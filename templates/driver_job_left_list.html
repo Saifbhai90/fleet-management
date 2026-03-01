@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Driver Job Left History{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --danger-btn: #dc3545;
+        --border-color: #ebedef;
+    }
+
+    .page-container { background-color: #f4f7f6; min-height: 100vh; padding: 1.5rem; }
+
+    /* Glassmorphism Card Effect */
+    .custom-card {
+        background: #ffffff;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        overflow: hidden;
+    }
+
+    /* Table Styling */
+    .table thead th {
+        background-color: #f8fafb;
+        color: #495057;
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 1rem;
+        border-bottom: 2px solid #f1f3f5;
+    }
+
+    .table tbody tr { transition: background 0.2s; }
+    .table tbody tr:hover { background-color: #f9fbff; }
+
+    /* Simple & Searchable Date Style */
+    .date-text {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: #2d3436;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .date-icon { color: #adb5bd; margin-right: 8px; font-size: 0.9rem; }
+
+    /* Driver Profile Info */
+    .driver-name { font-weight: 700; color: #1a1a1a; margin-bottom: 2px; }
+    .driver-id-badge { font-size: 0.75rem; background: #e9ecef; color: #495057; padding: 2px 8px; border-radius: 4px; }
+
+    /* Service Detail Icons */
+    .service-info i { width: 20px; color: #6c757d; font-size: 0.85rem; }
+    .service-info div { margin-bottom: 3px; }
+
+    /* Action Buttons Styling */
+    .action-group { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+    
+    .btn-act {
+        width: 38px; height: 38px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 10px; transition: all 0.3s ease;
+        border: 1px solid #dee2e6; background: white;
+        text-decoration: none;
+        padding: 0;
+    }
+    
+    .btn-view { color: #0d6efd; } 
+    .btn-view:hover { background: #0d6efd; color: white; box-shadow: 0 4px 8px rgba(13,110,253,0.2); border-color: #0d6efd; }
+
+    /* Modern Search Input */
+    .search-container { position: relative; max-width: 400px; }
+    .search-container i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #adb5bd; }
+    .search-input { padding-left: 35px; border-radius: 10px; border: 1px solid #ced4da; height: 42px; }
+    .search-input:focus { border-color: #dc3545; box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1); }
+</style>
+
+<div class="page-container">
+    <!-- Header Section -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-0">Driver Job Left <span class="text-danger">History</span></h3>
+            <p class="text-muted small mb-0">Audited list of drivers who have officially left the organization.</p>
+        </div>
+        <a href="{{ url_for('driver_job_left_new') }}" class="btn btn-danger shadow-sm px-4">
+            <i class="bi bi-plus-circle me-2"></i>Mark New Record
+        </a>
+    </div>
+
+    <!-- Stats & Search Bar -->
+    <div class="row mb-3 align-items-center">
+        <div class="col-md-6">
+            <div class="search-container">
+                <i class="bi bi-search"></i>
+                <input type="text" id="tableSearch" class="form-control search-input shadow-sm" placeholder="Search name, date, or ID...">
+            </div>
+        </div>
+        <div class="col-md-6 text-md-end mt-2 mt-md-0">
+            <span class="badge bg-white text-dark border py-2 px-3 shadow-sm rounded-pill">
+                <span class="text-muted me-1">Total Archived:</span> <strong>{{ records|length }}</strong>
+            </span>
+        </div>
+    </div>
+
+    <!-- Main Table -->
+    <div class="custom-card shadow-sm">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0" id="mainTable">
+                <thead>
+                    <tr>
+                        <th class="ps-4">Leaving Date</th>
+                        <th>Driver Info</th>
+                        <th>Deployment History</th>
+                        <th>Reason</th>
+                        <th>Remarks</th>
+                        <th class="text-end pe-4">View Report</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="date-text">
+                                <i class="bi bi-calendar3 date-icon"></i>{{ record.change_date.strftime('%Y-%m-%d') }}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="driver-name">{{ record.driver.name }}</div>
+                            <span class="driver-id-badge">ID: {{ record.driver.driver_id or 'N/A' }}</span>
+                        </td>
+                        <td>
+                            <div class="service-info small">
+                                <div><i class="bi bi-briefcase"></i> {{ record.left_project.name if record.left_project else '---' }}</div>
+                                <div><i class="bi bi-geo-alt text-danger"></i> {{ record.left_district.name if record.left_district else '---' }}</div>
+                                <div><i class="bi bi-truck"></i> <span class="fw-bold">{{ record.left_vehicle.vehicle_no if record.left_vehicle else '---' }}</span></div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge rounded-pill bg-light text-danger border border-danger-subtle px-3 py-2">
+                                {{ record.reason }}
+                            </span>
+                        </td>
+                        <td>
+                            <p class="text-muted small mb-0 text-wrap" style="max-width: 200px; line-height: 1.4;">
+                                {{ record.remarks or '-' }}
+                            </p>
+                        </td>
+                        <td class="pe-4">
+                            <div class="action-group">
+                                <!-- Sirf View Button rakha gaya hai -->
+                                <a href="{{ url_for('driver_job_left_view', id=record.id) }}" class="btn-act btn-view" title="View Detailed Report">
+                                    <i class="bi bi-eye-fill"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-folder-x display-4 d-block mb-3 opacity-50"></i>
+                            No history records found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Live Search Functionality
+    document.getElementById('tableSearch').addEventListener('keyup', function() {
+        let value = this.value.toLowerCase();
+        let rows = document.querySelectorAll('#mainTable tbody tr');
+        
+        rows.forEach(row => {
+            let rowText = row.innerText.toLowerCase();
+            row.style.display = rowText.includes(value) ? '' : 'none';
+        });
+    });
+</script>
+{% endblock %}

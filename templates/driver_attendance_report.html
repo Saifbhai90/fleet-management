@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Driver Attendance Report{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <h2 class="mb-4"><i class="bi bi-bar-chart me-2 text-info"></i>Driver Attendance Report</h2>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="post" action="{{ url_for('driver_attendance_report') }}" id="reportForm" class="row g-3 align-items-end">
+        {{ form.hidden_tag() }}
+        <div class="col-md-2">
+          <label class="form-label">Month</label>
+          <input type="number" name="month" class="form-control" min="1" max="12" value="{{ form.month.data or '' }}" placeholder="1-12" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Year</label>
+          <input type="number" name="year" class="form-control" min="2020" max="2030" value="{{ form.year.data or '' }}" placeholder="2025" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Project</label>
+          <select name="project_id" id="reportProjectSelect" class="form-select">
+            {% for val, label in form.project_id.choices %}
+              <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">District</label>
+          <select name="district_id" id="reportDistrictSelect" class="form-select">
+            {% for val, label in form.district_id.choices %}
+              <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Search</label>
+          <input type="text" name="search" class="form-control" placeholder="Name, Driver ID, Vehicle" value="{{ form.search.data or '' }}">
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-1"></i>Show Report
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if report %}
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-info text-white py-3">
+      <span class="fw-semibold">Monthly Summary</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="reportTable">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">#</th>
+              <th>Driver</th>
+              <th>Vehicle (Type)</th>
+              <th class="text-center">Present</th>
+              <th class="text-center">Absent</th>
+              <th class="text-center">Leave</th>
+              <th class="text-center">Late</th>
+              <th class="text-center">Half-Day</th>
+              <th class="text-center">Off</th>
+              <th class="text-center">Total Marked</th>
+              <th class="text-center">Days in Month</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in report %}
+            <tr>
+              <td class="ps-4">{{ loop.index }}</td>
+              <td>
+                <span class="fw-medium">{{ row.driver.name }}</span>
+                <br><small class="text-muted">{{ row.driver.driver_id }}</small>
+              </td>
+              <td>
+                {% if row.driver.vehicle %}
+                  {{ row.driver.vehicle.vehicle_no }}{% if row.driver.vehicle.vehicle_type %} ({{ row.driver.vehicle.vehicle_type }}){% endif %}
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td class="text-center"><span class="badge bg-success">{{ row.present }}</span></td>
+              <td class="text-center"><span class="badge bg-danger">{{ row.absent }}</span></td>
+              <td class="text-center"><span class="badge bg-info">{{ row.leave }}</span></td>
+              <td class="text-center"><span class="badge bg-warning text-dark">{{ row.late }}</span></td>
+              <td class="text-center"><span class="badge bg-secondary">{{ row.half_day }}</span></td>
+              <td class="text-center"><span class="badge bg-dark">{{ row.off }}</span></td>
+              <td class="text-center">{{ row.total_marked }}</td>
+              <td class="text-center">{{ row.days_in_month }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer bg-light text-muted small d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span>Total drivers: <strong>{{ report|length }}</strong></span>
+      <input type="text" id="reportTableSearch" class="form-control form-control-sm" style="max-width: 220px;" placeholder="Search in report...">
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-info border-0 shadow-sm">
+    <i class="bi bi-info-circle me-2"></i>Select month, year and optionally project / district, use search to filter drivers, then click <strong>Show Report</strong>.
+  </div>
+  {% endif %}
+</div>
+
+<script>
+document.getElementById('reportProjectSelect').addEventListener('change', function() {
+  var pid = this.value;
+  var districtSelect = document.getElementById('reportDistrictSelect');
+  districtSelect.innerHTML = '<option value="0">-- All Districts --</option>';
+  if (pid && pid !== '0') {
+    fetch('/get_districts_by_project/' + pid)
+      .then(function(r) { return r.json(); })
+      .then(function(districts) {
+        districts.forEach(function(d) {
+          var opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = d.name;
+          districtSelect.appendChild(opt);
+        });
+      });
+  }
+});
+var reportSearch = document.getElementById('reportTableSearch');
+if (reportSearch) {
+  reportSearch.addEventListener('keyup', function() {
+    var q = this.value.toLowerCase();
+    document.querySelectorAll('#reportTable tbody tr').forEach(function(row) {
+      var text = row.innerText.toLowerCase();
+      row.style.display = text.indexOf(q) > -1 ? '' : 'none';
+    });
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verification of Claims - RAS-1034 - {{ vehicle_no }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 12px; max-width: 800px; margin: 20px auto; padding: 0 15px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+    .logo { font-weight: bold; }
+    .subject { text-decoration: underline; font-weight: bold; margin: 15px 0; }
+    .claim-line { margin: 15px 0; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+    th { background: #f0f0f0; }
+    .text-end { text-align: right; }
+    .signatures { margin-top: 30px; display: flex; justify-content: space-between; }
+    .sig-block { width: 45%; }
+    .no-print { margin-top: 15px; }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">Health & Population Department</div>
+    <div style="text-align: right; max-width: 45%;">
+      Project Implementation Unit<br>
+      Community Empowerment and Strengthening of Healthcare access through Maryam Nawaz Health Clinic
+    </div>
+  </div>
+  <p>Dated Lahore the _____________</p>
+  <p>No. _____________ / MNIC</p>
+  <p class="subject">Subject: VERIFICATION OF CLAIMS OF RURAL AMBULANCE SERVICE (RAS-1034)</p>
+  <p>With reference to the contract between Health & Population Department and M/S Capital Car Rental (Pvt) Ltd for the management and operation of Rural Ambulance Service (RAS-1034), M/S Capital Car Rental (Pvt) Ltd. will submit claims fortnightly (ambulance-wise) as per the following proforma/Format.</p>
+  <p class="claim-line">Claim of Ambulance Number <u>{{ vehicle_no }}</u> for the period from <u>{{ from_date|ddmmyyyy }}</u> to <u>{{ to_date|ddmmyyyy }}</u></p>
+  <table>
+    <thead>
+      <tr>
+        <th>Sr.#</th>
+        <th>Particulars</th>
+        <th>KMs/Task</th>
+        <th>Date and Time</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>Total Number of Tasks (Green & Yellow)</td>
+        <td class="text-end">{{ total_task }}</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>Opening Meter Reading</td>
+        <td class="text-end">{{ "%.0f"|format(start_reading) }}</td>
+        <td>{{ from_date|ddmmyyyy }}</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>Closing Meter Reading</td>
+        <td class="text-end">{{ "%.0f"|format(close_reading) }}</td>
+        <td>{{ to_date|ddmmyyyy }}</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>Total Kilometre Claimed</td>
+        <td class="text-end">{{ total_kms }}</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="signatures">
+    <div class="sig-block">District Transport Officer<br>Capital Car Rental (Pvt) Ltd</div>
+    <div class="sig-block">District Coordinator<br>District Health Authority</div>
+  </div>
+  <p style="margin-top: 20px;">You are requested to submit invoices duly supported with above proforma.</p>
+  <p><strong>Program Director</strong><br>Community Empowerment and Strengthening of Healthcare Access through Maryam Nawaz Health Clinic</p>
+  <p class="no-print"><a href="javascript:window.print();" class="btn">Print</a> &nbsp; <a href="javascript:window.close();">Close</a></p>
+</body>
+</html>

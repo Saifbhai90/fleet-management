@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Parking Station Entry{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h3 class="mb-4 text-center fw-bold"><i class="bi bi-p-square me-2 text-primary"></i>Parking Station Entry Form</h3>
+
+  <form method="POST" class="needs-validation" novalidate>
+    {{ form.hidden_tag() }}
+
+    <div class="row g-4">
+      <!-- Left Column: Main Information (Blue Card) -->
+      <div class="col-md-6">
+        <div class="card h-100 shadow-sm border-primary">
+          <div class="card-header bg-primary text-white d-flex align-items-center">
+            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Station Information</h5>
+          </div>
+          <div class="card-body p-4">
+            
+            <div class="mb-3">
+              <label class="form-label fw-bold">{{ form.name.label.text }}</label>
+              {{ form.name(class="form-control form-control-lg " + ("is-invalid" if form.name.errors else ""), placeholder="e.g. Central Parking A") }}
+              {% for error in form.name.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-bold">{{ form.capacity.label.text }}</label>
+                {{ form.capacity(class="form-control", placeholder="Max Vehicles") }}
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-bold">{{ form.create_date.label.text }}</label>
+                {{ form.create_date(class="form-control", type="date") }}
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-bold">{{ form.district.label.text }}</label>
+                {{ form.district(class="form-control", placeholder="District Name") }}
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-bold">{{ form.tehsil.label.text }}</label>
+                {{ form.tehsil(class="form-control", placeholder="Tehsil Name") }}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Location & Remarks (Yellow Card) -->
+      <div class="col-md-6">
+        <div class="card h-100 shadow-sm border-warning">
+          <div class="card-header bg-warning text-dark d-flex align-items-center">
+            <h5 class="mb-0"><i class="bi bi-geo-alt me-2"></i>Additional Details</h5>
+          </div>
+          <div class="card-body p-4">
+            
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-bold">{{ form.mouza.label.text }}</label>
+                {{ form.mouza(class="form-control", placeholder="Mouza") }}
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-bold">{{ form.uc_name.label.text }}</label>
+                {{ form.uc_name(class="form-control", placeholder="UC Name") }}
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-bold">{{ form.address_location.label.text }}</label>
+              {{ form.address_location(class="form-control", rows=2, placeholder="Full address or GPS coordinates...") }}
+            </div>
+
+            <div class="mb-0">
+              <label class="form-label fw-bold">{{ form.remarks.label.text }}</label>
+              {{ form.remarks(class="form-control", rows=3, placeholder="Any extra notes...") }}
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Buttons -->
+    <div class="mt-5 mb-5 text-center">
+      <button type="submit" class="btn btn-primary btn-lg px-5 shadow-sm me-2">
+        <i class="bi bi-save me-2"></i>Save Station
+      </button>
+      <button type="reset" class="btn btn-warning btn-lg px-5 shadow-sm me-2 text-dark">
+        <i class="bi bi-eraser me-2"></i>Clear
+      </button>
+      <button type="button" class="btn btn-secondary btn-lg px-5 shadow-sm" onclick="window.location.href='{{ url_for('parking_list') }}'">
+        <i class="bi bi-x-circle me-2"></i>Cancel
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

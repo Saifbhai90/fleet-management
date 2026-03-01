@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<script>
+  $(document).ready(function() {
+    $('#company_id').select2({
+      placeholder: "Search and select company...",
+      allowClear: true,
+      width: '100%'
+    });
+  });
+
+  flatpickr(".datepicker", {
+    dateFormat: "Y-m-d"
+  });
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+        <div class="card-header bg-warning text-dark text-center py-4">
+          <h4 class="mb-0"><i class="bi bi-pencil-square me-2"></i>Edit Assignment: {{ project.name }}</h4>
+        </div>
+
+        <div class="card-body p-5">
+          <form method="POST" novalidate>
+            {{ form.hidden_tag() }}
+
+            <!-- Project Name (Read-only) -->
+            <div class="mb-4">
+              <label class="form-label fw-bold fs-5 text-dark">Project (Cannot be changed)</label>
+              <input type="text" class="form-control bg-light" value="{{ project.name }}" readonly>
+            </div>
+
+            <!-- Select Company -->
+            <div class="mb-4">
+              <label class="form-label fw-bold fs-5 text-primary">Change Company</label>
+              {{ form.company_id(class="form-select form-select-lg", id="company_id") }}
+              {% for error in form.company_id.errors %}
+                <div class="text-danger small mt-1">{{ error }}</div>
+              {% endfor %}
+            </div>
+
+            <!-- Assign Date -->
+            <div class="mb-4">
+              <label class="form-label fw-bold fs-5 text-primary">Assign Date</label>
+              {{ form.assign_date(class="form-control datepicker", required=True) }}
+              {% for error in form.assign_date.errors %}
+                <div class="text-danger small mt-1">{{ error }}</div>
+              {% endfor %}
+            </div>
+
+            <!-- Remarks -->
+            <div class="mb-5">
+              <label class="form-label fw-bold fs-5 text-primary">Remarks (Optional)</label>
+              {{ form.remarks(class="form-control", rows=4, placeholder="Update any notes...") }}
+            </div>
+
+            <!-- Buttons -->
+            <div class="d-grid gap-3">
+              {{ form.submit(class="btn btn-warning btn-lg fw-bold") }}
+              <a href="{{ url_for('assign_project_to_company') }}" class="btn btn-outline-secondary btn-lg">
+                Cancel & Back
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

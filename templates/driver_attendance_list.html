@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Mark Attendance{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-calendar-check me-2 text-primary"></i>Mark Attendance</h2>
+    <a href="{{ url_for('driver_attendance_report') }}" class="btn btn-outline-info btn-sm">
+      <i class="bi bi-bar-chart me-1"></i>Attendance Report
+    </a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="GET" action="{{ url_for('driver_attendance_list') }}" id="filterForm" class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label">Date</label>
+          <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Project</label>
+          <select name="project_id" id="projectSelect" class="form-select">
+            <option value="0" {% if not project_id %}selected{% endif %}>All Projects</option>
+            {% for p in form.project_id.choices if p[0] != 0 %}
+              <option value="{{ p[0] }}" {% if project_id == p[0] %}selected{% endif %}>{{ p[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">District</label>
+          <select name="district_id" id="districtSelect" class="form-select">
+            <option value="0" {% if not district_id %}selected{% endif %}>All Districts</option>
+            {% for d in form.district_id.choices if d[0] != 0 %}
+              <option value="{{ d[0] }}" {% if district_id == d[0] %}selected{% endif %}>{{ d[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Search</label>
+          <input type="text" name="search" class="form-control" placeholder="Name, Driver ID, Vehicle..." value="{{ search or '' }}">
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-1"></i>View
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center flex-wrap">
+      <span class="fw-semibold">Attendance for {{ view_date|ddmmyyyy }}{% if project_id %} · Project filter{% endif %}{% if district_id %} · District filter{% endif %}</span>
+      <a href="{{ url_for('driver_attendance_mark') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-success btn-sm">
+        <i class="bi bi-pencil-square me-1"></i>Mark Attendance
+      </a>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="attendanceTable">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">#</th>
+              <th>Vehicle No</th>
+              <th>Vehicle Type</th>
+              <th>Name</th>
+              <th>Project / District / Vehicle</th>
+              <th>Status</th>
+              <th>Check In</th>
+              <th>Check Out</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for driver in drivers %}
+            <tr>
+              <td class="ps-4">{{ loop.index }}</td>
+              <td class="fw-medium">{{ driver.vehicle.vehicle_no if driver.vehicle else '-' }}</td>
+              <td><span class="badge bg-light text-dark border">{{ driver.vehicle.vehicle_type if driver.vehicle and driver.vehicle.vehicle_type else '-' }}</span></td>
+              <td>
+                <span class="fw-medium">{{ driver.name }}</span>
+                <br><small class="text-muted">{{ driver.driver_id }}</small>
+              </td>
+              <td class="small">
+                {{ driver.project.name if driver.project else '-' }}
+                / {{ driver.district.name if driver.district else '-' }}
+                / {{ driver.vehicle.vehicle_no if driver.vehicle else '-' }}{% if driver.vehicle and driver.shift %} ({{ driver.shift }}){% endif %}
+              </td>
+              <td>
+                {% set rec = by_driver.get(driver.id) %}
+                {% if rec %}
+                  {% if rec.status == 'Present' %}
+                    <span class="badge bg-success">Present</span>
+                  {% elif rec.status == 'Absent' %}
+                    <span class="badge bg-danger">Absent</span>
+                  {% elif rec.status == 'Leave' %}
+                    <span class="badge bg-info">Leave</span>
+                  {% elif rec.status == 'Late' %}
+                    <span class="badge bg-warning text-dark">Late</span>
+                  {% elif rec.status == 'Half-Day' %}
+                    <span class="badge bg-secondary">Half-Day</span>
+                  {% elif rec.status == 'Off' %}
+                    <span class="badge bg-dark">Off</span>
+                  {% else %}
+                    <span class="badge bg-secondary">{{ rec.status }}</span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted">Not marked</span>
+                {% endif %}
+              </td>
+              <td>{% if rec and rec.check_in %}{{ rec.check_in.strftime('%H:%M') }}{% else %}-{% endif %}</td>
+              <td>{% if rec and rec.check_out %}{{ rec.check_out.strftime('%H:%M') }}{% else %}-{% endif %}</td>
+              <td class="small text-muted">{% if rec and rec.remarks %}{{ rec.remarks[:30] }}{% if rec.remarks|length > 30 %}...{% endif %}{% else %}-{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="9" class="text-center py-5 text-muted">
+                <i class="bi bi-people display-6 d-block mb-2"></i>
+                No active drivers found for this filter.
+                <br><small>Change date / project / district or search.</small>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer bg-light text-muted small d-flex justify-content-between align-items-center">
+      <span>Total: <strong>{{ drivers|length }}</strong> driver(s)</span>
+      <input type="text" id="tableSearch" class="form-control form-control-sm" style="max-width: 220px;" placeholder="Search in list...">
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('projectSelect').addEventListener('change', function() {
+  var pid = this.value;
+  var districtSelect = document.getElementById('districtSelect');
+  districtSelect.innerHTML = '<option value="0">All Districts</option>';
+  if (pid && pid !== '0') {
+    fetch('/get_districts_by_project/' + pid)
+      .then(function(r) { return r.json(); })
+      .then(function(districts) {
+        districts.forEach(function(d) {
+          var opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = d.name;
+          districtSelect.appendChild(opt);
+        });
+      });
+  }
+});
+document.getElementById('tableSearch').addEventListener('keyup', function() {
+  var q = this.value.toLowerCase();
+  document.querySelectorAll('#attendanceTable tbody tr').forEach(function(row) {
+    if (row.cells.length < 2) return;
+    var text = row.innerText.toLowerCase();
+    row.style.display = text.indexOf(q) > -1 ? '' : 'none';
+  });
+});
+</script>
+{% endblock %}

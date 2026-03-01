@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Fleet Manager - Dashboard{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+<h2 class="fw-bold">Dashboard</h2>
+<div>
+<button class="btn btn-outline-secondary me-2">
+<i class="bi bi-arrow-clockwise"></i> Refresh
+</button>
+<a href="{{ url_for('company_form') }}" class="btn btn-success me-2">
+<i class="bi bi-plus-circle"></i> Add Company
+</a>
+<a href="{{ url_for('district_form') }}" class="btn btn-info">
+<i class="bi bi-plus-circle"></i> Add District
+</a>
+</div>
+</div>
+
+<div class="row g-4">
+
+<!-- Companies -->
+<div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+    <a href="{{ url_for('companies') }}" class="text-decoration-none">
+        <div class="card stat-card text-white bg-gradient-primary text-center p-4">
+            <i class="bi bi-building fs-1 mb-3"></i>
+            <h6>Companies</h6>
+            <h3 class="fw-bold">{{ total_companies }}</h3>
+            <small>Active</small>
+        </div>
+    </a>
+</div>
+
+<!-- Projects -->
+<div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+    <a href="{{ url_for('projects_list') }}" class="text-decoration-none">
+        <div class="card stat-card text-white bg-gradient-success text-center p-4">
+            <i class="bi bi-briefcase fs-1 mb-3"></i>
+            <h6>Projects</h6>
+            <h3 class="fw-bold">{{ total_projects }}</h3>
+            <small>Total</small>
+        </div>
+    </a>
+</div>
+
+<!-- Districts -->
+<div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+    <a href="{{ url_for('districts_list') }}" class="text-decoration-none">
+        <div class="card stat-card text-white bg-gradient-info text-center p-4">
+            <i class="bi bi-geo-alt fs-1 mb-3"></i>
+            <h6>Districts</h6>
+            <h3 class="fw-bold">{{ total_districts }}</h3>
+            <small>Areas</small>
+        </div>
+    </a>
+</div>
+
+<!-- Vehicles -->
+<div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+    <a href="{{ url_for('vehicles_list') }}" class="text-decoration-none">
+        <div class="card stat-card text-white bg-gradient-warning text-center p-4">
+            <i class="bi bi-truck fs-1 mb-3"></i>
+            <h6>Vehicles</h6>
+            <h3 class="fw-bold">{{ total_vehicles }}</h3>
+            <small>Fleet</small>
+        </div>
+    </a>
+</div>
+
+<!-- Parking -->
+<div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+    <a href="{{ url_for('parking_list') }}" class="text-decoration-none">
+        <div class="card stat-card text-white bg-gradient-danger text-center p-4">
+            <i class="bi bi-p-square fs-1 mb-3"></i>
+            <h6>Parking</h6>
+            <h3 class="fw-bold">{{ total_parking }}</h3>
+            <small>Stations</small>
+        </div>
+    </a>
+</div>
+
+<!-- Drivers -->
+<div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+    <a href="{{ url_for('drivers_list') }}" class="text-decoration-none">
+        <div class="card stat-card text-white bg-dark text-center p-4">
+            <i class="bi bi-person-badge fs-1 mb-3"></i>
+            <h6>Drivers</h6>
+            <h3 class="fw-bold">{{ total_drivers }}</h3>
+            <small>Personnel</small>
+        </div>
+    </a>
+</div>
+
+</div>
+{% endblock %}

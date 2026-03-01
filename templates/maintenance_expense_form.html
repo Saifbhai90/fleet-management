@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<style>
+  .maint-form-wrap { max-width: 1200px; margin: 0 auto; }
+  .maint-form-wrap .page-header { background: linear-gradient(135deg, #fd7e14 0%, #e8590c 100%); color: #fff; padding: 0.5rem 1rem; border-radius: 10px; margin-bottom: 0.6rem; }
+  .maint-form-wrap .form-section { background: #fff; border-radius: 10px; border: 1px solid #e9ecef; margin-bottom: 0.6rem; overflow: hidden; }
+  .maint-form-wrap .form-section-header { background: linear-gradient(to right, #f8f9fa 0%, #fff 100%); border-bottom: 1px solid #e9ecef; padding: 0.35rem 0.75rem; font-weight: 600; font-size: 0.8rem; color: #495057; }
+  .maint-form-wrap .form-section-body { padding: 0.5rem 0.75rem; }
+  .maint-form-wrap .form-label { font-size: 0.72rem; font-weight: 500; color: #495057; margin-bottom: 0.2rem; }
+  .maint-form-wrap .form-control, .maint-form-wrap .form-select { border-radius: 6px; font-size: 0.8rem; padding: 0.35rem 0.5rem; min-height: 32px; }
+  .maint-form-wrap .form-control.bg-light { background-color: #f1f3f5 !important; cursor: default; }
+  .maint-form-wrap .field-group { margin-bottom: 0.4rem; }
+  .maint-form-wrap #itemsTable input, .maint-form-wrap #itemsTable select { font-size: 0.8rem; padding: 0.3rem 0.4rem; }
+  .maint-form-wrap .action-bar { padding: 0.5rem 1rem; background: #f8f9fa; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 0.5rem; }
+</style>
+<div class="container-fluid maint-form-wrap py-2">
+  <div class="page-header d-flex justify-content-between align-items-center">
+    <h4><i class="bi bi-wrench me-2"></i>{{ title }}</h4>
+    <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
+  </div>
+
+  <form method="POST" action="" id="maintenanceExpenseForm" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+
+    <div class="form-section">
+      <div class="form-section-header">Location & Date</div>
+      <div class="form-section-body">
+        <div class="row g-2">
+          <div class="col-md-4 field-group">
+            <label class="form-label">District</label>
+            {{ form.district_id(class="form-select", id="districtSelect") }}
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">Project</label>
+            {{ form.project_id(class="form-select", id="projectSelect") }}
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">Vehicle <span class="text-danger">*</span></label>
+            {{ form.vehicle_id(class="form-select", id="vehicleSelect") }}
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">Date <span class="text-danger">*</span></label>
+            {{ form.expense_date(class="form-control datepicker", id="expenseDate") }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-header">Meter Reading</div>
+      <div class="form-section-body">
+        <div class="row g-2">
+          <div class="col-md-4 field-group">
+            <label class="form-label">Previous Reading</label>
+            {{ form.previous_reading(class="form-control bg-light", id="previousReading", step="0.01", readonly=True, placeholder="From last entry") }}
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">Current Reading</label>
+            {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">KM (Current − Previous)</label>
+            <input type="text" id="kmDisplay" class="form-control bg-light" readonly placeholder="—">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-header">Product Lines</div>
+      <div class="form-section-body">
+        <p class="small text-muted mb-2">Search product → Qty → Price (Amount auto). Press <kbd>Enter</kbd> to add line to list.</p>
+        <div class="row g-2 align-items-end mb-3 border rounded p-2 bg-light" id="entryRow">
+          <div class="col-md-3">
+            <label class="form-label mb-0">Product</label>
+            <select id="entryProductSelect" class="form-select form-select-sm">
+              <option value="">-- Search / Select --</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label mb-0">Qty</label>
+            <input type="number" id="entryQty" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label mb-0">Price</label>
+            <input type="number" id="entryPrice" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label mb-0">Amount</label>
+            <input type="text" id="entryAmount" class="form-control form-control-sm bg-light" readonly placeholder="0">
+          </div>
+          <div class="col-md-2">
+            <button type="button" class="btn btn-sm btn-primary w-100" id="addToListBtn"><i class="bi bi-plus-lg"></i> Add to list</button>
+          </div>
+        </div>
+        <table class="table table-bordered table-sm mb-0" id="itemsTable">
+          <thead class="table-light">
+            <tr>
+              <th>Product</th>
+              <th>Qty</th>
+              <th>Price</th>
+              <th>Amount</th>
+              <th style="width: 40px;"></th>
+            </tr>
+          </thead>
+          <tbody id="itemsBody">
+            {% if rec and rec.items.count() %}
+              {% for it in rec.items %}
+              <tr class="item-row" data-product-id="{{ it.product_id }}">
+                <td><input type="hidden" name="product_id" value="{{ it.product_id }}"><span class="product-name">{{ it.product.name }}</span></td>
+                <td><input type="number" name="qty" class="form-control form-control-sm item-qty" step="0.01" min="0" value="{{ it.qty }}" placeholder="0"></td>
+                <td><input type="number" name="price" class="form-control form-control-sm item-price" step="0.01" min="0" value="{{ it.price }}" placeholder="0"></td>
+                <td><input type="text" class="form-control form-control-sm bg-light item-amount" readonly placeholder="0"></td>
+                <td><button type="button" class="btn btn-outline-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>
+              </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+          <tfoot class="table-light fw-semibold">
+            <tr>
+              <td class="text-end">Total</td>
+              <td><span id="totalQty">0</span></td>
+              <td>—</td>
+              <td><span id="totalBillAmount">0.00</span></td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-header">Remarks</div>
+      <div class="form-section-body">
+        {{ form.remarks(class="form-control", rows=2) }}
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-header">Photos / Videos</div>
+      <div class="form-section-body">
+        <input type="file" name="attachments" multiple accept="image/*,video/*" class="form-control">
+        <small class="text-muted">Multiple images or videos allowed.</small>
+        {% if rec and rec.attachments.count() %}
+        <div class="mt-2"><strong>Existing:</strong>
+          {% for att in rec.attachments %}
+          <a href="{{ url_for('uploaded_file', filename=att.file_path) }}" target="_blank" class="me-2">{{ att.original_name or att.file_path }}</a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="action-bar">
+        <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-secondary">Cancel</a>
+        {{ form.submit(class="btn btn-primary") }}
+      </div>
+    </div>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+(function() {
+  flatpickr('.datepicker', { dateFormat: 'd-m-Y', allowInput: true });
+
+  var vehicleSelect = document.getElementById('vehicleSelect');
+  var previousReading = document.getElementById('previousReading');
+  var currentReading = document.getElementById('currentReading');
+  var kmDisplay = document.getElementById('kmDisplay');
+  var itemsBody = document.getElementById('itemsBody');
+  var entryProductSelect = document.getElementById('entryProductSelect');
+  var entryQty = document.getElementById('entryQty');
+  var entryPrice = document.getElementById('entryPrice');
+  var entryAmount = document.getElementById('entryAmount');
+  var addToListBtn = document.getElementById('addToListBtn');
+
+  var productsForMaintenance = [];
+  fetch('/api/maintenance-expense/products-for-maintenance').then(function(r) { return r.json(); }).then(function(arr) {
+    productsForMaintenance = arr;
+    entryProductSelect.innerHTML = '<option value="">-- Search / Select --</option>';
+    arr.forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.name;
+      entryProductSelect.appendChild(o);
+    });
+    if (typeof $ !== 'undefined' && $(entryProductSelect).length) {
+      $(entryProductSelect).select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search product...' });
+    }
+    itemsBody.querySelectorAll('.item-row').forEach(function(tr) { bindListRow(tr); });
+    updateTotals();
+  });
+
+  function updateEntryAmount() {
+    var qty = parseFloat(entryQty.value) || 0;
+    var price = parseFloat(entryPrice.value) || 0;
+    entryAmount.value = (qty * price).toFixed(2);
+  }
+  entryQty.addEventListener('input', updateEntryAmount);
+  entryPrice.addEventListener('input', updateEntryAmount);
+
+  function clearEntryRow() {
+    if (typeof $ !== 'undefined' && $(entryProductSelect).length) $(entryProductSelect).val(null).trigger('change');
+    else entryProductSelect.value = '';
+    entryQty.value = '0';
+    entryPrice.value = '0';
+    entryAmount.value = '';
+    updateEntryAmount();
+    entryProductSelect.focus();
+  }
+
+  function addEntryToList() {
+    var pid = entryProductSelect.value;
+    if (!pid) { alert('Please select a product.'); entryProductSelect.focus(); return; }
+    var p = productsForMaintenance.find(function(x) { return String(x.id) === String(pid); });
+    var productName = p ? (p.name || '') : '';
+    var qty = parseFloat(entryQty.value) || 0;
+    var price = parseFloat(entryPrice.value) || 0;
+    var amount = (qty * price).toFixed(2);
+
+    var tr = document.createElement('tr');
+    tr.className = 'item-row';
+    tr.dataset.productId = pid;
+    tr.innerHTML =
+      '<td><input type="hidden" name="product_id" value="' + pid + '"><span class="product-name">' + productName + '</span></td>' +
+      '<td><input type="number" name="qty" class="form-control form-control-sm item-qty" step="0.01" min="0" value="' + qty + '"></td>' +
+      '<td><input type="number" name="price" class="form-control form-control-sm item-price" step="0.01" min="0" value="' + price + '"></td>' +
+      '<td><input type="text" class="form-control form-control-sm bg-light item-amount" readonly value="' + amount + '"></td>' +
+      '<td><button type="button" class="btn btn-outline-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>';
+    itemsBody.appendChild(tr);
+    bindListRow(tr);
+    clearEntryRow();
+    updateTotals();
+  }
+
+  addToListBtn.addEventListener('click', addEntryToList);
+  function onEntryKeydown(e) { if (e.key === 'Enter') { e.preventDefault(); addEntryToList(); } }
+  entryProductSelect.addEventListener('keydown', onEntryKeydown);
+  entryQty.addEventListener('keydown', onEntryKeydown);
+  entryPrice.addEventListener('keydown', onEntryKeydown);
+
+  function bindListRow(tr) {
+    var qty = tr.querySelector('.item-qty');
+    var price = tr.querySelector('.item-price');
+    var amount = tr.querySelector('.item-amount');
+    function updateRow() {
+      var q = parseFloat(qty.value) || 0;
+      var p = parseFloat(price.value) || 0;
+      amount.value = (q * p).toFixed(2);
+      updateTotals();
+    }
+    qty.addEventListener('input', updateRow);
+    price.addEventListener('input', updateRow);
+    tr.querySelector('.remove-row').addEventListener('click', function() { tr.remove(); updateTotals(); });
+    updateRow();
+  }
+
+  function updateTotals() {
+    var totalQty = 0, totalAmount = 0;
+    itemsBody.querySelectorAll('.item-row').forEach(function(tr) {
+      totalQty += parseFloat(tr.querySelector('.item-qty').value) || 0;
+      totalAmount += parseFloat(tr.querySelector('.item-amount').value) || 0;
+    });
+    document.getElementById('totalQty').textContent = totalQty.toFixed(2);
+    document.getElementById('totalBillAmount').textContent = totalAmount.toFixed(2);
+  }
+
+  function updateKm() {
+    var prev = parseFloat(previousReading.value) || null;
+    var curr = parseFloat(currentReading.value) || null;
+    kmDisplay.value = (prev != null && curr != null && curr >= prev) ? (curr - prev).toFixed(2) : '';
+  }
+  if (currentReading) currentReading.addEventListener('input', updateKm);
+  if (previousReading) previousReading.addEventListener('input', updateKm);
+  if (vehicleSelect) {
+    vehicleSelect.addEventListener('change', function() {
+      var vid = this.value;
+      previousReading.value = '';
+      if (!vid || vid === '0') return;
+      fetch('/api/maintenance-expense/last-reading?vehicle_id=' + vid).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.previous_reading != null) previousReading.value = d.previous_reading;
+        updateKm();
+      });
+    });
+  }
+  updateKm();
+  updateEntryAmount();
+})();
+</script>
+{% endblock %}

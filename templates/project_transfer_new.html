@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}New Project Transfer{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="card shadow-sm mx-auto" style="max-width: 850px; border: none; border-radius: 15px;">
+    
+    <!-- Professional Header -->
+    <div class="card-header bg-warning text-dark py-3" style="border-radius: 15px 15px 0 0;">
+      <div class="d-flex justify-content-between align-items-center px-2">
+        <h4 class="mb-0 fw-bold"><i class="bi bi-arrow-left-right me-2"></i>Project Transfer</h4>
+        <a href="{{ url_for('project_transfers') }}" class="btn btn-sm btn-dark px-3">
+          <i class="bi bi-clock-history me-1"></i> View History
+        </a>
+      </div>
+    </div>
+
+    <div class="card-body p-4">
+      <form method="POST" novalidate>
+        {{ form.hidden_tag() }}
+
+        <!-- Section 1: Project Selection (Full Width) -->
+        <div class="row mb-4">
+          <div class="col-12">
+            <label class="form-label fw-bold text-secondary small">STEP 1: SELECT PROJECT</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light"><i class="bi bi-briefcase"></i></span>
+              {{ form.project_id(class="form-select form-select-lg select2-enable") }}
+            </div>
+            {% for error in form.project_id.errors %}
+              <div class="text-danger small mt-1">{{ error }}</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Section 2: Destination & Date (Side by Side) -->
+        <div class="row mb-4">
+          <div class="col-md-7">
+            <label class="form-label fw-bold text-secondary small">STEP 2: TRANSFER TO COMPANY</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light"><i class="bi bi-building"></i></span>
+              {{ form.new_company_id(class="form-select form-select-lg select2-enable") }}
+            </div>
+            {% for error in form.new_company_id.errors %}
+              <div class="text-danger small mt-1">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="col-md-5">
+            <label class="form-label fw-bold text-secondary small">TRANSFER DATE</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light"><i class="bi bi-calendar-event"></i></span>
+              {{ form.transfer_date(class="form-control form-control-lg datepicker") }}
+            </div>
+            {% for error in form.transfer_date.errors %}
+              <div class="text-danger small mt-1">{{ error }}</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Section 3: Remarks (Full Width) -->
+        <div class="row mb-4">
+          <div class="col-12">
+            <label class="form-label fw-bold text-secondary small">REMARKS / NOTES (OPTIONAL)</label>
+            {{ form.remarks(class="form-control", rows=2, placeholder="Add transfer details here...") }}
+            {% for error in form.remarks.errors %}
+              <div class="text-danger small mt-1">{{ error }}</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Action Buttons -->
+        <div class="row">
+          <div class="col-md-6 mb-2">
+            <button type="reset" class="btn btn-outline-secondary w-100 py-2 fw-bold">
+              <i class="bi bi-eraser me-1"></i> Clear Form
+            </button>
+          </div>
+          <div class="col-md-6 mb-2">
+            {{ form.submit(class="btn btn-warning w-100 py-2 fw-bold shadow-sm") }}
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Styling to make it look premium but compact */
+  body { background-color: #f8f9fa; }
+  .form-label { letter-spacing: 0.5px; }
+  .input-group-text { border-right: none; color: #6c757d; }
+  .select2-container--default .select2-selection--single {
+    height: 48px !important;
+    padding: 10px;
+    border: 1px solid #dee2e6;
+    border-left: none;
+  }
+  .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 46px;
+  }
+  .datepicker { background-color: white !important; }
+</style>
+
+<!-- Necessary Scripts -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<script>
+  $(document).ready(function() {
+    $('.select2-enable').select2({
+      placeholder: "Please select...",
+      allowClear: true,
+      width: '100%'
+    });
+
+    flatpickr(".datepicker", {
+      dateFormat: "Y-m-d",
+      defaultDate: "today",
+      altInput: true,
+      altFormat: "F j, Y"
+    });
+  });
+</script>
+{% endblock %}

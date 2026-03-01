@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Products Name{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-box-seam me-2 text-primary"></i>Products Name</h2>
+    <a href="{{ url_for('product_form') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add Product
+    </a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="GET" action="{{ url_for('product_list') }}" class="row g-3 align-items-end">
+        <div class="col-md-6">
+          <label class="form-label">Search by name</label>
+          <input type="text" name="search" class="form-control" placeholder="Product name..." value="{{ search }}">
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-1"></i>Search
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-primary text-white py-3">
+      <span class="fw-semibold">Product List</span>
+      <small class="opacity-75 ms-2">(Used in Fueling, Oil &amp; Maintenance forms)</small>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">#</th>
+              <th>Product Name</th>
+              <th>Used in Form</th>
+              <th>Remarks</th>
+              <th class="text-center pe-4">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in products %}
+            <tr>
+              <td class="ps-4">{{ loop.index }}</td>
+              <td class="fw-medium">{{ p.name }}</td>
+              <td>
+                {% if p.used_in_forms %}
+                  {% set forms = p.used_in_forms.split(',') %}
+                  {% for f in forms %}
+                    <span class="badge bg-secondary me-1">{{ f.strip() }} Form</span>
+                  {% endfor %}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>{{ p.remarks or '-' }}</td>
+              <td class="text-center pe-4">
+                <a href="{{ url_for('product_form', id=p.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                <form action="{{ url_for('product_delete', id=p.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this product?');">
+                  <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="text-center py-5 text-muted">
+                <i class="bi bi-box-seam display-6 d-block mb-2"></i>
+                No product found. <a href="{{ url_for('product_form') }}">Add Product</a> (used in Fueling, Oil &amp; Maintenance).
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

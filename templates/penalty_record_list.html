@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Penalty Record{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-cash-coin me-2 text-secondary"></i>Penalty Record</h2>
+    <a href="{{ url_for('penalty_record_new') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add Penalty Record
+    </a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('penalty_record_list') }}" class="row g-3 align-items-end">
+        {{ form.hidden_tag() }}
+        <div class="col-md-2">
+          <label class="form-label">From Date</label>
+          {{ form.from_date(class="form-control datepicker") }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">To Date</label>
+          {{ form.to_date(class="form-control datepicker") }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">District</label>
+          <select name="district_id" id="districtSelect" class="form-select">
+            {% for val, label in form.district_id.choices %}
+              <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Project</label>
+          <select name="project_id" id="projectSelect" class="form-select">
+            {% for val, label in form.project_id.choices %}
+              <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-1"></i>View Report
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-secondary text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="fw-semibold">Report from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
+      <input type="text" id="penaltySearch" class="form-control form-control-sm" placeholder="Search..." style="max-width: 220px;" autocomplete="off">
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="penaltyTable">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">#</th>
+              <th>District</th>
+              <th>Project</th>
+              <th>Vehicle</th>
+              <th>Driver Name</th>
+              <th>Date</th>
+              <th>Fine</th>
+              <th>Remarks</th>
+              <th class="text-center">Edit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr class="penalty-row">
+              <td class="ps-4">{{ loop.index }}</td>
+              <td>{{ row.district.name if row.district else '-' }}</td>
+              <td>{{ row.project.name if row.project else '-' }}</td>
+              <td class="fw-medium">{{ row.vehicle.vehicle_no if row.vehicle else '-' }}</td>
+              <td>{{ row.driver.name if row.driver else '-' }}</td>
+              <td>{{ row.record_date|ddmmyyyy }}</td>
+              <td>{{ row.fine or '-' }}</td>
+              <td>{{ row.remarks or '-' }}</td>
+              <td class="text-center">
+                <a href="{{ url_for('penalty_record_edit', pk=row.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="9" class="text-center py-5 text-muted">
+                <i class="bi bi-cash-coin display-6 d-block mb-2"></i>
+                No penalty records. <a href="{{ url_for('penalty_record_new') }}">Add Penalty Record</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = this.value;
+      projectSelect.innerHTML = '<option value="0">-- All Projects --</option>';
+      if (did && did !== '0') {
+        fetch('/get_projects_by_district/' + did)
+          .then(function(r) { return r.json(); })
+          .then(function(arr) {
+            arr.forEach(function(p) {
+              var o = document.createElement('option');
+              o.value = p.id;
+              o.textContent = p.name;
+              projectSelect.appendChild(o);
+            });
+          });
+      }
+    });
+  }
+  var searchInput = document.getElementById('penaltySearch');
+  var table = document.getElementById('penaltyTable');
+  if (searchInput && table) {
+    var tbody = table.querySelector('tbody');
+    if (tbody) {
+      var allTr = Array.from(tbody.querySelectorAll('tr'));
+      var noDataRow = allTr.find(function(tr) { return tr.cells.length === 1; }) || null;
+      var dataRows = allTr.filter(function(tr) { return tr.cells.length > 1; });
+      searchInput.addEventListener('input', function() {
+        var q = this.value.trim().toLowerCase();
+        var visible = 0;
+        dataRows.forEach(function(row) {
+          var text = row.textContent.replace(/\s+/g, ' ').toLowerCase();
+          var show = !q || text.indexOf(q) > -1;
+          row.style.display = show ? '' : 'none';
+          if (show) visible++;
+        });
+        if (noDataRow) noDataRow.style.display = (dataRows.length === 0 || (q && visible === 0)) ? '' : 'none';
+      });
+    }
+  }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Assignment{% endblock %}
+
+{% block content %}
+<!-- Select2 & Icons -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-8 col-md-10">
+      <div class="card shadow border-0 rounded-3">
+        
+        <!-- Standard Header (Edit Mode) -->
+        <div class="card-header bg-warning text-dark py-3">
+          <h4 class="mb-0 text-center fw-bold"><i class="bi bi-pencil-square me-2"></i>Edit Project Assignment</h4>
+        </div>
+
+        <div class="card-body p-4">
+          <form method="POST" novalidate>
+            {{ form.hidden_tag() }}
+
+            <!-- Row 1: Company (1st) and Project (2nd) - Both Editable -->
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-semibold text-secondary small text-uppercase">Select Company</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-warning"><i class="bi bi-building"></i></span>
+                  {{ form.company_id(class="form-select select2-enable") }}
+                </div>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-semibold text-secondary small text-uppercase">Select Project</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-warning"><i class="bi bi-folder2-open"></i></span>
+                  {{ form.project_id(class="form-select select2-enable") }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 2: Date and Note -->
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-semibold text-secondary small text-uppercase">Assignment Date</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-warning"><i class="bi bi-calendar-event"></i></span>
+                  {{ form.assign_date(class="form-control", type="date") }}
+                </div>
+              </div>
+              <div class="col-md-6 mb-3 d-flex align-items-end">
+                <div class="alert alert-warning py-2 px-3 mb-0 w-100 border-0" style="font-size: 0.85rem;">
+                   <i class="bi bi-info-circle-fill me-1"></i> You can re-assign this project to any other company.
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 3: Remarks -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold text-secondary small text-uppercase">Remarks (Optional)</label>
+              {{ form.assign_remarks(class="form-control", rows=3, placeholder="Update details if needed...") }}
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="row g-3">
+              <div class="col-sm-8">
+                {{ form.submit(class="btn btn-warning w-100 fw-bold py-2 shadow-sm") }}
+              </div>
+              <div class="col-sm-4">
+                <a href="{{ url_for('assign_project_to_company') }}" class="btn btn-outline-secondary w-100 py-2">
+                  Cancel
+                </a>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="card-footer bg-light text-center py-2">
+          <a href="{{ url_for('assign_project_to_company') }}" class="btn btn-link btn-sm text-decoration-none text-muted">
+            <i class="bi bi-arrow-left me-1"></i> Back to List
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Select2 & Initialization -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+  $(document).ready(function() {
+    $('.select2-enable').select2({
+      theme: 'bootstrap-5',
+      width: '100%',
+      placeholder: 'Search and select...'
+    });
+  });
+</script>
+
+<style>
+  .form-label { margin-bottom: 0.4rem; letter-spacing: 0.5px; }
+  .form-control, .form-select { border: 1px solid #ced4da; padding: 0.5rem 0.75rem; }
+  .form-control:focus, .form-select:focus {
+    border-color: #ffc107;
+    box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.15);
+  }
+  .input-group-text { border: 1px solid #ced4da; }
+  .card { border-radius: 12px; }
+</style>
+{% endblock %}

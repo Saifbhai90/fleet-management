@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}All Projects{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-briefcase me-2"></i>All Projects</h2>
+    <a href="{{ url_for('project_form') }}" class="btn btn-success">
+      <i class="bi bi-plus-square me-1"></i>Add New Project
+    </a>
+  </div>
+
+  <!-- Search Section -->
+  <form method="GET" class="mb-4">
+    <div class="input-group input-group-lg shadow-sm">
+      <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+      <input type="text" name="search" class="form-control border-start-0 ps-0" placeholder="Search project name..." value="{{ search }}">
+      <button class="btn btn-primary px-4" type="submit">Search</button>
+    </div>
+  </form>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th class="ps-3" width="8%">ID</th>
+              <th width="35%">Project Name</th>
+              <th width="20%">Start Date</th>
+              <th width="15%">Status</th>
+              <th width="22%" class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for project in projects %}
+            <tr>
+              <td class="ps-3 text-muted">{{ project.id }}</td>
+              <td>
+                <a href="{{ url_for('project_detail', id=project.id) }}" class="fw-bold text-decoration-none text-primary">
+                  {{ project.name }}
+                </a>
+              </td>
+              <td>{{ project.start_date.strftime('%d-%b-%Y') if project.start_date else 'N/A' }}</td>
+              <td>
+                <span class="badge bg-{{ 'success' if project.status == 'Active' else 'danger' }} px-3 py-2">
+                  {{ project.status }}
+                </span>
+              </td>
+              <td class="text-center">
+                <a href="{{ url_for('project_form', id=project.id) }}" class="btn btn-sm btn-warning me-1" title="Edit">
+                  <i class="bi bi-pencil-square"></i> Edit
+                </a>
+
+                {% if project.status == 'Active' %}
+                  <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" style="display:inline;">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary me-1" onclick="return confirm('Mark as Inactive?')">
+                      <i class="bi bi-toggle-off"></i> Inactive
+                    </button>
+                  </form>
+                {% else %}
+                  <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" style="display:inline;">
+                    <button type="submit" class="btn btn-sm btn-outline-success me-1" onclick="return confirm('Mark as Active?')">
+                      <i class="bi bi-toggle-on"></i> Active
+                    </button>
+                  </form>
+                {% endif %}
+
+                <form action="{{ url_for('delete_project', id=project.id) }}" method="POST" style="display:inline;">
+                  <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this project?')">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="text-center py-5">
+                <div class="text-muted">
+                  <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                  <p>No projects found. <a href="{{ url_for('project_form') }}">Create your first project</a>.</p>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer bg-light text-muted text-end border-0 px-4">
+      Total Projects: <strong>{{ projects|length }}</strong>
+    </div>
+  </div>
+</div>
+{% endblock %}

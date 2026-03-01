@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4">
+    <div class="card shadow border-0 rounded-4 overflow-hidden">
+        <div class="card-header bg-dark text-white py-3">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-person-video2 me-2"></i>Assign Driver (Shift & Capacity Control)</h5>
+        </div>
+        <div class="card-body p-4 bg-light">
+            <form method="POST" id="driverAssignForm">
+               {{ form.hidden_tag() }}
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">1. Project</label>
+                        {{ form.project_id(class="form-select select2-enable", id="project_select") }}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">2. District</label>
+                        {{ form.district_id(class="form-select select2-enable", id="district_select") }}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">3. Vehicle</label>
+                        {{ form.vehicle_id(class="form-select select2-enable", id="vehicle_select") }}
+                    </div>
+
+                    <div class="col-md-6 mt-4">
+                        <div class="bg-white p-4 rounded-3 shadow-sm border-start border-primary border-4">
+                            <label class="form-label fw-bold text-primary">4. Select Shift</label>
+                            {{ form.shift(class="form-select", id="shift_select") }}
+                            <div id="capacity_info" class="mt-2 small fw-bold"></div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mt-4">
+                        <div class="bg-white p-4 rounded-3 shadow-sm border-start border-success border-4">
+                            <label class="form-label fw-bold text-success">5. Select Available Driver</label>
+                            {{ form.driver_id(class="form-select select2-enable", id="driver_select") }}
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mt-3">
+                        <label class="form-label fw-bold">Assign Date</label>
+                        {{ form.assign_date(class="form-control datepicker") }}
+                    </div>
+                    <div class="col-md-6 mt-3">
+                        <label class="form-label fw-bold">Remarks</label>
+                        {{ form.remarks(class="form-control", rows=1) }}
+                    </div>
+                </div>
+
+                <div class="mt-5 text-center">
+                    <button type="submit" id="submit_btn" class="btn btn-primary btn-lg px-5 fw-bold shadow-sm">
+                        <i class="bi bi-check-circle me-1"></i> Finalize Assignment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // 1. Select2 Initialize
+    $('.select2-enable').select2({ theme: 'bootstrap-5', width: '100%' });
+
+    var $proj = $('#project_select'), 
+        $dist = $('#district_select'), 
+        $veh = $('#vehicle_select'), 
+        $drv = $('#driver_select');
+
+    // --- A. Project -> District ---
+    // 'change' event use kiya hai jo zyada reliable hai
+    $proj.on('change', function() {
+        var pid = $(this).val();
+        console.log("Project Selected ID:", pid);
+        
+        // Jab project change ho tu purane districts aur vehicles clear kar dein
+        $dist.empty().append('<option value="">-- Select District --</option>').trigger('change');
+        $veh.empty().append('<option value="">-- Select Vehicle --</option>').trigger('change');
+
+        if(pid && pid != '0') {
+            $dist.empty().append('<option value="">Loading Districts...</option>').trigger('change');
+            $.ajax({
+                url: '/get_districts_by_project/' + pid,
+                type: 'GET',
+                success: function(data) {
+                    console.log("Districts received:", data);
+                    $dist.empty().append('<option value="">-- Select District --</option>');
+                    $.each(data, function(i, v) {
+                        $dist.append('<option value="' + v.id + '">' + v.name + '</option>');
+                    });
+                    $dist.trigger('change'); // Select2 ko update karein
+                },
+                error: function() { alert("Could not fetch districts!"); }
+            });
+        }
+    });
+
+    // --- B. District -> Vehicle ---
+    $dist.on('change', function() {
+        var did = $(this).val();
+        var pid = $proj.val();
+        
+        $veh.empty().append('<option value="">-- Select Vehicle --</option>').trigger('change');
+
+        if(did && pid && pid != '0') {
+            $veh.empty().append('<option value="">Loading Vehicles...</option>').trigger('change');
+            $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(data) {
+                $veh.empty().append('<option value="">-- Select Vehicle --</option>');
+                $.each(data, function(i, v) {
+                    $veh.append('<option value="' + v.id + '">' + v.no + '</option>');
+                });
+                $veh.trigger('change');
+            });
+        }
+    });
+
+    // --- C. Drivers Load (Page load par) ---
+    function loadDrivers() {
+        $.getJSON('/get_unassigned_drivers', function(data) {
+            $drv.empty().append('<option value="">-- Select Driver --</option>');
+            $.each(data, function(i, v) {
+                $drv.append('<option value="' + v.id + '">' + v.name + '</option>');
+            });
+            $drv.trigger('change');
+        });
+    }
+    loadDrivers();
+});
+</script>
+{% endblock %}

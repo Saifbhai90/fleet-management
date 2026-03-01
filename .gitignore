@@ -1,0 +1,27 @@
+# Local / env
+.env
+.env.local
+*.db
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Uploads (optional: remove this line if you want to backup uploads)
+uploads/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

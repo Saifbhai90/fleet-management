@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+  <div class="card shadow-lg mx-auto" style="max-width: 700px;">
+    <div class="card-header bg-warning text-dark text-center py-3">
+      <h4 class="mb-0 fw-bold">Edit Assignment Detail</h4>
+    </div>
+
+    <div class="card-body p-4">
+      <!-- Yeh boxes hamesha nazar aane chahiye -->
+      <div class="row mb-4">
+        <div class="col-6">
+          <div class="p-3 border rounded bg-light">
+            <small class="text-muted d-block text-uppercase fw-bold">Project</small>
+            <span class="fw-bold">{{ project.name if project else 'Loading...' }}</span>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="p-3 border rounded bg-light">
+            <small class="text-muted d-block text-uppercase fw-bold">District</small>
+            <span class="fw-bold">{{ district.name if district else 'Loading...' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        
+        <!-- Hidden editable fields values -->
+        <div style="display:none;">
+            {{ form.project_id() }}
+            {{ form.district_id() }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-bold">Assignment Date</label>
+          {{ form.assign_date(class="form-control datepicker") }}
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-bold">Update Remarks</label>
+          {{ form.remarks(class="form-control", rows=4) }}
+        </div>
+
+        <div class="d-grid gap-2">
+          <button type="submit" class="btn btn-warning btn-lg fw-bold">Update Assignment</button>
+          <a href="{{ url_for('assign_project_to_district') }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

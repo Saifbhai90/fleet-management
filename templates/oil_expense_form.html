@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<style>
+  .oil-form-wrap { max-width: 1200px; margin: 0 auto; }
+  .oil-form-wrap .page-header {
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    margin-bottom: 0.6rem;
+  }
+  .oil-form-wrap .form-section { background: #fff; border-radius: 10px; border: 1px solid #e9ecef; margin-bottom: 0.6rem; overflow: hidden; }
+  .oil-form-wrap .form-section-header {
+    background: linear-gradient(to right, #f8f9fa 0%, #fff 100%);
+    border-bottom: 1px solid #e9ecef;
+    padding: 0.35rem 0.75rem;
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: #495057;
+  }
+  .oil-form-wrap .form-section-body { padding: 0.5rem 0.75rem; }
+  .oil-form-wrap .form-label { font-size: 0.72rem; font-weight: 500; color: #495057; margin-bottom: 0.2rem; }
+  .oil-form-wrap .form-control, .oil-form-wrap .form-select { border-radius: 6px; font-size: 0.8rem; padding: 0.35rem 0.5rem; min-height: 32px; }
+  .oil-form-wrap .form-control.bg-light { background-color: #f1f3f5 !important; cursor: default; }
+  .oil-form-wrap .field-group { margin-bottom: 0.4rem; }
+  .oil-form-wrap #itemsTable input, .oil-form-wrap #itemsTable select { font-size: 0.8rem; padding: 0.3rem 0.4rem; }
+  .oil-form-wrap .action-bar { padding: 0.5rem 1rem; background: #f8f9fa; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 0.5rem; }
+</style>
+<div class="container-fluid oil-form-wrap py-2">
+  <div class="page-header d-flex justify-content-between align-items-center">
+    <h4><i class="bi bi-droplet-fill me-2"></i>{{ title }}</h4>
+    <a href="{{ url_for('oil_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
+  </div>
+
+  <form method="POST" action="" id="oilExpenseForm" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+
+    <div class="form-section">
+      <div class="form-section-header">Location & Date</div>
+      <div class="form-section-body">
+        <div class="row g-2">
+          <div class="col-md-4 field-group">
+            <label class="form-label">District</label>
+            {{ form.district_id(class="form-select", id="districtSelect") }}
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">Project</label>
+            {{ form.project_id(class="form-select", id="projectSelect") }}
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">Vehicle <span class="text-danger">*</span></label>
+            {{ form.vehicle_id(class="form-select", id="vehicleSelect") }}
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">Oil Change Date <span class="text-danger">*</span></label>
+            {{ form.expense_date(class="form-control datepicker", id="expenseDate") }}
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">Card Swipe Date</label>
+            {{ form.card_swipe_date(class="form-control datepicker") }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-header">Meter Readings</div>
+      <div class="form-section-body">
+        <div class="row g-2">
+          <div class="col-md-4 field-group">
+            <label class="form-label">Previous Reading</label>
+            {{ form.previous_reading(class="form-control bg-light", id="previousReading", step="0.01", readonly=True, placeholder="From last entry") }}
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">Current Reading</label>
+            {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">KM (Current − Previous)</label>
+            <input type="text" id="kmDisplay" class="form-control bg-light" readonly placeholder="—">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-header">Product Lines</div>
+      <div class="form-section-body">
+        <p class="small text-muted mb-2">Search product → Payment type → Purchase Qty → Used Qty → Price (Amount auto). Balance = Purchase − Used. Press <kbd>Enter</kbd> to add line to list below.</p>
+        <div class="row g-2 align-items-end mb-3 border rounded p-2 bg-light" id="entryRow">
+          <div class="col-md-2">
+            <label class="form-label mb-0">Product</label>
+            <select id="entryProductSelect" class="form-select form-select-sm">
+              <option value="">-- Search / Select --</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label mb-0">Payment Type</label>
+            <select id="entryPaymentType" class="form-select form-select-sm">
+              <option value="">-- Select --</option>
+              <option value="Card">Card</option>
+              <option value="Credit">Credit</option>
+              <option value="Cash">Cash</option>
+              <option value="In Hand Stock">In Hand Stock</option>
+            </select>
+          </div>
+          <div class="col-md-1">
+            <label class="form-label mb-0">Purchase Qty</label>
+            <input type="number" id="entryPurchaseQty" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
+          </div>
+          <div class="col-md-1">
+            <label class="form-label mb-0">Used Qty</label>
+            <input type="number" id="entryUsedQty" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
+          </div>
+          <div class="col-md-1">
+            <label class="form-label mb-0">Price</label>
+            <input type="number" id="entryPrice" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
+          </div>
+          <div class="col-md-1">
+            <label class="form-label mb-0">Amount</label>
+            <input type="text" id="entryAmount" class="form-control form-control-sm bg-light" readonly placeholder="0">
+          </div>
+          <div class="col-md-1">
+            <label class="form-label mb-0">Balance Qty</label>
+            <input type="text" id="entryBalanceQty" class="form-control form-control-sm bg-light" readonly placeholder="0">
+          </div>
+          <div class="col-md-2">
+            <button type="button" class="btn btn-sm btn-primary w-100" id="addToListBtn"><i class="bi bi-plus-lg"></i> Add to list</button>
+          </div>
+        </div>
+        <table class="table table-bordered table-sm mb-0" id="itemsTable">
+          <thead class="table-light">
+            <tr>
+              <th>Product</th>
+              <th>Payment Type</th>
+              <th>Purchase Qty</th>
+              <th>Used Qty</th>
+              <th>Price</th>
+              <th>Amount</th>
+              <th>Balance Qty</th>
+              <th style="width: 40px;"></th>
+            </tr>
+          </thead>
+          <tbody id="itemsBody">
+            {% if rec and rec.items.count() %}
+              {% for it in rec.items %}
+              <tr class="item-row" data-product-id="{{ it.product_id }}">
+                <td>
+                  <input type="hidden" name="product_id" value="{{ it.product_id }}">
+                  <span class="product-name">{{ it.product.name }}</span>
+                </td>
+                <td>
+                  <select name="payment_type" class="form-select form-select-sm">
+                    <option value="">-- Select --</option>
+                    <option value="Card" {% if it.payment_type == 'Card' %}selected{% endif %}>Card</option>
+                    <option value="Credit" {% if it.payment_type == 'Credit' %}selected{% endif %}>Credit</option>
+                    <option value="Cash" {% if it.payment_type == 'Cash' %}selected{% endif %}>Cash</option>
+                    <option value="In Hand Stock" {% if it.payment_type == 'In Hand Stock' %}selected{% endif %}>In Hand Stock</option>
+                  </select>
+                </td>
+                <td><input type="number" name="purchase_qty" class="form-control form-control-sm item-purchase-qty" step="0.01" min="0" value="{{ it.purchase_qty or 0 }}" placeholder="0"></td>
+                <td><input type="number" name="used_qty" class="form-control form-control-sm item-used-qty" step="0.01" min="0" value="{{ it.used_qty or 0 }}" placeholder="0"></td>
+                <td><input type="number" name="price" class="form-control form-control-sm item-price" step="0.01" min="0" value="{{ it.price }}" placeholder="0"></td>
+                <td><input type="text" class="form-control form-control-sm bg-light item-amount" readonly placeholder="0"></td>
+                <td><span class="balance-qty text-muted small">—</span></td>
+                <td><button type="button" class="btn btn-outline-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>
+              </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+          <tfoot class="table-light fw-semibold">
+            <tr id="totalsRow">
+              <td colspan="2" class="text-end">Total</td>
+              <td><span id="totalPurchaseQty">0</span></td>
+              <td><span id="totalUsedQty">0</span></td>
+              <td>—</td>
+              <td><span id="totalBillAmount">0.00</span></td>
+              <td><span id="totalBalanceQty">0</span></td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-header">Remarks</div>
+      <div class="form-section-body">
+        {{ form.remarks(class="form-control", rows=2) }}
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-header">Photos / Videos</div>
+      <div class="form-section-body">
+        <input type="file" name="attachments" multiple accept="image/*,video/*" class="form-control">
+        <small class="text-muted">Multiple images or videos allowed.</small>
+        {% if rec and rec.attachments.count() %}
+        <div class="mt-2">
+          <strong>Existing:</strong>
+          {% for att in rec.attachments %}
+          <a href="{{ url_for('uploaded_file', filename=att.file_path) }}" target="_blank" class="me-2">{{ att.original_name or att.file_path }}</a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="action-bar">
+        <a href="{{ url_for('oil_expense_list') }}" class="btn btn-outline-secondary">Cancel</a>
+        {{ form.submit(class="btn btn-primary") }}
+      </div>
+    </div>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+(function() {
+  flatpickr('.datepicker', { dateFormat: 'd-m-Y', allowInput: true });
+
+  var vehicleSelect = document.getElementById('vehicleSelect');
+  var previousReading = document.getElementById('previousReading');
+  var currentReading = document.getElementById('currentReading');
+  var kmDisplay = document.getElementById('kmDisplay');
+  var itemsBody = document.getElementById('itemsBody');
+  var entryProductSelect = document.getElementById('entryProductSelect');
+  var entryPaymentType = document.getElementById('entryPaymentType');
+  var entryPurchaseQty = document.getElementById('entryPurchaseQty');
+  var entryUsedQty = document.getElementById('entryUsedQty');
+  var entryPrice = document.getElementById('entryPrice');
+  var entryAmount = document.getElementById('entryAmount');
+  var entryBalanceQty = document.getElementById('entryBalanceQty');
+  var addToListBtn = document.getElementById('addToListBtn');
+
+  var productsForOil = [];
+  fetch('/api/oil-expense/products-for-oil').then(function(r) { return r.json(); }).then(function(arr) {
+    productsForOil = arr;
+    var sel = entryProductSelect;
+    sel.innerHTML = '<option value="">-- Search / Select --</option>';
+    arr.forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.name;
+      o.setAttribute('data-name', p.name || '');
+      sel.appendChild(o);
+    });
+    if (typeof $ !== 'undefined' && $(entryProductSelect).length) {
+      $(entryProductSelect).select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search product...' });
+    }
+    itemsBody.querySelectorAll('.item-row').forEach(function(tr) { bindListRow(tr); });
+    updateTotals();
+  });
+
+  function updateEntryAmountAndBalance() {
+    var purchase = parseFloat(entryPurchaseQty.value) || 0;
+    var used = parseFloat(entryUsedQty.value) || 0;
+    var price = parseFloat(entryPrice.value) || 0;
+    entryAmount.value = (purchase * price).toFixed(2);
+    entryBalanceQty.value = (purchase - used).toFixed(2);
+  }
+  entryPurchaseQty.addEventListener('input', updateEntryAmountAndBalance);
+  entryUsedQty.addEventListener('input', updateEntryAmountAndBalance);
+  entryPrice.addEventListener('input', updateEntryAmountAndBalance);
+
+  function clearEntryRow() {
+    if (typeof $ !== 'undefined' && $(entryProductSelect).length) {
+      $(entryProductSelect).val(null).trigger('change');
+    } else {
+      entryProductSelect.value = '';
+    }
+    entryPaymentType.value = '';
+    entryPurchaseQty.value = '0';
+    entryUsedQty.value = '0';
+    entryPrice.value = '0';
+    entryAmount.value = '';
+    entryBalanceQty.value = '';
+    updateEntryAmountAndBalance();
+    entryProductSelect.focus();
+  }
+
+  function addEntryToList() {
+    var pid = entryProductSelect.value;
+    if (!pid) {
+      alert('Please select a product.');
+      entryProductSelect.focus();
+      return;
+    }
+    var p = productsForOil.find(function(x) { return String(x.id) === String(pid); });
+    var productName = p ? (p.name || '') : '';
+    var paymentType = entryPaymentType.value || '';
+    var purchaseQty = parseFloat(entryPurchaseQty.value) || 0;
+    var usedQty = parseFloat(entryUsedQty.value) || 0;
+    var price = parseFloat(entryPrice.value) || 0;
+    var amount = (purchaseQty * price).toFixed(2);
+    var balanceQty = (purchaseQty - usedQty).toFixed(2);
+
+    var tr = document.createElement('tr');
+    tr.className = 'item-row';
+    tr.dataset.productId = pid;
+    tr.innerHTML =
+      '<td><input type="hidden" name="product_id" value="' + pid + '"><span class="product-name">' + (productName || '') + '</span></td>' +
+      '<td><select name="payment_type" class="form-select form-select-sm"><option value="">-- Select --</option><option value="Card"' + (paymentType === 'Card' ? ' selected' : '') + '>Card</option><option value="Credit"' + (paymentType === 'Credit' ? ' selected' : '') + '>Credit</option><option value="Cash"' + (paymentType === 'Cash' ? ' selected' : '') + '>Cash</option><option value="In Hand Stock"' + (paymentType === 'In Hand Stock' ? ' selected' : '') + '>In Hand Stock</option></select></td>' +
+      '<td><input type="number" name="purchase_qty" class="form-control form-control-sm item-purchase-qty" step="0.01" min="0" value="' + purchaseQty + '"></td>' +
+      '<td><input type="number" name="used_qty" class="form-control form-control-sm item-used-qty" step="0.01" min="0" value="' + usedQty + '"></td>' +
+      '<td><input type="number" name="price" class="form-control form-control-sm item-price" step="0.01" min="0" value="' + price + '"></td>' +
+      '<td><input type="text" class="form-control form-control-sm bg-light item-amount" readonly value="' + amount + '"></td>' +
+      '<td><span class="balance-qty text-muted small">' + balanceQty + '</span></td>' +
+      '<td><button type="button" class="btn btn-outline-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>';
+    itemsBody.appendChild(tr);
+    bindListRow(tr);
+    clearEntryRow();
+    updateTotals();
+  }
+
+  addToListBtn.addEventListener('click', addEntryToList);
+
+  function onEntryKeydown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addEntryToList();
+    }
+  }
+  entryProductSelect.addEventListener('keydown', onEntryKeydown);
+  entryPaymentType.addEventListener('keydown', onEntryKeydown);
+  entryPurchaseQty.addEventListener('keydown', onEntryKeydown);
+  entryUsedQty.addEventListener('keydown', onEntryKeydown);
+  entryPrice.addEventListener('keydown', onEntryKeydown);
+
+  function bindListRow(tr) {
+    var purchaseQty = tr.querySelector('.item-purchase-qty');
+    var usedQty = tr.querySelector('.item-used-qty');
+    var price = tr.querySelector('.item-price');
+    var amount = tr.querySelector('.item-amount');
+    var balanceSpan = tr.querySelector('.balance-qty');
+
+    function updateRow() {
+      var p = parseFloat(purchaseQty.value) || 0;
+      var u = parseFloat(usedQty.value) || 0;
+      var pr = parseFloat(price.value) || 0;
+      amount.value = (p * pr).toFixed(2);
+      balanceSpan.textContent = (p - u).toFixed(2);
+      updateTotals();
+    }
+    purchaseQty.addEventListener('input', updateRow);
+    usedQty.addEventListener('input', updateRow);
+    price.addEventListener('input', updateRow);
+
+    tr.querySelector('.remove-row').addEventListener('click', function() {
+      tr.remove();
+      updateTotals();
+    });
+    updateRow();
+  }
+
+  function updateTotals() {
+    var totalPurchase = 0, totalUsed = 0, totalBalance = 0, totalAmount = 0;
+    itemsBody.querySelectorAll('.item-row').forEach(function(tr) {
+      var p = parseFloat(tr.querySelector('.item-purchase-qty').value) || 0;
+      var u = parseFloat(tr.querySelector('.item-used-qty').value) || 0;
+      totalPurchase += p;
+      totalUsed += u;
+      totalBalance += (p - u);
+      totalAmount += parseFloat(tr.querySelector('.item-amount').value) || 0;
+    });
+    document.getElementById('totalPurchaseQty').textContent = totalPurchase.toFixed(2);
+    document.getElementById('totalUsedQty').textContent = totalUsed.toFixed(2);
+    document.getElementById('totalBalanceQty').textContent = totalBalance.toFixed(2);
+    document.getElementById('totalBillAmount').textContent = totalAmount.toFixed(2);
+  }
+
+  function updateKm() {
+    var prev = parseFloat(previousReading.value) || null;
+    var curr = parseFloat(currentReading.value) || null;
+    if (prev != null && curr != null && curr >= prev) {
+      kmDisplay.value = (curr - prev).toFixed(2);
+    } else {
+      kmDisplay.value = '';
+    }
+  }
+  if (currentReading) currentReading.addEventListener('input', updateKm);
+  if (previousReading) previousReading.addEventListener('input', updateKm);
+
+  if (vehicleSelect) {
+    vehicleSelect.addEventListener('change', function() {
+      var vid = this.value;
+      previousReading.value = '';
+      if (!vid || vid === '0') return;
+      fetch('/api/oil-expense/last-reading?vehicle_id=' + vid).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.previous_reading != null) previousReading.value = d.previous_reading;
+        updateKm();
+      });
+    });
+  }
+
+  updateKm();
+  updateEntryAmountAndBalance();
+})();
+</script>
+{% endblock %}

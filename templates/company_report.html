@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+    /* 1. Print Specific Fixes - Sidebar aur unwanted elements ko bilkul khatam karne ke liye */
+    @media print {
+        nav, .sidebar, .no-print, .btn, header, footer, .fleet-panel-brand { 
+            display: none !important; 
+        }
+        
+        body { background: white !important; margin: 0 !important; }
+        .container { max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
+        .main-content { margin-left: 0 !important; padding: 0 !important; }
+        
+        .report-paper {
+            box-shadow: none !important;
+            border: none !important;
+            margin: 0 !important;
+            padding: 20px !important;
+        }
+    }
+
+    /* 2. Professional Report Styling */
+    .report-paper {
+        background: white;
+        padding: 40px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .report-header {
+        border-bottom: 4px solid #1e3a8a;
+        margin-bottom: 30px;
+        padding-bottom: 10px;
+    }
+
+    .company-title { color: #1e3a8a; font-weight: 800; letter-spacing: -1px; }
+    
+    .detail-table th {
+        background-color: #f8fafc;
+        color: #475569;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+        width: 30%;
+        border-right: 2px solid #fff;
+    }
+
+    .detail-table td { font-size: 0.95rem; color: #1e293b; }
+
+    .signature-section {
+        margin-top: 80px;
+        border-top: 1px solid #e2e8f0;
+        padding-top: 10px;
+        width: 200px;
+        text-align: center;
+        font-size: 0.85rem;
+        color: #64748b;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 no-print">
+        <a href="{{ url_for('companies') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-chevron-left"></i> Back to Directory
+        </a>
+        <div class="btn-group shadow-sm">
+            <button onclick="exportToExcel()" class="btn btn-sm btn-success">Excel</button>
+            <button onclick="exportToWord()" class="btn btn-sm btn-primary">Word</button>
+            <button onclick="window.print()" class="btn btn-sm btn-dark">
+                <i class="bi bi-printer me-1"></i> Print / PDF
+            </button>
+        </div>
+    </div>
+
+    <div id="reportContent" class="report-paper mx-auto" style="max-width: 800px;">
+        
+        <div class="report-header d-flex justify-content-between align-items-end">
+            <div>
+                <h1 class="company-title mb-0">{{ company.name }}</h1>
+                <p class="text-muted small mb-0">Official Business Record | Fleet Management System</p>
+            </div>
+            <div class="text-end">
+                <h5 class="fw-bold mb-0">COMPANY REPORT</h5>
+                <p class="small text-muted mb-0">REF ID: #{{ company.id }}</p>
+            </div>
+        </div>
+
+        <div class="row mb-5">
+            <div class="col-12">
+                <table class="table table-bordered detail-table">
+                    <tbody>
+                        <tr>
+                            <th>Office Address</th>
+                            <td>{{ company.office_address or '---' }}</td> 
+                        </tr>
+                        <tr>
+                            <th>District / State</th>
+                            <td>{{ company.district or '---' }} , {{ company.state or '---' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Primary Mobile</th>
+                            <td>{{ company.mobile|phone_fmt or '---' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Landline Phone</th>
+                            <td>{{ company.phone|phone_fmt or '---' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Email Address</th>
+                            <td>{{ company.email or '---' }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mb-5">
+            <h6 class="fw-bold text-navy" style="border-left: 4px solid #1e3a8a; padding-left: 10px;">REMARKS & NOTES</h6>
+            <div class="p-3 bg-light rounded" style="min-height: 100px; font-style: italic;">
+                {{ company.remarks or 'No additional remarks have been recorded for this company profile.' }}
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between mt-5 pt-5">
+            <div class="small text-muted">
+                Report Generated: {{ current_date }}<br>
+                System User: Admin
+            </div>
+            <div class="signature-section">
+                Authorized Signature
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+<script>
+    function exportToExcel() {
+        let data = [
+            ["COMPANY PROFILE REPORT"],
+            ["Company Name", "{{ company.name }}"],
+            ["ID", "{{ company.id }}"],
+            ["Address", "{{ company.office_address  }}"],
+            ["District", "{{ company.district }}"],
+            ["State", "{{ company.state }}"],
+            ["Mobile", "{{ company.mobile }}"],
+            ["Email", "{{ company.email }}"],
+            ["Remarks", "{{ company.remarks }}"]
+        ];
+        let ws = XLSX.utils.aoa_to_sheet(data);
+        let wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Company Profile");
+        XLSX.writeFile(wb, "Company_{{ company.id }}_Profile.xlsx");
+    }
+
+    function exportToWord() {
+        var content = document.getElementById('reportContent').innerHTML;
+        var blob = new Blob(['\ufeff', content], { type: 'application/msword' });
+        saveAs(blob, "Company_{{ company.id }}_Report.doc");
+    }
+</script>
+{% endblock %}

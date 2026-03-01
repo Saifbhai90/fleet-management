@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Drivers List{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-person-badge-fill me-2 text-primary"></i>Drivers Management</h2>
+    <a href="{{ url_for('driver_form') }}" class="btn btn-success shadow-sm">
+      <i class="bi bi-person-plus-fill me-1"></i>Add New Driver
+    </a>
+  </div>
+
+  <!-- Search Form -->
+  <form method="GET" class="mb-4">
+    <div class="input-group input-group-lg shadow-sm">
+      <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+      <input type="text" name="search" class="form-control border-start-0" placeholder="Search by name, CNIC, license, driver ID or phone..." value="{{ search }}">
+      <button class="btn btn-primary" type="submit">
+        <i class="bi bi-search me-1"></i>Search
+      </button>
+    </div>
+  </form>
+
+  <!-- Drivers Table -->
+  <div class="card shadow border-0 rounded-4 overflow-hidden">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-striped mb-0 align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th class="ps-4">Driver ID</th>
+              <th>Name</th>
+              <th>CNIC No</th>
+              <th>CNIC Status</th>
+              <th>License No</th>
+              <th>License Status</th>
+              <th>Phone</th>
+              <th>Driver District</th>
+              <th class="text-end pe-4">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for driver in drivers %}
+            <tr>
+              <td class="ps-4 fw-bold">{{ driver.driver_id }}</td>
+              <td class="fw-medium">{{ driver.name }}{% if driver.photo_path %} <i class="bi bi-image text-info" title="Photo uploaded"></i>{% endif %}{% if driver.document_path %} <a href="{{ url_for('uploaded_file', filename=driver.document_path) }}" target="_blank" class="text-primary ms-1" title="View documents"><i class="bi bi-file-earmark-pdf"></i></a>{% endif %}</td>
+              <td>{{ driver.cnic_no|cnic_fmt or '-' }}</td>
+              <td>
+                {% if driver.cnic_status == 'Valid' %}
+                  <span class="badge bg-success px-3 py-2">Valid</span>
+                {% elif driver.cnic_status == 'Expired' %}
+                  <span class="badge bg-danger px-3 py-2">Expired</span>
+                {% else %}
+                  <span class="badge bg-secondary px-3 py-2">N/A</span>
+                {% endif %}
+              </td>
+              <td>{{ driver.license_no or '-' }}</td>
+              <td>
+                {% if driver.license_status == 'Valid' %}
+                  <span class="badge bg-success px-3 py-2">Valid</span>
+                {% elif driver.license_status == 'Expired' %}
+                  <span class="badge bg-danger px-3 py-2">Expired</span>
+                {% else %}
+                  <span class="badge bg-secondary px-3 py-2">N/A</span>
+                {% endif %}
+              </td>
+              <td>{{ driver.phone1|phone_fmt or '-' }}</td>
+              <td>{{ driver.driver_district or '-' }}</td>
+              <td class="text-end pe-4">
+                <a href="{{ url_for('report_driver_profile', driver_id=driver.id) }}" class="btn btn-sm btn-info me-1" title="Profile Report">
+                  <i class="bi bi-file-text"></i>
+                </a>
+                <a href="{{ url_for('driver_form', id=driver.id) }}" class="btn btn-sm btn-warning me-1" title="Edit Driver">
+                  <i class="bi bi-pencil-square"></i>
+                </a>
+                <form action="{{ url_for('delete_driver', id=driver.id) }}" method="POST" style="display:inline;">
+                  <button type="submit" class="btn btn-sm btn-danger" title="Delete Driver" onclick="return confirm('Are you sure you want to delete {{ driver.name }}? This action cannot be undone.')">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="9" class="text-center py-5">
+                <div class="alert alert-info border-0 shadow-sm mb-0">
+                  <i class="bi bi-info-circle-fill me-2 fs-4"></i>
+                  No drivers found in the system.
+                  <br class="d-block d-sm-none">
+                  <a href="{{ url_for('driver_form') }}" class="alert-link fw-bold">Add a new driver now</a>.
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer bg-light text-muted small d-flex justify-content-between align-items-center">
+      <div>Total Drivers: <strong class="text-dark">{{ drivers|length }}</strong></div>
+      {% if search %}
+        <div>Filtered by: <strong class="text-primary">"{{ search }}"</strong></div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+  tr:hover {
+    background-color: rgba(13, 110, 253, 0.05) !important;
+  }
+</style>
+{% endblock %}

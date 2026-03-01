@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Edit Vehicle Transfer{% endblock %}
+
+{% block content %}
+<!-- Modern Font -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<div class="container py-4" style="font-family: 'Inter', sans-serif;">
+  <div class="card shadow-lg border-0 mx-auto" style="max-width: 850px; border-radius: 20px; overflow: hidden;">
+    
+    <!-- Premium Header -->
+    <div class="card-header bg-primary py-3 px-4 d-flex align-items-center justify-content-between border-0">
+      <h4 class="mb-0 text-white fw-bold">
+        <i class="bi bi-pencil-square me-2"></i> Edit Transfer Record
+      </h4>
+      <div class="text-white-50 small fw-bold text-uppercase tracking-wider">
+        Log ID: #{{ transfer.id }}
+      </div>
+    </div>
+    
+    <div class="card-body p-4 bg-white">
+      <!-- Vehicle Context Bar (Gaari ki pehchan ke liye) -->
+      <div class="d-flex align-items-center p-3 mb-4 rounded-4 shadow-sm border-start border-4 border-warning" style="background-color: #fffdf5;">
+        <div class="bg-dark text-warning rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px;">
+            <i class="bi bi-truck fs-4"></i>
+        </div>
+        <div>
+            <h5 class="mb-0 fw-bold text-dark">{{ transfer.vehicle.vehicle_no }}</h5>
+            <small class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Currently editing destination details</small>
+        </div>
+      </div>
+
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        
+        <div class="row g-4">
+            <!-- SECTION: NEW LOCATION DETAILS -->
+            <div class="col-12">
+                <div class="p-4 rounded-4 border shadow-sm bg-light">
+                    <h6 class="fw-bold text-primary mb-4 text-uppercase small"><i class="bi bi-geo-fill me-2"></i>Update Destination Details</h6>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-muted text-uppercase">New Project</label>
+                            {{ form.new_project_id(class="form-select select2-enable shadow-sm", id="new_project") }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-muted text-uppercase">New District</label>
+                            {{ form.new_district_id(class="form-select shadow-sm", id="new_district") }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-muted text-uppercase">New Parking Site</label>
+                            {{ form.new_parking_id(class="form-select shadow-sm", id="new_parking") }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-muted text-uppercase">Transfer Date</label>
+                            <div class="input-group shadow-sm rounded-3 overflow-hidden">
+                                <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-calendar-event"></i></span>
+                                {{ form.transfer_date(class="form-control datepicker border-start-0") }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REMARKS -->
+            <div class="col-12 px-2">
+                <label class="form-label fw-semibold small text-muted text-uppercase">Adjustment Remarks</label>
+                {{ form.remarks(class="form-control border-0 bg-light rounded-3 p-3", rows=2, placeholder="Why is this record being updated?") }}
+            </div>
+        </div>
+
+        <!-- SMART ALERT (Driver Status Logic) -->
+        <div id="driver_status_alert" class="mt-4 alert d-flex align-items-center border-0 shadow-sm py-3 px-4 rounded-4" style="display: none !important;">
+            <i id="driver_icon" class="bi fs-2 me-3"></i>
+            <div>
+                <h6 id="driver_title" class="fw-bold mb-1"></h6>
+                <p id="driver_msg" class="mb-0 small opacity-75"></p>
+            </div>
+        </div>
+
+        <!-- ACTION BUTTONS -->
+        <div class="row g-2 mt-4">
+            <div class="col-6">
+                <a href="{{ url_for('vehicle_transfers') }}" class="btn btn-outline-secondary w-100 fw-bold py-3 rounded-4 border-2">
+                    <i class="bi bi-x-circle me-1"></i> Cancel
+                </a>
+            </div>
+            <div class="col-6">
+                <button type="submit" class="btn btn-primary w-100 fw-bold py-3 rounded-4 shadow border-0 text-uppercase tracking-wider">
+                    <i class="bi bi-check2-circle me-1"></i> Update Log
+                </button>
+            </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+    .form-select, .form-control { border-radius: 10px; border: 1px solid #e0e0e0; padding: 12px 15px; }
+    .form-select:focus, .form-control:focus { box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.1); border-color: #0d6efd; }
+    .bg-light { background-color: #f9fafb !important; }
+    .select2-container--default .select2-selection--single {
+        height: 50px !important;
+        border-radius: 10px !important;
+        border: 1px solid #e0e0e0 !important;
+        padding-top: 10px !important;
+    }
+</style>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+  $(document).ready(function() {
+    
+    // --- Driver Status Logic for Edit ---
+    // Note: Edit mein "From" location fixed hai (Jo transfer record mein pehle se thi)
+    const fromP = "{{ transfer.from_project_id }}";
+    const fromD = "{{ transfer.from_district_id }}";
+
+    function checkDriverImpact() {
+        let newP = $('#new_project').val();
+        let newD = $('#new_district').val();
+
+        if(newP > 0 && newD > 0) {
+            $('#driver_status_alert').attr('style', 'display: flex !important');
+            if(fromP == newP && fromD == newD) {
+                $('#driver_status_alert').removeClass('alert-danger text-danger').addClass('alert-info text-primary bg-info-subtle');
+                $('#driver_icon').attr('class', 'bi bi-person-check-fill fs-2 me-3');
+                $('#driver_title').text('Driver Remains Attached');
+                $('#driver_msg').text('Since project and district are the same, the driver will stay with the vehicle.');
+            } else {
+                $('#driver_status_alert').removeClass('alert-info text-primary').addClass('alert-danger text-danger bg-danger-subtle');
+                $('#driver_icon').attr('class', 'bi bi-person-x-fill fs-2 me-3');
+                $('#driver_title').text('Driver Detachment Warning');
+                $('#driver_msg').text('Changing the Project or District will automatically release the current driver.');
+            }
+        }
+    }
+
+    // Initial check on load
+    checkDriverImpact();
+
+    // Cascading Dropdowns logic
+    $('#new_project').change(function() {
+      let pid = $(this).val();
+      checkDriverImpact();
+      $.get('/get_districts_by_project/' + pid, function(data) {
+        let options = '<option value="0">-- Select District --</option>';
+        data.forEach(d => options += `<option value="${d.id}">${d.name}</option>`);
+        $('#new_district').html(options);
+        $('#new_parking').html('<option value="0">-- No Parking --</option>');
+      });
+    });
+
+    $('#new_district').change(function() {
+      let did = $(this).val();
+      checkDriverImpact();
+      $.get('/get_parking_by_district/' + did, function(data) {
+        let options = '<option value="0">-- No Parking --</option>';
+        data.forEach(p => options += `<option value="${p.id}">${p.name}</option>`);
+        $('#new_parking').html(options);
+      });
+    });
+  });
+</script>
+{% endblock %}

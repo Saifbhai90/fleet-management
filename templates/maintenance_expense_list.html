@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Maintenance Expense{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-wrench me-2 text-warning"></i>Maintenance Expense</h2>
+    <a href="{{ url_for('maintenance_expense_form') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add Maintenance
+    </a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="GET" action="{{ url_for('maintenance_expense_list') }}" class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label small">From Date</label>
+          <input type="text" name="from_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ from_date|ddmmyyyy if from_date else '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">To Date</label>
+          <input type="text" name="to_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ to_date|ddmmyyyy if to_date else '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">District</label>
+          <select name="district_id" id="districtSelect" class="form-select form-select-sm">
+            {% for val, label in form.district_id.choices %}
+              <option value="{{ val }}" {% if request.args.get('district_id')|int == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Project</label>
+          <select name="project_id" id="projectSelect" class="form-select form-select-sm">
+            {% for val, label in form.project_id.choices %}
+              <option value="{{ val }}" {% if request.args.get('project_id')|int == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Vehicle</label>
+          <select name="vehicle_id" id="vehicleSelect" class="form-select form-select-sm">
+            {% for val, label in form.vehicle_id.choices %}
+              <option value="{{ val }}" {% if request.args.get('vehicle_id')|int == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-funnel me-1"></i>Apply Filter
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-warning text-dark py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="fw-semibold">Maintenance {% if from_date %}from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}{% else %}(Apply filter to view){% endif %}</span>
+      <input type="text" id="maintenanceSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Search vehicle, district, project, items..." style="max-width: 280px;" autocomplete="off">
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 small" id="maintenanceTable">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">#</th>
+              <th>District</th>
+              <th>Project</th>
+              <th>Vehicle</th>
+              <th>Date</th>
+              <th>Prev / Curr / KM</th>
+              <th>Items</th>
+              <th>Total Qty</th>
+              <th>Amount</th>
+              <th class="text-center pe-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in rows %}
+            {% set r = item.rec %}
+            <tr class="maintenance-expense-row">
+              <td class="ps-3">{{ loop.index }}</td>
+              <td>{{ r.district.name if r.district else '-' }}</td>
+              <td>{{ r.project.name if r.project else '-' }}</td>
+              <td class="fw-medium">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
+              <td>{{ r.expense_date|ddmmyyyy }}</td>
+              <td>{{ r.previous_reading|round(2) if r.previous_reading is not none else '-' }} / {{ r.current_reading|round(2) if r.current_reading is not none else '-' }} / {{ r.km|round(2) if r.km is not none else '-' }}</td>
+              <td>
+                {% for it in r.items %}
+                  {{ it.product.name }}{% if not loop.last %}, {% endif %}
+                {% else %}
+                  —
+                {% endfor %}
+              </td>
+              <td>{{ "%.2f"|format(item.total_qty) }}</td>
+              <td>{{ "%.2f"|format(item.total_amount) }}</td>
+              <td class="text-center pe-3">
+                <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                <form action="{{ url_for('maintenance_expense_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this maintenance entry?');">
+                  <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr id="maintenanceNoDataRow">
+              <td colspan="10" class="text-center py-5 text-muted">
+                <i class="bi bi-wrench display-6 d-block mb-2"></i>
+                No maintenance entries. <a href="{{ url_for('maintenance_expense_form') }}">Add Maintenance</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  flatpickr('.datepicker', { dateFormat: 'd-m-Y', allowInput: true });
+  var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
+  var vehicleSelect = document.getElementById('vehicleSelect');
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = this.value;
+      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+      if (did && did !== '0') {
+        fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
+          arr.forEach(function(p) {
+            var o = document.createElement('option');
+            o.value = p.id;
+            o.textContent = p.name;
+            projectSelect.appendChild(o);
+          });
+        });
+      }
+    });
+  }
+  if (projectSelect && vehicleSelect) {
+    projectSelect.addEventListener('change', function() {
+      var pid = projectSelect.value;
+      var did = districtSelect ? districtSelect.value : '';
+      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+      if (pid && pid !== '0') {
+        var url = '/get_vehicles_by_project_district?project_id=' + pid;
+        if (did && did !== '0') url += '&district_id=' + did;
+        fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
+          arr.forEach(function(v) {
+            var o = document.createElement('option');
+            o.value = v.id;
+            o.textContent = v.vehicle_no;
+            vehicleSelect.appendChild(o);
+          });
+        });
+      }
+    });
+  }
+  var searchInput = document.getElementById('maintenanceSearch');
+  var table = document.getElementById('maintenanceTable');
+  if (searchInput && table) {
+    var tbody = table.querySelector('tbody');
+    if (tbody) {
+      var dataRows = tbody.querySelectorAll('tr.maintenance-expense-row');
+      var noDataRow = tbody.querySelector('tr#maintenanceNoDataRow');
+      searchInput.addEventListener('input', function() {
+        var q = this.value.trim().toLowerCase();
+        var visible = 0;
+        dataRows.forEach(function(row) {
+          var text = row.textContent.replace(/\s+/g, ' ').toLowerCase();
+          var show = !q || text.indexOf(q) > -1;
+          row.style.display = show ? '' : 'none';
+          if (show) visible++;
+        });
+        if (noDataRow) noDataRow.style.display = (dataRows.length === 0 || (q && visible === 0)) ? '' : 'none';
+      });
+    }
+  }
+});
+</script>
+{% endblock %}

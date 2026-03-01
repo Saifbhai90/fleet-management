@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Districts List{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-geo-alt me-2"></i>Districts Management</h2>
+    <a href="{{ url_for('district_form') }}" class="btn btn-success">
+      <i class="bi bi-plus-circle me-1"></i>Add New District
+    </a>
+  </div>
+
+  <form method="GET" class="mb-4">
+    <div class="input-group input-group-lg">
+      <span class="input-group-text"><i class="bi bi-search"></i></span>
+      <input type="text" name="search" class="form-control" placeholder="Search district or province..." value="{{ search }}">
+      <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1"></i>Search</button>
+    </div>
+  </form>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>ID</th>
+              <th>District Name</th>
+              <th>Province/Region</th>
+              <th>Remarks</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for district in districts %}
+            <tr>
+              <td>{{ district.id }}</td>
+              <td>{{ district.name }}</td>
+              <td>{{ district.province or '-' }}</td>
+              <td>{{ district.remarks|truncate(80) or '-' }}</td>
+              <td>{{ district.created_at.strftime('%Y-%m-%d') }}</td>
+              <td>
+                <a href="{{ url_for('district_form', id=district.id) }}" class="btn btn-sm btn-warning me-1" title="Edit">
+                  <i class="bi bi-pencil-square"></i> Edit
+                </a>
+                <form action="{{ url_for('delete_district', id=district.id) }}" method="POST" style="display:inline;">
+                  <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete district {{ district.name }}?')">
+                    <i class="bi bi-trash"></i> Delete
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="6" class="text-center py-5">
+                <div class="alert alert-info mb-0">
+                  <i class="bi bi-info-circle-fill me-2 fs-4"></i>No districts found.
+                  <a href="{{ url_for('district_form') }}" class="alert-link">Add a new district now</a>.
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer bg-light text-muted text-end small">
+      Total Districts: <strong>{{ districts|length }}</strong>
+      {% if search %} | Filtered by: "{{ search }}"{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Upload Workbooks (Admin){% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-file-earmark-excel me-2 text-primary"></i>Upload Workbooks (Admin)</h2>
+    <a href="{{ url_for('task_report_list') }}" class="btn btn-outline-secondary btn-sm">Back to Task Report</a>
+  </div>
+
+  <div class="card shadow border-0 rounded-3">
+    <div class="card-body">
+      <p class="text-muted small">Report date select karein, phir dono Excel files (ya jo bhi upload karni hon) choose karein. Dono optional hain lekin kam az kam ek file zaroor select karein.</p>
+      <form method="POST" enctype="multipart/form-data">
+        {{ form.hidden_tag() }}
+        <div class="row g-3">
+          <div class="col-md-12">
+            <label class="form-label">Report Date <span class="text-danger">*</span></label>
+            {{ form.task_date(class="form-control datepicker") }}
+            {% for e in form.task_date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">1. EmergencyTaskReport Excel</label>
+            {{ form.file_emergency(class="form-control") }}
+            <small class="text-muted">EMG,Tasks (admin) column ke liye</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">2. Vehicle Mileage Report Excel</label>
+            {{ form.file_mileage(class="form-control") }}
+            <small class="text-muted">Tracker Driven KMs (admin) ke liye</small>
+          </div>
+          <div class="col-12">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-upload me-1"></i>Upload Both
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

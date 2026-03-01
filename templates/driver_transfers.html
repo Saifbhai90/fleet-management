@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Driver Transfer History{% endblock %}
+
+{% block content %}
+<!-- Google Font for Premium UI -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /* Location Block Styling - Optimized */
+  .loc-block { 
+    padding: 12px; 
+    border-radius: 12px; 
+    min-width: 240px; /* Width thodi barhai */
+    transition: 0.3s; 
+    position: relative;
+    border: 1px solid #eee;
+  }
+  .loc-from { background-color: #fff8f8; border-top: 4px solid #ff4d4d; } /* Border top par shift kar di */
+  .loc-to { background-color: #f4fff6; border-top: 4px solid #2ecc71; }
+
+  /* Badge fix: Absolute ki bajaye simple margin */
+  .loc-badge {
+    font-size: 0.6rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 800;
+    display: inline-block;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  
+  .item-row { display: flex; align-items: center; margin-bottom: 5px; font-size: 0.85rem; white-space: nowrap; }
+  .item-row i { width: 22px; color: #6c757d; font-size: 0.95rem; }
+  .item-label { color: #777; width: 65px; font-weight: 500; flex-shrink: 0; }
+  .item-value { color: #111; font-weight: 700; overflow: visible; } /* text-truncate khatam kar diya */
+
+  .journey-arrow {
+    color: #ffc107;
+    font-size: 1.5rem;
+    margin: 0 5px;
+  }
+</style>
+
+<div class="container-fluid py-4 px-lg-5">
+  
+  <!-- Page Header -->
+  <div class="row align-items-center mb-4">
+    <div class="col-md-7">
+      <h2 class="fw-bold text-dark mb-1">Driver Transfers</h2>
+      <p class="text-muted mb-0">Monitor driver re-assignments, vehicle changes, and shift movements.</p>
+    </div>
+    <div class="col-md-5 text-md-end mt-3 mt-md-0">
+      <div class="d-inline-flex gap-2">
+        <a href="{{ url_for('driver_transfer_new') }}" class="btn btn-warning fw-bold px-4 shadow-sm border-0 py-2" style="border-radius: 12px;">
+          <i class="bi bi-person-plus-fill me-2"></i> New Transfer
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Table Card -->
+  <div class="card table-card bg-white">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold text-secondary text-uppercase tracking-wider small">Real-time Transfer Logs</h6>
+        <div id="exportButtonsArea"></div>
+    </div>
+    
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="transferTable">
+        <thead class="bg-light text-muted text-uppercase x-small fw-bold">
+          <tr>
+            <th class="ps-4">Driver Details</th>
+            <th>Journey Flow (From → To)</th>
+            <th>Effective Date</th>
+            <th>Remarks</th>
+            <th class="text-end pe-4">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transfers %}
+          <tr>
+            <!-- Driver Info -->
+            <td class="ps-4">
+                <div class="d-flex align-items-center">
+                    <div class="driver-avatar me-3 shadow-sm">
+                        <i class="bi bi-person-badge fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold text-dark fs-6">{{ t.driver.name }}</div>
+                        <div class="text-muted x-small text-uppercase">ID: {{ t.driver.driver_id }}</div>
+                    </div>
+                </div>
+            </td>
+            
+            <!-- Visual Flow (Journey) -->
+<td>
+  <div class="d-flex align-items-center">
+    
+    <!-- SOURCE (FROM) -->
+    <div class="loc-block loc-from shadow-sm">
+        <span class="badge bg-danger loc-badge mb-2">Source</span>
+        <div class="item-row">
+            <i class="bi bi-building"></i>
+            <span class="item-label">Project:</span>
+            <span class="item-value">{{ t.old_project.name if t.old_project else 'Initial' }}</span>
+        </div>
+        <div class="item-row">
+            <i class="bi bi-geo-alt"></i>
+            <span class="item-label">District:</span>
+            <span class="item-value">{{ t.old_vehicle.district.name if t.old_vehicle and t.old_vehicle.district else '---' }}</span>
+        </div>
+        <div class="item-row">
+            <i class="bi bi-truck"></i>
+            <span class="item-label">Vehicle:</span>
+            <span class="item-value">{{ t.old_vehicle.vehicle_no if t.old_vehicle else '---' }}</span>
+        </div>
+        <div class="item-row">
+            <i class="bi bi-clock"></i>
+            <span class="item-label">Shift:</span>
+            <span class="item-value text-danger">{{ t.old_shift if t.old_shift else '---' }}</span>
+        </div>
+    </div>
+    
+    <div class="journey-arrow">
+        <i class="bi bi-arrow-right-circle-fill"></i>
+    </div>
+    
+    <!-- DESTINATION (TO) -->
+    <div class="loc-block loc-to shadow-sm">
+        <span class="badge bg-success loc-badge mb-2">Destination</span>
+        <div class="item-row">
+            <i class="bi bi-building-fill text-success"></i>
+            <span class="item-label">Project:</span>
+            <span class="item-value">{{ t.new_project.name }}</span>
+        </div>
+        <div class="item-row">
+            <i class="bi bi-geo-alt-fill text-success"></i>
+            <span class="item-label">District:</span>
+            <span class="item-value">{{ t.new_vehicle.district.name if t.new_vehicle and t.new_vehicle.district else '---' }}</span>
+        </div>
+        <div class="item-row">
+            <i class="bi bi-truck-front-fill text-success"></i>
+            <span class="item-label">Vehicle:</span>
+            <span class="item-value">{{ t.new_vehicle.vehicle_no }}</span>
+        </div>
+        <div class="item-row">
+            <i class="bi bi-clock-fill text-success"></i>
+            <span class="item-label">Shift:</span>
+            <span class="item-value text-success fw-bold">{{ t.new_shift }}</span>
+        </div>
+    </div>
+
+  </div>
+</td>
+            
+            <!-- Date -->
+            <td>
+              <div class="fw-bold text-dark">{{ t.transfer_date.strftime('%d %b') }}</div>
+              <div class="text-muted small">{{ t.transfer_date.strftime('%Y') }}</div>
+            </td>
+            
+            <!-- Remarks -->
+            <td>
+              <div class="text-muted small" style="max-width: 180px; font-style: italic;">
+                {{ t.remarks if t.remarks else 'No additional notes.' }}
+              </div>
+            </td>
+
+            <!-- Actions -->
+            <td class="text-end pe-4">
+                <div class="d-flex justify-content-end gap-2">
+                    <form action="{{ url_for('driver_transfer_delete', id=t.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this transfer record permanently?');">
+                        <button type="submit" class="btn-action btn-delete text-danger shadow-sm" title="Delete">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </form>
+                </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- DataTables & Buttons Implementation -->
+<script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
+<script>
+  $(document).ready(function() {
+    var table = $('#transferTable').DataTable({
+      "pageLength": 10,
+      "order": [[2, "desc"]], // Newest transfers first
+      "dom": '<"d-flex justify-content-between align-items-center p-3"fB>rt<"d-flex justify-content-between align-items-center p-3"ip>',
+      "buttons": [
+        { extend: 'excelHtml5', text: '<i class="bi bi-file-earmark-excel me-1"></i> Excel', className: 'btn-success btn-sm' },
+        { extend: 'pdfHtml5', text: '<i class="bi bi-file-earmark-pdf me-1"></i> PDF', className: 'btn-danger btn-sm' },
+        { extend: 'print', text: '<i class="bi bi-printer me-1"></i> Print', className: 'btn-info btn-sm text-white' }
+      ],
+      "language": { "search": "", "searchPlaceholder": "Search driver or project..." }
+    });
+    table.buttons().container().appendTo('#exportButtonsArea');
+  });
+</script>
+{% endblock %}

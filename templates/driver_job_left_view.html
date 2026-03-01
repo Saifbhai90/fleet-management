@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block title %}Separation Report - {{ record.driver.name }}{% endblock %}
+
+{% block content %}
+<!-- Google Font & Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        --danger-gradient: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+        --info-gradient: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+        --surface-color: #ffffff;
+        --bg-color: #f3f4f6;
+    }
+
+    body {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background-color: var(--bg-color);
+    }
+
+    .report-container {
+        padding: 2rem;
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
+    /* Action Bar */
+    .action-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    /* Main Card */
+    .report-card {
+        background: var(--surface-color);
+        border-radius: 20px;
+        border: none;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+
+    /* Vibrant Header */
+    .report-header {
+        background: var(--primary-gradient);
+        padding: 3rem 2.5rem;
+        color: white;
+        position: relative;
+    }
+
+    .report-header::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: 200px;
+        height: 200px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 50%;
+        margin-right: -50px;
+        margin-bottom: -50px;
+    }
+
+    .badge-separation {
+        background: rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 1px;
+    }
+
+    /* Section Styling */
+    .section-box {
+        padding: 2rem 2.5rem;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.9rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        margin-bottom: 1.5rem;
+        letter-spacing: 0.5px;
+    }
+
+    .icon-box {
+        width: 35px;
+        height: 35px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+    }
+
+    /* Info Display */
+    .label-text {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #94a3b8;
+        margin-bottom: 0.3rem;
+    }
+
+    .value-text {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #1e293b;
+    }
+
+    /* Highlight Separation Box */
+    .separation-highlight {
+        background: #fff1f2;
+        border-radius: 15px;
+        padding: 1.5rem;
+        border-left: 5px solid #e11d48;
+    }
+
+    .reason-tag {
+        background: var(--danger-gradient);
+        color: white;
+        padding: 0.4rem 1rem;
+        border-radius: 8px;
+        font-weight: 700;
+        display: inline-block;
+    }
+
+    /* Remarks Box */
+    .remarks-area {
+        background: #f8fafc;
+        border: 1px dashed #cbd5e1;
+        border-radius: 12px;
+        padding: 1rem;
+        color: #475569;
+        font-size: 0.9rem;
+        line-height: 1.6;
+    }
+
+    /* PRINT RULES */
+    @media print {
+        .action-bar, nav, .sidebar { display: none !important; }
+        .report-container { padding: 0 !important; max-width: 100% !important; }
+        .report-card { border: 1px solid #eee; box-shadow: none !important; }
+        .report-header { -webkit-print-color-adjust: exact; }
+    }
+</style>
+
+<div class="report-container">
+    
+    <!-- TOP BUTTONS -->
+    <div class="action-bar no-print">
+        <a href="{{ url_for('driver_job_left_list') }}" class="btn btn-light shadow-sm rounded-pill px-4">
+            <i class="bi bi-arrow-left me-2"></i> Back to History
+        </a>
+        <button onclick="window.print()" class="btn btn-dark shadow-sm rounded-pill px-4">
+            <i class="bi bi-printer me-2"></i> Export / Print PDF
+        </button>
+    </div>
+
+    <!-- MAIN REPORT CARD -->
+    <div class="report-card">
+        
+        <!-- HEADER SECTION -->
+        <div class="report-header d-flex justify-content-between align-items-start">
+            <div>
+                <span class="badge-separation mb-3 d-inline-block">Separation Certificate</span>
+                <h2 class="fw-800 mb-1" style="font-weight: 800;">{{ record.driver.name }}</h2>
+                <p class="mb-0 opacity-75">Driver ID: <strong>{{ record.driver.driver_id }}</strong> | Log ID: #{{ record.id }}</p>
+            </div>
+            <div class="text-end">
+                <div class="label-text text-white opacity-75">Processed On</div>
+                <div class="value-text text-white">{{ record.created_at.strftime('%d %b, %Y') }}</div>
+            </div>
+        </div>
+
+        <!-- SECTION 1: PERSONNEL -->
+        <div class="section-box">
+            <div class="section-title" style="color: #6366f1;">
+                <div class="icon-box" style="background: var(--primary-gradient);">
+                    <i class="bi bi-person-badge"></i>
+                </div>
+                Personnel Information
+            </div>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="label-text">Designation</div>
+                    <div class="value-text">{{ record.driver.post }}</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="label-text">Identity (CNIC)</div>
+                    <div class="value-text">{{ record.driver.cnic_no or 'Not Available' }}</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="label-text">Contact No.</div>
+                    <div class="value-text text-primary">{{ record.driver.phone1 or 'N/A' }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 2: LAST DEPLOYMENT -->
+        <div class="section-box">
+            <div class="section-title" style="color: #0ea5e9;">
+                <div class="icon-box" style="background: var(--info-gradient);">
+                    <i class="bi bi-geo-alt"></i>
+                </div>
+                Last Known Deployment
+            </div>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="label-text">Project</div>
+                    <div class="value-text">{{ record.left_project.name if record.left_project else 'N/A' }}</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="label-text">Operation District</div>
+                    <div class="value-text">{{ record.left_district.name if record.left_district else 'N/A' }}</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="label-text">Vehicle & Shift</div>
+                    <div class="value-text">
+                        <i class="bi bi-truck me-1"></i> {{ record.left_vehicle.vehicle_no if record.left_vehicle else 'None' }}
+                        <span class="badge bg-light text-dark ms-2 border">{{ record.left_shift or 'Unset' }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 3: SEPARATION CASE -->
+        <div class="section-box" style="border-bottom: none;">
+            <div class="section-title" style="color: #e11d48;">
+                <div class="icon-box" style="background: var(--danger-gradient);">
+                    <i class="bi bi-exclamation-triangle"></i>
+                </div>
+                Separation Details
+            </div>
+            
+            <div class="separation-highlight mb-4">
+                <div class="row align-items-center">
+                    <div class="col-md-5">
+                        <div class="label-text text-danger">Effective Leave Date</div>
+                        <div class="value-text fs-4">{{ record.change_date.strftime('%d %B, %Y') }}</div>
+                    </div>
+                    <div class="col-md-7">
+                        <div class="label-text text-danger">Reason for Leaving</div>
+                        <div class="reason-tag mt-1">{{ record.reason }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="label-text">Internal Remarks & Handover Notes</div>
+                    <div class="remarks-area mt-2">
+                        <i class="bi bi-quote opacity-50 me-2"></i>
+                        {{ record.remarks or 'No additional remarks were recorded for this separation case.' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="p-3 bg-light text-center border-top">
+            <small class="text-muted fw-bold" style="font-size: 0.7rem; letter-spacing: 1px;">
+                CONFIDENTIAL REPORT | FLEET MANAGEMENT SYSTEM INTERNAL ARCHIVE
+            </small>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}

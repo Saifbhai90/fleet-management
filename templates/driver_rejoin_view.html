@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Rejoin Report - {{ record.driver.name }}{% endblock %}
+
+{% block content %}
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+    :root {
+        --primary-green: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        --accent-indigo: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+    }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
+    .report-card { background: white; border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.05); overflow: hidden; max-width: 950px; margin: 2rem auto; }
+    .report-header { background: var(--primary-green); padding: 3rem; color: white; position: relative; }
+    .section-box { padding: 2rem 3rem; border-bottom: 1px solid #f1f5f9; }
+    .section-title { font-size: 0.8rem; font-weight: 800; text-transform: uppercase; color: #10b981; letter-spacing: 1px; margin-bottom: 1.5rem; display: flex; align-items: center; }
+    .section-title::after { content: ""; flex: 1; height: 1px; background: #ecfdf5; margin-left: 1rem; }
+    .label { font-size: 0.75rem; color: #94a3b8; font-weight: 600; margin-bottom: 4px; }
+    .value { font-size: 1rem; font-weight: 700; color: #1e293b; }
+    .rejoin-highlight { background: #f0fdf4; border-radius: 16px; padding: 1.5rem; border-left: 5px solid #10b981; }
+    .btn-print { background: #1e293b; color: white; border-radius: 50px; padding: 10px 25px; font-weight: 600; border: none; }
+    @media print { .no-print { display: none; } .report-card { box-shadow: none; border: 1px solid #eee; } }
+</style>
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between mb-3 no-print">
+        <!-- Yahan change kiya gaya hai: driver_job_left_list ko driver_rejoin_list se badal diya gaya hai -->
+        <a href="{{ url_for('driver_rejoin_list') }}" class="btn btn-light rounded-pill px-4 border"><i class="bi bi-arrow-left me-2"></i>Back to History</a>
+        <button onclick="window.print()" class="btn-print shadow-sm"><i class="bi bi-printer me-2"></i>Print Report</button>
+    </div>
+
+    <div class="report-card">
+        <div class="report-header">
+            <span class="badge bg-white text-success fw-bold mb-3 px-3 py-2 rounded-pill">REJOINING CERTIFICATE</span>
+            <h2 class="fw-800 mb-1" style="font-weight: 800;">{{ record.driver.name }}</h2>
+            <p class="mb-0 opacity-75">Employee ID: <strong>{{ record.driver.driver_id }}</strong> | Rejoin Log: #{{ record.id }}</p>
+        </div>
+
+        <div class="section-box">
+            <div class="section-title">01. Personnel Profile</div>
+            <div class="row">
+                <div class="col-md-4"><div class="label">Full Name</div><div class="value">{{ record.driver.name }}</div></div>
+                <div class="col-md-4"><div class="label">Father Name</div><div class="value">{{ record.driver.father_name }}</div></div>
+                <div class="col-md-4"><div class="label">Designation</div><div class="value">{{ record.driver.post }}</div></div>
+            </div>
+        </div>
+
+        <div class="section-box" style="background: #fafafa;">
+            <div class="section-title">02. New Duty Assignment</div>
+            <div class="row g-4">
+                <div class="col-md-4"><div class="label">Project</div><div class="value">{{ record.new_project.name if record.new_project else 'N/A' }}</div></div>
+                <div class="col-md-4"><div class="label">District</div><div class="value">{{ record.new_district.name if record.new_district else 'N/A' }}</div></div>
+                <div class="col-md-4"><div class="label">Vehicle No</div><div class="value"><i class="bi bi-truck me-2 text-success"></i>{{ record.new_vehicle.vehicle_no if record.new_vehicle else 'N/A' }}</div></div>
+            </div>
+        </div>
+
+        <div class="section-box">
+            <div class="section-title">03. Activation Logistics</div>
+            <div class="rejoin-highlight mb-4">
+                <div class="row align-items-center">
+                    <div class="col-md-4"><div class="label text-success">Rejoin Effective Date</div><div class="value fs-4">{{ record.change_date.strftime('%d %B, %Y') if record.change_date else 'N/A' }}</div></div>
+                    <div class="col-md-4"><div class="label text-success">New Assigned Shift</div><div class="value fs-4">{{ record.new_shift }}</div></div>
+                    <div class="col-md-4 text-end"><i class="bi bi-patch-check-fill text-success" style="font-size: 3rem;"></i></div>
+                </div>
+            </div>
+            <div class="label">Administrative Notes</div>
+            <div class="p-3 bg-light rounded text-muted italic" style="border: 1px dashed #ccc;">
+                "{{ record.remarks or 'Driver has successfully rejoined and resumed duties as per the new assignment.' }}"
+            </div>
+        </div>
+
+        <div class="p-3 text-center border-top bg-light">
+            <small class="text-muted fw-bold">SYSTEM GENERATED ACTIVE STATUS REPORT | {{ record.created_at.strftime('%Y') if record.created_at else '' }}</small>
+        </div>
+    </div>
+</div>
+{% endblock %}

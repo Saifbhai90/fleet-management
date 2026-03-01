@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container py-4">
+    <div class="card shadow border-0 rounded-4 overflow-hidden">
+        <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold">
+                <i class="bi bi-pencil-square me-2"></i>Edit Driver Assignment
+            </h5>
+            <a href="{{ url_for('assign_driver_to_vehicle_list') }}" 
+               class="btn btn-sm btn-light text-dark fw-bold">
+                <i class="bi bi-arrow-left me-1"></i> Back to List
+            </a>
+        </div>
+
+        <div class="card-body p-4 bg-light">
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show mb-4" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            {% if form.errors %}
+            <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+                <strong>Please correct the following errors:</strong>
+                <ul class="mb-0">
+                    {% for field, field_errors in form.errors.items() %}
+                        {% for error in field_errors %}
+                            <li>{{ form[field].label.text }}: {{ error }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                </ul>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endif %}
+
+            <form method="POST" id="driverAssignForm">
+                {{ form.hidden_tag() }}
+
+                <div class="alert alert-info py-2 px-3 fw-bold mb-4 shadow-sm border-0">
+                    <i class="bi bi-person-fill me-2"></i> 
+                    Currently Editing: {{ driver.name }} (ID: {{ driver.driver_id }})
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">1. Project</label>
+                        {{ form.project_id(class="form-select select2-enable", id="project_select") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">2. District</label>
+                        {{ form.district_id(class="form-select select2-enable", id="district_select") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">3. Vehicle</label>
+                        {{ form.vehicle_id(class="form-select select2-enable", id="vehicle_select") }}
+                    </div>
+
+                    <div class="col-md-6 mt-4">
+                        <div class="bg-white p-4 rounded-3 shadow-sm border-start border-warning border-4">
+                            <label class="form-label fw-bold text-warning">4. Update Shift</label>
+                            {{ form.shift(class="form-select", id="shift_select") }}
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mt-4">
+                        <div class="bg-white p-4 rounded-3 shadow-sm border-start border-success border-4">
+                            <label class="form-label fw-bold text-success">5. Update/Swap Driver</label>
+                            {{ form.driver_id(class="form-select select2-enable", id="driver_select") }}
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mt-3">
+                        <label class="form-label fw-bold">Assign Date</label>
+                        {{ form.assign_date(class="form-control datepicker") }}
+                    </div>
+
+                    <div class="col-md-6 mt-3">
+                        <label class="form-label fw-bold">Remarks (Optional)</label>
+                        {{ form.remarks(class="form-control", rows=2) }}
+                    </div>
+                </div>
+
+                <div class="mt-5 text-center">
+                    <button type="submit" class="btn btn-primary btn-lg px-5 fw-bold shadow-sm">
+                        <i class="bi bi-save me-1"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('.select2-enable').select2({ theme: 'bootstrap-5', width: '100%' });
+
+    var $proj = $('#project_select'), 
+        $dist = $('#district_select'), 
+        $veh  = $('#vehicle_select'),
+        $driver = $('#driver_select');
+
+    // Project change → districts
+    $proj.on('select2:select', function(e) {
+        var pid = $(this).val();
+        $dist.empty().append('<option value="">Loading...</option>').trigger('change');
+        $veh.empty().append('<option value="">-- Select --</option>').trigger('change');
+        if(pid && pid != '0') {
+            $.ajax({
+                url: '/get_districts_by_project/' + pid,
+                success: function(data) {
+                    $dist.empty().append('<option value="">-- Select District --</option>');
+                    $.each(data, function(i, v) {
+                        $dist.append('<option value="' + v.id + '">' + v.name + '</option>');
+                    });
+                    $dist.trigger('change');
+                }
+            });
+        }
+    });
+
+    // District change → vehicles
+    $dist.on('select2:select', function(e) {
+        var did = $(this).val();
+        var pid = $proj.val();
+        $veh.empty().append('<option value="">Loading...</option>').trigger('change');
+        if(did && pid && pid != '0') {
+            $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(data) {
+                $veh.empty().append('<option value="">-- Select Vehicle --</option>');
+                $.each(data, function(i, v) {
+                    $veh.append('<option value="' + v.id + '">' + v.no + '</option>');
+                });
+                $veh.trigger('change');
+            });
+        }
+    });
+
+    $('.datepicker').datepicker({
+        format: 'yyyy-mm-dd',
+        autoclose: true,
+        todayHighlight: true
+    });
+});
+</script>
+
+{% endblock %}

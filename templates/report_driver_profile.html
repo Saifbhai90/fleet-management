@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Driver Profile - {{ driver.name }}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-4">
+    <h2 class="mb-0"><i class="bi bi-person-badge me-2 text-primary"></i>Driver Profile Report</h2>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('driver_form', id=driver.id) }}" class="btn btn-outline-primary btn-sm">Edit Driver</a>
+      <a href="{{ url_for('reports_index') }}" class="btn btn-outline-secondary btn-sm">All Reports</a>
+    </div>
+  </div>
+
+  <!-- Basic Info -->
+  <div class="card shadow border-0 mb-4">
+    <div class="card-header bg-light"><strong>{{ driver.name }}</strong> — {{ driver.driver_id }}</div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-6">
+          {% if driver.photo_path %}
+          <p class="mb-2"><img src="{{ url_for('uploaded_file', filename=driver.photo_path) }}" alt="Driver photo" class="img-thumbnail" style="max-height: 140px;"></p>
+          {% endif %}
+          <p class="mb-1"><strong>CNIC:</strong> {{ driver.cnic_no|cnic_fmt }}</p>
+          <p class="mb-1"><strong>Phone:</strong> {{ driver.phone1|phone_fmt }}{% if driver.phone2 %} / {{ driver.phone2|phone_fmt }}{% endif %}</p>
+          <p class="mb-1"><strong>Application Date:</strong> {{ driver.application_date|ddmmyyyy if driver.application_date else '-' }}</p>
+          <p class="mb-1"><strong>Status:</strong> {{ driver.status }}</p>
+          <p class="mb-1"><strong>District (home):</strong> {{ driver.driver_district or '-' }}</p>
+        </div>
+        <div class="col-md-6">
+          <p class="mb-1"><strong>License:</strong> {{ driver.license_no }} — {{ driver.license_status or '-' }}</p>
+          <p class="mb-1"><strong>License Expiry:</strong> {{ driver.license_expiry_date|ddmmyyyy if driver.license_expiry_date else '-' }}</p>
+          <p class="mb-1"><strong>CNIC Expiry:</strong> {{ driver.cnic_expiry_date|ddmmyyyy if driver.cnic_expiry_date else '-' }}</p>
+          {% if driver.document_path %}
+          <p class="mb-1"><a href="{{ url_for('uploaded_file', filename=driver.document_path) }}" target="_blank" class="text-primary"><i class="bi bi-file-earmark-pdf me-1"></i>View Documents (PDF)</a></p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Current Assignment -->
+  <div class="card shadow border-0 mb-4">
+    <div class="card-header bg-light">Current Assignment</div>
+    <div class="card-body">
+      <p class="mb-1"><strong>Project:</strong> {{ driver.project.name if driver.project else '-' }}</p>
+      <p class="mb-1"><strong>District:</strong> {{ driver.district.name if driver.district else '-' }}</p>
+      <p class="mb-1"><strong>Vehicle:</strong> {{ driver.vehicle.vehicle_no if driver.vehicle else '-' }}{% if driver.vehicle and driver.vehicle.vehicle_type %} ({{ driver.vehicle.vehicle_type }}){% endif %} ({{ driver.shift or '-' }} shift)</p>
+      <p class="mb-0"><strong>Assigned to vehicle since:</strong> {{ driver.assign_date|ddmmyyyy if driver.assign_date else '-' }}</p>
+    </div>
+  </div>
+
+  <!-- Transfer History (Project / District / Vehicle) -->
+  <div class="card shadow border-0 mb-4">
+    <div class="card-header bg-light">Transfer History</div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>From (Project / District / Vehicle)</th>
+            <th>To (Project / District / Vehicle)</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transfers %}
+          <tr>
+            <td>{{ t.transfer_date|ddmmyyyy }}</td>
+            <td>
+              {{ t.old_project.name if t.old_project else '-' }} /
+              {{ t.old_district.name if t.old_district else '-' }} /
+              {{ t.old_vehicle.vehicle_no if t.old_vehicle else '-' }} ({{ t.old_shift or '-' }})
+            </td>
+            <td>
+              {{ t.new_project.name if t.new_project else '-' }} /
+              {{ t.new_district.name if t.new_district else '-' }} /
+              {{ t.new_vehicle.vehicle_no if t.new_vehicle else '-' }} ({{ t.new_shift or '-' }})
+            </td>
+            <td class="small">{{ t.remarks or '-' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-muted">No transfers.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Status Changes (Job Left / Rejoin) – complete details -->
+  <div class="card shadow border-0">
+    <div class="card-header bg-light">Status Changes (Job Left / Rejoin)</div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Reason</th>
+            <th>Left (Project / District / Vehicle)</th>
+            <th>Rejoin (Project / District / Vehicle)</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in status_changes %}
+          <tr>
+            <td>{{ s.change_date|ddmmyyyy }}</td>
+            <td>{{ s.action_type }}</td>
+            <td>{{ s.reason or '-' }}</td>
+            <td>
+              {% if s.action_type == 'left' %}
+                {{ s.left_project.name if s.left_project else '-' }} /
+                {{ s.left_district.name if s.left_district else '-' }} /
+                {{ s.left_vehicle.vehicle_no if s.left_vehicle else '-' }} ({{ s.left_shift or '-' }})
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td>
+              {% if s.action_type == 'rejoin' and (s.new_project or s.new_vehicle) %}
+                {{ s.new_project.name if s.new_project else '-' }} /
+                {{ s.new_district.name if s.new_district else '-' }} /
+                {{ s.new_vehicle.vehicle_no if s.new_vehicle else '-' }} ({{ s.new_shift or '-' }})
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td class="small">{{ s.remarks or '-' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-muted">No status changes.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

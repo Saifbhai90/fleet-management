@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logbook Cover - All Vehicles</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 12px; max-width: 800px; margin: 20px auto; padding: 0 15px; }
+    .logbook-sheet { page-break-after: always; padding-bottom: 30px; }
+    .logbook-sheet:last-child { page-break-after: auto; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+    .subject { text-decoration: underline; font-weight: bold; margin: 15px 0; }
+    .claim-line { margin: 15px 0; font-weight: bold; }
+    .claim-line-u { margin: 10px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+    th { background: #f0f0f0; }
+    .text-end { text-align: right; }
+    .signatures { margin-top: 30px; display: flex; justify-content: space-between; }
+    .sig-block { width: 45%; }
+    .no-print { margin-top: 15px; position: sticky; top: 0; background: #fff; padding: 10px; z-index: 1; }
+    @media print { .no-print { display: none; } .logbook-sheet { page-break-after: always; } }
+  </style>
+</head>
+<body>
+  <p class="no-print"><strong>Saari vehicles ke Logbook Cover</strong> &nbsp; <a href="javascript:window.print();">Print All</a> &nbsp; <a href="javascript:window.close();">Close</a></p>
+  {% for row in rows %}
+  <div class="logbook-sheet">
+    {% if project_name == 'COW-1034' %}
+    <div class="header">
+      <p><strong>Capital Car Rental (Pvt) Ltd</strong><br>Plot # 101-M, Quaid-e-Azam Industrial Estate, Kot Lakhpat, Lahore.</p>
+    </div>
+    <p class="subject">Subject: VERIFICATION OF CLAIMS OF COW VEHICLES SERVICE</p>
+    <p>The competent authority has directed that M/S Capital Car Rental (Pvt) Ltd. will submit claim fortnightly (Vehicle-wise) duly signed by District Transport Officer (DTOs) of Capital Car Rental (Pvt) Ltd.</p>
+    <p class="claim-line-u">Claim Of Vehicle# <u>{{ row.vehicle_no }}</u></p>
+    <p class="claim-line-u">for the period from <u>{{ row.from_date|ddmmyyyy }}</u> to <u>{{ row.to_date|ddmmyyyy }}</u></p>
+    <p class="claim-line-u">District Name <u>{{ row.district_name }}</u></p>
+    <p class="claim-line-u">Tehsil Name <u>{{ row.tehsil_name }}</u></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Sr.#</th>
+          <th>Particulars</th>
+          <th>KMs/Task</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>Total Number of Tasks</td>
+          <td class="text-end">{{ row.total_task }}</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>Opening Meter Reading</td>
+          <td class="text-end">{{ "%.0f"|format(row.start_reading) }}</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>Closing Meter Reading</td>
+          <td class="text-end">{{ "%.0f"|format(row.close_reading) }}</td>
+          <td>{{ row.from_date|ddmmyyyy }}</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>Total Kilometer Claimed</td>
+          <td class="text-end">{{ row.total_kms }}</td>
+          <td>{{ row.to_date|ddmmyyyy }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="signatures">
+      <div class="sig-block">District Transport Officer<br>Capital Car Rental (Pvt) Ltd<br>District Health Authority</div>
+      <div class="sig-block">District Coordinator</div>
+    </div>
+    <p style="margin-top: 20px;">You are requested to submit invoices duly supported with above proforma.</p>
+    {% else %}
+    <div class="header">
+      <div>Health & Population Department</div>
+      <div style="text-align: right; max-width: 45%;">
+        Project Implementation Unit<br>
+        Community Empowerment and Strengthening of Healthcare access through Maryam Nawaz Health Clinic
+      </div>
+    </div>
+    <p>Dated Lahore the _____________</p>
+    <p>No. _____________ / MNIC</p>
+    <p class="subject">Subject: VERIFICATION OF CLAIMS OF RURAL AMBULANCE SERVICE (RAS-1034)</p>
+    <p>With reference to the contract between Health & Population Department and M/S Capital Car Rental (Pvt) Ltd for the management and operation of Rural Ambulance Service (RAS-1034), M/S Capital Car Rental (Pvt) Ltd. will submit claims fortnightly (ambulance-wise) as per the following proforma/Format.</p>
+    <p class="claim-line">Claim of Ambulance Number <u>{{ row.vehicle_no }}</u> for the period from <u>{{ row.from_date|ddmmyyyy }}</u> to <u>{{ row.to_date|ddmmyyyy }}</u></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Sr.#</th>
+          <th>Particulars</th>
+          <th>KMs/Task</th>
+          <th>Date and Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>Total Number of Tasks (Green & Yellow)</td>
+          <td class="text-end">{{ row.total_task }}</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>Opening Meter Reading</td>
+          <td class="text-end">{{ "%.0f"|format(row.start_reading) }}</td>
+          <td>{{ row.from_date|ddmmyyyy }}</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>Closing Meter Reading</td>
+          <td class="text-end">{{ "%.0f"|format(row.close_reading) }}</td>
+          <td>{{ row.to_date|ddmmyyyy }}</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>Total Kilometre Claimed</td>
+          <td class="text-end">{{ row.total_kms }}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="signatures">
+      <div class="sig-block">District Transport Officer<br>Capital Car Rental (Pvt) Ltd</div>
+      <div class="sig-block">District Coordinator<br>District Health Authority</div>
+    </div>
+    <p style="margin-top: 20px;">You are requested to submit invoices duly supported with above proforma.</p>
+    <p><strong>Program Director</strong><br>Community Empowerment and Strengthening of Healthcare Access through Maryam Nawaz Health Clinic</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</body>
+</html>

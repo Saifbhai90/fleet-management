@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Fuel Expense{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-fuel-pump me-2 text-primary"></i>Fuel Expense</h2>
+    <a href="{{ url_for('fuel_expense_add', district_id=form.district_id.data or 0, project_id=form.project_id.data or 0) }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add Fuel Expense
+    </a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('fuel_expense_list') }}" class="row g-3 align-items-end">
+        {{ form.hidden_tag() }}
+        <div class="col-md-2">
+          <label class="form-label small">From Date</label>
+          {{ form.from_date(class="form-control form-control-sm datepicker") }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">To Date</label>
+          {{ form.to_date(class="form-control form-control-sm datepicker") }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">District</label>
+          <select name="district_id" id="districtSelect" class="form-select form-select-sm">
+            {% for val, label in form.district_id.choices %}
+              <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Project</label>
+          <select name="project_id" id="projectSelect" class="form-select form-select-sm">
+            {% for val, label in form.project_id.choices %}
+              <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Vehicle</label>
+          <select name="vehicle_id" id="vehicleSelect" class="form-select form-select-sm">
+            {% for val, label in form.vehicle_id.choices %}
+              <option value="{{ val }}" {% if form.vehicle_id.data == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-funnel me-1"></i>Apply Filter
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-primary text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="fw-semibold">Fuel Expense from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
+      <input type="text" id="fuelExpenseSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Search..." style="max-width: 220px;" autocomplete="off">
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 small" id="fuelExpenseTable">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">#</th>
+              <th>District</th>
+              <th>Vehicle</th>
+              <th>Fuel Type</th>
+              <th>Pump</th>
+              <th>KM Out (Task)</th>
+              <th>KM In (Task)</th>
+              <th>Payment</th>
+              <th>Fueling Date</th>
+              <th>Card Swipe</th>
+              <th>Slip No</th>
+              <th>Prev Reading</th>
+              <th>Curr Reading</th>
+              <th>KM</th>
+              <th>Fuel Price</th>
+              <th>Liters</th>
+              <th>MPG</th>
+              <th>Amount</th>
+              <th>Matched</th>
+              <th class="text-center pe-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr class="fuel-expense-row">
+              <td class="ps-3">{{ loop.index }}</td>
+              <td>{{ r.district.name if r.district else '-' }}</td>
+              <td class="fw-medium">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
+              <td>{{ r.fuel_type or '-' }}</td>
+              <td>{{ r.fuel_pump.name if r.fuel_pump else '-' }}</td>
+              <td>{{ r.km_out_task|round(2) if r.km_out_task is not none else '-' }}</td>
+              <td>{{ r.km_in_task|round(2) if r.km_in_task is not none else '-' }}</td>
+              <td>{{ r.payment_type or '-' }}</td>
+              <td>{{ r.fueling_date|ddmmyyyy }}</td>
+              <td>{{ r.card_swipe_date|ddmmyyyy if r.card_swipe_date else '-' }}</td>
+              <td>{{ r.slip_no or '-' }}</td>
+              <td>{{ r.previous_reading|round(2) if r.previous_reading is not none else '-' }}</td>
+              <td>{{ r.current_reading|round(2) }}</td>
+              <td>{{ r.km|round(2) if r.km is not none else '-' }}</td>
+              <td>{{ r.fuel_price|round(2) if r.fuel_price is not none else '-' }}</td>
+              <td>{{ r.liters|round(2) if r.liters is not none else '-' }}</td>
+              <td>{{ r.mpg|round(2) if r.mpg is not none else '-' }}</td>
+              <td>{{ r.amount|round(2) if r.amount is not none else '-' }}</td>
+              <td>
+                {% if r.meter_reading_matched == 'Yes' %}
+                  <span class="badge bg-success">Yes</span>
+                {% else %}
+                  <span class="badge bg-secondary">No</span>
+                {% endif %}
+              </td>
+              <td class="text-center pe-3">
+                <a href="{{ url_for('fuel_expense_edit', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                <form action="{{ url_for('fuel_expense_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this fuel expense entry?');">
+                  <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr id="fuelExpenseNoDataRow">
+              <td colspan="20" class="text-center py-5 text-muted">
+                <i class="bi bi-fuel-pump display-6 d-block mb-2"></i>
+                No fuel expense entries. <a href="{{ url_for('fuel_expense_add') }}">Add Fuel Expense</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          {% if totals %}
+          <tfoot class="table-light fw-semibold">
+            <tr>
+              <td colspan="4" class="ps-3">Total</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td>{{ totals.first_previous_reading|round(2) if totals.first_previous_reading is not none else '-' }}</td>
+              <td>{{ totals.last_current_reading|round(2) if totals.last_current_reading is not none else '-' }}</td>
+              <td>{{ totals.total_km|round(2) }}</td>
+              <td></td>
+              <td>{{ totals.total_liters|round(2) }}</td>
+              <td>{{ totals.avg_mpg|round(2) if totals.avg_mpg is not none else '-' }}</td>
+              <td>{{ totals.total_amount|round(2) }}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
+  var vehicleSelect = document.getElementById('vehicleSelect');
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = this.value;
+      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+      if (did && did !== '0') {
+        fetch('/get_projects_by_district/' + did)
+          .then(function(r) { return r.json(); })
+          .then(function(arr) {
+            arr.forEach(function(p) {
+              var o = document.createElement('option');
+              o.value = p.id;
+              o.textContent = p.name;
+              projectSelect.appendChild(o);
+            });
+          });
+      }
+    });
+  }
+  if (projectSelect && vehicleSelect) {
+    projectSelect.addEventListener('change', function() {
+      var pid = projectSelect.value;
+      var did = districtSelect ? districtSelect.value : '';
+      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+      if (pid && pid !== '0') {
+        var url = '/get_vehicles_by_project_district?project_id=' + pid;
+        if (did && did !== '0') url += '&district_id=' + did;
+        fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
+          arr.forEach(function(v) {
+            var o = document.createElement('option');
+            o.value = v.id;
+            o.textContent = v.vehicle_no;
+            vehicleSelect.appendChild(o);
+          });
+        });
+      }
+    });
+  }
+})();
+</script>
+<script>
+(function() {
+  var searchInput = document.getElementById('fuelExpenseSearch');
+  var table = document.getElementById('fuelExpenseTable');
+  if (searchInput && table) {
+    var tbody = table.querySelector('tbody');
+    if (tbody) {
+      var dataRows = Array.from(tbody.querySelectorAll('tr.fuel-expense-row'));
+      var noDataRow = tbody.querySelector('tr#fuelExpenseNoDataRow') || tbody.querySelector('tr[colspan]') || null;
+      searchInput.addEventListener('input', function() {
+        var q = this.value.trim().toLowerCase();
+        var visible = 0;
+        dataRows.forEach(function(row) {
+          var text = row.textContent.replace(/\s+/g, ' ').toLowerCase();
+          var show = !q || text.indexOf(q) > -1;
+          row.style.display = show ? '' : 'none';
+          if (show) visible++;
+        });
+        if (noDataRow) noDataRow.style.display = (dataRows.length === 0 || (q && visible === 0)) ? '' : 'none';
+      });
+    }
+  }
+})();
+</script>
+{% endblock %}

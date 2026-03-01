@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Project Transfers History{% endblock %}
+
+{% block content %}
+<!-- Fonts & Extra CSS -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+
+<style>
+  body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
+  .x-small { font-size: 0.72rem; }
+  .table-hover tbody tr:hover { background-color: #fff9e6 !important; }
+  .project-icon-box { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: #212529; border-radius: 10px; color: #ffc107; }
+  
+  /* Action Buttons Styling */
+  .btn-action { width: 32px; height: 32px; pading: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; transition: all 0.2s; border: 1px solid #eee; background: white; }
+  .btn-edit:hover { background-color: #eef2ff; color: #4f46e5; border-color: #4f46e5; }
+  .btn-delete:hover { background-color: #fff1f2; color: #e11d48; border-color: #e11d48; }
+  
+  /* Export Button Styling */
+  .dt-buttons .btn { border-radius: 8px !important; font-weight: 600; font-size: 0.85rem; border: none !important; shadow: 0 2px 4px rgba(0,0,0,0.05); }
+  .buttons-excel { background-color: #198754 !important; color: white !important; }
+  .buttons-pdf { background-color: #dc3545 !important; color: white !important; }
+  .buttons-print { background-color: #0dcaf0 !important; color: white !important; }
+  .dataTables_filter input { border-radius: 10px; border: 1px solid #ddd; padding: 6px 15px; }
+</style>
+
+<div class="container-fluid py-4 px-lg-5">
+  
+  <!-- Top Header Section -->
+  <div class="d-md-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h2 class="fw-bold mb-1 text-dark">Transfer Management</h2>
+      <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i> View and manage project transitions across your organization.</p>
+    </div>
+    <div class="mt-3 mt-md-0 d-flex gap-2">
+      <a href="{{ url_for('project_transfer_new') }}" class="btn btn-warning fw-bold px-4 shadow-sm border-0" style="border-radius: 10px;">
+        <i class="bi bi-plus-lg me-1"></i> New Transfer
+      </a>
+    </div>
+  </div>
+
+  <!-- Main Table Card -->
+  <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+    <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+      <h5 class="mb-0 fw-bold text-dark">Recent Activity Logs</h5>
+      <!-- Placeholder for DataTables Buttons -->
+      <div id="exportButtonsArea"></div>
+    </div>
+    
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="transferDataTable">
+          <thead class="bg-light">
+            <tr class="text-uppercase x-small fw-bold text-muted">
+              <th class="ps-4 py-3">Project Details</th>
+              <th>Company Transition</th>
+              <th>Transfer Date</th>
+              <th>Remarks</th>
+              <th class="text-end pe-4">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in transfers %}
+            <tr>
+              <!-- Project Info -->
+              <td class="ps-4">
+                <div class="d-flex align-items-center">
+                  <div class="project-icon-box me-3 shadow-sm">
+                    <i class="bi bi-stack fs-6"></i>
+                  </div>
+                  <div>
+                    <div class="fw-bold text-dark fs-6">{{ t.project.name }}</div>
+                    <div class="text-muted x-small">ID: #TR-{{ t.id }}</div>
+                  </div>
+                </div>
+              </td>
+              
+              <!-- Transition Flow -->
+              <td>
+                <div class="d-inline-flex align-items-center bg-white rounded-pill px-3 py-1 border shadow-sm">
+                  <span class="small fw-medium text-muted">{{ t.old_company.name if t.old_company else 'Initial' }}</span>
+                  <i class="bi bi-arrow-right-short mx-2 text-warning fs-5"></i>
+                  <span class="small fw-bold text-dark">{{ t.new_company.name }}</span>
+                </div>
+              </td>
+              
+              <!-- Date -->
+              <td>
+                <div class="d-flex flex-column">
+                  <span class="fw-medium text-dark">{{ t.transfer_date.strftime('%d %b, %Y') }}</span>
+                  <span class="text-muted x-small text-uppercase">{{ t.transfer_date.strftime('%A') }}</span>
+                </div>
+              </td>
+              
+              <!-- Remarks -->
+              <td>
+                <span class="text-muted small text-truncate d-inline-block" style="max-width: 180px;" title="{{ t.remarks }}">
+                  {{ t.remarks if t.remarks else '---' }}
+                </span>
+              </td>
+
+              <!-- Actions (Direct Buttons) -->
+              <td class="text-end pe-4">
+                <div class="d-flex justify-content-end gap-2">
+                  <a href="{{ url_for('project_transfer_edit', id=t.id) }}" class="btn-action btn-edit text-muted" title="Edit Record">
+                    <i class="bi bi-pencil-square"></i>
+                  </a>
+                  <form action="{{ url_for('project_transfer_delete', id=t.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Permanently delete this transfer record?');">
+                    <button type="submit" class="btn-action btn-delete text-muted" title="Delete Record">
+                      <i class="bi bi-trash3"></i>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts Integration -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<!-- DataTables Buttons Scripts -->
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
+<script>
+  $(document).ready(function() {
+    var table = $('#transferDataTable').DataTable({
+      "pageLength": 10,
+      "ordering": true,
+      "dom": '<"d-flex justify-content-between align-items-center p-3"fB>t<"d-flex justify-content-between align-items-center p-3"ip>',
+      "buttons": [
+        {
+          extend: 'excelHtml5',
+          text: '<i class="bi bi-file-earmark-excel me-1"></i> Excel',
+          className: 'buttons-excel'
+        },
+        {
+          extend: 'pdfHtml5',
+          text: '<i class="bi bi-file-earmark-pdf me-1"></i> PDF',
+          className: 'buttons-pdf'
+        },
+        {
+          extend: 'print',
+          text: '<i class="bi bi-printer me-1"></i> Print',
+          className: 'buttons-print'
+        }
+      ],
+      "language": {
+        "search": "",
+        "searchPlaceholder": "Search logs..."
+      }
+    });
+
+    // Move buttons to the custom area in the header if you want, or keep them in the DOM
+    table.buttons().container().appendTo('#exportButtonsArea');
+  });
+</script>
+{% endblock %}

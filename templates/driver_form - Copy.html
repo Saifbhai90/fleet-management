@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}Driver Entry Form{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    :root { --navy: #1e3a8a; --light-bg: #f8fafc; }
+    .form-panel { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,0.08); overflow: hidden; }
+    .panel-header { background: var(--navy); color: white; padding: 15px 25px; border-radius: 12px 12px 0 0; }
+    .panel-section { padding: 25px; border-bottom: 1px solid #f1f5f9; }
+    .section-title { font-size: 0.95rem; font-weight: 700; color: var(--navy); margin-bottom: 20px; text-transform: uppercase; border-left: 4px solid var(--navy); padding-left: 10px; }
+    .form-label { font-weight: 600; font-size: 0.9rem; color: #475569; margin-bottom: 6px; }
+    .form-label.required::after { content: " *"; color: #dc3545; font-size: 0.9rem; }
+    .status-auto { background-color: #f8fafc !important; font-weight: 800 !important; text-align: center; border: 1px solid #cbd5e1; }
+    .valid-bg { background-color: #dcfce7 !important; color: #166534 !important; border-color: #86efac !important; }
+    .expired-bg { background-color: #fee2e2 !important; color: #991b1b !important; border-color: #fca5a5 !important; }
+    .btn-lg { min-width: 180px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-xl-11">
+      <form method="POST" id="driverForm" class="needs-validation" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="form-panel">
+          <div class="panel-header d-flex justify-content-between align-items-center">
+            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION</span>
+            <span class="badge bg-light text-dark">Fields with * are Mandatory</span>
+          </div>
+
+          <!-- Personal, Contact & Academic Details -->
+          <div class="panel-section">
+            <div class="section-title">Personal, Contact & Academic Details</div>
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label required">Driver ID</label>
+                {{ form.driver_id(class="form-control", id="driver_id_field", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">Post</label>
+                {{ form.post(class="form-select", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">Application Date</label>
+                {{ form.application_date(class="form-control datepicker", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">Full Name</label>
+                {{ form.name(class="form-control", required=True) }}
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label required">Father Name</label>
+                {{ form.father_name(class="form-control", required=True) }}
+              </div>
+              <div class="col-md-2">
+                <label class="form-label required">Date of Birth</label>
+                {{ form.dob(class="form-control datepicker", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">Phone No 1</label>
+                {{ form.phone1(class="form-control", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Phone No 2 (Optional)</label>
+                {{ form.phone2(class="form-control") }}
+              </div>
+
+              <div class="col-md-3">
+                <label class="form-label required">Emergency No</label>
+                {{ form.emergency_no(class="form-control", required=True) }}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label required">Address</label>
+                {{ form.address(class="form-control", rows=2, required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">Education</label>
+                {{ form.education(class="form-select", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">Blood Group</label>
+                {{ form.blood_group(class="form-select", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">Driver District</label>
+                {{ form.driver_district(class="form-control", required=True) }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Identity & Licensing -->
+          <div class="panel-section bg-light-subtle">
+            <div class="section-title">Identity & Licensing</div>
+            <div class="row g-3 mb-4">
+              <div class="col-md-3">
+                <label class="form-label required">CNIC No</label>
+                {{ form.cnic_no(class="form-control", id="cnic_mask", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">CNIC Issue Date</label>
+                {{ form.cnic_issue_date(class="form-control datepicker", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">CNIC Expiry Date</label>
+                {{ form.cnic_expiry_date(class="form-control datepicker expiry-trigger", data_target="cnic_status_display", data_hidden="cnic_status_hidden", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">CNIC Status (Auto)</label>
+                <input type="text" id="cnic_status_display" class="form-control status-auto" readonly placeholder="---">
+                <input type="hidden" name="cnic_status" id="cnic_status_hidden">
+              </div>
+            </div>
+
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label required">License No</label>
+                {{ form.license_no(class="form-control", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">License Type</label>
+                {{ form.license_type(class="form-select", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">Issue District</label>
+                {{ form.issue_district(class="form-control", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">License Issue Date</label>
+                {{ form.license_issue_date(class="form-control datepicker", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">License Expiry Date</label>
+                {{ form.license_expiry_date(class="form-control datepicker expiry-trigger", data_target="license_status_display", data_hidden="license_status_hidden", required=True) }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">License Status (Auto)</label>
+                <input type="text" id="license_status_display" class="form-control status-auto" readonly placeholder="---">
+                <input type="hidden" name="license_status" id="license_status_hidden">
+              </div>
+            </div>
+          </div>
+
+          <!-- Bank & Uniform (Optional) -->
+          <div class="panel-section">
+            <div class="section-title">Bank & Uniform Details (Optional)</div>
+            <div class="row g-3">
+              <div class="col-md-4">
+                {{ form.bank_name.label(class="form-label") }}
+                {{ form.bank_name(class="form-control") }}
+              </div>
+              <div class="col-md-4">
+                {{ form.account_no.label(class="form-label") }}
+                {{ form.account_no(class="form-control") }}
+              </div>
+              <div class="col-md-4">
+                {{ form.account_title.label(class="form-label") }}
+                {{ form.account_title(class="form-control") }}
+              </div>
+              <div class="col-md-4">
+                {{ form.shirt_size.label(class="form-label") }}
+                {{ form.shirt_size(class="form-select") }}
+              </div>
+              <div class="col-md-4">
+                {{ form.trouser_size.label(class="form-label") }}
+                {{ form.trouser_size(class="form-select") }}
+              </div>
+              <div class="col-md-4">
+                {{ form.jacket_size.label(class="form-label") }}
+                {{ form.jacket_size(class="form-select") }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="panel-section bg-light d-flex justify-content-end gap-3">
+            <button type="button" class="btn btn-outline-secondary px-5 fw-bold" onclick="resetAndClear()">RESET FORM</button>
+            <button type="submit" class="btn btn-primary btn-lg px-5 fw-bold text-uppercase">SAVE DRIVER DATA</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+
+document.addEventListener('DOMContentLoaded', function () {
+  // 1. Auto Generate Driver ID
+  const driverIdField = document.getElementById('driver_id_field');
+  function generateID() {
+    if (!driverIdField.value) {
+      const randomId = Math.floor(1000 + Math.random() * 9000);
+      const year = new Date().getFullYear();
+      driverIdField.value = `DRV-${year}-${randomId}`;
+    }
+  }
+  generateID();
+
+  // 2. Bootstrap Form Validation
+  const form = document.getElementById('driverForm');
+  form.addEventListener('submit', function (event) {
+    if (!form.checkValidity()) {
+      event.preventDefault();
+      event.stopPropagation();
+      alert("Please fill all mandatory fields (marked with *).");
+    }
+    form.classList.add('was-validated');
+  }, false);
+
+  // 3. Flatpickr Datepickers
+    flatpickr(".datepicker", {
+        dateFormat: "Y-m-d",
+        maxDate: "today",
+        onChange: function(selectedDates, dateStr, instance) {
+            if (instance.element.classList.contains('expiry-trigger')) {
+                updateStatus(dateStr, instance.element.dataset.target, instance.element.dataset.hidden);
+            }
+        }
+    });
+
+    // NEW: Calculate status on page load (for edit mode)
+    document.querySelectorAll('.expiry-trigger').forEach(el => {
+        if (el.value) {
+            updateStatus(el.value, el.dataset.target, el.dataset.hidden);
+        }
+    });
+
+    function updateStatus(dateStr, displayId, hiddenId) {
+        const displayField = document.getElementById(displayId);
+        const hiddenField = document.getElementById(hiddenId);
+        if (!dateStr) {
+            displayField.value = "---";
+            displayField.className = "form-control status-auto";
+            hiddenField.value = "";
+            return;
+        }
+        const expiry = new Date(dateStr);
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        if (expiry < today) {
+            displayField.value = "EXPIRED";
+            displayField.className = "form-control status-auto expired-bg";
+            hiddenField.value = "Expired";
+        } else {
+            displayField.value = "VALID";
+            displayField.className = "form-control status-auto valid-bg";
+            hiddenField.value = "Valid";
+        }
+    }
+
+  // 4. Auto License/CNIC Status on Expiry Change
+  document.querySelectorAll('.expiry-trigger').forEach(el => {
+    el.addEventListener('change', function() {
+      const expiryDate = new Date(this.value);
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const targetDisplay = document.getElementById(this.dataset.target);
+      const targetHidden = document.getElementById(this.dataset.hidden);
+      if (expiryDate < today) {
+        targetDisplay.value = "EXPIRED";
+        targetDisplay.className = "form-control status-auto expired-bg";
+        targetHidden.value = "Expired";
+      } else {
+        targetDisplay.value = "VALID";
+        targetDisplay.className = "form-control status-auto valid-bg";
+        targetHidden.value = "Valid";
+      }
+    });
+  });
+
+  // 5. Custom Reset Function
+  window.resetAndClear = function() {
+    if (confirm("Are you sure you want to clear all data?")) {
+      form.reset();
+      form.classList.remove('was-validated');
+      document.getElementById('cnic_status_display').value = "";
+      document.getElementById('cnic_status_display').className = "form-control status-auto";
+      document.getElementById('license_status_display').value = "";
+      document.getElementById('license_status_display').className = "form-control status-auto";
+      generateID(); // Re-generate ID
+    }
+  };
+
+  // 6. CNIC Input Mask (12345-1234567-1)
+  document.getElementById('cnic_mask').addEventListener('input', function (e) {
+    let val = e.target.value.replace(/\D/g, '').match(/(\d{0,5})(\d{0,7})(\d{0,1})/);
+    e.target.value = !val[2] ? val[1] : val[1] + '-' + val[2] + (val[3] ? '-' + val[3] : '');
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Driver Rejoin History{% endblock %}
+
+{% block content %}
+<style>
+    .page-container { background-color: #f0fdf4; min-height: 100vh; padding: 2rem; }
+    .custom-card { background: #fff; border-radius: 15px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.05); overflow: hidden; }
+    .table thead th { background: #f8fafc; color: #16a34a; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 1px; padding: 1.2rem; }
+    .driver-avatar { width: 40px; height: 40px; background: #dcfce7; color: #16a34a; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+</style>
+
+<div class="page-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-0">Driver Rejoin <span class="text-success">History</span></h3>
+            <p class="text-muted small mb-0">List of drivers who rejoined and resumed their duties.</p>
+        </div>
+        <!-- Yeh button ab list ke andar hai, yahan se user form par jayega -->
+        <a href="{{ url_for('driver_rejoin_new') }}" class="btn btn-success shadow-sm px-4 rounded-pill">
+            <i class="bi bi-person-plus-fill me-2"></i>Mark New Rejoin
+        </a>
+    </div>
+
+    <div class="custom-card">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-4">Rejoin Date</th>
+                        <th>Driver Detail</th>
+                        <th>New Assignment</th>
+                        <th>Shift</th>
+                        <th class="text-end pe-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                    <tr>
+                        <td class="ps-4">
+                            <span class="fw-bold"><i class="bi bi-calendar-check text-success me-2"></i>{{ record.change_date.strftime('%Y-%m-%d') }}</span>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="driver-avatar me-3">{{ record.driver.name[0] }}</div>
+                                <div>
+                                    <div class="fw-bold text-dark">{{ record.driver.name }}</div>
+                                    <small class="text-muted">ID: {{ record.driver.driver_id }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="small">
+                                <div class="text-dark fw-600"><i class="bi bi-buildings me-1 text-muted"></i> {{ record.new_project.name if record.new_project else 'N/A' }}</div>
+                                <div class="text-muted"><i class="bi bi-truck me-1"></i> {{ record.new_vehicle.vehicle_no if record.new_vehicle else 'N/A' }}</div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-success border border-success-subtle px-3">{{ record.new_shift }}</span>
+                        </td>
+                        <td class="text-end pe-4">
+                            <a href="{{ url_for('driver_rejoin_view', id=record.id) }}" class="btn btn-sm btn-outline-success rounded-pill px-3">
+                                <i class="bi bi-eye"></i> View Report
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">No rejoin records found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

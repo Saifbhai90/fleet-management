@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Edit Parking Assignment{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-xl-11">
+            <div class="card shadow border-0 rounded-4 overflow-hidden">
+                <div class="card-header bg-warning text-dark py-3">
+                    <h5 class="mb-0 fw-bold text-center"><i class="bi bi-pencil-square me-2"></i>Edit Parking Assignment: {{ vehicle.vehicle_no }}</h5>
+                </div>
+                <div class="card-body p-4 bg-light">
+                    <form method="POST" novalidate>
+                        {{ form.hidden_tag() }}
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">1. Select Project</label>
+                                {{ form.project_id(class="form-select select2-enable", id="project_select") }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">2. Select District</label>
+                                {{ form.district_id(class="form-select select2-enable", id="district_select") }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">3. Select Vehicle</label>
+                                {{ form.vehicle_id(class="form-select select2-enable", id="vehicle_select") }}
+                            </div>
+
+                            <div class="col-md-8">
+                                <div class="bg-white p-4 rounded-3 shadow-sm mt-3 border-top border-warning border-4">
+                                    <label class="form-label fw-bold text-warning">4. Update Parking Station</label>
+                                    {{ form.parking_station_id(class="form-select select2-enable", id="parking_select") }}
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="bg-white p-4 rounded-3 shadow-sm mt-3">
+                                    <label class="form-label fw-bold">Assign Date</label>
+                                    {{ form.assign_date(class="form-control datepicker") }}
+                                    <label class="form-label fw-bold mt-2">Remarks</label>
+                                    {{ form.remarks(class="form-control", rows=2) }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 text-center">
+                            <button type="submit" class="btn btn-warning btn-lg px-5 fw-bold shadow-sm">Update Assignment</button>
+                            <a href="{{ url_for('assign_vehicle_to_parking_list') }}" class="btn btn-outline-secondary btn-lg px-4">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('.select2-enable').select2({ theme: 'bootstrap-5', width: '100%' });
+
+    var $proj = $('#project_select'), $dist = $('#district_select'), 
+        $veh = $('#vehicle_select'), $park = $('#parking_select');
+
+    // Logic for loading Districts
+    $proj.on('change', function() {
+        var pid = $(this).val();
+        if(pid && pid != "0") {
+            $.getJSON('/get_districts_by_project/'+pid, function(data) {
+                $dist.empty().append('<option value="">-- Select District --</option>');
+                $.each(data, function(i, v){ $dist.append('<option value="'+v.id+'">'+v.name+'</option>'); });
+                // If it's the initial load, trigger district change to load vehicles/parking
+                {% if request.method == 'GET' %}
+                $dist.val("{{ vehicle.district_id }}").trigger('change');
+                {% endif %}
+            });
+        }
+    });
+
+    // Logic for loading Vehicles and Parking
+    $dist.on('change', function() {
+        var did = $(this).val();
+        var pid = $proj.val();
+        if(did && pid) {
+            $.getJSON('/get_vehicles_by_district/'+pid+'/'+did, function(data) {
+                $veh.empty().append('<option value="">-- Select Vehicle --</option>');
+                $.each(data, function(i, v){ $veh.append('<option value="'+v.id+'">'+v.no+'</option>'); });
+                {% if request.method == 'GET' %}$veh.val("{{ vehicle.id }}").trigger('change');{% endif %}
+            });
+
+            $.getJSON('/get_parking_by_district/'+did, function(data) {
+                $park.empty().append('<option value="">-- Select Parking --</option>');
+                $.each(data, function(i, v){ 
+                    var disabled = v.is_full && v.id != "{{ vehicle.parking_station_id }}" ? 'disabled' : '';
+                    $park.append('<option value="'+v.id+'" '+disabled+'>'+v.name+'</option>'); 
+                });
+                {% if request.method == 'GET' %}$park.val("{{ vehicle.parking_station_id }}").trigger('change');{% endif %}
+            });
+        }
+    });
+
+    // Page Load: Trigger project change if data exists
+    if($proj.val()) { $proj.trigger('change'); }
+});
+</script>
+{% endblock %}

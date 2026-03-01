@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Vehicle Transfers History{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+
+<style>
+  .table-hover tbody tr:hover { background-color: #fff9e6 !important; }
+  .dt-buttons .btn { border-radius: 8px !important; font-size: 0.85rem; font-weight: bold; border: none;}
+  .buttons-excel { background-color: #198754 !important; color: white !important; }
+  .buttons-pdf { background-color: #dc3545 !important; color: white !important; }
+</style>
+
+<div class="container-fluid py-4 px-lg-5">
+  <div class="d-md-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h2 class="fw-bold mb-1 text-dark">Vehicle Transfer Logs</h2>
+      <p class="text-muted small mb-0">Track all vehicle movements across projects and districts.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('vehicle_transfer_new') }}" class="btn btn-warning fw-bold px-4 shadow-sm" style="border-radius: 10px;">
+        <i class="bi bi-truck me-1"></i> New Transfer
+      </a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-4">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+      <h6 class="mb-0 fw-bold">Transfer History</h6>
+      <div id="exportButtonsArea"></div>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle" id="transferTable">
+          <thead class="bg-light">
+            <tr class="text-uppercase fw-bold text-muted small">
+              <th>Vehicle</th>
+              <th>From (Old Location)</th>
+              <th>To (New Location)</th>
+              <th>Date</th>
+              <th>Remarks</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in transfers %}
+            <tr>
+              <td class="fw-bold text-dark">{{ t.vehicle.vehicle_no }}</td>
+              <td class="small">
+                <span class="text-muted">Proj:</span> {{ t.old_project.name if t.old_project else '---' }}<br>
+                <span class="text-muted">Dist:</span> {{ t.old_district.name if t.old_district else '---' }}<br>
+                <span class="text-muted">Park:</span> <span class="text-danger">{{ t.old_parking.name if t.old_parking else 'Free' }}</span>
+              </td>
+              <td class="small">
+                <span class="text-muted">Proj:</span> {{ t.new_project.name }}<br>
+                <span class="text-muted">Dist:</span> {{ t.new_district.name }}<br>
+                <span class="text-muted">Park:</span> <span class="text-success fw-bold">{{ t.new_parking.name if t.new_parking else 'Free' }}</span>
+              </td>
+              <td class="small fw-medium">{{ t.transfer_date.strftime('%d %b, %Y') }}</td>
+              <td class="small text-muted" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ t.remarks }}">
+                {{ t.remarks if t.remarks else '---' }}
+              </td>
+              <td class="text-end">
+                <a href="{{ url_for('vehicle_transfer_edit', id=t.id) }}" class="btn btn-sm btn-outline-primary" title="Edit">
+                  <i class="bi bi-pencil-square"></i>
+                </a>
+                <form action="{{ url_for('vehicle_transfer_delete', id=t.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this log?');">
+                  <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash3"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+
+<script>
+  $(document).ready(function() {
+    var table = $('#transferTable').DataTable({
+      "pageLength": 10,
+      "dom": '<"row"<"col-sm-12 col-md-6"f><"col-sm-12 col-md-6 text-end"B>>rt<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>',
+      "buttons": [
+        { extend: 'excelHtml5', text: '<i class="bi bi-file-earmark-excel"></i> Excel', className: 'buttons-excel' },
+        { extend: 'pdfHtml5', text: '<i class="bi bi-file-earmark-pdf"></i> PDF', className: 'buttons-pdf' }
+      ]
+    });
+    table.buttons().container().appendTo('#exportButtonsArea');
+  });
+</script>
+{% endblock %}

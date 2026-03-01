@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}District Entry{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4 text-center"><i class="bi bi-geo-alt me-2"></i>District Entry Form</h2>
+
+  <form method="POST" class="needs-validation" novalidate>
+    {{ form.hidden_tag() }}
+
+    <div class="row g-4 justify-content-center">
+      <div class="col-lg-8">
+        <div class="card shadow-sm border-primary">
+          <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-geo-alt me-2"></i>District Details</h5>
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              {{ form.name.label(class="form-label") }}
+              {{ form.name(class="form-control " + ("is-invalid" if form.name.errors else "")) }}
+              {% for error in form.name.errors %}
+                <div class="invalid-feedback">{{ error }}</div>
+              {% endfor %}
+            </div>
+
+            <div class="mb-3">
+              {{ form.province.label(class="form-label") }}
+              {{ form.province(class="form-control " + ("is-invalid" if form.province.errors else "")) }}
+              {% for error in form.province.errors %}
+                <div class="invalid-feedback">{{ error }}</div>
+              {% endfor %}
+            </div>
+
+            <div class="mb-3">
+              {{ form.remarks.label(class="form-label") }}
+              {{ form.remarks(class="form-control", rows=5) }}
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-5 text-center">
+          {{ form.submit(class="btn btn-primary btn-lg me-3 px-5") }}
+          <button type="reset" class="btn btn-warning btn-lg me-3 px-5"><i class="bi bi-eraser me-1"></i>Clear</button>
+          <button type="button" class="btn btn-secondary btn-lg px-5" onclick="history.back()"><i class="bi bi-x-circle me-1"></i>Cancel</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

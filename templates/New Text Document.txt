@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Mark Driver Job Left{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="card shadow border-0 rounded-4 overflow-hidden">
+        <div class="card-header bg-danger text-white py-3">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-person-x-fill me-2"></i>Mark Driver as Job Left</h5>
+        </div>
+        
+        <div class="card-body p-4 bg-light">
+            <form method="POST" id="jobLeftForm" novalidate>
+                {{ form.hidden_tag() }}
+                
+                <div class="row g-3">
+                    <!-- Project -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">1. Project</label>
+                        {{ form.project_id(class="form-select select2-enable", id="project_select") }}
+                        {% for error in form.project_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    
+                    <!-- District -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">2. District</label>
+                        {{ form.district_id(class="form-select select2-enable", id="district_select") }}
+                        {% for error in form.district_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    
+                    <!-- Vehicle -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">3. Vehicle</label>
+                        {{ form.vehicle_id(class="form-select select2-enable", id="vehicle_select") }}
+                        {% for error in form.vehicle_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    
+                    <!-- Driver -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">4. Driver (Assigned to above vehicle)</label>
+                        {{ form.driver_id(class="form-select select2-enable", id="driver_select") }}
+                        {% for error in form.driver_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    
+                    <!-- Reason -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">5. Leave Reason</label>
+                        {{ form.reason(class="form-select", id="reason_select") }}
+                        {% for error in form.reason.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        
+                        <div id="other_reason_group" class="mt-3 d-none">
+                            {{ form.other_reason(class="form-control", placeholder="Please specify the reason...") }}
+                            {% for error in form.other_reason.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- Leave Date -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">6. Leave Date</label>
+                        {{ form.leave_date(class="form-control datepicker") }}
+                        {% for error in form.leave_date.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    
+                    <!-- Remarks -->
+                    <div class="col-12">
+                        <label class="form-label fw-bold">Remarks (Optional)</label>
+                        {{ form.remarks(class="form-control", rows=3, placeholder="Any additional notes about leaving...") }}
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-3 mt-4">
+                    {{ form.submit(class="btn btn-danger btn-lg fw-bold") }}
+                    <a href="{{ url_for('drivers_list') }}" class="btn btn-outline-secondary btn-lg">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Select2 for all dropdowns
+    $('.select2-enable').select2({ width: '100%', placeholder: "-- Select --" });
+    
+    // Reason → Other show/hide
+    $('#reason_select').on('change', function() {
+        if ($(this).val() === 'Other') {
+            $('#other_reason_group').removeClass('d-none');
+        } else {
+            $('#other_reason_group').addClass('d-none');
+            $('#other_reason').val('');
+        }
+    });
+    
+    // Cascading: Project → District → Vehicle → Driver
+    const $proj = $('#project_select');
+    const $dist = $('#district_select');
+    const $veh  = $('#vehicle_select');
+    const $drv  = $('#driver_select');
+    
+    $proj.on('change', function() {
+        let pid = $(this).val();
+        $dist.empty().append('<option value="">Loading...</option>').trigger('change');
+        if (pid) {
+            $.getJSON('/get_districts_by_project/' + pid, function(data) {
+                $dist.empty().append('<option value="">-- Select District --</option>');
+                $.each(data, function(i, d) {
+                    $dist.append('<option value="' + d.id + '">' + d.name + '</option>');
+                });
+                $dist.trigger('change');
+            });
+        }
+    });
+    
+    $dist.on('change', function() {
+        let did = $(this).val();
+        let pid = $proj.val();
+        $veh.empty().append('<option value="">-- Select Vehicle --</option>').trigger('change');
+        if (did && pid) {
+            $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(data) {
+                $.each(data, function(i, v) {
+                    $veh.append('<option value="' + v.id + '">' + v.no + '</option>');
+                });
+                $veh.trigger('change');
+            });
+        }
+    });
+    
+    $veh.on('change', function() {
+        let vid = $(this).val();
+        $drv.empty().append('<option value="">Loading Drivers...</option>').trigger('change');
+        if (vid) {
+            $.getJSON('/get_drivers_by_vehicle/' + vid, function(data) {
+                $drv.empty().append('<option value="">-- Select Driver --</option>');
+                $.each(data, function(i, d) {
+                    $drv.append('<option value="' + d.id + '">' + d.name + '</option>');
+                });
+            });
+        }
+    });
+    
+    // Flatpickr (already in base.html)
+});
+</script>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Parking Utilization Report{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-p-square me-2 text-secondary"></i>Parking Utilization Report</h2>
+    <a href="{{ url_for('reports_index') }}" class="btn btn-outline-secondary btn-sm">All Reports</a>
+  </div>
+  <div class="card shadow border-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-4">#</th>
+            <th>Parking Station</th>
+            <th>District</th>
+            <th>Project</th>
+            <th class="text-center">Occupied</th>
+            <th class="text-center">Capacity</th>
+            <th class="text-center">Available</th>
+            <th>Utilization</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in data %}
+          <tr>
+            <td class="ps-4">{{ loop.index }}</td>
+            <td class="fw-medium">{{ row.station.name }}</td>
+            <td>{{ row.station.district or '-' }}</td>
+            <td>{{ row.station.project.name if row.station.project else '-' }}</td>
+            <td class="text-center">{{ row.occupied }}</td>
+            <td class="text-center">{{ row.station.capacity }}</td>
+            <td class="text-center">{{ row.available }}</td>
+            <td>
+              {% set pct = (row.occupied / row.station.capacity * 100) if row.station.capacity else 0 %}
+              <div class="progress" style="height: 20px; min-width: 80px;">
+                <div class="progress-bar {% if pct >= 100 %}bg-danger{% elif pct >= 80 %}bg-warning{% else %}bg-success{% endif %}" style="width: {{ [pct, 100]|min }}%"></div>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="text-center py-4 text-muted">No parking stations.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

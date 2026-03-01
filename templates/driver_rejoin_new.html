@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Driver Rejoin Process{% endblock %}
+
+{% block content %}
+<style>
+    .page-wrapper { min-height: calc(100vh - 80px); padding: 30px; background-color: #f0fdf4; }
+    .glass-card { background: #fff; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); overflow: hidden; border-top: 8px solid #10b981; }
+    .header-box { background: #fff; padding: 25px 35px; border-bottom: 1px solid #e2e8f0; }
+    .form-section { padding: 30px; }
+    .section-title { font-size: 0.8rem; font-weight: 800; text-transform: uppercase; color: #10b981; letter-spacing: 1.5px; margin-bottom: 20px; display: flex; align-items: center; }
+    .section-title::after { content: ""; flex: 1; height: 1px; background: #dcfce7; margin-left: 15px; }
+    .pane-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+    .info-pane { background: #f8fafc; padding: 25px; border-radius: 15px; border: 1px solid #e2e8f0; }
+    .assignment-pane { background: #ffffff; padding: 25px; border-radius: 15px; border: 2px solid #10b981; }
+    .form-label { font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 6px; }
+    .form-control, .form-select { border-radius: 10px; border: 1px solid #cbd5e1; height: 45px; font-size: 0.9rem; }
+    .status-msg { font-size: 0.75rem; margin-top: 5px; font-weight: 600; }
+    .available { color: #16a34a; }
+    .unavailable { color: #dc3545; }
+    .btn-rejoin { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 15px; border-radius: 12px; font-weight: 800; width: 100%; text-transform: uppercase; margin-top: 20px; transition: 0.3s; }
+    .btn-rejoin:disabled { background: #cbd5e1; cursor: not-allowed; }
+</style>
+
+<div class="page-wrapper">
+    <div class="glass-card">
+        <div class="header-box">
+            <h4 class="fw-bold mb-1 text-dark"><i class="bi bi-person-plus-fill text-success me-2"></i>Driver Re-Engagement</h4>
+            <p class="text-muted small mb-0">Identify previous records and allocate new duty assignments.</p>
+        </div>
+
+        <form method="POST" id="rejoinForm">
+            {{ form.hidden_tag() }}
+            <div class="form-section">
+                <div class="pane-grid">
+                    <!-- LEFT PANE -->
+                    <div class="info-pane">
+                        <div class="section-title">01. Previous Context</div>
+                        <div class="mb-3">
+                            <label class="form-label">Old Project</label>
+                            <select id="old_project" class="form-select">
+                                <option value="">-- Select Project --</option>
+                                {% for p in projects %}
+                                <option value="{{ p.id }}">{{ p.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Old District</label>
+                            <select id="old_district" class="form-select" disabled><option value="">-- Select District --</option></select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Old Vehicle</label>
+                            <select id="old_vehicle" class="form-select" disabled><option value="">-- Select Vehicle --</option></select>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label text-danger">Left Driver Name</label>
+                            {{ form.driver_id(class="form-select border-danger", id="target_driver", disabled=True) }}
+                        </div>
+                    </div>
+
+                    <!-- RIGHT PANE -->
+                    <div class="assignment-pane">
+                        <div class="section-title">02. New Duty Assignment</div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">New Project</label>
+                                {{ form.project_id(class="form-select", id="new_project") }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">New District</label>
+                                {{ form.district_id(class="form-select", id="new_district") }}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">New Vehicle</label>
+                            {{ form.vehicle_id(class="form-select", id="new_vehicle") }}
+                            <div id="capacity_info" class="status-msg"></div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Available Shift</label>
+                                {{ form.shift(class="form-select", id="shift_select") }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Rejoin Date</label>
+                                {{ form.rejoin_date(class="form-control", type="date") }}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Remarks</label>
+                            {{ form.remarks(class="form-control", rows=2) }}
+                        </div>
+                        <button type="submit" id="submitBtn" class="btn-rejoin shadow-sm" disabled>Finalize Rejoin</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+$(document).ready(function() {
+    // OLD INFO CASCADE
+    $('#old_project').change(function() {
+        let pid = $(this).val();
+        $('#old_district').prop('disabled', !pid).empty().append('<option value="">Loading...</option>');
+        if(pid) $.getJSON('/get_districts_by_project/'+pid, function(data){
+            $('#old_district').empty().append('<option value="">-- Select District --</option>');
+            $.each(data, function(i, d){ $('#old_district').append(`<option value="${d.id}">${d.name}</option>`); });
+        });
+    });
+
+    $('#old_district').change(function() {
+        let did = $(this).val();
+        let pid = $('#old_project').val();
+        $('#old_vehicle').prop('disabled', !did).empty().append('<option value="">Loading...</option>');
+        if(did) $.getJSON(`/get_vehicles_by_district/${pid}/${did}`, function(data){
+            $('#old_vehicle').empty().append('<option value="">-- Select Vehicle --</option>');
+            $.each(data, function(i, v){ $('#old_vehicle').append(`<option value="${v.id}">${v.no}</option>`); });
+        });
+    });
+
+    $('#old_vehicle').change(function() {
+        let vid = $(this).val();
+        if(vid) {
+            $('#target_driver').prop('disabled', false).empty().append('<option>Searching...</option>');
+            $.getJSON('/api/get_left_drivers_by_vehicle/' + vid, function(data) {
+                $('#target_driver').empty();
+                if(data.length === 0) {
+                    $('#target_driver').append('<option value="0">-- No Drivers Found --</option>');
+                } else {
+                    $('#target_driver').append('<option value="">-- Select Driver --</option>');
+                    $.each(data, function(i, d) {
+                        $('#target_driver').append(`<option value="${d.id}">${d.name} (${d.driver_id})</option>`);
+                    });
+                }
+            });
+        }
+    });
+
+    // NEW ASSIGNMENT CASCADE
+    $('#new_project').change(function() {
+        let pid = $(this).val();
+        $.getJSON('/get_districts_by_project/'+pid, function(data){
+            $('#new_district').empty().append('<option value="">-- Select District --</option>');
+            $.each(data, function(i, d){ $('#new_district').append(`<option value="${d.id}">${d.name}</option>`); });
+        });
+    });
+
+    $('#new_district').change(function() {
+        let did = $(this).val(), pid = $('#new_project').val();
+        $.getJSON(`/get_vehicles_by_district/${pid}/${did}`, function(data){
+            $('#new_vehicle').empty().append('<option value="">-- Select Vehicle --</option>');
+            $.each(data, function(i, v){ $('#new_vehicle').append(`<option value="${v.id}">${v.no}</option>`); });
+        });
+    });
+
+    $('#new_vehicle').change(function() {
+        let vid = $(this).val();
+        if(vid) $.getJSON(`/api/check_vehicle_shifts/${vid}`, function(res) {
+            $('#shift_select').empty().append('<option value="">-- Select Shift --</option>');
+            if (res.capacity === 1) {
+                if (res.occupied_shifts.includes('Morning')) {
+                    $('#capacity_info').html('<span class="unavailable">Full (Morning taken)</span>');
+                    $('#submitBtn').prop('disabled', true);
+                } else {
+                    $('#shift_select').append('<option value="Morning">Morning</option>');
+                    $('#capacity_info').html('<span class="available">1 Spot (Morning) Available</span>');
+                    $('#submitBtn').prop('disabled', false);
+                }
+            } else {
+                let m = !res.occupied_shifts.includes('Morning'), n = !res.occupied_shifts.includes('Night');
+                if(m) $('#shift_select').append('<option value="Morning">Morning</option>');
+                if(n) $('#shift_select').append('<option value="Night">Night</option>');
+                if(!m && !n) {
+                    $('#capacity_info').html('<span class="unavailable">Vehicle Full</span>');
+                    $('#submitBtn').prop('disabled', true);
+                } else {
+                    $('#capacity_info').html('<span class="available">Shifts Available</span>');
+                    $('#submitBtn').prop('disabled', false);
+                }
+            }
+        });
+    });
+});
+$('#rejoinForm').on('submit', function() {
+    // Submit hone se theek pehle fields enable kar dein taake data server par chala jaye
+    $('#target_driver').prop('disabled', false);
+    $('#old_project, #old_district, #old_vehicle').prop('disabled', false);
+});
+</script>
+{% endblock %}

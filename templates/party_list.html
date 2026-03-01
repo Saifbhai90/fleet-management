@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Party Name (Pump / Workshop / Spare parts){% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-building me-2 text-primary"></i>Create Party Name</h2>
+    <a href="{{ url_for('party_form') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add Party
+    </a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="GET" action="{{ url_for('party_list') }}" class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Search by name</label>
+          <input type="text" name="search" class="form-control" placeholder="Pump / Workshop / Shop name..." value="{{ search }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Type</label>
+          <select name="type" class="form-select">
+            <option value="">All</option>
+            <option value="Pump" {% if party_type == 'Pump' %}selected{% endif %}>Pump</option>
+            <option value="Workshop" {% if party_type == 'Workshop' %}selected{% endif %}>Workshop</option>
+            <option value="Spare parts shop" {% if party_type == 'Spare parts shop' %}selected{% endif %}>Spare parts shop</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-1"></i>Search
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-primary text-white py-3">
+      <span class="fw-semibold">Party List</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">#</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Contact</th>
+              <th>Address</th>
+              <th class="text-center pe-4">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in parties %}
+            <tr>
+              <td class="ps-4">{{ loop.index }}</td>
+              <td class="fw-medium">{{ p.name }}</td>
+              <td><span class="badge bg-secondary">{{ p.party_type }}</span></td>
+              <td>{{ p.contact or '-' }}</td>
+              <td>{{ p.address or '-' }}</td>
+              <td class="text-center pe-4">
+                <a href="{{ url_for('party_form', id=p.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                <form action="{{ url_for('party_delete', id=p.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this party?');">
+                  <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="6" class="text-center py-5 text-muted">
+                <i class="bi bi-building display-6 d-block mb-2"></i>
+                No party found. <a href="{{ url_for('party_form') }}">Add Party</a> (Pump, Workshop or Spare parts shop).
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

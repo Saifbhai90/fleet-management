@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Project Assignments{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --primary-color: #0d6efd;
+        --bg-light: #f4f7f9;
+        --text-muted: #6c757d;
+    }
+    body { background-color: var(--bg-light); }
+    
+    /* Table Styling */
+    .assignment-table {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid #e0e6ed;
+    }
+    .assignment-table thead {
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #e0e6ed;
+    }
+    .assignment-table th {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 700;
+        color: var(--text-muted);
+        padding: 15px 20px;
+    }
+    .assignment-table td {
+        padding: 18px 20px;
+        vertical-align: middle;
+        border-bottom: 1px solid #f0f2f5;
+    }
+    
+    /* Project Title & Badge */
+    .project-name { font-weight: 700; color: #2c3e50; font-size: 1rem; margin-bottom: 2px; }
+    .company-badge {
+        background-color: #eef2ff;
+        color: #4338ca;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        display: inline-flex;
+        align-items: center;
+    }
+    
+    /* Custom Search Bar */
+    .search-container {
+        background: white;
+        border-radius: 10px;
+        padding: 6px;
+        display: flex;
+        border: 1px solid #dce1e7;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    .search-input { border: none; outline: none; flex-grow: 1; padding: 8px 15px; }
+    
+    /* Action Buttons */
+    .btn-action {
+        padding: 6px 14px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+    }
+    .btn-edit { background-color: #fff9db; color: #92522d; border: 1px solid #ffe066; }
+    .btn-edit:hover { background-color: #ffec99; }
+    .btn-deassign { background-color: #fff5f5; color: #c92a2a; border: 1px solid #ffa8a8; }
+    .btn-deassign:hover { background-color: #ffe3e3; }
+
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h3 class="fw-bold mb-1 text-dark">Project Assignments</h3>
+            <span class="text-muted"><i class="bi bi-info-circle me-1"></i> Managing <strong>{{ assigned_projects|length }}</strong> active projects</span>
+        </div>
+        <a href="{{ url_for('assign_project_to_company_new') }}" class="btn btn-primary btn-lg shadow-sm px-4 rounded-3">
+            <i class="bi bi-plus-lg me-2"></i>Assign New Project
+        </a>
+    </div>
+
+    <!-- Stats & Search Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-8">
+            <form method="GET" class="search-container">
+                <i class="bi bi-search ms-2 text-muted mt-2"></i>
+                <input type="text" name="search" class="search-input" placeholder="Search by Project Name or Company..." value="{{ request.args.get('search', '') }}">
+                <button type="submit" class="btn btn-dark rounded-3 px-4">Search</button>
+            </form>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <div class="bg-white p-2 px-3 rounded-3 border d-inline-block shadow-sm text-center">
+                <small class="text-muted d-block" style="font-size: 0.7rem; text-transform: uppercase;">Active Connections</small>
+                <span class="fw-bold fs-5 text-primary">{{ assigned_projects|length }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="assignment-table shadow-sm">
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Project Info</th>
+                        <th>Assigned Company</th>
+                        <th>Assign Date</th>
+                        <th>Remarks</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for proj in assigned_projects %}
+                    <tr>
+                        <td>
+                            <div class="project-name">{{ proj.name }}</div>
+                            <code class="text-muted small">ID: #{{ proj.id }}</code>
+                        </td>
+                        <td>
+                            <div class="company-badge">
+                                <i class="bi bi-building-fill me-2"></i>
+                                {{ proj.company.name if proj.company else 'Not Assigned' }}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="text-dark small fw-semibold">
+                                <i class="bi bi-calendar3 me-1 text-muted"></i>
+                                {{ proj.assign_date.strftime('%d %b, %Y') if proj.assign_date else '-' }}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="text-muted small">{{ proj.assign_remarks or '---' }}</span>
+                        </td>
+                        <td class="text-end">
+                            <div class="d-flex justify-content-end gap-2">
+                                <a href="{{ url_for('assign_project_to_company_edit', project_id=proj.id) }}" 
+                                   class="btn btn-action btn-edit text-decoration-none">
+                                    <i class="bi bi-pencil-square"></i> Edit
+                                </a>
+                                
+                                <form action="{{ url_for('desassign_project_from_company', project_id=proj.id) }}" method="POST" class="m-0">
+                                    <button type="submit" class="btn btn-action btn-deassign" 
+                                            onclick="return confirm('Do you want to deassign project: {{ proj.name }}?')">
+                                        <i class="bi bi-link-45deg"></i> Deassign
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">
+                            <i class="bi bi-folder-x display-4 d-block mb-3 opacity-25"></i>
+                            No assignments found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

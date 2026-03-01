@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-truck me-2 text-warning"></i>{{ title }}</h2>
+    <a href="{{ url_for('without_task_list') }}" class="btn btn-outline-secondary btn-sm">Back to Report</a>
+  </div>
+
+  <div class="card shadow border-0 rounded-3">
+    <div class="card-body">
+      <form method="POST" action="" class="row g-3">
+        {{ form.hidden_tag() }}
+        <div class="col-md-3">
+          <label class="form-label">Date <span class="text-danger">*</span></label>
+          {{ form.move_date(class="form-control datepicker") }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">District</label>
+          {{ form.district_id(class="form-select", id="districtSelect") }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Project</label>
+          {{ form.project_id(class="form-select", id="projectSelect") }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Vehicle#</label>
+          {{ form.vehicle_id(class="form-select") }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">KM IN</label>
+          {{ form.km_in(class="form-control") }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">KM Out</label>
+          {{ form.km_out(class="form-control") }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">D.Km</label>
+          {{ form.d_km(class="form-control") }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">T.KM</label>
+          {{ form.t_km(class="form-control") }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Logbook Task</label>
+          {{ form.logbook_task(class="form-control") }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">EMG-Task</label>
+          {{ form.emg_task(class="form-control") }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Fine</label>
+          {{ form.fine(class="form-control") }}
+        </div>
+        <div class="col-12">
+          <label class="form-label">Remarks</label>
+          {{ form.remarks(class="form-control") }}
+        </div>
+        <div class="col-12">
+          <hr>
+          {{ form.submit(class="btn btn-warning text-dark") }}
+          <a href="{{ url_for('without_task_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = this.value;
+      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+      if (did && did !== '0') {
+        fetch('/get_projects_by_district/' + did)
+          .then(function(r) { return r.json(); })
+          .then(function(arr) {
+            arr.forEach(function(p) {
+              var o = document.createElement('option');
+              o.value = p.id;
+              o.textContent = p.name;
+              projectSelect.appendChild(o);
+            });
+          });
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Upload Emergency Task Report (Admin){% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-file-earmark-excel me-2 text-warning"></i>Upload EmergencyTaskReport (Admin)</h2>
+    <a href="{{ url_for('task_report_list') }}" class="btn btn-outline-secondary btn-sm">Back to Task Report</a>
+  </div>
+
+  <div class="card shadow border-0 rounded-3">
+    <div class="card-body">
+      <p class="text-muted small">Upload the <strong>EmergencyTaskReport</strong> Excel file. This will fill the <strong>EMG,Tasks (admin)</strong> column in the Task Report. Use the same date as the report date.</p>
+      <form method="POST" enctype="multipart/form-data">
+        {{ form.hidden_tag() }}
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">Report Date <span class="text-danger">*</span></label>
+            {{ form.task_date(class="form-control datepicker") }}
+            {% for e in form.task_date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Excel File (.xlsx / .xls)</label>
+            {{ form.file(class="form-control") }}
+            {% for e in form.file.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="bi bi-upload me-1"></i>Upload
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="alert alert-info mt-3 small">
+    <strong>Expected format:</strong> First row = headers. Sheet must have a column for <strong>Vehicle No</strong> and a column for <strong>EMG / Emergency task count</strong>. Put sample files in <code>sample_excel</code> folder and refer to <code>sample_excel/README.md</code> for details.
+  </div>
+</div>
+{% endblock %}

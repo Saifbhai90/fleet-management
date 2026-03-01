@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}{{ company.name }} - Projects{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">
+      <i class="bi bi-building me-2"></i>{{ company.name }}
+      <small class="text-muted">→ Projects</small>
+    </h2>
+    <div>
+      <a href="{{ url_for('companies') }}" class="btn btn-outline-secondary me-2">
+        <i class="bi bi-arrow-left me-1"></i>Back to Companies
+      </a>
+      <a href="{{ url_for('project_form', company_id=company.id) }}" class="btn btn-success">
+        <i class="bi bi-plus-square me-1"></i>Add Project
+      </a>
+    </div>
+  </div>
+
+  <!-- Search Form -->
+  <form method="GET" class="mb-4">
+    <div class="input-group input-group-lg">
+      <span class="input-group-text"><i class="bi bi-search"></i></span>
+      <input type="text" name="search" class="form-control" placeholder="Search project name..." value="{{ search }}">
+      <button class="btn btn-primary" type="submit">
+        <i class="bi bi-search me-1"></i>Search
+      </button>
+    </div>
+  </form>
+
+  <!-- Projects Table -->
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>ID</th>
+              <th>Project Name</th>
+              <th>Vehicles</th>
+              <th>Drivers</th>
+              <th>Parking</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for project in projects %}
+            <tr>
+              <td>{{ project.id }}</td>
+              <td>
+                <a href="{{ url_for('project_detail', id=project.id) }}" class="fw-bold text-primary">
+                  {{ project.name }}
+                </a>
+                <small class="d-block text-muted">{{ project.start_date.strftime('%Y-%m-%d') if project.start_date else 'No start date' }}</small>
+              </td>
+              <td>{{ project.vehicle_count }}</td>
+              <td>{{ project.driver_count }}</td>
+              <td>{{ project.parking_count }}</td>
+              <td>
+                <span class="badge bg-{{ 'success' if project.status == 'Active' else 'danger' }} px-3 py-2">
+                  {{ project.status }}
+                </span>
+              </td>
+              <td>
+                <a href="{{ url_for('project_form', id=project.id) }}" class="btn btn-sm btn-warning me-1" title="Edit">
+                  <i class="bi bi-pencil-square"></i> Edit
+                </a>
+
+                <!-- Toggle Status -->
+                {% if project.status == 'Active' %}
+                  <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" style="display:inline;">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary me-1" title="Mark Inactive" onclick="return confirm('Mark project \"{{ project.name }}\" as Inactive?')">
+                      <i class="bi bi-toggle-off"></i> Inactive
+                    </button>
+                  </form>
+                {% else %}
+                  <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" style="display:inline;">
+                    <button type="submit" class="btn btn-sm btn-outline-success me-1" title="Mark Active" onclick="return confirm('Mark project \"{{ project.name }}\" as Active?')">
+                      <i class="bi bi-toggle-on"></i> Active
+                    </button>
+                  </form>
+                {% endif %}
+
+                <!-- Delete -->
+                <form action="{{ url_for('delete_project', id=project.id) }}" method="POST" style="display:inline;">
+                  <button type="submit" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete project \"{{ project.name }}\"? All linked vehicles/drivers/parking will be lost.')">
+                    <i class="bi bi-trash"></i> Delete
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7" class="text-center py-5">
+                <div class="alert alert-info mb-0">
+                  <i class="bi bi-info-circle-fill me-2 fs-4"></i>
+                  No projects found for {{ company.name }}.
+                  {% if search %}Try a different search or{% endif %}
+                  <a href="{{ url_for('project_form', company_id=company.id) }}" class="alert-link">add a new project</a>.
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer bg-light text-muted text-end small">
+      Total Projects: <strong>{{ projects|length }}</strong>
+      {% if search %} | Filtered by: "{{ search }}"{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

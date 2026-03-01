@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Project Transfer{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="card shadow-sm mx-auto" style="max-width: 850px; border: none; border-radius: 15px;">
+    
+    <div class="card-header bg-primary text-white py-3" style="border-radius: 15px 15px 0 0;">
+      <div class="d-flex justify-content-between align-items-center px-2">
+        <h4 class="mb-0 fw-bold"><i class="bi bi-pencil-square me-2"></i>Edit Project Transfer</h4>
+        <a href="{{ url_for('project_transfers') }}" class="btn btn-sm btn-light px-3 text-primary fw-bold">
+           Cancel
+        </a>
+      </div>
+    </div>
+
+    <div class="card-body p-4">
+      <form method="POST" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="row mb-4">
+          <div class="col-12">
+            <label class="form-label fw-bold text-secondary small">PROJECT</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light"><i class="bi bi-briefcase"></i></span>
+              {{ form.project_id(class="form-select form-select-lg select2-enable") }}
+            </div>
+          </div>
+        </div>
+
+        <div class="row mb-4">
+          <div class="col-md-7">
+            <label class="form-label fw-bold text-secondary small">TRANSFER TO COMPANY</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light"><i class="bi bi-building"></i></span>
+              {{ form.new_company_id(class="form-select form-select-lg select2-enable") }}
+            </div>
+          </div>
+
+          <div class="col-md-5">
+            <label class="form-label fw-bold text-secondary small">TRANSFER DATE</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light"><i class="bi bi-calendar-event"></i></span>
+              {{ form.transfer_date(class="form-control form-control-lg datepicker") }}
+            </div>
+          </div>
+        </div>
+
+        <div class="row mb-4">
+          <div class="col-12">
+            <label class="form-label fw-bold text-secondary small">REMARKS / NOTES</label>
+            {{ form.remarks(class="form-control", rows=2) }}
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <div class="row">
+          <div class="col-md-12">
+            <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">
+              <i class="bi bi-save me-1"></i> Save Changes
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Select2 & Flatpickr Scripts -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<script>
+  $(document).ready(function() {
+    $('.select2-enable').select2({ width: '100%' });
+    flatpickr(".datepicker", { dateFormat: "Y-m-d" });
+  });
+</script>
+{% endblock %}

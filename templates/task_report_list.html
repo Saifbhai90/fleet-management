@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Vehicles Daily Task Report{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-clipboard2-data me-2 text-primary"></i>Vehicles Daily Task Report</h2>
+    <a href="{{ url_for('task_report_new') }}" class="btn btn-success btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>New Task Entry
+    </a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('task_report_list') }}" class="row g-3 align-items-end">
+        {{ form.hidden_tag() }}
+        <div class="col-md-2">
+          <label class="form-label">From Date</label>
+          {{ form.from_date(class="form-control datepicker") }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">To Date</label>
+          {{ form.to_date(class="form-control datepicker") }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">District</label>
+          <select name="district_id" class="form-select">
+            {% for val, label in form.district_id.choices %}
+              <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Project</label>
+          <select name="project_id" class="form-select">
+            {% for val, label in form.project_id.choices %}
+              <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-1"></i>View Report
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-dark text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="fw-semibold">Report from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
+      <input type="text" id="taskReportSearch" class="form-control form-control-sm" placeholder="Search in list (real-time)..." style="max-width: 220px;" autocomplete="off">
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="taskReportTable">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">#</th>
+              <th>Date</th>
+              <th>District</th>
+              <th>Tehsil</th>
+              <th>Parking Place</th>
+              <th>Vehicle Type</th>
+              <th>Vehicle No</th>
+              <th class="text-end">Start Reading</th>
+              <th class="text-end">Close Reading</th>
+              <th class="text-end">KMs Driven</th>
+              <th class="text-center">Task's</th>
+              <th class="text-center">EMG,Tasks (admin)</th>
+              <th class="text-end">Tracker Driven KMs</th>
+              <th class="text-end">KMs Difference</th>
+              <th class="text-end">% Of Difference</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr class="{% if row.vehicle.vehicle_type and 'USG' in row.vehicle.vehicle_type %}table-secondary{% endif %}">
+              <td class="ps-4">{{ loop.index }}</td>
+              <td>{{ row.task_date|ddmmyyyy }}</td>
+              <td>{{ row.vehicle.district.name if row.vehicle.district else '-' }}</td>
+              <td>{{ row.vehicle.parking_station.tehsil if row.vehicle.parking_station else '-' }}</td>
+              <td>{{ row.vehicle.parking_station.name if row.vehicle.parking_station else '-' }}</td>
+              <td>{{ row.vehicle.vehicle_type or '-' }}</td>
+              <td class="fw-medium">{{ row.vehicle.vehicle_no }}</td>
+              <td class="text-end">{{ "%.0f"|format(row.start_reading) }}</td>
+              <td class="text-end">{{ "%.0f"|format(row.close_reading) }}</td>
+              <td class="text-end">{{ row.kms_driven }}</td>
+              <td class="text-center">{{ row.tasks_count }}</td>
+              <td class="text-center">{{ row.emg_tasks }}</td>
+              <td class="text-end">{{ row.tracker_km }}</td>
+              <td class="text-end {% if row.kms_diff > 5 %}text-danger fw-bold{% elif row.kms_diff < 0 %}text-warning{% endif %}">{{ row.kms_diff }}</td>
+              <td class="text-end {% if row.pct_diff is not none %}{% if row.pct_diff > 5 %}text-danger fw-bold{% elif row.pct_diff < 0 %}text-warning{% endif %}{% endif %}">
+                {% if row.pct_diff is not none %}{{ row.pct_diff }}%{% else %}Driven KM Zero{% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="15" class="text-center py-5 text-muted">
+                <i class="bi bi-clipboard2-data display-6 d-block mb-2"></i>
+                No task entries for this date/filter. <a href="{{ url_for('task_report_new') }}">Add entry</a> or change filter.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          {% if rows %}
+          <tfoot class="table-light fw-bold">
+            <tr>
+              <td colspan="9" class="ps-4">Total</td>
+              <td class="text-end">{{ total_kms }}</td>
+              <td class="text-center">{{ total_tasks }}</td>
+              <td></td>
+              <td class="text-end">{{ total_tracker }}</td>
+              <td class="text-end">{{ total_diff }}</td>
+              <td class="text-end">{% if total_pct is not none %}{{ total_pct }}%{% else %}—{% endif %}</td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var searchInput = document.getElementById('taskReportSearch');
+  var table = document.getElementById('taskReportTable');
+  if (searchInput && table) {
+    var tbody = table.querySelector('tbody');
+    var allTr = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+    var noDataRow = allTr.find(function(tr) { return tr.cells.length === 1; }) || null;
+    var dataRows = allTr.filter(function(tr) { return tr.cells.length > 1; });
+    searchInput.addEventListener('input', function() {
+      var q = this.value.trim().toLowerCase();
+      var visible = 0;
+      if (dataRows.length) {
+        dataRows.forEach(function(row) {
+          var text = row.textContent.replace(/\s+/g, ' ').toLowerCase();
+          var show = !q || text.indexOf(q) > -1;
+          row.style.display = show ? '' : 'none';
+          if (show) visible++;
+        });
+      }
+      if (noDataRow) noDataRow.style.display = (dataRows.length === 0 || (q && visible === 0)) ? '' : 'none';
+    });
+  }
+})();
+</script>
+{% endblock %}

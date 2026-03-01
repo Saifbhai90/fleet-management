@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Vehicle Profile - {{ vehicle.vehicle_no }}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-4">
+    <h2 class="mb-0"><i class="bi bi-truck me-2 text-primary"></i>Vehicle Profile Report</h2>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('vehicle_form', id=vehicle.id) }}" class="btn btn-outline-primary btn-sm">Edit Vehicle</a>
+      <a href="{{ url_for('reports_index') }}" class="btn btn-outline-secondary btn-sm">All Reports</a>
+    </div>
+  </div>
+
+  <!-- Basic Info -->
+  <div class="card shadow border-0 mb-4">
+    <div class="card-header bg-light"><strong>{{ vehicle.vehicle_no }}</strong> — {{ vehicle.model }}</div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-6">
+          <p class="mb-1"><strong>Model:</strong> {{ vehicle.model }}</p>
+          <p class="mb-1"><strong>Vehicle Type:</strong> {{ vehicle.vehicle_type or '-' }}</p>
+          <p class="mb-1"><strong>Engine No:</strong> {{ vehicle.engine_no or '-' }}</p>
+          <p class="mb-1"><strong>Chassis No:</strong> {{ vehicle.chassis_no or '-' }}</p>
+        </div>
+        <div class="col-md-6">
+          <p class="mb-1"><strong>Phone (vehicle):</strong> {{ vehicle.phone_no|phone_fmt if vehicle.phone_no else '-' }}</p>
+          <p class="mb-1"><strong>Active Date:</strong> {{ vehicle.active_date|ddmmyyyy if vehicle.active_date else '-' }}</p>
+          <p class="mb-1"><strong>Driver Capacity:</strong> {{ vehicle.driver_capacity or 1 }}</p>
+          {% if vehicle.document_path %}
+          <p class="mb-1"><a href="{{ url_for('uploaded_file', filename=vehicle.document_path) }}" target="_blank" class="text-primary"><i class="bi bi-file-earmark-pdf me-1"></i>View Vehicle Document</a></p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Current Assignment -->
+  <div class="card shadow border-0 mb-4">
+    <div class="card-header bg-light">Current Assignment</div>
+    <div class="card-body">
+      <p class="mb-1"><strong>Project:</strong> {{ vehicle.project.name if vehicle.project else '-' }}</p>
+      <p class="mb-1"><strong>District:</strong> {{ vehicle.district.name if vehicle.district else '-' }}</p>
+      <p class="mb-1"><strong>Parking Station:</strong> {{ vehicle.parking_station.name if vehicle.parking_station else '-' }}</p>
+      <p class="mb-2"><strong>Assigned to district since:</strong> {{ vehicle.assign_to_district_date|ddmmyyyy if vehicle.assign_to_district_date else '-' }}</p>
+      <p class="mb-1"><strong>Current Driver(s):</strong></p>
+      <ul class="mb-0">
+        {% for d in vehicle.drivers %}
+        <li>
+          <a href="{{ url_for('report_driver_profile', driver_id=d.id) }}">{{ d.name }}</a> ({{ d.driver_id }}) — {{ d.shift or '-' }} shift
+          {% if d.assign_date %} — since {{ d.assign_date|ddmmyyyy }}{% endif %}
+        </li>
+        {% else %}
+        <li class="text-muted">No driver assigned.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <!-- Vehicle Transfer History -->
+  <div class="card shadow border-0 mb-4">
+    <div class="card-header bg-light">Vehicle Transfer History</div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>From (Project / District / Parking)</th>
+            <th>To (Project / District / Parking)</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transfers %}
+          <tr>
+            <td>{{ t.transfer_date|ddmmyyyy }}</td>
+            <td>
+              {{ t.old_project.name if t.old_project else '-' }} /
+              {{ t.old_district.name if t.old_district else '-' }} /
+              {{ t.old_parking.name if t.old_parking else '-' }}
+            </td>
+            <td>
+              {{ t.new_project.name if t.new_project else '-' }} /
+              {{ t.new_district.name if t.new_district else '-' }} /
+              {{ t.new_parking.name if t.new_parking else '-' }}
+            </td>
+            <td class="small">{{ t.remarks or '-' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-muted">No transfers.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Driver Assignment History (drivers who were assigned to this vehicle) -->
+  <div class="card shadow border-0">
+    <div class="card-header bg-light">Driver Assignment History</div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Driver</th>
+            <th>From (Vehicle / Shift)</th>
+            <th>To (Vehicle / Shift)</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in driver_history %}
+          <tr>
+            <td>{{ h.transfer_date|ddmmyyyy }}</td>
+            <td>
+              <a href="{{ url_for('report_driver_profile', driver_id=h.driver_id) }}">{{ h.driver.name }}</a> ({{ h.driver.driver_id }})
+            </td>
+            <td>
+              {{ h.old_vehicle.vehicle_no if h.old_vehicle else '-' }} ({{ h.old_shift or '-' }})
+            </td>
+            <td>
+              {{ h.new_vehicle.vehicle_no if h.new_vehicle else '-' }} ({{ h.new_shift or '-' }})
+            </td>
+            <td class="small">{{ h.remarks or '-' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-muted">No driver assignment history.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}New Vehicle Transfer{% endblock %}
+
+{% block content %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<div class="container py-4" style="font-family: 'Inter', sans-serif;">
+  <div class="card shadow-lg border-0 mx-auto" style="max-width: 1000px; border-radius: 20px; overflow: hidden;">
+    
+    <div class="card-header bg-dark py-3 px-4 d-flex align-items-center justify-content-between">
+      <h4 class="mb-0 text-white fw-bold"><i class="bi bi-truck text-warning me-2"></i> Vehicle Asset Transfer</h4>
+      <span class="badge bg-warning text-dark px-3 py-2 rounded-pill fw-bold">Step-by-Step Process</span>
+    </div>
+    
+    <div class="card-body p-4 bg-white">
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        
+        <!-- TOP ALERT: Driver Policy (Static Info) -->
+        <div class="alert alert-light border shadow-sm mb-4 d-flex align-items-center rounded-3">
+            <i class="bi bi-info-circle-fill text-primary fs-4 me-3"></i>
+            <div class="small">
+                <strong>Transfer Policy:</strong> Project ya District tabdeel hone par Driver auto-detach ho jayega. Sirf Same Project & District mein Parking change hone par Driver sath rahega.
+            </div>
+        </div>
+
+        <div class="row g-4">
+          <!-- LEFT: FROM -->
+          <div class="col-lg-6">
+            <div class="p-4 h-100 rounded-4 border-start border-4 border-danger shadow-sm" style="background-color: #fffafa;">
+                <h5 class="fw-bold mb-3 text-danger text-uppercase small tracking-wide">Current Location (From)</h5>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small text-muted">Select Project</label>
+                    {{ form.from_project_id(class="form-select select2-enable", id="from_project") }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small text-muted">District</label>
+                    {{ form.from_district_id(class="form-select", id="from_district") }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small text-muted">Select Vehicle</label>
+                    {{ form.vehicle_id(class="form-select select2-enable", id="vehicle_id") }}
+                </div>
+                <div id="current_parking_info" class="mt-3 p-3 rounded-3 border bg-white" style="display: none;">
+                    <small class="text-muted d-block fw-bold" style="font-size: 0.65rem;">CURRENT PARKING SITE</small>
+                    <span id="parking_name_text" class="fw-bold text-dark">---</span>
+                </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: TO -->
+          <div class="col-lg-6">
+            <div class="p-4 h-100 rounded-4 border-start border-4 border-success shadow-sm" style="background-color: #f8fff9;">
+                <h5 class="fw-bold mb-3 text-success text-uppercase small tracking-wide">New Destination (To)</h5>
+                <div class="row g-2">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-semibold small text-muted">New Project</label>
+                        {{ form.new_project_id(class="form-select select2-enable", id="new_project") }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-semibold small text-muted">New District</label>
+                        {{ form.new_district_id(class="form-select", id="new_district") }}
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small text-muted">New Parking Site</label>
+                    {{ form.new_parking_id(class="form-select", id="new_parking") }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small text-muted">Effective Date</label>
+                    {{ form.transfer_date(class="form-control datepicker") }}
+                </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- REMARKS -->
+        <div class="col-12 mt-4 px-3">
+            <label class="form-label fw-semibold small text-muted">TRANSFER REMARKS</label>
+            {{ form.remarks(class="form-control bg-light", rows=2, placeholder="Enter transfer details...") }}
+        </div>
+
+        <!-- DYNAMIC DRIVER STATUS ALERT (Ye automatically change hoga) -->
+        <div id="driver_status_alert" class="mx-3 mt-4 alert d-flex align-items-center border-0 shadow-sm py-3" style="display: none !important;">
+            <i id="driver_icon" class="bi fs-3 me-3"></i>
+            <div>
+                <h6 id="driver_title" class="fw-bold mb-1"></h6>
+                <p id="driver_msg" class="mb-0 small"></p>
+            </div>
+        </div>
+
+        <div class="px-3 mt-4">
+            <button type="submit" class="btn btn-warning w-100 fw-bold py-3 shadow border-0 rounded-4 text-uppercase">
+                <i class="bi bi-arrow-left-right me-2"></i> Execute Transfer Order
+            </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+  $(document).ready(function() {
+    
+    // Function to calculate Driver Impact
+    function updateDriverImpact() {
+        let fromP = $('#from_project').val();
+        let fromD = $('#from_district').val();
+        let newP = $('#new_project').val();
+        let newD = $('#new_district').val();
+
+        // Agar saari fields select hain tab hi check karein
+        if(fromP > 0 && fromD > 0 && newP > 0 && newD > 0) {
+            $('#driver_status_alert').attr('style', 'display: flex !important');
+
+            if(fromP === newP && fromD === newD) {
+                // CASE 1: Same Project & District
+                $('#driver_status_alert').removeClass('alert-danger').addClass('alert-info text-primary bg-info-subtle');
+                $('#driver_icon').attr('class', 'bi bi-person-check-fill fs-3 me-3');
+                $('#driver_title').text('Driver Attached');
+                $('#driver_msg').text('Project aur District same hain. Driver gaari ke sath hi rahega.');
+            } else {
+                // CASE 2: Different Location
+                $('#driver_status_alert').removeClass('alert-info text-primary').addClass('alert-danger text-danger bg-danger-subtle');
+                $('#driver_icon').attr('class', 'bi bi-person-x-fill fs-3 me-3');
+                $('#driver_title').text('Driver Will Be Freed');
+                $('#driver_msg').text('Location tabdeel ho rahi hai. Driver ko is gaari se auto-detach kar diya jayega.');
+            }
+        } else {
+            $('#driver_status_alert').attr('style', 'display: none !important');
+        }
+    }
+
+    // Har field ke change par impact check karo
+    $('#from_project, #from_district, #new_project, #new_district').on('change', function() {
+        updateDriverImpact();
+    });
+
+    // --- Baki AJAX Logics ---
+    $('#from_project').change(function() {
+      let pid = $(this).val();
+      $.get('/get_districts_by_project/' + pid, function(data) {
+        let options = '<option value="0">-- Select District --</option>';
+        data.forEach(d => options += `<option value="${d.id}">${d.name}</option>`);
+        $('#from_district').html(options);
+      });
+    });
+
+    $('#from_district').change(function() {
+      let pid = $('#from_project').val();
+      let did = $(this).val();
+      $.get('/get_vehicles_by_district/' + pid + '/' + did, function(data) {
+        let options = '<option value="0">-- Select Vehicle --</option>';
+        data.forEach(v => options += `<option value="${v.id}">${v.no}</option>`);
+        $('#vehicle_id').html(options);
+      });
+    });
+
+    $('#vehicle_id').change(function() {
+        let vid = $(this).val();
+        if(vid > 0) {
+            $.get('/get_vehicle_current_info/' + vid, function(data) {
+                $('#parking_name_text').text(data.parking_name);
+                $('#current_parking_info').fadeIn();
+            });
+        }
+    });
+
+    $('#new_project').change(function() {
+      let pid = $(this).val();
+      $.get('/get_districts_by_project/' + pid, function(data) {
+        let options = '<option value="0">-- Select District --</option>';
+        data.forEach(d => options += `<option value="${d.id}">${d.name}</option>`);
+        $('#new_district').html(options);
+      });
+    });
+
+    $('#new_district').change(function() {
+      let did = $(this).val();
+      $.get('/get_parking_by_district/' + did, function(data) {
+        let options = '<option value="0">-- No Parking Assigned --</option>';
+        data.forEach(p => options += `<option value="${p.id}">${p.name}</option>`);
+        $('#new_parking').html(options);
+      });
+    });
+
+  });
+</script>
+{% endblock %}

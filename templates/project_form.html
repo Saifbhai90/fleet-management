@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Project Entry Form{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h3 class="mb-4 text-center fw-bold"><i class="bi bi-briefcase me-2 text-primary"></i>Project Entry Form</h3>
+
+  <form method="POST" class="needs-validation" novalidate>
+    {{ form.hidden_tag() }}
+
+    <div class="row g-4">
+      <!-- Left Column: Main Information -->
+      <div class="col-md-6">
+        <div class="card h-100 shadow-sm border-primary">
+          <div class="card-header bg-primary text-white d-flex align-items-center">
+            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Main Information</h5>
+          </div>
+          <div class="card-body p-4">
+            <div class="mb-4">
+              <label class="form-label fw-bold">{{ form.name.label.text }}</label>
+              {{ form.name(class="form-control form-control-lg " + ("is-invalid" if form.name.errors else ""), placeholder="Enter project name") }}
+              {% for error in form.name.errors %}
+                <div class="invalid-feedback">{{ error }}</div>
+              {% endfor %}
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label fw-bold">{{ form.start_date.label.text }}</label>
+              {{ form.start_date(class="form-control form-control-lg", type="date") }}
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label fw-bold">Project Status</label>
+              <div class="btn-group w-100 shadow-sm" role="group">
+                <input type="radio" class="btn-check" name="status" id="status_active" value="Active" {% if form.status.data == 'Active' or not form.status.data %}checked{% endif %}>
+                <label class="btn btn-outline-success py-2" for="status_active">Active</label>
+
+                <input type="radio" class="btn-check" name="status" id="status_inactive" value="Inactive" {% if form.status.data == 'Inactive' %}checked{% endif %}>
+                <label class="btn btn-outline-danger py-2" for="status_inactive">Inactive</label>
+              </div>
+            </div>
+
+            <!-- Inactive Date (Only shows if status is Inactive) -->
+            <div class="mb-3" id="inactive_date_group" style="display:none;">
+              <label class="form-label fw-bold">{{ form.inactive_date.label.text }}</label>
+              {{ form.inactive_date(class="form-control", type="date") }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Remarks -->
+      <div class="col-md-6">
+        <div class="card h-100 shadow-sm border-warning">
+          <div class="card-header bg-warning text-dark d-flex align-items-center">
+            <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>Remarks</h5>
+          </div>
+          <div class="card-body p-4">
+            <div class="mb-3 h-100">
+              <label class="form-label fw-bold">{{ form.remarks.label.text }}</label>
+              {{ form.remarks(class="form-control", rows=9, placeholder="Enter any additional notes here...") }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form Buttons -->
+    <div class="mt-5 mb-5 text-center">
+      <button type="submit" class="btn btn-primary btn-lg px-5 shadow-sm me-2">
+        <i class="bi bi-save me-2"></i>Save Project
+      </button>
+      <button type="reset" class="btn btn-warning btn-lg px-5 shadow-sm me-2 text-dark">
+        <i class="bi bi-eraser me-2"></i>Clear
+      </button>
+      <button type="button" class="btn btn-secondary btn-lg px-5 shadow-sm" onclick="window.location.href='{{ url_for('projects_list') }}'">
+        <i class="bi bi-x-circle me-2"></i>Cancel
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+  // Script to handle Inactive Date field visibility
+  document.addEventListener('DOMContentLoaded', function() {
+    const statusRadios = document.querySelectorAll('input[name="status"]');
+    const inactiveGroup = document.getElementById('inactive_date_group');
+
+    function toggleInactiveField() {
+      const selectedStatus = document.querySelector('input[name="status"]:checked').value;
+      inactiveGroup.style.display = (selectedStatus === 'Inactive') ? 'block' : 'none';
+    }
+
+    statusRadios.forEach(radio => radio.addEventListener('change', toggleInactiveField));
+    toggleInactiveField(); // Initial Check
+  });
+</script>
+{% endblock %}

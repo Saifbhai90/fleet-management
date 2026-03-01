@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}New Vehicle Assignment{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-xl-10">
+            <div class="card shadow border-0 rounded-4 overflow-hidden">
+                <!-- Header -->
+                <div class="card-header bg-success text-white py-3">
+                    <h5 class="mb-0 fw-bold text-center">
+                        <i class="bi bi-truck me-2"></i>New Assignment: Vehicle to District
+                    </h5>
+                </div>
+
+                <div class="card-body p-4 bg-light">
+                    <form method="POST" id="assignmentForm" novalidate>
+                        {{ form.hidden_tag() }}
+
+                        <div class="row g-4">
+                            <!-- Left Column: Links -->
+                            <div class="col-lg-7">
+                                <div class="bg-white p-4 rounded-4 shadow-sm border-start border-success border-4 h-100">
+                                    <h6 class="text-success fw-bold mb-4 text-uppercase small">
+                                        <i class="bi bi-link-45deg me-2"></i>Deployment Connections
+                                    </h6>
+                                    
+                                    <div class="row g-3">
+                                        <!-- Project -->
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold small">1. Select Project</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text bg-light"><i class="bi bi-folder2-open"></i></span>
+                                                {{ form.project_id(class="form-select select2-enable", id="project_select") }}
+                                            </div>
+                                        </div>
+
+                                        <!-- District -->
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold small">2. Select District</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text bg-light"><i class="bi bi-geo-alt"></i></span>
+                                                {{ form.district_id(class="form-select select2-enable", id="district_select") }}
+                                            </div>
+                                            <small class="text-muted" style="font-size: 0.7rem;">Only districts assigned to the project will appear.</small>
+                                        </div>
+
+                                        <!-- Vehicle -->
+                                        <div class="col-12 mt-4">
+                                            <label class="form-label fw-semibold small">3. Select Vehicle (Unassigned)</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text bg-light"><i class="bi bi-truck-front"></i></span>
+                                                {{ form.vehicle_id(class="form-select select2-enable") }}
+                                            </div>
+                                        </div>
+
+                                        <!-- Date -->
+                                        <div class="col-md-6 mt-4">
+                                            <label class="form-label fw-semibold small">Assignment Date</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text bg-light"><i class="bi bi-calendar-event"></i></span>
+                                                {{ form.assign_date(class="form-control datepicker") }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right Column: Remarks -->
+                            <div class="col-lg-5">
+                                <div class="bg-white p-4 rounded-4 shadow-sm border-start border-info border-4 h-100 d-flex flex-column">
+                                    <h6 class="text-info fw-bold mb-4 text-uppercase small">
+                                        <i class="bi bi-chat-left-text me-2"></i>Assignment Remarks
+                                    </h6>
+                                    <div class="flex-grow-1">
+                                        {{ form.remarks(class="form-control h-100", style="min-height: 180px;", placeholder="Enter any specific notes about this deployment...") }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="row mt-4">
+                            <div class="col-12 text-center">
+                                <button type="submit" class="btn btn-success btn-lg px-5 shadow-sm me-2 fw-bold">
+                                    <i class="bi bi-check-circle me-2"></i>Assign Vehicle
+                                </button>
+                                <button type="reset" class="btn btn-outline-warning px-4 shadow-sm me-2 fw-bold text-dark">
+                                    <i class="bi bi-eraser me-1"></i>Clear
+                                </button>
+                                <a href="{{ url_for('assign_vehicle_to_district') }}" class="btn btn-outline-secondary px-4 shadow-sm fw-bold">
+                                    <i class="bi bi-x-circle me-1"></i>Cancel
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts Section -->
+<script>
+$(document).ready(function() {
+    // 1. Select2 Initialization for all searchable dropdowns
+    function initSelect2() {
+        $('.select2-enable').select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: "Search and Select..."
+        });
+    }
+    initSelect2();
+
+    var $projectSelect = $('#project_select');
+    var $districtSelect = $('#district_select');
+
+    // 2. Dynamic District Loading Logic
+    $projectSelect.on('change', function() {
+        var projectId = $(this).val();
+        
+        // Show loading state
+        $districtSelect.empty().append('<option value="">Loading districts...</option>');
+        $districtSelect.trigger('change');
+
+        if (projectId && projectId !== "0") {
+            $.ajax({
+                url: "/get_districts_by_project/" + projectId,
+                type: "GET",
+                dataType: "json",
+                success: function(data) {
+                    $districtSelect.empty();
+                    if (data.length > 0) {
+                        $districtSelect.append('<option value="">-- Select District --</option>');
+                        $.each(data, function(i, item) {
+                            $districtSelect.append('<option value="' + item.id + '">' + item.name + '</option>');
+                        });
+                    } else {
+                        $districtSelect.append('<option value="">No districts assigned to this project</option>');
+                    }
+                    $districtSelect.trigger('change'); // Refresh Select2 UI
+                },
+                error: function(xhr, status, error) {
+                    console.error("AJAX Error:", error);
+                    alert("Failed to load districts. Please try again.");
+                }
+            });
+        } else {
+            $districtSelect.empty().append('<option value="">Select Project First</option>');
+            $districtSelect.trigger('change');
+        }
+    });
+
+    // 3. Persistence: If validation fails, reload districts on page load
+    var currentProject = $projectSelect.val();
+    if (currentProject && currentProject !== "0") {
+        // We delay slightly to ensure Select2 is ready
+        setTimeout(function() {
+            $projectSelect.trigger('change');
+        }, 100);
+    }
+});
+</script>
+
+<style>
+    .form-label { font-size: 0.85rem; color: #555; margin-bottom: 4px; }
+    .input-group-text { border: 1px solid #ced4da; }
+    .bg-light { background-color: #f8f9fa !important; }
+    .select2-container--bootstrap-5 .select2-selection {
+        min-height: 45px;
+        padding: 8px;
+    }
+</style>
+{% endblock %}

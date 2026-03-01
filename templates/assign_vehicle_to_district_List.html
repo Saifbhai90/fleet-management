@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Vehicle Deployments{% endblock %}
+
+{% block content %}
+<style>
+    .deployment-card { border-radius: 15px; border: none; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05); }
+    .table thead th { background-color: #f8fafc; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px; color: #64748b; border-bottom: 2px solid #edf2f7; }
+    .search-bar { border-radius: 10px; border: 1px solid #e2e8f0; padding: 10px 20px; }
+    .btn-action { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; transition: 0.2s; }
+    .btn-edit-alt { background-color: #fffbeb; color: #d97706; border: 1px solid #fef3c7; }
+    .btn-edit-alt:hover { background-color: #fef3c7; color: #b45309; }
+    .btn-delete-alt { background-color: #fef2f2; color: #dc2626; border: 1px solid #fee2e2; }
+    .btn-delete-alt:hover { background-color: #fee2e2; color: #b91c1c; }
+    .status-badge { font-weight: 600; font-size: 0.8rem; padding: 6px 12px; border-radius: 20px; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <!-- Header Area -->
+    <div class="row align-items-center mb-4">
+        <div class="col-md-6">
+            <h3 class="fw-bold text-dark mb-1">Vehicle Deployments</h3>
+            <p class="text-muted mb-0 small"><i class="bi bi-info-circle me-1"></i> Managing fleet distribution across active projects.</p>
+        </div>
+        <div class="col-md-6 text-md-end mt-3 mt-md-0">
+            <a href="{{ url_for('assign_vehicle_to_district_new') }}" class="btn btn-primary shadow-sm px-4 fw-bold">
+                <i class="bi bi-plus-lg me-2"></i>New Deployment
+            </a>
+        </div>
+    </div>
+
+    <!-- Search & Stats Area -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-8">
+            <form method="GET" class="d-flex gap-2">
+                <div class="input-group shadow-sm rounded-3 overflow-hidden">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" name="search" class="form-control border-start-0 ps-0 py-2" placeholder="Search by Vehicle No, Project, or District..." value="{{ search }}">
+                </div>
+                <button type="submit" class="btn btn-dark px-4">Filter</button>
+                {% if search %}
+                    <a href="{{ url_for('assign_vehicle_to_district') }}" class="btn btn-outline-secondary px-3">Clear</a>
+                {% endif %}
+            </form>
+        </div>
+        <div class="col-lg-4 text-end">
+            <div class="bg-white p-2 px-3 rounded-3 border d-inline-block shadow-sm">
+                <small class="text-muted d-block" style="font-size: 0.65rem; text-transform: uppercase;">Total Active Assignments</small>
+                <span class="fw-bold fs-5 text-primary">{{ assigned_vehicles|length }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table Card -->
+    <div class="card deployment-card overflow-hidden">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-4 py-3">Vehicle Details</th>
+                            <th>Project</th>
+                            <th>District</th>
+                            <th>Assignment Date</th>
+                            <th>Remarks</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for v in assigned_vehicles %}
+                        <tr>
+                            <td class="ps-4">
+                                <div class="fw-bold text-dark">{{ v.vehicle_no }}</div>
+                                <div class="text-muted x-small" style="font-size: 0.75rem;">Model: {{ v.model }}{% if v.vehicle_type %} · Type: {{ v.vehicle_type }}{% endif %}</div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-folder2 text-warning me-2"></i>
+                                    <span class="fw-semibold">{{ v.project.name if v.project else '---' }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3">
+                                    <i class="bi bi-geo-alt-fill me-1"></i>{{ v.district.name if v.district else '---' }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="small text-dark fw-medium">
+                                    <i class="bi bi-calendar3 me-1 text-muted"></i>
+                                    {{ v.assign_to_district_date.strftime('%d %b, %Y') if v.assign_to_district_date else '---' }}
+                                </div>
+                            </td>
+                            <td>
+                                <small class="text-muted" title="{{ v.assignment_remarks }}">
+                                    {{ v.assignment_remarks|truncate(25) or '---' }}
+                                </small>
+                            </td>
+                            <td class="text-end pe-4">
+                                <!-- Spacing for Action Buttons -->
+                                <div class="d-flex justify-content-end gap-3">
+                                    <a href="{{ url_for('assign_vehicle_to_district_edit', vehicle_id=v.id) }}" 
+                                       class="btn-action btn-edit-alt" title="Edit Assignment">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </a>
+                                    
+                                    <form action="{{ url_for('desassign_vehicle_from_district', vehicle_id=v.id) }}" method="POST" class="m-0">
+                                        <button type="submit" class="btn-action btn-delete-alt" 
+                                                onclick="return confirm('WARNING: Are you sure you want to deassign vehicle {{ v.vehicle_no }}?')" 
+                                                title="Deassign / Remove Link">
+                                            <i class="bi bi-link-45deg"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-5">
+                                <div class="py-4">
+                                    <i class="bi bi-truck-flatbed display-4 text-muted opacity-25"></i>
+                                    <p class="text-muted mt-3">No active vehicle deployments found matching your search.</p>
+                                    <a href="{{ url_for('assign_vehicle_to_district_new') }}" class="btn btn-sm btn-primary">Assign New Vehicle</a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .x-small { font-size: 0.7rem; }
+    tr:hover { background-color: #fcfdfe !important; }
+</style>
+{% endblock %}
