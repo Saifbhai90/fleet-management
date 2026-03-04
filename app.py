@@ -10,7 +10,14 @@ app = Flask(__name__)
 
 # Secret key / DB config (env first, fallback to current defaults)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-me-please-make-it-strong')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///company_management.db')
+
+# Database URL: Render (and some hosts) give postgres:// but SQLAlchemy 1.4+ requires postgresql://
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///company_management.db')
+if database_url:
+    database_url = database_url.strip()
+    if database_url.startswith('postgres://'):
+        database_url = 'postgresql://' + database_url[9:]
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///company_management.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload
