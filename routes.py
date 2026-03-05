@@ -3975,13 +3975,20 @@ def driver_post_delete(id):
 def party_list():
     search = request.args.get('search', '').strip()
     party_type = request.args.get('type', '').strip()
+    per_page_default = session.get('per_page_default', 20)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', per_page_default, type=int)
+
     query = Party.query
     if party_type:
         query = query.filter(Party.party_type == party_type)
     if search:
         query = query.filter(Party.name.ilike(f'%{search}%'))
-    parties = query.order_by(Party.party_type, Party.name).all()
-    return render_template('party_list.html', parties=parties, search=search, party_type=party_type)
+    pagination = query.order_by(Party.party_type, Party.name).paginate(page=page, per_page=per_page, error_out=False)
+    parties = pagination.items
+    session['per_page_default'] = per_page
+    return render_template('party_list.html', parties=parties, search=search, party_type=party_type,
+                           pagination=pagination, per_page=per_page)
 
 
 @app.route('/party/add', methods=['GET', 'POST'])
@@ -4035,11 +4042,18 @@ def _ensure_product_used_in_forms_column():
 def product_list():
     _ensure_product_used_in_forms_column()
     search = request.args.get('search', '').strip()
+    per_page_default = session.get('per_page_default', 20)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', per_page_default, type=int)
+
     query = Product.query
     if search:
         query = query.filter(Product.name.ilike(f'%{search}%'))
-    products = query.order_by(Product.name).all()
-    return render_template('product_list.html', products=products, search=search)
+    pagination = query.order_by(Product.name).paginate(page=page, per_page=per_page, error_out=False)
+    products = pagination.items
+    session['per_page_default'] = per_page
+    return render_template('product_list.html', products=products, search=search,
+                           pagination=pagination, per_page=per_page)
 
 
 @app.route('/product/add', methods=['GET', 'POST'])

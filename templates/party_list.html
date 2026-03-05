@@ -11,10 +11,10 @@
 
   <div class="card shadow-sm border-0 rounded-3 mb-4">
     <div class="card-body">
-      <form method="GET" action="{{ url_for('party_list') }}" class="row g-3 align-items-end">
+      <form method="GET" action="{{ url_for('party_list') }}" class="row g-3 align-items-end auto-search-form">
         <div class="col-md-4">
           <label class="form-label">Search by name</label>
-          <input type="text" name="search" class="form-control" placeholder="Pump / Workshop / Shop name..." value="{{ search }}" data-realtime-table="partyTable">
+          <input type="text" name="search" class="form-control" placeholder="Pump / Workshop / Shop name..." value="{{ search }}">
         </div>
         <div class="col-md-3">
           <label class="form-label">Type</label>
@@ -25,7 +25,15 @@
             <option value="Spare parts shop" {% if party_type == 'Spare parts shop' %}selected{% endif %}>Spare parts shop</option>
           </select>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
+          <label class="form-label">Records per page</label>
+          <select name="per_page" class="form-select form-select-sm" onchange="this.form.submit()">
+            {% for size in [10, 20, 50, 100] %}
+              <option value="{{ size }}" {% if per_page == size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
           <button type="submit" class="btn btn-primary w-100">
             <i class="bi bi-search me-1"></i>Search
           </button>
@@ -54,7 +62,7 @@
           <tbody>
             {% for p in parties %}
             <tr>
-              <td class="ps-4">{{ loop.index }}</td>
+              <td class="ps-4">{{ loop.index + ((pagination.page - 1) * pagination.per_page) if pagination else loop.index }}</td>
               <td class="fw-medium">{{ p.name }}</td>
               <td><span class="badge bg-secondary">{{ p.party_type }}</span></td>
               <td>{{ p.contact or '-' }}</td>
@@ -77,6 +85,39 @@
           </tbody>
         </table>
       </div>
+    </div>
+    <div class="card-footer bg-light text-muted border-0 px-4 py-3 d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+      <div class="mb-2 mb-md-0">
+        Total Parties:
+        <strong class="text-dark">{{ pagination.total if pagination else parties|length }}</strong>
+        {% if search %}<span class="ms-2">Filter: "{{ search }}"</span>{% endif %}
+        {% if party_type %}<span class="ms-2">Type: "{{ party_type }}"</span>{% endif %}
+      </div>
+      {% if pagination %}
+      <nav>
+        <ul class="pagination pagination-sm mb-0">
+          {% if pagination.has_prev %}
+          <li class="page-item">
+            <a class="page-link" href="{{ url_for('party_list', page=pagination.prev_num, per_page=per_page, search=search, type=party_type) }}">Previous</a>
+          </li>
+          {% endif %}
+          {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+              <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('party_list', page=p, per_page=per_page, search=search, type=party_type) }}">{{ p }}</a>
+              </li>
+            {% else %}
+              <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
+          {% endfor %}
+          {% if pagination.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="{{ url_for('party_list', page=pagination.next_num, per_page=per_page, search=search, type=party_type) }}">Next</a>
+          </li>
+          {% endif %}
+        </ul>
+      </nav>
+      {% endif %}
     </div>
   </div>
 </div>
