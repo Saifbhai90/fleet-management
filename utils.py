@@ -1,7 +1,7 @@
 # utils.py
 import csv
 import re
-from io import StringIO
+from io import StringIO, BytesIO
 from datetime import datetime, date
 from flask import Response
 from typing import List, Tuple, Union, Dict, Any, Optional
@@ -137,3 +137,61 @@ def generate_csv_string(
             writer.writerow(row_data[:len(headers)])
     output.seek(0)
     return output.getvalue()
+
+
+def generate_excel_template(
+    headers: List[str],
+    rows: List[Union[List[Any], Tuple[Any, ...]]],
+    required_columns: Optional[List[str]] = None,
+    filename: str = "template.xlsx"
+) -> Response:
+    """
+    Excel (.xlsx) template generate karta hai jisme:
+    - 1st row = headers
+    - Neeche sample rows
+    - Required columns ki heading light color + bold hoti hai
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill, Font
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Template"
+
+    # Header row
+    ws.append(headers)
+
+    # Sample data rows
+    for r in rows:
+        ws.append(list(r))
+
+    required_columns = required_columns or []
+
+    # Style: required headers ko highlight + bold
+    required_fill = PatternFill(start_color="FFF9C4", end_color="FFF9C4", fill_type="solid")  # light yellow
+    required_font = Font(bold=True)
+
+    for col_idx, header in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col_idx)
+        if header in required_columns:
+            cell.fill = required_fill
+            cell.font = required_font
+
+    # Basic auto-width (best-effort)
+    for col_idx, header in enumerate(headers, start=1):
+        col_letter = ws.cell(row=1, column=col_idx).column_letter
+        max_len = max(len(str(header)), 10)
+        ws.column_dimensions[col_letter].width = max_len + 2
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return Response(
+        output.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+    )

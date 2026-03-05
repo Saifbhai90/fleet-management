@@ -481,9 +481,9 @@
     setInterval(updateDateTime, 1000);
     updateDateTime();
 
-    // Auto-close Alerts
+    // Auto-close Alerts (sirf flash-message ke andar wale alerts)
     setTimeout(function() {
-        $(".alert").fadeOut('slow');
+        $(".flash-message .alert").fadeOut('slow');
     }, 5000);
 
     // Backend search auto-submit (for forms with class="auto-search-form")

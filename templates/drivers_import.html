@@ -24,8 +24,16 @@
         <code>driver_id</code>, <code>name</code>, <code>father_name</code>, <code>phone1</code>,
         <code>driver_district</code>, <code>cnic_no</code>, <code>license_no</code>, <code>status</code>.
       </p>
+      <p class="text-muted mb-2">
+        Required fields: <code>driver_id</code>, <code>name</code>, <code>phone1</code>, <code>driver_district</code>,
+        <code>cnic_no</code>, <code>license_no</code>. In mein se kisi bhi field ko blank rakhne ya CNIC / License / Driver ID
+        duplicate hone par poori file import nahi hogi aur neeche detail error table aayegi.
+      </p>
+      <p class="text-muted mb-2">
+        Optional fields blank chhorne par un jagon par <strong>N/A</strong> show ho ga (status blank ho to default <strong>Active</strong> rahe ga).
+      </p>
       <a href="{{ url_for('drivers_import_template') }}" class="btn btn-success">
-        <i class="bi bi-download me-1"></i>Download Template (CSV for Excel)
+        <i class="bi bi-download me-1"></i>Download Template (Excel)
       </a>
     </div>
   </div>
@@ -33,6 +41,31 @@
   <div class="card shadow-sm border-0">
     <div class="card-body">
       <h5 class="card-title mb-3"><i class="bi bi-cloud-arrow-up me-2 text-primary"></i>Step 2: Upload Filled File</h5>
+      {% if import_errors %}
+        <div class="alert alert-danger">
+          <h6 class="fw-bold mb-2">Import failed. Please fix these issues:</h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 80px;">Row #</th>
+                  <th style="width: 160px;">Driver ID</th>
+                  <th>Issue</th>
+                </tr>
+              </thead>
+              <tbody class="small">
+                {% for err in import_errors %}
+                  <tr>
+                    <td>{{ err.row }}</td>
+                    <td>{{ err.identifier or '-' }}</td>
+                    <td>{{ err.message }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
       <form method="POST" enctype="multipart/form-data">
         {{ form.hidden_tag() }}
         <div class="mb-3">

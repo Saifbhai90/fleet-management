@@ -27,8 +27,16 @@
       <p class="text-muted mb-2">
         Date format for <code>active_date</code>: <strong>dd-mm-yyyy</strong> (e.g. 01-01-2024).
       </p>
+      <p class="text-muted mb-2">
+        Required columns: <code>vehicle_no</code>, <code>model</code>, <code>vehicle_type</code>, <code>engine_no</code>,
+        <code>chassis_no</code>, <code>driver_capacity</code>, <code>active_date</code>. In mein se kisi bhi field ko blank
+        ya galat format mein rakhne par poora import <strong>cancel</strong> ho jaye ga aur neeche detail error table aayegi.
+      </p>
+      <p class="text-muted mb-2">
+        Optional columns khali chorne par import ke baad unki value <strong>N/A</strong> ho gi (NaN nahi aayega).
+      </p>
       <a href="{{ url_for('vehicles_import_template') }}" class="btn btn-success">
-        <i class="bi bi-download me-1"></i>Download Template (CSV for Excel)
+        <i class="bi bi-download me-1"></i>Download Template (Excel)
       </a>
     </div>
   </div>
@@ -36,6 +44,31 @@
   <div class="card shadow-sm border-0">
     <div class="card-body">
       <h5 class="card-title mb-3"><i class="bi bi-cloud-arrow-up me-2 text-primary"></i>Step 2: Upload Filled File</h5>
+      {% if import_errors %}
+        <div class="alert alert-danger">
+          <h6 class="fw-bold mb-2">Import failed. Please fix these issues:</h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 80px;">Row #</th>
+                  <th style="width: 160px;">Vehicle No</th>
+                  <th>Issue</th>
+                </tr>
+              </thead>
+              <tbody class="small">
+                {% for err in import_errors %}
+                  <tr>
+                    <td>{{ err.row }}</td>
+                    <td>{{ err.identifier or '-' }}</td>
+                    <td>{{ err.message }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
       <form method="POST" enctype="multipart/form-data">
         {{ form.hidden_tag() }}
         <div class="mb-3">

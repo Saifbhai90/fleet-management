@@ -22,10 +22,19 @@
       <p class="text-muted mb-2">
         Use this template to prepare your parking data. Columns:
         <code>name</code>, <code>district</code>, <code>tehsil</code>, <code>mouza</code>,
-        <code>uc_name</code>, <code>capacity</code>, <code>address_location</code>, <code>remarks</code>.
+        <code>uc_name</code>, <code>capacity</code>, <code>address_location</code>, <code>remarks</code>,
+        <code>create_date</code>, <code>latitude</code>, <code>longitude</code>.
+      </p>
+      <p class="text-muted mb-2">
+        Required columns: <code>name</code>, <code>district</code>, <code>tehsil</code>, <code>capacity</code>, <code>create_date</code>.
+        In mein se kisi bhi field ko blank/galat rakhne ya same <strong>name + district</strong> already system mein hone par
+        poora import <strong>cancel</strong> ho jaye ga aur neeche detail error table aayegi.
+      </p>
+      <p class="text-muted mb-2">
+        Jis optional column ka data aap na bharein, import ke baad us jaga <strong>N/A</strong> show ho ga (NaN nahi).
       </p>
       <a href="{{ url_for('parking_import_template') }}" class="btn btn-success">
-        <i class="bi bi-download me-1"></i>Download Template (CSV for Excel)
+      <i class="bi bi-download me-1"></i>Download Template (Excel)
       </a>
     </div>
   </div>
@@ -33,6 +42,31 @@
   <div class="card shadow-sm border-0">
     <div class="card-body">
       <h5 class="card-title mb-3"><i class="bi bi-cloud-arrow-up me-2 text-primary"></i>Step 2: Upload Filled File</h5>
+      {% if import_errors %}
+        <div class="alert alert-danger">
+          <h6 class="fw-bold mb-2">Import failed. Please fix these issues:</h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 80px;">Row #</th>
+                  <th style="width: 220px;">Parking Name</th>
+                  <th>Issue</th>
+                </tr>
+              </thead>
+              <tbody class="small">
+                {% for err in import_errors %}
+                  <tr>
+                    <td>{{ err.row }}</td>
+                    <td>{{ err.identifier or '-' }}</td>
+                    <td>{{ err.message }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
       <form method="POST" enctype="multipart/form-data">
         {{ form.hidden_tag() }}
         <div class="mb-3">

@@ -31,7 +31,7 @@ import csv
 from io import StringIO
 from sqlalchemy import func, text, inspect
 from sqlalchemy.exc import OperationalError, IntegrityError
-from utils import generate_csv_response, parse_date
+from utils import generate_csv_response, parse_date, generate_excel_template
 import re
 import os
 from werkzeug.utils import secure_filename
@@ -457,28 +457,58 @@ def vehicles_import():
                 flash('Unsupported file type. Please upload .xlsx, .xls or .csv.', 'danger')
                 return redirect(url_for('vehicles_import'))
 
-            expected_cols = ['vehicle_no', 'model', 'vehicle_type', 'engine_no', 'chassis_no', 'driver_capacity', 'phone_no', 'active_date', 'remarks']
+            # Required + optional columns (baqi extra columns aayein to bhi allowed hain)
+            required_cols = ['vehicle_no', 'model', 'vehicle_type', 'engine_no', 'chassis_no', 'driver_capacity', 'active_date']
+            expected_cols = required_cols + ['phone_no', 'remarks']
             missing = [c for c in expected_cols if c not in df.columns]
             if missing:
                 flash(f'Missing required columns in file: {", ".join(missing)}', 'danger')
                 return redirect(url_for('vehicles_import'))
 
-            created = 0
-            from utils import parse_date
-            for _, row in df.iterrows():
-                vno = str(row.get('vehicle_no') or '').strip()
-                if not vno:
-                    continue
-                existing = Vehicle.query.filter(Vehicle.vehicle_no == vno).first()
-                if existing:
-                    continue
+            # NaN ko human-friendly 'N/A' bana ne ke liye helper
+            def clean_text(value):
+                if pd.isna(value):
+                    return 'N/A'
+                v = str(value or '').strip()
+                return v or 'N/A'
 
+            from utils import parse_date
+            import_errors = []
+            vehicles_to_add = []
+
+            # Row-wise validation + duplicate checks
+            for idx, row in df.iterrows():
+                row_num = idx + 2  # 1 header row + 1-based index
+                row_issues = []
+
+                vno_raw = row.get('vehicle_no')
+                if pd.isna(vno_raw) or not str(vno_raw).strip():
+                    row_issues.append('Field "vehicle_no" is required.')
+                    vno = ''
+                else:
+                    vno = str(vno_raw).strip()
+
+                # Required field checks
+                for col in required_cols:
+                    val = row.get(col)
+                    if pd.isna(val) or not str(val).strip():
+                        row_issues.append(f'Field "{col}" is required.')
+
+                # Duplicate check (same as form validation)
+                if vno:
+                    existing = Vehicle.query.filter(Vehicle.vehicle_no == vno).first()
+                    if existing:
+                        row_issues.append(f'Vehicle No "{vno}" already exists in system.')
+
+                # driver_capacity numeric parse
                 cap_val = row.get('driver_capacity')
                 try:
                     driver_capacity = int(cap_val) if pd.notna(cap_val) else None
                 except Exception:
+                    row_issues.append('"driver_capacity" must be a number.')
                     driver_capacity = None
 
+                # Active date parse
                 active_raw = row.get('active_date')
                 active_date = None
                 if pd.notna(active_raw):
@@ -486,28 +516,48 @@ def vehicles_import():
                         active_date = parse_date(active_raw)
                     else:
                         try:
+                            import pandas as pd  # safe re-import
                             active_date = pd.to_datetime(active_raw).date()
                         except Exception:
                             active_date = None
+                if not active_date:
+                    row_issues.append('"active_date" is invalid or missing (expected dd-mm-yyyy).')
+
+                if row_issues:
+                    for msg in row_issues:
+                        import_errors.append({
+                            'row': row_num,
+                            'identifier': vno,
+                            'message': msg
+                        })
+                    continue
 
                 v = Vehicle(
                     vehicle_no=vno,
-                    model=str(row.get('model') or '').strip(),
-                    engine_no=str(row.get('engine_no') or '').strip() or None,
-                    chassis_no=str(row.get('chassis_no') or '').strip() or None,
-                    vehicle_type=str(row.get('vehicle_type') or '').strip() or None,
+                    model=clean_text(row.get('model')),
+                    engine_no=clean_text(row.get('engine_no')),
+                    chassis_no=clean_text(row.get('chassis_no')),
+                    vehicle_type=clean_text(row.get('vehicle_type')),
                     driver_capacity=driver_capacity,
-                    phone_no=str(row.get('phone_no') or '').strip() or None,
+                    phone_no=clean_text(row.get('phone_no')),
                     active_date=active_date,
-                    remarks=str(row.get('remarks') or '').strip() or None,
+                    remarks=clean_text(row.get('remarks')),
                 )
+                vehicles_to_add.append(v)
+
+            # Agar kisi bhi row mein issue ho to poori file import na ho
+            if import_errors:
+                db.session.rollback()
+                # Yahan flash sirf top message ke liye, detail neeche table mein dikhe gi
+                flash('Import failed. Please review the error table on this page.', 'danger')
+                return render_template('vehicles_import.html', form=form, import_errors=import_errors)
+
+            # All good → save all rows in one go
+            for v in vehicles_to_add:
                 db.session.add(v)
-                created += 1
             db.session.commit()
-            if created:
-                flash(f'{created} vehicle(s) imported successfully.', 'success')
-            else:
-                flash('File processed but no new vehicles were imported (duplicates or empty rows).', 'info')
+
+            flash(f'{len(vehicles_to_add)} vehicle(s) imported successfully.', 'success')
             return redirect(url_for('vehicles_list'))
         except Exception as e:
             db.session.rollback()
@@ -519,13 +569,15 @@ def vehicles_import():
 def vehicles_import_template():
     """
     Downloadable template for vehicle import (open in Excel and fill).
+    Required fields ka detail description import page par diya gaya hai.
     """
     headers = ['vehicle_no', 'model', 'vehicle_type', 'engine_no', 'chassis_no', 'driver_capacity', 'phone_no', 'active_date', 'remarks']
     rows = [
         ['LEA-1234', 'Suzuki Cultus', 'Ambulance', 'ENG123', 'CHS123', 1, '0300-1112233', '01-01-2024', 'Example row 1'],
         ['LEA-5678', 'Toyota Hiace', 'Passanger', 'ENG456', 'CHS456', 2, '0300-2223344', '05-02-2024', 'Example row 2'],
     ]
-    return generate_csv_response(headers, rows, filename='vehicles_import_template.csv')
+    required_cols = ['vehicle_no', 'model', 'vehicle_type', 'engine_no', 'chassis_no', 'driver_capacity', 'active_date']
+    return generate_excel_template(headers, rows, required_columns=required_cols, filename='vehicles_import_template.xlsx')
 
 
 @app.route('/vehicles/print')
@@ -694,40 +746,102 @@ def drivers_import():
                 flash('Unsupported file type. Please upload .xlsx, .xls or .csv.', 'danger')
                 return redirect(url_for('drivers_import'))
 
-            expected_cols = [
-                'driver_id', 'name', 'father_name', 'phone1', 'driver_district',
-                'cnic_no', 'license_no', 'status'
+            # Required basic fields (form ke mutabiq core identity)
+            required_cols = [
+                'driver_id', 'name', 'phone1', 'driver_district',
+                'cnic_no', 'license_no'
             ]
+            expected_cols = required_cols + ['father_name', 'status']
             missing = [c for c in expected_cols if c not in df.columns]
             if missing:
                 flash(f'Missing required columns in file: {", ".join(missing)}', 'danger')
                 return redirect(url_for('drivers_import'))
 
-            created = 0
-            for _, row in df.iterrows():
-                did = str(row.get('driver_id') or '').strip()
-                if not did:
+            # NaN ko 'N/A' mein convert karne ke liye helper (sirf text fields ke liye)
+            def clean_text(value):
+                if pd.isna(value):
+                    return 'N/A'
+                v = str(value or '').strip()
+                return v or 'N/A'
+
+            import_errors = []
+            drivers_to_add = []
+
+            for idx, row in df.iterrows():
+                row_num = idx + 2
+                row_issues = []
+
+                did_raw = row.get('driver_id')
+                if pd.isna(did_raw) or not str(did_raw).strip():
+                    row_issues.append('Field "driver_id" is required.')
+                    did = ''
+                else:
+                    did = str(did_raw).strip()
+
+                # Required field checks
+                for col in required_cols:
+                    val = row.get(col)
+                    if pd.isna(val) or not str(val).strip():
+                        row_issues.append(f'Field "{col}" is required.')
+
+                # Duplicate checks (driver_id, CNIC, license) – same rules as forms
+                if did:
+                    existing_id = Driver.query.filter(Driver.driver_id == did).first()
+                    if existing_id:
+                        row_issues.append(f'Driver ID "{did}" already exists in system.')
+
+                cnic_val = row.get('cnic_no')
+                cnic = str(cnic_val).strip() if not pd.isna(cnic_val) else ''
+                if cnic:
+                    existing_cnic = Driver.query.filter(Driver.cnic_no == cnic).first()
+                    if existing_cnic:
+                        row_issues.append(f'CNIC "{cnic}" already exists in system.')
+
+                lic_val = row.get('license_no')
+                lic = str(lic_val).strip() if not pd.isna(lic_val) else ''
+                if lic:
+                    existing_lic = Driver.query.filter(Driver.license_no == lic).first()
+                    if existing_lic:
+                        row_issues.append(f'License No "{lic}" already exists in system.')
+
+                raw_status = row.get('status')
+                if pd.isna(raw_status) or not str(raw_status).strip():
+                    status = 'Active'
+                else:
+                    status = str(raw_status).strip()
+
+                if row_issues:
+                    identifier = did or cnic or lic
+                    for msg in row_issues:
+                        import_errors.append({
+                            'row': row_num,
+                            'identifier': identifier,
+                            'message': msg
+                        })
                     continue
-                existing = Driver.query.filter(Driver.driver_id == did).first()
-                if existing:
-                    continue
+
                 d = Driver(
                     driver_id=did,
-                    name=str(row.get('name') or '').strip(),
-                    father_name=str(row.get('father_name') or '').strip() or None,
-                    phone1=str(row.get('phone1') or '').strip() or None,
-                    driver_district=str(row.get('driver_district') or '').strip() or None,
-                    cnic_no=str(row.get('cnic_no') or '').strip() or None,
-                    license_no=str(row.get('license_no') or '').strip() or None,
-                    status=str(row.get('status') or '').strip() or 'Active',
+                    name=clean_text(row.get('name')),
+                    father_name=clean_text(row.get('father_name')),
+                    phone1=clean_text(row.get('phone1')),
+                    driver_district=clean_text(row.get('driver_district')),
+                    cnic_no=cnic or 'N/A',
+                    license_no=lic or 'N/A',
+                    status=status,
                 )
+                drivers_to_add.append(d)
+
+            if import_errors:
+                db.session.rollback()
+                flash('Import failed. Please review the error table on this page.', 'danger')
+                return render_template('drivers_import.html', form=form, import_errors=import_errors)
+
+            for d in drivers_to_add:
                 db.session.add(d)
-                created += 1
             db.session.commit()
-            if created:
-                flash(f'{created} driver(s) imported successfully.', 'success')
-            else:
-                flash('File processed but no new drivers were imported (duplicates or empty rows).', 'info')
+
+            flash(f'{len(drivers_to_add)} driver(s) imported successfully.', 'success')
             return redirect(url_for('drivers_list'))
         except Exception as e:
             db.session.rollback()
@@ -739,13 +853,15 @@ def drivers_import():
 def drivers_import_template():
     """
     Downloadable template for driver import (open in Excel and fill).
+    Required/Optional fields ka detail text import page par diya gaya hai.
     """
     headers = ['driver_id', 'name', 'father_name', 'phone1', 'driver_district', 'cnic_no', 'license_no', 'status']
     rows = [
         ['DRV-2024-1001', 'Ali Ahmad', 'Ahmad Khan', '0300-1112233', 'Lahore', '32304-1111111-5', 'LTV-12345', 'Active'],
         ['DRV-2024-1002', 'Bilal Hussain', 'Hussain Raza', '0300-2223344', 'Lahore', '32304-2222222-5', 'HTV-56789', 'Active'],
     ]
-    return generate_csv_response(headers, rows, filename='drivers_import_template.csv')
+    required_cols = ['driver_id', 'name', 'phone1', 'driver_district', 'cnic_no', 'license_no']
+    return generate_excel_template(headers, rows, required_columns=required_cols, filename='drivers_import_template.xlsx')
 
 
 @app.route('/drivers/print')
@@ -1056,48 +1172,123 @@ def parking_import():
                 flash('Unsupported file type. Please upload .xlsx, .xls or .csv.', 'danger')
                 return redirect(url_for('parking_import'))
 
-            expected_cols = ['name', 'district', 'tehsil', 'mouza', 'uc_name', 'capacity', 'address_location', 'remarks']
+            # Required vs optional columns (Parking form ke mutabiq)
+            required_cols = ['name', 'district', 'tehsil', 'capacity', 'create_date']
+            expected_cols = required_cols + [
+                'mouza', 'uc_name',
+                'address_location', 'remarks',
+                'latitude', 'longitude'
+            ]
             missing = [c for c in expected_cols if c not in df.columns]
             if missing:
                 flash(f'Missing required columns in file: {", ".join(missing)}', 'danger')
                 return redirect(url_for('parking_import'))
 
-            created = 0
-            for _, row in df.iterrows():
-                name = str(row.get('name') or '').strip()
-                if not name:
-                    continue
-                # Skip if already exists with same name and district
-                existing = ParkingStation.query.filter(
-                    ParkingStation.name == name,
-                    ParkingStation.district == (str(row.get('district') or '').strip() or None)
-                ).first()
-                if existing:
-                    continue
+            # NaN ko 'N/A' mein convert karne ke liye helper (sirf text fields ke liye)
+            def clean_text(value):
+                if pd.isna(value):
+                    return 'N/A'
+                v = str(value or '').strip()
+                return v or 'N/A'
+
+            from utils import parse_date
+            import_errors = []
+            parkings_to_add = []
+
+            for idx, row in df.iterrows():
+                row_num = idx + 2
+                row_issues = []
+
+                name_raw = row.get('name')
+                if pd.isna(name_raw) or not str(name_raw).strip():
+                    row_issues.append('Field "name" is required.')
+                    name = ''
+                else:
+                    name = str(name_raw).strip()
+
+                # Required field checks
+                for col in required_cols:
+                    val = row.get(col)
+                    if pd.isna(val) or not str(val).strip():
+                        row_issues.append(f'Field "{col}" is required.')
+
+                # Duplicate check (same logic as form: name + district)
+                district_text = clean_text(row.get('district'))
+                if name and district_text:
+                    existing = ParkingStation.query.filter(
+                        ParkingStation.name == name,
+                        ParkingStation.district == district_text
+                    ).first()
+                    if existing:
+                        row_issues.append(f'Parking Station "{name}" in district "{district_text}" already exists.')
 
                 capacity_val = row.get('capacity')
                 try:
                     capacity = int(capacity_val) if pd.notna(capacity_val) else 0
                 except Exception:
+                    row_issues.append('"capacity" must be a number.')
                     capacity = 0
+
+                # Create Date parse (required)
+                create_raw = row.get('create_date')
+                create_date = None
+                if pd.notna(create_raw):
+                    if isinstance(create_raw, str):
+                        create_date = parse_date(create_raw)
+                    else:
+                        try:
+                            create_date = pd.to_datetime(create_raw).date()
+                        except Exception:
+                            create_date = None
+                if not create_date:
+                    row_issues.append('"create_date" is invalid or missing (expected dd-mm-yyyy).')
+
+                # Latitude / Longitude parse (optional)
+                lat_val = row.get('latitude')
+                lon_val = row.get('longitude')
+                try:
+                    latitude = float(lat_val) if pd.notna(lat_val) else None
+                except Exception:
+                    latitude = None
+                try:
+                    longitude = float(lon_val) if pd.notna(lon_val) else None
+                except Exception:
+                    longitude = None
+
+                if row_issues:
+                    for msg in row_issues:
+                        import_errors.append({
+                            'row': row_num,
+                            'identifier': name,
+                            'message': msg
+                        })
+                    continue
 
                 p = ParkingStation(
                     name=name,
-                    district=str(row.get('district') or '').strip() or None,
-                    tehsil=str(row.get('tehsil') or '').strip() or None,
-                    mouza=str(row.get('mouza') or '').strip() or None,
-                    uc_name=str(row.get('uc_name') or '').strip() or None,
+                    district=district_text,
+                    tehsil=clean_text(row.get('tehsil')),
+                    mouza=clean_text(row.get('mouza')),
+                    uc_name=clean_text(row.get('uc_name')),
                     capacity=capacity or 0,
-                    address_location=str(row.get('address_location') or '').strip() or None,
-                    remarks=str(row.get('remarks') or '').strip() or None,
+                    address_location=clean_text(row.get('address_location')),
+                    remarks=clean_text(row.get('remarks')),
+                    create_date=create_date,
+                    latitude=latitude,
+                    longitude=longitude,
                 )
+                parkings_to_add.append(p)
+
+            if import_errors:
+                db.session.rollback()
+                flash('Import failed. Please review the error table on this page.', 'danger')
+                return render_template('parking_import.html', form=form, import_errors=import_errors)
+
+            for p in parkings_to_add:
                 db.session.add(p)
-                created += 1
             db.session.commit()
-            if created:
-                flash(f'{created} parking station(s) imported successfully.', 'success')
-            else:
-                flash('File processed but no new parking stations were imported (duplicates or empty rows).', 'info')
+
+            flash(f'{len(parkings_to_add)} parking station(s) imported successfully.', 'success')
             return redirect(url_for('parking_list'))
         except Exception as e:
             db.session.rollback()
@@ -1109,13 +1300,20 @@ def parking_import():
 def parking_import_template():
     """
     Downloadable template for parking import (open in Excel and fill).
+    Ab is mein complete form fields shamil hain.
     """
-    headers = ['name', 'district', 'tehsil', 'mouza', 'uc_name', 'capacity', 'address_location', 'remarks']
-    rows = [
-        ['Central Parking A', 'Lahore', 'Model Town', 'Mouza 1', 'UC-1', 20, 'Near Main Road, Model Town', 'Example row 1'],
-        ['Central Parking B', 'Lahore', 'Johar Town', 'Mouza 2', 'UC-2', 15, 'Near Hospital, Johar Town', 'Example row 2'],
+    headers = [
+        'name', 'district', 'tehsil', 'mouza', 'uc_name',
+        'capacity', 'address_location', 'remarks',
+        'create_date', 'latitude', 'longitude'
     ]
-    return generate_csv_response(headers, rows, filename='parking_import_template.csv')
+    # Sample rows only (Required/Optional info description mein diya gaya hai)
+    rows = [
+        ['Central Parking A', 'Lahore', 'Model Town', 'Mouza 1', 'UC-1', 20, 'Near Main Road, Model Town', 'Example row 1', '01-01-2024', 31.520370, 74.358749],
+        ['Central Parking B', 'Lahore', 'Johar Town', 'Mouza 2', 'UC-2', 15, 'Near Hospital, Johar Town', 'Example row 2', '05-02-2024', 31.500000, 74.350000],
+    ]
+    required_cols = ['name', 'district', 'tehsil', 'capacity', 'create_date']
+    return generate_excel_template(headers, rows, required_columns=required_cols, filename='parking_import_template.xlsx')
 
 
 @app.route('/parking/export')
