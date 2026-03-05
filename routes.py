@@ -4181,71 +4181,76 @@ def report_ai():
         if not desc:
             flash('Please describe the report you need.', 'warning')
             return redirect(url_for('report_ai'))
-        if any(w in desc for w in ['driver', 'drivers', 'personnel']):
-            drivers = Driver.query.order_by(Driver.name).all()
-            report_title = 'Drivers List'
-            rows = [{'name': d.name, 'driver_id': d.driver_id, 'cnic': d.cnic_no, 'license': d.license_no, 'phone': d.phone1, 'status': d.status} for d in drivers]
-            result_html = _render_ai_report_table(['Name', 'Driver ID', 'CNIC', 'License', 'Phone', 'Status'], rows)
-        elif any(w in desc for w in ['vehicle', 'vehicles', 'fleet']):
-            vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
-            report_title = 'Vehicles List'
-            rows = [{'v_no': v.vehicle_no, 'model': v.model, 'type': v.vehicle_type, 'phone': v.phone_no} for v in vehicles]
-            result_html = _render_ai_report_table(['Vehicle No', 'Model', 'Type', 'Phone'], rows)
-        elif any(w in desc for w in ['project', 'projects']):
-            projects = Project.query.order_by(Project.name).all()
-            report_title = 'Project Summary'
-            rows = [{'name': p.name, 'vehicles': len(p.vehicles), 'drivers': len(p.drivers), 'status': p.status} for p in projects]
-            result_html = _render_ai_report_table(['Project', 'Vehicles', 'Drivers', 'Status'], rows)
-        elif any(w in desc for w in ['district', 'districts']):
-            districts = District.query.order_by(District.name).all()
-            report_title = 'District Summary'
-            rows = []
-            for d in districts:
-                vc = Vehicle.query.filter_by(district_id=d.id).count()
-                dc = Driver.query.filter_by(district_id=d.id).count()
-                rows.append({'name': d.name, 'vehicles': vc, 'drivers': dc})
-            result_html = _render_ai_report_table(['District', 'Vehicles', 'Drivers'], rows)
-        elif any(w in desc for w in ['expiry', 'license', 'cnic', 'expiring']):
-            from datetime import timedelta
-            today = date.today()
-            end = today + timedelta(days=60)
-            drivers = Driver.query.filter(Driver.status == 'Active').all()
-            expiring = []
-            for d in drivers:
-                if (d.license_expiry_date and today <= d.license_expiry_date <= end) or (d.cnic_expiry_date and today <= d.cnic_expiry_date <= end):
-                    expiring.append({'name': d.name, 'license_expiry': d.license_expiry_date, 'cnic_expiry': d.cnic_expiry_date})
-            report_title = 'License / CNIC Expiry (next 60 days)'
-            rows = [{'name': r['name'], 'license_expiry': str(r['license_expiry']) if r['license_expiry'] else '-', 'cnic_expiry': str(r['cnic_expiry']) if r['cnic_expiry'] else '-'} for r in expiring]
-            result_html = _render_ai_report_table(['Driver', 'License Expiry', 'CNIC Expiry'], rows)
-        elif any(w in desc for w in ['company', 'companies']):
-            companies = Company.query.order_by(Company.name).all()
-            report_title = 'Companies'
-            rows = [{'name': c.name, 'mobile': c.mobile or '-', 'email': c.email or '-'} for c in companies]
-            result_html = _render_ai_report_table(['Company', 'Mobile', 'Email'], rows)
-        elif any(w in desc for w in ['parking', 'utilization', 'station']):
-            stations = ParkingStation.query.order_by(ParkingStation.name).all()
-            report_title = 'Parking Utilization'
-            rows = []
-            for s in stations:
-                occ = Vehicle.query.filter_by(parking_station_id=s.id).count()
-                rows.append({'name': s.name, 'capacity': s.capacity, 'occupied': occ, 'available': s.capacity - occ})
-            result_html = _render_ai_report_table(['Station', 'Capacity', 'Occupied', 'Available'], rows)
-        elif any(w in desc for w in ['product', 'products', 'item']):
-            products = Product.query.order_by(Product.name).all()
-            report_title = 'Products (Master)'
-            rows = [{'name': p.name, 'used_in': p.used_in_forms or '-'} for p in products]
-            result_html = _render_ai_report_table(['Product', 'Used in forms'], rows)
-        elif any(w in desc for w in ['party', 'parties']):
-            parties = Party.query.order_by(Party.name).all()
-            report_title = 'Parties'
-            rows = [{'name': p.name, 'contact': (p.contact or '-')[:40]} for p in parties]
-            result_html = _render_ai_report_table(['Party', 'Contact'], rows)
-        else:
-            report_title = 'Suggested reports'
-            result_html = (
-                '<p class="text-muted">Try: "list of drivers", "vehicles", "project summary", "district summary", '
-                '"license expiry", "companies", "parking utilization", "products", or "parties".</p>'
-            )
+        try:
+            if any(w in desc for w in ['driver', 'drivers', 'personnel']):
+                drivers = Driver.query.order_by(Driver.name).all()
+                report_title = 'Drivers List'
+                rows = [{'name': d.name, 'driver_id': d.driver_id, 'cnic': d.cnic_no, 'license': d.license_no, 'phone': d.phone1, 'status': d.status} for d in drivers]
+                result_html = _render_ai_report_table(['Name', 'Driver ID', 'CNIC', 'License', 'Phone', 'Status'], rows)
+            elif any(w in desc for w in ['vehicle', 'vehicles', 'fleet']):
+                vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
+                report_title = 'Vehicles List'
+                rows = [{'v_no': v.vehicle_no, 'model': v.model, 'type': v.vehicle_type, 'phone': v.phone_no} for v in vehicles]
+                result_html = _render_ai_report_table(['Vehicle No', 'Model', 'Type', 'Phone'], rows)
+            elif any(w in desc for w in ['project', 'projects']):
+                projects = Project.query.order_by(Project.name).all()
+                report_title = 'Project Summary'
+                rows = [{'name': p.name, 'vehicles': len(p.vehicles), 'drivers': len(p.drivers), 'status': p.status} for p in projects]
+                result_html = _render_ai_report_table(['Project', 'Vehicles', 'Drivers', 'Status'], rows)
+            elif any(w in desc for w in ['district', 'districts']):
+                districts = District.query.order_by(District.name).all()
+                report_title = 'District Summary'
+                rows = []
+                for d in districts:
+                    vc = Vehicle.query.filter_by(district_id=d.id).count()
+                    dc = Driver.query.filter_by(district_id=d.id).count()
+                    rows.append({'name': d.name, 'vehicles': vc, 'drivers': dc})
+                result_html = _render_ai_report_table(['District', 'Vehicles', 'Drivers'], rows)
+            elif any(w in desc for w in ['expiry', 'license', 'cnic', 'expiring']):
+                from datetime import timedelta
+                today = date.today()
+                end = today + timedelta(days=60)
+                drivers = Driver.query.filter(Driver.status == 'Active').all()
+                expiring = []
+                for d in drivers:
+                    if (d.license_expiry_date and today <= d.license_expiry_date <= end) or (d.cnic_expiry_date and today <= d.cnic_expiry_date <= end):
+                        expiring.append({'name': d.name, 'license_expiry': d.license_expiry_date, 'cnic_expiry': d.cnic_expiry_date})
+                report_title = 'License / CNIC Expiry (next 60 days)'
+                rows = [{'name': r['name'], 'license_expiry': str(r['license_expiry']) if r['license_expiry'] else '-', 'cnic_expiry': str(r['cnic_expiry']) if r['cnic_expiry'] else '-'} for r in expiring]
+                result_html = _render_ai_report_table(['Driver', 'License Expiry', 'CNIC Expiry'], rows)
+            elif any(w in desc for w in ['company', 'companies']):
+                companies = Company.query.order_by(Company.name).all()
+                report_title = 'Companies'
+                rows = [{'name': c.name, 'mobile': c.mobile or '-', 'email': c.email or '-'} for c in companies]
+                result_html = _render_ai_report_table(['Company', 'Mobile', 'Email'], rows)
+            elif any(w in desc for w in ['parking', 'utilization', 'station']):
+                stations = ParkingStation.query.order_by(ParkingStation.name).all()
+                report_title = 'Parking Utilization'
+                rows = []
+                for s in stations:
+                    occ = Vehicle.query.filter_by(parking_station_id=s.id).count()
+                    rows.append({'name': s.name, 'capacity': s.capacity, 'occupied': occ, 'available': s.capacity - occ})
+                result_html = _render_ai_report_table(['Station', 'Capacity', 'Occupied', 'Available'], rows)
+            elif any(w in desc for w in ['product', 'products', 'item']):
+                products = Product.query.order_by(Product.name).all()
+                report_title = 'Products (Master)'
+                rows = [{'name': p.name, 'used_in': getattr(p, 'used_in_forms', None) or '-'} for p in products]
+                result_html = _render_ai_report_table(['Product', 'Used in forms'], rows)
+            elif any(w in desc for w in ['party', 'parties']):
+                parties = Party.query.order_by(Party.name).all()
+                report_title = 'Parties'
+                rows = [{'name': p.name, 'contact': (getattr(p, 'contact', None) or '-')[:40]} for p in parties]
+                result_html = _render_ai_report_table(['Party', 'Contact'], rows)
+            else:
+                report_title = 'Suggested reports'
+                result_html = (
+                    '<p class="text-muted">Try: "list of drivers", "vehicles", "project summary", "district summary", '
+                    '"license expiry", "companies", "parking utilization", "products", or "parties".</p>'
+                )
+        except Exception as e:
+            app.logger.exception(e)
+            report_title = 'Error'
+            result_html = f'<p class="text-danger">Report could not be generated. Try another keyword (e.g. drivers, vehicles, projects).</p>'
     return render_template('report_ai.html', result_html=result_html, report_title=report_title)
 
 
