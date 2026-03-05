@@ -69,6 +69,22 @@
     <div class="timeline-item mb-4">
       <h5 class="mb-1">
         <span class="badge bg-primary me-2">Latest</span>
+        Excel import templates, strong validation & error tables
+      </h5>
+      <small class="text-muted">Newest changes</small>
+      <ul class="mt-2 mb-0">
+        <li><strong>Excel templates with highlighted required columns</strong>: Parking, Vehicles, and Drivers import templates are now real <code>.xlsx</code> files. All required columns have colored + bold headings so users can immediately see which fields must be filled.</li>
+        <li><strong>Per‑row validation on import</strong>: During import, every row is checked for required fields and data type (e.g. capacity, driver capacity, dates). Duplicate checks follow the same rules as forms: Parking Station <code>name + district</code>, unique Vehicle No, unique Driver ID, CNIC, and License No.</li>
+        <li><strong>Safe “all‑or‑nothing” import</strong>: If even one row has an issue, the entire file is rolled back and no partial data is saved, keeping your database clean.</li>
+        <li><strong>Detailed error table on screen</strong>: Import pages now show a column‑wise error table (Row #, key column, Issue) that stays visible until you fix and re‑upload, so the user can easily match Excel rows with problems.</li>
+        <li><strong>Cleaner text values on import</strong>: Optional text fields that are left blank in Excel are stored as <code>N/A</code> instead of technical <code>NaN</code> values.</li>
+        <li><strong>Login username made case‑insensitive</strong>: <code>Admin</code>, <code>admin</code>, or <code>ADMIN</code> all work with the same password, making login more user‑friendly.</li>
+        <li><strong>Party & Product lists pagination/search</strong>: Party and Product Name lists now use the same professional pagination and backend search as other lists (records per page, page numbers, search across all pages).</li>
+      </ul>
+    </div>
+
+    <div class="timeline-item mb-4">
+      <h5 class="mb-1">
         Login screen, employee module enhancements & clean reports
       </h5>
       <small class="text-muted">Most recent updates</small>
