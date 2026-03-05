@@ -27,7 +27,7 @@ from datetime import datetime, date, time
 import csv
 from io import StringIO
 from sqlalchemy import func, text, inspect
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, IntegrityError
 from utils import generate_csv_response, parse_date
 import re
 import os
@@ -635,7 +635,8 @@ def districts_list():
             District.name.ilike(f'%{search}%') |
             District.province.ilike(f'%{search}%')
         )
-    districts = query.order_by(District.name).all()
+    # Sort by ID as requested
+    districts = query.order_by(District.id).all()
     return render_template('districts_list.html', districts=districts, search=search)
 
 
@@ -654,6 +655,9 @@ def district_form(id=None):
             db.session.commit()
             flash('District saved successfully!', 'success')
             return redirect(url_for('districts_list'))
+        except IntegrityError:
+            db.session.rollback()
+            flash('This district name already exists', 'danger')
         except Exception as e:
             db.session.rollback()
             flash(f'Error saving district: {str(e)}', 'danger')

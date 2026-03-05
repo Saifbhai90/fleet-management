@@ -459,6 +459,37 @@
                 el.value = raw.slice(0, 4) + "-" + raw.slice(4);
             }
         });
+
+        // Realtime search on list tables: as user types, rows filter instantly
+        $("[data-realtime-table]").each(function() {
+            var $input = $(this);
+            var tableId = $input.data("realtime-table");
+            var $table = $("#" + tableId);
+            if (!$table.length) return;
+            var $rows = $table.find("tbody tr");
+
+            function applyFilter() {
+                var q = ($input.val() || "").toString().toLowerCase().trim();
+                if (!q) {
+                    $rows.show();
+                    return;
+                }
+                $rows.each(function() {
+                    var $row = $(this);
+                    var text = $row.text().toLowerCase();
+                    $row.toggle(text.indexOf(q) !== -1);
+                });
+            }
+
+            $input.on("input", applyFilter);
+
+            // Prevent full form submit when pressing Enter in search box
+            $input.on("keydown", function(e) {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                }
+            });
+        });
     });
 
     // Move focus to next field on Enter (within forms)

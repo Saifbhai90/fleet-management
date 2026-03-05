@@ -14,7 +14,7 @@
   <form method="GET" class="mb-4">
     <div class="input-group input-group-lg">
       <span class="input-group-text"><i class="bi bi-search"></i></span>
-      <input type="text" name="search" class="form-control" placeholder="Search district or province..." value="{{ search }}">
+      <input type="text" name="search" class="form-control" placeholder="Search district or province..." value="{{ search }}" data-realtime-table="districtsTable">
       <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1"></i>Search</button>
     </div>
   </form>
@@ -22,7 +22,7 @@
   <div class="card shadow-sm">
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-striped table-hover mb-0">
+        <table id="districtsTable" class="table table-striped table-hover mb-0">
           <thead class="table-dark">
             <tr>
               <th>ID</th>
