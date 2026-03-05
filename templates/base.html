@@ -229,6 +229,21 @@
 <!-- SIDEBAR -->
 <div class="sidebar shadow" id="sidebar">
     <div id="sidebarAccordion">
+        {% set master_endpoints = ['companies', 'company_form', 'projects_list', 'project_detail', 'project_form', 'districts_list', 'district_form', 'vehicles_list', 'vehicle_form', 'parking_list', 'parking_form', 'drivers_list', 'driver_form', 'employees_list', 'employee_form', 'driver_post_list', 'driver_post_form', 'party_list', 'party_form', 'product_list', 'product_form'] %}
+        {% set assignment_endpoints = ['assign_project_to_company', 'assign_project_to_district', 'assign_vehicle_to_district', 'assign_vehicle_to_parking_list', 'assign_vehicle_to_parking_new', 'assign_vehicle_to_parking_edit', 'assign_driver_to_vehicle_list', 'assign_driver_to_vehicle_new', 'assign_driver_to_vehicle_edit'] %}
+        {% set transfer_endpoints = ['project_transfers', 'project_transfer_new', 'project_transfer_edit', 'vehicle_transfers', 'vehicle_transfer_new', 'vehicle_transfer_edit', 'driver_transfers', 'driver_transfer_new', 'driver_transfer_edit'] %}
+        {% set driver_status_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'driver_attendance_list', 'driver_attendance_mark', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
+        {% set task_report_endpoints = ['task_report_upload', 'task_report_list', 'red_task_list', 'red_task_new', 'red_task_edit', 'without_task_list', 'without_task_new', 'without_task_edit', 'task_report_logbook_cover', 'task_report_logbook_view', 'task_report_logbook_view_all'] %}
+        {% set expenses_endpoints = ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form'] %}
+        {% set reports_endpoints = ['reports_index', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_driver_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai'] %}
+        {% set master_open = (request.endpoint in master_endpoints and not (request.endpoint == 'companies' and request.args.get('mode') == 'report')) %}
+        {% set assignment_open = request.endpoint in assignment_endpoints or (request.endpoint and 'assign_vehicle_to_parking' in request.endpoint) or (request.endpoint and 'assign_driver_to_vehicle' in request.endpoint) %}
+        {% set transfer_open = request.endpoint in transfer_endpoints or (request.endpoint and 'driver_transfer' in request.endpoint) %}
+        {% set driver_status_open = request.endpoint in driver_status_endpoints %}
+        {% set task_report_open = request.endpoint in task_report_endpoints %}
+        {% set expenses_open = request.endpoint in expenses_endpoints %}
+        {% set reports_open = request.endpoint in reports_endpoints or (request.endpoint == 'companies' and request.args.get('mode') == 'report') %}
+
         <!-- Dashboard -->
         <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active-link{% endif %}">
             <i class="bi bi-speedometer2"></i><span>Dashboard</span>
@@ -236,10 +251,10 @@
 
         <!-- Master Section -->
         <div>
-            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#masterMenu">
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#masterMenu" role="button" aria-expanded="{{ 'true' if master_open else 'false' }}">
                 <i class="bi bi-folder2-open"></i><span>Master</span>
             </a>
-            <div class="collapse collapse-item-container"
+            <div class="collapse collapse-item-container {% if master_open %}show{% endif %}"
                  id="masterMenu" data-bs-parent="#sidebarAccordion">
                 <a href="{{ url_for('companies') }}" class="collapse-item {% if request.endpoint == 'companies' and request.args.get('mode') != 'report' %}active-link{% endif %}">
                     <i class="bi bi-building"></i><span>Companies</span>
@@ -276,10 +291,10 @@
 
         <!-- Assignment Section -->
         <div>
-            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#assignmentMenu" role="button">
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#assignmentMenu" role="button" aria-expanded="{{ 'true' if assignment_open else 'false' }}">
                 <i class="bi bi-link-45deg"></i><span>Assignment</span>
             </a>
-            <div class="collapse collapse-item-container"
+            <div class="collapse collapse-item-container {% if assignment_open %}show{% endif %}"
                  id="assignmentMenu" data-bs-parent="#sidebarAccordion">
                 <a href="{{ url_for('assign_project_to_company') }}" class="collapse-item {% if request.endpoint == 'assign_project_to_company' %}active-link{% endif %}">
                     <i class="bi bi-building-check text-primary"></i><span>Project → Company</span>
@@ -301,10 +316,10 @@
 
         <!-- Transfer Section -->
         <div>
-            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#transferMenu" role="button">
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#transferMenu" role="button" aria-expanded="{{ 'true' if transfer_open else 'false' }}">
                 <i class="bi bi-arrow-left-right me-2 text-warning"></i><span>Transfer</span>
             </a>
-            <div class="collapse collapse-item-container"
+            <div class="collapse collapse-item-container {% if transfer_open %}show{% endif %}"
                  id="transferMenu" data-bs-parent="#sidebarAccordion">
                 <a href="{{ url_for('project_transfers') }}" class="collapse-item {% if request.endpoint in ['project_transfers', 'project_transfer_new', 'project_transfer_edit'] %}active-link{% endif %}">
                     <i class="bi bi-arrow-repeat text-warning"></i><span>Project Transfer</span>
@@ -320,10 +335,10 @@
 
         <!-- Driver Status (Job Left, Rejoin, Attendance) -->
         <div>
-            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#otherActionMenu" role="button">
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#otherActionMenu" role="button" aria-expanded="{{ 'true' if driver_status_open else 'false' }}">
                 <i class="bi bi-person-gear"></i><span>Driver Status</span>
             </a>
-            <div class="collapse collapse-item-container"
+            <div class="collapse collapse-item-container {% if driver_status_open %}show{% endif %}"
                  id="otherActionMenu" data-bs-parent="#sidebarAccordion">
                 <a href="{{ url_for('driver_job_left_list') }}" class="collapse-item custom-job-link {% if request.endpoint in ['driver_job_left_new', 'driver_job_left_list'] %}active-link{% endif %}">
                     <i class="bi bi-person-x text-danger me-2"></i>
@@ -343,10 +358,10 @@
 
         <!-- Task Report -->
         <div>
-            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#taskReportMenu" role="button">
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#taskReportMenu" role="button" aria-expanded="{{ 'true' if task_report_open else 'false' }}">
                 <i class="bi bi-clipboard2-data"></i><span>Task Report</span>
             </a>
-            <div class="collapse collapse-item-container"
+            <div class="collapse collapse-item-container {% if task_report_open %}show{% endif %}"
                  id="taskReportMenu" data-bs-parent="#sidebarAccordion">
                 <a href="{{ url_for('task_report_upload') }}" class="collapse-item {% if request.endpoint == 'task_report_upload' %}active-link{% endif %}">
                     <i class="bi bi-file-earmark-excel"></i><span>Upload Workbooks</span>
@@ -368,10 +383,10 @@
 
         <!-- Expenses -->
         <div>
-            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#expensesMenu" role="button">
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#expensesMenu" role="button" aria-expanded="{{ 'true' if expenses_open else 'false' }}">
                 <i class="bi bi-wallet2"></i><span>Expenses</span>
             </a>
-            <div class="collapse collapse-item-container"
+            <div class="collapse collapse-item-container {% if expenses_open %}show{% endif %}"
                  id="expensesMenu" data-bs-parent="#sidebarAccordion">
                 <a href="{{ url_for('fuel_expense_list') }}" class="collapse-item {% if request.endpoint in ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit'] %}active-link{% endif %}">
                     <i class="bi bi-fuel-pump text-primary"></i><span>Fuel Expense</span>
@@ -387,10 +402,10 @@
 
         <!-- Reports Section -->
         <div>
-            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#reportsMenu" role="button">
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#reportsMenu" role="button" aria-expanded="{{ 'true' if reports_open else 'false' }}">
                 <i class="bi bi-bar-chart"></i><span>Reports</span>
             </a>
-            <div class="collapse collapse-item-container"
+            <div class="collapse collapse-item-container {% if reports_open %}show{% endif %}"
                  id="reportsMenu" data-bs-parent="#sidebarAccordion">
                 <a href="{{ url_for('reports_index') }}" class="collapse-item {% if request.endpoint == 'reports_index' %}active-link{% endif %}">
                     <i class="bi bi-list-ul"></i><span>All Reports</span>
