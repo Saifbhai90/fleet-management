@@ -2,16 +2,44 @@
 
 {% block title %}Districts List{% endblock %}
 
+{% block extra_head %}
+<style>
+@media print {
+  .no-print,
+  .navbar,
+  .sidebar,
+  .flash-message {
+    display: none !important;
+  }
+  .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  @page {
+    margin: 0;
+  }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h2 class="mb-0"><i class="bi bi-geo-alt me-2"></i>Districts Management</h2>
-    <a href="{{ url_for('district_form') }}" class="btn btn-success">
-      <i class="bi bi-plus-circle me-1"></i>Add New District
-    </a>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('districts_export', search=search) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-download me-1"></i>Export Excel
+      </a>
+      <a href="{{ url_for('districts_print', search=search) }}" target="_blank" class="btn btn-outline-primary">
+        <i class="bi bi-printer me-1"></i>Print / PDF
+      </a>
+      <a href="{{ url_for('district_form') }}" class="btn btn-success">
+        <i class="bi bi-plus-circle me-1"></i>Add New District
+      </a>
+    </div>
   </div>
 
-  <form method="GET" class="mb-4">
+  <form method="GET" class="mb-4 no-print">
     <div class="input-group input-group-lg">
       <span class="input-group-text"><i class="bi bi-search"></i></span>
       <input type="text" name="search" class="form-control" placeholder="Search district or province..." value="{{ search }}" data-realtime-table="districtsTable">
@@ -66,7 +94,7 @@
         </table>
       </div>
     </div>
-    <div class="card-footer bg-light text-muted text-end small">
+    <div class="card-footer bg-light text-muted text-end small no-print">
       Total Districts: <strong>{{ districts|length }}</strong>
       {% if search %} | Filtered by: "{{ search }}"{% endif %}
     </div>

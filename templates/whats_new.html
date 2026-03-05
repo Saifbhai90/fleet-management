@@ -2,31 +2,84 @@
 
 {% block title %}What's New / Updates{% endblock %}
 
+{% block extra_head %}
+<style>
+  .whats-new-header {
+    border-left: 4px solid #0d6efd;
+    padding-left: 12px;
+  }
+  .timeline {
+    position: relative;
+    margin-left: 10px;
+  }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, #0d6efd, #cbd5e1);
+  }
+  .timeline-item {
+    position: relative;
+    padding-left: 30px;
+  }
+  .timeline-item::before {
+    content: "";
+    position: absolute;
+    left: 1px;
+    top: 4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #0d6efd;
+    box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.2);
+  }
+  .timeline-item h5 {
+    margin-bottom: 0.15rem;
+  }
+  .timeline-item ul {
+    margin-left: 0;
+    padding-left: 1.1rem;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0">
-      <i class="bi bi-stars me-2 text-warning"></i>What's New in Fleet Manager
-    </h2>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="whats-new-header">
+      <h2 class="mb-0">
+        <i class="bi bi-stars me-2 text-warning"></i>What's New in Fleet Manager
+      </h2>
+      <div class="text-muted small mt-1">
+        Latest updates are always shown at the <strong>top</strong> (newest first).
+      </div>
+    </div>
   </div>
 
   <div class="alert alert-info border-0 shadow-sm mb-4">
     <i class="bi bi-info-circle me-2"></i>
-    This page shows recent updates in the software so users can quickly see what changed.
+    This page shows recent changes in the software so users can quickly see what is new or improved.
   </div>
 
   <div class="timeline">
+    <!-- Always add NEW items at the top of this list -->
     <div class="timeline-item mb-4">
       <h5 class="mb-1">
         <span class="badge bg-primary me-2">Latest</span>
-        Realtime search + Updates bell + AI reports
+        Realtime search, notifications, AI reports & districts
       </h5>
-      <small class="text-muted">Recent updates</small>
+      <small class="text-muted">Most recent updates</small>
       <ul class="mt-2 mb-0">
         <li>Navbar notification bell now shows unread count and works across all pages.</li>
         <li>Realtime search on list pages: Drivers, Vehicles, Projects, Companies, Districts, Parking, Party, Products.</li>
         <li>AI reports can now show fuel expenses, maintenance expenses, penalties, and attendance summary.</li>
         <li>New dashboard notification: alerts when many active drivers have no attendance in the last 7 days.</li>
+        <li>New “What’s New / Updates” page in the sidebar to view recent changes.</li>
+        <li>District list: Excel export and print/PDF preview (browser print) added.</li>
+        <li>Company, Parking, and Driver forms now use the District master (typeahead) when entering district names.</li>
       </ul>
     </div>
 
@@ -51,7 +104,8 @@
     </div>
 
     <p class="text-muted small mt-4">
-      For future updates, admins can edit this page (`whats_new.html`) to add new items in the timeline.
+      For future updates, always add the <strong>new item at the top</strong> of this page (inside the timeline)
+      so users can immediately see the latest changes.
     </p>
   </div>
 </div>

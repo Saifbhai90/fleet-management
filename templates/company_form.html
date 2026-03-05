@@ -43,7 +43,7 @@
               </div>
               <div class="col-md-6 mb-3">
                 {{ form.district.label(class="form-label") }}
-                {{ form.district(class="form-control " + ("is-invalid" if form.district.errors else "")) }}
+                {{ form.district(class="form-control " + ("is-invalid" if form.district.errors else ""), list="districtOptions", placeholder="Select from District master") }}
                 {% for error in form.district.errors %}
                   <div class="invalid-feedback">{{ error }}</div>
                 {% endfor %}

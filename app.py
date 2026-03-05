@@ -50,6 +50,19 @@ def inject_notification_badge():
         unread_count = 0
     return dict(unread_notification_count=unread_count)
 
+
+@app.context_processor
+def inject_all_districts():
+    """
+    Provide all district names to templates for dropdown/typeahead.
+    """
+    try:
+        from models import District
+        districts = District.query.order_by(District.name).all()
+    except Exception:
+        districts = []
+    return dict(all_districts=districts)
+
 # Create all tables if not exist (backward compatibility; new changes use migrations)
 with app.app_context():
     db.create_all()

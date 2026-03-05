@@ -646,6 +646,44 @@ def districts_list():
     return render_template('districts_list.html', districts=districts, search=search)
 
 
+@app.route('/districts/export')
+def districts_export():
+    """Export districts list (with optional search) to CSV/Excel."""
+    search = request.args.get('search', '').strip()
+    query = District.query
+    if search:
+        query = query.filter(
+            District.name.ilike(f'%{search}%') |
+            District.province.ilike(f'%{search}%')
+        )
+    districts = query.order_by(District.id).all()
+    headers = ['ID', 'District Name', 'Province/Region', 'Remarks', 'Created']
+    rows = []
+    for d in districts:
+        rows.append([
+            d.id,
+            d.name,
+            d.province or '',
+            (d.remarks or '')[:200] if getattr(d, 'remarks', None) else '',
+            d.created_at.strftime('%Y-%m-%d') if getattr(d, 'created_at', None) else '',
+        ])
+    return generate_csv_response(headers, rows, filename='districts.csv')
+
+
+@app.route('/districts/print')
+def districts_print():
+    """Print-friendly view of districts list (browser print to PDF)."""
+    search = request.args.get('search', '').strip()
+    query = District.query
+    if search:
+        query = query.filter(
+            District.name.ilike(f'%{search}%') |
+            District.province.ilike(f'%{search}%')
+        )
+    districts = query.order_by(District.id).all()
+    return render_template('districts_print.html', districts=districts, search=search)
+
+
 @app.route('/district/add', methods=['GET', 'POST'])
 @app.route('/district/edit/<int:id>', methods=['GET', 'POST'])
 def district_form(id=None):

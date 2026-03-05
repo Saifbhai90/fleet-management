@@ -334,7 +334,7 @@
             </a>
         </div>
     </div>
-</div>
+}</div>
 
 <!-- MAIN CONTENT -->
 <div class="main-content" id="mainContent">
@@ -395,6 +395,23 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <script>
+    // Global District datalist for typeahead
+    // (Used by inputs with list="districtOptions")
+    // Render options once here so all forms can reuse.
+    document.addEventListener("DOMContentLoaded", function() {
+        var existing = document.getElementById("districtOptions");
+        if (!existing) {
+            var dl = document.createElement("datalist");
+            dl.id = "districtOptions";
+            {% for d in all_districts %}
+            var opt{{ loop.index }} = document.createElement("option");
+            opt{{ loop.index }}.value = "{{ d.name }}";
+            dl.appendChild(opt{{ loop.index }});
+            {% endfor %}
+            document.body.appendChild(dl);
+        }
+    });
+
     // Sidebar Toggle
     function toggleSidebar() {
         document.getElementById("sidebar").classList.toggle("collapsed");

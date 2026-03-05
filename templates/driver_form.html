@@ -125,7 +125,7 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Driver District</label>
-                {{ form.driver_district(class="form-control", required=True) }}
+                {{ form.driver_district(class="form-control", required=True, list="districtOptions") }}
                 {% for error in form.driver_district.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -184,7 +184,7 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Issue District</label>
-                {{ form.issue_district(class="form-control", required=True) }}
+                {{ form.issue_district(class="form-control", required=True, list="districtOptions") }}
                 {% for error in form.issue_district.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
