@@ -981,7 +981,8 @@ def login():
     if form.validate_on_submit():
         username = (form.username.data or '').strip()
         password = (form.password.data or '').strip()
-        if username == 'admin' and password == 'admin':
+        # Username ko case-insensitive bana diya (Admin / ADMIN / admin sab chalein ge)
+        if username.lower() == 'admin' and password == 'admin':
             session['user'] = 'admin'
             flash('Login successful. Welcome admin!', 'success')
             return redirect(url_for('dashboard'))
