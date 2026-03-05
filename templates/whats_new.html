@@ -54,119 +54,37 @@
         <i class="bi bi-stars me-2 text-warning"></i>What's New in Fleet Manager
       </h2>
       <div class="text-muted small mt-1">
-        Latest updates are always shown at the <strong>top</strong> (newest first).
+        Latest <strong>15</strong> updates only (newest first).
       </div>
     </div>
   </div>
 
   <div class="alert alert-info border-0 shadow-sm mb-4">
     <i class="bi bi-info-circle me-2"></i>
-    This page shows recent changes in the software so users can quickly see what is new or improved.
+    This page shows recent changes in the software. Only the latest 15 entries are displayed.
   </div>
 
   <div class="timeline">
-    <!-- Always add NEW items at the top of this list -->
+    {% for entry in entries %}
     <div class="timeline-item mb-4">
       <h5 class="mb-1">
-        <span class="badge bg-primary me-2">Latest</span>
-        Backup, Drivers (search/print/export/post), Import (list-only + progress)
+        {% if entry.label %}<span class="badge bg-primary me-2">{{ entry.label }}</span>{% endif %}
+        {{ entry.title }}
       </h5>
-      <small class="text-muted">Newest changes</small>
+      {% if entry.label and entry.label != 'Latest' %}<small class="text-muted">{{ entry.label }}</small>{% endif %}
       <ul class="mt-2 mb-0">
-        <li><strong>Backup</strong>: Download and Send to Email only (Save to Path removed). Scheduled backup runs daily and sends backup to email only. Left menu: Backup link above What's New.</li>
-        <li><strong>What's New</strong>: Always shown at the bottom of the left menu (below Backup).</li>
-        <li><strong>Import only on list pages</strong>: Import Excel button removed from Driver, Vehicle, and Parking entry forms. Import is available only from Drivers List, Vehicles List, and Parking List.</li>
-        <li><strong>Import progress</strong>: When uploading a file for import, an overlay shows file name, upload percentage, and “Processing…” so users know the system is working and don’t refresh.</li>
-        <li><strong>Driver delete</strong>: Deleting a driver from the list now correctly removes related records (status changes, transfers, attendance) so no database error occurs.</li>
-        <li><strong>Driver list search</strong>: Search filters only by columns shown on the list (Driver ID, Name, CNIC No, CNIC Status, License No, License Status, Phone, Driver District). You can search by “Valid” or “Expired” for status.</li>
-        <li><strong>Driver print/PDF & Export Excel</strong>: Print view and Excel export use the same columns as the list (Driver ID, Name, CNIC No, CNIC Status, License No, License Status, Phone, Driver District). Export now downloads a real <code>.xlsx</code> file.</li>
-        <li><strong>Driver form – Post</strong>: Post dropdown shows only full name (short name removed). On edit, if the driver’s post was set by import and is not in the master list, it is kept and not changed.</li>
-        <li><strong>Driver import</strong>: CNIC Status and License Status are set automatically from expiry dates during import (Valid/Expired). License No “0” or blank is treated as invalid and the row is skipped with an error.</li>
-        <li><strong>Driver list delete</strong>: CSRF token added to the delete form so “Bad Request” no longer appears when deleting a driver.</li>
+        {% for bullet in entry.bullets %}
+        <li>{{ bullet }}</li>
+        {% endfor %}
       </ul>
     </div>
-
-    <div class="timeline-item mb-4">
-      <h5 class="mb-1">
-        Excel import templates, strong validation & error tables
-      </h5>
-      <small class="text-muted">Previous update</small>
-      <ul class="mt-2 mb-0">
-        <li><strong>Excel templates with highlighted required columns</strong>: Parking, Vehicles, and Drivers import templates are now real <code>.xlsx</code> files. All required columns have colored + bold headings so users can immediately see which fields must be filled.</li>
-        <li><strong>Per‑row validation on import</strong>: During import, every row is checked for required fields and data type (e.g. capacity, driver capacity, dates). Duplicate checks follow the same rules as forms: Parking Station <code>name + district</code>, unique Vehicle No, unique Driver ID, CNIC, and License No.</li>
-        <li><strong>Safe “all‑or‑nothing” import</strong>: If even one row has an issue, the entire file is rolled back and no partial data is saved, keeping your database clean.</li>
-        <li><strong>Detailed error table on screen</strong>: Import pages now show a column‑wise error table (Row #, key column, Issue) that stays visible until you fix and re‑upload, so the user can easily match Excel rows with problems.</li>
-        <li><strong>Cleaner text values on import</strong>: Optional text fields that are left blank in Excel are stored as <code>N/A</code> instead of technical <code>NaN</code> values.</li>
-        <li><strong>Login username made case‑insensitive</strong>: <code>Admin</code>, <code>admin</code>, or <code>ADMIN</code> all work with the same password, making login more user‑friendly.</li>
-        <li><strong>Party & Product lists pagination/search</strong>: Party and Product Name lists now use the same professional pagination and backend search as other lists (records per page, page numbers, search across all pages).</li>
-      </ul>
-    </div>
-
-    <div class="timeline-item mb-4">
-      <h5 class="mb-1">
-        Login screen, employee module enhancements & clean reports
-      </h5>
-      <small class="text-muted">Most recent updates</small>
-      <ul class="mt-2 mb-0">
-        <li><strong>Login screen added</strong>: Simple login form with default credentials <code>admin / admin</code> to control access (can be extended later for real users).</li>
-        <li><strong>Employee Posts (Master)</strong>: New master for all employee posts (short name + full name + remarks) used in Driver and Employee forms.</li>
-        <li><strong>Employees Management</strong>: New Employees list and entry form to register non-driver staff (Accounts Manager, Project Manager, etc.) with strong validation and history-based department suggestions.</li>
-        <li><strong>Employee details</strong>: Employee form now includes Father Name, Place of Birth, DOB, Education, Marital Status, District, Address, CNIC, and bank information, with most fields required.</li>
-        <li><strong>Employee CNIC & reports</strong>: CNIC No added to Employees list, CSV export, and print/PDF report view.</li>
-        <li><strong>Driver Form – Post field</strong>: Post dropdown is now fully driven by Employee Posts master instead of hard-coded values.</li>
-        <li><strong>Parking Station Form validation</strong>: Capacity, Create Date, District and Tehsil are now mandatory with clear on-form error messages.</li>
-        <li><strong>Vehicle Entry validation</strong>: Required fields strengthened (Vehicle No, Model, Vehicle Type, Engine No, Chassis No, Driver Capacity, Active Date) with visible validation messages.</li>
-        <li><strong>Duplicate checks</strong>: User-friendly messages when saving duplicate Vehicle Number or Parking Station Name, instead of raw database errors.</li>
-        <li><strong>Print views cleaned up</strong>: All list print pages (Districts, Parking, Vehicles, Drivers, Employees) now open in a clean report-only layout using a dedicated print base, without sidebar or navbar.</li>
-      </ul>
-    </div>
-
-    <div class="timeline-item mb-4">
-      <h5 class="mb-1">
-        Realtime search, notifications, AI reports, districts, parking, vehicles & drivers
-      </h5>
-      <small class="text-muted">Previous major update</small>
-      <ul class="mt-2 mb-0">
-        <li>Navbar notification bell now shows unread count and works across all pages.</li>
-        <li>Realtime search on list pages: Drivers, Vehicles, Projects, Companies, Districts, Parking, Party, Products.</li>
-        <li>AI reports can now show fuel expenses, maintenance expenses, penalties, and attendance summary.</li>
-        <li>New dashboard notification: alerts when many active drivers have no attendance in the last 7 days.</li>
-        <li>New “What’s New / Updates” page in the sidebar to view recent changes.</li>
-        <li>District list: Excel export and print/PDF preview (browser print) added.</li>
-        <li>Company, Parking, and Driver forms now use the District master (typeahead) when entering district names.</li>
-        <li>Parking Stations: Excel/CSV import process added with downloadable template and upload screen.</li>
-        <li>Parking Station Entry Form: date picker fixed so parking data now saves correctly.</li>
-        <li>Parking Station list: Excel export and dedicated print/PDF report view added (sorted by ID).</li>
-        <li>Vehicles: Excel/CSV import process added with template, plus Excel export and dedicated print/PDF report view (sorted by ID).</li>
-        <li>Drivers: Excel/CSV import process added (basic fields), plus Excel export and dedicated print/PDF report view (sorted by ID).</li>
-      </ul>
-    </div>
-
-    <div class="timeline-item mb-4">
-      <h5 class="mb-1">
-        Project & Forms improvements
-      </h5>
-      <ul class="mt-2 mb-0">
-        <li>Project Entry Form date validation fixed and errors are shown clearly.</li>
-        <li>District form now shows a friendly message if a duplicate district name is entered.</li>
-      </ul>
-    </div>
-
-    <div class="timeline-item mb-4">
-      <h5 class="mb-1">
-        Lists & Exports
-      </h5>
-      <ul class="mt-2 mb-0">
-        <li>Drivers, Vehicles, and Projects lists now have CSV export buttons.</li>
-        <li>Export respects current search filters.</li>
-      </ul>
-    </div>
-
-    <p class="text-muted small mt-4">
-      For future updates, always add the <strong>new item at the top</strong> of this page (inside the timeline)
-      so users can immediately see the latest changes.
-    </p>
+    {% else %}
+    <p class="text-muted">No updates to show.</p>
+    {% endfor %}
   </div>
+
+  <p class="text-muted small mt-4">
+    New updates are added at the top in the app; this page always shows only the latest 15 entries.
+  </p>
 </div>
 {% endblock %}
-

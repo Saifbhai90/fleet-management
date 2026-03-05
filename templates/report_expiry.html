@@ -4,14 +4,21 @@
 <div class="container-fluid">
   <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <h2 class="mb-0"><i class="bi bi-calendar-x me-2 text-danger"></i>License / CNIC Expiry Report</h2>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('report_expiry', days=30) }}" class="btn btn-sm btn-outline-danger">Next 30 days</a>
-      <a href="{{ url_for('report_expiry', days=60) }}" class="btn btn-sm btn-outline-warning">Next 60 days</a>
-      <a href="{{ url_for('report_expiry', days=90) }}" class="btn btn-sm btn-outline-secondary">Next 90 days</a>
+    <div class="d-flex align-items-center flex-wrap gap-2">
+      <a href="{{ url_for('report_expiry', days=0) }}" class="btn btn-sm btn-danger">Current expiry</a>
+      <span class="text-muted small">Next days expiry:</span>
+      <form action="{{ url_for('report_expiry') }}" method="get" class="d-inline-flex align-items-center gap-1">
+        <input type="number" name="days" class="form-control form-control-sm" style="width: 5rem;" min="1" placeholder="Days" value="{{ days if days and days > 0 else '' }}">
+        <button type="submit" class="btn btn-sm btn-outline-primary">Show</button>
+      </form>
       <a href="{{ url_for('reports_index') }}" class="btn btn-outline-secondary btn-sm">All Reports</a>
     </div>
   </div>
-  <p class="text-muted">Showing drivers with license or CNIC expiring in the next <strong>{{ days }}</strong> days.</p>
+  {% if days == 0 %}
+  <p class="text-muted">Showing drivers with license or CNIC <strong>already expired</strong> (current expiry).</p>
+  {% else %}
+  <p class="text-muted">Showing drivers with license or CNIC <strong>already expired</strong> or expiring in the next <strong>{{ days }}</strong> days.</p>
+  {% endif %}
   <div class="card shadow border-0">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
@@ -31,12 +38,12 @@
             <td class="ps-4">{{ loop.index }}</td>
             <td class="fw-medium">{{ row.driver.name }} <small class="text-muted">({{ row.driver.driver_id }})</small></td>
             <td>{{ row.driver.cnic_no|cnic_fmt }}</td>
-            <td>{% if row.cnic_soon %}<span class="badge bg-warning text-dark">{{ row.driver.cnic_expiry_date|ddmmyyyy }}</span>{% else %}{{ row.driver.cnic_expiry_date|ddmmyyyy }}{% endif %}</td>
-            <td>{% if row.license_soon %}<span class="badge bg-warning text-dark">{{ row.driver.license_expiry_date|ddmmyyyy }}</span>{% else %}{{ row.driver.license_expiry_date|ddmmyyyy }}{% endif %}</td>
+            <td>{% if row.cnic_expired %}<span class="badge bg-danger">{{ row.driver.cnic_expiry_date|ddmmyyyy }} (Expired)</span>{% elif row.cnic_soon %}<span class="badge bg-warning text-dark">{{ row.driver.cnic_expiry_date|ddmmyyyy }}</span>{% else %}{{ row.driver.cnic_expiry_date|ddmmyyyy }}{% endif %}</td>
+            <td>{% if row.license_expired %}<span class="badge bg-danger">{{ row.driver.license_expiry_date|ddmmyyyy }} (Expired)</span>{% elif row.license_soon %}<span class="badge bg-warning text-dark">{{ row.driver.license_expiry_date|ddmmyyyy }}</span>{% else %}{{ row.driver.license_expiry_date|ddmmyyyy }}{% endif %}</td>
             <td>{{ row.driver.phone1|phone_fmt }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="6" class="text-center py-4 text-muted">No drivers with documents expiring in this period.</td></tr>
+          <tr><td colspan="6" class="text-center py-4 text-muted">No drivers with expired or expiring documents in this period.</td></tr>
           {% endfor %}
         </tbody>
       </table>

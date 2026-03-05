@@ -112,48 +112,36 @@ def dashboard():
     total_drivers = Driver.query.count()
     total_parking = ParkingStation.query.count()
     total_districts = District.query.count()
-    recent_projects = Project.query.order_by(Project.created_at.desc()).limit(5).all()
 
     # Notifications: unread first, recent
     notifications = Notification.query.filter(Notification.read_at.is_(None)).order_by(Notification.created_at.desc()).limit(20).all()
-    # Optionally seed a few from data (e.g. expiry) - only if none exist
+    # Clear old "next 60 days" expiry notifications so only current-expiry ones appear
+    marked = False
+    for n in notifications:
+        if n.title == 'Document expiry' and n.message and 'next 60 days' in n.message:
+            n.read_at = datetime.utcnow()
+            marked = True
+    if marked:
+        db.session.commit()
+        notifications = Notification.query.filter(Notification.read_at.is_(None)).order_by(Notification.created_at.desc()).limit(20).all()
+    # Optionally seed from data (current expiry only) - only if none exist
     if not notifications and total_drivers:
-        from datetime import timedelta
         today = date.today()
-        end = today + timedelta(days=60)
         expiring_count = 0
         for d in Driver.query.filter(Driver.status == 'Active').all():
-            if (d.license_expiry_date and today <= d.license_expiry_date <= end) or (d.cnic_expiry_date and today <= d.cnic_expiry_date <= end):
+            if (d.license_expiry_date and d.license_expiry_date < today) or (d.cnic_expiry_date and d.cnic_expiry_date < today):
                 expiring_count += 1
         if expiring_count > 0:
             n = Notification(
                 title='Document expiry',
-                message=f'{expiring_count} driver(s) have license or CNIC expiring in the next 60 days.',
-                link=url_for('report_expiry'),
+                message=f'{expiring_count} driver(s) have license or CNIC already expired (current expiry).',
+                link=url_for('report_expiry', days=0),
                 link_text='View expiry report',
                 notification_type='warning'
             )
             db.session.add(n)
             db.session.commit()
             notifications = [n]
-    # Optional: one "parking full" notification if any station is at capacity (only when we have no unread notifications)
-    if not notifications and total_parking:
-        for s in ParkingStation.query.all():
-            if s.capacity and s.capacity > 0:
-                occ = Vehicle.query.filter_by(parking_station_id=s.id).count()
-                if occ >= s.capacity:
-                    n2 = Notification(
-                        title='Parking full',
-                        message=f'"{s.name}" is at full capacity ({occ}/{s.capacity}).',
-                        link=url_for('report_parking_utilization'),
-                        link_text='View parking',
-                        notification_type='danger'
-                    )
-                    db.session.add(n2)
-                    db.session.commit()
-                    notifications = Notification.query.filter(Notification.read_at.is_(None)).order_by(Notification.created_at.desc()).limit(20).all()
-                    break
-
     # Optional: one "attendance missing" notification if many active drivers have no recent attendance (only when we have no unread notifications)
     if not notifications and total_drivers:
         from datetime import timedelta
@@ -187,7 +175,6 @@ def dashboard():
                            total_drivers=total_drivers,
                            total_parking=total_parking,
                            total_districts=total_districts,
-                           recent_projects=recent_projects,
                            notifications=notifications)
 
 
@@ -401,8 +388,91 @@ def vehicles_list():
 
 @app.route('/whats-new')
 def whats_new():
-    """Simple 'What's New' page so users can see recent changes."""
-    return render_template('whats_new.html')
+    """What's New page: only latest 15 entries (newest first)."""
+    entries = [
+        {
+            'title': 'Backup, Drivers (search/print/export/post), Import (list-only + progress)',
+            'label': 'Latest',
+            'bullets': [
+                'Backup: Download and Send to Email only (Save to Path removed). Scheduled backup runs daily and sends backup to email only. Left menu: Backup link above What\'s New.',
+                'What\'s New: Always shown at the bottom of the left menu (below Backup).',
+                'Import only on list pages: Import Excel button removed from Driver, Vehicle, and Parking entry forms. Import is available only from Drivers List, Vehicles List, and Parking List.',
+                'Import progress: When uploading a file for import, an overlay shows file name, upload percentage, and "Processing…" so users know the system is working and don\'t refresh.',
+                'Driver delete: Deleting a driver from the list now correctly removes related records (status changes, transfers, attendance) so no database error occurs.',
+                'Driver list search: Search filters only by columns shown on the list (Driver ID, Name, CNIC No, CNIC Status, License No, License Status, Phone, Driver District). You can search by "Valid" or "Expired" for status.',
+                'Driver print/PDF & Export Excel: Print view and Excel export use the same columns as the list. Export now downloads a real .xlsx file.',
+                'Driver form – Post: Post dropdown shows only full name (short name removed). On edit, if the driver\'s post was set by import and is not in the master list, it is kept and not changed.',
+                'Driver import: CNIC Status and License Status are set automatically from expiry dates during import (Valid/Expired). License No "0" or blank is treated as invalid and the row is skipped with an error.',
+                'Driver list delete: CSRF token added to the delete form so "Bad Request" no longer appears when deleting a driver.',
+            ],
+        },
+        {
+            'title': 'Excel import templates, strong validation & error tables',
+            'label': 'Previous update',
+            'bullets': [
+                'Excel templates with highlighted required columns: Parking, Vehicles, and Drivers import templates are now real .xlsx files.',
+                'Per‑row validation on import: Required fields and duplicate checks (Vehicle No, Driver ID, CNIC, License No, Parking name+district).',
+                'Safe "all‑or‑nothing" import: If even one row has an issue, the entire file is rolled back.',
+                'Detailed error table on screen: Row #, key column, Issue so user can fix Excel and re‑upload.',
+                'Cleaner text values on import: Optional blank fields stored as N/A.',
+                'Login username made case‑insensitive.',
+                'Party & Product lists pagination/search.',
+            ],
+        },
+        {
+            'title': 'Login screen, employee module enhancements & clean reports',
+            'label': 'Most recent updates',
+            'bullets': [
+                'Login screen added with default credentials admin / admin.',
+                'Employee Posts (Master): short name + full name + remarks for Driver and Employee forms.',
+                'Employees Management: list and entry form for non-driver staff with validation and department suggestions.',
+                'Employee details: Father Name, DOB, Education, Marital Status, District, Address, CNIC, bank info.',
+                'Employee CNIC & reports: CSV export and print/PDF.',
+                'Driver Form – Post field driven by Employee Posts master.',
+                'Parking Station Form: Capacity, Create Date, District and Tehsil mandatory.',
+                'Vehicle Entry validation strengthened.',
+                'Duplicate checks: user-friendly messages for duplicate Vehicle Number or Parking Station Name.',
+                'Print views cleaned up: report-only layout without sidebar or navbar.',
+            ],
+        },
+        {
+            'title': 'Realtime search, notifications, AI reports, districts, parking, vehicles & drivers',
+            'label': 'Previous major update',
+            'bullets': [
+                'Navbar notification bell with unread count.',
+                'Realtime search on list pages: Drivers, Vehicles, Projects, Companies, Districts, Parking, Party, Products.',
+                'AI reports: fuel expenses, maintenance expenses, penalties, attendance summary.',
+                'Dashboard notification: alerts when many active drivers have no attendance in the last 7 days.',
+                'What\'s New / Updates page in the sidebar.',
+                'District list: Excel export and print/PDF.',
+                'Company, Parking, and Driver forms use District master (typeahead).',
+                'Parking Stations: Excel/CSV import with template and upload screen.',
+                'Parking Station Entry Form: date picker fixed.',
+                'Parking Station list: Excel export and print/PDF.',
+                'Vehicles: Excel/CSV import, Excel export, print/PDF.',
+                'Drivers: Excel/CSV import, Excel export, print/PDF.',
+            ],
+        },
+        {
+            'title': 'Project & Forms improvements',
+            'label': '',
+            'bullets': [
+                'Project Entry Form date validation fixed and errors shown clearly.',
+                'District form: friendly message if duplicate district name is entered.',
+            ],
+        },
+        {
+            'title': 'Lists & Exports',
+            'label': '',
+            'bullets': [
+                'Drivers, Vehicles, and Projects lists have CSV export buttons.',
+                'Export respects current search filters.',
+            ],
+        },
+    ]
+    # Only latest 15 entries (each timeline block = 1 entry)
+    entries = entries[:15]
+    return render_template('whats_new.html', entries=entries)
 
 
 # ────────────────────────────────────────────────
@@ -5621,21 +5691,20 @@ def report_vehicle_profile(vehicle_id):
 def report_expiry():
     from datetime import timedelta
     today = date.today()
-    days = request.args.get('days', type=int) or 60
-    end = today + timedelta(days=days)
+    # days=None or 0 → current (already expired) only; days>0 → expired + next N days
+    days = request.args.get('days', type=int)
+    if days is None:
+        days = 0
+    end = today + timedelta(days=days) if days > 0 else today
     drivers = Driver.query.filter(Driver.status == 'Active').all()
     expiring = []
     for d in drivers:
         row = {'driver': d, 'license_expiry': d.license_expiry_date, 'cnic_expiry': d.cnic_expiry_date}
-        if d.license_expiry_date and today <= d.license_expiry_date <= end:
-            row['license_soon'] = True
-        else:
-            row['license_soon'] = False
-        if d.cnic_expiry_date and today <= d.cnic_expiry_date <= end:
-            row['cnic_soon'] = True
-        else:
-            row['cnic_soon'] = False
-        if row['license_soon'] or row['cnic_soon']:
+        row['license_expired'] = bool(d.license_expiry_date and d.license_expiry_date < today)
+        row['cnic_expired'] = bool(d.cnic_expiry_date and d.cnic_expiry_date < today)
+        row['license_soon'] = bool(days > 0 and d.license_expiry_date and today <= d.license_expiry_date <= end)
+        row['cnic_soon'] = bool(days > 0 and d.cnic_expiry_date and today <= d.cnic_expiry_date <= end)
+        if row['license_expired'] or row['cnic_expired'] or row['license_soon'] or row['cnic_soon']:
             expiring.append(row)
     return render_template('report_expiry.html', expiring=expiring, days=days)
 
