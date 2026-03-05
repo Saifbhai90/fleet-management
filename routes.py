@@ -1097,15 +1097,20 @@ def drivers_print():
 @app.route('/driver/add', methods=['GET', 'POST'])
 @app.route('/driver/edit/<int:id>', methods=['GET', 'POST'])
 def driver_form(id=None):
-    # Common Employee Post master choices for both add/edit
+    # Post dropdown: sirf Full Name (short name nahi)
     posts = EmployeePost.query.order_by(EmployeePost.full_name).all()
     post_choices = [('', '-- Select Post --')] + [
-        (p.full_name, f"{p.full_name} ({p.short_name})") for p in posts
+        (p.full_name, p.full_name) for p in posts
     ]
 
     if id:
         driver = Driver.query.get_or_404(id)
         form = DriverForm(obj=driver)
+        # Edit: agar driver ki post import se aayi hai aur master mein nahi hai, to choices mein add karo taake change na ho
+        if driver.post and driver.post.strip():
+            existing_values = [c[0] for c in post_choices]
+            if driver.post.strip() not in existing_values:
+                post_choices = post_choices + [(driver.post.strip(), driver.post.strip())]
         form.post.choices = post_choices
         if driver.application_date:
             if isinstance(driver.application_date, str):
