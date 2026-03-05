@@ -36,6 +36,19 @@ import re
 import os
 from werkzeug.utils import secure_filename
 
+@app.before_request
+def require_login():
+    """Redirect to login if user not logged in. Only login and static are public."""
+    # endpoint can be None for some requests
+    endpoint = request.endpoint or ''
+    if endpoint.startswith('static'):
+        return
+    if endpoint in ('login',):
+        return
+    if not session.get('user'):
+        return redirect(url_for('login'))
+
+
 # ────────────────────────────────────────────────
 # API: CNIC / License duplicate check (for driver form)
 # ────────────────────────────────────────────────

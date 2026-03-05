@@ -145,9 +145,27 @@
             {% endif %}
         </a>
 
-        <div class="border-start ps-3 ms-2">
-            <small class="text-muted d-block" style="line-height: 1;">Logged in as</small>
-            <span class="fw-semibold">{{ session.get('user', 'Guest') }}</span>
+        <!-- Profile dropdown -->
+        <div class="dropdown border-start ps-3 ms-2">
+            <a class="d-flex align-items-center text-decoration-none text-light dropdown-toggle"
+               href="#" role="button" id="profileMenu" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-person-circle me-2" style="font-size: 1.3rem;"></i>
+                <div class="d-none d-sm-block text-start">
+                    <small class="text-muted d-block" style="line-height: 1;">Logged in as</small>
+                    <span class="fw-semibold">{{ session.get('user', 'Guest') }}</span>
+                </div>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="profileMenu">
+                <li class="dropdown-header small text-muted">
+                    <i class="bi bi-person-circle me-1"></i>{{ session.get('user', 'Guest') }}
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <a class="dropdown-item" href="{{ url_for('logout') }}">
+                        <i class="bi bi-box-arrow-right me-2 text-danger"></i>Logout
+                    </a>
+                </li>
+            </ul>
         </div>
     </div>
 </nav>
