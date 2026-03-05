@@ -382,6 +382,9 @@ def toggle_project_status(id):
 @app.route('/vehicles/')
 def vehicles_list():
     search = request.args.get('search', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
     query = Vehicle.query
     if search:
         like = f'%{search}%'
@@ -390,9 +393,10 @@ def vehicles_list():
             Vehicle.model.ilike(like) |
             Vehicle.vehicle_type.ilike(like)
         )
-    # Sort by ID as requested
-    vehicles = query.order_by(Vehicle.id).all()
-    return render_template('vehicles_list.html', vehicles=vehicles, search=search)
+    pagination = query.order_by(Vehicle.id).paginate(page=page, per_page=per_page, error_out=False)
+    vehicles = pagination.items
+    return render_template('vehicles_list.html', vehicles=vehicles, search=search,
+                           pagination=pagination, per_page=per_page)
 
 
 @app.route('/whats-new')
@@ -612,6 +616,9 @@ def delete_vehicle(id):
 @app.route('/drivers')
 def drivers_list():
     search = request.args.get('search', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
     query = Driver.query
     if search:
         like = f"%{search}%"
@@ -624,10 +631,11 @@ def drivers_list():
             Driver.phone2.ilike(like) |
             Driver.driver_district.ilike(like)
         )
-    # Sort by ID as requested
-    drivers = query.order_by(Driver.id.asc()).all()
+    drivers_pagination = query.order_by(Driver.id.asc()).paginate(page=page, per_page=per_page, error_out=False)
+    drivers = drivers_pagination.items
     today = date.today()
-    return render_template('drivers_list.html', drivers=drivers, search=search, today=today)
+    return render_template('drivers_list.html', drivers=drivers, search=search, today=today,
+                           pagination=drivers_pagination, per_page=per_page)
 
 
 @app.route('/drivers/export')
@@ -825,6 +833,9 @@ def driver_form(id=None):
 @app.route('/employees')
 def employees_list():
     search = request.args.get('search', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
     query = Employee.query
     if search:
         like = f"%{search}%"
@@ -834,8 +845,10 @@ def employees_list():
             Employee.department.ilike(like) |
             Employee.cnic_no.ilike(like)
         )
-    employees = query.order_by(Employee.id.asc()).all()
-    return render_template('employees_list.html', employees=employees, search=search)
+    pagination = query.order_by(Employee.id.asc()).paginate(page=page, per_page=per_page, error_out=False)
+    employees = pagination.items
+    return render_template('employees_list.html', employees=employees, search=search,
+                           pagination=pagination, per_page=per_page)
 
 
 @app.route('/employee/add', methods=['GET', 'POST'])
@@ -1002,6 +1015,9 @@ def delete_driver(id):
 @app.route('/parking/')
 def parking_list():
     search = request.args.get('search', '')
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
     query = ParkingStation.query
     if search:
         query = query.filter(
@@ -1009,9 +1025,10 @@ def parking_list():
             ParkingStation.district.ilike(f'%{search}%') |
             ParkingStation.address_location.ilike(f'%{search}%')
         )
-    # Sort by ID as requested
-    parkings = query.order_by(ParkingStation.id).all()
-    return render_template('parking_list.html', parkings=parkings, search=search)
+    parkings_pagination = query.order_by(ParkingStation.id).paginate(page=page, per_page=per_page, error_out=False)
+    parkings = parkings_pagination.items
+    return render_template('parking_list.html', parkings=parkings, search=search,
+                           pagination=parkings_pagination, per_page=per_page)
 
 
 @app.route('/parking/import', methods=['GET', 'POST'])
@@ -1195,15 +1212,19 @@ def delete_parking(id):
 @app.route('/districts/')
 def districts_list():
     search = request.args.get('search', '')
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
     query = District.query
     if search:
         query = query.filter(
             District.name.ilike(f'%{search}%') |
             District.province.ilike(f'%{search}%')
         )
-    # Sort by ID as requested
-    districts = query.order_by(District.id).all()
-    return render_template('districts_list.html', districts=districts, search=search)
+    districts_pagination = query.order_by(District.id).paginate(page=page, per_page=per_page, error_out=False)
+    districts = districts_pagination.items
+    return render_template('districts_list.html', districts=districts, search=search,
+                           pagination=districts_pagination, per_page=per_page)
 
 
 @app.route('/districts/export')
