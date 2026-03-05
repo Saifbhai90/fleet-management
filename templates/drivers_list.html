@@ -29,7 +29,7 @@
         <div class="input-group input-group-lg shadow-sm">
           <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
       <input type="text" name="search" class="form-control border-start-0"
-                 placeholder="Search by name, CNIC, license, driver ID or phone..."
+                 placeholder="Search by Driver ID, Name, CNIC, CNIC Status, License, License Status, Phone or District..."
                  value="{{ search }}">
           <button class="btn btn-primary" type="submit">
             <i class="bi bi-search me-1"></i>Search
@@ -102,6 +102,7 @@
                   <i class="bi bi-pencil-square"></i>
                 </a>
                 <form action="{{ url_for('delete_driver', id=driver.id) }}" method="POST" style="display:inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-sm btn-danger" title="Delete Driver" onclick="return confirm('Are you sure you want to delete {{ driver.name }}? This action cannot be undone.')">
                     <i class="bi bi-trash"></i>
                   </button>

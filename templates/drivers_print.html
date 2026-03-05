@@ -22,29 +22,31 @@
         <table class="table table-bordered table-sm mb-0">
           <thead class="table-light">
             <tr>
-              <th style="width: 6%">ID</th>
-              <th style="width: 18%">Driver ID</th>
-              <th style="width: 22%">Name</th>
-              <th style="width: 16%">CNIC</th>
-              <th style="width: 14%">Phone</th>
-              <th style="width: 12%">District</th>
-              <th style="width: 12%">Status</th>
+              <th>Driver ID</th>
+              <th>Name</th>
+              <th>CNIC No</th>
+              <th>CNIC Status</th>
+              <th>License No</th>
+              <th>License Status</th>
+              <th>Phone</th>
+              <th>Driver District</th>
             </tr>
           </thead>
           <tbody>
             {% for d in drivers %}
             <tr>
-              <td>{{ d.id }}</td>
               <td>{{ d.driver_id }}</td>
               <td>{{ d.name }}</td>
-              <td>{{ d.cnic_no or '-' }}</td>
-              <td>{{ d.phone1 or '-' }}</td>
+              <td>{{ d.cnic_no|cnic_fmt or '-' }}</td>
+              <td>{{ d.cnic_status or 'N/A' }}</td>
+              <td>{{ d.license_no or '-' }}</td>
+              <td>{{ d.license_status or 'N/A' }}</td>
+              <td>{{ d.phone1|phone_fmt or '-' }}</td>
               <td>{{ d.driver_district or '-' }}</td>
-              <td>{{ d.status or '-' }}</td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="7" class="text-center py-4 text-muted">
+              <td colspan="8" class="text-center py-4 text-muted">
                 No drivers found.
               </td>
             </tr>

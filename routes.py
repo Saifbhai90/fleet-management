@@ -31,7 +31,7 @@ import csv
 from io import StringIO
 from sqlalchemy import func, text, inspect
 from sqlalchemy.exc import OperationalError, IntegrityError
-from utils import generate_csv_response, parse_date, generate_excel_template
+from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone
 import re
 import os
 from werkzeug.utils import secure_filename
@@ -801,12 +801,13 @@ def drivers_list():
     if search:
         like = f"%{search}%"
         query = query.filter(
-            Driver.name.ilike(like) |
             Driver.driver_id.ilike(like) |
+            Driver.name.ilike(like) |
             Driver.cnic_no.ilike(like) |
+            Driver.cnic_status.ilike(like) |
             Driver.license_no.ilike(like) |
+            Driver.license_status.ilike(like) |
             Driver.phone1.ilike(like) |
-            Driver.phone2.ilike(like) |
             Driver.driver_district.ilike(like)
         )
     drivers_pagination = query.order_by(Driver.id.asc()).paginate(page=page, per_page=per_page, error_out=False)
@@ -824,29 +825,32 @@ def drivers_export():
     if search:
         like = f"%{search}%"
         query = query.filter(
-            Driver.name.ilike(like) |
             Driver.driver_id.ilike(like) |
+            Driver.name.ilike(like) |
             Driver.cnic_no.ilike(like) |
+            Driver.cnic_status.ilike(like) |
             Driver.license_no.ilike(like) |
+            Driver.license_status.ilike(like) |
             Driver.phone1.ilike(like) |
-            Driver.phone2.ilike(like) |
             Driver.driver_district.ilike(like)
         )
     drivers = query.order_by(Driver.id.asc()).all()
-    headers = ['Driver ID', 'Name', 'CNIC', 'License', 'Phone', 'District', 'Status']
+    # List/Print jaisi same columns: Driver ID, Name, CNIC No, CNIC Status, License No, License Status, Phone, Driver District
+    headers = ['Driver ID', 'Name', 'CNIC No', 'CNIC Status', 'License No', 'License Status', 'Phone', 'Driver District']
     rows = []
     for d in drivers:
         rows.append([
-            d.driver_id,
-            d.name,
-            d.cnic_no,
-            d.license_no,
-            d.phone1,
-            d.driver_district,
-            d.status
+            d.driver_id or '',
+            d.name or '',
+            format_cnic(d.cnic_no) if d.cnic_no else '-',
+            d.cnic_status or 'N/A',
+            d.license_no or '-',
+            d.license_status or 'N/A',
+            format_phone(d.phone1) if d.phone1 else '-',
+            d.driver_district or '-',
         ])
-    filename = 'drivers.csv' if not search else f'drivers_search_{search}.csv'
-    return generate_csv_response(headers, rows, filename=filename)
+    filename_xlsx = 'drivers.xlsx' if not search else f'drivers_search_{search[:25].replace("/", "-")}.xlsx'
+    return generate_excel_template(headers, rows, required_columns=[], filename=filename_xlsx)
 
 
 @app.route('/drivers/import', methods=['GET', 'POST'])
@@ -915,9 +919,11 @@ def drivers_import():
                 else:
                     did = str(did_raw).strip()
 
-                # Required field checks
+                # Required field checks (license_no: 0 or blank = invalid)
                 for col in required_cols:
                     val = row.get(col)
+                    if col == 'license_no' and val is not None and str(val).strip() == '0':
+                        val = ''  # Excel 0 → treat as missing
                     if pd.isna(val) or not str(val).strip():
                         row_issues.append(f'Field "{col}" is required.')
 
@@ -936,6 +942,8 @@ def drivers_import():
 
                 lic_val = row.get('license_no')
                 lic = str(lic_val).strip() if not pd.isna(lic_val) else ''
+                if lic == '0':
+                    lic = ''  # Excel number 0 = no license
                 if lic:
                     existing_lic = Driver.query.filter(Driver.license_no == lic).first()
                     if existing_lic:
@@ -948,7 +956,7 @@ def drivers_import():
                     status = str(raw_status).strip()
 
                 if row_issues:
-                    identifier = did or cnic or lic
+                    identifier = did or cnic or lic or f'Row {row_num}'
                     for msg in row_issues:
                         import_errors.append({
                             'row': row_num,
@@ -968,6 +976,11 @@ def drivers_import():
                 if not application_date:
                     application_date = _date.today()
 
+                def _expiry_status(expiry_date):
+                    if expiry_date is None:
+                        return None
+                    return "Expired" if expiry_date < _date.today() else "Valid"
+
                 d = Driver(
                     driver_id=did,
                     post=clean_text(row.get('post')),
@@ -985,11 +998,13 @@ def drivers_import():
                     cnic_no=cnic or 'N/A',
                     cnic_issue_date=cnic_issue_date,
                     cnic_expiry_date=cnic_expiry_date,
+                    cnic_status=_expiry_status(cnic_expiry_date),
                     license_no=lic or 'N/A',
                     license_type=clean_text(row.get('license_type')),
                     issue_district=clean_text(row.get('issue_district')),
                     license_issue_date=license_issue_date,
                     license_expiry_date=license_expiry_date,
+                    license_status=_expiry_status(license_expiry_date),
                     bank_name=clean_text(row.get('bank_name')),
                     account_no=clean_text(row.get('account_no')),
                     account_title=clean_text(row.get('account_title')),
@@ -1066,12 +1081,13 @@ def drivers_print():
     if search:
         like = f"%{search}%"
         query = query.filter(
-            Driver.name.ilike(like) |
             Driver.driver_id.ilike(like) |
+            Driver.name.ilike(like) |
             Driver.cnic_no.ilike(like) |
+            Driver.cnic_status.ilike(like) |
             Driver.license_no.ilike(like) |
+            Driver.license_status.ilike(like) |
             Driver.phone1.ilike(like) |
-            Driver.phone2.ilike(like) |
             Driver.driver_district.ilike(like)
         )
     drivers = query.order_by(Driver.id.asc()).all()
@@ -1312,10 +1328,15 @@ def logout():
 def delete_driver(id):
     driver = Driver.query.get_or_404(id)
     try:
+        # Delete related records that have NOT NULL driver_id (else IntegrityError)
+        DriverStatusChange.query.filter_by(driver_id=driver.id).delete()
+        DriverTransfer.query.filter_by(driver_id=driver.id).delete()
+        DriverAttendance.query.filter_by(driver_id=driver.id).delete()
         db.session.delete(driver)
         db.session.commit()
         flash('Driver deleted.', 'success')
     except Exception as e:
+        db.session.rollback()
         flash(f'Error deleting driver: {str(e)}', 'danger')
     return redirect(url_for('drivers_list'))
 

@@ -69,19 +69,92 @@
           </div>
         </div>
       {% endif %}
-      <form method="POST" enctype="multipart/form-data">
+      <form method="POST" enctype="multipart/form-data" id="importForm">
         {{ form.hidden_tag() }}
         <div class="mb-3">
           <label class="form-label fw-semibold">{{ form.file.label.text }}</label>
-          {{ form.file(class="form-control") }}
+          {{ form.file(class="form-control", id="importFile") }}
           <div class="form-text">
             Allowed types: <strong>.xlsx</strong>, <strong>.xls</strong>, or <strong>.csv</strong>.
           </div>
         </div>
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-primary" id="importBtn">
           <i class="bi bi-upload me-1"></i>Import Vehicles
         </button>
       </form>
+    </div>
+  </div>
+</div>
+
+<!-- Upload/Processing progress overlay -->
+<div id="importOverlay" class="import-overlay" style="display: none;">
+  <div class="import-overlay-card">
+    <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
+    <h5 class="mb-2">Uploading file...</h5>
+    <p class="text-muted small mb-2" id="importFileName">—</p>
+    <div class="progress mb-2" style="height: 8px;">
+      <div class="progress-bar" id="importProgressBar" role="progressbar" style="width: 0%;">0%</div>
+    </div>
+    <p class="text-muted small mb-0" id="importStatus">Please wait. Do not refresh.</p>
+  </div>
+</div>
+<style>
+.import-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.import-overlay-card { background: #fff; border-radius: 12px; padding: 2rem; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.2); min-width: 320px; }
+.import-overlay-card .progress-bar { transition: width 0.2s ease; }
+</style>
+<script>
+(function() {
+  var form = document.getElementById('importForm');
+  var overlay = document.getElementById('importOverlay');
+  var progressBar = document.getElementById('importProgressBar');
+  var fileNameEl = document.getElementById('importFileName');
+  var statusEl = document.getElementById('importStatus');
+  var btn = document.getElementById('importBtn');
+  if (!form || !overlay) return;
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var fileInput = document.getElementById('importFile');
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) { form.submit(); return; }
+    var file = fileInput.files[0];
+    fileNameEl.textContent = file.name;
+    progressBar.style.width = '0%';
+    progressBar.textContent = '0%';
+    statusEl.textContent = 'Please wait. Do not refresh.';
+    overlay.style.display = 'flex';
+    btn.disabled = true;
+    var xhr = new XMLHttpRequest();
+    var formData = new FormData(form);
+    xhr.upload.addEventListener('progress', function(ev) {
+      if (ev.lengthComputable) {
+        var pct = Math.round((ev.loaded / ev.total) * 100);
+        progressBar.style.width = pct + '%';
+        progressBar.textContent = pct + '%';
+      }
+    });
+    xhr.upload.addEventListener('load', function() {
+      progressBar.style.width = '100%';
+      progressBar.textContent = '100%';
+      statusEl.textContent = 'Processing your file... Please wait. Do not refresh.';
+    });
+    xhr.addEventListener('load', function() {
+      overlay.style.display = 'none';
+      btn.disabled = false;
+      if (xhr.status >= 200 && xhr.status < 300) {
+        document.open();
+        document.write(xhr.responseText);
+        document.close();
+      } else {
+        window.location.reload();
+      }
+    });
+    xhr.addEventListener('error', function() { overlay.style.display = 'none'; btn.disabled = false; form.submit(); });
+    xhr.open('POST', form.action || '{{ url_for("vehicles_import") }}');
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.send(formData);
+  });
+})();
+</script>
     </div>
   </div>
 </div>
