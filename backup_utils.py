@@ -2,6 +2,7 @@
 """
 Professional-style backup: one ZIP containing database dump and uploads folder.
 Supports SQLite and PostgreSQL. Used for Download, Email, and Save-to-path.
+On Windows, PostgreSQL backup uses Python (psycopg2) when pg_dump is not found.
 """
 import os
 import zipfile
@@ -27,6 +28,60 @@ def get_sqlite_db_path(app):
     return os.path.abspath(path)
 
 
+def _pg_dump_via_python(db_uri, sql_file):
+    """
+    Dump PostgreSQL schema + data to sql_file using psycopg2 (no pg_dump needed).
+    Raises on error.
+    """
+    import psycopg2
+    from urllib.parse import urlparse
+    parsed = urlparse(db_uri)
+    host = parsed.hostname or 'localhost'
+    port = parsed.port or 5432
+    user = parsed.username or 'postgres'
+    password = parsed.password or ''
+    dbname = (parsed.path or '').strip('/') or 'postgres'
+    conn = psycopg2.connect(
+        host=host, port=port, user=user, password=password, dbname=dbname
+    )
+    try:
+        with open(sql_file, 'w', encoding='utf-8') as f:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT tablename FROM pg_tables
+                    WHERE schemaname = 'public'
+                    ORDER BY tablename
+                """)
+                tables = [r[0] for r in cur.fetchall()]
+                for table in tables:
+                    cur.execute(f'SELECT * FROM "{table}"')
+                    rows = cur.fetchall()
+                    cols = [d[0] for d in cur.description]
+                    if not rows:
+                        f.write(f'-- Table "{table}" (empty)\n')
+                        continue
+                    col_list = ','.join(f'"{c}"' for c in cols)
+                    f.write(f'-- Table "{table}"\n')
+                    for row in rows:
+                        vals = []
+                        for v in row:
+                            if v is None:
+                                vals.append('NULL')
+                            elif isinstance(v, bool):
+                                vals.append('TRUE' if v else 'FALSE')
+                            elif isinstance(v, (int, float)):
+                                vals.append(str(v))
+                            elif isinstance(v, datetime):
+                                vals.append("'" + v.isoformat().replace("'", "''") + "'")
+                            else:
+                                s = str(v).replace("\\", "\\\\").replace("'", "''")
+                                vals.append("'" + s + "'")
+                        f.write(f'INSERT INTO "{table}" ({col_list}) VALUES ({",".join(vals)});\n')
+                    f.write('\n')
+    finally:
+        conn.close()
+
+
 def create_backup_zip(app):
     """
     Create a full backup ZIP: database + uploads folder.
@@ -38,7 +93,6 @@ def create_backup_zip(app):
         upload_folder = app.config.get('UPLOAD_FOLDER') or ''
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         zip_basename = f'fleet_backup_{timestamp}.zip'
-        # Use a proper name inside the zip for display; file on disk stays unique
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             if 'sqlite' in db_uri:
                 db_path = get_sqlite_db_path(app)
@@ -47,6 +101,7 @@ def create_backup_zip(app):
                 else:
                     raise FileNotFoundError('SQLite database file not found.')
             else:
+                sql_file = tempfile.mktemp(suffix='.sql')
                 try:
                     from urllib.parse import urlparse
                     parsed = urlparse(db_uri)
@@ -57,7 +112,6 @@ def create_backup_zip(app):
                     dbname = (parsed.path or '').strip('/') or 'postgres'
                 except Exception as e:
                     raise ValueError(f'Invalid DATABASE_URL: {e}')
-                sql_file = tempfile.mktemp(suffix='.sql')
                 env = os.environ.copy()
                 if password:
                     env['PGPASSWORD'] = password
@@ -66,9 +120,16 @@ def create_backup_zip(app):
                     'pg_dump', '-h', host, '-p', str(port), '-U', user,
                     '-d', dbname, '-F', 'p', '-f', sql_file, '--no-owner', '--no-acl'
                 ]
-                r = subprocess.run(cmd, env=env, capture_output=True, text=True)
-                if r.returncode != 0:
-                    raise RuntimeError(f'pg_dump failed: {r.stderr or r.stdout}')
+                try:
+                    r = subprocess.run(cmd, env=env, capture_output=True, text=True)
+                except FileNotFoundError:
+                    r = None
+                if r is None or r.returncode != 0:
+                    # pg_dump not found (e.g. Windows) or failed: use Python dump
+                    _pg_dump_via_python(db_uri, sql_file)
+                else:
+                    # pg_dump wrote sql_file; only need to zip it (no rewrite)
+                    pass
                 zf.write(sql_file, zip_basename.replace('.zip', '_database.sql'))
                 try:
                     os.remove(sql_file)
@@ -94,19 +155,20 @@ def send_backup_email(app, zip_path, to_email):
     """
     Send backup ZIP as email attachment via SMTP.
     Returns (success: bool, message: str).
-    Config: MAIL_SERVER, MAIL_PORT, MAIL_USE_TLS, MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM (optional).
+    Tries port 465 (SSL) first, then 587 (STARTTLS).
     """
     if not to_email or not to_email.strip():
         return False, 'Email address is required.'
     to_email = to_email.strip()
-    server = app.config.get('MAIL_SERVER') or os.environ.get('MAIL_SERVER')
-    port = app.config.get('MAIL_PORT') or os.environ.get('MAIL_PORT', 587)
-    use_tls = app.config.get('MAIL_USE_TLS', True)
-    username = app.config.get('MAIL_USERNAME') or os.environ.get('MAIL_USERNAME')
-    password = app.config.get('MAIL_PASSWORD') or os.environ.get('MAIL_PASSWORD')
-    mail_from = app.config.get('MAIL_FROM') or os.environ.get('MAIL_FROM') or username or 'noreply@fleetmanager.local'
+    server = (app.config.get('MAIL_SERVER') or os.environ.get('MAIL_SERVER') or '').strip()
+    port_str = (app.config.get('MAIL_PORT') or os.environ.get('MAIL_PORT') or '587').strip()
+    port = int(port_str) if port_str.isdigit() else 587
+    use_tls = str(app.config.get('MAIL_USE_TLS', True)).lower() in ('1', 'true', 'yes')
+    username = (app.config.get('MAIL_USERNAME') or os.environ.get('MAIL_USERNAME') or '').strip()
+    password = (app.config.get('MAIL_PASSWORD') or os.environ.get('MAIL_PASSWORD') or '').strip()
+    mail_from = (app.config.get('MAIL_FROM') or os.environ.get('MAIL_FROM') or username or 'noreply@fleetmanager.local').strip()
     if not server or not username or not password:
-        return False, 'Email not configured. Set MAIL_SERVER, MAIL_USERNAME, MAIL_PASSWORD (and optionally MAIL_PORT, MAIL_USE_TLS, MAIL_FROM) in environment or app config.'
+        return False, 'Email not configured. Set MAIL_SERVER, MAIL_USERNAME, MAIL_PASSWORD in .env (local) or Environment (online).'
     try:
         import smtplib
         from email.mime.multipart import MIMEMultipart
@@ -124,12 +186,25 @@ def send_backup_email(app, zip_path, to_email):
         encoders.encode_base64(part)
         part.add_header('Content-Disposition', 'attachment', filename=os.path.basename(zip_path))
         msg.attach(part)
-        with smtplib.SMTP(server, int(port)) as smtp:
-            if use_tls:
-                smtp.starttls()
-            smtp.login(username, password)
-            smtp.sendmail(mail_from, [to_email], msg.as_string())
-        return True, 'Backup sent to ' + to_email
+        # Try 465 (SSL) first; often works better from local. Else 587 (STARTTLS).
+        last_err = None
+        for try_port, use_ssl in [(465, True), (587, False)]:
+            try:
+                if use_ssl:
+                    with smtplib.SMTP_SSL(server, try_port) as smtp:
+                        smtp.login(username, password)
+                        smtp.sendmail(mail_from, [to_email], msg.as_string())
+                else:
+                    with smtplib.SMTP(server, try_port) as smtp:
+                        if use_tls:
+                            smtp.starttls()
+                        smtp.login(username, password)
+                        smtp.sendmail(mail_from, [to_email], msg.as_string())
+                return True, 'Backup sent to ' + to_email
+            except Exception as e:
+                last_err = e
+                continue
+        return False, str(last_err) if last_err else 'Email failed'
     except Exception as e:
         return False, str(e)
 

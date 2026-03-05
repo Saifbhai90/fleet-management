@@ -5,7 +5,9 @@ from flask_wtf.csrf import CSRFProtect
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+# Load .env from app folder (so it works even when run from another directory)
+_app_dir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_app_dir, '.env'))
 
 print("Starting app...")
 app = Flask(__name__)
@@ -33,9 +35,10 @@ app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
 app.config['MAIL_FROM'] = os.environ.get('MAIL_FROM', '')
 # Scheduled backup: time in 24h "HH:MM", email to send to
-app.config['BACKUP_SCHEDULE_ENABLED'] = os.environ.get('BACKUP_SCHEDULE_ENABLED', '').lower() in ('1', 'true', 'yes')
-app.config['BACKUP_SCHEDULE_TIME'] = os.environ.get('BACKUP_SCHEDULE_TIME', '02:00').strip()  # default 2 AM
-app.config['BACKUP_EMAIL_TO'] = os.environ.get('BACKUP_EMAIL_TO', '').strip()
+_app_schedule = (os.environ.get('BACKUP_SCHEDULE_ENABLED') or '').strip().lower()
+app.config['BACKUP_SCHEDULE_ENABLED'] = _app_schedule in ('1', 'true', 'yes')
+app.config['BACKUP_SCHEDULE_TIME'] = (os.environ.get('BACKUP_SCHEDULE_TIME') or '02:00').strip()
+app.config['BACKUP_EMAIL_TO'] = (os.environ.get('BACKUP_EMAIL_TO') or '').strip()
 
 # Enable global CSRF protection so csrf_token() is available in templates
 csrf = CSRFProtect(app)

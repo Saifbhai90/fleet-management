@@ -412,12 +412,37 @@ def whats_new():
 def backup_index():
     """Backup page: download, email, or save to path."""
     backup_path = app.config.get('BACKUP_PATH') or ''
-    mail_configured = bool(app.config.get('MAIL_SERVER') and app.config.get('MAIL_USERNAME') and app.config.get('MAIL_PASSWORD'))
+    mail_configured = bool(
+        app.config.get('MAIL_SERVER') and
+        app.config.get('MAIL_USERNAME') and
+        app.config.get('MAIL_PASSWORD')
+    )
     schedule_enabled = app.config.get('BACKUP_SCHEDULE_ENABLED', False)
     schedule_time = app.config.get('BACKUP_SCHEDULE_TIME') or '02:00'
-    backup_email_to = app.config.get('BACKUP_EMAIL_TO') or ''
-    return render_template('backup.html', backup_path=backup_path, mail_configured=mail_configured,
-                          schedule_enabled=schedule_enabled, schedule_time=schedule_time, backup_email_to=backup_email_to)
+    backup_email_to = (app.config.get('BACKUP_EMAIL_TO') or '').strip()
+    # Missing env (for online: Render Environment mein kya add karna hai)
+    mail_missing = []
+    if not (app.config.get('MAIL_SERVER') or '').strip():
+        mail_missing.append('MAIL_SERVER')
+    if not (app.config.get('MAIL_USERNAME') or '').strip():
+        mail_missing.append('MAIL_USERNAME')
+    if not (app.config.get('MAIL_PASSWORD') or '').strip():
+        mail_missing.append('MAIL_PASSWORD')
+    schedule_missing = []
+    if not schedule_enabled:
+        schedule_missing.append('BACKUP_SCHEDULE_ENABLED=true')
+    if not backup_email_to:
+        schedule_missing.append('BACKUP_EMAIL_TO=your@email.com')
+    return render_template(
+        'backup.html',
+        backup_path=backup_path,
+        mail_configured=mail_configured,
+        schedule_enabled=schedule_enabled,
+        schedule_time=schedule_time,
+        backup_email_to=backup_email_to,
+        mail_missing=mail_missing,
+        schedule_missing=schedule_missing,
+    )
 
 
 @app.route('/backup/download')
