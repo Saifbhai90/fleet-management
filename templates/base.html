@@ -486,6 +486,43 @@
         $(".alert").fadeOut('slow');
     }, 5000);
 
+    // Backend search auto-submit (for forms with class="auto-search-form")
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('form.auto-search-form input[name="search"]').forEach(function (input) {
+            var timer;
+            input.addEventListener('input', function () {
+                clearTimeout(timer);
+                var form = input.form;
+                if (!form) return;
+                timer = setTimeout(function () {
+                    // Only trigger when user stopped typing for a bit
+                    // and either search has at least 2 chars or is fully cleared.
+                    var val = (input.value || '').trim();
+                    if (val.length === 1) return;
+
+                    // reset page to 1 on new search
+                    var pageField = form.querySelector('input[name="page"]');
+                    if (!pageField) {
+                        pageField = document.createElement('input');
+                        pageField.type = 'hidden';
+                        pageField.name = 'page';
+                        form.appendChild(pageField);
+                    }
+                    pageField.value = '1';
+                    form.submit();
+                }, 500); // 0.5s debounce
+            });
+        });
+        // Always keep initial focus on the first search box
+        var firstSearch = document.querySelector('form.auto-search-form input[name=\"search\"]');
+        if (firstSearch) {
+            firstSearch.focus();
+            // Move caret to end of existing text
+            var val = firstSearch.value;
+            firstSearch.setSelectionRange(val.length, val.length);
+        }
+    });
+
     // Initialize Components
     $(document).ready(function() {
         flatpickr(".datepicker", {
