@@ -378,6 +378,12 @@ def vehicles_list():
     return render_template('vehicles_list.html', vehicles=vehicles, search=search)
 
 
+@app.route('/whats-new')
+def whats_new():
+    """Simple 'What's New' page so users can see recent changes."""
+    return render_template('whats_new.html')
+
+
 @app.route('/vehicles/export')
 def vehicles_export():
     """Export vehicles list (with optional search) to CSV."""

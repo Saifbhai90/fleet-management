@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}What's New / Updates{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">
+      <i class="bi bi-stars me-2 text-warning"></i>What's New in Fleet Manager
+    </h2>
+  </div>
+
+  <div class="alert alert-info border-0 shadow-sm mb-4">
+    <i class="bi bi-info-circle me-2"></i>
+    This page shows recent updates in the software so users can quickly see what changed.
+  </div>
+
+  <div class="timeline">
+    <div class="timeline-item mb-4">
+      <h5 class="mb-1">
+        <span class="badge bg-primary me-2">Latest</span>
+        Realtime search + Updates bell + AI reports
+      </h5>
+      <small class="text-muted">Recent updates</small>
+      <ul class="mt-2 mb-0">
+        <li>Navbar notification bell now shows unread count and works across all pages.</li>
+        <li>Realtime search on list pages: Drivers, Vehicles, Projects, Companies, Districts, Parking, Party, Products.</li>
+        <li>AI reports can now show fuel expenses, maintenance expenses, penalties, and attendance summary.</li>
+        <li>New dashboard notification: alerts when many active drivers have no attendance in the last 7 days.</li>
+      </ul>
+    </div>
+
+    <div class="timeline-item mb-4">
+      <h5 class="mb-1">
+        Project & Forms improvements
+      </h5>
+      <ul class="mt-2 mb-0">
+        <li>Project Entry Form date validation fixed and errors are shown clearly.</li>
+        <li>District form now shows a friendly message if a duplicate district name is entered.</li>
+      </ul>
+    </div>
+
+    <div class="timeline-item mb-4">
+      <h5 class="mb-1">
+        Lists & Exports
+      </h5>
+      <ul class="mt-2 mb-0">
+        <li>Drivers, Vehicles, and Projects lists now have CSV export buttons.</li>
+        <li>Export respects current search filters.</li>
+      </ul>
+    </div>
+
+    <p class="text-muted small mt-4">
+      For future updates, admins can edit this page (`whats_new.html`) to add new items in the timeline.
+    </p>
+  </div>
+</div>
+{% endblock %}
+

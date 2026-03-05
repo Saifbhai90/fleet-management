@@ -326,6 +326,13 @@
                 </a>
             </div>
         </div>
+
+        <!-- Help / Updates -->
+        <div class="mt-3">
+            <a href="{{ url_for('whats_new') }}" class="{% if request.endpoint == 'whats_new' %}active-link{% endif %}">
+                <i class="bi bi-megaphone text-warning"></i><span>What's New / Updates</span>
+            </a>
+        </div>
     </div>
 </div>
 
