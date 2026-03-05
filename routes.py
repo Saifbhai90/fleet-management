@@ -7,6 +7,7 @@ from models import (
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
     Party, Product, FuelExpense, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
+    Notification,
 )
 from forms import (
     CompanyForm, ProjectForm, VehicleForm, DriverForm, ParkingForm, DistrictForm,
@@ -96,6 +97,47 @@ def dashboard():
     total_parking = ParkingStation.query.count()
     total_districts = District.query.count()
     recent_projects = Project.query.order_by(Project.created_at.desc()).limit(5).all()
+
+    # Notifications: unread first, recent
+    notifications = Notification.query.filter(Notification.read_at.is_(None)).order_by(Notification.created_at.desc()).limit(20).all()
+    # Optionally seed a few from data (e.g. expiry) - only if none exist
+    if not notifications and total_drivers:
+        from datetime import timedelta
+        today = date.today()
+        end = today + timedelta(days=60)
+        expiring_count = 0
+        for d in Driver.query.filter(Driver.status == 'Active').all():
+            if (d.license_expiry_date and today <= d.license_expiry_date <= end) or (d.cnic_expiry_date and today <= d.cnic_expiry_date <= end):
+                expiring_count += 1
+        if expiring_count > 0:
+            n = Notification(
+                title='Document expiry',
+                message=f'{expiring_count} driver(s) have license or CNIC expiring in the next 60 days.',
+                link=url_for('report_expiry'),
+                link_text='View expiry report',
+                notification_type='warning'
+            )
+            db.session.add(n)
+            db.session.commit()
+            notifications = [n]
+    # Optional: one "parking full" notification if any station is at capacity (only when we have no unread notifications)
+    if not notifications and total_parking:
+        for s in ParkingStation.query.all():
+            if s.capacity and s.capacity > 0:
+                occ = Vehicle.query.filter_by(parking_station_id=s.id).count()
+                if occ >= s.capacity:
+                    n2 = Notification(
+                        title='Parking full',
+                        message=f'"{s.name}" is at full capacity ({occ}/{s.capacity}).',
+                        link=url_for('report_parking_utilization'),
+                        link_text='View parking',
+                        notification_type='danger'
+                    )
+                    db.session.add(n2)
+                    db.session.commit()
+                    notifications = Notification.query.filter(Notification.read_at.is_(None)).order_by(Notification.created_at.desc()).limit(20).all()
+                    break
+
     return render_template('dashboard.html',
                            total_companies=total_companies,
                            total_projects=total_projects,
@@ -103,7 +145,19 @@ def dashboard():
                            total_drivers=total_drivers,
                            total_parking=total_parking,
                            total_districts=total_districts,
-                           recent_projects=recent_projects)
+                           recent_projects=recent_projects,
+                           notifications=notifications)
+
+
+@app.route('/notification/<int:pk>/read', methods=['POST'])
+def notification_mark_read(pk):
+    n = Notification.query.get_or_404(pk)
+    n.read_at = datetime.utcnow()
+    db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'ok': True})
+    next_url = request.args.get('next') or url_for('dashboard')
+    return redirect(next_url)
 
 
 # ────────────────────────────────────────────────
@@ -4115,6 +4169,96 @@ def maintenance_expense_delete(pk):
 @app.route('/reports/')
 def reports_index():
     return render_template('reports_index.html')
+
+
+@app.route('/reports/ai', methods=['GET', 'POST'])
+def report_ai():
+    """AI-style custom report: user describes what they want; we show a temp view. Close = discard."""
+    result_html = None
+    report_title = None
+    if request.method == 'POST':
+        desc = (request.form.get('description') or '').strip().lower()
+        if not desc:
+            flash('Please describe the report you need.', 'warning')
+            return redirect(url_for('report_ai'))
+        if any(w in desc for w in ['driver', 'drivers', 'personnel']):
+            drivers = Driver.query.order_by(Driver.name).all()
+            report_title = 'Drivers List'
+            rows = [{'name': d.name, 'driver_id': d.driver_id, 'cnic': d.cnic_no, 'license': d.license_no, 'phone': d.phone1, 'status': d.status} for d in drivers]
+            result_html = _render_ai_report_table(['Name', 'Driver ID', 'CNIC', 'License', 'Phone', 'Status'], rows)
+        elif any(w in desc for w in ['vehicle', 'vehicles', 'fleet']):
+            vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
+            report_title = 'Vehicles List'
+            rows = [{'v_no': v.vehicle_no, 'model': v.model, 'type': v.vehicle_type, 'phone': v.phone_no} for v in vehicles]
+            result_html = _render_ai_report_table(['Vehicle No', 'Model', 'Type', 'Phone'], rows)
+        elif any(w in desc for w in ['project', 'projects']):
+            projects = Project.query.order_by(Project.name).all()
+            report_title = 'Project Summary'
+            rows = [{'name': p.name, 'vehicles': len(p.vehicles), 'drivers': len(p.drivers), 'status': p.status} for p in projects]
+            result_html = _render_ai_report_table(['Project', 'Vehicles', 'Drivers', 'Status'], rows)
+        elif any(w in desc for w in ['district', 'districts']):
+            districts = District.query.order_by(District.name).all()
+            report_title = 'District Summary'
+            rows = []
+            for d in districts:
+                vc = Vehicle.query.filter_by(district_id=d.id).count()
+                dc = Driver.query.filter_by(district_id=d.id).count()
+                rows.append({'name': d.name, 'vehicles': vc, 'drivers': dc})
+            result_html = _render_ai_report_table(['District', 'Vehicles', 'Drivers'], rows)
+        elif any(w in desc for w in ['expiry', 'license', 'cnic', 'expiring']):
+            from datetime import timedelta
+            today = date.today()
+            end = today + timedelta(days=60)
+            drivers = Driver.query.filter(Driver.status == 'Active').all()
+            expiring = []
+            for d in drivers:
+                if (d.license_expiry_date and today <= d.license_expiry_date <= end) or (d.cnic_expiry_date and today <= d.cnic_expiry_date <= end):
+                    expiring.append({'name': d.name, 'license_expiry': d.license_expiry_date, 'cnic_expiry': d.cnic_expiry_date})
+            report_title = 'License / CNIC Expiry (next 60 days)'
+            rows = [{'name': r['name'], 'license_expiry': str(r['license_expiry']) if r['license_expiry'] else '-', 'cnic_expiry': str(r['cnic_expiry']) if r['cnic_expiry'] else '-'} for r in expiring]
+            result_html = _render_ai_report_table(['Driver', 'License Expiry', 'CNIC Expiry'], rows)
+        elif any(w in desc for w in ['company', 'companies']):
+            companies = Company.query.order_by(Company.name).all()
+            report_title = 'Companies'
+            rows = [{'name': c.name, 'mobile': c.mobile or '-', 'email': c.email or '-'} for c in companies]
+            result_html = _render_ai_report_table(['Company', 'Mobile', 'Email'], rows)
+        elif any(w in desc for w in ['parking', 'utilization', 'station']):
+            stations = ParkingStation.query.order_by(ParkingStation.name).all()
+            report_title = 'Parking Utilization'
+            rows = []
+            for s in stations:
+                occ = Vehicle.query.filter_by(parking_station_id=s.id).count()
+                rows.append({'name': s.name, 'capacity': s.capacity, 'occupied': occ, 'available': s.capacity - occ})
+            result_html = _render_ai_report_table(['Station', 'Capacity', 'Occupied', 'Available'], rows)
+        elif any(w in desc for w in ['product', 'products', 'item']):
+            products = Product.query.order_by(Product.name).all()
+            report_title = 'Products (Master)'
+            rows = [{'name': p.name, 'used_in': p.used_in_forms or '-'} for p in products]
+            result_html = _render_ai_report_table(['Product', 'Used in forms'], rows)
+        elif any(w in desc for w in ['party', 'parties']):
+            parties = Party.query.order_by(Party.name).all()
+            report_title = 'Parties'
+            rows = [{'name': p.name, 'contact': (p.contact or '-')[:40]} for p in parties]
+            result_html = _render_ai_report_table(['Party', 'Contact'], rows)
+        else:
+            report_title = 'Suggested reports'
+            result_html = (
+                '<p class="text-muted">Try: "list of drivers", "vehicles", "project summary", "district summary", '
+                '"license expiry", "companies", "parking utilization", "products", or "parties".</p>'
+            )
+    return render_template('report_ai.html', result_html=result_html, report_title=report_title)
+
+
+def _render_ai_report_table(headers, rows):
+    if not rows:
+        return '<p class="text-muted">No data found.</p>'
+    keys = list(rows[0].keys()) if rows else []
+    h = '<thead class="table-light"><tr>' + ''.join(f'<th>{x}</th>' for x in headers) + '</tr></thead>'
+    body = '<tbody>'
+    for r in rows:
+        body += '<tr>' + ''.join(f'<td>{r.get(k, "")}</td>' for k in keys) + '</tr>'
+    body += '</tbody>'
+    return '<table class="table table-bordered table-sm">' + h + body + '</table>'
 
 
 @app.route('/reports/project-summary')

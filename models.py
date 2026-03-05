@@ -710,3 +710,21 @@ class MaintenanceExpenseAttachment(db.Model):
 
     def __repr__(self):
         return f'<MaintenanceExpenseAttachment {self.file_path}>'
+
+
+# ────────────────────────────────────────────────
+# Notification (dashboard / in-app alerts)
+# ────────────────────────────────────────────────
+class Notification(db.Model):
+    __tablename__ = 'notification'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text)
+    link = db.Column(db.String(500))  # optional URL to open
+    link_text = db.Column(db.String(100))
+    notification_type = db.Column(db.String(50), default='info')  # info, warning, success, danger
+    read_at = db.Column(db.DateTime, nullable=True)  # when marked read
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Notification {self.title}>'

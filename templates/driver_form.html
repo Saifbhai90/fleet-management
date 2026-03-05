@@ -82,14 +82,14 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Phone No 1</label>
-                {{ form.phone1(class="form-control", required=True) }}
+                {{ form.phone1(class="form-control phone-format", required=True) }}
                 {% for error in form.phone1.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label">Phone No 2 (Optional)</label>
-                {{ form.phone2(class="form-control") }}
+                {{ form.phone2(class="form-control phone-format") }}
                 {% for error in form.phone2.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -97,7 +97,7 @@
 
               <div class="col-md-3">
                 <label class="form-label required">Emergency No</label>
-                {{ form.emergency_no(class="form-control", required=True) }}
+                {{ form.emergency_no(class="form-control phone-format", required=True) }}
                 {% for error in form.emergency_no.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}

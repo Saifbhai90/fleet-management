@@ -53,14 +53,14 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 {{ form.mobile.label(class="form-label") }}
-                {{ form.mobile(class="form-control mobile-mask " + ("is-invalid" if form.mobile.errors else "")) }}
+                {{ form.mobile(class="form-control phone-format " + ("is-invalid" if form.mobile.errors else "")) }}
                 {% for error in form.mobile.errors %}
                   <div class="invalid-feedback">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-6 mb-3">
                 {{ form.phone.label(class="form-label") }}
-                {{ form.phone(class="form-control " + ("is-invalid" if form.phone.errors else "")) }}
+                {{ form.phone(class="form-control phone-format " + ("is-invalid" if form.phone.errors else "")) }}
                 {% for error in form.phone.errors %}
                   <div class="invalid-feedback">{{ error }}</div>
                 {% endfor %}

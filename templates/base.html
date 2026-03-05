@@ -335,6 +335,42 @@
     {% block content %}{% endblock %}
 </div>
 
+<!-- Guide Chatbot: App guide (Forms & Reports) -->
+<div id="guideChatbotWrap" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
+    <div id="guideChatPanel" class="card shadow-lg border-0 d-none" style="width: 360px; max-width: 95vw; max-height: 70vh;">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
+            <span><i class="bi bi-chat-dots me-2"></i>App Guide</span>
+            <button type="button" class="btn btn-sm btn-light" id="guideChatClose" aria-label="Close">&times;</button>
+        </div>
+        <div class="card-body p-0 d-flex flex-column" style="min-height: 280px;">
+            <div id="guideChatMessages" class="flex-grow-1 overflow-auto p-3" style="min-height: 200px;">
+                <div class="text-muted small mb-2">
+                    Ask about <strong>Forms</strong> or <strong>Reports</strong>. Examples:
+                </div>
+                <div class="d-flex flex-wrap gap-1 mb-2" id="guideChatChips">
+                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Forms list</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Add driver</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Add vehicle</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Fuel expense</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Reports</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">License expiry</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">AI report</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Notifications</button>
+                </div>
+            </div>
+            <div class="p-2 border-top">
+                <div class="input-group input-group-sm">
+                    <input type="text" id="guideChatInput" class="form-control" placeholder="Type your question..." maxlength="200">
+                    <button class="btn btn-primary" type="button" id="guideChatSend"><i class="bi bi-send"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <button type="button" id="guideChatToggle" class="btn btn-primary btn-lg rounded-circle shadow" title="App Guide" aria-label="Open guide">
+        <i class="bi bi-question-lg"></i>
+    </button>
+</div>
+
 <!-- External JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -403,6 +439,15 @@
             theme: 'bootstrap-5',
             width: '100%'
         });
+
+        // Auto-format Pakistan mobile: 03001112346 -> 0300-1112346 on blur
+        $(document).on("blur", ".phone-format", function() {
+            var el = this;
+            var raw = (el.value || "").replace(/\D/g, "");
+            if (raw.length === 11 && raw.indexOf("03") === 0) {
+                el.value = raw.slice(0, 4) + "-" + raw.slice(4);
+            }
+        });
     });
 
     // Move focus to next field on Enter (within forms)
@@ -449,6 +494,118 @@
             }
         }
     });
+
+    // ─── Guide Chatbot (Forms & Reports Q&A) ───
+    (function() {
+        var panel = document.getElementById("guideChatPanel");
+        var toggle = document.getElementById("guideChatToggle");
+        var closeBtn = document.getElementById("guideChatClose");
+        var messagesEl = document.getElementById("guideChatMessages");
+        var inputEl = document.getElementById("guideChatInput");
+        var sendBtn = document.getElementById("guideChatSend");
+        if (!panel || !toggle) return;
+
+        var guideQA = [
+            { keys: ["form", "forms", "kaise", "add", "create", "banaye"], cat: "forms",
+              text: "<strong>Forms in this app:</strong><br>• Company, District, Project, Vehicle, Driver, Parking<br>• Fuel / Oil / Maintenance Expense<br>• Party, Product Name (Master)<br>• Driver Transfer, Vehicle Transfer, Assign Driver to Vehicle, Assign Vehicle to District/Parking<br>• Penalty, Red Task, Task Reports, Driver Attendance<br><br>Use the sidebar to open the list page, then click <strong>Add</strong> or <strong>Edit</strong>." },
+            { keys: ["driver", "add driver", "driver form", "driver kaise"], cat: "forms",
+              text: "<strong>Add Driver:</strong> Sidebar → Drivers → Add Driver. Fill Driver ID, Name, CNIC, License, Phone (format 0300-1112346), Emergency No, Post, etc. Save." },
+            { keys: ["vehicle", "add vehicle", "vehicle form", "vehicle kaise"], cat: "forms",
+              text: "<strong>Add Vehicle:</strong> Sidebar → Vehicles → Add Vehicle. Enter Vehicle No, Model, Type, Engine/Chassis No, Vehicle Phone. Save." },
+            { keys: ["company", "add company", "company form"], cat: "forms",
+              text: "<strong>Add Company:</strong> Sidebar → Companies (or Dashboard → Add Company). Enter name, address, mobile (0300-1112346), phone, email. Save." },
+            { keys: ["district", "add district", "district form"], cat: "forms",
+              text: "<strong>Add District:</strong> Sidebar → Districts (or Dashboard → Add District). Enter district name and save." },
+            { keys: ["project", "add project", "project form"], cat: "forms",
+              text: "<strong>Add Project:</strong> Sidebar → Projects → Add. Enter name, start date, status (Active/Inactive). Save." },
+            { keys: ["parking", "add parking", "parking station"], cat: "forms",
+              text: "<strong>Add Parking:</strong> Sidebar → Parking → Add. Enter station name and capacity. Save." },
+            { keys: ["fuel", "fuel expense", "petrol", "diesel"], cat: "forms",
+              text: "<strong>Fuel Expense:</strong> Sidebar → Expenses → Fuel Expense. Select District, Project, Vehicle, Date, Meter Reading, Product, Qty, Price. Amount is auto. You can add multiple lines." },
+            { keys: ["oil", "oil expense", "oil change"], cat: "forms",
+              text: "<strong>Oil Expense:</strong> Sidebar → Expenses → Oil. Select District, Project, Vehicle, Date, Card Swipe Date, meter readings. Add product lines with Payment Type (Card/Credit/Cash/In Hand Stock), Purchase Qty, Used Qty, Price. Amount and Balance are calculated." },
+            { keys: ["maintenance", "maintenance expense", "repair"], cat: "forms",
+              text: "<strong>Maintenance:</strong> Sidebar → Expenses → Maintenance. District, Project, Vehicle, Date, Meter Reading. Add products with Qty, Price (Amount auto). Remarks and photos allowed." },
+            { keys: ["transfer", "driver transfer", "vehicle transfer"], cat: "forms",
+              text: "<strong>Transfers:</strong> Sidebar has Driver Transfer and Vehicle Transfer. Use these to move a driver or vehicle from one project/district to another. Fill date, from/to location, and save." },
+            { keys: ["assign driver", "assign vehicle", "driver assign", "vehicle assign"], cat: "forms",
+              text: "<strong>Assign:</strong> Sidebar → Assign Driver to Vehicle, or Assign Vehicle to District/Parking. Select project, district, vehicle/driver and save the assignment." },
+            { keys: ["penalty", "penalty record"], cat: "forms",
+              text: "<strong>Penalty:</strong> Sidebar → Penalty Record. Add penalty for a driver with date, amount, reason. List and filter from the same section." },
+            { keys: ["red task", "red task form"], cat: "forms",
+              text: "<strong>Red Task:</strong> Sidebar → Red Task. Add and list red tasks linked to project/driver/vehicle as per your workflow." },
+            { keys: ["task report", "task report upload", "logbook"], cat: "forms",
+              text: "<strong>Task Reports:</strong> Sidebar → Task Reports. List, add new, or upload emergency/mileage reports. Use filters by date and project." },
+            { keys: ["attendance", "driver attendance", "mark attendance"], cat: "forms",
+              text: "<strong>Driver Attendance:</strong> Sidebar → Driver Attendance. Mark or view daily attendance (check-in/check-out) for drivers." },
+            { keys: ["product", "product name", "master product"], cat: "forms",
+              text: "<strong>Product Name (Master):</strong> Sidebar → Master → Products Name. Add products used in Fuel, Oil, or Maintenance. You can select in which form(s) each product is used." },
+            { keys: ["party", "party form"], cat: "forms",
+              text: "<strong>Party:</strong> Sidebar → Party. Add and list parties (e.g. for fuel or other expenses)." },
+            { keys: ["report", "reports", "report kya", "kaun si", "reports section"], cat: "reports",
+              text: "<strong>Available Reports:</strong> Company Profile, Project Summary, District Summary, Vehicle Summary, Vehicle Profile, License/CNIC Expiry, Parking Utilization, Driver Attendance. Plus <strong>Create report with AI</strong> for custom temp reports. Sidebar → Reports." },
+            { keys: ["expiry", "license expiry", "cnic expiry", "document expiry"], cat: "reports",
+              text: "<strong>License/CNIC Expiry:</strong> Sidebar → Reports → License / CNIC Expiry. Shows drivers with documents expiring in the selected number of days." },
+            { keys: ["attendance report", "attendance summary"], cat: "reports",
+              text: "<strong>Attendance Report:</strong> Sidebar → Reports → Attendance Report. Monthly driver attendance summary. Filter by date range." },
+            { keys: ["custom report", "apni report", "ai report", "khud report", "temp report"], cat: "reports",
+              text: "<strong>Custom report:</strong> Go to Reports → <strong>Create report with AI</strong>. Describe what you need (e.g. drivers, vehicles, projects, expiry). A temporary report opens; close it when done—nothing is saved." },
+            { keys: ["dashboard", "home", "main page"], cat: "general",
+              text: "<strong>Dashboard:</strong> Shows counts (Companies, Projects, Districts, Vehicles, Parking, Drivers) and <strong>Notifications</strong> (e.g. document expiry). Use the cards to jump to each section." },
+            { keys: ["notification", "notifications", "alert", "bell"], cat: "general",
+              text: "<strong>Notifications:</strong> Shown on the Dashboard. They can include document expiry reminders or other alerts. Click <strong>View</strong> to open the linked report, or ✓ to mark as read." },
+            { keys: ["mobile", "phone", "format", "0300", "number format"], cat: "forms",
+              text: "<strong>Mobile format:</strong> In Driver, Company, and Vehicle forms, enter phone as 03001112346—when you leave the field it will auto-format to 0300-1112346." },
+            { keys: ["hello", "hi", "help", "start", "hey"], cat: "greet",
+              text: "Hi! I'm the app guide. Ask about <strong>Forms</strong> (e.g. how to add driver, vehicle, fuel, company) or <strong>Reports</strong> (what reports exist, expiry, attendance, AI report)." },
+            { keys: ["thank", "thanks", "bye"], cat: "greet",
+              text: "You're welcome! Ask anytime if you need help with forms or reports." }
+        ];
+
+        function getReply(msg) {
+            if (!msg || !msg.trim()) return "Please type a short question about Forms or Reports.";
+            var m = msg.toLowerCase().trim();
+            for (var i = 0; i < guideQA.length; i++) {
+                for (var j = 0; j < guideQA[i].keys.length; j++) {
+                    if (m.indexOf(guideQA[i].keys[j]) !== -1) return guideQA[i].text;
+                }
+            }
+            return "I can guide you on <strong>Forms</strong> (Company, Driver, Vehicle, Fuel, Oil, Maintenance, etc.) and <strong>Reports</strong> (Project Summary, Expiry, Attendance, etc.). Try: \"How to add driver?\" or \"What reports are there?\"";
+        }
+
+        function addMsg(html, isUser) {
+            var div = document.createElement("div");
+            div.className = "mb-2 " + (isUser ? "text-end" : "");
+            var bubble = document.createElement("div");
+            bubble.className = "d-inline-block p-2 rounded " + (isUser ? "bg-primary text-white" : "bg-light");
+            bubble.style.maxWidth = "90%";
+            bubble.innerHTML = isUser ? ("You: " + html) : html;
+            div.appendChild(bubble);
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function send() {
+            var val = (inputEl && inputEl.value) ? inputEl.value.trim() : "";
+            if (!val) return;
+            addMsg(val.replace(/</g, "&lt;"), true);
+            if (inputEl) inputEl.value = "";
+            addMsg(getReply(val), false);
+        }
+
+        toggle.addEventListener("click", function() {
+            panel.classList.toggle("d-none");
+            if (!panel.classList.contains("d-none") && inputEl) inputEl.focus();
+        });
+        if (closeBtn) closeBtn.addEventListener("click", function() { panel.classList.add("d-none"); });
+        if (sendBtn) sendBtn.addEventListener("click", send);
+        if (inputEl) inputEl.addEventListener("keydown", function(e) { if (e.key === "Enter") send(); });
+        $(document).on("click", ".guide-chip", function() {
+            var t = $(this).text().trim();
+            if (inputEl) inputEl.value = t;
+            send();
+        });
+    })();
 </script>
 
 </body>
