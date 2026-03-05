@@ -28,9 +28,14 @@
         {{ form.hidden_tag() }}
 
         <div class="form-panel">
-          <div class="panel-header d-flex justify-content-between align-items-center">
+          <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
             <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION</span>
-            <span class="badge bg-light text-dark">Fields with * are Mandatory</span>
+            <div class="d-flex align-items-center gap-2">
+              <a href="{{ url_for('drivers_import') }}" class="btn btn-light btn-sm">
+                <i class="bi bi-upload me-1"></i>Import from Excel
+              </a>
+              <span class="badge bg-light text-dark">Fields with * are Mandatory</span>
+            </div>
           </div>
 
           <!-- Personal, Contact & Academic Details -->
@@ -285,7 +290,10 @@
           </div>
 
           <!-- Action Buttons -->
-          <div class="panel-section bg-light d-flex justify-content-end gap-3">
+          <div class="panel-section bg-light d-flex flex-wrap justify-content-end gap-3">
+            <a href="{{ url_for('drivers_import') }}" class="btn btn-outline-secondary px-5 fw-bold">
+              <i class="bi bi-upload me-2"></i>Import from Excel
+            </a>
             <button type="button" class="btn btn-outline-secondary px-5 fw-bold" onclick="resetAndClear()">RESET FORM</button>
             <button type="submit" class="btn btn-primary btn-lg px-5 fw-bold text-uppercase">SAVE DRIVER DATA</button>
           </div>

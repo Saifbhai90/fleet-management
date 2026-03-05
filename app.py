@@ -7,6 +7,7 @@ import os
 
 load_dotenv()
 
+print("Starting app...")
 app = Flask(__name__)
 
 # Secret key / DB config (env first, fallback to current defaults)
@@ -23,10 +24,24 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload
 
+# Backup: optional path to save backups; email via env MAIL_*
+app.config['BACKUP_PATH'] = os.environ.get('BACKUP_PATH', '')  # empty = no save-to-path
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', '')
+app.config['MAIL_PORT'] = os.environ.get('MAIL_PORT', '587')
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'true').lower() in ('1', 'true', 'yes')
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
+app.config['MAIL_FROM'] = os.environ.get('MAIL_FROM', '')
+# Scheduled backup: time in 24h "HH:MM", email to send to
+app.config['BACKUP_SCHEDULE_ENABLED'] = os.environ.get('BACKUP_SCHEDULE_ENABLED', '').lower() in ('1', 'true', 'yes')
+app.config['BACKUP_SCHEDULE_TIME'] = os.environ.get('BACKUP_SCHEDULE_TIME', '02:00').strip()  # default 2 AM
+app.config['BACKUP_EMAIL_TO'] = os.environ.get('BACKUP_EMAIL_TO', '').strip()
+
 # Enable global CSRF protection so csrf_token() is available in templates
 csrf = CSRFProtect(app)
 
 # Initialize SQLAlchemy
+print("Connecting to database...")
 db.init_app(app)
 Migrate(app, db)
 
@@ -65,11 +80,36 @@ def inject_all_districts():
 
 # Create all tables if not exist (backward compatibility; new changes use migrations)
 with app.app_context():
+    print("Creating tables if needed...")
     db.create_all()
+    print("Database ready.")
 
 # Import routes after app & db are ready
 from routes import *  # noqa: E402,F401
 
+# Start backup scheduler if enabled
+_backup_scheduler = None
+if app.config.get('BACKUP_SCHEDULE_ENABLED'):
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from backup_utils import run_scheduled_backup
+        time_str = (app.config.get('BACKUP_SCHEDULE_TIME') or '02:00').strip()
+        parts = time_str.split(':')
+        hour = int(parts[0]) if len(parts) > 0 and parts[0].isdigit() else 2
+        minute = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+        _backup_scheduler = BackgroundScheduler()
+        _backup_scheduler.add_job(
+            lambda: run_scheduled_backup(app),
+            'cron', hour=hour, minute=minute, id='fleet_backup'
+        )
+        _backup_scheduler.start()
+    except Exception:
+        pass
+
 
 if __name__ == '__main__':
+    print("\n" + "="*50)
+    print("Server starting at: http://127.0.0.1:5000")
+    print("Browser mein ye URL open karein. Band karne ke liye Ctrl+C")
+    print("="*50 + "\n")
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session
+from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session, send_file
 from app import app, db
 from models import (
     Company, Project, Vehicle, Driver, ParkingStation, District, EmployeePost, Employee,
@@ -405,6 +405,107 @@ def whats_new():
     return render_template('whats_new.html')
 
 
+# ────────────────────────────────────────────────
+# Backup System (Download, Email, Save to path)
+# ────────────────────────────────────────────────
+@app.route('/backup')
+def backup_index():
+    """Backup page: download, email, or save to path."""
+    backup_path = app.config.get('BACKUP_PATH') or ''
+    mail_configured = bool(app.config.get('MAIL_SERVER') and app.config.get('MAIL_USERNAME') and app.config.get('MAIL_PASSWORD'))
+    schedule_enabled = app.config.get('BACKUP_SCHEDULE_ENABLED', False)
+    schedule_time = app.config.get('BACKUP_SCHEDULE_TIME') or '02:00'
+    backup_email_to = app.config.get('BACKUP_EMAIL_TO') or ''
+    return render_template('backup.html', backup_path=backup_path, mail_configured=mail_configured,
+                          schedule_enabled=schedule_enabled, schedule_time=schedule_time, backup_email_to=backup_email_to)
+
+
+@app.route('/backup/download')
+def backup_download():
+    """Create backup ZIP and send as download (local computer)."""
+    from backup_utils import create_backup_zip
+    zip_path, err = create_backup_zip(app)
+    if err:
+        flash(f'Backup failed: {err}', 'danger')
+        return redirect(url_for('backup_index'))
+    try:
+        filename = os.path.basename(zip_path)
+        # Use a friendly download name
+        friendly = f'fleet_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip'
+        return send_file(zip_path, as_attachment=True, download_name=friendly)
+    finally:
+        try:
+            if zip_path and os.path.exists(zip_path):
+                os.remove(zip_path)
+        except Exception:
+            pass
+
+
+@app.route('/backup/email', methods=['POST'])
+def backup_email():
+    """Create backup and send to given email."""
+    from backup_utils import create_backup_zip, send_backup_email
+    to_email = (request.form.get('email') or '').strip()
+    if not to_email:
+        flash('Please enter an email address.', 'warning')
+        return redirect(url_for('backup_index'))
+    zip_path, err = create_backup_zip(app)
+    if err:
+        flash(f'Backup failed: {err}', 'danger')
+        return redirect(url_for('backup_index'))
+    try:
+        ok, msg = send_backup_email(app, zip_path, to_email)
+        if ok:
+            flash(msg, 'success')
+        else:
+            flash(f'Email failed: {msg}', 'danger')
+    finally:
+        try:
+            if zip_path and os.path.exists(zip_path):
+                os.remove(zip_path)
+        except Exception:
+            pass
+    return redirect(url_for('backup_index'))
+
+
+@app.route('/backup/save', methods=['POST'])
+def backup_save():
+    """Create backup and save to user-selected path (local/server folder)."""
+    from backup_utils import create_backup_zip
+    import shutil
+    path = (request.form.get('path') or '').strip()
+    if not path:
+        flash('Please enter a folder path.', 'warning')
+        return redirect(url_for('backup_index'))
+    path = os.path.abspath(path)
+    app_root = os.path.abspath(os.path.dirname(__file__))
+    if path == app_root or path.startswith(app_root + os.sep):
+        flash('Cannot save backup inside the application folder.', 'danger')
+        return redirect(url_for('backup_index'))
+    if not os.path.isdir(path):
+        try:
+            os.makedirs(path, exist_ok=True)
+        except Exception as e:
+            flash(f'Could not create folder: {e}', 'danger')
+            return redirect(url_for('backup_index'))
+    zip_path, err = create_backup_zip(app)
+    if err:
+        flash(f'Backup failed: {err}', 'danger')
+        return redirect(url_for('backup_index'))
+    try:
+        friendly = f'fleet_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip'
+        dest = os.path.join(path, friendly)
+        shutil.copy2(zip_path, dest)
+        flash(f'Backup saved to: {dest}', 'success')
+    finally:
+        try:
+            if zip_path and os.path.exists(zip_path):
+                os.remove(zip_path)
+        except Exception:
+            pass
+    return redirect(url_for('backup_index'))
+
+
 @app.route('/vehicles/export')
 def vehicles_export():
     """Export vehicles list (with optional search) to CSV."""
@@ -764,6 +865,17 @@ def drivers_import():
                 v = str(value or '').strip()
                 return v or 'N/A'
 
+            # Excel se date ko safe parse karne ke liye helper
+            def parse_import_date(value):
+                if pd.isna(value) or value is None or str(value).strip() == '':
+                    return None
+                if isinstance(value, str):
+                    return parse_date(value)
+                try:
+                    return pd.to_datetime(value).date()
+                except Exception:
+                    return None
+
             import_errors = []
             drivers_to_add = []
 
@@ -820,14 +932,45 @@ def drivers_import():
                         })
                     continue
 
+                application_date = parse_import_date(row.get('application_date'))
+                dob = parse_import_date(row.get('dob'))
+                cnic_issue_date = parse_import_date(row.get('cnic_issue_date'))
+                cnic_expiry_date = parse_import_date(row.get('cnic_expiry_date'))
+                license_issue_date = parse_import_date(row.get('license_issue_date'))
+                license_expiry_date = parse_import_date(row.get('license_expiry_date'))
+
+                from datetime import date as _date
+                if not application_date:
+                    application_date = _date.today()
+
                 d = Driver(
                     driver_id=did,
+                    post=clean_text(row.get('post')),
+                    application_date=application_date,
                     name=clean_text(row.get('name')),
                     father_name=clean_text(row.get('father_name')),
+                    dob=dob,
                     phone1=clean_text(row.get('phone1')),
+                    phone2=clean_text(row.get('phone2')),
+                    emergency_no=clean_text(row.get('emergency_no')),
+                    address=clean_text(row.get('address')),
+                    education=clean_text(row.get('education')),
+                    blood_group=clean_text(row.get('blood_group')),
                     driver_district=clean_text(row.get('driver_district')),
                     cnic_no=cnic or 'N/A',
+                    cnic_issue_date=cnic_issue_date,
+                    cnic_expiry_date=cnic_expiry_date,
                     license_no=lic or 'N/A',
+                    license_type=clean_text(row.get('license_type')),
+                    issue_district=clean_text(row.get('issue_district')),
+                    license_issue_date=license_issue_date,
+                    license_expiry_date=license_expiry_date,
+                    bank_name=clean_text(row.get('bank_name')),
+                    account_no=clean_text(row.get('account_no')),
+                    account_title=clean_text(row.get('account_title')),
+                    shirt_size=clean_text(row.get('shirt_size')),
+                    trouser_size=clean_text(row.get('trouser_size')),
+                    jacket_size=clean_text(row.get('jacket_size')),
                     status=status,
                 )
                 drivers_to_add.append(d)
@@ -855,10 +998,36 @@ def drivers_import_template():
     Downloadable template for driver import (open in Excel and fill).
     Required/Optional fields ka detail text import page par diya gaya hai.
     """
-    headers = ['driver_id', 'name', 'father_name', 'phone1', 'driver_district', 'cnic_no', 'license_no', 'status']
+    headers = [
+        'driver_id', 'post', 'application_date', 'name', 'father_name', 'dob',
+        'phone1', 'phone2', 'emergency_no', 'address',
+        'education', 'blood_group', 'driver_district',
+        'cnic_no', 'cnic_issue_date', 'cnic_expiry_date',
+        'license_no', 'license_type', 'issue_district',
+        'license_issue_date', 'license_expiry_date',
+        'bank_name', 'account_no', 'account_title',
+        'shirt_size', 'trouser_size', 'jacket_size',
+        'status'
+    ]
     rows = [
-        ['DRV-2024-1001', 'Ali Ahmad', 'Ahmad Khan', '0300-1112233', 'Lahore', '32304-1111111-5', 'LTV-12345', 'Active'],
-        ['DRV-2024-1002', 'Bilal Hussain', 'Hussain Raza', '0300-2223344', 'Lahore', '32304-2222222-5', 'HTV-56789', 'Active'],
+        ['DRV-2024-1001', 'Driver', '01-01-2024', 'Ali Ahmad', 'Ahmad Khan', '01-01-1990',
+         '0300-1112233', '0300-2223344', '0300-3334455', 'House #1, Street #1, Lahore',
+         'Matric', 'O+', 'Lahore',
+         '32304-1111111-5', '01-01-2015', '01-01-2030',
+         'LTV-12345', 'LTV', 'Lahore',
+         '01-01-2015', '01-01-2030',
+         'XYZ Bank', '1234567890', 'Ali Ahmad',
+         'M', '32', 'M',
+         'Active'],
+        ['DRV-2024-1002', 'Senior Driver', '05-02-2024', 'Bilal Hussain', 'Hussain Raza', '05-05-1988',
+         '0300-2223344', '0300-4445566', '0300-5556677', 'House #2, Street #5, Lahore',
+         'Intermediate', 'A+', 'Lahore',
+         '32304-2222222-5', '05-05-2014', '05-05-2029',
+         'HTV-56789', 'HTV', 'Lahore',
+         '05-05-2014', '05-05-2029',
+         'ABC Bank', '9876543210', 'Bilal Hussain',
+         'L', '34', 'L',
+         'Active'],
     ]
     required_cols = ['driver_id', 'name', 'phone1', 'driver_district', 'cnic_no', 'license_no']
     return generate_excel_template(headers, rows, required_columns=required_cols, filename='drivers_import_template.xlsx')

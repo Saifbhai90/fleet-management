@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Backup{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0 fw-bold"><i class="bi bi-cloud-arrow-down me-2 text-primary"></i>Backup System</h2>
+  </div>
+
+  <div class="alert alert-info border-0 shadow-sm mb-4">
+    <i class="bi bi-info-circle me-2"></i>
+    Full backup includes <strong>database</strong> and <strong>uploads folder</strong> in one ZIP file.
+    Use any option below to keep a copy on your computer, in email, or on the server.
+  </div>
+
+  <div class="row g-4">
+    <!-- 1) Download to local computer -->
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 shadow-sm border-0">
+        <div class="card-body text-center">
+          <div class="text-primary mb-3"><i class="bi bi-download display-4"></i></div>
+          <h5 class="card-title">Download to Computer</h5>
+          <p class="card-text text-muted small">Save backup file on your PC/laptop.</p>
+          <a href="{{ url_for('backup_download') }}" class="btn btn-primary">
+            <i class="bi bi-download me-1"></i>Download Backup
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2) Send to Email -->
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 shadow-sm border-0">
+        <div class="card-body">
+          <div class="text-success mb-3 text-center"><i class="bi bi-envelope display-4"></i></div>
+          <h5 class="card-title text-center">Send to Email</h5>
+          <p class="card-text text-muted small text-center">Receive backup as attachment on your email.</p>
+          {% if mail_configured %}
+          <form method="POST" action="{{ url_for('backup_email') }}" class="mt-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-2">
+              <input type="email" name="email" class="form-control" placeholder="your@email.com" required>
+            </div>
+            <button type="submit" class="btn btn-success w-100">
+              <i class="bi bi-send me-1"></i>Send Backup by Email
+            </button>
+          </form>
+          {% else %}
+          <p class="small text-warning mb-0">Set <code>MAIL_SERVER</code>, <code>MAIL_USERNAME</code>, <code>MAIL_PASSWORD</code> in environment to enable.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- 3) Save to path (user selects at backup time) -->
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 shadow-sm border-0">
+        <div class="card-body">
+          <div class="text-secondary mb-3 text-center"><i class="bi bi-folder-symlink display-4"></i></div>
+          <h5 class="card-title text-center">Save to Path</h5>
+          <p class="card-text text-muted small text-center">Backup ko kisi bhi folder mein save karein (path abhi enter karein).</p>
+          <form method="POST" action="{{ url_for('backup_save') }}" class="mt-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-2">
+              <input type="text" name="path" class="form-control" placeholder="{% if backup_path %}{{ backup_path }}{% else %}D:\backups ya /path/to/folder{% endif %}" required>
+            </div>
+            <button type="submit" class="btn btn-outline-secondary w-100">
+              <i class="bi bi-save me-1"></i>Save Backup to Path
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scheduled backup (sirf email) -->
+  <div class="card border-0 shadow-sm mt-4">
+    <div class="card-body">
+      <h5 class="card-title"><i class="bi bi-clock-history me-2 text-primary"></i>Scheduled Backup</h5>
+      <p class="text-muted small mb-2">Automatic daily backup <strong>sirf email par</strong> bheja jata hai (<code>BACKUP_EMAIL_TO</code>).</p>
+      {% if schedule_enabled %}
+      <p class="mb-1"><span class="badge bg-success">Enabled</span> Daily at <strong>{{ schedule_time }}</strong></p>
+      {% if backup_email_to %}
+      <p class="small text-muted mb-0">Email jayega: <code>{{ backup_email_to }}</code></p>
+      {% endif %}
+      {% else %}
+      <p class="mb-0"><span class="badge bg-secondary">Disabled</span> <code>BACKUP_SCHEDULE_ENABLED=true</code>, <code>BACKUP_SCHEDULE_TIME=02:00</code>, <code>BACKUP_EMAIL_TO=your@email.com</code> .env mein set karein.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Email backup – kya chahiye -->
+  <div class="card border-0 shadow-sm mt-4">
+    <div class="card-body">
+      <h6 class="fw-bold mb-2"><i class="bi bi-envelope-check me-2"></i>Email backup ke liye kya chahiye?</h6>
+      <p class="small text-muted mb-2">Backup email bhejne ke liye ye environment variables set karein:</p>
+      <ul class="small mb-2">
+        <li><code>MAIL_SERVER</code> – SMTP server (e.g. <code>smtp.gmail.com</code>)</li>
+        <li><code>MAIL_PORT</code> – Port (587 TLS ke liye, 465 SSL)</li>
+        <li><code>MAIL_USERNAME</code> – Your email / SMTP user</li>
+        <li><code>MAIL_PASSWORD</code> – Password ya <strong>App Password</strong> (Gmail ke liye Google Account → Security → App passwords use karein)</li>
+        <li><code>MAIL_FROM</code> (optional) – Sender email agar alag chahiye</li>
+        <li><code>MAIL_USE_TLS</code> (optional) – <code>true</code> for port 587</li>
+      </ul>
+      <p class="small mb-0"><strong>Auto (scheduled) email:</strong> <code>BACKUP_EMAIL_TO=receive@email.com</code> set karein; scheduled backup us email par backup bhej dega.</p>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mt-4">
+    <div class="card-body">
+      <h6 class="fw-bold mb-2"><i class="bi bi-gear me-2"></i>Configuration</h6>
+      <ul class="small text-muted mb-0">
+        <li><strong>Download</strong> – koi config nahi chahiye.</li>
+        <li><strong>Email</strong> – .env mein <code>MAIL_SERVER</code>, <code>MAIL_PORT</code>, <code>MAIL_USERNAME</code>, <code>MAIL_PASSWORD</code>, <code>MAIL_FROM</code>, <code>MAIL_USE_TLS</code> set karein.</li>
+        <li><strong>Save to path</strong> – backup lete waqt path khud type karein (optional: default path ke liye <code>BACKUP_PATH</code> .env mein set karein).</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
