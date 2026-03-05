@@ -138,6 +138,32 @@ def dashboard():
                     notifications = Notification.query.filter(Notification.read_at.is_(None)).order_by(Notification.created_at.desc()).limit(20).all()
                     break
 
+    # Optional: one "attendance missing" notification if many active drivers have no recent attendance (only when we have no unread notifications)
+    if not notifications and total_drivers:
+        from datetime import timedelta
+        today = date.today()
+        start = today - timedelta(days=7)
+        active_drivers = Driver.query.filter(Driver.status == 'Active').all()
+        missing_count = 0
+        for d in active_drivers:
+            has_recent = DriverAttendance.query.filter(
+                DriverAttendance.driver_id == d.id,
+                DriverAttendance.attendance_date >= start
+            ).first()
+            if not has_recent:
+                missing_count += 1
+        if missing_count > 0:
+            n3 = Notification(
+                title='Attendance missing',
+                message=f'{missing_count} active driver(s) have no attendance in the last 7 days.',
+                link=url_for('driver_attendance_list'),
+                link_text='View attendance',
+                notification_type='info'
+            )
+            db.session.add(n3)
+            db.session.commit()
+            notifications = Notification.query.filter(Notification.read_at.is_(None)).order_by(Notification.created_at.desc()).limit(20).all()
+
     return render_template('dashboard.html',
                            total_companies=total_companies,
                            total_projects=total_projects,
@@ -214,12 +240,33 @@ def delete_company(id):
 # ────────────────────────────────────────────────
 @app.route('/projects/')
 def projects_list():
-    search = request.args.get('search', '')
+    search = request.args.get('search', '').strip()
     query = Project.query
     if search:
         query = query.filter(Project.name.ilike(f'%{search}%'))
     projects = query.order_by(Project.name).all()
     return render_template('projects_list.html', projects=projects, search=search)
+
+
+@app.route('/projects/export')
+def projects_export():
+    """Export projects list (with optional search) to CSV."""
+    search = request.args.get('search', '').strip()
+    query = Project.query
+    if search:
+        query = query.filter(Project.name.ilike(f'%{search}%'))
+    projects = query.order_by(Project.name).all()
+    headers = ['ID', 'Project Name', 'Start Date', 'Status']
+    rows = []
+    for p in projects:
+        rows.append([
+            p.id,
+            p.name,
+            p.start_date.strftime('%Y-%m-%d') if getattr(p, 'start_date', None) else '',
+            p.status
+        ])
+    filename = 'projects.csv' if not search else f'projects_search_{search}.csv'
+    return generate_csv_response(headers, rows, filename=filename)
 
 
 @app.route('/project/<int:id>')
@@ -318,16 +365,46 @@ def toggle_project_status(id):
 # ────────────────────────────────────────────────
 @app.route('/vehicles/')
 def vehicles_list():
-    search = request.args.get('search', '')
+    search = request.args.get('search', '').strip()
     query = Vehicle.query
     if search:
+        like = f'%{search}%'
         query = query.filter(
-            Vehicle.vehicle_no.ilike(f'%{search}%') |
-            Vehicle.model.ilike(f'%{search}%') |
-            Vehicle.vehicle_type.ilike(f'%{search}%')
+            Vehicle.vehicle_no.ilike(like) |
+            Vehicle.model.ilike(like) |
+            Vehicle.vehicle_type.ilike(like)
         )
     vehicles = query.order_by(Vehicle.vehicle_no).all()
     return render_template('vehicles_list.html', vehicles=vehicles, search=search)
+
+
+@app.route('/vehicles/export')
+def vehicles_export():
+    """Export vehicles list (with optional search) to CSV."""
+    search = request.args.get('search', '').strip()
+    query = Vehicle.query
+    if search:
+        like = f'%{search}%'
+        query = query.filter(
+            Vehicle.vehicle_no.ilike(like) |
+            Vehicle.model.ilike(like) |
+            Vehicle.vehicle_type.ilike(like)
+        )
+    vehicles = query.order_by(Vehicle.vehicle_no).all()
+    headers = ['ID', 'Vehicle No', 'Model', 'Type', 'Driver Capacity', 'Phone', 'Active Date']
+    rows = []
+    for v in vehicles:
+        rows.append([
+            v.id,
+            v.vehicle_no,
+            v.model,
+            v.vehicle_type,
+            getattr(v, 'driver_capacity', None),
+            v.phone_no,
+            v.active_date.strftime('%Y-%m-%d') if getattr(v, 'active_date', None) else ''
+        ])
+    filename = 'vehicles.csv' if not search else f'vehicles_search_{search}.csv'
+    return generate_csv_response(headers, rows, filename=filename)
 
 
 @app.route('/vehicle/add', methods=['GET', 'POST'])
@@ -384,19 +461,52 @@ def drivers_list():
     search = request.args.get('search', '').strip()
     query = Driver.query
     if search:
-        search = f"%{search}%"
+        like = f"%{search}%"
         query = query.filter(
-            Driver.name.ilike(search) |
-            Driver.driver_id.ilike(search) |
-            Driver.cnic_no.ilike(search) |
-            Driver.license_no.ilike(search) |
-            Driver.phone1.ilike(search) |
-            Driver.phone2.ilike(search) |
-            Driver.driver_district.ilike(search)
+            Driver.name.ilike(like) |
+            Driver.driver_id.ilike(like) |
+            Driver.cnic_no.ilike(like) |
+            Driver.license_no.ilike(like) |
+            Driver.phone1.ilike(like) |
+            Driver.phone2.ilike(like) |
+            Driver.driver_district.ilike(like)
         )
     drivers = query.order_by(Driver.name.asc()).all()
     today = date.today()
     return render_template('drivers_list.html', drivers=drivers, search=search, today=today)
+
+
+@app.route('/drivers/export')
+def drivers_export():
+    """Export drivers list (with optional search) to CSV."""
+    search = request.args.get('search', '').strip()
+    query = Driver.query
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            Driver.name.ilike(like) |
+            Driver.driver_id.ilike(like) |
+            Driver.cnic_no.ilike(like) |
+            Driver.license_no.ilike(like) |
+            Driver.phone1.ilike(like) |
+            Driver.phone2.ilike(like) |
+            Driver.driver_district.ilike(like)
+        )
+    drivers = query.order_by(Driver.name.asc()).all()
+    headers = ['Driver ID', 'Name', 'CNIC', 'License', 'Phone', 'District', 'Status']
+    rows = []
+    for d in drivers:
+        rows.append([
+            d.driver_id,
+            d.name,
+            d.cnic_no,
+            d.license_no,
+            d.phone1,
+            d.driver_district,
+            d.status
+        ])
+    filename = 'drivers.csv' if not search else f'drivers_search_{search}.csv'
+    return generate_csv_response(headers, rows, filename=filename)
 
 
 @app.route('/driver/add', methods=['GET', 'POST'])
@@ -4241,11 +4351,100 @@ def report_ai():
                 report_title = 'Parties'
                 rows = [{'name': p.name, 'contact': (getattr(p, 'contact', None) or '-')[:40]} for p in parties]
                 result_html = _render_ai_report_table(['Party', 'Contact'], rows)
+            elif any(w in desc for w in ['fuel', 'diesel', 'petrol']):
+                # Fuel expenses: last 30 days
+                from datetime import timedelta
+                today = date.today()
+                start = today - timedelta(days=30)
+                q = FuelExpense.query.filter(FuelExpense.fueling_date >= start).order_by(FuelExpense.fueling_date.desc())
+                expenses = q.limit(500).all()
+                report_title = 'Fuel Expenses (last 30 days)'
+                rows = []
+                for f in expenses:
+                    rows.append({
+                        'date': f.fueling_date.strftime('%Y-%m-%d') if f.fueling_date else '',
+                        'vehicle': f.vehicle.vehicle_no if f.vehicle else '',
+                        'project': f.project.name if f.project else '',
+                        'fuel_type': f.fuel_type or '',
+                        'liters': f.liters,
+                        'amount': f.amount,
+                        'km': f.km,
+                        'mpg': f.mpg,
+                    })
+                result_html = _render_ai_report_table(
+                    ['Date', 'Vehicle', 'Project', 'Fuel Type', 'Liters', 'Amount', 'KM', 'KM per liter'],
+                    rows
+                )
+            elif any(w in desc for w in ['maintenance', 'repair', 'service']):
+                # Maintenance expenses: last 90 days
+                from datetime import timedelta
+                today = date.today()
+                start = today - timedelta(days=90)
+                q = MaintenanceExpense.query.filter(MaintenanceExpense.expense_date >= start).order_by(MaintenanceExpense.expense_date.desc())
+                recs = q.limit(500).all()
+                report_title = 'Maintenance Expenses (last 90 days)'
+                rows = []
+                for r in recs:
+                    rows.append({
+                        'date': r.expense_date.strftime('%Y-%m-%d') if r.expense_date else '',
+                        'vehicle': r.vehicle.vehicle_no if r.vehicle else '',
+                        'project': r.project.name if r.project else '',
+                        'district': r.district.name if r.district else '',
+                        'remarks': (r.remarks or '')[:80],
+                    })
+                result_html = _render_ai_report_table(
+                    ['Date', 'Vehicle', 'Project', 'District', 'Remarks'],
+                    rows
+                )
+            elif any(w in desc for w in ['penalty', 'penalties', 'fine', 'fines']):
+                # Penalty records: last 60 days
+                from datetime import timedelta
+                today = date.today()
+                start = today - timedelta(days=60)
+                q = PenaltyRecord.query.filter(PenaltyRecord.record_date >= start).order_by(PenaltyRecord.record_date.desc())
+                recs = q.limit(500).all()
+                report_title = 'Penalties (last 60 days)'
+                rows = []
+                for r in recs:
+                    rows.append({
+                        'date': r.record_date.strftime('%Y-%m-%d') if r.record_date else '',
+                        'driver': r.driver.name if r.driver else '',
+                        'vehicle': r.vehicle.vehicle_no if r.vehicle else '',
+                        'project': r.project.name if r.project else '',
+                        'fine': r.fine or '',
+                        'remarks': (r.remarks or '')[:80],
+                    })
+                result_html = _render_ai_report_table(
+                    ['Date', 'Driver', 'Vehicle', 'Project', 'Fine', 'Remarks'],
+                    rows
+                )
+            elif any(w in desc for w in ['attendance', 'absent', 'present']):
+                # Driver attendance summary: last 30 days
+                from datetime import timedelta
+                today = date.today()
+                start = today - timedelta(days=30)
+                q = DriverAttendance.query.filter(DriverAttendance.attendance_date >= start).order_by(DriverAttendance.attendance_date.desc())
+                recs = q.limit(500).all()
+                report_title = 'Driver Attendance (last 30 days)'
+                rows = []
+                for r in recs:
+                    rows.append({
+                        'date': r.attendance_date.strftime('%Y-%m-%d') if r.attendance_date else '',
+                        'driver': r.driver.name if r.driver else '',
+                        'project': r.project.name if r.project else '',
+                        'status': r.status,
+                        'remarks': (r.remarks or '')[:80],
+                    })
+                result_html = _render_ai_report_table(
+                    ['Date', 'Driver', 'Project', 'Status', 'Remarks'],
+                    rows
+                )
             else:
                 report_title = 'Suggested reports'
                 result_html = (
                     '<p class="text-muted">Try: "list of drivers", "vehicles", "project summary", "district summary", '
-                    '"license expiry", "companies", "parking utilization", "products", or "parties".</p>'
+                    '"license expiry", "companies", "parking utilization", "products", "parties", '
+                    '"fuel expenses", "maintenance expenses", "penalties", or "attendance summary".</p>'
                 )
         except Exception as e:
             app.logger.exception(e)

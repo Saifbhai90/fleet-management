@@ -1,6 +1,7 @@
 from flask import Flask
 from models import db
 from flask_migrate import Migrate
+from flask_wtf.csrf import CSRFProtect
 from dotenv import load_dotenv
 import os
 
@@ -21,6 +22,9 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///company_manag
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload
+
+# Enable global CSRF protection so csrf_token() is available in templates
+csrf = CSRFProtect(app)
 
 # Initialize SQLAlchemy
 db.init_app(app)
