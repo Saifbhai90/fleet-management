@@ -69,9 +69,28 @@
     <div class="timeline-item mb-4">
       <h5 class="mb-1">
         <span class="badge bg-primary me-2">Latest</span>
-        Excel import templates, strong validation & error tables
+        Backup, Drivers (search/print/export/post), Import (list-only + progress)
       </h5>
       <small class="text-muted">Newest changes</small>
+      <ul class="mt-2 mb-0">
+        <li><strong>Backup</strong>: Download and Send to Email only (Save to Path removed). Scheduled backup runs daily and sends backup to email only. Left menu: Backup link above What's New.</li>
+        <li><strong>What's New</strong>: Always shown at the bottom of the left menu (below Backup).</li>
+        <li><strong>Import only on list pages</strong>: Import Excel button removed from Driver, Vehicle, and Parking entry forms. Import is available only from Drivers List, Vehicles List, and Parking List.</li>
+        <li><strong>Import progress</strong>: When uploading a file for import, an overlay shows file name, upload percentage, and “Processing…” so users know the system is working and don’t refresh.</li>
+        <li><strong>Driver delete</strong>: Deleting a driver from the list now correctly removes related records (status changes, transfers, attendance) so no database error occurs.</li>
+        <li><strong>Driver list search</strong>: Search filters only by columns shown on the list (Driver ID, Name, CNIC No, CNIC Status, License No, License Status, Phone, Driver District). You can search by “Valid” or “Expired” for status.</li>
+        <li><strong>Driver print/PDF & Export Excel</strong>: Print view and Excel export use the same columns as the list (Driver ID, Name, CNIC No, CNIC Status, License No, License Status, Phone, Driver District). Export now downloads a real <code>.xlsx</code> file.</li>
+        <li><strong>Driver form – Post</strong>: Post dropdown shows only full name (short name removed). On edit, if the driver’s post was set by import and is not in the master list, it is kept and not changed.</li>
+        <li><strong>Driver import</strong>: CNIC Status and License Status are set automatically from expiry dates during import (Valid/Expired). License No “0” or blank is treated as invalid and the row is skipped with an error.</li>
+        <li><strong>Driver list delete</strong>: CSRF token added to the delete form so “Bad Request” no longer appears when deleting a driver.</li>
+      </ul>
+    </div>
+
+    <div class="timeline-item mb-4">
+      <h5 class="mb-1">
+        Excel import templates, strong validation & error tables
+      </h5>
+      <small class="text-muted">Previous update</small>
       <ul class="mt-2 mb-0">
         <li><strong>Excel templates with highlighted required columns</strong>: Parking, Vehicles, and Drivers import templates are now real <code>.xlsx</code> files. All required columns have colored + bold headings so users can immediately see which fields must be filled.</li>
         <li><strong>Per‑row validation on import</strong>: During import, every row is checked for required fields and data type (e.g. capacity, driver capacity, dates). Duplicate checks follow the same rules as forms: Parking Station <code>name + district</code>, unique Vehicle No, unique Driver ID, CNIC, and License No.</li>

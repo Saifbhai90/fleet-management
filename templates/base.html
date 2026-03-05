@@ -404,13 +404,13 @@
             </div>
         </div>
 
-        <!-- Help / Updates / Backup -->
+        <!-- Backup & What's New (What's New always last) -->
         <div class="mt-3">
-            <a href="{{ url_for('whats_new') }}" class="{% if request.endpoint == 'whats_new' %}active-link{% endif %}">
-                <i class="bi bi-megaphone text-warning"></i><span>What's New / Updates</span>
-            </a>
             <a href="{{ url_for('backup_index') }}" class="{% if request.endpoint == 'backup_index' %}active-link{% endif %}">
                 <i class="bi bi-cloud-arrow-down text-info"></i><span>Backup</span>
+            </a>
+            <a href="{{ url_for('whats_new') }}" class="{% if request.endpoint == 'whats_new' %}active-link{% endif %}">
+                <i class="bi bi-megaphone text-warning"></i><span>What's New / Updates</span>
             </a>
         </div>
     </div>
