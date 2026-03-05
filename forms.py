@@ -410,6 +410,13 @@ class VehicleMileageUploadForm(FlaskForm):
     submit = SubmitField('Upload')
 
 
+class ParkingImportForm(FlaskForm):
+    file = FileField('Parking Location Excel/CSV', validators=[
+        FileAllowed(['xlsx', 'xls', 'csv'], 'Only Excel or CSV files allowed')
+    ])
+    submit = SubmitField('Import')
+
+
 class TaskReportUploadBothForm(FlaskForm):
     task_date = DateField('Report Date', format='%d-%m-%Y', validators=[DataRequired()],
                           render_kw={"class": "form-control datepicker"})

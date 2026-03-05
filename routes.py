@@ -15,7 +15,7 @@ from forms import (
     AssignProjectToDistrictForm, AssignVehicleToDistrictForm, AssignVehicleToParkingForm,
     AssignDriverToVehicleForm, ProjectTransferForm, VehicleTransferForm, EditVehicleTransferForm, DriverTransferForm, DriverJobLeftForm, DriverRejoinForm,
     DriverAttendanceFilterForm, DriverAttendanceReportForm, ATTENDANCE_STATUS_CHOICES,
-    TaskReportForm, TaskReportFilterForm, EmergencyTaskUploadForm, VehicleMileageUploadForm,
+    TaskReportForm, TaskReportFilterForm, EmergencyTaskUploadForm, VehicleMileageUploadForm, ParkingImportForm,
     TaskReportUploadBothForm, RedTaskFilterForm, RedTaskForm, VehicleMoveWithoutTaskFilterForm, VehicleMoveWithoutTaskForm, PenaltyRecordForm, PenaltyRecordFilterForm,
     FuelExpenseFilterForm, FuelExpenseForm,
     OilExpenseFilterForm, OilExpenseForm,
@@ -593,6 +593,92 @@ def parking_list():
         )
     parkings = query.order_by(ParkingStation.name).all()
     return render_template('parking_list.html', parkings=parkings, search=search)
+
+
+@app.route('/parking/import', methods=['GET', 'POST'])
+def parking_import():
+    """
+    Import parking locations from Excel/CSV.
+    User can also download a template.
+    """
+    form = ParkingImportForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        f = form.file.data
+        if not f:
+            flash('Please select an Excel/CSV file.', 'warning')
+            return redirect(url_for('parking_import'))
+        try:
+            import pandas as pd
+            filename = f.filename or ''
+            ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+            if ext in ('xlsx', 'xls'):
+                df = pd.read_excel(f)
+            elif ext == 'csv':
+                df = pd.read_csv(f)
+            else:
+                flash('Unsupported file type. Please upload .xlsx, .xls or .csv.', 'danger')
+                return redirect(url_for('parking_import'))
+
+            expected_cols = ['name', 'district', 'tehsil', 'mouza', 'uc_name', 'capacity', 'address_location', 'remarks']
+            missing = [c for c in expected_cols if c not in df.columns]
+            if missing:
+                flash(f'Missing required columns in file: {", ".join(missing)}', 'danger')
+                return redirect(url_for('parking_import'))
+
+            created = 0
+            for _, row in df.iterrows():
+                name = str(row.get('name') or '').strip()
+                if not name:
+                    continue
+                # Skip if already exists with same name and district
+                existing = ParkingStation.query.filter(
+                    ParkingStation.name == name,
+                    ParkingStation.district == (str(row.get('district') or '').strip() or None)
+                ).first()
+                if existing:
+                    continue
+
+                capacity_val = row.get('capacity')
+                try:
+                    capacity = int(capacity_val) if pd.notna(capacity_val) else 0
+                except Exception:
+                    capacity = 0
+
+                p = ParkingStation(
+                    name=name,
+                    district=str(row.get('district') or '').strip() or None,
+                    tehsil=str(row.get('tehsil') or '').strip() or None,
+                    mouza=str(row.get('mouza') or '').strip() or None,
+                    uc_name=str(row.get('uc_name') or '').strip() or None,
+                    capacity=capacity or 0,
+                    address_location=str(row.get('address_location') or '').strip() or None,
+                    remarks=str(row.get('remarks') or '').strip() or None,
+                )
+                db.session.add(p)
+                created += 1
+            db.session.commit()
+            if created:
+                flash(f'{created} parking station(s) imported successfully.', 'success')
+            else:
+                flash('File processed but no new parking stations were imported (duplicates or empty rows).', 'info')
+            return redirect(url_for('parking_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error importing parking locations: {str(e)}', 'danger')
+    return render_template('parking_import.html', form=form)
+
+
+@app.route('/parking/import/template')
+def parking_import_template():
+    """
+    Downloadable template for parking import (open in Excel and fill).
+    """
+    headers = ['name', 'district', 'tehsil', 'mouza', 'uc_name', 'capacity', 'address_location', 'remarks']
+    rows = [
+        ['Central Parking A', 'Lahore', 'Model Town', 'Mouza 1', 'UC-1', 20, 'Near Main Road, Model Town', 'Example row 1'],
+        ['Central Parking B', 'Lahore', 'Johar Town', 'Mouza 2', 'UC-2', 15, 'Near Hospital, Johar Town', 'Example row 2'],
+    ]
+    return generate_csv_response(headers, rows, filename='parking_import_template.csv')
 
 
 @app.route('/parking/add', methods=['GET', 'POST'])
