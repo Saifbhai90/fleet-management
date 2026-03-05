@@ -134,6 +134,17 @@
     </div>
     <div class="ms-auto d-flex align-items-center text-white">
         <div class="me-4 d-none d-md-block" id="liveDateTime" style="font-size: 0.9rem; color: #cbd5e1;"></div>
+
+        <!-- Notification bell: always visible, badge only when there are unread notifications -->
+        <a href="{{ url_for('dashboard') }}" class="btn btn-link text-light position-relative me-3" title="Notifications">
+            <i class="bi bi-bell{% if unread_notification_count and unread_notification_count > 0 %}-fill{% endif %}" style="font-size: 1.3rem;"></i>
+            {% if unread_notification_count and unread_notification_count > 0 %}
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                {{ unread_notification_count }}
+            </span>
+            {% endif %}
+        </a>
+
         <div class="border-start ps-3 ms-2">
             <small class="text-muted d-block" style="line-height: 1;">Logged in as</small>
             <span class="fw-semibold">Admin</span>

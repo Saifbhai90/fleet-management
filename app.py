@@ -32,6 +32,20 @@ app.jinja_env.filters['ddmmyyyy'] = format_date_ddmmyyyy
 app.jinja_env.filters['cnic_fmt'] = format_cnic
 app.jinja_env.filters['phone_fmt'] = format_phone
 
+
+@app.context_processor
+def inject_notification_badge():
+    """
+    Make unread notification count available in all templates as
+    `unread_notification_count` for the navbar bell icon.
+    """
+    try:
+        from models import Notification
+        unread_count = Notification.query.filter(Notification.read_at.is_(None)).count()
+    except Exception:
+        unread_count = 0
+    return dict(unread_notification_count=unread_count)
+
 # Create all tables if not exist (backward compatibility; new changes use migrations)
 with app.app_context():
     db.create_all()
