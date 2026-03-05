@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div class="container d-flex align-items-center justify-content-center" style="min-height: 70vh;">
+  <div class="col-md-5 col-lg-4">
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-header bg-primary text-white text-center rounded-top-4">
+        <h5 class="mb-0 fw-bold">
+          <i class="bi bi-shield-lock-fill me-2"></i>Fleet Manager Login
+        </h5>
+      </div>
+      <div class="card-body p-4 bg-light rounded-bottom-4">
+        <form method="POST" novalidate>
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            {{ form.username.label(class="form-label fw-semibold small") }}
+            {{ form.username(class="form-control form-control-sm " + ("is-invalid" if form.username.errors else ""), placeholder="User ID") }}
+            {% for error in form.username.errors %}
+            <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-3">
+            {{ form.password.label(class="form-label fw-semibold small") }}
+            {{ form.password(class="form-control form-control-sm " + ("is-invalid" if form.password.errors else ""), placeholder="Password") }}
+            {% for error in form.password.errors %}
+            <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+            <div class="form-text">
+              Default: <code>admin / admin</code>
+            </div>
+          </div>
+
+          <div class="d-grid mt-3">
+            <button type="submit" class="btn btn-primary fw-bold">
+              <i class="bi bi-box-arrow-in-right me-1"></i>Login
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

@@ -27,30 +27,48 @@
                                         <div class="col-md-12">
                                             <label class="form-label fw-semibold small">Vehicle No#</label>
                                             {{ form.vehicle_no(class="form-control form-control-sm " + ("is-invalid" if form.vehicle_no.errors else ""), placeholder="e.g. ABC-1234") }}
+                                            {% for error in form.vehicle_no.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
                                         </div>
 
                                         <!-- Row 2 -->
                                         <div class="col-md-4">
                                             <label class="form-label fw-semibold small">Model</label>
-                                            {{ form.model(class="form-control form-control-sm", placeholder="2023") }}
+                                            {{ form.model(class="form-control form-control-sm " + ("is-invalid" if form.model.errors else ""), placeholder="2023") }}
+                                            {% for error in form.model.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
                                         </div>
                                         <div class="col-md-4">
                                             <label class="form-label fw-semibold small">Vehicle Type</label>
-                                            {{ form.vehicle_type(class="form-select form-select-sm") }}
+                                            {{ form.vehicle_type(class="form-select form-select-sm " + ("is-invalid" if form.vehicle_type.errors else "")) }}
+                                            {% for error in form.vehicle_type.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
                                         </div>
                                         <div class="col-md-4">
                                             <label class="form-label fw-semibold small">Driver Capacity</label>
-                                            {{ form.driver_capacity(class="form-control form-control-sm", placeholder="e.g. 1") }}
+                                            {{ form.driver_capacity(class="form-control form-control-sm " + ("is-invalid" if form.driver_capacity.errors else ""), placeholder="e.g. 1") }}
+                                            {% for error in form.driver_capacity.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
                                         </div>
 
                                         <!-- Row 3 -->
                                         <div class="col-md-6">
                                             <label class="form-label fw-semibold small">Engine No#</label>
-                                            {{ form.engine_no(class="form-control form-control-sm", placeholder="Engine #") }}
+                                            {{ form.engine_no(class="form-control form-control-sm " + ("is-invalid" if form.engine_no.errors else ""), placeholder="Engine #") }}
+                                            {% for error in form.engine_no.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label fw-semibold small">Chassis No#</label>
-                                            {{ form.chassis_no(class="form-control form-control-sm", placeholder="Chassis #") }}
+                                            {{ form.chassis_no(class="form-control form-control-sm " + ("is-invalid" if form.chassis_no.errors else ""), placeholder="Chassis #") }}
+                                            {% for error in form.chassis_no.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
                                         </div>
 
                                         <!-- Row 4 -->
@@ -60,7 +78,10 @@
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label fw-semibold small">Active Date</label>
-                                            {{ form.active_date(class="form-control form-control-sm datepicker") }}
+                                            {{ form.active_date(class="form-control form-control-sm datepicker " + ("is-invalid" if form.active_date.errors else "")) }}
+                                            {% for error in form.active_date.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
                                         </div>
                                     </div>
                                 </div>

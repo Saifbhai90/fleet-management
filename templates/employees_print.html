@@ -1,0 +1,69 @@
+{% extends "base_print.html" %}
+
+{% block title %}Print Employees{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-2">
+  <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+    <h3 class="mb-0"><i class="bi bi-people-fill me-2"></i>Employees (Print View)</h3>
+    <div>
+      {% if search %}
+      <span class="badge bg-secondary me-2">Filtered by: "{{ search }}"</span>
+      {% endif %}
+      <button class="btn btn-outline-primary" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>Print / Save as PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width: 6%">ID</th>
+              <th style="width: 14%">Code</th>
+              <th style="width: 20%">Name</th>
+              <th style="width: 16%">CNIC No</th>
+              <th style="width: 18%">Post</th>
+              <th style="width: 14%">Department</th>
+              <th style="width: 12%">Phone</th>
+              <th style="width: 10%">Joining</th>
+              <th style="width: 8%">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in employees %}
+            <tr>
+              <td>{{ e.id }}</td>
+              <td>{{ e.code }}</td>
+              <td>{{ e.name }}</td>
+              <td>{{ e.cnic_no or '-' }}</td>
+              <td>
+                {% if e.post %}
+                  {{ e.post.full_name }}{% if e.post.short_name %} ({{ e.post.short_name }}){% endif %}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>{{ e.department or '-' }}</td>
+              <td>{{ e.phone1 or e.phone2 or '-' }}</td>
+              <td>{{ e.joining_date.strftime('%Y-%m-%d') if e.joining_date else '-' }}</td>
+              <td>{{ e.status or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="9" class="text-center py-4 text-muted">
+                No employees found.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

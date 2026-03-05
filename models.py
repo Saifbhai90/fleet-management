@@ -77,6 +77,64 @@ class Project(db.Model):
     def __repr__(self):
         return f'<Project {self.name}>'
 
+
+# ────────────────────────────────────────────────
+# Employee Post Master (for DriverForm.post)
+# ────────────────────────────────────────────────
+class EmployeePost(db.Model):
+    __tablename__ = 'driver_post'  # reuse existing table
+
+    id = db.Column(db.Integer, primary_key=True)
+    short_name = db.Column('name', db.String(100), unique=True, nullable=False)
+    full_name = db.Column(db.String(150), nullable=False)
+    remarks = db.Column(db.Text)
+
+    def __repr__(self):
+        return f'<EmployeePost {self.full_name}>'
+
+
+# ────────────────────────────────────────────────
+# Other Employees (non-drivers)
+# ────────────────────────────────────────────────
+class Employee(db.Model):
+    __tablename__ = 'employee'
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), unique=True, nullable=False)  # e.g. EMP-2026-0001
+    name = db.Column(db.String(100), nullable=False)
+
+    post_id = db.Column(db.Integer, db.ForeignKey('driver_post.id'), nullable=True)
+    department = db.Column(db.String(100))
+
+    father_name = db.Column(db.String(100))
+    place_of_birth = db.Column(db.String(100))
+    dob = db.Column(db.Date)
+    education = db.Column(db.String(50))
+    marital_status = db.Column(db.String(20))
+    cnic_no = db.Column(db.String(20))
+    district = db.Column(db.String(100))
+    address = db.Column(db.Text)
+
+    phone1 = db.Column(db.String(20))
+    phone2 = db.Column(db.String(20))
+    email = db.Column(db.String(120))
+
+    bank_name = db.Column(db.String(100))
+    account_no = db.Column(db.String(50))
+    account_title = db.Column(db.String(100))
+
+    joining_date = db.Column(db.Date, nullable=False)
+    status = db.Column(db.String(20), default='Active')  # Active / Inactive / Left
+    remarks = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    post = db.relationship('EmployeePost', backref='employees')
+
+    def __repr__(self):
+        return f'<Employee {self.name}>'
+
+
 # ────────────────────────────────────────────────
 # Driver Model
 # ────────────────────────────────────────────────
@@ -191,6 +249,8 @@ class ParkingStation(db.Model):
     address_location = db.Column(db.Text)
     remarks = db.Column(db.Text)
     capacity = db.Column(db.Integer, nullable=False)
+    latitude = db.Column(db.Numeric(10, 6), nullable=True)
+    longitude = db.Column(db.Numeric(10, 6), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)

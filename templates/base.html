@@ -147,7 +147,7 @@
 
         <div class="border-start ps-3 ms-2">
             <small class="text-muted d-block" style="line-height: 1;">Logged in as</small>
-            <span class="fw-semibold">Admin</span>
+            <span class="fw-semibold">{{ session.get('user', 'Guest') }}</span>
         </div>
     </div>
 </nav>
@@ -187,6 +187,12 @@
                 </a>
                 <a href="{{ url_for('drivers_list') }}" class="collapse-item {% if request.endpoint == 'drivers_list' %}active-link{% endif %}">
                     <i class="bi bi-person-badge"></i><span>Drivers</span>
+                </a>
+                <a href="{{ url_for('employees_list') }}" class="collapse-item {% if request.endpoint in ['employees_list', 'employee_form'] %}active-link{% endif %}">
+                    <i class="bi bi-people-fill"></i><span>Employees</span>
+                </a>
+                <a href="{{ url_for('driver_post_list') }}" class="collapse-item {% if request.endpoint in ['driver_post_list', 'driver_post_form'] %}active-link{% endif %}">
+                    <i class="bi bi-person-vcard"></i><span>Employee Posts</span>
                 </a>
                 <a href="{{ url_for('party_list') }}" class="collapse-item {% if request.endpoint in ['party_list', 'party_form'] %}active-link{% endif %}">
                     <i class="bi bi-building"></i><span>Create Party Name</span>

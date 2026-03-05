@@ -69,9 +69,28 @@
     <div class="timeline-item mb-4">
       <h5 class="mb-1">
         <span class="badge bg-primary me-2">Latest</span>
-        Realtime search, notifications, AI reports, districts & parking import
+        Login screen, employee module enhancements & clean reports
       </h5>
       <small class="text-muted">Most recent updates</small>
+      <ul class="mt-2 mb-0">
+        <li><strong>Login screen added</strong>: Simple login form with default credentials <code>admin / admin</code> to control access (can be extended later for real users).</li>
+        <li><strong>Employee Posts (Master)</strong>: New master for all employee posts (short name + full name + remarks) used in Driver and Employee forms.</li>
+        <li><strong>Employees Management</strong>: New Employees list and entry form to register non-driver staff (Accounts Manager, Project Manager, etc.) with strong validation and history-based department suggestions.</li>
+        <li><strong>Employee details</strong>: Employee form now includes Father Name, Place of Birth, DOB, Education, Marital Status, District, Address, CNIC, and bank information, with most fields required.</li>
+        <li><strong>Employee CNIC & reports</strong>: CNIC No added to Employees list, CSV export, and print/PDF report view.</li>
+        <li><strong>Driver Form – Post field</strong>: Post dropdown is now fully driven by Employee Posts master instead of hard-coded values.</li>
+        <li><strong>Parking Station Form validation</strong>: Capacity, Create Date, District and Tehsil are now mandatory with clear on-form error messages.</li>
+        <li><strong>Vehicle Entry validation</strong>: Required fields strengthened (Vehicle No, Model, Vehicle Type, Engine No, Chassis No, Driver Capacity, Active Date) with visible validation messages.</li>
+        <li><strong>Duplicate checks</strong>: User-friendly messages when saving duplicate Vehicle Number or Parking Station Name, instead of raw database errors.</li>
+        <li><strong>Print views cleaned up</strong>: All list print pages (Districts, Parking, Vehicles, Drivers, Employees) now open in a clean report-only layout using a dedicated print base, without sidebar or navbar.</li>
+      </ul>
+    </div>
+
+    <div class="timeline-item mb-4">
+      <h5 class="mb-1">
+        Realtime search, notifications, AI reports, districts, parking, vehicles & drivers
+      </h5>
+      <small class="text-muted">Previous major update</small>
       <ul class="mt-2 mb-0">
         <li>Navbar notification bell now shows unread count and works across all pages.</li>
         <li>Realtime search on list pages: Drivers, Vehicles, Projects, Companies, Districts, Parking, Party, Products.</li>
@@ -82,6 +101,9 @@
         <li>Company, Parking, and Driver forms now use the District master (typeahead) when entering district names.</li>
         <li>Parking Stations: Excel/CSV import process added with downloadable template and upload screen.</li>
         <li>Parking Station Entry Form: date picker fixed so parking data now saves correctly.</li>
+        <li>Parking Station list: Excel export and dedicated print/PDF report view added (sorted by ID).</li>
+        <li>Vehicles: Excel/CSV import process added with template, plus Excel export and dedicated print/PDF report view (sorted by ID).</li>
+        <li>Drivers: Excel/CSV import process added (basic fields), plus Excel export and dedicated print/PDF report view (sorted by ID).</li>
       </ul>
     </div>
 

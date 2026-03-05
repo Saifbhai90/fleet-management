@@ -1,7 +1,7 @@
-from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory
+from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session
 from app import app, db
 from models import (
-    Company, Project, Vehicle, Driver, ParkingStation, District,
+    Company, Project, Vehicle, Driver, ParkingStation, District, EmployeePost, Employee,
     project_district, vehicle_district, ProjectTransfer, VehicleTransfer, DriverTransfer, DriverStatusChange,
     DriverAttendance,
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
@@ -10,7 +10,7 @@ from models import (
     Notification,
 )
 from forms import (
-    CompanyForm, ProjectForm, VehicleForm, DriverForm, ParkingForm, DistrictForm,
+    CompanyForm, ProjectForm, VehicleForm, VehicleImportForm, DriverForm, DriverImportForm, ParkingForm, DistrictForm,
     AssignProjectToCompanyForm, EditProjectAssignmentForm,
     AssignProjectToDistrictForm, AssignVehicleToDistrictForm, AssignVehicleToParkingForm,
     AssignDriverToVehicleForm, ProjectTransferForm, VehicleTransferForm, EditVehicleTransferForm, DriverTransferForm, DriverJobLeftForm, DriverRejoinForm,
@@ -22,6 +22,9 @@ from forms import (
     MaintenanceExpenseFilterForm, MaintenanceExpenseForm,
     PartyForm,
     ProductForm,
+    EmployeePostForm,
+    EmployeeForm,
+    LoginForm,
 )
 from datetime import datetime, date, time
 import csv
@@ -374,7 +377,8 @@ def vehicles_list():
             Vehicle.model.ilike(like) |
             Vehicle.vehicle_type.ilike(like)
         )
-    vehicles = query.order_by(Vehicle.vehicle_no).all()
+    # Sort by ID as requested
+    vehicles = query.order_by(Vehicle.id).all()
     return render_template('vehicles_list.html', vehicles=vehicles, search=search)
 
 
@@ -396,7 +400,7 @@ def vehicles_export():
             Vehicle.model.ilike(like) |
             Vehicle.vehicle_type.ilike(like)
         )
-    vehicles = query.order_by(Vehicle.vehicle_no).all()
+    vehicles = query.order_by(Vehicle.id).all()
     headers = ['ID', 'Vehicle No', 'Model', 'Type', 'Driver Capacity', 'Phone', 'Active Date']
     rows = []
     for v in vehicles:
@@ -413,6 +417,116 @@ def vehicles_export():
     return generate_csv_response(headers, rows, filename=filename)
 
 
+@app.route('/vehicles/import', methods=['GET', 'POST'])
+def vehicles_import():
+    """
+    Import vehicles from Excel/CSV.
+    """
+    form = VehicleImportForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        f = form.file.data
+        if not f:
+            flash('Please select an Excel/CSV file.', 'warning')
+            return redirect(url_for('vehicles_import'))
+        try:
+            import pandas as pd
+            filename = f.filename or ''
+            ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+            if ext in ('xlsx', 'xls'):
+                df = pd.read_excel(f)
+            elif ext == 'csv':
+                df = pd.read_csv(f)
+            else:
+                flash('Unsupported file type. Please upload .xlsx, .xls or .csv.', 'danger')
+                return redirect(url_for('vehicles_import'))
+
+            expected_cols = ['vehicle_no', 'model', 'vehicle_type', 'engine_no', 'chassis_no', 'driver_capacity', 'phone_no', 'active_date', 'remarks']
+            missing = [c for c in expected_cols if c not in df.columns]
+            if missing:
+                flash(f'Missing required columns in file: {", ".join(missing)}', 'danger')
+                return redirect(url_for('vehicles_import'))
+
+            created = 0
+            from utils import parse_date
+            for _, row in df.iterrows():
+                vno = str(row.get('vehicle_no') or '').strip()
+                if not vno:
+                    continue
+                existing = Vehicle.query.filter(Vehicle.vehicle_no == vno).first()
+                if existing:
+                    continue
+
+                cap_val = row.get('driver_capacity')
+                try:
+                    driver_capacity = int(cap_val) if pd.notna(cap_val) else None
+                except Exception:
+                    driver_capacity = None
+
+                active_raw = row.get('active_date')
+                active_date = None
+                if pd.notna(active_raw):
+                    if isinstance(active_raw, str):
+                        active_date = parse_date(active_raw)
+                    else:
+                        try:
+                            active_date = pd.to_datetime(active_raw).date()
+                        except Exception:
+                            active_date = None
+
+                v = Vehicle(
+                    vehicle_no=vno,
+                    model=str(row.get('model') or '').strip(),
+                    engine_no=str(row.get('engine_no') or '').strip() or None,
+                    chassis_no=str(row.get('chassis_no') or '').strip() or None,
+                    vehicle_type=str(row.get('vehicle_type') or '').strip() or None,
+                    driver_capacity=driver_capacity,
+                    phone_no=str(row.get('phone_no') or '').strip() or None,
+                    active_date=active_date,
+                    remarks=str(row.get('remarks') or '').strip() or None,
+                )
+                db.session.add(v)
+                created += 1
+            db.session.commit()
+            if created:
+                flash(f'{created} vehicle(s) imported successfully.', 'success')
+            else:
+                flash('File processed but no new vehicles were imported (duplicates or empty rows).', 'info')
+            return redirect(url_for('vehicles_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error importing vehicles: {str(e)}', 'danger')
+    return render_template('vehicles_import.html', form=form)
+
+
+@app.route('/vehicles/import/template')
+def vehicles_import_template():
+    """
+    Downloadable template for vehicle import (open in Excel and fill).
+    """
+    headers = ['vehicle_no', 'model', 'vehicle_type', 'engine_no', 'chassis_no', 'driver_capacity', 'phone_no', 'active_date', 'remarks']
+    rows = [
+        ['LEA-1234', 'Suzuki Cultus', 'Ambulance', 'ENG123', 'CHS123', 1, '0300-1112233', '01-01-2024', 'Example row 1'],
+        ['LEA-5678', 'Toyota Hiace', 'Passanger', 'ENG456', 'CHS456', 2, '0300-2223344', '05-02-2024', 'Example row 2'],
+    ]
+    return generate_csv_response(headers, rows, filename='vehicles_import_template.csv')
+
+
+@app.route('/vehicles/print')
+def vehicles_print():
+    """Print-friendly view of vehicles (browser print to PDF)."""
+    search = request.args.get('search', '').strip()
+    query = Vehicle.query
+    if search:
+        like = f'%{search}%'
+        query = query.filter(
+            Vehicle.vehicle_no.ilike(like) |
+            Vehicle.model.ilike(like) |
+            Vehicle.vehicle_type.ilike(like)
+        )
+    vehicles = query.order_by(Vehicle.id).all()
+    return render_template('vehicles_print.html', vehicles=vehicles, search=search)
+
+
 @app.route('/vehicle/add', methods=['GET', 'POST'])
 @app.route('/vehicle/edit/<int:id>', methods=['GET', 'POST'])
 def vehicle_form(id=None):
@@ -422,7 +536,22 @@ def vehicle_form(id=None):
         try:
             if not vehicle:
                 vehicle = Vehicle()
+            # Normalize vehicle number (trim spaces)
+            vehicle_no_normalized = (form.vehicle_no.data or '').strip()
             form.populate_obj(vehicle)
+            vehicle.vehicle_no = vehicle_no_normalized
+
+            # Duplicate vehicle_no check (case-insensitive, ignore current record)
+            existing_q = Vehicle.query.filter(
+                func.lower(Vehicle.vehicle_no) == vehicle_no_normalized.lower()
+            )
+            if id:
+                existing_q = existing_q.filter(Vehicle.id != vehicle.id)
+            if existing_q.first():
+                flash('This Vehicle Number is already registered', 'danger')
+                target = url_for('vehicle_form', id=id) if id else url_for('vehicle_form')
+                return redirect(target)
+
             if not id:
                 db.session.add(vehicle)
             db.session.commit()
@@ -440,6 +569,11 @@ def vehicle_form(id=None):
                 db.session.commit()
             flash('Vehicle saved successfully!', 'success')
             return redirect(url_for('vehicles_list'))
+        except IntegrityError:
+            db.session.rollback()
+            flash('This Vehicle Number is already registered', 'danger')
+            target = url_for('vehicle_form', id=id) if id else url_for('vehicle_form')
+            return redirect(target)
         except Exception as e:
             db.session.rollback()
             flash(f'Error saving vehicle: {str(e)}', 'danger')
@@ -477,7 +611,8 @@ def drivers_list():
             Driver.phone2.ilike(like) |
             Driver.driver_district.ilike(like)
         )
-    drivers = query.order_by(Driver.name.asc()).all()
+    # Sort by ID as requested
+    drivers = query.order_by(Driver.id.asc()).all()
     today = date.today()
     return render_template('drivers_list.html', drivers=drivers, search=search, today=today)
 
@@ -498,7 +633,7 @@ def drivers_export():
             Driver.phone2.ilike(like) |
             Driver.driver_district.ilike(like)
         )
-    drivers = query.order_by(Driver.name.asc()).all()
+    drivers = query.order_by(Driver.id.asc()).all()
     headers = ['Driver ID', 'Name', 'CNIC', 'License', 'Phone', 'District', 'Status']
     rows = []
     for d in drivers:
@@ -515,12 +650,116 @@ def drivers_export():
     return generate_csv_response(headers, rows, filename=filename)
 
 
+@app.route('/drivers/import', methods=['GET', 'POST'])
+def drivers_import():
+    """
+    Import drivers from Excel/CSV (basic fields).
+    """
+    form = DriverImportForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        f = form.file.data
+        if not f:
+            flash('Please select an Excel/CSV file.', 'warning')
+            return redirect(url_for('drivers_import'))
+        try:
+            import pandas as pd
+            filename = f.filename or ''
+            ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+            if ext in ('xlsx', 'xls'):
+                df = pd.read_excel(f)
+            elif ext == 'csv':
+                df = pd.read_csv(f)
+            else:
+                flash('Unsupported file type. Please upload .xlsx, .xls or .csv.', 'danger')
+                return redirect(url_for('drivers_import'))
+
+            expected_cols = [
+                'driver_id', 'name', 'father_name', 'phone1', 'driver_district',
+                'cnic_no', 'license_no', 'status'
+            ]
+            missing = [c for c in expected_cols if c not in df.columns]
+            if missing:
+                flash(f'Missing required columns in file: {", ".join(missing)}', 'danger')
+                return redirect(url_for('drivers_import'))
+
+            created = 0
+            for _, row in df.iterrows():
+                did = str(row.get('driver_id') or '').strip()
+                if not did:
+                    continue
+                existing = Driver.query.filter(Driver.driver_id == did).first()
+                if existing:
+                    continue
+                d = Driver(
+                    driver_id=did,
+                    name=str(row.get('name') or '').strip(),
+                    father_name=str(row.get('father_name') or '').strip() or None,
+                    phone1=str(row.get('phone1') or '').strip() or None,
+                    driver_district=str(row.get('driver_district') or '').strip() or None,
+                    cnic_no=str(row.get('cnic_no') or '').strip() or None,
+                    license_no=str(row.get('license_no') or '').strip() or None,
+                    status=str(row.get('status') or '').strip() or 'Active',
+                )
+                db.session.add(d)
+                created += 1
+            db.session.commit()
+            if created:
+                flash(f'{created} driver(s) imported successfully.', 'success')
+            else:
+                flash('File processed but no new drivers were imported (duplicates or empty rows).', 'info')
+            return redirect(url_for('drivers_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error importing drivers: {str(e)}', 'danger')
+    return render_template('drivers_import.html', form=form)
+
+
+@app.route('/drivers/import/template')
+def drivers_import_template():
+    """
+    Downloadable template for driver import (open in Excel and fill).
+    """
+    headers = ['driver_id', 'name', 'father_name', 'phone1', 'driver_district', 'cnic_no', 'license_no', 'status']
+    rows = [
+        ['DRV-2024-1001', 'Ali Ahmad', 'Ahmad Khan', '0300-1112233', 'Lahore', '32304-1111111-5', 'LTV-12345', 'Active'],
+        ['DRV-2024-1002', 'Bilal Hussain', 'Hussain Raza', '0300-2223344', 'Lahore', '32304-2222222-5', 'HTV-56789', 'Active'],
+    ]
+    return generate_csv_response(headers, rows, filename='drivers_import_template.csv')
+
+
+@app.route('/drivers/print')
+def drivers_print():
+    """Print-friendly view of drivers (browser print to PDF)."""
+    search = request.args.get('search', '').strip()
+    query = Driver.query
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            Driver.name.ilike(like) |
+            Driver.driver_id.ilike(like) |
+            Driver.cnic_no.ilike(like) |
+            Driver.license_no.ilike(like) |
+            Driver.phone1.ilike(like) |
+            Driver.phone2.ilike(like) |
+            Driver.driver_district.ilike(like)
+        )
+    drivers = query.order_by(Driver.id.asc()).all()
+    return render_template('drivers_print.html', drivers=drivers, search=search)
+
+
 @app.route('/driver/add', methods=['GET', 'POST'])
 @app.route('/driver/edit/<int:id>', methods=['GET', 'POST'])
 def driver_form(id=None):
+    # Common Employee Post master choices for both add/edit
+    posts = EmployeePost.query.order_by(EmployeePost.full_name).all()
+    post_choices = [('', '-- Select Post --')] + [
+        (p.full_name, f"{p.full_name} ({p.short_name})") for p in posts
+    ]
+
     if id:
         driver = Driver.query.get_or_404(id)
         form = DriverForm(obj=driver)
+        form.post.choices = post_choices
         if driver.application_date:
             if isinstance(driver.application_date, str):
                 form.application_date.data = parse_date(driver.application_date)
@@ -530,6 +769,7 @@ def driver_form(id=None):
     else:
         driver = Driver()
         form = DriverForm()
+        form.post.choices = post_choices
         title = "Add New Driver"
     if form.validate_on_submit():
         try:
@@ -566,6 +806,171 @@ def driver_form(id=None):
     return render_template('driver_form.html', form=form, title=title, driver=driver)
 
 
+# ────────────────────────────────────────────────
+# Employees (non-driver staff)
+# ────────────────────────────────────────────────
+@app.route('/employees')
+def employees_list():
+    search = request.args.get('search', '').strip()
+    query = Employee.query
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            Employee.name.ilike(like) |
+            Employee.code.ilike(like) |
+            Employee.department.ilike(like) |
+            Employee.cnic_no.ilike(like)
+        )
+    employees = query.order_by(Employee.id.asc()).all()
+    return render_template('employees_list.html', employees=employees, search=search)
+
+
+@app.route('/employee/add', methods=['GET', 'POST'])
+@app.route('/employee/edit/<int:id>', methods=['GET', 'POST'])
+def employee_form(id=None):
+    # Build Employee Post dropdown (id-based, shows full + short name)
+    posts = EmployeePost.query.order_by(EmployeePost.full_name).all()
+    post_choices = [(0, '-- Select Post --')] + [
+        (p.id, f"{p.full_name} ({p.short_name})") for p in posts
+    ]
+
+    # Department history (distinct existing departments)
+    dept_rows = (
+        db.session.query(Employee.department)
+        .filter(Employee.department.isnot(None), Employee.department != '')
+        .distinct()
+        .order_by(Employee.department)
+        .all()
+    )
+    departments = [row[0] for row in dept_rows]
+
+    if id:
+        emp = Employee.query.get_or_404(id)
+        form = EmployeeForm(obj=emp)
+        form.post_id.choices = post_choices
+        if emp.joining_date:
+            if isinstance(emp.joining_date, str):
+                form.joining_date.data = parse_date(emp.joining_date)
+            else:
+                form.joining_date.data = emp.joining_date
+        title = f"Edit Employee - {emp.name}"
+    else:
+        emp = Employee()
+        form = EmployeeForm()
+        form.post_id.choices = post_choices
+        title = "Add New Employee"
+
+    if form.validate_on_submit():
+        try:
+            # Auto-generate code if user left it blank
+            code_val = (form.code.data or "").strip()
+            if not code_val:
+                year = datetime.now().year
+                last_emp = Employee.query.order_by(Employee.id.desc()).first()
+                next_num = (last_emp.id + 1) if last_emp else 1
+                form.code.data = f"EMP-{year}-{next_num:04d}"
+
+            form.populate_obj(emp)
+            if form.post_id.data == 0:
+                emp.post_id = None
+            if not id:
+                db.session.add(emp)
+            db.session.commit()
+            flash('Employee saved successfully!', 'success')
+            return redirect(url_for('employees_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error saving employee: {str(e)}', 'danger')
+
+    return render_template('employee_form.html', form=form, title=title, employee=emp, departments=departments)
+
+
+@app.route('/employee/delete/<int:id>', methods=['POST'])
+def employee_delete(id):
+    emp = Employee.query.get_or_404(id)
+    try:
+        db.session.delete(emp)
+        db.session.commit()
+        flash('Employee deleted.', 'success')
+    except Exception as e:
+        flash(f'Error deleting employee: {str(e)}', 'danger')
+    return redirect(url_for('employees_list'))
+
+
+@app.route('/employees/export')
+def employees_export():
+    """Export employees list (with optional search) to CSV."""
+    search = request.args.get('search', '').strip()
+    query = Employee.query
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            Employee.name.ilike(like) |
+            Employee.code.ilike(like) |
+            Employee.department.ilike(like) |
+            Employee.cnic_no.ilike(like)
+        )
+    employees = query.order_by(Employee.id.asc()).all()
+    headers = ['ID', 'Code', 'Name', 'CNIC', 'Post', 'Department', 'Phone', 'Joining Date', 'Status']
+    rows = []
+    for e in employees:
+        rows.append([
+            e.id,
+            e.code,
+            e.name,
+            e.cnic_no or '',
+            e.post.full_name if e.post else '',
+            e.department or '',
+            e.phone1 or e.phone2 or '',
+            e.joining_date.strftime('%Y-%m-%d') if e.joining_date else '',
+            e.status or '',
+        ])
+    filename = 'employees.csv' if not search else f'employees_search_{search}.csv'
+    return generate_csv_response(headers, rows, filename=filename)
+
+
+@app.route('/employees/print')
+def employees_print():
+    """Print-friendly view of employees (browser print to PDF)."""
+    search = request.args.get('search', '').strip()
+    query = Employee.query
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            Employee.name.ilike(like) |
+            Employee.code.ilike(like) |
+            Employee.department.ilike(like) |
+            Employee.cnic_no.ilike(like)
+        )
+    employees = query.order_by(Employee.id.asc()).all()
+    return render_template('employees_print.html', employees=employees, search=search)
+
+
+# ────────────────────────────────────────────────
+# Simple Login (admin / admin)
+# ────────────────────────────────────────────────
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    form = LoginForm()
+    if form.validate_on_submit():
+        username = (form.username.data or '').strip()
+        password = (form.password.data or '').strip()
+        if username == 'admin' and password == 'admin':
+            session['user'] = 'admin'
+            flash('Login successful. Welcome admin!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid user ID or password.', 'danger')
+    return render_template('login.html', form=form)
+
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
+
 @app.route('/driver/delete/<int:id>', methods=['POST'])
 def delete_driver(id):
     driver = Driver.query.get_or_404(id)
@@ -591,7 +996,8 @@ def parking_list():
             ParkingStation.district.ilike(f'%{search}%') |
             ParkingStation.address_location.ilike(f'%{search}%')
         )
-    parkings = query.order_by(ParkingStation.name).all()
+    # Sort by ID as requested
+    parkings = query.order_by(ParkingStation.id).all()
     return render_template('parking_list.html', parkings=parkings, search=search)
 
 
@@ -681,6 +1087,47 @@ def parking_import_template():
     return generate_csv_response(headers, rows, filename='parking_import_template.csv')
 
 
+@app.route('/parking/export')
+def parking_export():
+    """Export parking list (with optional search) to CSV/Excel."""
+    search = request.args.get('search', '').strip()
+    query = ParkingStation.query
+    if search:
+        query = query.filter(
+            ParkingStation.name.ilike(f'%{search}%') |
+            ParkingStation.district.ilike(f'%{search}%') |
+            ParkingStation.address_location.ilike(f'%{search}%')
+        )
+    parkings = query.order_by(ParkingStation.id).all()
+    headers = ['ID', 'Station Name', 'District', 'Tehsil', 'Capacity', 'Address/Location']
+    rows = []
+    for p in parkings:
+        rows.append([
+            p.id,
+            p.name,
+            p.district or '',
+            p.tehsil or '',
+            p.capacity,
+            p.address_location or '',
+        ])
+    return generate_csv_response(headers, rows, filename='parking_stations.csv')
+
+
+@app.route('/parking/print')
+def parking_print():
+    """Print-friendly view of parking stations (browser print to PDF)."""
+    search = request.args.get('search', '').strip()
+    query = ParkingStation.query
+    if search:
+        query = query.filter(
+            ParkingStation.name.ilike(f'%{search}%') |
+            ParkingStation.district.ilike(f'%{search}%') |
+            ParkingStation.address_location.ilike(f'%{search}%')
+        )
+    parkings = query.order_by(ParkingStation.id).all()
+    return render_template('parking_print.html', parkings=parkings, search=search)
+
+
 @app.route('/parking/add', methods=['GET', 'POST'])
 @app.route('/parking/edit/<int:id>', methods=['GET', 'POST'])
 def parking_form(id=None):
@@ -690,7 +1137,21 @@ def parking_form(id=None):
         try:
             if not parking:
                 parking = ParkingStation()
+            # Normalize name (trim spaces)
+            name_normalized = (form.name.data or '').strip()
             form.populate_obj(parking)
+            parking.name = name_normalized
+
+            # Duplicate name check (case-insensitive, ignore current record)
+            existing_q = ParkingStation.query.filter(
+                func.lower(ParkingStation.name) == name_normalized.lower()
+            )
+            if id:
+                existing_q = existing_q.filter(ParkingStation.id != parking.id)
+            if existing_q.first():
+                flash('Parking Station with this name already exists. Please use a different name.', 'danger')
+                return render_template('parking_form.html', form=form, title='Parking Station', back_url=url_for('parking_list'))
+
             if not id:
                 db.session.add(parking)
             db.session.commit()
@@ -3438,6 +3899,44 @@ def penalty_record_edit(pk):
 # ────────────────────────────────────────────────
 # Party Name (Pump / Workshop / Spare parts shop)
 # ────────────────────────────────────────────────
+@app.route('/driver-posts')
+def driver_post_list():
+    search = request.args.get('search', '').strip()
+    query = EmployeePost.query
+    if search:
+        query = query.filter(EmployeePost.full_name.ilike(f'%{search}%'))
+    posts = query.order_by(EmployeePost.full_name).all()
+    return render_template('driver_post_list.html', posts=posts, search=search)
+
+
+@app.route('/driver-post/add', methods=['GET', 'POST'])
+@app.route('/driver-post/edit/<int:id>', methods=['GET', 'POST'])
+def driver_post_form(id=None):
+    post = EmployeePost.query.get_or_404(id) if id else None
+    form = EmployeePostForm(obj=post)
+    if form.validate_on_submit():
+        if not post:
+            post = EmployeePost()
+        post.short_name = form.short_name.data.strip()
+        post.full_name = form.full_name.data.strip()
+        post.remarks = form.remarks.data.strip() if form.remarks.data else None
+        if not id:
+            db.session.add(post)
+        db.session.commit()
+        flash('Post saved.', 'success')
+        return redirect(url_for('driver_post_list'))
+    return render_template('driver_post_form.html', form=form, post=post)
+
+
+@app.route('/driver-post/delete/<int:id>', methods=['POST'])
+def driver_post_delete(id):
+    post = EmployeePost.query.get_or_404(id)
+    db.session.delete(post)
+    db.session.commit()
+    flash('Post deleted.', 'success')
+    return redirect(url_for('driver_post_list'))
+
+
 @app.route('/parties')
 def party_list():
     search = request.args.get('search', '').strip()

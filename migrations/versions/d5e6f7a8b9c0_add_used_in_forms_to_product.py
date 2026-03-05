@@ -7,6 +7,7 @@ Create Date: 2026-03-01
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 revision = 'd5e6f7a8b9c0'
@@ -16,8 +17,12 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table('product', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('used_in_forms', sa.String(length=100), nullable=True))
+    bind = op.get_bind()
+    insp = inspect(bind)
+    cols = [c['name'] for c in insp.get_columns('product')]
+    if 'used_in_forms' not in cols:
+        with op.batch_alter_table('product', schema=None) as batch_op:
+            batch_op.add_column(sa.Column('used_in_forms', sa.String(length=100), nullable=True))
 
 
 def downgrade():

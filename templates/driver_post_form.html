@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Post{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0 fw-bold">
+            <i class="bi bi-person-vcard me-2"></i>
+            {{ 'Edit Post' if post else 'Create Employee Post' }}
+          </h5>
+        </div>
+        <div class="card-body">
+          <form method="POST">
+            {{ form.hidden_tag() }}
+
+            <div class="mb-3">
+              {{ form.short_name.label(class="form-label fw-bold") }}
+              {{ form.short_name(class="form-control " + ("is-invalid" if form.short_name.errors else ""), placeholder="e.g. Drv, SrDrv") }}
+              {% for error in form.short_name.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+
+            <div class="mb-3">
+              {{ form.full_name.label(class="form-label fw-bold") }}
+              {{ form.full_name(class="form-control " + ("is-invalid" if form.full_name.errors else ""), placeholder="e.g. Driver, Senior Driver") }}
+              {% for error in form.full_name.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+
+            <div class="mb-3">
+              {{ form.remarks.label(class="form-label fw-bold") }}
+              {{ form.remarks(class="form-control", placeholder="Any notes about this post") }}
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+              <a href="{{ url_for('driver_post_list') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left-circle me-1"></i>Back to List
+              </a>
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-save me-1"></i>{{ 'Update' if post else 'Save' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

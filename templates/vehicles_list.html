@@ -7,8 +7,14 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0 fw-bold"><i class="bi bi-truck me-2 text-primary"></i>Vehicles Management</h2>
     <div class="d-flex gap-2">
+      <a href="{{ url_for('vehicles_import') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-upload me-1"></i>Import Excel
+      </a>
       <a href="{{ url_for('vehicles_export', search=search) }}" class="btn btn-outline-secondary">
-        <i class="bi bi-download me-1"></i>Export CSV
+        <i class="bi bi-download me-1"></i>Export Excel
+      </a>
+      <a href="{{ url_for('vehicles_print', search=search) }}" target="_blank" class="btn btn-outline-primary">
+        <i class="bi bi-printer me-1"></i>Print / PDF
       </a>
       <a href="{{ url_for('vehicle_form') }}" class="btn btn-success">
         <i class="bi bi-plus-circle me-1"></i>Add New Vehicle

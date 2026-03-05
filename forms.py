@@ -50,38 +50,45 @@ class ProjectForm(FlaskForm):
 class VehicleForm(FlaskForm):
     vehicle_no = StringField('Vehicle No#', validators=[DataRequired(), Length(max=50)])
     model = StringField('Model', validators=[DataRequired(), Length(max=100)])
-    engine_no = StringField('Engine No#', validators=[Optional(), Length(max=50)])
-    chassis_no = StringField('Chassis No#', validators=[Optional(), Length(max=50)])
-    vehicle_type = SelectField('Vehicle Type',
-                               choices=[
-                                   ('Ambulance', 'Ambulance'),
-                                   ('Passanger', 'Passanger'),
-                                   ('USG+Passanger', 'USG+Passanger'),
-                                   ('USG', 'USG'),
-                               ],
-                               validators=[DataRequired()])
-    driver_capacity = IntegerField('Driver Capacity', validators=[Optional(), NumberRange(min=1)])
+    engine_no = StringField('Engine No#', validators=[DataRequired(), Length(max=50)])
+    chassis_no = StringField('Chassis No#', validators=[DataRequired(), Length(max=50)])
+    vehicle_type = SelectField(
+        'Vehicle Type',
+        choices=[
+            ('', '-- Select Vehicle Type --'),
+            ('Ambulance', 'Ambulance'),
+            ('Passanger', 'Passanger'),
+            ('USG+Passanger', 'USG+Passanger'),
+            ('USG', 'USG'),
+        ],
+        validators=[DataRequired()]
+    )
+    driver_capacity = IntegerField('Driver Capacity', validators=[DataRequired(), NumberRange(min=1)])
 
     phone_no = StringField('Vehicle Phone No', validators=[Optional(), Length(max=20)])
-    active_date = DateField('Active Date', format='%d-%m-%Y',
-                            render_kw={"class": "form-control datepicker"},
-                            validators=[Optional()])
+    active_date = DateField(
+        'Active Date',
+        format='%d-%m-%Y',
+        render_kw={"class": "form-control datepicker"},
+        validators=[DataRequired()]
+    )
     remarks = TextAreaField('Remarks', validators=[Optional()])
     document = FileField('Vehicle Documents (PDF)', validators=[Optional(),
         FileAllowed(['pdf'], 'Only PDF files allowed')])
     submit = SubmitField('Save')
 
 
+class VehicleImportForm(FlaskForm):
+    file = FileField('Vehicle Excel/CSV', validators=[
+        FileAllowed(['xlsx', 'xls', 'csv'], 'Only Excel or CSV files allowed')
+    ])
+    submit = SubmitField('Import')
+
+
 # Driver Form
 class DriverForm(FlaskForm):
     driver_id = StringField('Driver ID', validators=[DataRequired()])
-    post = SelectField('Post', choices=[
-        ('Driver', 'Driver'),
-        ('Senior Driver', 'Senior Driver'),
-        ('Supervisor', 'Supervisor'),
-        ('Trainer', 'Trainer'),
-        ('Other', 'Other')
-    ], validators=[DataRequired()])
+    post = SelectField('Post', choices=[], validators=[DataRequired()])
     application_date = DateField('Application Date', format='%d-%m-%Y', validators=[DataRequired()])
     name = StringField('Full Name', validators=[DataRequired()])
     father_name = StringField('Father Name', validators=[DataRequired()])
@@ -134,19 +141,28 @@ class DriverForm(FlaskForm):
     submit = SubmitField('Save Driver Data')
 
 
+class DriverImportForm(FlaskForm):
+    file = FileField('Driver Excel/CSV', validators=[
+        FileAllowed(['xlsx', 'xls', 'csv'], 'Only Excel or CSV files allowed')
+    ])
+    submit = SubmitField('Import')
+
+
 # Parking Form
 class ParkingForm(FlaskForm):
     name = StringField('Parking Station Name', validators=[DataRequired(), Length(max=100)])
-    district = StringField('District Name', validators=[Optional(), Length(max=100)])
-    tehsil = StringField('Tehsil Name', validators=[Optional(), Length(max=100)])
+    district = StringField('District Name', validators=[DataRequired(), Length(max=100)])
+    tehsil = StringField('Tehsil Name', validators=[DataRequired(), Length(max=100)])
     mouza = StringField('Mouza Name', validators=[Optional(), Length(max=100)])
     uc_name = StringField('UC Name', validators=[Optional(), Length(max=100)])
     create_date = DateField('Create Date', format='%d-%m-%Y',
                             render_kw={"class": "form-control datepicker"},
-                            validators=[Optional()])
+                            validators=[DataRequired()])
     address_location = TextAreaField('Address/Location Description', validators=[Optional()])
     remarks = TextAreaField('Remarks', validators=[Optional()])
     capacity = IntegerField('Capacity', validators=[DataRequired(), NumberRange(min=1)])
+    latitude = DecimalField('Latitude', places=6, validators=[Optional()], render_kw={"placeholder": "e.g. 31.520370"})
+    longitude = DecimalField('Longitude', places=6, validators=[Optional()], render_kw={"placeholder": "e.g. 74.358749"})
     submit = SubmitField('Save')
 
 
@@ -557,6 +573,74 @@ class ProductForm(FlaskForm):
     ], validators=[Optional()])
     remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 2})
     submit = SubmitField('Save')
+
+
+class EmployeePostForm(FlaskForm):
+    short_name = StringField('Post Short Name', validators=[DataRequired(), Length(min=1, max=50)])
+    full_name = StringField('Post Full Name', validators=[DataRequired(), Length(min=2, max=150)])
+    remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 2})
+    submit = SubmitField('Save')
+
+
+class EmployeeForm(FlaskForm):
+    code = StringField('Employee Code', validators=[Length(max=20)])
+    name = StringField('Employee Name', validators=[DataRequired(), Length(max=100)])
+    post_id = SelectField('Employee Post', coerce=int, validators=[DataRequired()], choices=[])
+    department = StringField('Department', validators=[DataRequired(), Length(max=100)])
+
+    father_name = StringField('Father Name', validators=[DataRequired(), Length(max=100)])
+    place_of_birth = StringField('Place of Birth', validators=[DataRequired(), Length(max=100)])
+    dob = DateField('Date of Birth', format='%d-%m-%Y', validators=[DataRequired()],
+                    render_kw={"class": "form-control datepicker"})
+    education = SelectField('Education', choices=[
+        ('', '-- Select Education --'),
+        ('Middle', 'Middle'),
+        ('Matric', 'Matric'),
+        ('Intermediate', 'Intermediate'),
+        ('Graduate', 'Graduate'),
+        ('Masters', 'Masters'),
+        ('Other', 'Other'),
+    ], validators=[DataRequired()])
+    marital_status = SelectField('Marital Status', choices=[
+        ('Single', 'Single'),
+        ('Married', 'Married'),
+        ('Divorced', 'Divorced'),
+        ('Widowed', 'Widowed'),
+    ], validators=[DataRequired()])
+    cnic_no = StringField('CNIC No', validators=[
+        DataRequired(),
+        Regexp(r'^[0-9]{5}-[0-9]{7}-[0-9]{1}$', message='Format: 32304-1111111-5')
+    ], render_kw={"placeholder": "32304-1111111-5"})
+    district = StringField('District', validators=[DataRequired(), Length(max=100)],
+                           render_kw={"list": "districtOptions"})
+    address = TextAreaField('Address', validators=[DataRequired()], render_kw={"rows": 2})
+
+    phone1 = StringField('Phone No 1', validators=[DataRequired(), Length(max=20)], render_kw={"placeholder": "03xx-xxxxxxx"})
+    phone2 = StringField('Phone No 2', validators=[DataRequired(), Length(max=20)], render_kw={"placeholder": "03xx-xxxxxxx"})
+    email = StringField('Email', validators=[Optional(), Email(), Length(max=120)])
+
+    joining_date = DateField('Joining Date', format='%d-%m-%Y',
+                             validators=[DataRequired()],
+                             render_kw={"class": "form-control datepicker"})
+    status = SelectField('Status', choices=[
+        ('Active', 'Active'),
+        ('Inactive', 'Inactive'),
+        ('Left', 'Left'),
+    ], default='Active', validators=[DataRequired()])
+
+    bank_name = StringField('Bank Name', validators=[Optional(), Length(max=100)])
+    account_no = StringField('Account No', validators=[Optional(), Length(max=50)])
+    account_title = StringField('Account Title', validators=[Optional(), Length(max=100)])
+
+    remarks = TextAreaField('Remarks', validators=[Optional()],
+                            render_kw={"rows": 3, "placeholder": "Previous job experience / other notes"})
+    submit = SubmitField('Save Employee')
+
+
+class LoginForm(FlaskForm):
+    username = StringField('User ID', validators=[DataRequired()])
+    password = StringField('Password', validators=[DataRequired()])
+    submit = SubmitField('Login')
 
 
 class FuelExpenseFilterForm(FlaskForm):

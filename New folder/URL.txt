@@ -1,0 +1,11 @@
+Password: 
+0uOHtbvtXVW2gPrEN36SBcdsPcRDOhEs
+
+Internal Database URL: 
+postgresql://saifbhai:0uOHtbvtXVW2gPrEN36SBcdsPcRDOhEs@dpg-d6k6omn5r7bs73a8crcg-a/company_management_w27v
+
+External Database URL: 
+postgresql://saifbhai:0uOHtbvtXVW2gPrEN36SBcdsPcRDOhEs@dpg-d6k6omn5r7bs73a8crcg-a.singapore-postgres.render.com/company_management_w27v
+
+PSQL Command:
+PGPASSWORD=0uOHtbvtXVW2gPrEN36SBcdsPcRDOhEs psql -h dpg-d6k6omn5r7bs73a8crcg-a.singapore-postgres.render.com -U saifbhai company_management_w27v

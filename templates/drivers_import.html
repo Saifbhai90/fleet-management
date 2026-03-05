@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Import Drivers{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-person-badge-fill me-2 text-primary"></i>Import Drivers</h2>
+    <a href="{{ url_for('drivers_list') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Back to Drivers List
+    </a>
+  </div>
+
+  <div class="alert alert-info border-0 shadow-sm mb-4">
+    <i class="bi bi-info-circle me-2"></i>
+    Step 1: Download the Excel/CSV template. Step 2: Fill driver data (basic fields). Step 3: Upload the same file here to import.
+  </div>
+
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <h5 class="card-title mb-2"><i class="bi bi-file-earmark-spreadsheet me-2 text-success"></i>Step 1: Download Template</h5>
+      <p class="text-muted mb-2">
+        Use this template to prepare basic driver data. Columns:
+        <code>driver_id</code>, <code>name</code>, <code>father_name</code>, <code>phone1</code>,
+        <code>driver_district</code>, <code>cnic_no</code>, <code>license_no</code>, <code>status</code>.
+      </p>
+      <a href="{{ url_for('drivers_import_template') }}" class="btn btn-success">
+        <i class="bi bi-download me-1"></i>Download Template (CSV for Excel)
+      </a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <h5 class="card-title mb-3"><i class="bi bi-cloud-arrow-up me-2 text-primary"></i>Step 2: Upload Filled File</h5>
+      <form method="POST" enctype="multipart/form-data">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          <label class="form-label fw-semibold">{{ form.file.label.text }}</label>
+          {{ form.file(class="form-control") }}
+          <div class="form-text">
+            Allowed types: <strong>.xlsx</strong>, <strong>.xls</strong>, or <strong>.csv</strong>.
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-upload me-1"></i>Import Drivers
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

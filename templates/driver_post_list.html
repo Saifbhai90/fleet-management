@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Posts{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0 fw-bold"><i class="bi bi-person-vcard me-2 text-primary"></i>Employee Posts</h2>
+    <a href="{{ url_for('driver_post_form') }}" class="btn btn-success shadow-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add New Post
+    </a>
+  </div>
+
+  <form method="GET" class="mb-3">
+    <div class="input-group input-group-lg shadow-sm">
+      <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+      <input type="text" name="search" class="form-control border-start-0 ps-0"
+             placeholder="Search by short or full name..." value="{{ search or '' }}" data-realtime-table="driverPostTable">
+      <button class="btn btn-primary px-4" type="submit">Search</button>
+    </div>
+  </form>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table id="driverPostTable" class="table table-hover align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th class="ps-3" style="width: 10%;">ID</th>
+              <th style="width: 20%;">Post Short Name</th>
+              <th style="width: 30%;">Post Full Name</th>
+              <th>Remarks</th>
+              <th class="text-center" style="width: 15%;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for post in posts %}
+            <tr>
+              <td class="ps-3 text-muted">{{ post.id }}</td>
+              <td class="fw-bold">{{ post.short_name }}</td>
+              <td>{{ post.full_name }}</td>
+              <td>{{ post.remarks or '-' }}</td>
+              <td class="text-center">
+                <a href="{{ url_for('driver_post_form', id=post.id) }}" class="btn btn-sm btn-warning me-1">
+                  <i class="bi bi-pencil-square"></i> Edit
+                </a>
+                <form action="{{ url_for('driver_post_delete', id=post.id) }}" method="POST" style="display:inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-sm btn-danger"
+                          onclick="return confirm('Delete post {{ post.full_name }}?')">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="text-center py-5">
+                <div class="text-muted">
+                  <i class="bi bi-person-vcard fs-1 d-block mb-3"></i>
+                  <p>No posts found. <a href="{{ url_for('driver_post_form') }}">Add your first post</a>.</p>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

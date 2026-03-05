@@ -27,7 +27,8 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label class="form-label fw-bold">{{ form.capacity.label.text }}</label>
-                {{ form.capacity(class="form-control", placeholder="Max Vehicles") }}
+                {{ form.capacity(class="form-control " + ("is-invalid" if form.capacity.errors else ""), placeholder="Max Vehicles") }}
+                {% for error in form.capacity.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
               </div>
               <div class="col-md-6 mb-3">
                 <label class="form-label fw-bold">{{ form.create_date.label.text }}</label>
@@ -39,11 +40,24 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label class="form-label fw-bold">{{ form.district.label.text }}</label>
-                {{ form.district(class="form-control", placeholder="District Name", list="districtOptions") }}
+                {{ form.district(class="form-control " + ("is-invalid" if form.district.errors else ""), placeholder="District Name", list="districtOptions") }}
+                {% for error in form.district.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
               </div>
               <div class="col-md-6 mb-3">
                 <label class="form-label fw-bold">{{ form.tehsil.label.text }}</label>
-                {{ form.tehsil(class="form-control", placeholder="Tehsil Name") }}
+                {{ form.tehsil(class="form-control " + ("is-invalid" if form.tehsil.errors else ""), placeholder="Tehsil Name") }}
+                {% for error in form.tehsil.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-bold">{{ form.latitude.label.text }}</label>
+                {{ form.latitude(class="form-control", placeholder="e.g. 31.520370") }}
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label fw-bold">{{ form.longitude.label.text }}</label>
+                {{ form.longitude(class="form-control", placeholder="e.g. 74.358749") }}
               </div>
             </div>
 
@@ -72,7 +86,7 @@
 
             <div class="mb-3">
               <label class="form-label fw-bold">{{ form.address_location.label.text }}</label>
-              {{ form.address_location(class="form-control", rows=2, placeholder="Full address or GPS coordinates...") }}
+              {{ form.address_location(class="form-control", rows=2, placeholder="Full address or nearby landmark...") }}
             </div>
 
             <div class="mb-0">

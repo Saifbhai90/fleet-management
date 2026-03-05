@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Employees List{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0 fw-bold"><i class="bi bi-people-fill me-2 text-primary"></i>Employees Management</h2>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('employees_export', search=search) }}" class="btn btn-outline-secondary shadow-sm">
+        <i class="bi bi-download me-1"></i>Export Excel
+      </a>
+      <a href="{{ url_for('employees_print', search=search) }}" target="_blank" class="btn btn-outline-primary shadow-sm">
+        <i class="bi bi-printer me-1"></i>Print / PDF
+      </a>
+      <a href="{{ url_for('employee_form') }}" class="btn btn-success shadow-sm">
+        <i class="bi bi-plus-circle me-1"></i>Add New Employee
+      </a>
+    </div>
+  </div>
+
+  <!-- Search Section -->
+  <form method="GET" class="mb-4">
+    <div class="input-group input-group-lg shadow-sm">
+      <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+      <input type="text" name="search" class="form-control border-start-0 ps-0"
+             placeholder="Search by name, code or department..." value="{{ search }}" data-realtime-table="employeesTable">
+      <button class="btn btn-primary px-4" type="submit">Search</button>
+    </div>
+  </form>
+
+  <!-- Table Section -->
+  <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table id="employeesTable" class="table table-hover align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th class="ps-4">ID</th>
+              <th>Employee Code</th>
+              <th>Name</th>
+              <th>CNIC No</th>
+              <th>Post</th>
+              <th>Department</th>
+              <th>Phone</th>
+              <th>Joining Date</th>
+              <th>Status</th>
+              <th class="text-center pe-4">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for emp in employees %}
+            <tr>
+              <td class="ps-4 text-muted">{{ emp.id }}</td>
+              <td class="fw-bold text-navy">{{ emp.code }}</td>
+              <td>{{ emp.name }}</td>
+              <td>{{ emp.cnic_no or '-' }}</td>
+              <td>
+                {% if emp.post %}
+                  <span class="badge bg-light text-primary border">
+                    {{ emp.post.full_name }}{% if emp.post.short_name %} ({{ emp.post.short_name }}){% endif %}
+                  </span>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>{{ emp.department or '-' }}</td>
+              <td>{{ emp.phone1 or emp.phone2 or '-' }}</td>
+              <td>{{ emp.joining_date.strftime('%d-%b-%Y') if emp.joining_date else '-' }}</td>
+              <td>
+                {% if emp.status == 'Active' %}
+                  <span class="badge bg-success">Active</span>
+                {% elif emp.status == 'Inactive' %}
+                  <span class="badge bg-secondary">Inactive</span>
+                {% else %}
+                  <span class="badge bg-danger">Left</span>
+                {% endif %}
+              </td>
+              <td class="text-center pe-4">
+                <div class="btn-group shadow-sm">
+                  <a href="{{ url_for('employee_form', id=emp.id) }}" class="btn btn-sm btn-warning" title="Edit">
+                    <i class="bi bi-pencil-square"></i>
+                  </a>
+                  <form action="{{ url_for('employee_delete', id=emp.id) }}" method="POST" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-danger"
+                            onclick="return confirm('Delete employee {{ emp.name }}?')">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="9" class="text-center py-5">
+                <div class="text-muted">
+                  <i class="bi bi-people-fill fs-1 d-block mb-3 opacity-25"></i>
+                  <p>No employees found. <a href="{{ url_for('employee_form') }}" class="fw-bold">Add a new employee now</a>.</p>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .text-navy { color: #1e3a8a; }
+  .table thead th { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
+{% endblock %}
+
