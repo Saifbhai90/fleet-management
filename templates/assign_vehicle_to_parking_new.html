@@ -8,29 +8,46 @@
                     <h5 class="mb-0 fw-bold"><i class="bi bi-p-square-fill me-2 text-info"></i>Vehicle Parking Assignment</h5>
                 </div>
                 <div class="card-body p-4 bg-light">
+                    {% if form.errors %}
+                    <div class="alert alert-danger py-2 mb-3" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>Please fix the errors below. Fill all required fields.
+                    </div>
+                    {% endif %}
                     <form method="POST" novalidate>
                         {{ form.hidden_tag() }}
                         <div class="row g-3">
                             <!-- 1. Project -->
                             <div class="col-md-4">
-                                <label class="form-label fw-bold">1. Select Project</label>
-                                {{ form.project_id(class="form-select select2-enable", id="project_select") }}
+                                <label class="form-label fw-bold">1. Select Project <span class="text-danger">*</span></label>
+                                {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else ""), id="project_select") }}
+                                {% for error in form.project_id.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
                             </div>
                             <!-- 2. District -->
                             <div class="col-md-4">
-                                <label class="form-label fw-bold">2. Select District</label>
-                                {{ form.district_id(class="form-select select2-enable", id="district_select") }}
+                                <label class="form-label fw-bold">2. Select District <span class="text-danger">*</span></label>
+                                {{ form.district_id(class="form-select select2-enable " + ("is-invalid" if form.district_id.errors else ""), id="district_select") }}
+                                {% for error in form.district_id.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
                             </div>
                             <!-- 3. Vehicle -->
                             <div class="col-md-4">
-                                <label class="form-label fw-bold">3. Select Vehicle</label>
-                                {{ form.vehicle_id(class="form-select select2-enable", id="vehicle_select") }}
+                                <label class="form-label fw-bold">3. Select Vehicle <span class="text-danger">*</span></label>
+                                {{ form.vehicle_id(class="form-select select2-enable " + ("is-invalid" if form.vehicle_id.errors else ""), id="vehicle_select") }}
+                                {% for error in form.vehicle_id.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
                             </div>
 
                             <div class="col-md-8">
                                 <div class="bg-white p-4 rounded-3 shadow-sm mt-3 border-top border-info border-4">
-                                    <label class="form-label fw-bold text-info">4. Select Parking Station (Real-time Capacity Check)</label>
-                                    {{ form.parking_station_id(class="form-select select2-enable", id="parking_select") }}
+                                    <label class="form-label fw-bold text-info">4. Select Parking Station (Real-time Capacity Check) <span class="text-danger">*</span></label>
+                                    {{ form.parking_station_id(class="form-select select2-enable " + ("is-invalid" if form.parking_station_id.errors else ""), id="parking_select") }}
+                                    {% for error in form.parking_station_id.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
                                     <div id="capacity-warning" class="mt-2" style="display:none;">
                                         <div class="alert alert-danger py-2 small"><i class="bi bi-exclamation-triangle-fill"></i> This station is FULL.</div>
                                     </div>
@@ -39,8 +56,11 @@
 
                             <div class="col-md-4">
                                 <div class="bg-white p-4 rounded-3 shadow-sm mt-3 h-100">
-                                    <label class="form-label fw-bold">Assign Date</label>
-                                    {{ form.assign_date(class="form-control datepicker") }}
+                                    <label class="form-label fw-bold">Assign Date <span class="text-danger">*</span></label>
+                                    {{ form.assign_date(class="form-control datepicker " + ("is-invalid" if form.assign_date.errors else "")) }}
+                                    {% for error in form.assign_date.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
                                     <label class="form-label fw-bold mt-3">Remarks</label>
                                     {{ form.remarks(class="form-control", rows=2) }}
                                 </div>
@@ -49,6 +69,7 @@
 
                         <div class="mt-4 text-center">
                             <button type="submit" id="submit-btn" class="btn btn-primary btn-lg px-5 fw-bold">Assign Parking Slot</button>
+                            <a href="{{ url_for('assign_vehicle_to_parking_list') }}" class="btn btn-outline-secondary btn-lg px-4 ms-2">Cancel</a>
                         </div>
                     </form>
                 </div>
@@ -87,8 +108,8 @@ $(document).ready(function() {
         $park.empty().append('<option value="">Loading...</option>').trigger('change');
 
         if(did && did != "") {
-            // Load Vehicles
-            $.getJSON('/get_vehicles_by_district/'+pid+'/'+did, function(data) {
+            // Load Vehicles (only those without parking assigned)
+            $.getJSON('/get_vehicles_by_district_no_parking/'+pid+'/'+did, function(data) {
                 $veh.empty().append('<option value="">-- Select Vehicle --</option>');
                 $.each(data, function(i, v){ $veh.append('<option value="'+v.id+'">'+v.no+'</option>'); });
             });

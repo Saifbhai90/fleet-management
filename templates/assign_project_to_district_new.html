@@ -5,23 +5,41 @@
 {% block content %}
 <div class="container mt-5">
   <div class="card shadow-lg mx-auto" style="max-width: 700px;">
-    <div class="card-header bg-success text-white text-center">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
       <h4 class="mb-0">+ New Assignment: District to Project</h4>
+      <a href="{{ url_for('assign_project_to_district') }}" class="btn btn-light btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to List
+      </a>
     </div>
     <div class="card-body">
+      {% if form.errors %}
+      <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+        <strong>Please correct the errors below.</strong>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+      {% endif %}
       <form method="POST">
         {{ form.hidden_tag() }}
         <div class="mb-3">
           <label class="form-label fw-bold">Select Project</label>
-          {{ form.project_id(class="form-select") }}
+          {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else ""), id="project_id") }}
+          {% for error in form.project_id.errors %}
+          <div class="invalid-feedback d-block">{{ error }}</div>
+          {% endfor %}
         </div>
         <div class="mb-3">
           <label class="form-label fw-bold">Select District</label>
-          {{ form.district_id(class="form-select") }}
+          {{ form.district_id(class="form-select select2-enable " + ("is-invalid" if form.district_id.errors else ""), id="district_id") }}
+          {% for error in form.district_id.errors %}
+          <div class="invalid-feedback d-block">{{ error }}</div>
+          {% endfor %}
         </div>
         <div class="mb-3">
           <label class="form-label fw-bold">Assign Date</label>
-          {{ form.assign_date(class="form-control datepicker") }}
+          {{ form.assign_date(class="form-control datepicker " + ("is-invalid" if form.assign_date.errors else "")) }}
+          {% for error in form.assign_date.errors %}
+          <div class="invalid-feedback d-block">{{ error }}</div>
+          {% endfor %}
         </div>
         <div class="mb-4">
           <label class="form-label fw-bold">Remarks (Optional)</label>
@@ -29,15 +47,83 @@
         </div>
         <div class="d-grid gap-2">
           {{ form.submit(class="btn btn-success btn-lg") }}
-          <button type="reset" class="btn btn-outline-secondary btn-lg">Clear</button>
+          <button type="reset" class="btn btn-outline-secondary btn-lg" id="btnClear">Clear</button>
         </div>
       </form>
     </div>
-    <div class="card-footer text-center">
-      <a href="{{ url_for('assign_project_to_district') }}" class="btn btn-outline-secondary">
-        ← Back to List
-      </a>
-    </div>
   </div>
 </div>
+<script>
+(function() {
+  function loadUnassignedDistricts(projectId, preserveDistrictId) {
+    var $districtSelect = $('#district_id');
+    if (!projectId || projectId === '0') {
+      $districtSelect.empty().append('<option value="0">-- Select District --</option>');
+      $districtSelect.val('0').trigger('change');
+      return;
+    }
+    // Destroy Select2 before changing options so it reflects new list
+    if ($districtSelect.data('select2')) {
+      $districtSelect.select2('destroy');
+    }
+    $districtSelect.empty().append('<option value="0">Loading...</option>').val('0');
+    $districtSelect.select2({ theme: 'bootstrap-5', width: '100%' });
+
+    fetch('/get_unassigned_districts_by_project/' + projectId)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if ($districtSelect.data('select2')) {
+          $districtSelect.select2('destroy');
+        }
+        $districtSelect.empty().append('<option value="0">-- Select District --</option>');
+        data.forEach(function(d) {
+          $districtSelect.append($('<option></option>').attr('value', d.id).text(d.name));
+        });
+        if (preserveDistrictId && preserveDistrictId !== '0' && preserveDistrictId !== '') {
+          $districtSelect.val(preserveDistrictId);
+        } else {
+          $districtSelect.val('0');
+        }
+        $districtSelect.select2({ theme: 'bootstrap-5', width: '100%' });
+        $districtSelect.trigger('change');
+      })
+      .catch(function() {
+        if ($districtSelect.data('select2')) {
+          $districtSelect.select2('destroy');
+        }
+        $districtSelect.empty().append('<option value="0">-- Select District --</option>').val('0');
+        $districtSelect.select2({ theme: 'bootstrap-5', width: '100%' });
+      });
+  }
+
+  $(document).ready(function() {
+    var $projectSelect = $('#project_id');
+    var $districtSelect = $('#district_id');
+    var $form = $('form[method="POST"]');
+
+    // Project change: load only unassigned districts for this project
+    $projectSelect.on('change', function() {
+      var pid = $(this).val();
+      loadUnassignedDistricts(pid, null);
+    });
+
+    $form.on('reset', function() {
+      setTimeout(function() {
+        if ($districtSelect.data('select2')) {
+          $districtSelect.select2('destroy');
+        }
+        $districtSelect.empty().append('<option value="0">-- Select District --</option>').val('0');
+        $districtSelect.select2({ theme: 'bootstrap-5', width: '100%' });
+        $projectSelect.val('0').trigger('change');
+      }, 0);
+    });
+
+    // After validation error: project may already be selected; load its unassigned districts
+    var selectedProject = $projectSelect.val();
+    if (selectedProject && selectedProject !== '0') {
+      loadUnassignedDistricts(selectedProject, $districtSelect.val());
+    }
+  });
+})();
+</script>
 {% endblock %}

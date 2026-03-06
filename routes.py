@@ -29,7 +29,8 @@ from forms import (
 from datetime import datetime, date, time
 import csv
 from io import StringIO
-from sqlalchemy import func, text, inspect
+from sqlalchemy import func, text, inspect, or_, cast
+from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone
 import re
@@ -391,8 +392,21 @@ def whats_new():
     """What's New page: only latest 15 entries (newest first)."""
     entries = [
         {
-            'title': 'Backup, Drivers (search/print/export/post), Import (list-only + progress)',
+            'title': 'Assignment modules: validations, locks, exports & print preview',
             'label': 'Latest',
+            'bullets': [
+                'Driver to Vehicle: Required field errors shown below each field. Assign date must be entered by user (no auto-select). Cancel button added. Selected vehicle\'s parking station shown below Vehicle dropdown. If vehicle has no parking station, Finalize shows message and form is not saved or reset. Unassign form now includes CSRF token (fixes Bad Request).',
+                'Project to Company list: Projects that have districts linked now have Edit and Deassign locked (with lock icon). Export to Excel and Report Preview (print) buttons added. List search filter applied to export and print.',
+                'New Project Assignment & District to Project: Company/Project and Project/District must be selected by user (no auto-select); placeholder options and validation. District to Project: Clear button resets Project and District to placeholder. Required field errors shown below fields.',
+                'District to Project: Select Project shows only projects assigned to a company. After selecting a project, District dropdown shows only districts not already linked to that project (via AJAX).',
+                'Vehicle to District: Project dropdown shows only company-assigned projects. Clear button clears all fields (Project, District, Vehicle, Date). Export to Excel and Print Preview buttons added on list.',
+                'Vehicle to Parking: Project dropdown shows only company-assigned projects. Vehicle list shows only vehicles without parking assigned (and current vehicle on edit). Vehicles with a driver attached have Edit and Deassign locked on parking list; edit and deassign routes also block when driver is attached. Export to Excel and Print Preview buttons added on list.',
+                'Driver to Vehicle: Project dropdown shows only company-assigned projects. Export to Excel and Print Preview buttons added on list.',
+            ],
+        },
+        {
+            'title': 'Backup, Drivers (search/print/export/post), Import (list-only + progress)',
+            'label': 'Previous update',
             'bullets': [
                 'Backup: Download and Send to Email only (Save to Path removed). Scheduled backup runs daily and sends backup to email only. Left menu: Backup link above What\'s New.',
                 'What\'s New: Always shown at the bottom of the left menu (below Backup).',
@@ -1808,17 +1822,74 @@ def export_vehicles(id):
 # ────────────────────────────────────────────────
 # Assignment: Project → Company
 # ────────────────────────────────────────────────
+def _assign_project_to_company_data(search=None):
+    """Query assigned projects (optionally filtered by search). Returns list of Project."""
+    q = Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name)
+    if search:
+        like = f'%{search}%'
+        q = q.outerjoin(Company, Project.company_id == Company.id).filter(
+            or_(Project.name.ilike(like), (Company.name.ilike(like)))
+        )
+    return q.all()
+
+
 @app.route('/assign_project_to_company')
 def assign_project_to_company():
-    assigned_projects = Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
-    return render_template('assign_project_to_company.html', assigned_projects=assigned_projects)
+    search = request.args.get('search', '').strip()
+    assigned_projects = _assign_project_to_company_data(search)
+    # Project IDs that have at least one district linked (lock Edit/Deassign)
+    project_ids_with_districts = set(
+        r[0] for r in db.session.query(project_district.c.project_id).distinct().all()
+    )
+    return render_template(
+        'assign_project_to_company.html',
+        assigned_projects=assigned_projects,
+        search=search,
+        project_ids_with_districts=project_ids_with_districts
+    )
+
+
+@app.route('/assign_project_to_company/export')
+def assign_project_to_company_export():
+    search = request.args.get('search', '').strip()
+    assigned_projects = _assign_project_to_company_data(search)
+    headers = ['Project Name', 'Project ID', 'Company', 'Assign Date', 'Remarks']
+    rows = []
+    for proj in assigned_projects:
+        rows.append([
+            proj.name or '',
+            proj.id,
+            proj.company.name if proj.company else '',
+            proj.assign_date.strftime('%Y-%m-%d') if proj.assign_date else '-',
+            (proj.assign_remarks or '').replace('\r\n', ' ').replace('\n', ' ')
+        ])
+    filename = 'project_company_assignments.xlsx' if not search else f'project_company_assignments_{search[:30].replace("/", "-")}.xlsx'
+    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
+
+
+@app.route('/assign_project_to_company/print')
+def assign_project_to_company_print():
+    search = request.args.get('search', '').strip()
+    assigned_projects = _assign_project_to_company_data(search)
+    return render_template(
+        'assign_project_to_company_print.html',
+        assigned_projects=assigned_projects,
+        search=search
+    )
 
 
 @app.route('/assign_project_to_company/new', methods=['GET', 'POST'])
 def assign_project_to_company_new():
     form = AssignProjectToCompanyForm()
-    form.company_id.choices = [(c.id, c.name) for c in Company.query.order_by(Company.name).all()]
-    form.project_id.choices = [(p.id, p.name) for p in Project.query.filter(Project.company_id.is_(None)).order_by(Project.name).all()]
+    form.company_id.choices = [(0, '-- Select Company --')] + [
+        (c.id, c.name) for c in Company.query.order_by(Company.name).all()
+    ]
+    form.project_id.choices = [(0, '-- Select Project --')] + [
+        (p.id, p.name) for p in Project.query.filter(Project.company_id.is_(None)).order_by(Project.name).all()
+    ]
+    if request.method == 'GET':
+        form.company_id.data = 0
+        form.project_id.data = 0
     if form.validate_on_submit():
         try:
             company = Company.query.get_or_404(form.company_id.data)
@@ -1841,6 +1912,14 @@ def assign_project_to_company_new():
 @app.route('/assign_project_to_company/edit/<int:project_id>', methods=['GET', 'POST'])
 def assign_project_to_company_edit(project_id):
     old_project = Project.query.get_or_404(project_id)
+    # Lock edit if project has districts linked
+    if db.session.query(project_district.c.project_id).filter_by(project_id=project_id).first():
+        flash(
+            f'Cannot edit: Project "{old_project.name}" is linked to district(s). '
+            'Remove district assignment first (Assignment → District → Project).',
+            'danger'
+        )
+        return redirect(url_for('assign_project_to_company'))
     form = EditProjectAssignmentForm()
     form.company_id.choices = [(c.id, c.name) for c in Company.query.order_by(Company.name).all()]
     available_projects = Project.query.filter((Project.company_id == None) | (Project.id == project_id)).all()
@@ -1883,6 +1962,15 @@ def desassign_project_from_company(project_id):
     if not project.company_id:
         flash("This project is not assigned to any company.", 'info')
         return redirect(url_for('assign_project_to_company'))
+    # Block deassign if project is linked to any district
+    if project.districts.count() > 0:
+        district_names = ', '.join(d.name for d in project.districts.all())
+        flash(
+            f'Cannot deassign: Project "{project.name}" is linked to district(s): {district_names}. '
+            'Remove district assignment first (Assignment → District → Project).',
+            'danger'
+        )
+        return redirect(url_for('assign_project_to_company'))
     try:
         company_name = project.company.name if project.company else 'N/A'
         project.company_id = None
@@ -1901,25 +1989,87 @@ def desassign_project_from_company(project_id):
 # ────────────────────────────────────────────────
 @app.route('/assign_project_to_district')
 def assign_project_to_district():
-    results = db.session.query(
+    search = request.args.get('search', '').strip()
+    assigned_structured = _assign_project_to_district_data(search)
+    return render_template('assign_project_to_district.html', assigned=assigned_structured, search=search)
+
+
+def _assign_project_to_district_data(search):
+    """Shared query for list, print, export."""
+    query = db.session.query(
         Project, District, project_district.c.assign_date, project_district.c.remarks
-    ).join(project_district, Project.id == project_district.c.project_id)\
-     .join(District, District.id == project_district.c.district_id)\
-     .order_by(Project.name).all()
-    
+    ).join(project_district, Project.id == project_district.c.project_id).join(
+        District, District.id == project_district.c.district_id
+    )
+    if search:
+        like = f'%{search}%'
+        query = query.filter(or_(
+            Project.name.ilike(like),
+            District.name.ilike(like),
+            project_district.c.remarks.ilike(like),
+            cast(project_district.c.assign_date, SAString).ilike(like)
+        ))
+    results = query.order_by(Project.name).all()
     assigned_structured = []
     for proj, dist, a_date, a_remarks in results:
-        link_data = {'assign_date': a_date, 'remarks': a_remarks}
-        assigned_structured.append((link_data, proj, dist))
-    
-    return render_template('assign_project_to_district.html', assigned=assigned_structured)
+        assigned_structured.append(({'assign_date': a_date, 'remarks': a_remarks}, proj, dist))
+    return assigned_structured
+
+
+@app.route('/assign_project_to_district/export')
+def assign_project_to_district_export():
+    search = request.args.get('search', '').strip()
+    assigned_structured = _assign_project_to_district_data(search)
+    headers = ['Project Name', 'District Name', 'Assign Date', 'Remarks']
+    rows = []
+    for link_data, proj, dist in assigned_structured:
+        rows.append([
+            proj.name or '',
+            dist.name or '',
+            link_data['assign_date'].strftime('%Y-%m-%d') if link_data.get('assign_date') else '-',
+            link_data.get('remarks') or '-'
+        ])
+    filename = 'project_district_assignments.xlsx' if not search else f'project_district_assignments_{search[:30].replace("/", "-")}.xlsx'
+    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
+
+
+@app.route('/assign_project_to_district/print')
+def assign_project_to_district_print():
+    search = request.args.get('search', '').strip()
+    assigned_structured = _assign_project_to_district_data(search)
+    return render_template('assign_project_to_district_print.html', assigned=assigned_structured, search=search)
+
+
+@app.route('/get_unassigned_districts_by_project/<int:project_id>')
+def get_unassigned_districts_by_project(project_id):
+    """Districts that are NOT yet assigned to this project (for District-to-Project form)."""
+    assigned_ids = [r[0] for r in db.session.query(project_district.c.district_id).filter_by(project_id=project_id).all()]
+    if not assigned_ids:
+        districts = District.query.order_by(District.name).all()
+    else:
+        districts = District.query.filter(~District.id.in_(assigned_ids)).order_by(District.name).all()
+    return jsonify([{"id": d.id, "name": d.name} for d in districts])
 
 
 @app.route('/assign_project_to_district/new', methods=['GET', 'POST'])
 def assign_project_to_district_new():
     form = AssignProjectToDistrictForm()
-    form.project_id.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    form.district_id.choices = [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    form.project_id.choices = [(0, '-- Select Project --')] + [
+        (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    ]
+    # District choices: only placeholder on GET; on POST with errors, fill with unassigned districts for selected project
+    form.district_id.choices = [(0, '-- Select District --')]
+    if request.method == 'GET':
+        form.project_id.data = 0
+        form.district_id.data = 0
+    elif request.method == 'POST' and form.project_id.data and form.project_id.data != 0:
+        # Repopulate district dropdown: only districts NOT linked to this project
+        assigned_ids = [r[0] for r in db.session.query(project_district.c.district_id).filter_by(project_id=form.project_id.data).all()]
+        if not assigned_ids:
+            unassigned = District.query.order_by(District.name).all()
+        else:
+            unassigned = District.query.filter(~District.id.in_(assigned_ids)).order_by(District.name).all()
+        form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in unassigned]
     if form.validate_on_submit():
         try:
             project = Project.query.get_or_404(form.project_id.data)
@@ -1985,6 +2135,19 @@ def assign_project_to_district_edit(project_id, district_id):
 
 @app.route('/assign_project_to_district/desassign/<int:project_id>/<int:district_id>', methods=['POST'])
 def desassign_district_from_project(project_id, district_id):
+    district = District.query.get_or_404(district_id)
+    # Block deassign if district is linked to any vehicle
+    linked_vehicles = Vehicle.query.filter(Vehicle.district_id == district_id).all()
+    if linked_vehicles:
+        vehicle_nos = ', '.join(v.vehicle_no for v in linked_vehicles[:10])
+        if len(linked_vehicles) > 10:
+            vehicle_nos += f' and {len(linked_vehicles) - 10} more'
+        flash(
+            f'Cannot deassign: District "{district.name}" is linked to vehicle(s): {vehicle_nos}. '
+            'Remove vehicle assignment first (Assignment → Vehicle → District).',
+            'danger'
+        )
+        return redirect(url_for('assign_project_to_district'))
     try:
         db.session.execute(
             project_district.delete().where(
@@ -2003,32 +2166,74 @@ def desassign_district_from_project(project_id, district_id):
 # ────────────────────────────────────────────────
 # Assignment: Vehicle → District
 # ────────────────────────────────────────────────
-@app.route('/assign_vehicle_to_district')
-def assign_vehicle_to_district():
-    search = request.args.get('search', '').strip()
+def _assign_vehicle_to_district_data(search=None):
+    """Query assigned vehicles (optionally filtered by search). Returns list of Vehicle."""
     query = Vehicle.query.filter(Vehicle.district_id.isnot(None))
     if search:
-        query = query.join(Project).join(District).filter(
+        query = query.outerjoin(Project, Vehicle.project_id == Project.id).outerjoin(
+            District, Vehicle.district_id == District.id
+        ).filter(
             (Vehicle.vehicle_no.ilike(f'%{search}%')) |
             (Project.name.ilike(f'%{search}%')) |
             (District.name.ilike(f'%{search}%'))
         )
-    assigned = query.all()
-    return render_template('assign_vehicle_to_district_list.html', assigned_vehicles=assigned, search=search)
+    return query.all()
+
+
+@app.route('/assign_vehicle_to_district')
+def assign_vehicle_to_district():
+    search = request.args.get('search', '').strip()
+    assigned = _assign_vehicle_to_district_data(search)
+    return render_template('assign_vehicle_to_district_List.html', assigned_vehicles=assigned, search=search)
+
+
+@app.route('/assign_vehicle_to_district/export')
+def assign_vehicle_to_district_export():
+    search = request.args.get('search', '').strip()
+    assigned = _assign_vehicle_to_district_data(search)
+    headers = ['Vehicle No', 'Model', 'Project', 'District', 'Assignment Date', 'Remarks']
+    rows = []
+    for v in assigned:
+        rows.append([
+            v.vehicle_no or '',
+            v.model or '',
+            v.project.name if v.project else '',
+            v.district.name if v.district else '',
+            v.assign_to_district_date.strftime('%Y-%m-%d') if v.assign_to_district_date else '-',
+            (v.assignment_remarks or '').replace('\r\n', ' ').replace('\n', ' ')[:200]
+        ])
+    filename = 'vehicle_district_assignments.xlsx' if not search else f'vehicle_district_assignments_{search[:30].replace("/", "-")}.xlsx'
+    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
+
+
+@app.route('/assign_vehicle_to_district/print')
+def assign_vehicle_to_district_print():
+    search = request.args.get('search', '').strip()
+    assigned = _assign_vehicle_to_district_data(search)
+    return render_template(
+        'assign_vehicle_to_district_print.html',
+        assigned_vehicles=assigned,
+        search=search
+    )
 
 
 @app.route('/assign_vehicle_to_district/new', methods=['GET', 'POST'])
 def assign_vehicle_to_district_new():
     form = AssignVehicleToDistrictForm()
-    form.project_id.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    form.vehicle_id.choices = [(v.id, f"{v.vehicle_no} ({v.model})") for v in Vehicle.query.all()]
+    form.project_id.choices = [(0, '-- Select Project --')] + [
+        (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    ]
+    form.district_id.choices = [(0, '-- Select District --')]  # Loaded via AJAX when project selected
+    # Only show vehicles not yet assigned (so they can't be assigned twice)
+    unassigned_vehicles = Vehicle.query.filter(Vehicle.district_id.is_(None)).order_by(Vehicle.vehicle_no).all()
+    form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, f"{v.vehicle_no} ({v.model})") for v in unassigned_vehicles]
     if request.method == 'POST':
         p_id = request.form.get('project_id', type=int)
         if p_id:
             project = Project.query.get(p_id)
-            form.district_id.choices = [(d.id, d.name) for d in project.districts] if project else []
+            form.district_id.choices = [(0, '-- Select District --')] + ([(d.id, d.name) for d in project.districts] if project else [])
         else:
-            form.district_id.choices = []
+            form.district_id.choices = [(0, '-- Select District --')]
 
     if form.validate_on_submit():
         try:
@@ -2058,6 +2263,18 @@ def get_districts_by_project(project_id):
 @app.route('/assign_vehicle_to_district/desassign/<int:vehicle_id>', methods=['POST'])
 def desassign_vehicle_from_district(vehicle_id):
     vehicle = Vehicle.query.get_or_404(vehicle_id)
+    if vehicle.parking_station_id or vehicle.driver_id:
+        parts = []
+        if vehicle.parking_station_id:
+            parts.append('Parking')
+        if vehicle.driver_id:
+            parts.append('Driver')
+        flash(
+            f'Cannot deassign: Vehicle "{vehicle.vehicle_no}" is linked with {" and ".join(parts)}. '
+            'Remove parking assignment or driver assignment first.',
+            'danger'
+        )
+        return redirect(url_for('assign_vehicle_to_district'))
     vehicle.district_id = None
     vehicle.assign_to_district_date = None
     vehicle.assignment_remarks = None
@@ -2075,9 +2292,29 @@ def company_report(id):
 @app.route('/assign_vehicle_to_district/edit/<int:vehicle_id>', methods=['GET', 'POST'])
 def assign_vehicle_to_district_edit(vehicle_id):
     vehicle = Vehicle.query.get_or_404(vehicle_id)
+    if vehicle.parking_station_id or vehicle.driver_id:
+        parts = []
+        if vehicle.parking_station_id:
+            parts.append('Parking')
+        if vehicle.driver_id:
+            parts.append('Driver')
+        flash(
+            f'Cannot edit: Vehicle "{vehicle.vehicle_no}" is linked with {" and ".join(parts)}. '
+            'Remove parking or driver assignment first.',
+            'danger'
+        )
+        return redirect(url_for('assign_vehicle_to_district'))
     form = AssignVehicleToDistrictForm()
-    form.project_id.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    form.vehicle_id.choices = [(v.id, f"{v.vehicle_no} ({v.model})") for v in Vehicle.query.all()]
+    form.project_id.choices = [
+        (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    ]
+    # Show current vehicle + only unassigned vehicles (so already-assigned vehicles can't be selected for another project/district)
+    form.vehicle_id.choices = [
+        (v.id, f"{v.vehicle_no} ({v.model})")
+        for v in Vehicle.query.filter(
+            or_(Vehicle.district_id.is_(None), Vehicle.id == vehicle_id)
+        ).order_by(Vehicle.vehicle_no).all()
+    ]
     
     current_p_id = request.form.get('project_id', type=int) or vehicle.project_id
     if current_p_id:
@@ -2126,12 +2363,39 @@ def get_parking_by_project(project_id):
 @app.route('/assign_vehicle_to_parking/new', methods=['GET', 'POST'])
 def assign_vehicle_to_parking_new():
     form = AssignVehicleToParkingForm()
-    form.project_id.choices = [(0, "Select Project")] + [(p.id, p.name) for p in Project.query.all()]
-    
+    form.project_id.choices = [(0, "Select Project")] + [
+        (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    ]
+
     if request.method == 'POST':
-        form.district_id.choices = [(int(request.form.get('district_id')), '')] if request.form.get('district_id') else []
-        form.vehicle_id.choices = [(int(request.form.get('vehicle_id')), '')] if request.form.get('vehicle_id') else []
-        form.parking_station_id.choices = [(int(request.form.get('parking_station_id')), '')] if request.form.get('parking_station_id') else []
+        p_id = request.form.get('project_id', type=int) or form.project_id.data
+        d_id = request.form.get('district_id', type=int) or form.district_id.data
+        # Repopulate choices so submitted values are preserved when validation fails (form does not reset)
+        if p_id:
+            proj = Project.query.get(p_id)
+            form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in (proj.districts.order_by(District.name).all() if proj else [])]
+        else:
+            form.district_id.choices = [(0, '-- Select District --')]
+        if d_id and p_id:
+            dist_obj = District.query.get(d_id)
+            vehicles = Vehicle.query.filter(
+                Vehicle.project_id == p_id,
+                Vehicle.district_id == d_id,
+                Vehicle.parking_station_id.is_(None)
+            ).order_by(Vehicle.vehicle_no).all()
+            form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicles]
+            if dist_obj:
+                stations = ParkingStation.query.filter_by(district=dist_obj.name).all()
+                form.parking_station_id.choices = [(0, '-- Select Parking --')] + [(s.id, s.name) for s in stations]
+            else:
+                form.parking_station_id.choices = [(0, '-- Select Parking --')]
+        else:
+            form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
+            form.parking_station_id.choices = [(0, '-- Select Parking --')]
+    else:
+        form.district_id.choices = [(0, '-- Select District --')]
+        form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
+        form.parking_station_id.choices = [(0, '-- Select Parking --')]
 
     if form.validate_on_submit():
         try:
@@ -2156,6 +2420,24 @@ def get_vehicles_by_district(project_id, district_id):
     ).order_by(Vehicle.vehicle_no).all()
     return jsonify([{"id": v.id, "no": v.vehicle_no} for v in vehicles])
 
+
+@app.route('/get_vehicles_by_district_no_parking/<int:project_id>/<int:district_id>')
+def get_vehicles_by_district_no_parking(project_id, district_id):
+    """Vehicles in project+district that have NO parking assigned. Optional ?include_vehicle_id=X to include that vehicle (for edit form)."""
+    include_id = request.args.get('include_vehicle_id', type=int)
+    query = Vehicle.query.filter(
+        Vehicle.project_id == project_id,
+        Vehicle.district_id == district_id
+    )
+    if include_id:
+        query = query.filter(
+            (Vehicle.parking_station_id.is_(None)) | (Vehicle.id == include_id)
+        )
+    else:
+        query = query.filter(Vehicle.parking_station_id.is_(None))
+    vehicles = query.order_by(Vehicle.vehicle_no).all()
+    return jsonify([{"id": v.id, "no": v.vehicle_no} for v in vehicles])
+
 @app.route('/get_parking_by_district/<int:district_id>')
 def get_parking_by_district(district_id):
     district = District.query.get(district_id)
@@ -2177,6 +2459,12 @@ def get_parking_by_district(district_id):
 @app.route('/assign_vehicle_to_parking')
 def assign_vehicle_to_parking_list():
     search = request.args.get('search', '').strip()
+    parked_vehicles = _assign_vehicle_to_parking_data(search)
+    return render_template('assign_vehicle_to_parking_list.html', parked_vehicles=parked_vehicles, search=search)
+
+
+def _assign_vehicle_to_parking_data(search=None):
+    """Query vehicles with parking assigned (optionally filtered). Returns list of Vehicle."""
     query = Vehicle.query.filter(Vehicle.parking_station_id.isnot(None))
     if search:
         query = query.join(Project).join(ParkingStation).filter(
@@ -2184,12 +2472,49 @@ def assign_vehicle_to_parking_list():
             (Project.name.ilike(f'%{search}%')) |
             (ParkingStation.name.ilike(f'%{search}%'))
         )
-    parked_vehicles = query.all()
-    return render_template('assign_vehicle_to_parking_list.html', parked_vehicles=parked_vehicles, search=search)
+    return query.all()
+
+
+@app.route('/assign_vehicle_to_parking/export')
+def assign_vehicle_to_parking_export():
+    search = request.args.get('search', '').strip()
+    parked_vehicles = _assign_vehicle_to_parking_data(search)
+    headers = ['Vehicle No', 'Model', 'Project', 'Parking Station', 'District', 'Remarks']
+    rows = []
+    for v in parked_vehicles:
+        rows.append([
+            v.vehicle_no or '',
+            v.model or '',
+            v.project.name if v.project else '',
+            v.parking_station.name if v.parking_station else '',
+            v.district.name if v.district else '',
+            (v.parking_remarks or '').replace('\r\n', ' ').replace('\n', ' ')[:200]
+        ])
+    filename = 'vehicle_parking_assignments.xlsx' if not search else f'vehicle_parking_assignments_{search[:30].replace("/", "-")}.xlsx'
+    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
+
+
+@app.route('/assign_vehicle_to_parking/print')
+def assign_vehicle_to_parking_print():
+    search = request.args.get('search', '').strip()
+    parked_vehicles = _assign_vehicle_to_parking_data(search)
+    return render_template(
+        'assign_vehicle_to_parking_print.html',
+        parked_vehicles=parked_vehicles,
+        search=search
+    )
 
 @app.route('/assign_vehicle_to_parking/desassign/<int:vehicle_id>', methods=['POST'])
 def desassign_vehicle_from_parking(vehicle_id):
     vehicle = Vehicle.query.get_or_404(vehicle_id)
+    has_driver = Driver.query.filter_by(vehicle_id=vehicle.id).first() is not None
+    if has_driver:
+        flash(
+            f'Cannot deassign: Vehicle "{vehicle.vehicle_no}" has a driver attached. '
+            'Remove driver assignment first (Assignment → Driver to Vehicle).',
+            'danger'
+        )
+        return redirect(url_for('assign_vehicle_to_parking_list'))
     station_name = vehicle.parking_station.name if vehicle.parking_station else "Parking"
     vehicle.parking_station_id = None
     db.session.commit()
@@ -2199,13 +2524,33 @@ def desassign_vehicle_from_parking(vehicle_id):
 @app.route('/assign_vehicle_to_parking/edit/<int:vehicle_id>', methods=['GET', 'POST'])
 def assign_vehicle_to_parking_edit(vehicle_id):
     vehicle = Vehicle.query.get_or_404(vehicle_id)
+    has_driver = Driver.query.filter_by(vehicle_id=vehicle.id).first() is not None
+    if has_driver:
+        flash(
+            f'Cannot edit: Vehicle "{vehicle.vehicle_no}" has a driver attached. '
+            'Remove driver assignment first (Assignment → Driver to Vehicle).',
+            'danger'
+        )
+        return redirect(url_for('assign_vehicle_to_parking_list'))
     form = AssignVehicleToParkingForm()
     
-    form.project_id.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    form.vehicle_id.choices = [(v.id, f"{v.vehicle_no} ({v.model})") for v in Vehicle.query.all()]
-    
+    form.project_id.choices = [
+        (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    ]
     p_id = request.form.get('project_id', type=int) or vehicle.project_id
     d_id = request.form.get('district_id', type=int) or vehicle.district_id
+    # Vehicle list: only those without parking in this project+district, or the current vehicle (for edit)
+    if p_id and d_id:
+        vehicles_for_choice = Vehicle.query.filter(
+            Vehicle.project_id == p_id,
+            Vehicle.district_id == d_id
+        ).filter(
+            (Vehicle.parking_station_id.is_(None)) | (Vehicle.id == vehicle_id)
+        ).order_by(Vehicle.vehicle_no).all()
+        form.vehicle_id.choices = [(v.id, f"{v.vehicle_no} ({v.model})") for v in vehicles_for_choice]
+    else:
+        form.vehicle_id.choices = []
+    
 
     if p_id:
         proj = Project.query.get(p_id)
@@ -2264,7 +2609,7 @@ def get_unassigned_drivers():
 def assign_driver_to_vehicle_new():
     form = AssignDriverToVehicleForm()
     form.project_id.choices = [(0, '-- Select Project --')] + [
-        (p.id, p.name) for p in Project.query.order_by(Project.name).all()
+        (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
     ]
 
     selected_project_id = None
@@ -2299,6 +2644,27 @@ def assign_driver_to_vehicle_new():
 
         if not vehicle or not driver:
             flash("Selected vehicle or driver not found.", "danger")
+            return render_template('assign_driver_to_vehicle_new.html', form=form)
+
+        if not vehicle.parking_station_id:
+            flash("Pehle es vehicle ko Parking Station assign karo.", "danger")
+            if not form.district_id.choices or form.district_id.choices == [(0, '-- Select District --')]:
+                if selected_project_id and selected_project_id != 0:
+                    project = Project.query.get(selected_project_id)
+                    if project:
+                        form.district_id.choices = [(d.id, d.name) for d in project.districts]
+                if selected_district_id and selected_district_id != 0:
+                    vehicles = Vehicle.query.filter_by(
+                        project_id=selected_project_id,
+                        district_id=selected_district_id
+                    ).all()
+                    form.vehicle_id.choices = [
+                        (v.id, f"{v.vehicle_no} – {v.model or 'N/A'}") for v in vehicles
+                    ]
+            if not form.district_id.choices:
+                form.district_id.choices = [(0, '-- Select District --')]
+            if not form.vehicle_id.choices:
+                form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
             return render_template('assign_driver_to_vehicle_new.html', form=form)
 
         current_count = Driver.query.filter_by(vehicle_id=vehicle.id).count()
@@ -2343,9 +2709,30 @@ def get_vehicle_capacity_info(vehicle_id):
         "available_night": "Night" not in occupied_shifts
     })
 
+
+@app.route('/get_vehicle_parking/<int:vehicle_id>')
+def get_vehicle_parking(vehicle_id):
+    """Returns parking station info for a vehicle (for Driver-to-Vehicle form)."""
+    vehicle = Vehicle.query.get(vehicle_id)
+    if not vehicle:
+        return jsonify({"error": "Not found"}), 404
+    if not vehicle.parking_station_id:
+        return jsonify({"parking_station_id": None, "parking_station_name": None})
+    ps = ParkingStation.query.get(vehicle.parking_station_id)
+    return jsonify({
+        "parking_station_id": vehicle.parking_station_id,
+        "parking_station_name": ps.name if ps else None
+    })
+
 @app.route('/assign_driver_to_vehicle')
 def assign_driver_to_vehicle_list():
     search = request.args.get('search', '').strip()
+    assigned_drivers = _assign_driver_to_vehicle_data(search)
+    return render_template('assign_driver_to_vehicle_list.html', assigned_drivers=assigned_drivers, search=search)
+
+
+def _assign_driver_to_vehicle_data(search=None):
+    """Query (Driver, Vehicle) pairs for assigned drivers. Returns list of tuples."""
     query = db.session.query(Driver, Vehicle).join(Vehicle, Driver.vehicle_id == Vehicle.id)
     if search:
         query = query.outerjoin(Project, Driver.project_id == Project.id).filter(
@@ -2354,8 +2741,38 @@ def assign_driver_to_vehicle_list():
             (Vehicle.vehicle_no.ilike(f'%{search}%')) |
             (Project.name.ilike(f'%{search}%'))
         )
-    assigned_drivers = query.all()
-    return render_template('assign_driver_to_vehicle_list.html', assigned_drivers=assigned_drivers, search=search)
+    return query.all()
+
+
+@app.route('/assign_driver_to_vehicle/export')
+def assign_driver_to_vehicle_export():
+    search = request.args.get('search', '').strip()
+    assigned_drivers = _assign_driver_to_vehicle_data(search)
+    headers = ['S.No', 'Driver Name', 'Driver ID', 'Project', 'Vehicle No', 'Model', 'Shift']
+    rows = []
+    for i, (driver, vehicle) in enumerate(assigned_drivers, 1):
+        rows.append([
+            i,
+            driver.name or '',
+            driver.driver_id or '',
+            driver.project.name if driver.project else '',
+            vehicle.vehicle_no or '',
+            vehicle.model or '',
+            driver.shift or ''
+        ])
+    filename = 'driver_vehicle_assignments.xlsx' if not search else f'driver_vehicle_assignments_{search[:30].replace("/", "-")}.xlsx'
+    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
+
+
+@app.route('/assign_driver_to_vehicle/print')
+def assign_driver_to_vehicle_print():
+    search = request.args.get('search', '').strip()
+    assigned_drivers = _assign_driver_to_vehicle_data(search)
+    return render_template(
+        'assign_driver_to_vehicle_print.html',
+        assigned_drivers=assigned_drivers,
+        search=search
+    )
 
 @app.route('/assign_driver_to_vehicle/desassign/<int:driver_id>', methods=['POST'])
 def desassign_driver_from_vehicle(driver_id):
@@ -2377,7 +2794,7 @@ def assign_driver_to_vehicle_edit(driver_id):
 
     form = AssignDriverToVehicleForm()
     form.project_id.choices = [(0, '-- Select Project --')] + [
-        (p.id, p.name) for p in Project.query.order_by(Project.name).all()
+        (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
     ]
 
     pid = form.project_id.data if request.method == 'POST' else driver.project_id

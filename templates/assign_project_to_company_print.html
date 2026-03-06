@@ -1,0 +1,52 @@
+{% extends "base_print.html" %}
+
+{% block title %}Print - Project to Company{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-2">
+  <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+    <h3 class="mb-0"><i class="bi bi-building me-2"></i>Project to Company Assignments (Report Preview)</h3>
+    <div>
+      {% if search %}
+      <span class="badge bg-secondary me-2">Filtered: "{{ search }}"</span>
+      {% endif %}
+      <button class="btn btn-outline-primary" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>Print / Save as PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Project Name</th>
+              <th>Project ID</th>
+              <th>Company</th>
+              <th>Assign Date</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for proj in assigned_projects %}
+            <tr>
+              <td>{{ proj.name }}</td>
+              <td>#{{ proj.id }}</td>
+              <td>{{ proj.company.name if proj.company else '-' }}</td>
+              <td>{{ proj.assign_date.strftime('%Y-%m-%d') if proj.assign_date else '-' }}</td>
+              <td>{{ proj.assign_remarks or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="text-center py-4 text-muted">No assignments found.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

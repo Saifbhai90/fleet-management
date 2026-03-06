@@ -15,6 +15,11 @@
                 </div>
 
                 <div class="card-body p-4 bg-light">
+                    {% if form.errors %}
+                    <div class="alert alert-danger py-2 mb-3" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>Please fix the errors below. Fill all required fields.
+                    </div>
+                    {% endif %}
                     <form method="POST" id="editAssignmentForm" novalidate>
                         {{ form.hidden_tag() }}
 
@@ -23,19 +28,28 @@
                             <div class="col-md-7">
                                 <div class="bg-white p-4 rounded-4 shadow-sm border-start border-warning border-4">
                                     <div class="mb-3">
-                                        <label class="form-label fw-bold">1. Select Project</label>
-                                        {{ form.project_id(class="form-select select2-enable", id="project_select") }}
+                                        <label class="form-label fw-bold">1. Select Project <span class="text-danger">*</span></label>
+                                        {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else ""), id="project_select") }}
+                                        {% for error in form.project_id.errors %}
+                                        <div class="text-danger small mt-1">{{ error }}</div>
+                                        {% endfor %}
                                     </div>
                                     
                                     <div class="mb-3">
-                                        <label class="form-label fw-bold">2. Assigned Districts</label>
-                                        {{ form.district_id(class="form-select select2-enable", id="district_select") }}
+                                        <label class="form-label fw-bold">2. Assigned Districts <span class="text-danger">*</span></label>
+                                        {{ form.district_id(class="form-select select2-enable " + ("is-invalid" if form.district_id.errors else ""), id="district_select") }}
+                                        {% for error in form.district_id.errors %}
+                                        <div class="text-danger small mt-1">{{ error }}</div>
+                                        {% endfor %}
                                         <small class="text-muted">Districts are filtered by selected project.</small>
                                     </div>
 
                                     <div class="mb-0">
-                                        <label class="form-label fw-bold">3. Select Vehicle</label>
-                                        {{ form.vehicle_id(class="form-select select2-enable") }}
+                                        <label class="form-label fw-bold">3. Select Vehicle <span class="text-danger">*</span></label>
+                                        {{ form.vehicle_id(class="form-select select2-enable " + ("is-invalid" if form.vehicle_id.errors else "")) }}
+                                        {% for error in form.vehicle_id.errors %}
+                                        <div class="text-danger small mt-1">{{ error }}</div>
+                                        {% endfor %}
                                     </div>
                                 </div>
                             </div>
@@ -44,8 +58,11 @@
                             <div class="col-md-5">
                                 <div class="bg-white p-4 rounded-4 shadow-sm h-100">
                                     <div class="mb-3">
-                                        <label class="form-label fw-bold">Assignment Date</label>
-                                        {{ form.assign_date(class="form-control datepicker") }}
+                                        <label class="form-label fw-bold">Assignment Date <span class="text-danger">*</span></label>
+                                        {{ form.assign_date(class="form-control datepicker " + ("is-invalid" if form.assign_date.errors else "")) }}
+                                        {% for error in form.assign_date.errors %}
+                                        <div class="text-danger small mt-1">{{ error }}</div>
+                                        {% endfor %}
                                     </div>
                                     <div class="mb-0">
                                         <label class="form-label fw-bold">Remarks (Optional)</label>

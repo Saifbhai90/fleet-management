@@ -5,9 +5,17 @@
         <h2 class="fw-bold text-dark mb-0">
             <i class="bi bi-people-fill text-primary me-2"></i>Assigned Drivers to Vehicles
         </h2>
-        <a href="{{ url_for('assign_driver_to_vehicle_new') }}" class="btn btn-primary shadow-sm fw-bold">
-            <i class="bi bi-plus-circle me-1"></i> Assign New Driver
-        </a>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('assign_driver_to_vehicle_export', search=search or '') }}" class="btn btn-success shadow-sm px-3 fw-bold">
+                <i class="bi bi-file-earmark-excel me-1"></i>Export to Excel
+            </a>
+            <a href="{{ url_for('assign_driver_to_vehicle_print', search=search or '') }}" target="_blank" class="btn btn-outline-primary shadow-sm px-3 fw-bold">
+                <i class="bi bi-eye me-1"></i>Print Preview
+            </a>
+            <a href="{{ url_for('assign_driver_to_vehicle_new') }}" class="btn btn-primary shadow-sm fw-bold">
+                <i class="bi bi-plus-circle me-1"></i> Assign New Driver
+            </a>
+        </div>
     </div>
 
     <div class="card shadow-sm border-0 rounded-4">
@@ -76,7 +84,8 @@
         </a>
         
         <!-- Desassign Button -->
-        <form action="{{ url_for('desassign_driver_from_vehicle', driver_id=driver.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to remove this driver from the vehicle?');">
+        <form action="{{ url_for('desassign_driver_from_vehicle', driver_id=driver.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to remove this driver from the vehicle?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-outline-danger fw-bold" title="Remove Assignment">
                 <i class="bi bi-trash"></i> Unassign
             </button>

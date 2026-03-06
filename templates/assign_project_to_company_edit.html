@@ -14,11 +14,19 @@
       <div class="card shadow border-0 rounded-3">
         
         <!-- Standard Header (Edit Mode) -->
-        <div class="card-header bg-warning text-dark py-3">
-          <h4 class="mb-0 text-center fw-bold"><i class="bi bi-pencil-square me-2"></i>Edit Project Assignment</h4>
+        <div class="card-header bg-warning text-dark py-3 d-flex justify-content-between align-items-center">
+          <h4 class="mb-0 fw-bold"><i class="bi bi-pencil-square me-2"></i>Edit Project Assignment</h4>
+          <a href="{{ url_for('assign_project_to_company') }}" class="btn btn-outline-dark btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Back to List
+          </a>
         </div>
 
         <div class="card-body p-4">
+          {% if form.errors %}
+          <div class="alert alert-danger py-2 mb-3" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>Please fix the errors below. Required fields are missing or invalid.
+          </div>
+          {% endif %}
           <form method="POST" novalidate>
             {{ form.hidden_tag() }}
 
@@ -28,26 +36,36 @@
                 <label class="form-label fw-semibold text-secondary small text-uppercase">Select Company</label>
                 <div class="input-group">
                   <span class="input-group-text bg-light text-warning"><i class="bi bi-building"></i></span>
-                  {{ form.company_id(class="form-select select2-enable") }}
+                  {{ form.company_id(class="form-select select2-enable " + ("is-invalid" if form.company_id.errors else "")) }}
                 </div>
+                {% for error in form.company_id.errors %}
+                <div class="text-danger small mt-1">{{ error }}</div>
+                {% endfor %}
               </div>
               <div class="col-md-6 mb-3">
                 <label class="form-label fw-semibold text-secondary small text-uppercase">Select Project</label>
                 <div class="input-group">
                   <span class="input-group-text bg-light text-warning"><i class="bi bi-folder2-open"></i></span>
-                  {{ form.project_id(class="form-select select2-enable") }}
+                  {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else "")) }}
                 </div>
+                {% for error in form.project_id.errors %}
+                <div class="text-danger small mt-1">{{ error }}</div>
+                {% endfor %}
               </div>
             </div>
 
             <!-- Row 2: Date and Note -->
             <div class="row">
               <div class="col-md-6 mb-3">
-                <label class="form-label fw-semibold text-secondary small text-uppercase">Assignment Date</label>
+                <label class="form-label fw-semibold text-secondary small text-uppercase">Assignment Date <span class="text-danger">*</span></label>
                 <div class="input-group">
                   <span class="input-group-text bg-light text-warning"><i class="bi bi-calendar-event"></i></span>
-                  {{ form.assign_date(class="form-control", type="date") }}
+                  <input type="date" name="assign_date" id="assign_date" class="form-control {{ 'is-invalid' if form.assign_date.errors else '' }}"
+                         value="{% if form.assign_date.data %}{{ form.assign_date.data.strftime('%Y-%m-%d') }}{% elif project.assign_date %}{{ project.assign_date.strftime('%Y-%m-%d') }}{% endif %}">
                 </div>
+                {% for error in form.assign_date.errors %}
+                <div class="text-danger small mt-1">{{ error }}</div>
+                {% endfor %}
               </div>
               <div class="col-md-6 mb-3 d-flex align-items-end">
                 <div class="alert alert-warning py-2 px-3 mb-0 w-100 border-0" style="font-size: 0.85rem;">
@@ -59,7 +77,10 @@
             <!-- Row 3: Remarks -->
             <div class="mb-4">
               <label class="form-label fw-semibold text-secondary small text-uppercase">Remarks (Optional)</label>
-              {{ form.assign_remarks(class="form-control", rows=3, placeholder="Update details if needed...") }}
+              {{ form.assign_remarks(class="form-control " + ("is-invalid" if form.assign_remarks.errors else ""), rows=3, placeholder="Update details if needed...") }}
+              {% for error in form.assign_remarks.errors %}
+              <div class="text-danger small mt-1">{{ error }}</div>
+              {% endfor %}
             </div>
 
             <!-- Action Buttons -->
@@ -74,12 +95,6 @@
               </div>
             </div>
           </form>
-        </div>
-
-        <div class="card-footer bg-light text-center py-2">
-          <a href="{{ url_for('assign_project_to_company') }}" class="btn btn-link btn-sm text-decoration-none text-muted">
-            <i class="bi bi-arrow-left me-1"></i> Back to List
-          </a>
         </div>
       </div>
     </div>

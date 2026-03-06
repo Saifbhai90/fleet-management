@@ -15,6 +15,11 @@
                 </div>
 
                 <div class="card-body p-4 bg-light">
+                    {% if form.errors %}
+                    <div class="alert alert-danger py-2 mb-3" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>Please fix the errors below. Fill all required fields.
+                    </div>
+                    {% endif %}
                     <form method="POST" id="assignmentForm" novalidate>
                         {{ form.hidden_tag() }}
 
@@ -29,39 +34,51 @@
                                     <div class="row g-3">
                                         <!-- Project -->
                                         <div class="col-md-6">
-                                            <label class="form-label fw-semibold small">1. Select Project</label>
+                                            <label class="form-label fw-semibold small">1. Select Project <span class="text-danger">*</span></label>
                                             <div class="input-group">
                                                 <span class="input-group-text bg-light"><i class="bi bi-folder2-open"></i></span>
-                                                {{ form.project_id(class="form-select select2-enable", id="project_select") }}
+                                                {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else ""), id="project_select") }}
                                             </div>
+                                            {% for error in form.project_id.errors %}
+                                            <div class="text-danger small mt-1">{{ error }}</div>
+                                            {% endfor %}
                                         </div>
 
                                         <!-- District -->
                                         <div class="col-md-6">
-                                            <label class="form-label fw-semibold small">2. Select District</label>
+                                            <label class="form-label fw-semibold small">2. Select District <span class="text-danger">*</span></label>
                                             <div class="input-group">
                                                 <span class="input-group-text bg-light"><i class="bi bi-geo-alt"></i></span>
-                                                {{ form.district_id(class="form-select select2-enable", id="district_select") }}
+                                                {{ form.district_id(class="form-select select2-enable " + ("is-invalid" if form.district_id.errors else ""), id="district_select") }}
                                             </div>
+                                            {% for error in form.district_id.errors %}
+                                            <div class="text-danger small mt-1">{{ error }}</div>
+                                            {% endfor %}
                                             <small class="text-muted" style="font-size: 0.7rem;">Only districts assigned to the project will appear.</small>
                                         </div>
 
                                         <!-- Vehicle -->
                                         <div class="col-12 mt-4">
-                                            <label class="form-label fw-semibold small">3. Select Vehicle (Unassigned)</label>
+                                            <label class="form-label fw-semibold small">3. Select Vehicle (Unassigned) <span class="text-danger">*</span></label>
                                             <div class="input-group">
                                                 <span class="input-group-text bg-light"><i class="bi bi-truck-front"></i></span>
-                                                {{ form.vehicle_id(class="form-select select2-enable") }}
+                                                {{ form.vehicle_id(class="form-select select2-enable " + ("is-invalid" if form.vehicle_id.errors else "")) }}
                                             </div>
+                                            {% for error in form.vehicle_id.errors %}
+                                            <div class="text-danger small mt-1">{{ error }}</div>
+                                            {% endfor %}
                                         </div>
 
                                         <!-- Date -->
                                         <div class="col-md-6 mt-4">
-                                            <label class="form-label fw-semibold small">Assignment Date</label>
+                                            <label class="form-label fw-semibold small">Assignment Date <span class="text-danger">*</span></label>
                                             <div class="input-group">
                                                 <span class="input-group-text bg-light"><i class="bi bi-calendar-event"></i></span>
-                                                {{ form.assign_date(class="form-control datepicker") }}
+                                                {{ form.assign_date(class="form-control datepicker " + ("is-invalid" if form.assign_date.errors else "")) }}
                                             </div>
+                                            {% for error in form.assign_date.errors %}
+                                            <div class="text-danger small mt-1">{{ error }}</div>
+                                            {% endfor %}
                                         </div>
                                     </div>
                                 </div>
@@ -133,12 +150,12 @@ $(document).ready(function() {
                 success: function(data) {
                     $districtSelect.empty();
                     if (data.length > 0) {
-                        $districtSelect.append('<option value="">-- Select District --</option>');
+                        $districtSelect.append('<option value="0">-- Select District --</option>');
                         $.each(data, function(i, item) {
                             $districtSelect.append('<option value="' + item.id + '">' + item.name + '</option>');
                         });
                     } else {
-                        $districtSelect.append('<option value="">No districts assigned to this project</option>');
+                        $districtSelect.append('<option value="0">No districts assigned to this project</option>');
                     }
                     $districtSelect.trigger('change'); // Refresh Select2 UI
                 },
@@ -148,19 +165,47 @@ $(document).ready(function() {
                 }
             });
         } else {
-            $districtSelect.empty().append('<option value="">Select Project First</option>');
+            $districtSelect.empty().append('<option value="0">Select Project First</option>');
             $districtSelect.trigger('change');
         }
     });
 
-    // 3. Persistence: If validation fails, reload districts on page load
+    // When validation fails, reload districts for selected project so user sees their choice
     var currentProject = $projectSelect.val();
-    if (currentProject && currentProject !== "0") {
-        // We delay slightly to ensure Select2 is ready
+    if (currentProject && currentProject !== "0" && currentProject !== "") {
         setTimeout(function() {
             $projectSelect.trigger('change');
         }, 100);
     }
+
+    // Clear button: reset all fields including Select2 and district dropdown to initial state
+    $('#assignmentForm').on('reset', function() {
+        setTimeout(function() {
+            var $form = $('#assignmentForm');
+            // Project: first option (-- Select Project --)
+            $projectSelect.val('0').trigger('change');
+            // District: destroy Select2, set only placeholder, re-init
+            if ($districtSelect.data('select2')) {
+                $districtSelect.select2('destroy');
+            }
+            $districtSelect.empty().append('<option value="0">-- Select District --</option>').val('0');
+            $districtSelect.select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search and Select...' });
+            // Vehicle: first option
+            var $vehicleSelect = $('#assignmentForm').find('[name="vehicle_id"]');
+            if ($vehicleSelect.length && $vehicleSelect.data('select2')) {
+                $vehicleSelect.val('0').trigger('change');
+            }
+            // Date
+            var $dateInput = $form.find('.datepicker');
+            if ($dateInput.length) {
+                $dateInput.val('');
+                if ($dateInput.data('datepicker')) {
+                    $dateInput.datepicker('setDate', null);
+                }
+            }
+            // Remarks already cleared by native reset
+        }, 0);
+    });
 });
 </script>
 

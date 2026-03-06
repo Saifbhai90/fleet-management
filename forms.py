@@ -176,8 +176,18 @@ class DistrictForm(FlaskForm):
 
 # Assignment Forms
 class AssignProjectToCompanyForm(FlaskForm):
-    company_id = SelectField('Select Company', coerce=int, validators=[DataRequired()])
-    project_id = SelectField('Select Project', coerce=int, validators=[DataRequired()])
+    company_id = SelectField(
+        'Select Company',
+        coerce=int,
+        validators=[DataRequired(), NumberRange(min=1, message='Please select a company.')],
+        choices=[(0, '-- Select Company --')]
+    )
+    project_id = SelectField(
+        'Select Project',
+        coerce=int,
+        validators=[DataRequired(), NumberRange(min=1, message='Please select a project.')],
+        choices=[(0, '-- Select Project --')]
+    )
     assign_date = DateField('Assign Date', format='%d-%m-%Y', validators=[DataRequired()])
     assign_remarks = TextAreaField('Remarks (Optional)')
     submit = SubmitField('Assign Project to Company')
@@ -186,23 +196,33 @@ class AssignProjectToCompanyForm(FlaskForm):
 class EditProjectAssignmentForm(FlaskForm):
     company_id = SelectField('Select Company', coerce=int, validators=[DataRequired()])
     project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
-    assign_date = DateField('Assign Date', format='%d-%m-%Y', validators=[DataRequired()])
+    assign_date = DateField('Assign Date', format='%Y-%m-%d', validators=[DataRequired()])  # HTML5 date input uses YYYY-MM-DD
     assign_remarks = TextAreaField('Assignment Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Update Assignment')	
 
 
 class AssignProjectToDistrictForm(FlaskForm):
-    project_id = SelectField('Select Project', coerce=int, validators=[DataRequired()])
-    district_id = SelectField('Select District', coerce=int, validators=[DataRequired()])
+    project_id = SelectField(
+        'Select Project',
+        coerce=int,
+        validators=[DataRequired(), NumberRange(min=1, message='Please select a project.')],
+        choices=[(0, '-- Select Project --')]
+    )
+    district_id = SelectField(
+        'Select District',
+        coerce=int,
+        validators=[DataRequired(), NumberRange(min=1, message='Please select a district.')],
+        choices=[(0, '-- Select District --')]
+    )
     assign_date = DateField('Assign Date', format='%d-%m-%Y', validators=[DataRequired()])
     remarks = TextAreaField('Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Assign District to Project')
 
 
 class AssignVehicleToDistrictForm(FlaskForm):
-    project_id = SelectField('Select Project', coerce=int, validators=[DataRequired()])
-    district_id = SelectField('Select District', coerce=int, validators=[DataRequired()])
-    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired()])
+    project_id = SelectField('Select Project', coerce=int, validators=[DataRequired(), NumberRange(min=1, message='Please select a project.')])
+    district_id = SelectField('Select District', coerce=int, validators=[DataRequired(), NumberRange(min=1, message='Please select a district.')])
+    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired(), NumberRange(min=1, message='Please select a vehicle.')])
     assign_date = DateField('Assignment Date', format='%d-%m-%Y', validators=[DataRequired()])
     remarks = TextAreaField('Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Assign Vehicle to District')
@@ -221,28 +241,28 @@ class AssignDriverToVehicleForm(FlaskForm):
     project_id = SelectField(
         'Select Project',
         coerce=int,
-        validators=[DataRequired()],
+        validators=[DataRequired(), NumberRange(min=1, message='Please select a project.')],
         choices=[(0, '-- Select Project --')]
     )
     
     district_id = SelectField(
         'Select District',
         coerce=int,
-        validators=[DataRequired()],
+        validators=[DataRequired(), NumberRange(min=1, message='Please select a district.')],
         choices=[(0, '-- Select District --')]
     )
     
     vehicle_id = SelectField(
         'Select Vehicle',
         coerce=int,
-        validators=[DataRequired()],
+        validators=[DataRequired(), NumberRange(min=1, message='Please select a vehicle.')],
         choices=[(0, '-- Select Vehicle --')]
     )
     
     driver_id = SelectField(
         'Select Driver (Unassigned)',
         coerce=int,
-        validators=[DataRequired()],
+        validators=[DataRequired(), NumberRange(min=1, message='Please select a driver.')],
         choices=[(0, '-- Select Driver --')]
     )
     
@@ -255,8 +275,7 @@ class AssignDriverToVehicleForm(FlaskForm):
     assign_date = DateField(
         'Assignment Date',
         format='%d-%m-%Y',
-        validators=[DataRequired()],
-        default=date.today
+        validators=[DataRequired(message='Assign date is required.')]
     )
     
     remarks = TextAreaField(

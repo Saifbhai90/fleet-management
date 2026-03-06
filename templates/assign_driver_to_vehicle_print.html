@@ -1,0 +1,56 @@
+{% extends "base_print.html" %}
+
+{% block title %}Print - Driver to Vehicle{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-2">
+  <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+    <h3 class="mb-0"><i class="bi bi-people-fill me-2"></i>Assigned Drivers to Vehicles (Report Preview)</h3>
+    <div>
+      {% if search %}
+      <span class="badge bg-secondary me-2">Filtered: "{{ search }}"</span>
+      {% endif %}
+      <button class="btn btn-outline-primary" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>Print / Save as PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>S.No</th>
+              <th>Driver Name</th>
+              <th>Driver ID</th>
+              <th>Project</th>
+              <th>Vehicle No</th>
+              <th>Model</th>
+              <th>Shift</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for driver, vehicle in assigned_drivers %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ driver.name }}</td>
+              <td>{{ driver.driver_id }}</td>
+              <td>{{ driver.project.name if driver.project else 'N/A' }}</td>
+              <td>{{ vehicle.vehicle_no }}</td>
+              <td>{{ vehicle.model or '-' }}</td>
+              <td>{{ driver.shift or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7" class="text-center py-4 text-muted">No assignments found.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -15,9 +15,17 @@
             <h3 class="fw-bold mb-1">Vehicle Parking Inventory</h3>
             <p class="text-muted small mb-0">Tracking vehicle locations across project parking stations.</p>
         </div>
-        <a href="{{ url_for('assign_vehicle_to_parking_new') }}" class="btn btn-primary shadow-sm px-4">
-            <i class="bi bi-plus-lg me-1"></i>Assign Parking
-        </a>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('assign_vehicle_to_parking_export', search=search or '') }}" class="btn btn-success shadow-sm px-3 fw-bold">
+                <i class="bi bi-file-earmark-excel me-1"></i>Export to Excel
+            </a>
+            <a href="{{ url_for('assign_vehicle_to_parking_print', search=search or '') }}" target="_blank" class="btn btn-outline-primary shadow-sm px-3 fw-bold">
+                <i class="bi bi-eye me-1"></i>Print Preview
+            </a>
+            <a href="{{ url_for('assign_vehicle_to_parking_new') }}" class="btn btn-primary shadow-sm px-4">
+                <i class="bi bi-plus-lg me-1"></i>Assign Parking
+            </a>
+        </div>
     </div>
 
     <!-- Search & Stats -->
@@ -70,16 +78,26 @@
                             </td>
                             <td>
                                 <div class="d-flex gap-2">
+                                    {% if v.drivers %}
+                                    <span class="btn-action btn-outline-secondary opacity-75" style="cursor: not-allowed; pointer-events: none;" title="Driver attached – Edit locked">
+                                        <i class="bi bi-lock-fill"></i>
+                                    </span>
+                                    <span class="btn-action btn-outline-secondary opacity-75" style="cursor: not-allowed; pointer-events: none;" title="Driver attached – Deassign locked">
+                                        <i class="bi bi-lock-fill"></i>
+                                    </span>
+                                    {% else %}
                                     <!-- Edit Link -->
-                                    <a href="{{ url_for('assign_vehicle_to_parking_edit', vehicle_id=v.id) }}" class="btn-action btn-outline-warning">
-    <i class="bi bi-pencil-square"></i>
-</a>
+                                    <a href="{{ url_for('assign_vehicle_to_parking_edit', vehicle_id=v.id) }}" class="btn-action btn-outline-warning" title="Edit Parking">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </a>
                                     <!-- Desassign Form -->
                                     <form action="{{ url_for('desassign_vehicle_from_parking', vehicle_id=v.id) }}" method="POST" class="m-0">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn-action btn-outline-danger" onclick="return confirm('Remove this vehicle from parking?')" title="Desassign">
                                             <i class="bi bi-x-circle"></i>
                                         </button>
                                     </form>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>

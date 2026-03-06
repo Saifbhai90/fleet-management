@@ -22,6 +22,12 @@
             <p class="text-muted mb-0 small"><i class="bi bi-info-circle me-1"></i> Managing fleet distribution across active projects.</p>
         </div>
         <div class="col-md-6 text-md-end mt-3 mt-md-0">
+            <a href="{{ url_for('assign_vehicle_to_district_export', search=search or '') }}" class="btn btn-success shadow-sm px-3 fw-bold me-2">
+                <i class="bi bi-file-earmark-excel me-2"></i>Export to Excel
+            </a>
+            <a href="{{ url_for('assign_vehicle_to_district_print', search=search or '') }}" target="_blank" class="btn btn-outline-primary shadow-sm px-3 fw-bold me-2">
+                <i class="bi bi-eye me-2"></i>Print Preview
+            </a>
             <a href="{{ url_for('assign_vehicle_to_district_new') }}" class="btn btn-primary shadow-sm px-4 fw-bold">
                 <i class="bi bi-plus-lg me-2"></i>New Deployment
             </a>
@@ -97,18 +103,25 @@
                             <td class="text-end pe-4">
                                 <!-- Spacing for Action Buttons -->
                                 <div class="d-flex justify-content-end gap-3">
+                                    {% if v.parking_station_id or v.driver_id %}
+                                    <span class="badge bg-secondary align-self-center" title="Linked with {% if v.parking_station_id %}Parking{% endif %}{% if v.parking_station_id and v.driver_id %} & {% endif %}{% if v.driver_id %}Driver{% endif %} — Edit/Deassign not allowed">
+                                        <i class="bi bi-lock me-1"></i>Locked
+                                    </span>
+                                    {% else %}
                                     <a href="{{ url_for('assign_vehicle_to_district_edit', vehicle_id=v.id) }}" 
                                        class="btn-action btn-edit-alt" title="Edit Assignment">
                                         <i class="bi bi-pencil-square"></i>
                                     </a>
                                     
                                     <form action="{{ url_for('desassign_vehicle_from_district', vehicle_id=v.id) }}" method="POST" class="m-0">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn-action btn-delete-alt" 
                                                 onclick="return confirm('WARNING: Are you sure you want to deassign vehicle {{ v.vehicle_no }}?')" 
                                                 title="Deassign / Remove Link">
                                             <i class="bi bi-link-45deg"></i>
                                         </button>
                                     </form>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>

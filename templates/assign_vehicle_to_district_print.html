@@ -1,0 +1,54 @@
+{% extends "base_print.html" %}
+
+{% block title %}Print - Vehicle to District{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-2">
+  <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+    <h3 class="mb-0"><i class="bi bi-truck me-2"></i>Vehicle to District Assignments (Report Preview)</h3>
+    <div>
+      {% if search %}
+      <span class="badge bg-secondary me-2">Filtered: "{{ search }}"</span>
+      {% endif %}
+      <button class="btn btn-outline-primary" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>Print / Save as PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Vehicle No</th>
+              <th>Model</th>
+              <th>Project</th>
+              <th>District</th>
+              <th>Assignment Date</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for v in assigned_vehicles %}
+            <tr>
+              <td>{{ v.vehicle_no }}</td>
+              <td>{{ v.model or '-' }}</td>
+              <td>{{ v.project.name if v.project else '-' }}</td>
+              <td>{{ v.district.name if v.district else '-' }}</td>
+              <td>{{ v.assign_to_district_date.strftime('%Y-%m-%d') if v.assign_to_district_date else '-' }}</td>
+              <td>{{ v.assignment_remarks|truncate(40) or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="6" class="text-center py-4 text-muted">No assignments found.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
