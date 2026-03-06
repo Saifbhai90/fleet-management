@@ -13,6 +13,14 @@ load_dotenv(os.path.join(_app_dir, '.env'))
 print("Starting app...")
 app = Flask(__name__)
 
+# When behind a reverse proxy (e.g. Render), trust X-Forwarded-Proto and X-Forwarded-Host
+# so redirects and session cookies use the correct scheme (https) and host. Fixes ERR_TOO_MANY_REDIRECTS.
+try:
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+except ImportError:
+    pass
+
 # Secret key / DB config (env first, fallback to current defaults)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-me-please-make-it-strong')
 # When "Remember me" is checked, session lasts this long (default 7 days)
@@ -46,8 +54,11 @@ app.config['BACKUP_EMAIL_TO'] = (os.environ.get('BACKUP_EMAIL_TO') or '').strip(
 # Session timeout; PERMANENT_SESSION_LIFETIME when "Remember me" is checked
 app.config['SESSION_TIMEOUT_MINUTES'] = int(os.environ.get('SESSION_TIMEOUT_MINUTES', '60'))
 app.config['PERMANENT_SESSION_LIFETIME'] = __import__('datetime').timedelta(days=7)
+# On Render: set SESSION_COOKIE_SECURE=true in Environment so cookie is sent only over HTTPS (use with ProxyFix).
+if os.environ.get('SESSION_COOKIE_SECURE', '').lower() in ('1', 'true', 'yes'):
+    app.config['SESSION_COOKIE_SECURE'] = True
 
-# Enable global CSRF protection so csrf_token() is available in templates
+# Enable global CSRF protection
 csrf = CSRFProtect(app)
 
 # Initialize SQLAlchemy
