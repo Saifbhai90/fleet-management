@@ -28,21 +28,37 @@
 
         <form method="POST">
             {{ form.hidden_tag() }}
+            {% if form.errors %}
+            <div class="alert alert-danger alert-dismissible fade show m-4 mb-0" role="alert">
+                <strong><i class="bi bi-exclamation-triangle me-1"></i> Please fill all required fields:</strong>
+                <ul class="mb-0 mt-2">
+                    {% for field_name, errors in form.errors.items() %}
+                        {% for err in errors %}
+                            <li>{{ form[field_name].label.text }}: {{ err }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                </ul>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endif %}
             <div class="form-pane">
                 <!-- Deployment Context (Read-only recommended here but editable if needed) -->
                 <div class="pane-column">
                     <span class="step-title">01. Deployment Data</span>
                     <div class="form-group">
-                        <label class="form-label">Project</label>
-                        {{ form.project_id(class="form-select") }}
+                        <label class="form-label">Project <span class="text-danger">*</span></label>
+                        {{ form.project_id(class="form-select " + ("is-invalid" if form.project_id.errors else "")) }}
+                        {% for error in form.project_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                     </div>
                     <div class="form-group">
-                        <label class="form-label">District</label>
-                        {{ form.district_id(class="form-select") }}
+                        <label class="form-label">District <span class="text-danger">*</span></label>
+                        {{ form.district_id(class="form-select " + ("is-invalid" if form.district_id.errors else "")) }}
+                        {% for error in form.district_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Vehicle</label>
-                        {{ form.vehicle_id(class="form-select") }}
+                        <label class="form-label">Vehicle <span class="text-danger">*</span></label>
+                        {{ form.vehicle_id(class="form-select " + ("is-invalid" if form.vehicle_id.errors else "")) }}
+                        {% for error in form.vehicle_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                     </div>
                 </div>
 
@@ -50,8 +66,9 @@
                 <div class="pane-column">
                     <span class="step-title">02. Driver Selection</span>
                     <div class="form-group">
-                        <label class="form-label">Driver</label>
-                        {{ form.driver_id(class="form-select") }}
+                        <label class="form-label">Driver <span class="text-danger">*</span></label>
+                        {{ form.driver_id(class="form-select " + ("is-invalid" if form.driver_id.errors else "")) }}
+                        {% for error in form.driver_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                     </div>
                     <div class="alert alert-light border small mt-4">
                         <i class="bi bi-info-circle me-1 text-primary"></i>
@@ -65,14 +82,16 @@
                     <div class="row g-2">
                         <div class="col-6">
                             <div class="form-group">
-                                <label class="form-label">Leave Date</label>
-                                {{ form.leave_date(class="form-control", type="date") }}
+                                <label class="form-label">Leave Date <span class="text-danger">*</span></label>
+                                {{ form.leave_date(class="form-control " + ("is-invalid" if form.leave_date.errors else ""), type="date") }}
+                                {% for error in form.leave_date.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="form-group">
-                                <label class="form-label">Reason</label>
-                                {{ form.reason(class="form-select") }}
+                                <label class="form-label">Reason <span class="text-danger">*</span></label>
+                                {{ form.reason(class="form-select " + ("is-invalid" if form.reason.errors else "")) }}
+                                {% for error in form.reason.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                             </div>
                         </div>
                     </div>

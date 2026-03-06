@@ -13,12 +13,25 @@
       <h4 class="mb-0 text-white fw-bold">
         <i class="bi bi-pencil-square me-2"></i> Edit Transfer Record
       </h4>
-      <div class="text-white-50 small fw-bold text-uppercase tracking-wider">
-        Log ID: #{{ transfer.id }}
-      </div>
+      <a href="{{ url_for('vehicle_transfers') }}" class="btn btn-outline-light btn-sm fw-bold">
+        <i class="bi bi-arrow-left-circle me-1"></i> Back to List
+      </a>
     </div>
     
     <div class="card-body p-4 bg-white">
+      {% if form.errors %}
+      <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+        <strong><i class="bi bi-exclamation-triangle me-1"></i> Please fill all required fields:</strong>
+        <ul class="mb-0 mt-2">
+          {% for field_name, errors in form.errors.items() %}
+            {% for err in errors %}
+              <li>{{ form[field_name].label.text }}: {{ err }}</li>
+            {% endfor %}
+          {% endfor %}
+        </ul>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+      {% endif %}
       <!-- Vehicle Context Bar (Gaari ki pehchan ke liye) -->
       <div class="d-flex align-items-center p-3 mb-4 rounded-4 shadow-sm border-start border-4 border-warning" style="background-color: #fffdf5;">
         <div class="bg-dark text-warning rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px;">
@@ -41,23 +54,26 @@
                     
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold small text-muted text-uppercase">New Project</label>
-                            {{ form.new_project_id(class="form-select select2-enable shadow-sm", id="new_project") }}
+                            <label class="form-label fw-semibold small text-muted text-uppercase">New Project <span class="text-danger">*</span></label>
+                            {{ form.new_project_id(class="form-select select2-enable shadow-sm " + ("is-invalid" if form.new_project_id.errors else ""), id="new_project") }}
+                            {% for error in form.new_project_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold small text-muted text-uppercase">New District</label>
-                            {{ form.new_district_id(class="form-select shadow-sm", id="new_district") }}
+                            <label class="form-label fw-semibold small text-muted text-uppercase">New District <span class="text-danger">*</span></label>
+                            {{ form.new_district_id(class="form-select shadow-sm " + ("is-invalid" if form.new_district_id.errors else ""), id="new_district") }}
+                            {% for error in form.new_district_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold small text-muted text-uppercase">New Parking Site</label>
                             {{ form.new_parking_id(class="form-select shadow-sm", id="new_parking") }}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold small text-muted text-uppercase">Transfer Date</label>
+                            <label class="form-label fw-semibold small text-muted text-uppercase">Transfer Date <span class="text-danger">*</span></label>
                             <div class="input-group shadow-sm rounded-3 overflow-hidden">
                                 <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-calendar-event"></i></span>
-                                {{ form.transfer_date(class="form-control datepicker border-start-0") }}
+                                {{ form.transfer_date(class="form-control datepicker border-start-0 " + ("is-invalid" if form.transfer_date.errors else ""), placeholder="Select date") }}
                             </div>
+                            {% for error in form.transfer_date.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                         </div>
                     </div>
                 </div>
@@ -83,7 +99,7 @@
         <div class="row g-2 mt-4">
             <div class="col-6">
                 <a href="{{ url_for('vehicle_transfers') }}" class="btn btn-outline-secondary w-100 fw-bold py-3 rounded-4 border-2">
-                    <i class="bi bi-x-circle me-1"></i> Cancel
+                    <i class="bi bi-arrow-left-circle me-1"></i> Back to List
                 </a>
             </div>
             <div class="col-6">

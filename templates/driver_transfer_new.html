@@ -121,7 +121,9 @@
                 <i class="bi bi-truck text-warning me-2 fs-5"></i>
                 <h5>Driver Re-Assignment Portal</h5>
             </div>
-            <span class="badge-process">Step-by-Step Process</span>
+            <a href="{{ url_for('driver_transfers') }}" class="btn btn-sm btn-outline-light fw-bold">
+                <i class="bi bi-arrow-left-circle me-1"></i> Back to List
+            </a>
         </div>
 
         <!-- Info Alert -->
@@ -198,8 +200,8 @@
                             </div>
                             <div class="col-6">
                                 <div class="form-group-custom">
-                                    <label>Effective Date</label>
-                                    {{ form.transfer_date(class="form-control datepicker") }}
+                                    <label>Effective Date <span class="text-danger">*</span></label>
+                                    {{ form.transfer_date(class="form-control datepicker", placeholder="Select date") }}
                                 </div>
                             </div>
                         </div>
@@ -232,7 +234,7 @@
 <script>
     $(document).ready(function() {
         $('.select2-enable').select2({ width: '100%' });
-        flatpickr(".datepicker", { dateFormat: "Y-m-d", defaultDate: "today" });
+        flatpickr(".datepicker", { dateFormat: "Y-m-d", allowInput: true, altInput: true, altFormat: "F j, Y" });
 
         function resetDropdown(selector) {
             $(selector).html('<option value="">-- Select --</option>').trigger('change');

@@ -4,9 +4,20 @@
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-building me-2 text-primary"></i>Create Party Name</h2>
-    <a href="{{ url_for('party_form') }}" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus-circle me-1"></i>Add Party
-    </a>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{{ url_for('party_export', search=search, type=party_type) }}" class="btn btn-success btn-sm shadow-sm">
+        <i class="bi bi-file-earmark-excel me-1"></i>Export to Excel
+      </a>
+      <a href="{{ url_for('party_print', search=search, type=party_type) }}" target="_blank" class="btn btn-outline-primary btn-sm shadow-sm">
+        <i class="bi bi-printer me-1"></i>Print Preview
+      </a>
+      <a href="{{ url_for('party_import') }}" class="btn btn-outline-secondary btn-sm shadow-sm">
+        <i class="bi bi-upload me-1"></i>Import
+      </a>
+      <a href="{{ url_for('party_form') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>Add Party
+      </a>
+    </div>
   </div>
 
   <div class="card shadow-sm border-0 rounded-3 mb-4">
@@ -54,6 +65,7 @@
               <th class="ps-4">#</th>
               <th>Name</th>
               <th>Type</th>
+              <th>District</th>
               <th>Contact</th>
               <th>Address</th>
               <th class="text-center pe-4">Actions</th>
@@ -65,6 +77,7 @@
               <td class="ps-4">{{ loop.index + ((pagination.page - 1) * pagination.per_page) if pagination else loop.index }}</td>
               <td class="fw-medium">{{ p.name }}</td>
               <td><span class="badge bg-secondary">{{ p.party_type }}</span></td>
+              <td>{{ p.district.name if p.district else '-' }}</td>
               <td>{{ p.contact or '-' }}</td>
               <td>{{ p.address or '-' }}</td>
               <td class="text-center pe-4">
@@ -76,7 +89,7 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="6" class="text-center py-5 text-muted">
+              <td colspan="7" class="text-center py-5 text-muted">
                 <i class="bi bi-building display-6 d-block mb-2"></i>
                 No party found. <a href="{{ url_for('party_form') }}">Add Party</a> (Pump, Workshop or Spare parts shop).
               </td>

@@ -288,30 +288,30 @@ class AssignDriverToVehicleForm(FlaskForm):
 
 
 class ProjectTransferForm(FlaskForm):
-    project_id = SelectField('Select Project to Transfer', coerce=int, validators=[DataRequired()])
-    new_company_id = SelectField('Transfer to New Company', coerce=int, validators=[DataRequired()])
-    transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired()])
+    project_id = SelectField('Select Project to Transfer', coerce=int, validators=[DataRequired(message='Please select a project.')], choices=[])
+    new_company_id = SelectField('Transfer to New Company', coerce=int, validators=[DataRequired(message='Please select a company.')], choices=[])
+    transfer_date = DateField('Transfer Date', format='%Y-%m-%d', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
     remarks = TextAreaField('Transfer Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Confirm Transfer')
 
 class VehicleTransferForm(FlaskForm):
-    from_project_id = SelectField('From Project', coerce=int, validators=[Optional()])
-    from_district_id = SelectField('From District', coerce=int, validators=[Optional()])
-    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired()])
+    from_project_id = SelectField('From Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')])
+    from_district_id = SelectField('From District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')])
+    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired(message='Please select vehicle.'), NumberRange(min=1, message='Please select a vehicle.')], choices=[(0, '-- Select Vehicle --')])
     
-    new_project_id = SelectField('Transfer to Project', coerce=int, validators=[DataRequired()])
-    new_district_id = SelectField('Transfer to District', coerce=int, validators=[DataRequired()])
-    new_parking_id = SelectField('Transfer to Parking (Optional)', coerce=int, validators=[Optional()])
+    new_project_id = SelectField('Transfer to Project', coerce=int, validators=[DataRequired(message='Please select new project.'), NumberRange(min=1, message='Please select new project.')], choices=[(0, '-- Select Project --')])
+    new_district_id = SelectField('Transfer to District', coerce=int, validators=[DataRequired(message='Please select new district.'), NumberRange(min=1, message='Please select new district.')], choices=[(0, '-- Select District --')])
+    new_parking_id = SelectField('Transfer to Parking (Optional)', coerce=int, validators=[Optional()], choices=[(0, '-- No Parking --')])
     
-    transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired()])
+    transfer_date = DateField('Transfer Date', format='%Y-%m-%d', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
     remarks = TextAreaField('Transfer Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Confirm Transfer')
 
 class EditVehicleTransferForm(FlaskForm):
-    new_project_id = SelectField('Transfer to Project', coerce=int, validators=[DataRequired()])
-    new_district_id = SelectField('Transfer to District', coerce=int, validators=[DataRequired()])
-    new_parking_id = SelectField('Transfer to Parking (Optional)', coerce=int, validators=[Optional()])
-    transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired()])
+    new_project_id = SelectField('Transfer to Project', coerce=int, validators=[DataRequired(message='Please select new project.'), NumberRange(min=1, message='Please select new project.')], choices=[(0, '-- Select Project --')])
+    new_district_id = SelectField('Transfer to District', coerce=int, validators=[DataRequired(message='Please select new district.'), NumberRange(min=1, message='Please select new district.')], choices=[(0, '-- Select District --')])
+    new_parking_id = SelectField('Transfer to Parking (Optional)', coerce=int, validators=[Optional()], choices=[(0, '-- No Parking --')])
+    transfer_date = DateField('Transfer Date', format='%Y-%m-%d', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
     remarks = TextAreaField('Transfer Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Update Transfer')
 
@@ -327,15 +327,15 @@ class DriverTransferForm(FlaskForm):
     new_vehicle_id = SelectField('Transfer to Vehicle', coerce=int, validators=[DataRequired()])
     new_shift = SelectField('Select Shift', choices=[('', '-- Select Shift --')], validators=[DataRequired()])
     
-    transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired()])
+    transfer_date = DateField('Transfer Date', format='%Y-%m-%d', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
     remarks = TextAreaField('Transfer Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Confirm Transfer')
 
 class DriverJobLeftForm(FlaskForm):
-    project_id = SelectField('Select Project', coerce=int, validators=[DataRequired()])
-    district_id = SelectField('Select District', coerce=int, validators=[DataRequired()])
-    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired()])
-    driver_id = SelectField('Select Driver (currently assigned)', coerce=int, validators=[DataRequired()])
+    project_id = SelectField('Select Project', coerce=int, validators=[DataRequired(message='Please select project.')])
+    district_id = SelectField('Select District', coerce=int, validators=[DataRequired(message='Please select district.')])
+    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired(message='Please select vehicle.')])
+    driver_id = SelectField('Select Driver (currently assigned)', coerce=int, validators=[DataRequired(message='Please select driver.')])
     
     reason = SelectField('Leave Reason', 
         choices=[
@@ -347,16 +347,16 @@ class DriverJobLeftForm(FlaskForm):
             ('End of Contract', 'End of Contract'),
             ('Other', 'Other')
         ],
-        validators=[DataRequired(message="Reason is required")]
+        validators=[DataRequired(message="Please select reason.")]
     )
     
     other_reason = StringField('Other Reason (if selected)', 
                                validators=[Optional(), Length(max=200)])
     
     leave_date = DateField('Leave Date', 
-                           format='%d-%m-%Y', 
-                           default=date.today,
-                           validators=[DataRequired()])
+                           format='%Y-%m-%d', 
+                           validators=[DataRequired(message='Please select leave date.')],
+                           render_kw={'placeholder': 'Select date'})
     
     remarks = TextAreaField('Remarks (Optional)', 
                             validators=[Optional(), Length(max=500)])
@@ -364,14 +364,14 @@ class DriverJobLeftForm(FlaskForm):
     submit = SubmitField('Confirm Job Left')
 
 class DriverRejoinForm(FlaskForm):
-    driver_id = SelectField('Select Driver to Rejoin', coerce=int, validators=[DataRequired()])
+    driver_id = SelectField('Select Driver to Rejoin', coerce=int, validators=[DataRequired(message='Please select driver.')])
     
-    project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
-    district_id = SelectField('District', coerce=int, validators=[DataRequired()])
-    vehicle_id = SelectField('Vehicle', coerce=int, validators=[DataRequired()])
-    shift = SelectField('Shift', choices=[], validators=[DataRequired()])  # dynamic
+    project_id = SelectField('Project', coerce=int, validators=[DataRequired(message='Please select project.')])
+    district_id = SelectField('District', coerce=int, validators=[DataRequired(message='Please select district.')])
+    vehicle_id = SelectField('Vehicle', coerce=int, validators=[DataRequired(message='Please select vehicle.')])
+    shift = SelectField('Shift', choices=[], validators=[DataRequired(message='Please select shift.')])  # dynamic
     
-    rejoin_date = DateField('Rejoin Date', format='%d-%m-%Y', default=date.today, validators=[DataRequired()])
+    rejoin_date = DateField('Rejoin Date', format='%Y-%m-%d', validators=[DataRequired(message='Please select rejoin date.')], render_kw={'placeholder': 'Select date'})
     remarks = TextAreaField('Rejoin Remarks', validators=[Optional()])
     
     submit = SubmitField('Confirm Rejoin')
@@ -447,6 +447,20 @@ class VehicleMileageUploadForm(FlaskForm):
 
 class ParkingImportForm(FlaskForm):
     file = FileField('Parking Location Excel/CSV', validators=[
+        FileAllowed(['xlsx', 'xls', 'csv'], 'Only Excel or CSV files allowed')
+    ])
+    submit = SubmitField('Import')
+
+
+class PartyImportForm(FlaskForm):
+    file = FileField('Party Excel/CSV', validators=[
+        FileAllowed(['xlsx', 'xls', 'csv'], 'Only Excel or CSV files allowed')
+    ])
+    submit = SubmitField('Import')
+
+
+class ProductImportForm(FlaskForm):
+    file = FileField('Product Excel/CSV', validators=[
         FileAllowed(['xlsx', 'xls', 'csv'], 'Only Excel or CSV files allowed')
     ])
     submit = SubmitField('Import')
@@ -577,6 +591,7 @@ PARTY_TYPE_CHOICES = [
 class PartyForm(FlaskForm):
     name = StringField('Party Name', validators=[DataRequired(), Length(max=150)], render_kw={"placeholder": "Pump / Workshop / Shop name"})
     party_type = SelectField('Type', choices=PARTY_TYPE_CHOICES, validators=[DataRequired()])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[], default=None)
     contact = StringField('Contact', validators=[Optional(), Length(max=100)])
     address = StringField('Address', validators=[Optional(), Length(max=255)])
     remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 2})

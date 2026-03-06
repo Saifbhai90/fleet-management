@@ -173,33 +173,50 @@
         <form method="POST" id="jobLeftForm" novalidate>
             {{ form.hidden_tag() }}
             
+            {% if form.errors %}
+            <div class="alert alert-danger alert-dismissible fade show m-4 mb-0" role="alert">
+                <strong><i class="bi bi-exclamation-triangle me-1"></i> Please fill all required fields:</strong>
+                <ul class="mb-0 mt-2">
+                    {% for field_name, errors in form.errors.items() %}
+                        {% for err in errors %}
+                            <li>{{ form[field_name].label.text }}: {{ err }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                </ul>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endif %}
+            
             <div class="form-pane">
                 <!-- Column 1: Deployment Context -->
                 <div class="pane-column">
                     <span class="step-title">01. Deployment Area</span>
                     
                     <div class="form-group">
-                        <label class="form-label">Active Project</label>
+                        <label class="form-label">Active Project <span class="text-danger">*</span></label>
                         <div class="input-group-custom">
                             <i class="bi bi-buildings"></i>
-                            {{ form.project_id(class="form-select select2-enable", id="project_select") }}
+                            {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else ""), id="project_select") }}
                         </div>
+                        {% for error in form.project_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Operations District</label>
+                        <label class="form-label">Operations District <span class="text-danger">*</span></label>
                         <div class="input-group-custom">
                             <i class="bi bi-geo-alt"></i>
-                            {{ form.district_id(class="form-select select2-enable", id="district_select") }}
+                            {{ form.district_id(class="form-select select2-enable " + ("is-invalid" if form.district_id.errors else ""), id="district_select") }}
                         </div>
+                        {% for error in form.district_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Assigned Vehicle</label>
+                        <label class="form-label">Assigned Vehicle <span class="text-danger">*</span></label>
                         <div class="input-group-custom">
                             <i class="bi bi-truck"></i>
-                            {{ form.vehicle_id(class="form-select select2-enable", id="vehicle_select") }}
+                            {{ form.vehicle_id(class="form-select select2-enable " + ("is-invalid" if form.vehicle_id.errors else ""), id="vehicle_select") }}
                         </div>
+                        {% for error in form.vehicle_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                     </div>
                 </div>
 
@@ -208,11 +225,12 @@
                     <span class="step-title">02. Personnel Identification</span>
                     
                     <div class="form-group">
-                        <label class="form-label text-danger-custom">Target Driver</label>
+                        <label class="form-label text-danger-custom">Target Driver <span class="text-danger">*</span></label>
                         <div class="input-group-custom">
                             <i class="bi bi-person-badge"></i>
-                            {{ form.driver_id(class="form-select select2-enable", id="driver_select") }}
+                            {{ form.driver_id(class="form-select select2-enable " + ("is-invalid" if form.driver_id.errors else ""), id="driver_select") }}
                         </div>
+                        {% for error in form.driver_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                     </div>
 
                     <div class="status-box d-flex align-items-center">
@@ -238,14 +256,16 @@
                     <div class="row g-2">
                         <div class="col-6">
                             <div class="form-group">
-                                <label class="form-label">Leaving Date</label>
-                                {{ form.leave_date(class="form-control", type="date") }}
+                                <label class="form-label">Leaving Date <span class="text-danger">*</span></label>
+                                {{ form.leave_date(class="form-control " + ("is-invalid" if form.leave_date.errors else ""), type="date", placeholder="Select date") }}
+                                {% for error in form.leave_date.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="form-group">
-                                <label class="form-label">Reason Category</label>
-                                {{ form.reason(class="form-select", id="reason_select") }}
+                                <label class="form-label">Reason Category <span class="text-danger">*</span></label>
+                                {{ form.reason(class="form-select " + ("is-invalid" if form.reason.errors else ""), id="reason_select") }}
+                                {% for error in form.reason.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                             </div>
                         </div>
                     </div>

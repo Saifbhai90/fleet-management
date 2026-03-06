@@ -1,0 +1,56 @@
+{% extends "base_print.html" %}
+
+{% block title %}Print - Penalty Record{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-2">
+  <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+    <h3 class="mb-0"><i class="bi bi-cash-coin text-secondary me-2"></i>Penalty Record (Report Preview)</h3>
+    <div>
+      <span class="badge bg-secondary me-2">{{ from_date.strftime('%d-%m-%Y') }} to {{ to_date.strftime('%d-%m-%Y') }}</span>
+      <button class="btn btn-outline-primary" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>Print / Save as PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>District</th>
+              <th>Project</th>
+              <th>Vehicle</th>
+              <th>Driver Name</th>
+              <th>Date</th>
+              <th>Fine</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ row.district.name if row.district else '-' }}</td>
+              <td>{{ row.project.name if row.project else '-' }}</td>
+              <td>{{ row.vehicle.vehicle_no if row.vehicle else '-' }}</td>
+              <td>{{ row.driver.name if row.driver else '-' }}</td>
+              <td>{{ row.record_date.strftime('%d-%m-%Y') if row.record_date else '-' }}</td>
+              <td>{{ row.fine or '-' }}</td>
+              <td>{{ row.remarks or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="8" class="text-center py-4 text-muted">No penalty records found.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

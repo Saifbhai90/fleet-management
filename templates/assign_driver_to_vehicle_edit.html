@@ -68,6 +68,7 @@
                         <div class="bg-white p-4 rounded-3 shadow-sm border-start border-warning border-4">
                             <label class="form-label fw-bold text-warning">4. Update Shift</label>
                             {{ form.shift(class="form-select", id="shift_select") }}
+                            <div id="capacity_info" class="mt-2 small fw-bold"></div>
                         </div>
                     </div>
 
@@ -148,6 +149,46 @@ $(document).ready(function() {
         autoclose: true,
         todayHighlight: true
     });
+
+    // Vehicle change → Capacity ke hisaab se Shift options (edit: current driver exclude)
+    var currentDriverId = {{ driver.id|default(0)|tojson }};
+    $veh.on('change', function() {
+        var vid = $(this).val();
+        var $capInfo = $('#capacity_info');
+        var $shiftSelect = $('#shift_select');
+        if (!vid || vid == '0') {
+            $capInfo.text('');
+            return;
+        }
+        $.getJSON('/get_vehicle_capacity_info/' + vid, function(capData) {
+            var capacity = capData.capacity || 1;
+            if (capacity === 1) {
+                $capInfo.removeClass('text-warning text-success').addClass('text-info').html('<i class="bi bi-person me-1"></i> Capacity: 1 — Sirf <strong>Morning</strong> shift.');
+            } else {
+                $capInfo.removeClass('text-warning text-info').addClass('text-success').html('<i class="bi bi-people me-1"></i> Capacity: 2 — <strong>Morning</strong> & <strong>Night</strong> dono shifts.');
+            }
+        }).fail(function() { $capInfo.text(''); });
+        var url = '/get_available_shifts/' + vid + (currentDriverId ? '?exclude_driver_id=' + currentDriverId : '');
+        $.getJSON(url, function(shifts) {
+            $shiftSelect.empty().append('<option value="">-- Select Shift --</option>');
+            $.each(shifts, function(i, s) {
+                $shiftSelect.append('<option value="' + (s.id || s.name) + '">' + (s.name || s.id) + '</option>');
+            });
+            if (shifts.length === 0) {
+                $shiftSelect.append('<option value="" disabled>Vehicle full — no shift available</option>');
+            }
+            // Restore current shift selection if still in list
+            var curVal = $shiftSelect.data('currentShift');
+            if (curVal && shifts.some(function(s){ return (s.id || s.name) === curVal; })) {
+                $shiftSelect.val(curVal);
+            }
+        }).fail(function() {
+            $shiftSelect.empty().append('<option value="">-- Select Shift --</option>');
+        });
+    });
+    // Set current shift for restore after reload
+    $('#shift_select').data('currentShift', $('#shift_select').val());
+    if ($veh.val() && $veh.val() != '0') { $veh.trigger('change'); }
 });
 </script>
 

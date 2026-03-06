@@ -1,0 +1,65 @@
+{% extends "base_print.html" %}
+
+{% block title %}Print - Driver Attendance{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-2">
+  <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+    <h3 class="mb-0"><i class="bi bi-calendar-check me-2"></i>Driver Attendance (Marked) — {{ view_date.strftime('%d-%m-%Y') }}</h3>
+    <div>
+      {% if project_id or district_id or search %}
+      <span class="badge bg-secondary me-2">Filtered</span>
+      {% endif %}
+      <button class="btn btn-outline-primary" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>Print / Save as PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Vehicle No</th>
+              <th>Name</th>
+              <th>Driver ID</th>
+              <th>Project / District</th>
+              <th>Status</th>
+              <th>Check In</th>
+              <th>Check Out</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for driver in drivers %}
+            {% set rec = by_driver.get(driver.id) %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ driver.vehicle.vehicle_no if driver.vehicle else '-' }}</td>
+              <td>{{ driver.name }}</td>
+              <td>{{ driver.driver_id or '-' }}</td>
+              <td class="small">{{ driver.project.name if driver.project else '-' }} / {{ driver.district.name if driver.district else '-' }}</td>
+              <td>
+                {% if rec %}
+                  <span class="badge {% if rec.status == 'Present' %}bg-success{% elif rec.status == 'Absent' %}bg-danger{% elif rec.status == 'Leave' %}bg-info{% elif rec.status == 'Late' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ rec.status }}</span>
+                {% else %}-{% endif %}
+              </td>
+              <td>{% if rec and rec.check_in %}{{ rec.check_in.strftime('%H:%M') }}{% else %}-{% endif %}</td>
+              <td>{% if rec and rec.check_out %}{{ rec.check_out.strftime('%H:%M') }}{% else %}-{% endif %}</td>
+              <td class="small">{% if rec and rec.remarks %}{{ rec.remarks[:40] }}{% if rec.remarks|length > 40 %}...{% endif %}{% else %}-{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="9" class="text-center py-4 text-muted">No marked attendance for this date.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

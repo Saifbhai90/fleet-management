@@ -22,6 +22,12 @@
         <div class="mb-3">
           <label class="form-label">Type <span class="text-danger">*</span></label>
           {{ form.party_type(class="form-select") }}
+          <small class="text-muted">Select: Pump, Workshop or Spare parts shop</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">District</label>
+          {{ form.district_id(class="form-select") }}
+          <small class="text-muted">Select from District list (optional)</small>
         </div>
         <div class="mb-3">
           <label class="form-label">Contact</label>

@@ -49,7 +49,15 @@
   <div class="card shadow border-0 rounded-3 overflow-hidden">
     <div class="card-header bg-secondary text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="fw-semibold">Report from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
-      <input type="text" id="penaltySearch" class="form-control form-control-sm" placeholder="Search..." style="max-width: 220px;" autocomplete="off">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <a href="{{ url_for('penalty_record_export', from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), district_id=district_id or 0, project_id=project_id or 0) }}" class="btn btn-success btn-sm">
+          <i class="bi bi-file-earmark-excel me-1"></i>Export to Excel
+        </a>
+        <a href="{{ url_for('penalty_record_print', from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), district_id=district_id or 0, project_id=project_id or 0) }}" target="_blank" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-printer me-1"></i>Print Preview
+        </a>
+        <input type="text" id="penaltySearch" class="form-control form-control-sm" placeholder="Search..." style="max-width: 220px;" autocomplete="off">
+      </div>
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">

@@ -566,10 +566,13 @@ class Party(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
     party_type = db.Column(db.String(30), nullable=False)  # Pump, Workshop, Spare parts shop
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
     contact = db.Column(db.String(100), nullable=True)
     address = db.Column(db.String(255), nullable=True)
     remarks = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    district = db.relationship('District', backref='parties', lazy=True)
 
     def __repr__(self):
         return f'<Party {self.name} ({self.party_type})>'

@@ -24,12 +24,32 @@
 <div class="page-wrapper">
     <div class="glass-card">
         <div class="header-box">
-            <h4 class="fw-bold mb-1 text-dark"><i class="bi bi-person-plus-fill text-success me-2"></i>Driver Re-Engagement</h4>
-            <p class="text-muted small mb-0">Identify previous records and allocate new duty assignments.</p>
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="fw-bold mb-1 text-dark"><i class="bi bi-person-plus-fill text-success me-2"></i>Driver Re-Engagement</h4>
+                    <p class="text-muted small mb-0">Identify previous records and allocate new duty assignments.</p>
+                </div>
+                <a href="{{ url_for('driver_rejoin_list') }}" class="btn btn-outline-secondary fw-bold">
+                    <i class="bi bi-arrow-left-circle me-1"></i> Back to List
+                </a>
+            </div>
         </div>
 
         <form method="POST" id="rejoinForm">
             {{ form.hidden_tag() }}
+            {% if form.errors %}
+            <div class="alert alert-danger alert-dismissible fade show mx-4 mt-4 mb-0" role="alert">
+                <strong><i class="bi bi-exclamation-triangle me-1"></i> Please fill all required fields:</strong>
+                <ul class="mb-0 mt-2">
+                    {% for field_name, errors in form.errors.items() %}
+                        {% for err in errors %}
+                            <li>{{ form[field_name].label.text }}: {{ err }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                </ul>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endif %}
             <div class="form-section">
                 <div class="pane-grid">
                     <!-- LEFT PANE -->
@@ -53,8 +73,9 @@
                             <select id="old_vehicle" class="form-select" disabled><option value="">-- Select Vehicle --</option></select>
                         </div>
                         <div class="mb-0">
-                            <label class="form-label text-danger">Left Driver Name</label>
-                            {{ form.driver_id(class="form-select border-danger", id="target_driver", disabled=True) }}
+                            <label class="form-label text-danger">Left Driver Name <span class="text-danger">*</span></label>
+                            {{ form.driver_id(class="form-select border-danger " + ("is-invalid" if form.driver_id.errors else ""), id="target_driver", disabled=True) }}
+                            {% for error in form.driver_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                         </div>
                     </div>
 
@@ -63,27 +84,32 @@
                         <div class="section-title">02. New Duty Assignment</div>
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
-                                <label class="form-label">New Project</label>
-                                {{ form.project_id(class="form-select", id="new_project") }}
+                                <label class="form-label">New Project <span class="text-danger">*</span></label>
+                                {{ form.project_id(class="form-select " + ("is-invalid" if form.project_id.errors else ""), id="new_project") }}
+                                {% for error in form.project_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">New District</label>
-                                {{ form.district_id(class="form-select", id="new_district") }}
+                                <label class="form-label">New District <span class="text-danger">*</span></label>
+                                {{ form.district_id(class="form-select " + ("is-invalid" if form.district_id.errors else ""), id="new_district") }}
+                                {% for error in form.district_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">New Vehicle</label>
-                            {{ form.vehicle_id(class="form-select", id="new_vehicle") }}
+                            <label class="form-label">New Vehicle <span class="text-danger">*</span></label>
+                            {{ form.vehicle_id(class="form-select " + ("is-invalid" if form.vehicle_id.errors else ""), id="new_vehicle") }}
+                            {% for error in form.vehicle_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                             <div id="capacity_info" class="status-msg"></div>
                         </div>
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
-                                <label class="form-label">Available Shift</label>
-                                {{ form.shift(class="form-select", id="shift_select") }}
+                                <label class="form-label">Available Shift <span class="text-danger">*</span></label>
+                                {{ form.shift(class="form-select " + ("is-invalid" if form.shift.errors else ""), id="shift_select") }}
+                                {% for error in form.shift.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Rejoin Date</label>
-                                {{ form.rejoin_date(class="form-control", type="date") }}
+                                <label class="form-label">Rejoin Date <span class="text-danger">*</span></label>
+                                {{ form.rejoin_date(class="form-control " + ("is-invalid" if form.rejoin_date.errors else ""), type="date", placeholder="Select date") }}
+                                {% for error in form.rejoin_date.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                             </div>
                         </div>
                         <div class="mb-3">

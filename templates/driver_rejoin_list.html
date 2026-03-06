@@ -10,16 +10,34 @@
 </style>
 
 <div class="page-container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
         <div>
             <h3 class="fw-bold text-dark mb-0">Driver Rejoin <span class="text-success">History</span></h3>
             <p class="text-muted small mb-0">List of drivers who rejoined and resumed their duties.</p>
         </div>
-        <!-- Yeh button ab list ke andar hai, yahan se user form par jayega -->
-        <a href="{{ url_for('driver_rejoin_new') }}" class="btn btn-success shadow-sm px-4 rounded-pill">
-            <i class="bi bi-person-plus-fill me-2"></i>Mark New Rejoin
-        </a>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{{ url_for('driver_rejoin_export', search=search or '') }}" class="btn btn-success shadow-sm px-3 rounded-pill">
+                <i class="bi bi-file-earmark-excel me-1"></i> Export to Excel
+            </a>
+            <a href="{{ url_for('driver_rejoin_print', search=search or '') }}" target="_blank" class="btn btn-outline-primary shadow-sm px-3 rounded-pill">
+                <i class="bi bi-printer me-1"></i> Print Preview
+            </a>
+            <a href="{{ url_for('driver_rejoin_new') }}" class="btn btn-success shadow-sm px-4 rounded-pill">
+                <i class="bi bi-person-plus-fill me-2"></i> Mark New Rejoin
+            </a>
+        </div>
     </div>
+
+    <form method="GET" action="{{ url_for('driver_rejoin_list') }}" class="mb-4">
+        <div class="input-group shadow-sm rounded-pill overflow-hidden" style="max-width: 400px;">
+            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" name="search" class="form-control border-start-0" placeholder="Search by Driver name, ID, Project or Vehicle..." value="{{ search or '' }}">
+            <button type="submit" class="btn btn-primary px-4">Search</button>
+        </div>
+        {% if search %}
+        <a href="{{ url_for('driver_rejoin_list') }}" class="btn btn-link btn-sm text-muted mt-2">Clear search</a>
+        {% endif %}
+    </form>
 
     <div class="custom-card">
         <div class="table-responsive">

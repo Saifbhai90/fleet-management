@@ -653,6 +653,29 @@
         if (event.key === "Enter") {
             const target = event.target;
 
+            // Select2: when Enter is pressed inside a Select2 (search dropdown), move focus to next form field
+            const select2Container = target.closest && target.closest(".select2-container");
+            if (select2Container) {
+                const select = select2Container.previousElementSibling;
+                if (select && select.tagName === "SELECT" && select.form) {
+                    const form = select.form;
+                    const allFields = Array.from(form.querySelectorAll(
+                        "input:not([type=\"hidden\"]):not([readonly]):not([disabled]), select:not([disabled]), textarea:not([readonly]):not([disabled])"
+                    )).filter(function(el) { return el.offsetWidth > 0 && el.offsetHeight > 0; });
+                    const idx = allFields.indexOf(select);
+                    if (idx >= 0) {
+                        event.preventDefault();
+                        if (idx < allFields.length - 1) {
+                            allFields[idx + 1].focus();
+                        } else {
+                            const submitBtn = form.querySelector("button[type=\"submit\"], input[type=\"submit\"]");
+                            if (submitBtn) submitBtn.focus();
+                        }
+                        return;
+                    }
+                }
+            }
+
             // Check if the target is an input, select, or textarea within a form
             if (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA") {
                 const form = target.form;
@@ -662,14 +685,14 @@
                     const focusableElements = Array.from(form.querySelectorAll(
                         "input:not([type=\"hidden\"]):not([readonly]):not([disabled]), select:not([readonly]):not([disabled]), textarea:not([readonly]):not([disabled])"
                     )).filter(
-                        el => !el.closest(".select2-container") && el.offsetWidth > 0 && el.offsetHeight > 0
+                        el => el.offsetWidth > 0 && el.offsetHeight > 0 && (el.tagName !== "SELECT" || !el.closest(".select2-container"))
                     );
 
                     const currentElementIndex = focusableElements.indexOf(target);
                     if (currentElementIndex > -1) {
                         let nextElement = focusableElements[currentElementIndex + 1];
                         
-                        // Skip elements that are clearly not meant for sequential input like datepicker inputs if they were to be skipped
+                        // Skip disabled
                         while(nextElement && nextElement.disabled) {
                             nextElement = focusableElements[focusableElements.indexOf(nextElement) + 1];
                         }
@@ -677,7 +700,6 @@
                         if (nextElement) {
                             nextElement.focus();
                         } else {
-                            // If it's the last field, try to find the submit button and click it
                             const submitButton = form.querySelector("button[type=\"submit\"], input[type=\"submit\"]");
                             if (submitButton) {
                                 submitButton.click();
@@ -686,7 +708,6 @@
                     }
                 }
             } else if (target.tagName === "BUTTON" && target.type !== "button" && !target.disabled) {
-                // If focus is on a submit button, trigger its click
                 event.preventDefault(); 
                 target.click();
             }

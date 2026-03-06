@@ -15,7 +15,7 @@ from forms import (
     AssignProjectToDistrictForm, AssignVehicleToDistrictForm, AssignVehicleToParkingForm,
     AssignDriverToVehicleForm, ProjectTransferForm, VehicleTransferForm, EditVehicleTransferForm, DriverTransferForm, DriverJobLeftForm, DriverRejoinForm,
     DriverAttendanceFilterForm, DriverAttendanceReportForm, ATTENDANCE_STATUS_CHOICES,
-    TaskReportForm, TaskReportFilterForm, EmergencyTaskUploadForm, VehicleMileageUploadForm, ParkingImportForm,
+    TaskReportForm, TaskReportFilterForm, EmergencyTaskUploadForm, VehicleMileageUploadForm, ParkingImportForm, PartyImportForm, ProductImportForm,
     TaskReportUploadBothForm, RedTaskFilterForm, RedTaskForm, VehicleMoveWithoutTaskFilterForm, VehicleMoveWithoutTaskForm, PenaltyRecordForm, PenaltyRecordFilterForm,
     FuelExpenseFilterForm, FuelExpenseForm,
     OilExpenseFilterForm, OilExpenseForm,
@@ -2677,6 +2677,11 @@ def assign_driver_to_vehicle_new():
             flash(f"{form.shift.data} shift already assigned to this vehicle!", "danger")
             return render_template('assign_driver_to_vehicle_new.html', form=form)
 
+        cap = vehicle.driver_capacity or 1
+        if cap == 1 and form.shift.data != 'Morning':
+            flash("Is vehicle ki capacity 1 hai — sirf Morning shift allowed.", "danger")
+            return render_template('assign_driver_to_vehicle_new.html', form=form)
+
         try:
             driver.vehicle_id = vehicle.id
             driver.shift = form.shift.data
@@ -2844,6 +2849,11 @@ def assign_driver_to_vehicle_edit(driver_id):
             flash(f"{form.shift.data} shift already taken", "danger")
             return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver)
 
+        cap = vehicle.driver_capacity or 1
+        if cap == 1 and form.shift.data != 'Morning':
+            flash("Is vehicle ki capacity 1 hai — sirf Morning shift allowed.", "danger")
+            return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver)
+
         try:
             new_driver_id = form.driver_id.data
             if new_driver_id != driver.id:
@@ -2885,13 +2895,20 @@ def project_transfers():
 @app.route('/project-transfer/new', methods=['GET', 'POST'])
 def project_transfer_new():
     form = ProjectTransferForm()
-    form.project_id.choices = [
+    projects = Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    form.project_id.choices = [(0, '-- Select Project --')] + [
         (p.id, f"{p.name} (Current: {p.company.name if p.company else 'Unassigned'})")
-        for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+        for p in projects
     ]
-    form.new_company_id.choices = [(c.id, c.name) for c in Company.query.order_by(Company.name).all()]
+    form.new_company_id.choices = [(0, '-- Select Transfer to Company --')] + [(c.id, c.name) for c in Company.query.order_by(Company.name).all()]
 
     if form.validate_on_submit():
+        if not form.project_id.data or form.project_id.data == 0:
+            flash('Please select a project.', 'danger')
+            return render_template('project_transfer_new.html', form=form)
+        if not form.new_company_id.data or form.new_company_id.data == 0:
+            flash('Please select transfer to company.', 'danger')
+            return render_template('project_transfer_new.html', form=form)
         try:
             project = Project.query.get_or_404(form.project_id.data)
             new_company = Company.query.get_or_404(form.new_company_id.data)
@@ -2925,8 +2942,8 @@ def project_transfer_new():
 def project_transfer_edit(id):
     transfer = ProjectTransfer.query.get_or_404(id)
     form = ProjectTransferForm(obj=transfer)
-    form.project_id.choices = [(p.id, p.name) for p in Project.query.all()]
-    form.new_company_id.choices = [(c.id, c.name) for c in Company.query.all()]
+    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    form.new_company_id.choices = [(0, '-- Select Transfer to Company --')] + [(c.id, c.name) for c in Company.query.order_by(Company.name).all()]
     if form.validate_on_submit():
         transfer.project_id = form.project_id.data
         transfer.new_company_id = form.new_company_id.data
@@ -2972,10 +2989,6 @@ def vehicle_transfer_new():
         form.new_parking_id.choices = [(int(request.form.get('new_parking_id') or 0), '')]
 
     if form.validate_on_submit():
-        if form.vehicle_id.data == 0 or form.new_project_id.data == 0 or form.new_district_id.data == 0:
-            flash("Vehicle, New Project, and New District are required fields.", "danger")
-            return redirect(url_for('vehicle_transfer_new'))
-
         try:
             vehicle = Vehicle.query.get_or_404(form.vehicle_id.data)
             old_p_id = vehicle.project_id
@@ -3579,14 +3592,81 @@ def driver_job_left_delete(id):
 # routes.py mein ye function add karein
 @app.route('/driver/rejoin/list')
 def driver_rejoin_list():
-    # Sirf 'rejoin' action waale records uthayein
-    rejoin_records = DriverStatusChange.query.filter_by(action_type='rejoin') \
-                                     .order_by(DriverStatusChange.change_date.desc()) \
-                                     .all()
-    
-    return render_template('driver_rejoin_list.html', 
-                           records=rejoin_records, 
+    search = request.args.get('search', '').strip()
+    query = DriverStatusChange.query.filter_by(action_type='rejoin') \
+                         .join(Driver, DriverStatusChange.driver_id == Driver.id) \
+                         .outerjoin(Project, DriverStatusChange.new_project_id == Project.id) \
+                         .outerjoin(Vehicle, DriverStatusChange.new_vehicle_id == Vehicle.id)
+    if search:
+        like = f'%{search}%'
+        query = query.filter(
+            or_(
+                Driver.name.ilike(like),
+                Driver.driver_id.ilike(like),
+                Project.name.ilike(like),
+                Vehicle.vehicle_no.ilike(like)
+            )
+        )
+    rejoin_records = query.order_by(DriverStatusChange.change_date.desc()).all()
+    return render_template('driver_rejoin_list.html',
+                           records=rejoin_records,
+                           search=search,
                            title="Driver Rejoin History")
+
+
+@app.route('/driver/rejoin/export')
+def driver_rejoin_export():
+    search = request.args.get('search', '').strip()
+    query = DriverStatusChange.query.filter_by(action_type='rejoin') \
+                         .join(Driver, DriverStatusChange.driver_id == Driver.id) \
+                         .outerjoin(Project, DriverStatusChange.new_project_id == Project.id) \
+                         .outerjoin(Vehicle, DriverStatusChange.new_vehicle_id == Vehicle.id)
+    if search:
+        like = f'%{search}%'
+        query = query.filter(
+            or_(
+                Driver.name.ilike(like),
+                Driver.driver_id.ilike(like),
+                Project.name.ilike(like),
+                Vehicle.vehicle_no.ilike(like)
+            )
+        )
+    records = query.order_by(DriverStatusChange.change_date.desc()).all()
+    headers = ['S.No', 'Rejoin Date', 'Driver Name', 'Driver ID', 'New Project', 'New Vehicle', 'Shift']
+    rows = []
+    for i, r in enumerate(records, 1):
+        rows.append([
+            i,
+            r.change_date.strftime('%Y-%m-%d') if r.change_date else '',
+            r.driver.name if r.driver else '',
+            r.driver.driver_id if r.driver else '',
+            r.new_project.name if r.new_project else 'N/A',
+            r.new_vehicle.vehicle_no if r.new_vehicle else 'N/A',
+            r.new_shift or ''
+        ])
+    filename = 'driver_rejoin_history.xlsx' if not search else f'driver_rejoin_{search[:30].replace("/", "-")}.xlsx'
+    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
+
+
+@app.route('/driver/rejoin/print')
+def driver_rejoin_print():
+    search = request.args.get('search', '').strip()
+    query = DriverStatusChange.query.filter_by(action_type='rejoin') \
+                         .join(Driver, DriverStatusChange.driver_id == Driver.id) \
+                         .outerjoin(Project, DriverStatusChange.new_project_id == Project.id) \
+                         .outerjoin(Vehicle, DriverStatusChange.new_vehicle_id == Vehicle.id)
+    if search:
+        like = f'%{search}%'
+        query = query.filter(
+            or_(
+                Driver.name.ilike(like),
+                Driver.driver_id.ilike(like),
+                Project.name.ilike(like),
+                Vehicle.vehicle_no.ilike(like)
+            )
+        )
+    records = query.order_by(DriverStatusChange.change_date.desc()).all()
+    return render_template('driver_rejoin_print.html', records=records, search=search)
 
 @app.route('/api/get_left_drivers_by_vehicle/<int:vid>')
 def get_left_drivers_by_vehicle(vid):
@@ -3647,37 +3727,106 @@ def driver_attendance_list():
     search = (request.args.get('search') or '').strip()
     if request.args.get('date'):
         view_date = parse_date(request.args.get('date')) or view_date
-    # Pre-fill form from query params
     form.attendance_date.data = view_date
     form.project_id.data = project_id if project_id else 0
-    # District choices: only when project selected, from project_district
     if project_id and project_id != 0:
         districts = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name).all()
         form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
     else:
         form.district_id.choices = [(0, '-- All Districts --')]
     form.district_id.data = district_id if district_id else 0
+
+    # Sirf wo records jo Mark Attendance form se mark hue (DriverAttendance table mein hain)
     query = DriverAttendance.query.filter_by(attendance_date=view_date)
     if project_id:
         query = query.filter(DriverAttendance.project_id == project_id)
     attendance_list = query.order_by(DriverAttendance.driver_id).all()
-    drivers_query = Driver.query.filter_by(status='Active')
+    by_driver = {a.driver_id: a for a in attendance_list}
+    driver_ids = [a.driver_id for a in attendance_list]
+    if not driver_ids:
+        drivers = []
+    else:
+        drivers_query = Driver.query.filter(Driver.id.in_(driver_ids))
+        if district_id:
+            drivers_query = drivers_query.filter(Driver.district_id == district_id)
+        if search:
+            q = f'%{search}%'
+            drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+                or_(
+                    Driver.name.ilike(q),
+                    Driver.driver_id.ilike(q),
+                    Vehicle.vehicle_no.ilike(q),
+                )
+            )
+        drivers = drivers_query.order_by(Driver.name).all()
+    return render_template('driver_attendance_list.html', form=form, view_date=view_date, drivers=drivers, by_driver=by_driver, project_id=project_id, district_id=district_id, search=search)
+
+
+def _driver_attendance_marked_list(view_date, project_id=None, district_id=None, search=None):
+    """Returns (drivers, by_driver) for date - only drivers who have attendance marked (from Mark Attendance form)."""
+    query = DriverAttendance.query.filter_by(attendance_date=view_date)
     if project_id:
-        drivers_query = drivers_query.filter(Driver.project_id == project_id)
+        query = query.filter(DriverAttendance.project_id == project_id)
+    attendance_list = query.order_by(DriverAttendance.driver_id).all()
+    by_driver = {a.driver_id: a for a in attendance_list}
+    driver_ids = [a.driver_id for a in attendance_list]
+    if not driver_ids:
+        return [], by_driver
+    drivers_query = Driver.query.filter(Driver.id.in_(driver_ids))
     if district_id:
         drivers_query = drivers_query.filter(Driver.district_id == district_id)
     if search:
         q = f'%{search}%'
         drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
-            db.or_(
+            or_(
                 Driver.name.ilike(q),
                 Driver.driver_id.ilike(q),
                 Vehicle.vehicle_no.ilike(q),
             )
         )
-    drivers = drivers_query.order_by(Driver.name).all()
-    by_driver = {a.driver_id: a for a in attendance_list}
-    return render_template('driver_attendance_list.html', form=form, view_date=view_date, drivers=drivers, by_driver=by_driver, project_id=project_id, district_id=district_id, search=search)
+    return drivers_query.order_by(Driver.name).all(), by_driver
+
+
+@app.route('/driver-attendance/export')
+def driver_attendance_export():
+    view_date = date.today()
+    if request.args.get('date'):
+        view_date = parse_date(request.args.get('date')) or view_date
+    project_id = request.args.get('project_id', type=int) or None
+    district_id = request.args.get('district_id', type=int) or None
+    search = (request.args.get('search') or '').strip()
+    drivers, by_driver = _driver_attendance_marked_list(view_date, project_id, district_id, search)
+    headers = ['S.No', 'Date', 'Vehicle No', 'Name', 'Driver ID', 'Project', 'District', 'Status', 'Check In', 'Check Out', 'Remarks']
+    rows = []
+    for i, d in enumerate(drivers, 1):
+        rec = by_driver.get(d.id)
+        rows.append([
+            i,
+            view_date.strftime('%Y-%m-%d'),
+            d.vehicle.vehicle_no if d.vehicle else '-',
+            d.name or '',
+            d.driver_id or '',
+            d.project.name if d.project else '-',
+            d.district.name if d.district else '-',
+            rec.status if rec else '',
+            rec.check_in.strftime('%H:%M') if rec and rec.check_in else '-',
+            rec.check_out.strftime('%H:%M') if rec and rec.check_out else '-',
+            (rec.remarks or '')[:100] if rec else ''
+        ])
+    filename = f'driver_attendance_{view_date.strftime("%Y-%m-%d")}.xlsx'
+    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
+
+
+@app.route('/driver-attendance/print')
+def driver_attendance_print():
+    view_date = date.today()
+    if request.args.get('date'):
+        view_date = parse_date(request.args.get('date')) or view_date
+    project_id = request.args.get('project_id', type=int) or None
+    district_id = request.args.get('district_id', type=int) or None
+    search = (request.args.get('search') or '').strip()
+    drivers, by_driver = _driver_attendance_marked_list(view_date, project_id, district_id, search)
+    return render_template('driver_attendance_print.html', drivers=drivers, by_driver=by_driver, view_date=view_date, project_id=project_id, district_id=district_id, search=search)
 
 
 @app.route('/driver-attendance/mark', methods=['GET', 'POST'])
@@ -3719,7 +3868,8 @@ def driver_attendance_mark():
         form.district_id.choices = [(0, '-- All Districts --')]
     if request.method == 'GET':
         form.district_id.data = district_id if district_id else 0
-    drivers_query = Driver.query.filter_by(status='Active')
+    # Sirf wo drivers jo Vehicle ke sath assign ho chuke hain (vehicle_id set hai)
+    drivers_query = Driver.query.filter_by(status='Active').filter(Driver.vehicle_id.isnot(None))
     if project_id:
         drivers_query = drivers_query.filter(Driver.project_id == project_id)
     if district_id:
@@ -4711,7 +4861,7 @@ def without_task_edit(pk):
 # ────────────────────────────────────────────────
 # Penalty Record (Driver Status)
 # ────────────────────────────────────────────────
-@app.route('/penalty-record')
+@app.route('/penalty-record', methods=['GET', 'POST'])
 def penalty_record_list():
     form = PenaltyRecordFilterForm()
     form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
@@ -4754,7 +4904,60 @@ def penalty_record_list():
     if project_id:
         query = query.filter(PenaltyRecord.project_id == project_id)
     rows = query.order_by(PenaltyRecord.record_date.desc(), PenaltyRecord.id.desc()).all()
-    return render_template('penalty_record_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date)
+    return render_template('penalty_record_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id)
+
+
+def _penalty_record_query(from_date, to_date, district_id=0, project_id=0):
+    """Shared query for penalty list/export/print."""
+    query = PenaltyRecord.query.filter(
+        PenaltyRecord.record_date >= from_date,
+        PenaltyRecord.record_date <= to_date
+    )
+    if district_id:
+        query = query.filter(PenaltyRecord.district_id == district_id)
+    if project_id:
+        query = query.filter(PenaltyRecord.project_id == project_id)
+    return query.order_by(PenaltyRecord.record_date.desc(), PenaltyRecord.id.desc())
+
+
+@app.route('/penalty-record/export')
+def penalty_record_export():
+    today = date.today()
+    from_date = parse_date(request.args.get('from_date')) or today
+    to_date = parse_date(request.args.get('to_date')) or today
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+    rows = _penalty_record_query(from_date, to_date, district_id, project_id).all()
+    headers = ['S.No', 'District', 'Project', 'Vehicle', 'Driver Name', 'Date', 'Fine', 'Remarks']
+    data_rows = []
+    for i, row in enumerate(rows, 1):
+        data_rows.append([
+            i,
+            row.district.name if row.district else '-',
+            row.project.name if row.project else '-',
+            row.vehicle.vehicle_no if row.vehicle else '-',
+            row.driver.name if row.driver else '-',
+            row.record_date.strftime('%Y-%m-%d') if row.record_date else '-',
+            row.fine or '-',
+            (row.remarks or '')[:200]
+        ])
+    filename = f'penalty_records_{from_date.strftime("%Y-%m-%d")}_to_{to_date.strftime("%Y-%m-%d")}.xlsx'
+    return generate_excel_template(headers, data_rows, required_columns=[], filename=filename)
+
+
+@app.route('/penalty-record/print')
+def penalty_record_print():
+    today = date.today()
+    from_date = parse_date(request.args.get('from_date')) or today
+    to_date = parse_date(request.args.get('to_date')) or today
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+    rows = _penalty_record_query(from_date, to_date, district_id, project_id).all()
+    return render_template('penalty_record_print.html', rows=rows, from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id)
 
 
 @app.route('/penalty-record/new', methods=['GET', 'POST'])
@@ -4902,12 +5105,19 @@ def party_list():
 def party_form(id=None):
     party = Party.query.get_or_404(id) if id else None
     form = PartyForm(obj=party)
+    # District list se options (District model)
+    districts = District.query.order_by(District.name).all()
+    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
     if request.method == 'GET' and request.args.get('type'):
         form.party_type.data = request.args.get('type')
+    if party and getattr(party, 'district_id', None) is None:
+        form.district_id.data = 0
     if form.validate_on_submit():
         if not party:
             party = Party()
         form.populate_obj(party)
+        if form.district_id.data in (None, 0):
+            party.district_id = None
         if not id:
             db.session.add(party)
         db.session.commit()
@@ -4924,6 +5134,130 @@ def party_delete(id):
     db.session.commit()
     flash('Party deleted.', 'success')
     return redirect(url_for('party_list'))
+
+
+def _party_list_query(search=None, party_type=None):
+    """Shared query for party list/export/print (filter by search and type)."""
+    query = Party.query
+    if party_type:
+        query = query.filter(Party.party_type == party_type)
+    if search:
+        query = query.filter(Party.name.ilike(f'%{search}%'))
+    return query.order_by(Party.party_type, Party.name)
+
+
+@app.route('/parties/export')
+def party_export():
+    """Export party list (with optional search and type) to Excel."""
+    search = request.args.get('search', '').strip()
+    party_type = request.args.get('type', '').strip()
+    query = _party_list_query(search=search, party_type=party_type)
+    parties = query.all()
+    headers = ['S.No', 'Name', 'Type', 'District', 'Contact', 'Address', 'Remarks']
+    rows = []
+    for i, p in enumerate(parties, 1):
+        rows.append([
+            i,
+            p.name or '',
+            p.party_type or '',
+            p.district.name if p.district else '',
+            p.contact or '',
+            (p.address or '')[:200],
+            (p.remarks or '')[:200]
+        ])
+    filename = 'parties.xlsx'
+    if search or party_type:
+        parts = [search[:20].replace('/', '-')] if search else []
+        if party_type:
+            parts.append(party_type.replace(' ', '_'))
+        filename = 'parties_' + '_'.join(parts) + '.xlsx'
+    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
+
+
+@app.route('/parties/print')
+def party_print():
+    """Print-friendly view of parties (browser print to PDF)."""
+    search = request.args.get('search', '').strip()
+    party_type = request.args.get('type', '').strip()
+    parties = _party_list_query(search=search, party_type=party_type).all()
+    return render_template('party_print.html', parties=parties, search=search, party_type=party_type)
+
+
+@app.route('/parties/import', methods=['GET', 'POST'])
+def party_import():
+    """Import parties from Excel/CSV. User can download a template."""
+    form = PartyImportForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        f = form.file.data
+        if not f:
+            flash('Please select an Excel/CSV file.', 'warning')
+            return redirect(url_for('party_import'))
+        try:
+            import pandas as pd
+            filename = f.filename or ''
+            ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+            if ext in ('xlsx', 'xls'):
+                df = pd.read_excel(f)
+            elif ext == 'csv':
+                df = pd.read_csv(f)
+            else:
+                flash('Unsupported file type. Use .xlsx, .xls or .csv.', 'danger')
+                return redirect(url_for('party_import'))
+
+            required_cols = ['name', 'party_type']
+            expected_cols = ['name', 'party_type', 'contact', 'address', 'remarks']
+            missing = [c for c in required_cols if c not in df.columns]
+            if missing:
+                flash(f'Missing required columns: {", ".join(missing)}', 'danger')
+                return redirect(url_for('party_import'))
+
+            import_errors = []
+            parties_to_add = []
+            for idx, row in df.iterrows():
+                row_num = idx + 2
+                row_issues = []
+                name = str(row.get('name', '')).strip() if not pd.isna(row.get('name')) else ''
+                ptype = str(row.get('party_type', '')).strip() if not pd.isna(row.get('party_type')) else ''
+                if not name:
+                    row_issues.append('"name" is required.')
+                if not ptype:
+                    row_issues.append('"party_type" is required.')
+                if ptype and ptype not in ('Pump', 'Workshop', 'Spare parts shop'):
+                    row_issues.append('party_type must be Pump, Workshop or Spare parts shop.')
+                if row_issues:
+                    import_errors.append({'row': row_num, 'identifier': name or ptype or '-', 'message': '; '.join(row_issues)})
+                    continue
+                contact = row.get('contact')
+                contact = '' if pd.isna(contact) else str(contact).strip()
+                address = row.get('address')
+                address = '' if pd.isna(address) else str(address).strip()[:255]
+                remarks = row.get('remarks')
+                remarks = '' if pd.isna(remarks) else str(remarks).strip()
+                parties_to_add.append(Party(name=name, party_type=ptype, contact=contact or None, address=address or None, remarks=remarks or None))
+
+            if import_errors:
+                return render_template('party_import.html', form=form, import_errors=import_errors)
+
+            for p in parties_to_add:
+                db.session.add(p)
+            db.session.commit()
+            flash(f'{len(parties_to_add)} party(ies) imported successfully.', 'success')
+            return redirect(url_for('party_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error importing: {str(e)}', 'danger')
+    return render_template('party_import.html', form=form)
+
+
+@app.route('/parties/import/template')
+def party_import_template():
+    """Download template for party import."""
+    headers = ['name', 'party_type', 'contact', 'address', 'remarks']
+    rows = [
+        ['Shell Pump A', 'Pump', '042-1234567', 'Main Road, City', 'Sample pump'],
+        ['ABC Workshop', 'Workshop', '042-7654321', 'Industrial Area', 'Sample workshop'],
+    ]
+    return generate_excel_template(headers, rows, required_columns=['name', 'party_type'], filename='party_import_template.xlsx')
 
 
 # ────────────────────────────────────────────────
@@ -4991,6 +5325,95 @@ def product_delete(id):
     db.session.commit()
     flash('Product deleted.', 'success')
     return redirect(url_for('product_list'))
+
+
+def _product_list_query(search=None):
+    query = Product.query
+    if search:
+        query = query.filter(Product.name.ilike(f'%{search}%'))
+    return query.order_by(Product.name)
+
+
+@app.route('/products/export')
+def product_export():
+    search = request.args.get('search', '').strip()
+    products = _product_list_query(search=search).all()
+    headers = ['S.No', 'Product Name', 'Used in Form', 'Remarks']
+    rows = []
+    for i, p in enumerate(products, 1):
+        rows.append([
+            i,
+            p.name or '',
+            p.used_in_forms or '',
+            (p.remarks or '')[:200]
+        ])
+    filename = 'products.xlsx' if not search else f'products_{search[:30].replace("/", "-")}.xlsx'
+    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
+
+
+@app.route('/products/print')
+def product_print():
+    search = request.args.get('search', '').strip()
+    products = _product_list_query(search=search).all()
+    return render_template('product_print.html', products=products, search=search)
+
+
+@app.route('/products/import', methods=['GET', 'POST'])
+def product_import():
+    form = ProductImportForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        f = form.file.data
+        if not f:
+            flash('Please select an Excel/CSV file.', 'warning')
+            return redirect(url_for('product_import'))
+        try:
+            import pandas as pd
+            filename = f.filename or ''
+            ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+            if ext in ('xlsx', 'xls'):
+                df = pd.read_excel(f)
+            elif ext == 'csv':
+                df = pd.read_csv(f)
+            else:
+                flash('Unsupported file type. Use .xlsx, .xls or .csv.', 'danger')
+                return redirect(url_for('product_import'))
+            if 'name' not in df.columns:
+                flash('Missing required column: name', 'danger')
+                return redirect(url_for('product_import'))
+            import_errors = []
+            products_to_add = []
+            for idx, row in df.iterrows():
+                row_num = idx + 2
+                name = str(row.get('name', '')).strip() if not pd.isna(row.get('name')) else ''
+                if not name:
+                    import_errors.append({'row': row_num, 'identifier': '-', 'message': '"name" is required.'})
+                    continue
+                used_in = row.get('used_in_forms')
+                used_in = '' if pd.isna(used_in) else str(used_in).strip()[:100]
+                remarks = row.get('remarks')
+                remarks = '' if pd.isna(remarks) else str(remarks).strip()
+                products_to_add.append(Product(name=name, used_in_forms=used_in or None, remarks=remarks or None))
+            if import_errors:
+                return render_template('product_import.html', form=form, import_errors=import_errors)
+            for p in products_to_add:
+                db.session.add(p)
+            db.session.commit()
+            flash(f'{len(products_to_add)} product(s) imported successfully.', 'success')
+            return redirect(url_for('product_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error importing: {str(e)}', 'danger')
+    return render_template('product_import.html', form=form)
+
+
+@app.route('/products/import/template')
+def product_import_template():
+    headers = ['name', 'used_in_forms', 'remarks']
+    rows = [
+        ['Diesel', 'Fueling', 'Fuel product'],
+        ['Engine Oil', 'Oil,Maintenance', 'Oil and maintenance'],
+    ]
+    return generate_excel_template(headers, rows, required_columns=['name'], filename='product_import_template.xlsx')
 
 
 @app.route('/api/parties')

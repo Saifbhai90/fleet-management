@@ -5,9 +5,17 @@
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-calendar-check me-2 text-primary"></i>Mark Attendance</h2>
-    <a href="{{ url_for('driver_attendance_report') }}" class="btn btn-outline-info btn-sm">
-      <i class="bi bi-bar-chart me-1"></i>Attendance Report
-    </a>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{{ url_for('driver_attendance_export') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-success btn-sm">
+        <i class="bi bi-file-earmark-excel me-1"></i> Export to Excel
+      </a>
+      <a href="{{ url_for('driver_attendance_print') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-printer me-1"></i> Print Preview
+      </a>
+      <a href="{{ url_for('driver_attendance_report') }}" class="btn btn-outline-info btn-sm">
+        <i class="bi bi-bar-chart me-1"></i> Attendance Report
+      </a>
+    </div>
   </div>
 
   <div class="card shadow-sm border-0 rounded-3 mb-4">
@@ -41,8 +49,13 @@
         </div>
         <div class="col-md-2">
           <button type="submit" class="btn btn-primary w-100">
-            <i class="bi bi-search me-1"></i>View
+            <i class="bi bi-search me-1"></i> View
           </button>
+        </div>
+        <div class="col-md-2">
+          <a href="{{ url_for('driver_attendance_mark') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-success w-100">
+            <i class="bi bi-pencil-square me-1"></i> Mark Attendance
+          </a>
         </div>
       </form>
     </div>
@@ -50,10 +63,7 @@
 
   <div class="card shadow border-0 rounded-3 overflow-hidden">
     <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center flex-wrap">
-      <span class="fw-semibold">Attendance for {{ view_date|ddmmyyyy }}{% if project_id %} · Project filter{% endif %}{% if district_id %} · District filter{% endif %}</span>
-      <a href="{{ url_for('driver_attendance_mark') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-success btn-sm">
-        <i class="bi bi-pencil-square me-1"></i>Mark Attendance
-      </a>
+      <span class="fw-semibold">Attendance for {{ view_date|ddmmyyyy }}{% if project_id %} · Project filter{% endif %}{% if district_id %} · District filter{% endif %}{% if search %} · Search{% endif %} <small class="opacity-75">(Only marked attendance)</small></span>
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
@@ -115,9 +125,9 @@
             {% else %}
             <tr>
               <td colspan="9" class="text-center py-5 text-muted">
-                <i class="bi bi-people display-6 d-block mb-2"></i>
-                No active drivers found for this filter.
-                <br><small>Change date / project / district or search.</small>
+                <i class="bi bi-calendar-x display-6 d-block mb-2"></i>
+                No marked attendance for this date.
+                <br><small>Use <strong>Mark Attendance</strong> (above) to mark attendance, then filter by date to view.</small>
               </td>
             </tr>
             {% endfor %}

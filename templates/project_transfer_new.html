@@ -23,7 +23,7 @@
         <!-- Section 1: Project Selection (Full Width) -->
         <div class="row mb-4">
           <div class="col-12">
-            <label class="form-label fw-bold text-secondary small">STEP 1: SELECT PROJECT</label>
+            <label class="form-label fw-bold text-secondary small">STEP 1: SELECT PROJECT <span class="text-danger">*</span></label>
             <div class="input-group">
               <span class="input-group-text bg-light"><i class="bi bi-briefcase"></i></span>
               {{ form.project_id(class="form-select form-select-lg select2-enable") }}
@@ -37,7 +37,7 @@
         <!-- Section 2: Destination & Date (Side by Side) -->
         <div class="row mb-4">
           <div class="col-md-7">
-            <label class="form-label fw-bold text-secondary small">STEP 2: TRANSFER TO COMPANY</label>
+            <label class="form-label fw-bold text-secondary small">STEP 2: SELECT TRANSFER TO COMPANY <span class="text-danger">*</span></label>
             <div class="input-group">
               <span class="input-group-text bg-light"><i class="bi bi-building"></i></span>
               {{ form.new_company_id(class="form-select form-select-lg select2-enable") }}
@@ -48,10 +48,10 @@
           </div>
 
           <div class="col-md-5">
-            <label class="form-label fw-bold text-secondary small">TRANSFER DATE</label>
+            <label class="form-label fw-bold text-secondary small">TRANSFER DATE <span class="text-danger">*</span></label>
             <div class="input-group">
               <span class="input-group-text bg-light"><i class="bi bi-calendar-event"></i></span>
-              {{ form.transfer_date(class="form-control form-control-lg datepicker") }}
+              {{ form.transfer_date(class="form-control form-control-lg datepicker", placeholder="Select date") }}
             </div>
             {% for error in form.transfer_date.errors %}
               <div class="text-danger small mt-1">{{ error }}</div>
@@ -122,7 +122,7 @@
 
     flatpickr(".datepicker", {
       dateFormat: "Y-m-d",
-      defaultDate: "today",
+      allowInput: true,
       altInput: true,
       altFormat: "F j, Y"
     });

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Import Products Name{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-upload me-2 text-primary"></i>Import Products Name</h2>
+    <a href="{{ url_for('product_list') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Back to Product List
+    </a>
+  </div>
+
+  <div class="alert alert-info border-0 shadow-sm mb-4">
+    <i class="bi bi-info-circle me-2"></i>
+    Step 1: Download the Excel template. Step 2: Fill product data (name, used_in_forms, remarks). Step 3: Upload the file here to import.
+  </div>
+
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <h5 class="card-title mb-2"><i class="bi bi-file-earmark-spreadsheet me-2 text-success"></i>Step 1: Download Template</h5>
+      <p class="text-muted mb-2">
+        Columns: <code>name</code>, <code>used_in_forms</code>, <code>remarks</code>.
+      </p>
+      <p class="text-muted mb-2">
+        Required: <code>name</code>. used_in_forms can be e.g. <strong>Fueling</strong>, <strong>Oil</strong>, <strong>Maintenance</strong> or comma-separated: Fueling,Oil,Maintenance.
+      </p>
+      <a href="{{ url_for('product_import_template') }}" class="btn btn-success">
+        <i class="bi bi-download me-1"></i>Download Template (Excel)
+      </a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <h5 class="card-title mb-3"><i class="bi bi-cloud-arrow-up me-2 text-primary"></i>Step 2: Upload Filled File</h5>
+      {% if import_errors %}
+        <div class="alert alert-danger">
+          <h6 class="fw-bold mb-2">Import failed. Please fix these issues:</h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 80px;">Row #</th>
+                  <th style="width: 220px;">Product</th>
+                  <th>Issue</th>
+                </tr>
+              </thead>
+              <tbody class="small">
+                {% for err in import_errors %}
+                  <tr>
+                    <td>{{ err.row }}</td>
+                    <td>{{ err.identifier or '-' }}</td>
+                    <td>{{ err.message }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+      <form method="POST" enctype="multipart/form-data">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          <label class="form-label fw-semibold">{{ form.file.label.text }}</label>
+          {{ form.file(class="form-control", id="importFile") }}
+          <div class="form-text">Allowed: .xlsx, .xls, .csv</div>
+        </div>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-upload me-1"></i>Import Products
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -105,7 +105,7 @@
                     </div>
                     <div class="col-md-4">
                       {{ form.cnic_no.label(class="form-label fw-semibold small") }}
-                      {{ form.cnic_no(class="form-control form-control-sm " + ("is-invalid" if form.cnic_no.errors else "")) }}
+                      {{ form.cnic_no(class="form-control form-control-sm cnic-mask " + ("is-invalid" if form.cnic_no.errors else ""), id="employee_cnic") }}
                       {% for error in form.cnic_no.errors %}
                       <div class="invalid-feedback d-block">{{ error }}</div>
                       {% endfor %}
@@ -140,14 +140,14 @@
                   <div class="row g-2">
                     <div class="col-md-6">
                       {{ form.phone1.label(class="form-label fw-semibold small") }}
-                      {{ form.phone1(class="form-control form-control-sm " + ("is-invalid" if form.phone1.errors else ""), placeholder="03xx-xxxxxxx") }}
+                      {{ form.phone1(class="form-control form-control-sm phone-mask " + ("is-invalid" if form.phone1.errors else ""), placeholder="03xx-xxxxxxx", id="phone1") }}
                       {% for error in form.phone1.errors %}
                       <div class="invalid-feedback d-block">{{ error }}</div>
                       {% endfor %}
                     </div>
                     <div class="col-md-6">
                       {{ form.phone2.label(class="form-label fw-semibold small") }}
-                      {{ form.phone2(class="form-control form-control-sm " + ("is-invalid" if form.phone2.errors else ""), placeholder="03xx-xxxxxxx") }}
+                      {{ form.phone2(class="form-control form-control-sm phone-mask " + ("is-invalid" if form.phone2.errors else ""), placeholder="03xx-xxxxxxx", id="phone2") }}
                       {% for error in form.phone2.errors %}
                       <div class="invalid-feedback d-block">{{ error }}</div>
                       {% endfor %}
@@ -237,5 +237,46 @@
     padding-bottom: 0.25rem;
   }
 </style>
-{% endblock %}
+<script>
+  (function() {
+    // ----- CNIC: live mask + auto-format on blur/Enter (e.g. 3230400012345 -> 32304-0001234-5)
+    var cnicInput = document.getElementById('employee_cnic');
+    if (cnicInput) {
+      cnicInput.addEventListener('input', function (e) {
+        var val = e.target.value.replace(/\D/g, '').match(/(\d{0,5})(\d{0,7})(\d{0,1})/);
+        if (val) e.target.value = !val[2] ? val[1] : val[1] + '-' + val[2] + (val[3] ? '-' + val[3] : '');
+      });
+      function formatCnic() {
+        var raw = cnicInput.value.replace(/\D/g, '');
+        if (raw.length === 13)
+          cnicInput.value = raw.slice(0,5) + '-' + raw.slice(5,12) + '-' + raw.slice(12);
+      }
+      cnicInput.addEventListener('blur', formatCnic);
+      cnicInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') formatCnic(); });
+    }
 
+    // ----- Mobile: live mask (03xx-xxxxxxx) + auto-format on blur/Enter (e.g. 03001112345 -> 0300-1112345)
+    function formatPhone(input) {
+      var raw = input.value.replace(/\D/g, '');
+      if (raw.length >= 4)
+        input.value = raw.slice(0, 4) + (raw.length > 4 ? '-' + raw.slice(4, 11) : '');
+      else
+        input.value = raw.slice(0, 4);
+    }
+    function formatPhoneOnBlur(input) {
+      var raw = input.value.replace(/\D/g, '');
+      if (raw.length === 11 && (raw[0] === '0' && ['3','4'].indexOf(raw[1]) !== -1))
+        input.value = raw.slice(0, 4) + '-' + raw.slice(4);
+    }
+    [ 'phone1', 'phone2' ].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', function() { formatPhone(el); });
+      el.addEventListener('blur', function() { formatPhoneOnBlur(el); });
+      el.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') formatPhoneOnBlur(el);
+      });
+    });
+  })();
+</script>
+{% endblock %}
