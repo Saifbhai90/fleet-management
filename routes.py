@@ -78,7 +78,7 @@ def require_login():
         perms = session.get('permissions') or []
         if not user_has_permission(perms, required):
             flash('You do not have access to this page.', 'danger')
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('login'))
 
 
 # ────────────────────────────────────────────────
