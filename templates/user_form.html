@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit User' if user else 'Add User' }}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-person-plus me-2 text-primary"></i>{{ 'Edit User' if user else 'Add User' }}</h2>
+    <a href="{{ url_for('user_list') }}" class="btn btn-outline-secondary btn-sm">Back to Users</a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3">
+    <div class="card-body">
+      <form method="POST" action="">
+        {{ form.hidden_tag() }}
+        <div class="row g-3">
+          <div class="col-md-6">
+            {{ form.username.label(class="form-label") }}
+            {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else "")) }}
+            {% for e in form.username.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            {{ form.password.label(class="form-label") }}
+            {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else "")) }}
+            {% if user %}<small class="text-muted">Leave blank to keep current password.</small>{% endif %}
+            {% for e in form.password.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            {{ form.full_name.label(class="form-label") }}
+            {{ form.full_name(class="form-control") }}
+          </div>
+          <div class="col-md-6">
+            {{ form.role_id.label(class="form-label") }}
+            {{ form.role_id(class="form-select") }}
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              {{ form.is_active(class="form-check-input") }}
+              {{ form.is_active.label(class="form-check-label") }}
+            </div>
+          </div>
+          <div class="col-12">
+            <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+            <a href="{{ url_for('user_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

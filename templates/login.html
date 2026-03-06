@@ -33,6 +33,12 @@
             {% endfor %}
           </div>
 
+          <div class="mb-3 form-check">
+            {{ form.remember_me(class="form-check-input") }}
+            {{ form.remember_me.label(class="form-check-label small") }}
+            <small class="d-block text-muted mt-0">Stay logged in for 7 days</small>
+          </div>
+
           <div class="d-grid mt-3">
             <button type="submit" class="btn btn-danger fw-bold">
               <i class="bi bi-box-arrow-in-right me-1"></i>Sign in

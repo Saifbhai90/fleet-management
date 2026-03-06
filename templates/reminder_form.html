@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Reminder' if reminder else 'Add Reminder' }}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-success text-white">
+          <h5 class="mb-0"><i class="bi bi-calendar-plus me-2"></i>{{ 'Edit Reminder' if reminder else 'Add Reminder' }}</h5>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="{{ url_for('reminder_edit', pk=reminder.id) if reminder else url_for('reminder_add') }}">
+            {{ form.hidden_tag() }}
+            <div class="mb-3">
+              {{ form.title.label(class="form-label") }}
+              {{ form.title(class="form-control" + (" is-invalid" if form.title.errors else "")) }}
+              {% for e in form.title.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="mb-3">
+              {{ form.message.label(class="form-label") }}
+              {{ form.message(class="form-control" + (" is-invalid" if form.message.errors else "")) }}
+              {% for e in form.message.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                {{ form.reminder_date.label(class="form-label") }}
+                {{ form.reminder_date(class="form-control datepicker" + (" is-invalid" if form.reminder_date.errors else "")) }}
+                {% for e in form.reminder_date.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+              <div class="col-md-6 mb-3">
+                {{ form.reminder_time.label(class="form-label") }}
+                {{ form.reminder_time(class="form-control" + (" is-invalid" if form.reminder_time.errors else "")) }}
+                {% for e in form.reminder_time.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+            </div>
+            <button type="submit" class="btn btn-success">{{ form.submit.label.text }}</button>
+            <a href="{{ url_for('reminder_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

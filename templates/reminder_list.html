@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}My Reminders{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-calendar-check me-2 text-success"></i>My Reminders</h2>
+    <a href="{{ url_for('reminder_add') }}" class="btn btn-success btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add Reminder
+    </a>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      {% if reminders %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Title</th>
+              <th>Note</th>
+              <th class="text-center">Done</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in reminders %}
+            <tr class="{% if r.is_completed %}text-muted{% endif %}">
+              <td>{{ r.reminder_date.strftime('%d-%m-%Y') if r.reminder_date else '-' }}</td>
+              <td>{{ r.reminder_time.strftime('%H:%M') if r.reminder_time else '-' }}</td>
+              <td>
+                {% if r.is_completed %}<s>{% endif %}{{ r.title }}{% if r.is_completed %}</s>{% endif %}
+              </td>
+              <td class="small text-muted">{{ (r.message or '')[:50] }}{% if r.message and r.message|length > 50 %}...{% endif %}</td>
+              <td class="text-center">
+                <form action="{{ url_for('reminder_toggle', pk=r.id) }}" method="POST" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-sm {% if r.is_completed %}btn-outline-secondary{% else %}btn-outline-success{% endif %}" title="{% if r.is_completed %}Mark incomplete{% else %}Mark done{% endif %}">
+                    {% if r.is_completed %}<i class="bi bi-check2-all"></i>{% else %}<i class="bi bi-circle"></i>{% endif %}
+                  </button>
+                </form>
+              </td>
+              <td class="text-end">
+                <a href="{{ url_for('reminder_edit', pk=r.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                <form action="{{ url_for('reminder_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this reminder?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-calendar-plus display-6"></i>
+        <p class="mt-2 mb-0">No reminders. <a href="{{ url_for('reminder_add') }}">Add one</a> to get started.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

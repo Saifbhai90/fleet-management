@@ -189,7 +189,7 @@
         <div class="me-2 me-md-4 d-none d-md-block" id="liveDateTime" style="font-size: 0.9rem; color: #cbd5e1;"></div>
 
         <!-- Notification bell (touch-friendly on mobile) -->
-        <a href="{{ url_for('dashboard') }}" class="btn btn-link text-light position-relative me-1 me-sm-3 p-2" title="Notifications" style="min-width: 44px; min-height: 44px;">
+        <a href="{{ url_for('notification_list') }}" class="btn btn-link text-light position-relative me-1 me-sm-3 p-2" title="Notifications" style="min-width: 44px; min-height: 44px;">
             <i class="bi bi-bell{% if unread_notification_count and unread_notification_count > 0 %}-fill{% endif %}" style="font-size: 1.25rem;"></i>
             {% if unread_notification_count and unread_notification_count > 0 %}
             <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
@@ -214,6 +214,23 @@
                 </li>
                 <li><hr class="dropdown-divider"></li>
                 <li>
+                    <a class="dropdown-item" href="{{ url_for('notification_list') }}">
+                        <i class="bi bi-bell me-2"></i>Notifications
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" href="{{ url_for('reminder_list') }}">
+                        <i class="bi bi-calendar-check me-2"></i>My Reminders
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <a class="dropdown-item" href="{{ url_for('account_change_password') }}">
+                        <i class="bi bi-key me-2"></i>Change Password
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
                     <a class="dropdown-item" href="{{ url_for('logout') }}">
                         <i class="bi bi-box-arrow-right me-2 text-danger"></i>Logout
                     </a>
@@ -234,8 +251,9 @@
         {% set transfer_endpoints = ['project_transfers', 'project_transfer_new', 'project_transfer_edit', 'vehicle_transfers', 'vehicle_transfer_new', 'vehicle_transfer_edit', 'driver_transfers', 'driver_transfer_new', 'driver_transfer_edit'] %}
         {% set driver_status_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'driver_attendance_list', 'driver_attendance_mark', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
         {% set task_report_endpoints = ['task_report_upload', 'task_report_list', 'red_task_list', 'red_task_new', 'red_task_edit', 'without_task_list', 'without_task_new', 'without_task_edit', 'task_report_logbook_cover', 'task_report_logbook_view', 'task_report_logbook_view_all'] %}
-        {% set expenses_endpoints = ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form'] %}
+        {% set expenses_endpoints = ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form', 'employee_expense_list', 'employee_expense_form'] %}
         {% set reports_endpoints = ['reports_index', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_driver_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai'] %}
+        {% set accounts_endpoints = ['accounts_quick_payment', 'accounts_quick_receipt', 'accounts_bank_entry', 'accounts_jv', 'accounts_future_entry', 'accounts_balance_sheet', 'accounts_account_ledger'] %}
         {% set master_open = (request.endpoint in master_endpoints and not (request.endpoint == 'companies' and request.args.get('mode') == 'report')) %}
         {% set assignment_open = request.endpoint in assignment_endpoints or (request.endpoint and 'assign_vehicle_to_parking' in request.endpoint) or (request.endpoint and 'assign_driver_to_vehicle' in request.endpoint) %}
         {% set transfer_open = request.endpoint in transfer_endpoints or (request.endpoint and 'driver_transfer' in request.endpoint) %}
@@ -243,13 +261,52 @@
         {% set task_report_open = request.endpoint in task_report_endpoints %}
         {% set expenses_open = request.endpoint in expenses_endpoints %}
         {% set reports_open = request.endpoint in reports_endpoints or (request.endpoint == 'companies' and request.args.get('mode') == 'report') %}
+        {% set accounts_open = request.endpoint in accounts_endpoints %}
+        {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit'] %}
+        {% set users_open = request.endpoint in users_manage_endpoints %}
 
         <!-- Dashboard -->
+        {% if 'dashboard' in current_permissions %}
         <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active-link{% endif %}">
             <i class="bi bi-speedometer2"></i><span>Dashboard</span>
         </a>
+        {% endif %}
+
+        <!-- Accounts -->
+        {% if 'accounts' in current_permissions %}
+        <div>
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#accountsMenu" role="button" aria-expanded="{{ 'true' if accounts_open else 'false' }}">
+                <i class="bi bi-bank"></i><span>Accounts</span>
+            </a>
+            <div class="collapse collapse-item-container {% if accounts_open %}show{% endif %}"
+                 id="accountsMenu" data-bs-parent="#sidebarAccordion">
+                <a href="{{ url_for('accounts_quick_payment') }}" class="collapse-item {% if request.endpoint == 'accounts_quick_payment' %}active-link{% endif %}">
+                    <i class="bi bi-cash-stack text-success"></i><span>Quick Payment</span>
+                </a>
+                <a href="{{ url_for('accounts_quick_receipt') }}" class="collapse-item {% if request.endpoint == 'accounts_quick_receipt' %}active-link{% endif %}">
+                    <i class="bi bi-cash-coin text-primary"></i><span>Quick Receipt</span>
+                </a>
+                <a href="{{ url_for('accounts_bank_entry') }}" class="collapse-item {% if request.endpoint == 'accounts_bank_entry' %}active-link{% endif %}">
+                    <i class="bi bi-bank2 text-info"></i><span>Bank Entry</span>
+                </a>
+                <a href="{{ url_for('accounts_jv') }}" class="collapse-item {% if request.endpoint == 'accounts_jv' %}active-link{% endif %}">
+                    <i class="bi bi-journal-text text-warning"></i><span>JV (Journal Voucher)</span>
+                </a>
+                <a href="{{ url_for('accounts_future_entry') }}" class="collapse-item {% if request.endpoint == 'accounts_future_entry' %}active-link{% endif %}">
+                    <i class="bi bi-calendar-plus text-secondary"></i><span>Future Entry</span>
+                </a>
+                <a href="{{ url_for('accounts_balance_sheet') }}" class="collapse-item {% if request.endpoint == 'accounts_balance_sheet' %}active-link{% endif %}">
+                    <i class="bi bi-file-earmark-bar-graph text-info"></i><span>Balance Sheet</span>
+                </a>
+                <a href="{{ url_for('accounts_account_ledger') }}" class="collapse-item {% if request.endpoint == 'accounts_account_ledger' %}active-link{% endif %}">
+                    <i class="bi bi-journal-bookmark-fill text-warning"></i><span>Account Ledger</span>
+                </a>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Master Section -->
+        {% if 'master' in current_permissions %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#masterMenu" role="button" aria-expanded="{{ 'true' if master_open else 'false' }}">
                 <i class="bi bi-folder2-open"></i><span>Master</span>
@@ -288,8 +345,10 @@
                 </a>
             </div>
         </div>
+        {% endif %}
 
         <!-- Assignment Section -->
+        {% if 'assignment' in current_permissions %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#assignmentMenu" role="button" aria-expanded="{{ 'true' if assignment_open else 'false' }}">
                 <i class="bi bi-link-45deg"></i><span>Assignment</span>
@@ -313,8 +372,10 @@
                 </a>
             </div>
         </div>
+        {% endif %}
 
         <!-- Transfer Section -->
+        {% if 'transfer' in current_permissions %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#transferMenu" role="button" aria-expanded="{{ 'true' if transfer_open else 'false' }}">
                 <i class="bi bi-arrow-left-right me-2 text-warning"></i><span>Transfer</span>
@@ -332,8 +393,10 @@
                 </a>
             </div>
         </div>
+        {% endif %}
 
         <!-- Driver Status (Job Left, Rejoin, Attendance) -->
+        {% if 'driver_status' in current_permissions %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#otherActionMenu" role="button" aria-expanded="{{ 'true' if driver_status_open else 'false' }}">
                 <i class="bi bi-person-gear"></i><span>Driver Status</span>
@@ -355,8 +418,10 @@
                 </a>
             </div>
         </div>
+        {% endif %}
 
         <!-- Task Report -->
+        {% if 'task_report' in current_permissions %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#taskReportMenu" role="button" aria-expanded="{{ 'true' if task_report_open else 'false' }}">
                 <i class="bi bi-clipboard2-data"></i><span>Task Report</span>
@@ -380,8 +445,10 @@
                 </a>
             </div>
         </div>
+        {% endif %}
 
         <!-- Expenses -->
+        {% if 'expenses' in current_permissions %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#expensesMenu" role="button" aria-expanded="{{ 'true' if expenses_open else 'false' }}">
                 <i class="bi bi-wallet2"></i><span>Expenses</span>
@@ -397,10 +464,15 @@
                 <a href="{{ url_for('maintenance_expense_list') }}" class="collapse-item {% if request.endpoint in ['maintenance_expense_list', 'maintenance_expense_form'] %}active-link{% endif %}">
                     <i class="bi bi-wrench text-warning"></i><span>Maintenance</span>
                 </a>
+                <a href="{{ url_for('employee_expense_list') }}" class="collapse-item {% if request.endpoint in ['employee_expense_list', 'employee_expense_form'] %}active-link{% endif %}">
+                    <i class="bi bi-person-badge text-info"></i><span>Employee Expense</span>
+                </a>
             </div>
         </div>
+        {% endif %}
 
         <!-- Reports Section -->
+        {% if 'reports' in current_permissions %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#reportsMenu" role="button" aria-expanded="{{ 'true' if reports_open else 'false' }}">
                 <i class="bi bi-bar-chart"></i><span>Reports</span>
@@ -418,12 +490,52 @@
                 </a>
             </div>
         </div>
+        {% endif %}
+
+        <!-- User & Access (only for users_manage permission) -->
+        {% if 'users_manage' in current_permissions %}
+        <div>
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#userAccessMenu" role="button" aria-expanded="{{ 'true' if users_open else 'false' }}">
+                <i class="bi bi-shield-lock"></i><span>User & Access</span>
+            </a>
+            <div class="collapse collapse-item-container {% if users_open %}show{% endif %}"
+                 id="userAccessMenu" data-bs-parent="#sidebarAccordion">
+                <a href="{{ url_for('user_list') }}" class="collapse-item {% if request.endpoint in ['user_list', 'user_form', 'user_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-person-gear text-primary"></i><span>Users</span>
+                </a>
+                <a href="{{ url_for('role_list') }}" class="collapse-item {% if request.endpoint in ['role_list', 'role_form', 'role_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-shield-check text-success"></i><span>Roles & Permissions</span>
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Notifications & Reminders (all users) -->
+        <div>
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#notifReminderMenu" role="button" aria-expanded="{{ 'true' if (request.endpoint in ['notification_list', 'notification_add'] or request.endpoint and 'reminder' in request.endpoint) else 'false' }}">
+                <i class="bi bi-bell-fill text-warning"></i><span>Notifications & Reminders</span>
+            </a>
+            <div class="collapse collapse-item-container {% if request.endpoint in ['notification_list', 'notification_add'] or request.endpoint and 'reminder' in request.endpoint %}show{% endif %}"
+                 id="notifReminderMenu" data-bs-parent="#sidebarAccordion">
+                <a href="{{ url_for('notification_list') }}" class="collapse-item {% if request.endpoint == 'notification_list' %}active-link{% endif %}">
+                    <i class="bi bi-bell text-primary"></i><span>All Notifications</span>
+                </a>
+                <a href="{{ url_for('notification_add') }}" class="collapse-item {% if request.endpoint == 'notification_add' %}active-link{% endif %}">
+                    <i class="bi bi-plus-circle text-success"></i><span>Add Notification (to all users)</span>
+                </a>
+                <a href="{{ url_for('reminder_list') }}" class="collapse-item {% if request.endpoint in ['reminder_list', 'reminder_add', 'reminder_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-calendar-check text-info"></i><span>My Reminders</span>
+                </a>
+            </div>
+        </div>
 
         <!-- Backup & What's New (What's New always last) -->
         <div class="mt-3">
+            {% if 'backup' in current_permissions %}
             <a href="{{ url_for('backup_index') }}" class="{% if request.endpoint == 'backup_index' %}active-link{% endif %}">
                 <i class="bi bi-cloud-arrow-down text-info"></i><span>Backup</span>
             </a>
+            {% endif %}
             <a href="{{ url_for('whats_new') }}" class="{% if request.endpoint == 'whats_new' %}active-link{% endif %}">
                 <i class="bi bi-megaphone text-warning"></i><span>What's New / Updates</span>
             </a>

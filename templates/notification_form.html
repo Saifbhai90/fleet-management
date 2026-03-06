@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Add Notification{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0"><i class="bi bi-bell-fill me-2"></i>New Notification (all users will see this)</h5>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="{{ url_for('notification_add') }}">
+            {{ form.hidden_tag() }}
+            <div class="mb-3">
+              {{ form.title.label(class="form-label") }}
+              {{ form.title(class="form-control" + (" is-invalid" if form.title.errors else "")) }}
+              {% for e in form.title.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="mb-3">
+              {{ form.message.label(class="form-label") }}
+              {{ form.message(class="form-control" + (" is-invalid" if form.message.errors else "")) }}
+              {% for e in form.message.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                {{ form.link.label(class="form-label") }}
+                {{ form.link(class="form-control" + (" is-invalid" if form.link.errors else "")) }}
+                {% for e in form.link.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+              <div class="col-md-6 mb-3">
+                {{ form.link_text.label(class="form-label") }}
+                {{ form.link_text(class="form-control" + (" is-invalid" if form.link_text.errors else "")) }}
+                {% for e in form.link_text.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+            </div>
+            <div class="mb-3">
+              {{ form.notification_type.label(class="form-label") }}
+              {{ form.notification_type(class="form-select" + (" is-invalid" if form.notification_type.errors else "")) }}
+              {% for e in form.notification_type.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+            <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+            <a href="{{ url_for('notification_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - Accounts{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-bank me-2 text-primary"></i>{{ title }}</h2>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-house me-1"></i>Dashboard
+    </a>
+  </div>
+  <div class="card shadow-sm border-0 rounded-3">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-tools display-4 text-muted mb-3"></i>
+      <p class="text-muted mb-0">{{ description }}</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -7,7 +7,9 @@ from models import (
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
     Party, Product, FuelExpense, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
-    Notification,
+    Notification, NotificationRead,
+    User, Role, Permission,
+    Reminder,
 )
 from forms import (
     CompanyForm, ProjectForm, VehicleForm, VehicleImportForm, DriverForm, DriverImportForm, ParkingForm, DistrictForm,
@@ -25,22 +27,29 @@ from forms import (
     EmployeePostForm,
     EmployeeForm,
     LoginForm,
+    UserForm,
+    RoleForm,
+    NotificationForm,
+    ReminderForm,
+    ChangePasswordForm,
 )
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timezone
+from datetime import timedelta
 import csv
 from io import StringIO
 from sqlalchemy import func, text, inspect, or_, cast
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone
+from auth_utils import get_required_permission, user_has_permission, check_password
+from werkzeug.security import generate_password_hash
 import re
 import os
 from werkzeug.utils import secure_filename
 
 @app.before_request
 def require_login():
-    """Redirect to login if user not logged in. Only login and static are public."""
-    # endpoint can be None for some requests
+    """Redirect to login if user not logged in. Check permission for endpoint. Session timeout."""
     endpoint = request.endpoint or ''
     if endpoint.startswith('static'):
         return
@@ -48,6 +57,28 @@ def require_login():
         return
     if not session.get('user'):
         return redirect(url_for('login'))
+    # Session timeout (unless "remember me" made session permanent)
+    timeout_mins = app.config.get('SESSION_TIMEOUT_MINUTES', 60)
+    last = session.get('last_activity')
+    now = datetime.now(timezone.utc)
+    session['last_activity'] = now
+    if last and not getattr(session, 'permanent', False):
+        # Ensure both are timezone-aware UTC so subtraction works (avoid naive/aware mix)
+        if getattr(last, 'tzinfo', None) is None:
+            last = last.replace(tzinfo=timezone.utc)
+        else:
+            last = last.astimezone(timezone.utc)
+        if (now - last).total_seconds() > timeout_mins * 60:
+            session.clear()
+            flash('Session expired. Please login again.', 'info')
+            return redirect(url_for('login'))
+    # Role-based access: check if user has permission for this endpoint
+    required = get_required_permission(endpoint)
+    if required:
+        perms = session.get('permissions') or []
+        if not user_has_permission(perms, required):
+            flash('You do not have access to this page.', 'danger')
+            return redirect(url_for('dashboard'))
 
 
 # ────────────────────────────────────────────────
@@ -104,6 +135,22 @@ def uploaded_file(filename):
 # ────────────────────────────────────────────────
 # Dashboard / Home
 # ────────────────────────────────────────────────
+def _is_parking_full_notification(notification):
+    """True if this notification is about parking full (do not show to user)."""
+    if not notification:
+        return False
+    t = ((notification.title or '') + ' ' + (notification.message or '')).lower()
+    return 'parking' in t and 'full' in t
+
+
+def _unread_notifications_for_user(user_id, limit=20):
+    """Notifications not yet read by this user (per-user read via NotificationRead). Excludes Parking full."""
+    read_ids = db.session.query(NotificationRead.notification_id).filter(NotificationRead.user_id == user_id).subquery()
+    candidates = Notification.query.filter(~Notification.id.in_(read_ids)).order_by(Notification.created_at.desc()).limit(limit * 3).all()
+    out = [n for n in candidates if not _is_parking_full_notification(n)][:limit]
+    return out
+
+
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
@@ -114,19 +161,12 @@ def dashboard():
     total_parking = ParkingStation.query.count()
     total_districts = District.query.count()
 
-    # Notifications: unread first, recent
-    notifications = Notification.query.filter(Notification.read_at.is_(None)).order_by(Notification.created_at.desc()).limit(20).all()
-    # Clear old "next 60 days" expiry notifications so only current-expiry ones appear
-    marked = False
-    for n in notifications:
-        if n.title == 'Document expiry' and n.message and 'next 60 days' in n.message:
-            n.read_at = datetime.utcnow()
-            marked = True
-    if marked:
-        db.session.commit()
-        notifications = Notification.query.filter(Notification.read_at.is_(None)).order_by(Notification.created_at.desc()).limit(20).all()
-    # Optionally seed from data (current expiry only) - only if none exist
-    if not notifications and total_drivers:
+    user_id = session.get('user_id')
+    notifications = _unread_notifications_for_user(user_id, 20) if user_id else []
+
+    # Optional: seed expiry/attendance notifications only when no unread (and we have drivers)
+    # Do not add any "Parking full" notification (user requested: parking full ki notification na ho).
+    if not notifications and total_drivers and user_id:
         today = date.today()
         expiring_count = 0
         for d in Driver.query.filter(Driver.status == 'Active').all():
@@ -138,13 +178,14 @@ def dashboard():
                 message=f'{expiring_count} driver(s) have license or CNIC already expired (current expiry).',
                 link=url_for('report_expiry', days=0),
                 link_text='View expiry report',
-                notification_type='warning'
+                notification_type='warning',
+                created_by_user_id=None
             )
             db.session.add(n)
             db.session.commit()
-            notifications = [n]
-    # Optional: one "attendance missing" notification if many active drivers have no recent attendance (only when we have no unread notifications)
-    if not notifications and total_drivers:
+            notifications = _unread_notifications_for_user(user_id, 20)
+
+    if not notifications and total_drivers and user_id:
         from datetime import timedelta
         today = date.today()
         start = today - timedelta(days=7)
@@ -163,11 +204,12 @@ def dashboard():
                 message=f'{missing_count} active driver(s) have no attendance in the last 7 days.',
                 link=url_for('driver_attendance_list'),
                 link_text='View attendance',
-                notification_type='info'
+                notification_type='info',
+                created_by_user_id=None
             )
             db.session.add(n3)
             db.session.commit()
-            notifications = Notification.query.filter(Notification.read_at.is_(None)).order_by(Notification.created_at.desc()).limit(20).all()
+            notifications = _unread_notifications_for_user(user_id, 20)
 
     return render_template('dashboard.html',
                            total_companies=total_companies,
@@ -182,12 +224,174 @@ def dashboard():
 @app.route('/notification/<int:pk>/read', methods=['POST'])
 def notification_mark_read(pk):
     n = Notification.query.get_or_404(pk)
-    n.read_at = datetime.utcnow()
-    db.session.commit()
+    user_id = session.get('user_id')
+    if user_id:
+        nr = NotificationRead.query.filter_by(notification_id=pk, user_id=user_id).first()
+        if not nr:
+            nr = NotificationRead(notification_id=pk, user_id=user_id, read_at=datetime.utcnow())
+            db.session.add(nr)
+        else:
+            nr.read_at = datetime.utcnow()
+        db.session.commit()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({'ok': True})
     next_url = request.args.get('next') or url_for('dashboard')
     return redirect(next_url)
+
+
+# ────────────────────────────────────────────────
+# Notifications (user-created broadcast; all users see and mark read)
+# ────────────────────────────────────────────────
+@app.route('/notifications')
+def notification_list():
+    """List all notifications (newest first); current user's unread highlighted. Excludes Parking full."""
+    user_id = session.get('user_id')
+    read_ids = set()
+    if user_id:
+        read_ids = {r.notification_id for r in NotificationRead.query.filter_by(user_id=user_id).all()}
+    all_n = Notification.query.order_by(Notification.created_at.desc()).limit(150).all()
+    notifications = [n for n in all_n if not _is_parking_full_notification(n)][:100]
+    return render_template('notification_list.html', notifications=notifications, read_ids=read_ids)
+
+
+@app.route('/notifications/new', methods=['GET', 'POST'])
+def notification_add():
+    """Any logged-in user can create a notification (broadcast to all users)."""
+    form = NotificationForm()
+    if form.validate_on_submit():
+        n = Notification(
+            title=form.title.data.strip(),
+            message=(form.message.data or '').strip() or None,
+            link=(form.link.data or '').strip() or None,
+            link_text=(form.link_text.data or '').strip() or None,
+            notification_type=form.notification_type.data or 'info',
+            created_by_user_id=session.get('user_id')
+        )
+        db.session.add(n)
+        db.session.commit()
+        flash('Notification sent to all users.', 'success')
+        return redirect(url_for('notification_list'))
+    return render_template('notification_form.html', form=form)
+
+
+# ────────────────────────────────────────────────
+# Reminders (personal; each user sees only their own)
+# ────────────────────────────────────────────────
+def _parse_time(s):
+    """Parse HH:MM or H:MM to time object."""
+    if not s or not str(s).strip():
+        return None
+    s = str(s).strip()
+    parts = s.replace('.', ':').split(':')
+    if len(parts) >= 2:
+        try:
+            h, m = int(parts[0]), int(parts[1])
+            if 0 <= h <= 23 and 0 <= m <= 59:
+                return time(h, m, 0)
+        except ValueError:
+            pass
+    return None
+
+
+@app.route('/reminders')
+def reminder_list():
+    user_id = session.get('user_id')
+    if not user_id:
+        return redirect(url_for('login'))
+    reminders = Reminder.query.filter_by(user_id=user_id).order_by(Reminder.reminder_date.desc(), Reminder.reminder_time).all()
+    return render_template('reminder_list.html', reminders=reminders)
+
+
+@app.route('/reminders/new', methods=['GET', 'POST'])
+def reminder_add():
+    user_id = session.get('user_id')
+    if not user_id:
+        return redirect(url_for('login'))
+    form = ReminderForm()
+    if form.validate_on_submit():
+        t = _parse_time(form.reminder_time.data)
+        r = Reminder(
+            user_id=user_id,
+            title=form.title.data.strip(),
+            message=(form.message.data or '').strip() or None,
+            reminder_date=form.reminder_date.data,
+            reminder_time=t,
+            is_completed=False
+        )
+        db.session.add(r)
+        db.session.commit()
+        flash('Reminder saved.', 'success')
+        return redirect(url_for('reminder_list'))
+    return render_template('reminder_form.html', form=form)
+
+
+@app.route('/reminders/<int:pk>/edit', methods=['GET', 'POST'])
+def reminder_edit(pk):
+    user_id = session.get('user_id')
+    if not user_id:
+        return redirect(url_for('login'))
+    r = Reminder.query.filter_by(id=pk, user_id=user_id).first_or_404()
+    form = ReminderForm(obj=r)
+    if form.validate_on_submit():
+        r.title = form.title.data.strip()
+        r.message = (form.message.data or '').strip() or None
+        r.reminder_date = form.reminder_date.data
+        r.reminder_time = _parse_time(form.reminder_time.data)
+        db.session.commit()
+        flash('Reminder updated.', 'success')
+        return redirect(url_for('reminder_list'))
+    if request.method == 'GET':
+        form.reminder_time.data = r.reminder_time.strftime('%H:%M') if r.reminder_time else ''
+    return render_template('reminder_form.html', form=form, reminder=r)
+
+
+@app.route('/reminders/<int:pk>/delete', methods=['POST'])
+def reminder_delete(pk):
+    user_id = session.get('user_id')
+    if not user_id:
+        return redirect(url_for('login'))
+    r = Reminder.query.filter_by(id=pk, user_id=user_id).first_or_404()
+    db.session.delete(r)
+    db.session.commit()
+    flash('Reminder deleted.', 'success')
+    return redirect(url_for('reminder_list'))
+
+
+@app.route('/reminders/<int:pk>/toggle', methods=['POST'])
+def reminder_toggle(pk):
+    user_id = session.get('user_id')
+    if not user_id:
+        return redirect(url_for('login'))
+    r = Reminder.query.filter_by(id=pk, user_id=user_id).first_or_404()
+    r.is_completed = not r.is_completed
+    db.session.commit()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'ok': True, 'is_completed': r.is_completed})
+    return redirect(url_for('reminder_list'))
+
+
+# ────────────────────────────────────────────────
+# Account (change password, session)
+# ────────────────────────────────────────────────
+@app.route('/account/change-password', methods=['GET', 'POST'])
+def account_change_password():
+    user_id = session.get('user_id')
+    if not user_id:
+        return redirect(url_for('login'))
+    user = User.query.get_or_404(user_id)
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        if not check_password(user, form.current_password.data):
+            flash('Current password is incorrect.', 'danger')
+            return render_template('account_change_password.html', form=form)
+        user.password_hash = generate_password_hash(form.new_password.data)
+        db.session.commit()
+        flash('Password changed successfully. Please login again.', 'success')
+        session.pop('user_id', None)
+        session.pop('user', None)
+        session.pop('permissions', None)
+        return redirect(url_for('login'))
+    return render_template('account_change_password.html', form=form)
 
 
 # ────────────────────────────────────────────────
@@ -487,6 +691,38 @@ def whats_new():
     # Only latest 15 entries (each timeline block = 1 entry)
     entries = entries[:15]
     return render_template('whats_new.html', entries=entries)
+
+
+# ────────────────────────────────────────────────
+# Accounts (Quick Payment, Quick Receipt, Bank Entry, JV, Future Entry)
+# ────────────────────────────────────────────────
+@app.route('/accounts/quick-payment')
+def accounts_quick_payment():
+    return render_template('accounts_placeholder.html', title='Quick Payment', description='Record quick payments here. (Coming soon)')
+
+@app.route('/accounts/quick-receipt')
+def accounts_quick_receipt():
+    return render_template('accounts_placeholder.html', title='Quick Receipt', description='Record quick receipts here. (Coming soon)')
+
+@app.route('/accounts/bank-entry')
+def accounts_bank_entry():
+    return render_template('accounts_placeholder.html', title='Bank Entry', description='Bank transactions entry. (Coming soon)')
+
+@app.route('/accounts/jv')
+def accounts_jv():
+    return render_template('accounts_placeholder.html', title='JV (Journal Voucher)', description='Journal voucher entry. (Coming soon)')
+
+@app.route('/accounts/future-entry')
+def accounts_future_entry():
+    return render_template('accounts_placeholder.html', title='Future Entry', description='Future-dated entries. (Coming soon)')
+
+@app.route('/accounts/balance-sheet')
+def accounts_balance_sheet():
+    return render_template('accounts_placeholder.html', title='Balance Sheet', description='View balance sheet report. (Coming soon)')
+
+@app.route('/accounts/account-ledger')
+def accounts_account_ledger():
+    return render_template('accounts_placeholder.html', title='Account Ledger', description='View account ledger. (Coming soon)')
 
 
 # ────────────────────────────────────────────────
@@ -1388,7 +1624,7 @@ def employees_print():
 
 
 # ────────────────────────────────────────────────
-# Simple Login (admin / admin)
+# Login (User model + permissions in session)
 # ────────────────────────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -1396,21 +1632,155 @@ def login():
     if form.validate_on_submit():
         username = (form.username.data or '').strip()
         password = (form.password.data or '').strip()
-        # Username ko case-insensitive bana diya (Admin / ADMIN / admin sab chalein ge)
-        if username.lower() == 'admin' and password == 'admin':
-            session['user'] = 'admin'
-            flash('Login successful. Welcome admin!', 'success')
+        user = User.query.filter(func.lower(User.username) == username.lower()).first()
+        if user and user.is_active and check_password(user, password):
+            session['user_id'] = user.id
+            session['user'] = user.full_name or user.username
+            session['permissions'] = user.permission_codes()
+            session.permanent = form.remember_me.data
+            flash(f'Welcome, {session["user"]}!', 'success')
             return redirect(url_for('dashboard'))
-        else:
-            flash('Invalid user ID or password.', 'danger')
+        flash('Invalid user ID or password.', 'danger')
     return render_template('login.html', form=form)
 
 
 @app.route('/logout')
 def logout():
+    session.pop('user_id', None)
     session.pop('user', None)
+    session.pop('permissions', None)
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
+
+
+# ────────────────────────────────────────────────
+# User & Role Management (requires users_manage permission)
+# ────────────────────────────────────────────────
+@app.route('/users')
+def user_list():
+    users = User.query.order_by(User.username).all()
+    return render_template('user_list.html', users=users)
+
+
+@app.route('/users/new', methods=['GET', 'POST'])
+def user_form():
+    form = UserForm()
+    form.role_id.choices = [(0, '-- No Role --')] + [(r.id, r.name) for r in Role.query.order_by(Role.name).all()]
+    if request.method == 'GET':
+        return render_template('user_form.html', form=form, user=None)
+    if form.validate_on_submit():
+        username = (form.username.data or '').strip()
+        if User.query.filter(func.lower(User.username) == username.lower()).first():
+            flash('Username already exists.', 'danger')
+            return render_template('user_form.html', form=form, user=None)
+        password = (form.password.data or '').strip()
+        if not password or len(password) < 4:
+            flash('Password must be at least 4 characters.', 'danger')
+            return render_template('user_form.html', form=form, user=None)
+        user = User(
+            username=username,
+            password_hash=generate_password_hash(password),
+            full_name=(form.full_name.data or '').strip() or None,
+            role_id=form.role_id.data if form.role_id.data else None,
+            is_active=form.is_active.data
+        )
+        db.session.add(user)
+        db.session.commit()
+        flash('User created successfully.', 'success')
+        return redirect(url_for('user_list'))
+    return render_template('user_form.html', form=form, user=None)
+
+
+@app.route('/users/<int:pk>/edit', methods=['GET', 'POST'])
+def user_edit(pk):
+    user = User.query.get_or_404(pk)
+    form = UserForm()
+    form.role_id.choices = [(0, '-- No Role --')] + [(r.id, r.name) for r in Role.query.order_by(Role.name).all()]
+    if request.method == 'GET':
+        form.username.data = user.username
+        form.full_name.data = user.full_name
+        form.role_id.data = user.role_id or 0
+        form.is_active.data = user.is_active
+        return render_template('user_form.html', form=form, user=user)
+    if form.validate_on_submit():
+        username = (form.username.data or '').strip()
+        other = User.query.filter(func.lower(User.username) == username.lower()).filter(User.id != pk).first()
+        if other:
+            flash('Username already exists.', 'danger')
+            return render_template('user_form.html', form=form, user=user)
+        user.username = username
+        user.full_name = (form.full_name.data or '').strip() or None
+        user.role_id = form.role_id.data if form.role_id.data else None
+        user.is_active = form.is_active.data
+        password = (form.password.data or '').strip()
+        if password:
+            if len(password) < 4:
+                flash('Password must be at least 4 characters.', 'danger')
+                return render_template('user_form.html', form=form, user=user)
+            user.password_hash = generate_password_hash(password)
+        db.session.commit()
+        flash('User updated successfully.', 'success')
+        return redirect(url_for('user_list'))
+    return render_template('user_form.html', form=form, user=user)
+
+
+@app.route('/roles')
+def role_list():
+    roles = Role.query.order_by(Role.name).all()
+    return render_template('role_list.html', roles=roles)
+
+
+@app.route('/roles/new', methods=['GET', 'POST'])
+def role_form():
+    form = RoleForm()
+    if request.method == 'GET':
+        permissions = Permission.query.order_by(Permission.category, Permission.name).all()
+        return render_template('role_form.html', form=form, role=None, permissions=permissions)
+    if form.validate_on_submit():
+        name = (form.name.data or '').strip()
+        if Role.query.filter(func.lower(Role.name) == name.lower()).first():
+            flash('Role name already exists.', 'danger')
+            permissions = Permission.query.order_by(Permission.category, Permission.name).all()
+            return render_template('role_form.html', form=form, role=None, permissions=permissions)
+        role = Role(name=name, description=(form.description.data or '').strip() or None)
+        db.session.add(role)
+        db.session.commit()
+        perm_ids = request.form.getlist('permission_ids', type=int)
+        if perm_ids:
+            perms = Permission.query.filter(Permission.id.in_(perm_ids)).all()
+            role.permissions = perms
+            db.session.commit()
+        flash('Role created successfully.', 'success')
+        return redirect(url_for('role_list'))
+    permissions = Permission.query.order_by(Permission.category, Permission.name).all()
+    return render_template('role_form.html', form=form, role=None, permissions=permissions)
+
+
+@app.route('/roles/<int:pk>/edit', methods=['GET', 'POST'])
+def role_edit(pk):
+    role = Role.query.get_or_404(pk)
+    form = RoleForm()
+    if request.method == 'GET':
+        form.name.data = role.name
+        form.description.data = role.description
+        permissions = Permission.query.order_by(Permission.category, Permission.name).all()
+        return render_template('role_form.html', form=form, role=role, permissions=permissions)
+    if form.validate_on_submit():
+        name = (form.name.data or '').strip()
+        other = Role.query.filter(func.lower(Role.name) == name.lower()).filter(Role.id != pk).first()
+        if other:
+            flash('Role name already exists.', 'danger')
+            permissions = Permission.query.order_by(Permission.category, Permission.name).all()
+            return render_template('role_form.html', form=form, role=role, permissions=permissions)
+        role.name = name
+        role.description = (form.description.data or '').strip() or None
+        perm_ids = request.form.getlist('permission_ids', type=int)
+        role.permissions = Permission.query.filter(Permission.id.in_(perm_ids)).all() if perm_ids else []
+        db.session.commit()
+        flash('Role updated successfully.', 'success')
+        return redirect(url_for('role_list'))
+    permissions = Permission.query.order_by(Permission.category, Permission.name).all()
+    return render_template('role_form.html', form=form, role=role, permissions=permissions)
 
 
 @app.route('/driver/delete/<int:id>', methods=['POST'])
@@ -6281,6 +6651,15 @@ def maintenance_expense_delete(pk):
     db.session.commit()
     flash('Maintenance expense deleted.', 'success')
     return redirect(url_for('maintenance_expense_list'))
+
+
+# ────────────────────────────────────────────────
+# Employee Expense (placeholder list)
+# ────────────────────────────────────────────────
+@app.route('/employee-expenses')
+def employee_expense_list():
+    """Employee expense list - placeholder; add form/list later."""
+    return render_template('employee_expense_list.html', rows=[])
 
 
 # ────────────────────────────────────────────────

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-bell me-2 text-primary"></i>Notifications</h2>
+    <a href="{{ url_for('notification_add') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add Notification (sends to all users)
+    </a>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      {% if notifications %}
+      <ul class="list-group list-group-flush">
+        {% for n in notifications %}
+        <li class="list-group-item d-flex justify-content-between align-items-start {% if n.id not in read_ids %}bg-light{% endif %}">
+          <div class="flex-grow-1">
+            <span class="badge bg-{{ n.notification_type or 'info' }} me-2">{{ n.notification_type or 'info' }}</span>
+            <strong>{{ n.title }}</strong>
+            {% if n.created_by %}<small class="text-muted ms-2">by {{ n.created_by.full_name or n.created_by.username }}</small>{% endif %}
+            {% if n.message %}<div class="text-muted small mt-1">{{ n.message }}</div>{% endif %}
+            {% if n.link %}
+            <a href="{{ n.link }}" class="btn btn-sm btn-outline-primary mt-2">{{ n.link_text or 'View' }}</a>
+            {% endif %}
+            <div class="small text-muted mt-1">{{ n.created_at.strftime('%d-%m-%Y %H:%M') if n.created_at else '' }}</div>
+          </div>
+          {% if n.id not in read_ids %}
+          <form action="{{ url_for('notification_mark_read', pk=n.id) }}" method="POST" class="ms-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ url_for('notification_list') }}">
+            <button type="submit" class="btn btn-sm btn-outline-success" title="Mark as read"><i class="bi bi-check2"></i></button>
+          </form>
+          {% else %}
+          <span class="badge bg-secondary">Read</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-bell display-6"></i>
+        <p class="mt-2 mb-0">No notifications yet. <a href="{{ url_for('notification_add') }}">Add one</a> to send to all users.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -776,7 +776,7 @@ class MaintenanceExpenseAttachment(db.Model):
 
 
 # ────────────────────────────────────────────────
-# Notification (dashboard / in-app alerts)
+# Notification (dashboard / in-app alerts) — broadcast to all users; per-user read state
 # ────────────────────────────────────────────────
 class Notification(db.Model):
     __tablename__ = 'notification'
@@ -786,8 +786,95 @@ class Notification(db.Model):
     link = db.Column(db.String(500))  # optional URL to open
     link_text = db.Column(db.String(100))
     notification_type = db.Column(db.String(50), default='info')  # info, warning, success, danger
-    read_at = db.Column(db.DateTime, nullable=True)  # when marked read
+    read_at = db.Column(db.DateTime, nullable=True)  # legacy: when single user marked read (deprecated; use NotificationRead)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+
+    created_by = db.relationship('User', backref='created_notifications', foreign_keys=[created_by_user_id], lazy=True)
 
     def __repr__(self):
         return f'<Notification {self.title}>'
+
+
+class NotificationRead(db.Model):
+    """Per-user read state for notifications (so each user marks read independently)."""
+    __tablename__ = 'notification_read'
+    notification_id = db.Column(db.Integer, db.ForeignKey('notification.id', ondelete='CASCADE'), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), primary_key=True)
+    read_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Reminder(db.Model):
+    """Personal reminder for a user (only that user sees it)."""
+    __tablename__ = 'reminder'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text)
+    reminder_date = db.Column(db.Date, nullable=False)
+    reminder_time = db.Column(db.Time, nullable=True)  # optional
+    is_completed = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='reminders', lazy=True)
+
+    def __repr__(self):
+        return f'<Reminder {self.title}>'
+
+
+# ────────────────────────────────────────────────
+# User Login & Role-Based Access Control
+# ────────────────────────────────────────────────
+role_permissions = db.Table('role_permissions',
+    db.Column('role_id', db.Integer, db.ForeignKey('role.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('permission_id', db.Integer, db.ForeignKey('permission.id', ondelete='CASCADE'), primary_key=True)
+)
+
+
+class Permission(db.Model):
+    """Permission code for access control (e.g. master, expenses, reports)."""
+    __tablename__ = 'permission'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(80), unique=True, nullable=False)   # e.g. 'master', 'expenses', 'users_manage'
+    name = db.Column(db.String(120), nullable=False)               # Display name
+    category = db.Column(db.String(80), nullable=True)             # Group in UI: Master, Expenses, etc.
+
+    def __repr__(self):
+        return f'<Permission {self.code}>'
+
+
+class Role(db.Model):
+    """Role: has many permissions. Users get permissions via their role."""
+    __tablename__ = 'role'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), unique=True, nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    permissions = db.relationship('Permission', secondary=role_permissions, backref='roles', lazy='select')
+
+    def __repr__(self):
+        return f'<Role {self.name}>'
+
+    def permission_codes(self):
+        return [p.code for p in self.permissions]
+
+
+class User(db.Model):
+    """App user: login with username/password, linked to a role for permissions."""
+    __tablename__ = 'user'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    full_name = db.Column(db.String(120), nullable=True)
+    role_id = db.Column(db.Integer, db.ForeignKey('role.id', ondelete='SET NULL'), nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    role = db.relationship('Role', backref='users', lazy=True)
+
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+    def permission_codes(self):
+        if self.role:
+            return self.role.permission_codes()
+        return []

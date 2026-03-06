@@ -19,7 +19,7 @@
         </div>
         <div class="col-md-2">
           <label class="form-label">Project</label>
-          <select name="project_id" id="projectSelect" class="form-select">
+          <select name="project_id" id="projectSelect" class="form-select select2-enable">
             <option value="0" {% if not project_id %}selected{% endif %}>All Projects</option>
             {% for p in form.project_id.choices if p[0] != 0 %}
               <option value="{{ p[0] }}" {% if project_id == p[0] %}selected{% endif %}>{{ p[1] }}</option>
@@ -28,7 +28,7 @@
         </div>
         <div class="col-md-2">
           <label class="form-label">District</label>
-          <select name="district_id" id="districtSelect" class="form-select">
+          <select name="district_id" id="districtSelect" class="form-select select2-enable">
             <option value="0" {% if not district_id %}selected{% endif %}>All Districts</option>
             {% for d in form.district_id.choices if d[0] != 0 %}
               <option value="{{ d[0] }}" {% if district_id == d[0] %}selected{% endif %}>{{ d[1] }}</option>
@@ -102,7 +102,7 @@
               {% else %}
               <tr>
                 <td colspan="7" class="text-center py-5 text-muted">
-                  No active drivers for selected filters. Change date / project / district or search.
+                  No drivers for selected Project / District. Select Project and District above, then click <strong>Load</strong> to show drivers of that project and district.
                 </td>
               </tr>
               {% endfor %}
@@ -126,33 +126,43 @@
 </div>
 
 <script>
-document.getElementById('projectSelect').addEventListener('change', function() {
-  var pid = this.value;
+(function() {
+  var projectSelect = document.getElementById('projectSelect');
   var districtSelect = document.getElementById('districtSelect');
-  districtSelect.innerHTML = '<option value="0">All Districts</option>';
-  if (pid && pid !== '0') {
-    fetch('/get_districts_by_project/' + pid)
-      .then(function(r) { return r.json(); })
-      .then(function(districts) {
-        districts.forEach(function(d) {
-          var opt = document.createElement('option');
-          opt.value = d.id;
-          opt.textContent = d.name;
-          districtSelect.appendChild(opt);
-        });
-      });
-  }
-});
-var markSearch = document.getElementById('markTableSearch');
-if (markSearch) {
-  markSearch.addEventListener('keyup', function() {
-    var q = this.value.toLowerCase();
-    document.querySelectorAll('#markTable tbody tr').forEach(function(row) {
-      if (row.cells.length < 2) return;
-      var text = row.innerText.toLowerCase();
-      row.style.display = text.indexOf(q) > -1 ? '' : 'none';
+  if (projectSelect && districtSelect) {
+    projectSelect.addEventListener('change', function() {
+      var pid = this.value;
+      var $dist = $(districtSelect);
+      if ($dist.data('select2')) $dist.select2('destroy');
+      districtSelect.innerHTML = '<option value="0">All Districts</option>';
+      if (pid && pid !== '0') {
+        fetch('/get_districts_by_project/' + pid)
+          .then(function(r) { return r.json(); })
+          .then(function(districts) {
+            districts.forEach(function(d) {
+              var opt = document.createElement('option');
+              opt.value = d.id;
+              opt.textContent = d.name;
+              districtSelect.appendChild(opt);
+            });
+            if ($.fn.select2) $dist.select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search district...' });
+          });
+      } else {
+        if ($.fn.select2) $dist.select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search district...' });
+      }
     });
-  });
-}
+  }
+  var markSearch = document.getElementById('markTableSearch');
+  if (markSearch) {
+    markSearch.addEventListener('keyup', function() {
+      var q = this.value.toLowerCase();
+      document.querySelectorAll('#markTable tbody tr').forEach(function(row) {
+        if (row.cells.length < 2) return;
+        var text = row.innerText.toLowerCase();
+        row.style.display = text.indexOf(q) > -1 ? '' : 'none';
+      });
+    });
+  }
+})();
 </script>
 {% endblock %}

@@ -3,7 +3,7 @@ from flask_wtf.file import FileField, FileAllowed
 from wtforms import (
     StringField, TextAreaField, DateField, IntegerField,
     SelectField, SelectMultipleField, SubmitField, HiddenField,
-    RadioField, DecimalField
+    RadioField, DecimalField, BooleanField, PasswordField
 )
 from wtforms.validators import (
     DataRequired, Length, Optional, NumberRange, Email, ValidationError, Regexp
@@ -673,8 +673,63 @@ class EmployeeForm(FlaskForm):
 
 class LoginForm(FlaskForm):
     username = StringField('User ID', validators=[DataRequired()])
-    password = StringField('Password', validators=[DataRequired()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    remember_me = BooleanField('Remember me', default=False, validators=[Optional()])
     submit = SubmitField('Login')
+
+
+class UserForm(FlaskForm):
+    """Add/Edit user. Password optional on edit (leave blank to keep current)."""
+    username = StringField('Username', validators=[DataRequired(), Length(min=2, max=80)],
+                          render_kw={"placeholder": "Login name"})
+    password = PasswordField('Password', validators=[Optional(), Length(min=4)],
+                             render_kw={"placeholder": "Leave blank to keep current (edit)"})
+    full_name = StringField('Full Name', validators=[Optional(), Length(max=120)],
+                            render_kw={"placeholder": "Display name"})
+    role_id = SelectField('Role', coerce=int, validators=[Optional()], choices=[])
+    is_active = BooleanField('Active', default=True, validators=[Optional()])
+    submit = SubmitField('Save User')
+
+
+class RoleForm(FlaskForm):
+    """Add/Edit role."""
+    name = StringField('Role Name', validators=[DataRequired(), Length(min=2, max=80)],
+                      render_kw={"placeholder": "e.g. Accountant"})
+    description = StringField('Description', validators=[Optional(), Length(max=255)],
+                             render_kw={"placeholder": "Short description"})
+    submit = SubmitField('Save Role')
+
+
+class NotificationForm(FlaskForm):
+    """Create a notification (broadcast to all users)."""
+    title = StringField('Title', validators=[DataRequired(), Length(max=200)], render_kw={"placeholder": "e.g. Meeting tomorrow"})
+    message = TextAreaField('Message', validators=[Optional()], render_kw={"rows": 3, "placeholder": "Details (optional)"})
+    link = StringField('Link URL', validators=[Optional(), Length(max=500)], render_kw={"placeholder": "/reports/ (optional)"})
+    link_text = StringField('Link Text', validators=[Optional(), Length(max=100)], render_kw={"placeholder": "View (optional)"})
+    notification_type = SelectField('Type', choices=[('info', 'Info'), ('warning', 'Warning'), ('success', 'Success'), ('danger', 'Urgent')], validators=[DataRequired()])
+    submit = SubmitField('Send to All Users')
+
+
+class ReminderForm(FlaskForm):
+    """Personal reminder."""
+    title = StringField('Title', validators=[DataRequired(), Length(max=200)], render_kw={"placeholder": "e.g. Submit report"})
+    message = TextAreaField('Note', validators=[Optional()], render_kw={"rows": 2})
+    reminder_date = DateField('Date', format='%d-%m-%Y', validators=[DataRequired()],
+                             render_kw={"class": "form-control datepicker"})
+    reminder_time = StringField('Time (optional)', validators=[Optional(), Length(max=5)], render_kw={"placeholder": "HH:MM"})
+    submit = SubmitField('Save Reminder')
+
+
+class ChangePasswordForm(FlaskForm):
+    """Change current user password."""
+    current_password = PasswordField('Current Password', validators=[DataRequired()])
+    new_password = PasswordField('New Password', validators=[DataRequired(), Length(min=4)])
+    confirm_password = PasswordField('Confirm New Password', validators=[DataRequired()])
+    submit = SubmitField('Change Password')
+
+    def validate_confirm_password(self, field):
+        if self.new_password.data and field.data != self.new_password.data:
+            raise ValidationError('New password and confirm must match.')
 
 
 class FuelExpenseFilterForm(FlaskForm):

@@ -3,6 +3,7 @@ from models import db
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 from dotenv import load_dotenv
+from datetime import timedelta
 import os
 
 # Load .env from app folder (so it works even when run from another directory)
@@ -14,6 +15,8 @@ app = Flask(__name__)
 
 # Secret key / DB config (env first, fallback to current defaults)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-me-please-make-it-strong')
+# When "Remember me" is checked, session lasts this long (default 7 days)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=int(os.environ.get('SESSION_DAYS', '7')))
 
 # Database URL: Render (and some hosts) give postgres:// but SQLAlchemy 1.4+ requires postgresql://
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///company_management.db')
@@ -40,6 +43,10 @@ app.config['BACKUP_SCHEDULE_ENABLED'] = _app_schedule in ('1', 'true', 'yes')
 app.config['BACKUP_SCHEDULE_TIME'] = (os.environ.get('BACKUP_SCHEDULE_TIME') or '02:00').strip()
 app.config['BACKUP_EMAIL_TO'] = (os.environ.get('BACKUP_EMAIL_TO') or '').strip()
 
+# Session timeout; PERMANENT_SESSION_LIFETIME when "Remember me" is checked
+app.config['SESSION_TIMEOUT_MINUTES'] = int(os.environ.get('SESSION_TIMEOUT_MINUTES', '60'))
+app.config['PERMANENT_SESSION_LIFETIME'] = __import__('datetime').timedelta(days=7)
+
 # Enable global CSRF protection so csrf_token() is available in templates
 csrf = CSRFProtect(app)
 
@@ -57,16 +64,32 @@ app.jinja_env.filters['phone_fmt'] = format_phone
 
 @app.context_processor
 def inject_notification_badge():
-    """
-    Make unread notification count available in all templates as
-    `unread_notification_count` for the navbar bell icon.
-    """
+    """Unread notification count for current user (per-user read via NotificationRead). Excludes Parking full."""
     try:
-        from models import Notification
-        unread_count = Notification.query.filter(Notification.read_at.is_(None)).count()
+        from flask import session
+        from sqlalchemy import and_, or_
+        from models import db, Notification, NotificationRead
+        user_id = session.get('user_id')
+        if not user_id:
+            return dict(unread_notification_count=0)
+        subq = db.session.query(NotificationRead.notification_id).filter(NotificationRead.user_id == user_id)
+        # Exclude "Parking full" notifications from count
+        parking_full = and_(
+            Notification.title.ilike('%parking%'),
+            or_(Notification.title.ilike('%full%'), db.func.coalesce(Notification.message, '').ilike('%full%'))
+        )
+        count = Notification.query.filter(~Notification.id.in_(subq)).filter(~parking_full).count()
     except Exception:
-        unread_count = 0
-    return dict(unread_notification_count=unread_count)
+        count = 0
+    return dict(unread_notification_count=count)
+
+
+@app.context_processor
+def inject_current_permissions():
+    """Make current user's permission codes available in templates for sidebar visibility."""
+    from flask import session
+    perms = session.get('permissions') or []
+    return dict(current_permissions=perms)
 
 
 @app.context_processor
@@ -85,7 +108,54 @@ def inject_all_districts():
 with app.app_context():
     print("Creating tables if needed...")
     db.create_all()
+    # Ensure notification.created_by_user_id and related tables exist (SQLite fallback if migration not run)
+    try:
+        uri = (app.config.get('SQLALCHEMY_DATABASE_URI') or '').strip()
+        if uri and 'sqlite' in uri:
+            with db.engine.connect() as conn:
+                r = conn.execute(db.text("PRAGMA table_info(notification)"))
+                cols = [row[1] for row in r]
+                if 'created_by_user_id' not in cols:
+                    conn.execute(db.text("ALTER TABLE notification ADD COLUMN created_by_user_id INTEGER REFERENCES user(id)"))
+                    conn.commit()
+                    print("Added notification.created_by_user_id.")
+            with db.engine.connect() as conn:
+                conn.execute(db.text("""
+                    CREATE TABLE IF NOT EXISTS notification_read (
+                        notification_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        read_at DATETIME NOT NULL,
+                        PRIMARY KEY (notification_id, user_id),
+                        FOREIGN KEY(notification_id) REFERENCES notification(id) ON DELETE CASCADE,
+                        FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE
+                    )
+                """))
+                conn.commit()
+            with db.engine.connect() as conn:
+                conn.execute(db.text("""
+                    CREATE TABLE IF NOT EXISTS reminder (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        title VARCHAR(200) NOT NULL,
+                        message TEXT,
+                        reminder_date DATE NOT NULL,
+                        reminder_time TIME,
+                        is_completed BOOLEAN NOT NULL DEFAULT 0,
+                        created_at DATETIME,
+                        FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE
+                    )
+                """))
+                conn.commit()
+    except Exception as e:
+        print("DB schema fallback skip:", e)
     print("Database ready.")
+    # Seed default permissions, Admin role, and admin user (if none exist)
+    try:
+        from auth_utils import seed_auth_tables
+        seed_auth_tables(app)
+        print("Auth seed done.")
+    except Exception as e:
+        print("Auth seed skip or error:", e)
 
 # Import routes after app & db are ready
 from routes import *  # noqa: E402,F401

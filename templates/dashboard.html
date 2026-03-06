@@ -12,33 +12,6 @@
 </div>
 </div>
 
-{% if notifications %}
-<div class="card border-0 shadow-sm mb-4">
-  <div class="card-header bg-light d-flex align-items-center">
-    <i class="bi bi-bell me-2"></i>
-    <strong>Notifications</strong>
-  </div>
-  <ul class="list-group list-group-flush">
-    {% for n in notifications %}
-    <li class="list-group-item d-flex justify-content-between align-items-start">
-      <div>
-        <span class="badge bg-{{ n.notification_type or 'info' }} me-2">{{ n.notification_type or 'info' }}</span>
-        <strong>{{ n.title }}</strong>
-        {% if n.message %}<div class="text-muted small mt-1">{{ n.message }}</div>{% endif %}
-        {% if n.link %}
-        <a href="{{ n.link }}" class="btn btn-sm btn-outline-primary mt-2">{{ n.link_text or 'View' }}</a>
-        {% endif %}
-      </div>
-      <form action="{{ url_for('notification_mark_read', pk=n.id) }}" method="POST" class="d-inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Mark as read">&check;</button>
-      </form>
-    </li>
-    {% endfor %}
-  </ul>
-</div>
-{% endif %}
-
 <div class="row g-4">
 
 <!-- Companies -->
