@@ -17,7 +17,8 @@ app = Flask(__name__)
 # so redirects and session cookies use the correct scheme (https) and host. Fixes ERR_TOO_MANY_REDIRECTS.
 try:
     from werkzeug.middleware.proxy_fix import ProxyFix
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+    # Use depth 2 in case Render has multiple proxy hops (e.g. edge -> app server)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=2, x_host=2)
 except ImportError:
     pass
 
@@ -57,8 +58,8 @@ app.config['PERMANENT_SESSION_LIFETIME'] = __import__('datetime').timedelta(days
 # On Render: set SESSION_COOKIE_SECURE=true in Environment so cookie is sent only over HTTPS (use with ProxyFix).
 if os.environ.get('SESSION_COOKIE_SECURE', '').lower() in ('1', 'true', 'yes'):
     app.config['SESSION_COOKIE_SECURE'] = True
-
-# Enable global CSRF protection
+# Avoid redirect/cookie issues behind HTTPS proxy (Render)
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 csrf = CSRFProtect(app)
 
 # Initialize SQLAlchemy
