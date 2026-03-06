@@ -77,7 +77,7 @@ def require_login():
     if required:
         perms = session.get('permissions') or []
         if not user_has_permission(perms, required):
-            flash('You do not have access to this page.', 'danger')
+            session['show_no_access'] = True  # show once on login page, not per-request flash
             return redirect(url_for('login'))
 
 
@@ -596,8 +596,16 @@ def whats_new():
     """What's New page: only latest 15 entries (newest first)."""
     entries = [
         {
-            'title': 'Assignment modules: validations, locks, exports & print preview',
+            'title': 'Login & access: redirect and error message fixes',
             'label': 'Latest',
+            'bullets': [
+                'Redirect fix: When a user has no permission for a page, the app now redirects to the login page instead of the dashboard, so the previous redirect loop is resolved.',
+                "Login page error stack fixed: The 'You do not have access to this page.' message was showing many times on the login screen. Now it is shown only once when redirected due to permission failure (using a session flag instead of flashing on every request).",
+            ],
+        },
+        {
+            'title': 'Assignment modules: validations, locks, exports & print preview',
+            'label': 'Previous update',
             'bullets': [
                 'Driver to Vehicle: Required field errors shown below each field. Assign date must be entered by user (no auto-select). Cancel button added. Selected vehicle\'s parking station shown below Vehicle dropdown. If vehicle has no parking station, Finalize shows message and form is not saved or reset. Unassign form now includes CSRF token (fixes Bad Request).',
                 'Project to Company list: Projects that have districts linked now have Edit and Deassign locked (with lock icon). Export to Excel and Report Preview (print) buttons added. List search filter applied to export and print.',
@@ -1629,6 +1637,9 @@ def employees_print():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     form = LoginForm()
+    # Show "no access" message at most once when redirected due to permission failure
+    if session.pop('show_no_access', None):
+        flash('You do not have access to this page.', 'danger')
     if form.validate_on_submit():
         username = (form.username.data or '').strip()
         password = (form.password.data or '').strip()
