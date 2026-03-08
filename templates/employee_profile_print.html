@@ -1,0 +1,107 @@
+{% extends "base_print.html" %}
+
+{% block title %}Employee Profile - {{ employee.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-2">
+  <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+    <h4 class="mb-0"><i class="bi bi-person-badge me-2"></i>Employee Profile - {{ employee.name }}</h4>
+    <button class="btn btn-primary" onclick="window.print()">
+      <i class="bi bi-printer me-1"></i>Print / Save as PDF
+    </button>
+  </div>
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-header bg-primary text-white py-2">
+      <h5 class="mb-0">Employee Complete Profile</h5>
+      <small>{{ employee.code }} — {{ employee.name }}</small>
+    </div>
+    <div class="card-body p-3">
+      <!-- Tab 1: Basic & Personal -->
+      <section class="mb-4">
+        <h6 class="border-bottom pb-1 mb-2 text-primary"><i class="bi bi-person me-1"></i>1. Basic & Personal</h6>
+        <div class="row g-2 small">
+          <div class="col-6 col-md-4"><strong>Code</strong></div><div class="col-6 col-md-8">{{ employee.code or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Name</strong></div><div class="col-6 col-md-8">{{ employee.name or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Father Name</strong></div><div class="col-6 col-md-8">{{ employee.father_name or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Post</strong></div><div class="col-6 col-md-8">{% if employee.post %}{{ employee.post.full_name }}{% if employee.post.short_name %} ({{ employee.post.short_name }}){% endif %}{% else %}-{% endif %}</div>
+          <div class="col-6 col-md-4"><strong>Department</strong></div><div class="col-6 col-md-8">{{ employee.department or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Place of Birth</strong></div><div class="col-6 col-md-8">{{ employee.place_of_birth or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>DOB</strong></div><div class="col-6 col-md-8">{{ employee.dob.strftime('%d-%b-%Y') if employee.dob else '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Education</strong></div><div class="col-6 col-md-8">{{ employee.education or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Marital Status</strong></div><div class="col-6 col-md-8">{{ employee.marital_status or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>CNIC No</strong></div><div class="col-6 col-md-8">{{ employee.cnic_no or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>District</strong></div><div class="col-6 col-md-8">{{ employee.district or '-' }}</div>
+          <div class="col-12"><strong>Address</strong></div><div class="col-12">{{ employee.address or '-' }}</div>
+        </div>
+      </section>
+
+      <!-- Tab 2: Contact & Job -->
+      <section class="mb-4">
+        <h6 class="border-bottom pb-1 mb-2 text-primary"><i class="bi bi-telephone me-1"></i>2. Contact & Job</h6>
+        <div class="row g-2 small">
+          <div class="col-6 col-md-4"><strong>Phone 1</strong></div><div class="col-6 col-md-8">{{ employee.phone1 or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Phone 2</strong></div><div class="col-6 col-md-8">{{ employee.phone2 or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Email</strong></div><div class="col-6 col-md-8">{{ employee.email or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Joining Date</strong></div><div class="col-6 col-md-8">{{ employee.joining_date.strftime('%d-%b-%Y') if employee.joining_date else '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Status</strong></div><div class="col-6 col-md-8">{{ employee.status or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Bank Name</strong></div><div class="col-6 col-md-8">{{ employee.bank_name or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Account No</strong></div><div class="col-6 col-md-8">{{ employee.account_no or '-' }}</div>
+          <div class="col-6 col-md-4"><strong>Account Title</strong></div><div class="col-6 col-md-8">{{ employee.account_title or '-' }}</div>
+          <div class="col-12"><strong>Remarks</strong></div><div class="col-12">{{ employee.remarks or '-' }}</div>
+        </div>
+      </section>
+
+      <!-- Tab 3: Assignment (Projects & Districts) -->
+      <section class="mb-4">
+        <h6 class="border-bottom pb-1 mb-2 text-primary"><i class="bi bi-geo-alt me-1"></i>3. Assignment</h6>
+        <div class="row g-2 small">
+          <div class="col-12 col-md-6">
+            <strong>Assigned Projects</strong>
+            {% if projects %}
+            <ul class="mb-0 ps-3">
+              {% for p in projects %}
+              <li>{{ p.name }}</li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <p class="mb-0 text-muted">—</p>
+            {% endif %}
+          </div>
+          <div class="col-12 col-md-6">
+            <strong>Assigned Districts</strong>
+            {% if districts %}
+            <ul class="mb-0 ps-3">
+              {% for d in districts %}
+              <li>{{ d.name }}</li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <p class="mb-0 text-muted">—</p>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 4: Documents -->
+      <section>
+        <h6 class="border-bottom pb-1 mb-2 text-primary"><i class="bi bi-file-earmark-pdf me-1"></i>4. Documents</h6>
+        {% if documents %}
+        <ul class="list-group list-group-flush">
+          {% for doc in documents %}
+          <li class="list-group-item py-2 px-0 d-flex align-items-center">
+            <i class="bi bi-file-earmark me-2 text-secondary"></i>
+            <span>{{ doc.title or doc.file_path }}</span>
+            <span class="ms-2 text-muted small">({{ doc.created_at.strftime('%d-%b-%Y') if doc.created_at else '' }})</span>
+          </li>
+          {% endfor %}
+        </ul>
+        <p class="small text-muted mt-2 mb-0">Documents ko open karne ke liye employee form se Documents tab use karein.</p>
+        {% else %}
+        <p class="mb-0 text-muted">Koi document upload nahi.</p>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}

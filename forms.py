@@ -148,6 +148,13 @@ class DriverImportForm(FlaskForm):
     submit = SubmitField('Import')
 
 
+class EmployeeImportForm(FlaskForm):
+    file = FileField('Employee Excel/CSV', validators=[
+        FileAllowed(['xlsx', 'xls', 'csv'], 'Only Excel or CSV files allowed')
+    ])
+    submit = SubmitField('Import')
+
+
 # Parking Form
 class ParkingForm(FlaskForm):
     name = StringField('Parking Station Name', validators=[DataRequired(), Length(max=100)])
@@ -669,7 +676,77 @@ class EmployeeForm(FlaskForm):
 
     remarks = TextAreaField('Remarks', validators=[Optional()],
                             render_kw={"rows": 3, "placeholder": "Previous job experience / other notes"})
+
+    project_ids = SelectMultipleField('Assign Projects', coerce=int, validators=[Optional()], choices=[], render_kw={"class": "form-select form-select-sm", "size": "5"})
+    district_ids = SelectMultipleField('Assign Districts', coerce=int, validators=[Optional()], choices=[], render_kw={"class": "form-select form-select-sm", "size": "5"})
+
     submit = SubmitField('Save Employee')
+
+
+# Step-wise forms for Module Tabs (save step → then next tab)
+class EmployeeFormStep1(FlaskForm):
+    """Tab 1: Basic & Personal Info only."""
+    code = StringField('Employee Code', validators=[Length(max=20)])
+    name = StringField('Employee Name', validators=[DataRequired(), Length(max=100)])
+    post_id = SelectField('Employee Post', coerce=int, validators=[DataRequired()], choices=[])
+    department = StringField('Department', validators=[DataRequired(), Length(max=100)])
+    father_name = StringField('Father Name', validators=[DataRequired(), Length(max=100)])
+    place_of_birth = StringField('Place of Birth', validators=[DataRequired(), Length(max=100)])
+    dob = DateField('Date of Birth', format='%d-%m-%Y', validators=[DataRequired()],
+                    render_kw={"class": "form-control datepicker"})
+    education = SelectField('Education', choices=[
+        ('', '-- Select Education --'),
+        ('Middle', 'Middle'), ('Matric', 'Matric'), ('Intermediate', 'Intermediate'),
+        ('Graduate', 'Graduate'), ('Masters', 'Masters'), ('Other', 'Other'),
+    ], validators=[DataRequired()])
+    marital_status = SelectField('Marital Status', choices=[
+        ('Single', 'Single'), ('Married', 'Married'), ('Divorced', 'Divorced'), ('Widowed', 'Widowed'),
+    ], validators=[DataRequired()])
+    cnic_no = StringField('CNIC No', validators=[
+        DataRequired(),
+        Regexp(r'^[0-9]{5}-[0-9]{7}-[0-9]{1}$', message='Format: 32304-1111111-5')
+    ], render_kw={"placeholder": "32304-1111111-5"})
+    district = StringField('District', validators=[DataRequired(), Length(max=100)], render_kw={"list": "districtOptions"})
+    address = TextAreaField('Address', validators=[DataRequired()], render_kw={"rows": 2})
+
+
+class EmployeeFormStep2(FlaskForm):
+    """Tab 2: Contact, Job & Bank only."""
+    phone1 = StringField('Phone No 1', validators=[DataRequired(), Length(max=20)], render_kw={"placeholder": "03xx-xxxxxxx"})
+    phone2 = StringField('Phone No 2', validators=[DataRequired(), Length(max=20)], render_kw={"placeholder": "03xx-xxxxxxx"})
+    email = StringField('Email', validators=[Optional(), Email(), Length(max=120)])
+    joining_date = DateField('Joining Date', format='%d-%m-%Y', validators=[DataRequired()],
+                             render_kw={"class": "form-control datepicker"})
+    status = SelectField('Status', choices=[
+        ('Active', 'Active'), ('Inactive', 'Inactive'), ('Left', 'Left'),
+    ], default='Active', validators=[DataRequired()])
+    bank_name = StringField('Bank Name', validators=[Optional(), Length(max=100)])
+    account_no = StringField('Account No', validators=[Optional(), Length(max=50)])
+    account_title = StringField('Account Title', validators=[Optional(), Length(max=100)])
+    remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 3, "placeholder": "Previous job experience / other notes"})
+
+
+class EmployeeFormStep3(FlaskForm):
+    """Tab 3: Project & District Assignment only."""
+    project_ids = SelectMultipleField('Assign Projects', coerce=int, validators=[Optional()], choices=[],
+                                     render_kw={"class": "form-select form-select-sm", "size": "5"})
+    district_ids = SelectMultipleField('Assign Districts', coerce=int, validators=[Optional()], choices=[],
+                                      render_kw={"class": "form-select form-select-sm", "size": "5"})
+
+
+class EmployeeAssignmentForm(FlaskForm):
+    """Only Project & District assignment (for separate assignment page)."""
+    project_ids = SelectMultipleField('Assign Projects', coerce=int, validators=[Optional()], choices=[], render_kw={"class": "form-select", "size": "6"})
+    district_ids = SelectMultipleField('Assign Districts', coerce=int, validators=[Optional()], choices=[], render_kw={"class": "form-select", "size": "6"})
+    submit = SubmitField('Save Employee & Assignment')
+
+
+class EmployeeDocumentForm(FlaskForm):
+    """Tab 4: Optional document upload (title + file)."""
+    title = StringField('Document title (optional)', validators=[Optional(), Length(max=120)],
+                        render_kw={"placeholder": "e.g. CNIC Copy, Contract"})
+    document = FileField('File', validators=[Optional(),
+        FileAllowed(['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'doc', 'docx'], 'PDF, images, or Word only')])
 
 
 class LoginForm(FlaskForm):

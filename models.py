@@ -15,6 +15,18 @@ project_district = db.Table('project_district',
     db.Column('remarks', db.Text, nullable=True)
 )
 
+# Employee ↔ Project (many-to-many): one employee can be assigned multiple projects
+employee_project = db.Table('employee_project',
+    db.Column('employee_id', db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('project_id', db.Integer, db.ForeignKey('project.id', ondelete='CASCADE'), primary_key=True)
+)
+
+# Employee ↔ District (many-to-many): one employee can be assigned multiple districts
+employee_district = db.Table('employee_district',
+    db.Column('employee_id', db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('district_id', db.Integer, db.ForeignKey('district.id', ondelete='CASCADE'), primary_key=True)
+)
+
 # ────────────────────────────────────────────────
 # Company Model
 # ────────────────────────────────────────────────
@@ -134,9 +146,26 @@ class Employee(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     post = db.relationship('EmployeePost', backref='employees')
+    # Multiple projects and districts (assignment from this form)
+    projects = db.relationship('Project', secondary=employee_project, backref=db.backref('employees', lazy='dynamic'), lazy='dynamic')
+    districts = db.relationship('District', secondary=employee_district, backref=db.backref('employees', lazy='dynamic'), lazy='dynamic')
+    documents = db.relationship('EmployeeDocument', backref='employee', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Employee {self.name}>'
+
+
+# Employee documents (optional): CNIC copy, contract, etc.
+class EmployeeDocument(db.Model):
+    __tablename__ = 'employee_document'
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False)
+    title = db.Column(db.String(120), nullable=True)  # e.g. "CNIC Copy", "Contract"
+    file_path = db.Column(db.String(500), nullable=False)  # relative to UPLOAD_FOLDER, e.g. employees/1/abc.pdf
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<EmployeeDocument {self.title or self.file_path}>'
 
 
 # ────────────────────────────────────────────────

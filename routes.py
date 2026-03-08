@@ -1,8 +1,8 @@
 from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session, send_file, abort
 from app import app, db
 from models import (
-    Company, Project, Vehicle, Driver, ParkingStation, District, EmployeePost, Employee,
-    project_district, vehicle_district, ProjectTransfer, VehicleTransfer, DriverTransfer, DriverStatusChange,
+    Company, Project, Vehicle, Driver, ParkingStation, District, EmployeePost, Employee, EmployeeDocument,
+    project_district, employee_project, employee_district, vehicle_district, ProjectTransfer, VehicleTransfer, DriverTransfer, DriverStatusChange,
     DriverAttendance,
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
     Party, Product, FuelExpense, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
@@ -14,7 +14,7 @@ from models import (
     AttendanceTimeControl,
 )
 from forms import (
-    CompanyForm, ProjectForm, VehicleForm, VehicleImportForm, DriverForm, DriverImportForm, ParkingForm, DistrictForm,
+    CompanyForm, ProjectForm, VehicleForm, VehicleImportForm, DriverForm, DriverImportForm, EmployeeImportForm, ParkingForm, DistrictForm,
     AssignProjectToCompanyForm, EditProjectAssignmentForm,
     AssignProjectToDistrictForm, AssignVehicleToDistrictForm, AssignVehicleToParkingForm,
     AssignDriverToVehicleForm, ProjectTransferForm, VehicleTransferForm, EditVehicleTransferForm, DriverTransferForm, DriverJobLeftForm, DriverRejoinForm,
@@ -28,6 +28,11 @@ from forms import (
     ProductForm,
     EmployeePostForm,
     EmployeeForm,
+    EmployeeFormStep1,
+    EmployeeFormStep2,
+    EmployeeFormStep3,
+    EmployeeAssignmentForm,
+    EmployeeDocumentForm,
     LoginForm,
     UserForm,
     RoleForm,
@@ -1603,6 +1608,12 @@ def employee_form(id=None):
         (p.id, f"{p.full_name} ({p.short_name})") for p in posts
     ]
 
+    # Projects & Districts for assignment (multi-select): company-assigned projects, all districts
+    projects_list = Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    districts_list = District.query.order_by(District.name).all()
+    project_choices = [(p.id, p.name) for p in projects_list]
+    district_choices = [(d.id, d.name) for d in districts_list]
+
     # Department history (distinct existing departments)
     dept_rows = (
         db.session.query(Employee.department)
@@ -1613,57 +1624,328 @@ def employee_form(id=None):
     )
     departments = [row[0] for row in dept_rows]
 
-    if id:
-        emp = Employee.query.get_or_404(id)
-        form = EmployeeForm(obj=emp)
-        form.post_id.choices = post_choices
-        if emp.joining_date:
-            if isinstance(emp.joining_date, str):
-                form.joining_date.data = parse_date(emp.joining_date)
-            else:
-                form.joining_date.data = emp.joining_date
-        title = f"Edit Employee - {emp.name}"
-    else:
-        emp = Employee()
-        form = EmployeeForm()
-        form.post_id.choices = post_choices
-        title = "Add New Employee"
+    # Tab: 1=Basic, 2=Contact, 3=Assignment, 4=Documents (optional)
+    tab = request.args.get('tab', 1, type=int)
+    if tab < 1 or tab > 4:
+        tab = 1
+    if not id and tab > 1:
+        return redirect(url_for('employee_form', tab=1))
 
+    emp = Employee.query.get(id) if id else None
+    if id and not emp:
+        abort(404)
+    title = f"Edit Employee - {emp.name}" if emp else "Add New Employee"
+
+    form1 = EmployeeFormStep1()
+    form1.post_id.choices = post_choices
+    form2 = EmployeeFormStep2()
+    form3 = EmployeeFormStep3()
+    form3.project_ids.choices = project_choices
+    form3.district_ids.choices = district_choices
+
+    if emp:
+        form1.code.data = emp.code
+        form1.name.data = emp.name
+        form1.post_id.data = emp.post_id or 0
+        form1.department.data = emp.department or ''
+        form1.father_name.data = emp.father_name or ''
+        form1.place_of_birth.data = emp.place_of_birth or ''
+        form1.dob.data = parse_date(emp.dob) if isinstance(emp.dob, str) else emp.dob
+        form1.education.data = emp.education or ''
+        form1.marital_status.data = emp.marital_status or ''
+        form1.cnic_no.data = emp.cnic_no or ''
+        form1.district.data = emp.district or ''
+        form1.address.data = emp.address or ''
+        form2.phone1.data = emp.phone1 or ''
+        form2.phone2.data = emp.phone2 or ''
+        form2.email.data = emp.email or ''
+        form2.joining_date.data = parse_date(emp.joining_date) if isinstance(emp.joining_date, str) else emp.joining_date
+        form2.status.data = emp.status or 'Active'
+        form2.bank_name.data = emp.bank_name or ''
+        form2.account_no.data = emp.account_no or ''
+        form2.account_title.data = emp.account_title or ''
+        form2.remarks.data = emp.remarks or ''
+        form3.project_ids.data = [p.id for p in emp.projects]
+        form3.district_ids.data = [d.id for d in emp.districts]
+
+    doc_form = EmployeeDocumentForm()
+    employee_documents = list(emp.documents) if emp else []
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+
+        if action == 'save_step_1':
+            form1 = EmployeeFormStep1(request.form)
+            form1.post_id.choices = post_choices
+            if form1.validate():
+                try:
+                    code_val = (form1.code.data or '').strip()
+                    if not code_val:
+                        year = datetime.now().year
+                        last_emp = Employee.query.order_by(Employee.id.desc()).first()
+                        next_num = (last_emp.id + 1) if last_emp else 1
+                        code_val = f"EMP-{year}-{next_num:04d}"
+                    if not emp:
+                        emp = Employee(code=code_val)
+                        db.session.add(emp)
+                    emp.code = code_val
+                    emp.name = (form1.name.data or '').strip()
+                    emp.post_id = form1.post_id.data if form1.post_id.data else None
+                    emp.department = (form1.department.data or '').strip()
+                    emp.father_name = (form1.father_name.data or '').strip()
+                    emp.place_of_birth = (form1.place_of_birth.data or '').strip()
+                    emp.dob = form1.dob.data
+                    emp.education = (form1.education.data or '').strip()
+                    emp.marital_status = (form1.marital_status.data or '').strip()
+                    emp.cnic_no = (form1.cnic_no.data or '').strip()
+                    emp.district = (form1.district.data or '').strip()
+                    emp.address = (form1.address.data or '').strip()
+                    db.session.commit()
+                    flash('Step 1 saved. Ab Contact & Job bharo.', 'success')
+                    return redirect(url_for('employee_form', id=emp.id, tab=2))
+                except Exception as e:
+                    db.session.rollback()
+                    flash(f'Error: {str(e)}', 'danger')
+            tab = 1
+
+        elif action == 'save_step_2' and emp:
+            form2 = EmployeeFormStep2(request.form)
+            if form2.validate():
+                try:
+                    emp.phone1 = (form2.phone1.data or '').strip()
+                    emp.phone2 = (form2.phone2.data or '').strip()
+                    emp.email = (form2.email.data or '').strip()
+                    emp.joining_date = form2.joining_date.data
+                    emp.status = (form2.status.data or 'Active').strip()
+                    emp.bank_name = (form2.bank_name.data or '').strip()
+                    emp.account_no = (form2.account_no.data or '').strip()
+                    emp.account_title = (form2.account_title.data or '').strip()
+                    emp.remarks = (form2.remarks.data or '').strip()
+                    db.session.commit()
+                    if emp.cnic_no and (emp.status or '').strip() == 'Active':
+                        _sync_user_active_by_cnic(emp.cnic_no.strip(), True)
+                    flash('Step 2 saved. Ab Project & District Assignment karein.', 'success')
+                    return redirect(url_for('employee_form', id=emp.id, tab=3))
+                except Exception as e:
+                    db.session.rollback()
+                    flash(f'Error: {str(e)}', 'danger')
+            tab = 2
+
+        elif action == 'save_step_3' and emp:
+            form3 = EmployeeFormStep3(request.form)
+            form3.project_ids.choices = project_choices
+            form3.district_ids.choices = district_choices
+            if form3.validate():
+                project_ids = [x for x in (form3.project_ids.data or []) if x]
+                district_ids = [x for x in (form3.district_ids.data or []) if x]
+                if not project_ids or not district_ids:
+                    flash('Kam se kam 1 Project aur 1 District select karein, phir Save & Next dabayein.', 'danger')
+                    tab = 3
+                else:
+                    try:
+                        emp.projects = [Project.query.get(pid) for pid in project_ids if Project.query.get(pid)]
+                        emp.districts = [District.query.get(did) for did in district_ids if District.query.get(did)]
+                        db.session.commit()
+                        if emp.cnic_no and (emp.status or '').strip() == 'Active':
+                            post = EmployeePost.query.get(emp.post_id) if emp.post_id else None
+                            role_id = post.role_id if post else None
+                            u = _create_user_for_employee_or_driver(emp.cnic_no.strip(), emp.name, emp.post_id, role_id)
+                            if u:
+                                flash('Assignment save! Ab Documents tab par ja sakte hain (optional) ya Done dabayein.', 'success')
+                            else:
+                                flash('Assignment save! Ab Documents tab (optional) par jayein ya Done dabayein.', 'success')
+                        else:
+                            flash('Assignment save! Ab Documents tab (optional) par jayein ya Done dabayein.', 'success')
+                        return redirect(url_for('employee_form', id=emp.id, tab=4))
+                    except Exception as e:
+                        db.session.rollback()
+                        flash(f'Error: {str(e)}', 'danger')
+                        tab = 3
+            else:
+                tab = 3
+
+        elif action == 'add_document' and emp:
+            doc_form = EmployeeDocumentForm()
+            doc_file = request.files.get('document')
+            if doc_file and doc_file.filename:
+                try:
+                    from werkzeug.utils import secure_filename
+                    ext = os.path.splitext(doc_file.filename)[1].lower() or '.bin'
+                    allowed = {'.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.doc', '.docx'}
+                    if ext not in allowed:
+                        flash('Sirf PDF, image, ya Word file upload karein.', 'danger')
+                    else:
+                        subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'employees', str(emp.id))
+                        os.makedirs(subdir, exist_ok=True)
+                        fname = secure_filename(doc_file.filename)
+                        if not fname:
+                            fname = 'doc' + ext
+                        file_path = os.path.join(subdir, fname)
+                        doc_file.save(file_path)
+                        rel_path = os.path.join('employees', str(emp.id), fname).replace('\\', '/')
+                        doc_title = (request.form.get('title') or '').strip() or fname
+                        doc = EmployeeDocument(employee_id=emp.id, title=doc_title or None, file_path=rel_path)
+                        db.session.add(doc)
+                        db.session.commit()
+                        flash('Document save ho gaya.', 'success')
+                    return redirect(url_for('employee_form', id=emp.id, tab=4))
+                except Exception as e:
+                    db.session.rollback()
+                    flash(f'Error: {str(e)}', 'danger')
+            else:
+                flash('Pehle file select karein.', 'warning')
+                return redirect(url_for('employee_form', id=emp.id, tab=4))
+            tab = 4
+
+    form3.project_ids.choices = project_choices
+    form3.district_ids.choices = district_choices
+    step1_done = emp is not None
+    step2_done = emp is not None
+    employee_documents = list(emp.documents) if emp else []
+    return render_template(
+        'employee_form.html',
+        form1=form1, form2=form2, form3=form3, doc_form=doc_form,
+        title=title, employee=emp, departments=departments,
+        tab=tab, step1_done=step1_done, step2_done=step2_done,
+        employee_documents=employee_documents,
+    )
+
+
+@app.route('/employee/<int:id>/print')
+def employee_profile_print(id):
+    """Print/PDF: employee complete profile (all tabs + documents list)."""
+    emp = Employee.query.get_or_404(id)
+    # Ensure relationships are loaded for print view
+    projects = list(emp.projects)
+    districts = list(emp.districts)
+    documents = list(emp.documents)
+    return render_template(
+        'employee_profile_print.html',
+        employee=emp,
+        projects=projects,
+        districts=districts,
+        documents=documents,
+    )
+
+
+@app.route('/employee/<int:id>/document/<int:doc_id>/delete', methods=['POST'])
+def employee_document_delete(id, doc_id):
+    """Delete one employee document (optional tab)."""
+    emp = Employee.query.get_or_404(id)
+    doc = EmployeeDocument.query.filter_by(id=doc_id, employee_id=emp.id).first_or_404()
+    try:
+        base = os.path.abspath(app.config['UPLOAD_FOLDER'])
+        full_path = os.path.join(base, doc.file_path)
+        if os.path.isfile(full_path):
+            os.remove(full_path)
+        db.session.delete(doc)
+        db.session.commit()
+        flash('Document hata diya gaya.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'danger')
+    return redirect(url_for('employee_form', id=emp.id, tab=4))
+
+
+@app.route('/employee/assignment', methods=['GET', 'POST'])
+def employee_assignment_form():
+    """Separate form for Project & District assignment. Save here saves employee (from session draft) + assignment."""
+    projects_list = Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    districts_list = District.query.order_by(District.name).all()
+    project_choices = [(p.id, p.name) for p in projects_list]
+    district_choices = [(d.id, d.name) for d in districts_list]
+
+    form = EmployeeAssignmentForm()
+    form.project_ids.choices = project_choices
+    form.district_ids.choices = district_choices
+
+    draft = session.get('employee_draft')
+    draft_employee_id = session.get('employee_draft_id')
+    emp = None
+    if draft_employee_id:
+        emp = Employee.query.get(draft_employee_id)
+    if not draft and not emp:
+        flash('Pehle Add New Employee form par jaa kar details bharo aur "Project & District Assignment" dabayein.', 'warning')
+        return redirect(url_for('employee_form'))
+
+    if request.method == 'GET':
+        if emp:
+            form.project_ids.data = [p.id for p in emp.projects]
+            form.district_ids.data = [d.id for d in emp.districts]
+            draft_summary = f"{emp.code} — {emp.name}"
+        elif draft:
+            form.project_ids.data = draft.get('project_ids') or []
+            form.district_ids.data = draft.get('district_ids') or []
+            draft_summary = f"{draft.get('code') or '-'} — {draft.get('name') or '-'}"
+        else:
+            draft_summary = None
+        return render_template('employee_assignment_form.html', form=form, draft=draft, employee=emp, draft_summary=draft_summary)
+
+    # POST: Save employee (if draft) + assignment
     if form.validate_on_submit():
         try:
-            # Auto-generate code if user left it blank
-            code_val = (form.code.data or "").strip()
-            if not code_val:
-                year = datetime.now().year
-                last_emp = Employee.query.order_by(Employee.id.desc()).first()
-                next_num = (last_emp.id + 1) if last_emp else 1
-                form.code.data = f"EMP-{year}-{next_num:04d}"
-
-            form.populate_obj(emp)
-            if form.post_id.data == 0:
-                emp.post_id = None
-            if not id:
+            if draft and not emp:
+                # Create new employee from draft
+                code_val = (draft.get('code') or '').strip()
+                if not code_val:
+                    year = datetime.now().year
+                    last_emp = Employee.query.order_by(Employee.id.desc()).first()
+                    next_num = (last_emp.id + 1) if last_emp else 1
+                    code_val = f"EMP-{year}-{next_num:04d}"
+                emp = Employee(
+                    code=code_val,
+                    name=(draft.get('name') or '').strip(),
+                    post_id=draft.get('post_id') if draft.get('post_id') else None,
+                    department=(draft.get('department') or '').strip(),
+                    father_name=(draft.get('father_name') or '').strip(),
+                    place_of_birth=(draft.get('place_of_birth') or '').strip(),
+                    dob=parse_date(draft['dob']) if isinstance(draft.get('dob'), str) else None,
+                    education=(draft.get('education') or '').strip(),
+                    marital_status=(draft.get('marital_status') or '').strip(),
+                    cnic_no=(draft.get('cnic_no') or '').strip(),
+                    district=(draft.get('district') or '').strip(),
+                    address=(draft.get('address') or '').strip(),
+                    phone1=(draft.get('phone1') or '').strip(),
+                    phone2=(draft.get('phone2') or '').strip(),
+                    email=(draft.get('email') or '').strip(),
+                    joining_date=parse_date(draft['joining_date']) if isinstance(draft.get('joining_date'), str) else None,
+                    status=(draft.get('status') or 'Active').strip(),
+                    bank_name=(draft.get('bank_name') or '').strip(),
+                    account_no=(draft.get('account_no') or '').strip(),
+                    account_title=(draft.get('account_title') or '').strip(),
+                    remarks=(draft.get('remarks') or '').strip(),
+                )
                 db.session.add(emp)
+                db.session.flush()
+                # Create login user if Active + CNIC
+                if emp.cnic_no and (emp.status or '').strip() == 'Active':
+                    post = EmployeePost.query.get(emp.post_id) if emp.post_id else None
+                    role_id = post.role_id if post else None
+                    _create_user_for_employee_or_driver(emp.cnic_no.strip(), emp.name, emp.post_id, role_id)
+            elif not emp:
+                flash('Session expired. Pehle employee form bharo.', 'danger')
+                session.pop('employee_draft', None)
+                session.pop('employee_draft_id', None)
+                return redirect(url_for('employee_form'))
+
+            project_ids = [x for x in (form.project_ids.data or []) if x]
+            district_ids = [x for x in (form.district_ids.data or []) if x]
+            emp.projects = [Project.query.get(pid) for pid in project_ids if Project.query.get(pid)]
+            emp.districts = [District.query.get(did) for did in district_ids if District.query.get(did)]
             db.session.commit()
-            # Employee Inactive/Active hone par us CNIC wale User ka login enable/disable
-            if id and emp.cnic_no and (emp.cnic_no or '').strip():
-                _sync_user_active_by_cnic(emp.cnic_no.strip(), (emp.status or '').strip() == 'Active')
-            if not id and emp.cnic_no and (emp.cnic_no or '').strip() and (emp.status or '').strip() == 'Active':
-                post = EmployeePost.query.get(emp.post_id) if emp.post_id else None
-                role_id = post.role_id if post else None
-                u = _create_user_for_employee_or_driver(emp.cnic_no.strip(), emp.name, emp.post_id, role_id)
-                if u:
-                    flash('Employee saved! Login user bhi ban gaya: User ID = CNIC, pehli dafa password 123 se login karein, phir naya password set karein.', 'success')
-                else:
-                    flash('Employee saved successfully!', 'success')
-            else:
-                flash('Employee saved successfully!', 'success')
+
+            session.pop('employee_draft', None)
+            session.pop('employee_draft_id', None)
+            flash('Employee aur Project/District assignment dono save ho gaye.', 'success')
             return redirect(url_for('employees_list'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error saving employee: {str(e)}', 'danger')
+            flash(f'Error: {str(e)}', 'danger')
 
-    return render_template('employee_form.html', form=form, title=title, employee=emp, departments=departments)
+    form.project_ids.choices = project_choices
+    form.district_ids.choices = district_choices
+    draft_summary = f"{emp.code} — {emp.name}" if emp else (f"{draft.get('code') or '-'} — {draft.get('name') or '-'}" if draft else None)
+    return render_template('employee_assignment_form.html', form=form, draft=draft, employee=emp, draft_summary=draft_summary)
 
 
 @app.route('/employee/delete/<int:id>', methods=['POST'])
@@ -1692,22 +1974,204 @@ def employees_export():
             Employee.cnic_no.ilike(like)
         )
     employees = query.order_by(Employee.id.asc()).all()
-    headers = ['ID', 'Code', 'Name', 'CNIC', 'Post', 'Department', 'Phone', 'Joining Date', 'Status']
+    headers = ['ID', 'Code', 'Name', 'Father Name', 'CNIC', 'Post', 'Department', 'Phone', 'Email', 'Joining Date', 'Status']
     rows = []
     for e in employees:
         rows.append([
             e.id,
             e.code,
             e.name,
+            e.father_name or '',
             e.cnic_no or '',
             e.post.full_name if e.post else '',
             e.department or '',
             e.phone1 or e.phone2 or '',
+            e.email or '',
             e.joining_date.strftime('%Y-%m-%d') if e.joining_date else '',
             e.status or '',
         ])
     filename = 'employees.csv' if not search else f'employees_search_{search}.csv'
     return generate_csv_response(headers, rows, filename=filename)
+
+
+@app.route('/employees/import/template')
+def employees_import_template():
+    """Download Excel template for employee import (Basic + Contact tabs data)."""
+    headers = [
+        'code', 'name', 'post', 'department',
+        'father_name', 'place_of_birth', 'dob', 'education', 'marital_status',
+        'cnic_no', 'district', 'address',
+        'phone1', 'phone2', 'email',
+        'joining_date', 'status',
+        'bank_name', 'account_no', 'account_title', 'remarks'
+    ]
+    rows = [
+        ['EMP-2026-0001', 'Ali Ahmad', 'Accountant', 'Accounts', 'Ahmad Khan', 'Lahore', '01-01-1990',
+         'Graduate', 'Single', '32304-1111111-5', 'Lahore', 'House 1, Street 1, Lahore',
+         '0300-1112233', '0300-2223344', 'ali@example.com',
+         '01-01-2024', 'Active',
+         'XYZ Bank', '1234567890', 'Ali Ahmad', ''],
+        ['EMP-2026-0002', 'Sara Khan', 'Data Entry', 'IT', 'Khan Sahib', 'Karachi', '15-05-1992',
+         'Intermediate', 'Married', '32304-2222222-5', 'Karachi', 'Block A, Karachi',
+         '0300-3334455', '0300-4445566', 'sara@example.com',
+         '15-02-2024', 'Active',
+         '', '', '', ''],
+    ]
+    required_cols = ['name', 'post', 'department', 'father_name', 'cnic_no', 'phone1', 'phone2', 'joining_date']
+    return generate_excel_template(headers, rows, required_columns=required_cols, filename='employees_import_template.xlsx')
+
+
+@app.route('/employees/import', methods=['GET', 'POST'])
+def employees_import():
+    """Import employees from Excel/CSV (Basic + Contact data). Assignment & Documents form se fill karein."""
+    form = EmployeeImportForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        f = form.file.data
+        if not f:
+            flash('Please select an Excel/CSV file.', 'warning')
+            return redirect(url_for('employees_import'))
+        try:
+            import pandas as pd
+            filename = f.filename or ''
+            ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+            if ext in ('xlsx', 'xls'):
+                df = pd.read_excel(f)
+            elif ext == 'csv':
+                df = pd.read_csv(f)
+            else:
+                flash('Unsupported file type. Please upload .xlsx, .xls or .csv.', 'danger')
+                return redirect(url_for('employees_import'))
+
+            required_cols = ['name', 'post', 'department', 'father_name', 'cnic_no', 'phone1', 'phone2', 'joining_date']
+            missing = [c for c in required_cols if c not in df.columns]
+            if missing:
+                flash(f'Missing required columns: {", ".join(missing)}', 'danger')
+                return redirect(url_for('employees_import'))
+
+            def clean_text(value):
+                if pd.isna(value):
+                    return ''
+                return str(value or '').strip()
+
+            def parse_import_date(value):
+                if pd.isna(value) or value is None or not str(value).strip():
+                    return None
+                if isinstance(value, str):
+                    return parse_date(value)
+                try:
+                    return pd.to_datetime(value).date()
+                except Exception:
+                    return None
+
+            def resolve_post_id(post_str):
+                if pd.isna(post_str) or not str(post_str).strip():
+                    return None
+                p = str(post_str).strip()
+                post = EmployeePost.query.filter(
+                    db.or_(EmployeePost.full_name == p, EmployeePost.short_name == p)
+                ).first()
+                return post.id if post else None
+
+            import_errors = []
+            employees_to_add = []
+
+            for idx, row in df.iterrows():
+                row_num = idx + 2
+                row_issues = []
+
+                name = clean_text(row.get('name'))
+                if not name:
+                    row_issues.append('Field "name" is required.')
+                post_str = clean_text(row.get('post'))
+                post_id = resolve_post_id(post_str) if post_str else None
+                if post_str and not post_id:
+                    row_issues.append(f'Post "{post_str}" not found in Post master. Add post first or use exact name.')
+                department = clean_text(row.get('department'))
+                if not department:
+                    row_issues.append('Field "department" is required.')
+                father_name = clean_text(row.get('father_name'))
+                if not father_name:
+                    row_issues.append('Field "father_name" is required.')
+                cnic_raw = row.get('cnic_no')
+                cnic = clean_text(cnic_raw)
+                if not cnic:
+                    row_issues.append('Field "cnic_no" is required.')
+                if cnic:
+                    cnic = format_cnic(cnic)
+                    existing_cnic = Employee.query.filter(Employee.cnic_no == cnic).first()
+                    if existing_cnic:
+                        row_issues.append(f'CNIC "{cnic}" already exists.')
+                phone1 = clean_text(row.get('phone1'))
+                if not phone1:
+                    row_issues.append('Field "phone1" is required.')
+                phone2 = clean_text(row.get('phone2'))
+                if not phone2:
+                    row_issues.append('Field "phone2" is required.')
+                joining_date = parse_import_date(row.get('joining_date'))
+                if not joining_date:
+                    row_issues.append('Field "joining_date" is required (e.g. 01-01-2024).')
+
+                code_val = clean_text(row.get('code'))
+                if code_val:
+                    existing_code = Employee.query.filter(Employee.code == code_val).first()
+                    if existing_code:
+                        row_issues.append(f'Employee code "{code_val}" already exists.')
+
+                if row_issues:
+                    ident = name or code_val or cnic or f'Row {row_num}'
+                    for msg in row_issues:
+                        import_errors.append({'row': row_num, 'identifier': ident, 'message': msg})
+                    continue
+
+                if not code_val:
+                    year = datetime.now().year
+                    last_emp = Employee.query.order_by(Employee.id.desc()).first()
+                    next_num = (last_emp.id + 1) if last_emp else 1
+                    code_val = f"EMP-{year}-{next_num:04d}"
+
+                status = clean_text(row.get('status')) or 'Active'
+                if status not in ('Active', 'Inactive', 'Left'):
+                    status = 'Active'
+
+                emp = Employee(
+                    code=code_val,
+                    name=name,
+                    post_id=post_id,
+                    department=department,
+                    father_name=father_name,
+                    place_of_birth=clean_text(row.get('place_of_birth')),
+                    dob=parse_import_date(row.get('dob')),
+                    education=clean_text(row.get('education')) or None,
+                    marital_status=clean_text(row.get('marital_status')) or None,
+                    cnic_no=cnic,
+                    district=clean_text(row.get('district')) or None,
+                    address=clean_text(row.get('address')) or None,
+                    phone1=phone1,
+                    phone2=phone2,
+                    email=clean_text(row.get('email')) or None,
+                    joining_date=joining_date,
+                    status=status,
+                    bank_name=clean_text(row.get('bank_name')) or None,
+                    account_no=clean_text(row.get('account_no')) or None,
+                    account_title=clean_text(row.get('account_title')) or None,
+                    remarks=clean_text(row.get('remarks')) or None,
+                )
+                employees_to_add.append(emp)
+
+            if import_errors:
+                db.session.rollback()
+                flash('Import failed. Please fix errors shown below.', 'danger')
+                return render_template('employees_import.html', form=form, import_errors=import_errors)
+
+            for emp in employees_to_add:
+                db.session.add(emp)
+            db.session.commit()
+            flash(f'{len(employees_to_add)} employee(s) imported. Ab Assignment aur Documents form se assign karein.', 'success')
+            return redirect(url_for('employees_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error importing: {str(e)}', 'danger')
+    return render_template('employees_import.html', form=form)
 
 
 @app.route('/employees/print')
@@ -6857,7 +7321,7 @@ def driver_post_list():
 def driver_post_form(id=None):
     post = EmployeePost.query.get_or_404(id) if id else None
     form = EmployeePostForm(obj=post)
-    form.role_id.choices = [(0, '-- No access role --')] + [(r.id, r.name) for r in Role.query.order_by(Role.name).all()]
+    form.role_id.choices = [(0, '-- No access role --')] + [(r.id, r.name) for r in Role.query.filter(func.lower(Role.name) != 'master').order_by(Role.name).all()]
     if form.validate_on_submit():
         if not post:
             post = EmployeePost()

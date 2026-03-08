@@ -7,6 +7,9 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0 fw-bold"><i class="bi bi-people-fill me-2 text-primary"></i>Employees Management</h2>
     <div class="d-flex gap-2">
+      <a href="{{ url_for('employees_import') }}" class="btn btn-outline-secondary shadow-sm">
+        <i class="bi bi-upload me-1"></i>Import Excel
+      </a>
       <a href="{{ url_for('employees_export', search=search) }}" class="btn btn-outline-secondary shadow-sm">
         <i class="bi bi-download me-1"></i>Export Excel
       </a>
@@ -51,12 +54,14 @@
           <thead class="table-dark">
             <tr>
               <th class="ps-4">ID</th>
-              <th>Employee Code</th>
+              <th>Code</th>
               <th>Name</th>
+              <th>Father Name</th>
               <th>CNIC No</th>
               <th>Post</th>
               <th>Department</th>
               <th>Phone</th>
+              <th>Email</th>
               <th>Joining Date</th>
               <th>Status</th>
               <th class="text-center pe-4">Actions</th>
@@ -68,6 +73,7 @@
               <td class="ps-4 text-muted">{{ emp.id }}</td>
               <td class="fw-bold text-navy">{{ emp.code }}</td>
               <td>{{ emp.name }}</td>
+              <td>{{ emp.father_name or '-' }}</td>
               <td>{{ emp.cnic_no or '-' }}</td>
               <td>
                 {% if emp.post %}
@@ -80,6 +86,7 @@
               </td>
               <td>{{ emp.department or '-' }}</td>
               <td>{{ emp.phone1 or emp.phone2 or '-' }}</td>
+              <td>{{ emp.email or '-' }}</td>
               <td>{{ emp.joining_date.strftime('%d-%b-%Y') if emp.joining_date else '-' }}</td>
               <td>
                 {% if emp.status == 'Active' %}
@@ -92,22 +99,18 @@
               </td>
               <td class="text-center pe-4">
                 <div class="btn-group shadow-sm">
+                  <a href="{{ url_for('employee_profile_print', id=emp.id) }}" class="btn btn-sm btn-info" title="View Profile" target="_blank">
+                    <i class="bi bi-eye"></i>
+                  </a>
                   <a href="{{ url_for('employee_form', id=emp.id) }}" class="btn btn-sm btn-warning" title="Edit">
                     <i class="bi bi-pencil-square"></i>
                   </a>
-                  <form action="{{ url_for('employee_delete', id=emp.id) }}" method="POST" style="display:inline;">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-sm btn-danger"
-                            onclick="return confirm('Delete employee {{ emp.name }}?')">
-                      <i class="bi bi-trash"></i>
-                    </button>
-                  </form>
                 </div>
               </td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="9" class="text-center py-5">
+              <td colspan="11" class="text-center py-5">
                 <div class="text-muted">
                   <i class="bi bi-people-fill fs-1 d-block mb-3 opacity-25"></i>
                   <p>No employees found. <a href="{{ url_for('employee_form') }}" class="fw-bold">Add a new employee now</a>.</p>
