@@ -33,64 +33,73 @@ ALL_PERMISSION_CODES = [
     (PERMISSION_USERS_MANAGE, 'User & Role Management', 'Admin'),
 ]
 
-# Endpoint -> required permission code (first match wins; order matters for nested endpoints)
+# Endpoint -> required permission code (granular where defined)
 ENDPOINT_PERMISSION_MAP = [
-    # (endpoint_prefix_or_exact, permission_code)
     ('dashboard', PERMISSION_DASHBOARD),
-    ('companies', PERMISSION_MASTER),
-    ('company_form', PERMISSION_MASTER),
-    ('projects_list', PERMISSION_MASTER),
-    ('project_detail', PERMISSION_MASTER),
-    ('project_form', PERMISSION_MASTER),
-    ('districts_list', PERMISSION_MASTER),
-    ('district_form', PERMISSION_MASTER),
-    ('vehicles_list', PERMISSION_MASTER),
-    ('vehicle_form', PERMISSION_MASTER),
-    ('parking_list', PERMISSION_MASTER),
-    ('parking_form', PERMISSION_MASTER),
-    ('drivers_list', PERMISSION_MASTER),
-    ('driver_form', PERMISSION_MASTER),
-    ('employees_list', PERMISSION_MASTER),
-    ('employee_form', PERMISSION_MASTER),
-    ('driver_post_list', PERMISSION_MASTER),
-    ('driver_post_form', PERMISSION_MASTER),
-    ('party_list', PERMISSION_MASTER),
-    ('party_form', PERMISSION_MASTER),
-    ('product_list', PERMISSION_MASTER),
-    ('product_form', PERMISSION_MASTER),
-    ('assign_project_to_company', PERMISSION_ASSIGNMENT),
-    ('assign_project_to_district', PERMISSION_ASSIGNMENT),
-    ('assign_vehicle_to_district', PERMISSION_ASSIGNMENT),
-    ('assign_vehicle_to_parking', PERMISSION_ASSIGNMENT),
-    ('assign_driver_to_vehicle', PERMISSION_ASSIGNMENT),
-    ('project_transfers', PERMISSION_TRANSFER),
-    ('project_transfer', PERMISSION_TRANSFER),
-    ('vehicle_transfers', PERMISSION_TRANSFER),
-    ('vehicle_transfer', PERMISSION_TRANSFER),
-    ('driver_transfers', PERMISSION_TRANSFER),
-    ('driver_transfer', PERMISSION_TRANSFER),
-    ('driver_job_left', PERMISSION_DRIVER_STATUS),
-    ('driver_rejoin', PERMISSION_DRIVER_STATUS),
-    ('driver_attendance', PERMISSION_DRIVER_STATUS),
-    ('penalty_record', PERMISSION_DRIVER_STATUS),
-    ('task_report', PERMISSION_TASK_REPORT),
-    ('red_task', PERMISSION_TASK_REPORT),
-    ('without_task', PERMISSION_TASK_REPORT),
-    ('task_report_logbook', PERMISSION_TASK_REPORT),
-    ('fuel_expense', PERMISSION_EXPENSES),
-    ('oil_expense', PERMISSION_EXPENSES),
-    ('maintenance_expense', PERMISSION_EXPENSES),
-    ('employee_expense', PERMISSION_EXPENSES),
-    ('accounts_', PERMISSION_ACCOUNTS),  # accounts_quick_payment, etc.
-    ('reports_index', PERMISSION_REPORTS),
-    ('report_', PERMISSION_REPORTS),
-    ('driver_attendance_report', PERMISSION_REPORTS),
+    ('companies', 'companies_list'),
+    ('company_form', 'companies_add'),
+    ('company_report', 'company_report'),
+    ('delete_company', 'companies_delete'),
+    ('projects_list', 'projects_list'),
+    ('project_detail', 'project_detail'),
+    ('project_form', 'projects_add'),
+    ('districts_list', 'districts_list'),
+    ('district_form', 'districts_add'),
+    ('vehicles_list', 'vehicles_list'),
+    ('vehicle_form', 'vehicles_add'),
+    ('parking_list', 'parking_list'),
+    ('parking_form', 'parking_add'),
+    ('drivers_list', 'drivers_list'),
+    ('driver_form', 'drivers_add'),
+    ('employees_list', 'employees_list'),
+    ('employee_form', 'employees_add'),
+    ('driver_post_list', 'driver_post_list'),
+    ('driver_post_form', 'driver_post_add'),
+    ('party_list', 'party_list'),
+    ('party_form', 'party_add'),
+    ('product_list', 'product_list'),
+    ('product_form', 'product_add'),
+    ('assign_project_to_company', 'assign_project_to_company'),
+    ('assign_project_to_district', 'assign_project_to_district'),
+    ('assign_vehicle_to_district', 'assign_vehicle_to_district'),
+    ('assign_vehicle_to_parking', 'assign_vehicle_to_parking'),
+    ('assign_driver_to_vehicle', 'assign_driver_to_vehicle'),
+    ('project_transfers', 'project_transfers'),
+    ('project_transfer', 'project_transfer'),
+    ('vehicle_transfers', 'vehicle_transfers'),
+    ('vehicle_transfer', 'vehicle_transfer'),
+    ('driver_transfers', 'driver_transfers'),
+    ('driver_transfer', 'driver_transfer'),
+    ('driver_job_left', 'driver_job_left'),
+    ('driver_rejoin', 'driver_rejoin'),
+    ('driver_attendance', 'driver_attendance'),
+    ('penalty_record', 'penalty_record'),
+    ('task_report', 'task_report'),
+    ('red_task', 'red_task'),
+    ('without_task', 'without_task'),
+    ('task_report_logbook', 'task_report_logbook'),
+    ('fuel_expense', 'fuel_expense'),
+    ('oil_expense', 'oil_expense'),
+    ('maintenance_expense', 'maintenance_expense'),
+    ('employee_expense', 'employee_expense'),
+    ('accounts_', 'accounts'),
+    ('reports_index', 'reports'),
+    ('report_', 'reports'),
+    ('activity_logs_geo_report', 'reports'),
+    ('driver_attendance_report', 'reports'),
     ('backup', PERMISSION_BACKUP),
-    ('whats_new', PERMISSION_DASHBOARD),
-    ('user_list', PERMISSION_USERS_MANAGE),
-    ('user_', PERMISSION_USERS_MANAGE),
-    ('role_list', PERMISSION_USERS_MANAGE),
-    ('role_', PERMISSION_USERS_MANAGE),
+    ('whats_new', 'whats_new'),
+    ('user_list', 'user_list'),
+    ('user_form', 'user_add'),
+    ('user_edit', 'user_edit'),
+    ('users_sync_from_employees_drivers', 'user_list'),
+    ('role_list', 'role_list'),
+    ('role_form', 'role_add'),
+    ('role_edit', 'role_edit'),
+    ('form_control', 'form_control'),
+    ('notification_list', 'notification_list'),
+    ('notification_add', 'notification_add'),
+    ('notification_mark_read', 'notification_list'),
 ]
 
 
@@ -105,36 +114,98 @@ def get_required_permission(endpoint):
     return None
 
 
+# Section that grants full access to a permission (e.g. master grants companies_list)
+def _build_section_for_permission():
+    try:
+        from permissions_config import PERMISSION_TREE
+        d = {}
+        for section_code, items in PERMISSION_TREE.items():
+            for code, _ in items:
+                d[code] = section_code
+        return d
+    except Exception:
+        return {}
+
+SECTION_FOR_PERMISSION = _build_section_for_permission()
+
+
 def user_has_permission(permission_codes, code):
     """Check if list of permission codes includes the given code."""
     return code in (permission_codes or [])
 
 
+def user_can_access(permission_codes, required_code):
+    """True if user has required_code OR the section that grants it (e.g. master grants companies_list)."""
+    if not required_code:
+        return True
+    codes = permission_codes or []
+    if required_code in codes:
+        return True
+    section = SECTION_FOR_PERMISSION.get(required_code)
+    if section and section in codes:
+        return True
+    return False
+
+
 def seed_auth_tables(app):
-    """Create default Permission, Admin role, and admin user if not present."""
+    """Create permissions from tree, Master/Admin roles, and default users if not present."""
     from models import db, Permission, Role, User
+    try:
+        from permissions_config import flatten_permission_tree
+        tree_perms = list(flatten_permission_tree())
+    except Exception:
+        tree_perms = []
 
     with app.app_context():
-        # Create permissions if missing
+        # Create permissions from tree (and legacy flat list for backward compat)
         for code, name, category in ALL_PERMISSION_CODES:
+            p = Permission.query.filter_by(code=code).first()
+            if not p:
+                p = Permission(code=code, name=name, category=category)
+                db.session.add(p)
+        for code, name, category in tree_perms:
+            if code in [x[0] for x in ALL_PERMISSION_CODES]:
+                continue
             p = Permission.query.filter_by(code=code).first()
             if not p:
                 p = Permission(code=code, name=name, category=category)
                 db.session.add(p)
         db.session.commit()
 
+        all_perms = Permission.query.all()
+
+        # Create Master role (Developer) with all permissions if missing
+        master_role = Role.query.filter_by(name='Master').first()
+        if not master_role:
+            master_role = Role(name='Master', description='Developer only – full access; only Master can assign Admin role to users')
+            db.session.add(master_role)
+            db.session.commit()
+            master_role.permissions = all_perms
+            db.session.commit()
+
         # Create Admin role with all permissions if missing
         admin_role = Role.query.filter_by(name='Admin').first()
         if not admin_role:
-            admin_role = Role(name='Admin', description='Full access to all modules')
+            admin_role = Role(name='Admin', description='Full access; can assign other roles (except Master/Admin) to users')
             db.session.add(admin_role)
             db.session.commit()
-            perms = Permission.query.all()
-            admin_role.permissions = perms
+            admin_role.permissions = all_perms
             db.session.commit()
 
-        # Create default admin user if no users exist
-        if User.query.count() == 0:
+        # Create default master (developer) user if no Master user exists
+        if not User.query.join(Role).filter(Role.name == 'Master').first():
+            master_user = User(
+                username='master',
+                password_hash=generate_password_hash('master'),
+                full_name='Master (Developer)',
+                role_id=master_role.id,
+                is_active=True
+            )
+            db.session.add(master_user)
+            db.session.commit()
+
+        # Create default admin user if no Admin user exists (for first-time setup)
+        if not User.query.join(Role).filter(Role.name == 'Admin').first():
             admin_user = User(
                 username='admin',
                 password_hash=generate_password_hash('admin'),

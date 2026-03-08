@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Mark Attendance{% endblock %}
+{% block title %}Attendance List{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-calendar-check me-2 text-primary"></i>Mark Attendance</h2>
+    <h2 class="mb-0"><i class="bi bi-calendar-check me-2 text-primary"></i>Attendance List</h2>
     <div class="d-flex flex-wrap gap-2">
-      <a href="{{ url_for('driver_attendance_export') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-success btn-sm">
+      <a href="{{ url_for('driver_attendance_export') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-success btn-sm">
         <i class="bi bi-file-earmark-excel me-1"></i> Export to Excel
       </a>
-      <a href="{{ url_for('driver_attendance_print') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
+      <a href="{{ url_for('driver_attendance_print') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-printer me-1"></i> Print Preview
       </a>
       <a href="{{ url_for('driver_attendance_report') }}" class="btn btn-outline-info btn-sm">
@@ -44,6 +44,24 @@
           </select>
         </div>
         <div class="col-md-2">
+          <label class="form-label">Vehicle</label>
+          <select name="vehicle_id" id="vehicleSelect" class="form-select">
+            <option value="0" {% if not vehicle_id %}selected{% endif %}>All Vehicles</option>
+            {% for v in form.vehicle_id.choices if v[0] != 0 %}
+              <option value="{{ v[0] }}" {% if vehicle_id == v[0] %}selected{% endif %}>{{ v[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Shift</label>
+          <select name="shift" id="shiftSelect" class="form-select">
+            <option value="" {% if not shift %}selected{% endif %}>All Shifts</option>
+            {% for s in form.shift.choices if s[0] != '' %}
+              <option value="{{ s[0] }}" {% if shift == s[0] %}selected{% endif %}>{{ s[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
           <label class="form-label">Search</label>
           <input type="text" name="search" class="form-control" placeholder="Name, Driver ID, Vehicle..." value="{{ search or '' }}">
         </div>
@@ -52,18 +70,14 @@
             <i class="bi bi-search me-1"></i> View
           </button>
         </div>
-        <div class="col-md-2">
-          <a href="{{ url_for('driver_attendance_mark') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-success w-100">
-            <i class="bi bi-pencil-square me-1"></i> Mark Attendance
-          </a>
-        </div>
       </form>
     </div>
   </div>
 
   <div class="card shadow border-0 rounded-3 overflow-hidden">
-    <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center flex-wrap">
-      <span class="fw-semibold">Attendance for {{ view_date|ddmmyyyy }}{% if project_id %} · Project filter{% endif %}{% if district_id %} · District filter{% endif %}{% if search %} · Search{% endif %} <small class="opacity-75">(Only marked attendance)</small></span>
+    <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span class="fw-semibold">Attendance for {{ view_date|ddmmyyyy }}{% if project_id %} · Project filter{% endif %}{% if district_id %} · District filter{% endif %}{% if vehicle_id %} · Vehicle filter{% endif %}{% if shift %} · Shift filter{% endif %}{% if search %} · Search{% endif %} <small class="opacity-75">(Only marked attendance)</small></span>
+      <input type="text" id="tableSearch" class="form-control form-control-sm text-dark bg-light border-0" style="max-width: 220px;" placeholder="Search in list...">
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
@@ -71,33 +85,57 @@
           <thead class="table-light">
             <tr>
               <th class="ps-4">#</th>
+              <th>Date</th>
+              <th>Driver ID</th>
+              <th>Name</th>
+              <th>Project / District / Parking</th>
               <th>Vehicle No</th>
               <th>Vehicle Type</th>
-              <th>Name</th>
-              <th>Project / District / Vehicle</th>
+              <th>Shift</th>
               <th>Status</th>
               <th>Check In</th>
+              <th>Check In Photo</th>
+              <th>Check In Remarks</th>
               <th>Check Out</th>
-              <th>Remarks</th>
+              <th>Check Out Photo</th>
+              <th>Check Out Remarks</th>
             </tr>
           </thead>
           <tbody>
             {% for driver in drivers %}
-            <tr>
+            {% set rec = by_driver.get(driver.id) %}
+            {% set missing_checkout = rec and rec.check_in and not rec.check_out %}
+            {% set district_name = driver.district.name if driver.district else (driver.vehicle.district.name if driver.vehicle and driver.vehicle.district else '-') %}
+            {% set parking_name = driver.vehicle.parking_station.name if driver.vehicle and driver.vehicle.parking_station else '-' %}
+            {% set project_district_parking = (driver.project.name if driver.project else '-') ~ ' / ' ~ district_name ~ ' / ' ~ parking_name %}
+            {% if rec and rec.check_in_photo_path or (rec and rec.check_in_latitude is not none and rec.check_in_longitude is not none) %}
+              {% set check_in_remarks_text = 'Check-in via GPS & Camera' %}
+            {% elif rec and rec.remarks and 'Manual check-in:' in rec.remarks %}
+              {% set _parts = (rec.remarks or '').split('Manual check-in:') %}
+              {% set _after = _parts[1].split(' | ')[0].strip() if _parts|length > 1 else '' %}
+              {% set check_in_remarks_text = _after or 'Manual check-in' %}
+            {% else %}
+              {% set check_in_remarks_text = '' %}
+            {% endif %}
+            {% if rec and rec.check_out_photo_path or (rec and rec.check_out_latitude is not none and rec.check_out_longitude is not none) %}
+              {% set check_out_remarks_text = 'Check-out via GPS & Camera' %}
+            {% elif rec and rec.remarks and 'Manual check-out' in (rec.remarks or '') %}
+              {% set _parts = (rec.remarks or '').split('Manual check-out') %}
+              {% set _after = _parts[1].split(' | ')[0].strip() if _parts|length > 1 else '' %}
+              {% set check_out_remarks_text = (_after[2:].strip() if _after.startswith(': ') else _after) or 'Manual check-out' %}
+            {% else %}
+              {% set check_out_remarks_text = '' %}
+            {% endif %}
+            <tr class="{% if missing_checkout %}table-warning{% endif %}">
               <td class="ps-4">{{ loop.index }}</td>
+              <td>{{ view_date.strftime('%d-%m-%Y') }}</td>
+              <td class="text-muted small">{{ driver.driver_id or '-' }}</td>
+              <td class="fw-medium">{{ driver.name }}</td>
+              <td class="small" style="max-width:200px;">{{ project_district_parking }}</td>
               <td class="fw-medium">{{ driver.vehicle.vehicle_no if driver.vehicle else '-' }}</td>
               <td><span class="badge bg-light text-dark border">{{ driver.vehicle.vehicle_type if driver.vehicle and driver.vehicle.vehicle_type else '-' }}</span></td>
+              <td>{{ driver.shift or '-' }}</td>
               <td>
-                <span class="fw-medium">{{ driver.name }}</span>
-                <br><small class="text-muted">{{ driver.driver_id }}</small>
-              </td>
-              <td class="small">
-                {{ driver.project.name if driver.project else '-' }}
-                / {{ driver.district.name if driver.district else '-' }}
-                / {{ driver.vehicle.vehicle_no if driver.vehicle else '-' }}{% if driver.vehicle and driver.shift %} ({{ driver.shift }}){% endif %}
-              </td>
-              <td>
-                {% set rec = by_driver.get(driver.id) %}
                 {% if rec %}
                   {% if rec.status == 'Present' %}
                     <span class="badge bg-success">Present</span>
@@ -118,16 +156,39 @@
                   <span class="text-muted">Not marked</span>
                 {% endif %}
               </td>
-              <td>{% if rec and rec.check_in %}{{ rec.check_in.strftime('%H:%M') }}{% else %}-{% endif %}</td>
-              <td>{% if rec and rec.check_out %}{{ rec.check_out.strftime('%H:%M') }}{% else %}-{% endif %}</td>
-              <td class="small text-muted">{% if rec and rec.remarks %}{{ rec.remarks[:30] }}{% if rec.remarks|length > 30 %}...{% endif %}{% else %}-{% endif %}</td>
+              <td>
+                {% if rec and rec.check_in %}
+                  {{ rec.check_in.strftime('%H:%M') }}
+                  {% if rec.check_in_latitude is not none and rec.check_in_longitude is not none %}<br><span class="badge bg-success badge-sm" title="GPS">GPS</span>{% endif %}
+                {% else %}-{% endif %}
+              </td>
+              <td>
+                {% if rec and rec.check_in_photo_path %}
+                  <a href="{{ url_for('uploaded_file', filename=rec.check_in_photo_path) }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Check-in photo"> <i class="bi bi-image"></i> </a>
+                {% else %}<span class="text-muted">-</span>{% endif %}
+              </td>
+              <td class="small text-muted" style="max-width:160px;">{{ check_in_remarks_text or '-' }}</td>
+              <td>
+                {% if missing_checkout %}
+                  <a href="{{ url_for('driver_attendance_missing_checkout') }}?date={{ view_date.strftime('%d-%m-%Y') }}" class="badge bg-warning text-dark" title="Check-out missing">No check-out</a>
+                {% elif rec and rec.check_out %}
+                  {{ rec.check_out.strftime('%H:%M') }}
+                  {% if rec.check_out_latitude is not none and rec.check_out_longitude is not none %}<br><span class="badge bg-success badge-sm" title="GPS">GPS</span>{% endif %}
+                {% else %}-{% endif %}
+              </td>
+              <td>
+                {% if rec and rec.check_out_photo_path %}
+                  <a href="{{ url_for('uploaded_file', filename=rec.check_out_photo_path) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Check-out photo"> <i class="bi bi-image"></i> </a>
+                {% else %}<span class="text-muted">-</span>{% endif %}
+              </td>
+              <td class="small text-muted" style="max-width:160px;">{{ check_out_remarks_text or '-' }}</td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="9" class="text-center py-5 text-muted">
+              <td colspan="16" class="text-center py-5 text-muted">
                 <i class="bi bi-calendar-x display-6 d-block mb-2"></i>
                 No marked attendance for this date.
-                <br><small>Use <strong>Mark Attendance</strong> (above) to mark attendance, then filter by date to view.</small>
+                <br><small>Use <strong>Leave / Late / Half Day / Off</strong> (above) to set status, then filter by date to view.</small>
               </td>
             </tr>
             {% endfor %}
@@ -135,9 +196,8 @@
         </table>
       </div>
     </div>
-    <div class="card-footer bg-light text-muted small d-flex justify-content-between align-items-center">
+    <div class="card-footer bg-light text-muted small">
       <span>Total: <strong>{{ drivers|length }}</strong> driver(s)</span>
-      <input type="text" id="tableSearch" class="form-control form-control-sm" style="max-width: 220px;" placeholder="Search in list...">
     </div>
   </div>
 </div>
@@ -147,6 +207,8 @@ document.getElementById('projectSelect').addEventListener('change', function() {
   var pid = this.value;
   var districtSelect = document.getElementById('districtSelect');
   districtSelect.innerHTML = '<option value="0">All Districts</option>';
+  var vehicleSelect = document.getElementById('vehicleSelect');
+  if (vehicleSelect) vehicleSelect.selectedIndex = 0;
   if (pid && pid !== '0') {
     fetch('/get_districts_by_project/' + pid)
       .then(function(r) { return r.json(); })

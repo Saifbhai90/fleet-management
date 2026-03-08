@@ -28,8 +28,16 @@
             {{ form.full_name(class="form-control") }}
           </div>
           <div class="col-md-6">
-            {{ form.role_id.label(class="form-label") }}
-            {{ form.role_id(class="form-select") }}
+            {{ form.employee_post_id.label(class="form-label") }}
+            {{ form.employee_post_id(class="form-select") }}
+            {% if allowed_roles_master_only %}
+            <small class="text-muted">As Master (Developer), you can assign a Post linked to Admin. Only Master can assign Admin or Master.</small>
+            {% else %}
+            <small class="text-muted">Post is from Employee Posts. Assign an Access Role to the post (in Employee Posts) to control user access.</small>
+            {% endif %}
+            {% if user %}
+            <small class="text-muted d-block mt-1">Agar user password bhool gaya: Naya password yahan set karein aur user ko bata dein; phir user login kar sakta hai.</small>
+            {% endif %}
           </div>
           <div class="col-12">
             <div class="form-check">

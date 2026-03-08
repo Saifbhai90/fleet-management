@@ -36,7 +36,11 @@
                 {% endfor %}
               </td>
               <td class="text-center pe-4">
+                {% if not current_user_is_master and r.name == 'Admin' %}
+                <span class="text-muted" title="Only Master can edit Admin role"><i class="bi bi-lock-fill"></i></span>
+                {% else %}
                 <a href="{{ url_for('role_edit', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                {% endif %}
               </td>
             </tr>
             {% else %}

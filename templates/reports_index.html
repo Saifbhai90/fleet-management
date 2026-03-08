@@ -103,6 +103,17 @@
         </div>
       </a>
     </div>
+    <div class="col-md-6 col-lg-4">
+      <a href="{{ url_for('activity_log_report') }}" class="text-decoration-none">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body">
+            <i class="bi bi-journal-check display-6 text-secondary"></i>
+            <h5 class="card-title mt-2">Activity &amp; Login Log</h5>
+            <p class="text-muted small mb-0">Login sessions (who, when, device, IP) + client activity with device ID and geolocation (lat/long, View on Map). One report, both in one page.</p>
+          </div>
+        </div>
+      </a>
+    </div>
   </div>
 </div>
 {% endblock %}

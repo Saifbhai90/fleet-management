@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, date
+from datetime import datetime, date, time
+import hashlib
 
 
 db = SQLAlchemy()
@@ -88,6 +89,9 @@ class EmployeePost(db.Model):
     short_name = db.Column('name', db.String(100), unique=True, nullable=False)
     full_name = db.Column(db.String(150), nullable=False)
     remarks = db.Column(db.Text)
+    role_id = db.Column(db.Integer, db.ForeignKey('role.id', ondelete='SET NULL'), nullable=True)
+
+    role = db.relationship('Role', backref='employee_posts', lazy=True)
 
     def __repr__(self):
         return f'<EmployeePost {self.full_name}>'
@@ -421,11 +425,21 @@ class DriverAttendance(db.Model):
     check_out = db.Column(db.Time, nullable=True)
     remarks = db.Column(db.Text, nullable=True)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    # Geofenced check-in: parking station, driver's coords at check-in, selfie
+    parking_station_id = db.Column(db.Integer, db.ForeignKey('parking_station.id'), nullable=True)
+    check_in_latitude = db.Column(db.Numeric(12, 8), nullable=True)
+    check_in_longitude = db.Column(db.Numeric(12, 8), nullable=True)
+    check_in_photo_path = db.Column(db.String(500), nullable=True)
+    # Geofenced check-out: coords and selfie at check-out
+    check_out_latitude = db.Column(db.Numeric(12, 8), nullable=True)
+    check_out_longitude = db.Column(db.Numeric(12, 8), nullable=True)
+    check_out_photo_path = db.Column(db.String(500), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     driver = db.relationship('Driver', backref='attendance_records', lazy='select')
     project = db.relationship('Project', backref='attendance_records', lazy='select')
+    parking_station = db.relationship('ParkingStation', backref='attendance_checkins', lazy='select')
 
     def __repr__(self):
         return f'<DriverAttendance {self.driver_id} {self.attendance_date} {self.status}>'
@@ -866,10 +880,13 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     full_name = db.Column(db.String(120), nullable=True)
     role_id = db.Column(db.Integer, db.ForeignKey('role.id', ondelete='SET NULL'), nullable=True)
+    employee_post_id = db.Column(db.Integer, db.ForeignKey('driver_post.id', ondelete='SET NULL'), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    force_password_change = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     role = db.relationship('Role', backref='users', lazy=True)
+    employee_post = db.relationship('EmployeePost', backref='users', foreign_keys=[employee_post_id], lazy=True)
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -878,3 +895,81 @@ class User(db.Model):
         if self.role:
             return self.role.permission_codes()
         return []
+
+
+class LoginLog(db.Model):
+    """One record per user login: who, when, from where (IP + device/browser)."""
+    __tablename__ = 'login_log'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    login_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    ip_address = db.Column(db.String(64), nullable=True)
+    user_agent = db.Column(db.String(500), nullable=True)  # Browser/device string
+    logout_at = db.Column(db.DateTime, nullable=True)
+
+    user = db.relationship('User', backref='login_logs', lazy=True)
+    activities = db.relationship('ActivityLog', backref='login_log', lazy='dynamic', foreign_keys='ActivityLog.login_log_id')
+
+    @property
+    def device_id(self):
+        """Short stable ID for this device/browser (from user_agent hash)."""
+        raw = (self.user_agent or '').encode()
+        return hashlib.sha256(raw).hexdigest()[:8] if raw else '-'
+
+    def __repr__(self):
+        return f'<LoginLog user_id={self.user_id} at {self.login_at}>'
+
+
+class ActivityLog(db.Model):
+    """Per-request activity in a session: endpoint, method, time, optional details."""
+    __tablename__ = 'activity_log'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    login_log_id = db.Column(db.Integer, db.ForeignKey('login_log.id', ondelete='SET NULL'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    endpoint = db.Column(db.String(120), nullable=True)
+    method = db.Column(db.String(10), nullable=True)
+    path = db.Column(db.String(500), nullable=True)
+    description = db.Column(db.String(500), nullable=True)  # Human-readable action
+
+    user = db.relationship('User', backref='activity_logs', lazy=True)
+
+    def __repr__(self):
+        return f'<ActivityLog {self.method} {self.endpoint} at {self.created_at}>'
+
+
+class ClientActivityLog(db.Model):
+    """Client-side activity logs with device ID and geolocation (one row per logActivity() call)."""
+    __tablename__ = 'activity_logs'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    device_id = db.Column(db.String(80), nullable=True)   # UUID from localStorage
+    action = db.Column(db.String(200), nullable=False)    # e.g. Login, Page View, Button Click
+    latitude = db.Column(db.Numeric(12, 8), nullable=True)
+    longitude = db.Column(db.Numeric(12, 8), nullable=True)
+    accuracy = db.Column(db.Numeric(10, 2), nullable=True)  # meters
+    ip_address = db.Column(db.String(64), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship('User', backref='client_activity_logs', lazy=True)
+
+    def __repr__(self):
+        return f'<ClientActivityLog {self.action} at {self.created_at}>'
+
+
+# ────────────────────────────────────────────────
+# Form Control: Attendance time windows (Morning / Night shift)
+# Single row: kis time se kis time tak attendance lag sakti hai
+# ────────────────────────────────────────────────
+class AttendanceTimeControl(db.Model):
+    """Single-row settings: Morning shift & Night shift attendance allowed time window."""
+    __tablename__ = 'attendance_time_control'
+    id = db.Column(db.Integer, primary_key=True)
+    morning_start = db.Column(db.Time, nullable=True)   # e.g. 06:00
+    morning_end   = db.Column(db.Time, nullable=True)   # e.g. 10:00
+    night_start   = db.Column(db.Time, nullable=True)   # e.g. 18:00
+    night_end     = db.Column(db.Time, nullable=True)   # e.g. 22:00
+    updated_at    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<AttendanceTimeControl Morning {self.morning_start}-{self.morning_end} Night {self.night_start}-{self.night_end}>'

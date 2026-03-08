@@ -377,10 +377,8 @@ class DriverRejoinForm(FlaskForm):
     submit = SubmitField('Confirm Rejoin')
 
 
-# Driver Attendance
+# Driver Attendance (Leave / Late / Half Day / Off form — Present & Absent removed)
 ATTENDANCE_STATUS_CHOICES = [
-    ('Present', 'Present'),
-    ('Absent', 'Absent'),
     ('Leave', 'Leave'),
     ('Late', 'Late'),
     ('Half-Day', 'Half-Day'),
@@ -392,7 +390,9 @@ class DriverAttendanceFilterForm(FlaskForm):
     attendance_date = DateField('Date', format='%d-%m-%Y', default=date.today, validators=[DataRequired()])
     project_id = SelectField('Project (optional)', coerce=int, validators=[Optional()])
     district_id = SelectField('District (optional)', coerce=int, validators=[Optional()])
-    submit = SubmitField('View / Mark Attendance')
+    vehicle_id = SelectField('Vehicle (optional)', coerce=int, validators=[Optional()])
+    shift = SelectField('Shift (optional)', validators=[Optional()])
+    submit = SubmitField('Load')
 
 
 class DriverAttendanceReportForm(FlaskForm):
@@ -612,6 +612,7 @@ class ProductForm(FlaskForm):
 class EmployeePostForm(FlaskForm):
     short_name = StringField('Post Short Name', validators=[DataRequired(), Length(min=1, max=50)])
     full_name = StringField('Post Full Name', validators=[DataRequired(), Length(min=2, max=150)])
+    role_id = SelectField('Access Role (for User Management)', coerce=int, validators=[Optional()], choices=[])
     remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 2})
     submit = SubmitField('Save')
 
@@ -679,21 +680,23 @@ class LoginForm(FlaskForm):
 
 
 class UserForm(FlaskForm):
-    """Add/Edit user. Password optional on edit (leave blank to keep current)."""
+    """Add/Edit user. Post from Employee Posts; role is set from post's linked role."""
     username = StringField('Username', validators=[DataRequired(), Length(min=2, max=80)],
                           render_kw={"placeholder": "Login name"})
     password = PasswordField('Password', validators=[Optional(), Length(min=4)],
                              render_kw={"placeholder": "Leave blank to keep current (edit)"})
     full_name = StringField('Full Name', validators=[Optional(), Length(max=120)],
                             render_kw={"placeholder": "Display name"})
-    role_id = SelectField('Role', coerce=int, validators=[Optional()], choices=[])
+    employee_post_id = SelectField('Post', coerce=int, validators=[Optional()], choices=[])
     is_active = BooleanField('Active', default=True, validators=[Optional()])
     submit = SubmitField('Save User')
 
 
 class RoleForm(FlaskForm):
-    """Add/Edit role."""
-    name = StringField('Role Name', validators=[DataRequired(), Length(min=2, max=80)],
+    """Add/Edit role. Add: Post from Employee Posts (searchable). Edit: Role Name."""
+    post_id = SelectField('Post', coerce=int, validators=[Optional()], choices=[],
+                         render_kw={"placeholder": "Search post..."})
+    name = StringField('Role Name', validators=[Optional(), Length(min=2, max=80)],
                       render_kw={"placeholder": "e.g. Accountant"})
     description = StringField('Description', validators=[Optional(), Length(max=255)],
                              render_kw={"placeholder": "Short description"})
@@ -730,6 +733,17 @@ class ChangePasswordForm(FlaskForm):
     def validate_confirm_password(self, field):
         if self.new_password.data and field.data != self.new_password.data:
             raise ValidationError('New password and confirm must match.')
+
+
+class SetNewPasswordForm(FlaskForm):
+    """First-time set password (after login with 123)."""
+    new_password = PasswordField('New Password', validators=[DataRequired(), Length(min=4)])
+    confirm_password = PasswordField('Confirm New Password', validators=[DataRequired()])
+    submit = SubmitField('Save & Login')
+
+    def validate_confirm_password(self, field):
+        if self.new_password.data and field.data != self.new_password.data:
+            raise ValidationError('Passwords must match.')
 
 
 class FuelExpenseFilterForm(FlaskForm):
@@ -812,3 +826,11 @@ class MaintenanceExpenseForm(FlaskForm):
                                    render_kw={"class": "form-control", "step": "0.01"})
     remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 2})
     submit = SubmitField('Save')
+
+
+class AttendanceTimeControlForm(FlaskForm):
+    morning_start = StringField('Morning shift: Start time', validators=[Optional()], render_kw={"type": "time", "class": "form-control"})
+    morning_end   = StringField('Morning shift: End time',   validators=[Optional()], render_kw={"type": "time", "class": "form-control"})
+    night_start   = StringField('Night shift: Start time',   validators=[Optional()], render_kw={"type": "time", "class": "form-control"})
+    night_end     = StringField('Night shift: End time',     validators=[Optional()], render_kw={"type": "time", "class": "form-control"})
+    submit        = SubmitField('Save')

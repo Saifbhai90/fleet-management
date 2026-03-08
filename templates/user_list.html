@@ -4,9 +4,38 @@
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-person-gear me-2 text-primary"></i>Users</h2>
-    <a href="{{ url_for('user_form') }}" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus-circle me-1"></i>Add User
-    </a>
+    <div class="d-flex flex-wrap gap-2">
+      <button type="button" class="btn btn-outline-success btn-sm" id="syncUsersBtn">
+        <i class="bi bi-people me-1"></i>Create users for existing Employees & Drivers
+      </button>
+      <a href="{{ url_for('user_form') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>Add User
+      </a>
+    </div>
+  </div>
+
+  <!-- Progress modal -->
+  <div class="modal fade" id="syncProgressModal" tabindex="-1" aria-labelledby="syncProgressModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="syncProgressModalLabel">
+            <i class="bi bi-people me-2"></i>Creating users...
+          </h5>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-2" id="syncStatus">Processing...</p>
+          <div class="progress" style="height: 24px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" id="syncProgressBar" role="progressbar" style="width: 100%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+          </div>
+          <p class="small text-muted mt-2 mb-0" id="syncDetail">Please wait.</p>
+        </div>
+        <div class="modal-footer d-none" id="syncDoneFooter">
+          <p class="text-success mb-0 me-auto" id="syncDoneText"></p>
+          <button type="button" class="btn btn-primary" id="syncCloseBtn">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
@@ -18,7 +47,7 @@
               <th class="ps-4">#</th>
               <th>Username</th>
               <th>Full Name</th>
-              <th>Role</th>
+              <th>Post</th>
               <th>Status</th>
               <th class="text-center pe-4">Edit</th>
             </tr>
@@ -29,12 +58,16 @@
               <td class="ps-4">{{ loop.index }}</td>
               <td class="fw-medium">{{ u.username }}</td>
               <td>{{ u.full_name or '-' }}</td>
-              <td>{% if u.role %}<span class="badge bg-secondary">{{ u.role.name }}</span>{% else %}-{% endif %}</td>
+              <td>{% if u.employee_post %}<span class="badge bg-secondary">{{ u.employee_post.full_name }}</span>{% elif u.role %}<span class="badge bg-light text-dark">{{ u.role.name }}</span>{% else %}-{% endif %}</td>
               <td>
                 {% if u.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}
               </td>
               <td class="text-center pe-4">
+                {% if current_user_is_master or (not u.role or u.role.name not in ['Master', 'Admin']) %}
                 <a href="{{ url_for('user_edit', pk=u.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                {% else %}
+                <span class="text-muted small" title="Only Master can edit">—</span>
+                {% endif %}
               </td>
             </tr>
             {% else %}
@@ -48,4 +81,88 @@
     </div>
   </div>
 </div>
+
+<script>
+(function() {
+  var syncBtn = document.getElementById('syncUsersBtn');
+  var progressBar = document.getElementById('syncProgressBar');
+  var syncStatus = document.getElementById('syncStatus');
+  var syncDetail = document.getElementById('syncDetail');
+  var syncDoneFooter = document.getElementById('syncDoneFooter');
+  var syncDoneText = document.getElementById('syncDoneText');
+  var syncCloseBtn = document.getElementById('syncCloseBtn');
+
+  function getModal() {
+    var el = document.getElementById('syncProgressModal');
+    if (window.bootstrap && el) return bootstrap.Modal.getOrCreateInstance(el);
+    return null;
+  }
+
+  function showModal() {
+    var modal = getModal();
+    if (modal) modal.show();
+  }
+
+  function hideModal() {
+    var modal = getModal();
+    if (modal) modal.hide();
+  }
+
+    syncBtn.addEventListener('click', function() {
+    if (!confirm('Existing Employees aur Drivers ke liye User create karein? Jo pehle se User nahi hain, unke liye CNIC = User ID, password 123 se login hoga.')) return;
+    syncDoneFooter.classList.add('d-none');
+    progressBar.classList.remove('bg-success', 'bg-danger');
+    progressBar.classList.add('progress-bar-animated');
+    progressBar.style.width = '100%';
+    progressBar.textContent = '';
+    progressBar.setAttribute('aria-valuenow', 0);
+    syncStatus.textContent = 'Processing...';
+    syncDetail.textContent = 'Please wait.';
+    showModal();
+
+    var formData = new FormData();
+    formData.append('csrf_token', '{{ csrf_token() }}');
+
+    fetch('{{ url_for("users_sync_from_employees_drivers") }}', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin'
+    }).then(function(response) {
+      return response.json().then(function(data) {
+        if (!response.ok) throw new Error(data.error || ('Network error: ' + response.status));
+        return data;
+      });
+    }).then(function(data) {
+      progressBar.classList.remove('progress-bar-animated');
+      progressBar.classList.add('bg-success');
+      progressBar.style.width = '100%';
+      progressBar.textContent = '100%';
+      syncStatus.textContent = 'Done.';
+      var created = data.created || 0;
+      var total = data.total || 0;
+      syncDetail.textContent = created + ' user(s) created out of ' + total + ' candidate(s).';
+      syncDoneFooter.classList.remove('d-none');
+      syncDoneText.textContent = 'Done! ' + created + ' user(s) create kiye gaye. User list update ho chuki hai.';
+      syncDoneText.classList.remove('text-danger');
+      syncDoneText.classList.add('text-success');
+      syncCloseBtn.onclick = function() { hideModal(); window.location.reload(); };
+    }).catch(function(err) {
+      syncStatus.textContent = 'Error';
+      progressBar.classList.remove('progress-bar-animated');
+      progressBar.classList.add('bg-danger');
+      progressBar.style.width = '100%';
+      progressBar.textContent = '';
+      syncDetail.textContent = '';
+      syncDoneFooter.classList.remove('d-none');
+      syncDoneText.textContent = (err.message || 'Request failed');
+      syncDoneText.classList.remove('text-success');
+      syncDoneText.classList.add('text-danger');
+      syncCloseBtn.onclick = function() { hideModal(); window.location.reload(); };
+    });
+  });
+})();
+</script>
 {% endblock %}

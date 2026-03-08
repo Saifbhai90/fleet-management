@@ -98,10 +98,19 @@ def inject_notification_badge():
 
 @app.context_processor
 def inject_current_permissions():
-    """Make current user's permission codes available in templates for sidebar visibility."""
+    """Make current user's permission codes, is_master, can_see_page and can_see_section available in templates."""
     from flask import session
     perms = session.get('permissions') or []
-    return dict(current_permissions=perms)
+    is_master = session.get('is_master', False)
+    try:
+        from permissions_config import can_see_page, can_see_section
+        # Master ke liye role ki value nahi: hamesha sab dikhe, koi permission miss na ho
+        can_see_p = (lambda key: True) if is_master else (lambda key: can_see_page(perms, key))
+        can_see_s = (lambda key: True) if is_master else (lambda key: can_see_section(perms, key))
+    except Exception:
+        can_see_p = lambda key: True
+        can_see_s = lambda key: True
+    return dict(current_permissions=perms, current_user_is_master=is_master, can_see_page=can_see_p, can_see_section=can_see_s)
 
 
 @app.context_processor

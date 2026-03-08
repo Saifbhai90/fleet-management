@@ -7,6 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>{% block title %}Fleet Manager{% endblock %}</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     
     <!-- External CSS & JS -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -31,7 +32,7 @@
             top: 60px;
             left: 0;
             height: calc(100vh - 60px);
-            width: 280px;
+            width: 300px;
             background: linear-gradient(180deg, #1e293b, #0f172a);
             padding: 15px 0;
             overflow-y: auto;
@@ -98,7 +99,7 @@
             text-align: center;
         }
         /* Main Content */
-        .main-content { margin-left: 280px; margin-top: 60px; padding: 25px; transition: 0.3s; }
+        .main-content { margin-left: 300px; margin-top: 60px; padding: 25px; transition: 0.3s; }
         .main-content.expanded { margin-left: 70px; }
         @media (max-width: 991.98px) {
             .main-content { margin-left: 0; }
@@ -189,6 +190,7 @@
         <div class="me-2 me-md-4 d-none d-md-block" id="liveDateTime" style="font-size: 0.9rem; color: #cbd5e1;"></div>
 
         <!-- Notification bell (touch-friendly on mobile) -->
+        {% if can_see_page('notification_list') %}
         <a href="{{ url_for('notification_list') }}" class="btn btn-link text-light position-relative me-1 me-sm-3 p-2" title="Notifications" style="min-width: 44px; min-height: 44px;">
             <i class="bi bi-bell{% if unread_notification_count and unread_notification_count > 0 %}-fill{% endif %}" style="font-size: 1.25rem;"></i>
             {% if unread_notification_count and unread_notification_count > 0 %}
@@ -197,6 +199,7 @@
             </span>
             {% endif %}
         </a>
+        {% endif %}
 
         <!-- Profile dropdown (touch-friendly) -->
         <div class="dropdown border-start ps-2 ps-sm-3 ms-1">
@@ -213,11 +216,13 @@
                     <i class="bi bi-person-circle me-1"></i>{{ session.get('user', 'Guest') }}
                 </li>
                 <li><hr class="dropdown-divider"></li>
+                {% if can_see_page('notification_list') %}
                 <li>
                     <a class="dropdown-item" href="{{ url_for('notification_list') }}">
                         <i class="bi bi-bell me-2"></i>Notifications
                     </a>
                 </li>
+                {% endif %}
                 <li>
                     <a class="dropdown-item" href="{{ url_for('reminder_list') }}">
                         <i class="bi bi-calendar-check me-2"></i>My Reminders
@@ -249,296 +254,468 @@
         {% set master_endpoints = ['companies', 'company_form', 'projects_list', 'project_detail', 'project_form', 'districts_list', 'district_form', 'vehicles_list', 'vehicle_form', 'parking_list', 'parking_form', 'drivers_list', 'driver_form', 'employees_list', 'employee_form', 'driver_post_list', 'driver_post_form', 'party_list', 'party_form', 'product_list', 'product_form'] %}
         {% set assignment_endpoints = ['assign_project_to_company', 'assign_project_to_district', 'assign_vehicle_to_district', 'assign_vehicle_to_parking_list', 'assign_vehicle_to_parking_new', 'assign_vehicle_to_parking_edit', 'assign_driver_to_vehicle_list', 'assign_driver_to_vehicle_new', 'assign_driver_to_vehicle_edit'] %}
         {% set transfer_endpoints = ['project_transfers', 'project_transfer_new', 'project_transfer_edit', 'vehicle_transfers', 'vehicle_transfer_new', 'vehicle_transfer_edit', 'driver_transfers', 'driver_transfer_new', 'driver_transfer_edit'] %}
-        {% set driver_status_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'driver_attendance_list', 'driver_attendance_mark', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
+        {% set driver_status_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'driver_attendance_list', 'driver_attendance_mark', 'driver_attendance_bulk_off', 'driver_attendance_pending', 'driver_attendance_missing_checkout', 'driver_attendance_manual_checkin', 'driver_attendance_manual_checkout', 'driver_attendance_checkin', 'driver_attendance_checkout', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
+        {% set attendance_endpoints = ['driver_attendance_list', 'driver_attendance_mark', 'driver_attendance_bulk_off', 'driver_attendance_pending', 'driver_attendance_missing_checkout', 'driver_attendance_manual_checkin', 'driver_attendance_manual_checkout', 'driver_attendance_checkin', 'driver_attendance_checkout'] %}
+        {% set workforce_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
         {% set task_report_endpoints = ['task_report_upload', 'task_report_list', 'red_task_list', 'red_task_new', 'red_task_edit', 'without_task_list', 'without_task_new', 'without_task_edit', 'task_report_logbook_cover', 'task_report_logbook_view', 'task_report_logbook_view_all'] %}
         {% set expenses_endpoints = ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form', 'employee_expense_list', 'employee_expense_form'] %}
-        {% set reports_endpoints = ['reports_index', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_driver_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai'] %}
+        {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai'] %}
         {% set accounts_endpoints = ['accounts_quick_payment', 'accounts_quick_receipt', 'accounts_bank_entry', 'accounts_jv', 'accounts_future_entry', 'accounts_balance_sheet', 'accounts_account_ledger'] %}
         {% set master_open = (request.endpoint in master_endpoints and not (request.endpoint == 'companies' and request.args.get('mode') == 'report')) %}
         {% set assignment_open = request.endpoint in assignment_endpoints or (request.endpoint and 'assign_vehicle_to_parking' in request.endpoint) or (request.endpoint and 'assign_driver_to_vehicle' in request.endpoint) %}
         {% set transfer_open = request.endpoint in transfer_endpoints or (request.endpoint and 'driver_transfer' in request.endpoint) %}
         {% set driver_status_open = request.endpoint in driver_status_endpoints %}
+        {% set attendance_open = request.endpoint in attendance_endpoints %}
+        {% set workforce_open = request.endpoint in workforce_endpoints %}
         {% set task_report_open = request.endpoint in task_report_endpoints %}
         {% set expenses_open = request.endpoint in expenses_endpoints %}
         {% set reports_open = request.endpoint in reports_endpoints or (request.endpoint == 'companies' and request.args.get('mode') == 'report') %}
         {% set accounts_open = request.endpoint in accounts_endpoints %}
-        {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit'] %}
+        {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit', 'form_control'] %}
         {% set users_open = request.endpoint in users_manage_endpoints %}
 
         <!-- Dashboard -->
-        {% if 'dashboard' in current_permissions %}
+        {% if can_see_section('dashboard') %}
         <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active-link{% endif %}">
             <i class="bi bi-speedometer2"></i><span>Dashboard</span>
         </a>
         {% endif %}
 
-        <!-- Accounts -->
-        {% if 'accounts' in current_permissions %}
-        <div>
-            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#accountsMenu" role="button" aria-expanded="{{ 'true' if accounts_open else 'false' }}">
-                <i class="bi bi-bank"></i><span>Accounts</span>
-            </a>
-            <div class="collapse collapse-item-container {% if accounts_open %}show{% endif %}"
-                 id="accountsMenu" data-bs-parent="#sidebarAccordion">
-                <a href="{{ url_for('accounts_quick_payment') }}" class="collapse-item {% if request.endpoint == 'accounts_quick_payment' %}active-link{% endif %}">
-                    <i class="bi bi-cash-stack text-success"></i><span>Quick Payment</span>
-                </a>
-                <a href="{{ url_for('accounts_quick_receipt') }}" class="collapse-item {% if request.endpoint == 'accounts_quick_receipt' %}active-link{% endif %}">
-                    <i class="bi bi-cash-coin text-primary"></i><span>Quick Receipt</span>
-                </a>
-                <a href="{{ url_for('accounts_bank_entry') }}" class="collapse-item {% if request.endpoint == 'accounts_bank_entry' %}active-link{% endif %}">
-                    <i class="bi bi-bank2 text-info"></i><span>Bank Entry</span>
-                </a>
-                <a href="{{ url_for('accounts_jv') }}" class="collapse-item {% if request.endpoint == 'accounts_jv' %}active-link{% endif %}">
-                    <i class="bi bi-journal-text text-warning"></i><span>JV (Journal Voucher)</span>
-                </a>
-                <a href="{{ url_for('accounts_future_entry') }}" class="collapse-item {% if request.endpoint == 'accounts_future_entry' %}active-link{% endif %}">
-                    <i class="bi bi-calendar-plus text-secondary"></i><span>Future Entry</span>
-                </a>
-                <a href="{{ url_for('accounts_balance_sheet') }}" class="collapse-item {% if request.endpoint == 'accounts_balance_sheet' %}active-link{% endif %}">
-                    <i class="bi bi-file-earmark-bar-graph text-info"></i><span>Balance Sheet</span>
-                </a>
-                <a href="{{ url_for('accounts_account_ledger') }}" class="collapse-item {% if request.endpoint == 'accounts_account_ledger' %}active-link{% endif %}">
-                    <i class="bi bi-journal-bookmark-fill text-warning"></i><span>Account Ledger</span>
-                </a>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Master Section -->
-        {% if 'master' in current_permissions %}
+        <!-- Master Data -->
+        {% if can_see_section('master') %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#masterMenu" role="button" aria-expanded="{{ 'true' if master_open else 'false' }}">
-                <i class="bi bi-folder2-open"></i><span>Master</span>
+                <i class="bi bi-folder2-open"></i><span>Master Data</span>
             </a>
             <div class="collapse collapse-item-container {% if master_open %}show{% endif %}"
                  id="masterMenu" data-bs-parent="#sidebarAccordion">
+                {% if can_see_page('companies') %}
                 <a href="{{ url_for('companies') }}" class="collapse-item {% if request.endpoint == 'companies' and request.args.get('mode') != 'report' %}active-link{% endif %}">
                     <i class="bi bi-building"></i><span>Companies</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('projects') %}
                 <a href="{{ url_for('projects_list') }}" class="collapse-item {% if request.endpoint == 'projects_list' %}active-link{% endif %}">
                     <i class="bi bi-briefcase"></i><span>Projects</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('districts') %}
                 <a href="{{ url_for('districts_list') }}" class="collapse-item {% if request.endpoint == 'districts_list' %}active-link{% endif %}">
                     <i class="bi bi-geo-alt"></i><span>Districts</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('vehicles') %}
                 <a href="{{ url_for('vehicles_list') }}" class="collapse-item {% if request.endpoint == 'vehicles_list' %}active-link{% endif %}">
                     <i class="bi bi-truck"></i><span>Vehicles</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('parking') %}
                 <a href="{{ url_for('parking_list') }}" class="collapse-item {% if request.endpoint == 'parking_list' %}active-link{% endif %}">
-                    <i class="bi bi-p-square"></i><span>Parking Station</span>
+                    <i class="bi bi-p-square"></i><span>Parking Stations</span>
                 </a>
-                <a href="{{ url_for('drivers_list') }}" class="collapse-item {% if request.endpoint == 'drivers_list' %}active-link{% endif %}">
-                    <i class="bi bi-person-badge"></i><span>Drivers</span>
+                {% endif %}
+                {% if can_see_page('driver_post') %}
+                <a href="{{ url_for('driver_post_list') }}" class="collapse-item {% if request.endpoint in ['driver_post_list', 'driver_post_form'] %}active-link{% endif %}">
+                    <i class="bi bi-person-vcard"></i><span>Designations</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('employees') %}
                 <a href="{{ url_for('employees_list') }}" class="collapse-item {% if request.endpoint in ['employees_list', 'employee_form'] %}active-link{% endif %}">
                     <i class="bi bi-people-fill"></i><span>Employees</span>
                 </a>
-                <a href="{{ url_for('driver_post_list') }}" class="collapse-item {% if request.endpoint in ['driver_post_list', 'driver_post_form'] %}active-link{% endif %}">
-                    <i class="bi bi-person-vcard"></i><span>Employee Posts</span>
+                {% endif %}
+                {% if can_see_page('drivers') %}
+                <a href="{{ url_for('drivers_list') }}" class="collapse-item {% if request.endpoint == 'drivers_list' %}active-link{% endif %}">
+                    <i class="bi bi-person-badge"></i><span>Drivers</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('party') %}
                 <a href="{{ url_for('party_list') }}" class="collapse-item {% if request.endpoint in ['party_list', 'party_form'] %}active-link{% endif %}">
-                    <i class="bi bi-building"></i><span>Create Party Name</span>
+                    <i class="bi bi-building"></i><span>Parties</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('product') %}
                 <a href="{{ url_for('product_list') }}" class="collapse-item {% if request.endpoint in ['product_list', 'product_form'] %}active-link{% endif %}">
-                    <i class="bi bi-box-seam"></i><span>Products Name</span>
+                    <i class="bi bi-box-seam"></i><span>Products</span>
                 </a>
+                {% endif %}
             </div>
         </div>
         {% endif %}
 
-        <!-- Assignment Section -->
-        {% if 'assignment' in current_permissions %}
+        <!-- Assignments (Fleet & Organisation) -->
+        {% if can_see_section('assignment') %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#assignmentMenu" role="button" aria-expanded="{{ 'true' if assignment_open else 'false' }}">
-                <i class="bi bi-link-45deg"></i><span>Assignment</span>
+                <i class="bi bi-link-45deg"></i><span>Assignments</span>
             </a>
             <div class="collapse collapse-item-container {% if assignment_open %}show{% endif %}"
                  id="assignmentMenu" data-bs-parent="#sidebarAccordion">
+                {% if can_see_page('assign_project_to_company') %}
                 <a href="{{ url_for('assign_project_to_company') }}" class="collapse-item {% if request.endpoint == 'assign_project_to_company' %}active-link{% endif %}">
-                    <i class="bi bi-building-check text-primary"></i><span>Project → Company</span>
+                    <i class="bi bi-building-check text-primary"></i><span>Project to Company</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('assign_project_to_district') %}
                 <a href="{{ url_for('assign_project_to_district') }}" class="collapse-item {% if request.endpoint == 'assign_project_to_district' %}active-link{% endif %}">
-                    <i class="bi bi-geo-alt-fill text-danger"></i><span>District → Project</span>
+                    <i class="bi bi-geo-alt-fill text-danger"></i><span>District to Project</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('assign_vehicle_to_district') %}
                 <a href="{{ url_for('assign_vehicle_to_district') }}" class="collapse-item {% if request.endpoint == 'assign_vehicle_to_district' %}active-link{% endif %}">
-                    <i class="bi bi-truck-front-fill text-warning"></i><span>Vehicle → District</span>
+                    <i class="bi bi-truck-front-fill text-warning"></i><span>Vehicle to District</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('assign_vehicle_to_parking') %}
                 <a href="{{ url_for('assign_vehicle_to_parking_list') }}" class="collapse-item {% if request.endpoint and 'assign_vehicle_to_parking' in request.endpoint %}active-link{% endif %}">
-                    <i class="bi bi-p-square-fill text-info"></i><span>Vehicle → Parking</span>
+                    <i class="bi bi-p-square-fill text-info"></i><span>Vehicle to Parking</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('assign_driver_to_vehicle') %}
                 <a href="{{ url_for('assign_driver_to_vehicle_list') }}" class="collapse-item {% if request.endpoint and 'assign_driver_to_vehicle' in request.endpoint %}active-link{% endif %}">
-                    <i class="bi bi-person-badge-fill text-success"></i><span>Driver → Vehicle</span>
+                    <i class="bi bi-person-badge-fill text-success"></i><span>Driver to Vehicle</span>
                 </a>
+                {% endif %}
             </div>
         </div>
         {% endif %}
 
-        <!-- Transfer Section -->
-        {% if 'transfer' in current_permissions %}
+        <!-- Transfers -->
+        {% if can_see_section('transfer') %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#transferMenu" role="button" aria-expanded="{{ 'true' if transfer_open else 'false' }}">
-                <i class="bi bi-arrow-left-right me-2 text-warning"></i><span>Transfer</span>
+                <i class="bi bi-arrow-left-right me-2 text-warning"></i><span>Transfers</span>
             </a>
             <div class="collapse collapse-item-container {% if transfer_open %}show{% endif %}"
                  id="transferMenu" data-bs-parent="#sidebarAccordion">
+                {% if can_see_page('project_transfers') %}
                 <a href="{{ url_for('project_transfers') }}" class="collapse-item {% if request.endpoint in ['project_transfers', 'project_transfer_new', 'project_transfer_edit'] %}active-link{% endif %}">
                     <i class="bi bi-arrow-repeat text-warning"></i><span>Project Transfer</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('vehicle_transfers') %}
                 <a href="{{ url_for('vehicle_transfers') }}" class="collapse-item {% if request.endpoint in ['vehicle_transfers', 'vehicle_transfer_new', 'vehicle_transfer_edit'] %}active-link{% endif %}">
                     <i class="bi bi-truck text-warning"></i><span>Vehicle Transfer</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('driver_transfers') %}
                 <a href="{{ url_for('driver_transfers') }}" class="collapse-item {% if request.endpoint and 'driver_transfer' in request.endpoint %}active-link{% endif %}">
                     <i class="bi bi-person-lines-fill text-warning"></i><span>Driver Transfer</span>
                 </a>
+                {% endif %}
             </div>
         </div>
         {% endif %}
 
-        <!-- Driver Status (Job Left, Rejoin, Attendance) -->
-        {% if 'driver_status' in current_permissions %}
+        <!-- Workforce (Resignation, Rejoin, Penalties) -->
+        {% if can_see_section('driver_status') %}
         <div>
-            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#otherActionMenu" role="button" aria-expanded="{{ 'true' if driver_status_open else 'false' }}">
-                <i class="bi bi-person-gear"></i><span>Driver Status</span>
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#workforceMenu" role="button" aria-expanded="{{ 'true' if workforce_open else 'false' }}">
+                <i class="bi bi-person-gear"></i><span>Workforce</span>
             </a>
-            <div class="collapse collapse-item-container {% if driver_status_open %}show{% endif %}"
-                 id="otherActionMenu" data-bs-parent="#sidebarAccordion">
+            <div class="collapse collapse-item-container {% if workforce_open %}show{% endif %}"
+                 id="workforceMenu" data-bs-parent="#sidebarAccordion">
+                {% if can_see_page('driver_job_left') %}
                 <a href="{{ url_for('driver_job_left_list') }}" class="collapse-item custom-job-link {% if request.endpoint in ['driver_job_left_new', 'driver_job_left_list'] %}active-link{% endif %}">
-                    <i class="bi bi-person-x text-danger me-2"></i>
-                    <span>Job Left</span>
+                    <i class="bi bi-person-x text-danger me-2"></i><span>Resignation / Exit</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('driver_rejoin') %}
                 <a href="{{ url_for('driver_rejoin_list') }}" class="collapse-item {% if request.endpoint in ['driver_rejoin_new', 'driver_rejoin_list'] %}active-link{% endif %}">
-                    <i class="bi bi-person-plus-fill text-success"></i><span>Rejoin Driver</span>
+                    <i class="bi bi-person-plus-fill text-success"></i><span>Re-employment</span>
                 </a>
-                <a href="{{ url_for('driver_attendance_list') }}" class="collapse-item {% if request.endpoint in ['driver_attendance_list', 'driver_attendance_mark'] %}active-link{% endif %}">
-                    <i class="bi bi-calendar-check text-primary"></i><span>Mark Attendance</span>
-                </a>
+                {% endif %}
+                {% if can_see_page('penalty_record') %}
                 <a href="{{ url_for('penalty_record_list') }}" class="collapse-item {% if request.endpoint in ['penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}active-link{% endif %}">
-                    <i class="bi bi-cash-coin text-secondary"></i><span>Penalty Record</span>
+                    <i class="bi bi-cash-coin text-secondary"></i><span>Penalties</span>
                 </a>
+                {% endif %}
             </div>
         </div>
         {% endif %}
 
-        <!-- Task Report -->
-        {% if 'task_report' in current_permissions %}
+        <!-- Attendance -->
+        {% if can_see_section('driver_status') %}
+        <div>
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#attendanceMenu" role="button" aria-expanded="{{ 'true' if attendance_open else 'false' }}">
+                <i class="bi bi-calendar-check"></i><span>Attendance</span>
+            </a>
+            <div class="collapse collapse-item-container {% if attendance_open %}show{% endif %}"
+                 id="attendanceMenu" data-bs-parent="#sidebarAccordion">
+                {% if can_see_page('driver_attendance_checkin') %}
+                <a href="{{ url_for('driver_attendance_checkin') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_checkin' %}active-link{% endif %}">
+                    <i class="bi bi-geo-alt-fill text-success"></i><span>Check In (GPS & Camera)</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('driver_attendance_checkout') %}
+                <a href="{{ url_for('driver_attendance_checkout') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_checkout' %}active-link{% endif %}">
+                    <i class="bi bi-box-arrow-right text-danger"></i><span>Check Out (GPS & Camera)</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('driver_attendance_pending') %}
+                <a href="{{ url_for('driver_attendance_pending') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_pending' %}active-link{% endif %}">
+                    <i class="bi bi-exclamation-circle text-warning"></i><span>Missing Check IN</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('driver_attendance_missing_checkout') %}
+                <a href="{{ url_for('driver_attendance_missing_checkout') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_missing_checkout' %}active-link{% endif %}">
+                    <i class="bi bi-box-arrow-right text-warning"></i><span>Missing Check out</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('driver_attendance_mark') %}
+                <a href="{{ url_for('driver_attendance_mark') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_mark' %}active-link{% endif %}">
+                    <i class="bi bi-pencil-square text-primary"></i><span>Leave / Late / Half Day / Off</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('driver_attendance_bulk_off') %}
+                <a href="{{ url_for('driver_attendance_bulk_off') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_bulk_off' %}active-link{% endif %}">
+                    <i class="bi bi-calendar-x text-secondary"></i><span>Bulk Off</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('driver_attendance_list') %}
+                <a href="{{ url_for('driver_attendance_list') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_list' %}active-link{% endif %}">
+                    <i class="bi bi-list-ul text-primary"></i><span>Attendance List</span>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Task & Logbook -->
+        {% if can_see_section('task_report') %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#taskReportMenu" role="button" aria-expanded="{{ 'true' if task_report_open else 'false' }}">
-                <i class="bi bi-clipboard2-data"></i><span>Task Report</span>
+                <i class="bi bi-clipboard2-data"></i><span>Task & Logbook</span>
             </a>
             <div class="collapse collapse-item-container {% if task_report_open %}show{% endif %}"
                  id="taskReportMenu" data-bs-parent="#sidebarAccordion">
+                {% if can_see_page('task_report_upload') %}
                 <a href="{{ url_for('task_report_upload') }}" class="collapse-item {% if request.endpoint == 'task_report_upload' %}active-link{% endif %}">
-                    <i class="bi bi-file-earmark-excel"></i><span>Upload Workbooks</span>
+                    <i class="bi bi-file-earmark-excel"></i><span>Workbook Upload</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('task_report_list') %}
                 <a href="{{ url_for('task_report_list') }}" class="collapse-item {% if request.endpoint == 'task_report_list' %}active-link{% endif %}">
-                    <i class="bi bi-table"></i><span>Vehicle Daily Task Report</span>
+                    <i class="bi bi-table"></i><span>Daily Task Report</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('red_task') %}
                 <a href="{{ url_for('red_task_list') }}" class="collapse-item {% if request.endpoint == 'red_task_list' or request.endpoint == 'red_task_new' or request.endpoint == 'red_task_edit' %}active-link{% endif %}">
                     <i class="bi bi-exclamation-triangle-fill text-danger"></i><span>Red Task Justification</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('without_task') %}
                 <a href="{{ url_for('without_task_list') }}" class="collapse-item {% if request.endpoint == 'without_task_list' or request.endpoint == 'without_task_new' or request.endpoint == 'without_task_edit' %}active-link{% endif %}">
-                    <i class="bi bi-truck text-warning"></i><span>Move without Task</span>
+                    <i class="bi bi-truck text-warning"></i><span>Movement without Task</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('task_report_logbook') %}
                 <a href="{{ url_for('task_report_logbook_cover') }}" class="collapse-item {% if request.endpoint == 'task_report_logbook_cover' or request.endpoint == 'task_report_logbook_view' or request.endpoint == 'task_report_logbook_view_all' %}active-link{% endif %}">
-                    <i class="bi bi-journal-text"></i><span>Logbook Cover Page</span>
+                    <i class="bi bi-journal-text"></i><span>Logbook Covers</span>
                 </a>
+                {% endif %}
             </div>
         </div>
         {% endif %}
 
-        <!-- Expenses -->
-        {% if 'expenses' in current_permissions %}
+        <!-- Finance -->
+        {% if can_see_section('accounts') %}
+        <div>
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#accountsMenu" role="button" aria-expanded="{{ 'true' if accounts_open else 'false' }}">
+                <i class="bi bi-bank"></i><span>Finance</span>
+            </a>
+            <div class="collapse collapse-item-container {% if accounts_open %}show{% endif %}"
+                 id="accountsMenu" data-bs-parent="#sidebarAccordion">
+                {% if can_see_page('accounts_quick_payment') %}
+                <a href="{{ url_for('accounts_quick_payment') }}" class="collapse-item {% if request.endpoint == 'accounts_quick_payment' %}active-link{% endif %}">
+                    <i class="bi bi-cash-stack text-success"></i><span>Payment Voucher</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('accounts_quick_receipt') %}
+                <a href="{{ url_for('accounts_quick_receipt') }}" class="collapse-item {% if request.endpoint == 'accounts_quick_receipt' %}active-link{% endif %}">
+                    <i class="bi bi-cash-coin text-primary"></i><span>Receipt Voucher</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('accounts_bank_entry') %}
+                <a href="{{ url_for('accounts_bank_entry') }}" class="collapse-item {% if request.endpoint == 'accounts_bank_entry' %}active-link{% endif %}">
+                    <i class="bi bi-bank2 text-info"></i><span>Bank Entry</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('accounts_jv') %}
+                <a href="{{ url_for('accounts_jv') }}" class="collapse-item {% if request.endpoint == 'accounts_jv' %}active-link{% endif %}">
+                    <i class="bi bi-journal-text text-warning"></i><span>Journal Voucher</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('accounts_future_entry') %}
+                <a href="{{ url_for('accounts_future_entry') }}" class="collapse-item {% if request.endpoint == 'accounts_future_entry' %}active-link{% endif %}">
+                    <i class="bi bi-calendar-plus text-secondary"></i><span>Future Dated Entries</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('accounts_balance_sheet') %}
+                <a href="{{ url_for('accounts_balance_sheet') }}" class="collapse-item {% if request.endpoint == 'accounts_balance_sheet' %}active-link{% endif %}">
+                    <i class="bi bi-file-earmark-bar-graph text-info"></i><span>Balance Sheet</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('accounts_account_ledger') %}
+                <a href="{{ url_for('accounts_account_ledger') }}" class="collapse-item {% if request.endpoint == 'accounts_account_ledger' %}active-link{% endif %}">
+                    <i class="bi bi-journal-bookmark-fill text-warning"></i><span>Account Ledger</span>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Expense Management -->
+        {% if can_see_section('expenses') %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#expensesMenu" role="button" aria-expanded="{{ 'true' if expenses_open else 'false' }}">
-                <i class="bi bi-wallet2"></i><span>Expenses</span>
+                <i class="bi bi-wallet2"></i><span>Expense Management</span>
             </a>
             <div class="collapse collapse-item-container {% if expenses_open %}show{% endif %}"
                  id="expensesMenu" data-bs-parent="#sidebarAccordion">
+                {% if can_see_page('fuel_expense') %}
                 <a href="{{ url_for('fuel_expense_list') }}" class="collapse-item {% if request.endpoint in ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit'] %}active-link{% endif %}">
-                    <i class="bi bi-fuel-pump text-primary"></i><span>Fuel Expense</span>
+                    <i class="bi bi-fuel-pump text-primary"></i><span>Fuel</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('oil_expense') %}
                 <a href="{{ url_for('oil_expense_list') }}" class="collapse-item {% if request.endpoint in ['oil_expense_list', 'oil_expense_form'] %}active-link{% endif %}">
-                    <i class="bi bi-droplet text-info"></i><span>Oil Expense</span>
+                    <i class="bi bi-droplet text-info"></i><span>Oil & Lubricants</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('maintenance_expense') %}
                 <a href="{{ url_for('maintenance_expense_list') }}" class="collapse-item {% if request.endpoint in ['maintenance_expense_list', 'maintenance_expense_form'] %}active-link{% endif %}">
                     <i class="bi bi-wrench text-warning"></i><span>Maintenance</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('employee_expense') %}
                 <a href="{{ url_for('employee_expense_list') }}" class="collapse-item {% if request.endpoint in ['employee_expense_list', 'employee_expense_form'] %}active-link{% endif %}">
-                    <i class="bi bi-person-badge text-info"></i><span>Employee Expense</span>
+                    <i class="bi bi-person-badge text-info"></i><span>Employee Expenses</span>
                 </a>
+                {% endif %}
             </div>
         </div>
         {% endif %}
 
-        <!-- Reports Section -->
-        {% if 'reports' in current_permissions %}
+        <!-- Reports & Analytics -->
+        {% if can_see_section('reports') %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#reportsMenu" role="button" aria-expanded="{{ 'true' if reports_open else 'false' }}">
-                <i class="bi bi-bar-chart"></i><span>Reports</span>
+                <i class="bi bi-bar-chart"></i><span>Reports & Analytics</span>
             </a>
             <div class="collapse collapse-item-container {% if reports_open %}show{% endif %}"
                  id="reportsMenu" data-bs-parent="#sidebarAccordion">
+                {% if can_see_page('reports_index') %}
                 <a href="{{ url_for('reports_index') }}" class="collapse-item {% if request.endpoint == 'reports_index' %}active-link{% endif %}">
-                    <i class="bi bi-list-ul"></i><span>All Reports</span>
+                    <i class="bi bi-list-ul"></i><span>Report Centre</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('report_company_profile') %}
                 <a href="{{ url_for('companies', mode='report') }}" class="collapse-item {% if request.endpoint == 'companies' and request.args.get('mode') == 'report' %}active-link{% endif %}">
                     <i class="bi bi-file-earmark-person"></i><span>Company Profile</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('driver_attendance_report') %}
                 <a href="{{ url_for('driver_attendance_report') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_report' %}active-link{% endif %}">
                     <i class="bi bi-calendar2-range text-info"></i><span>Attendance Report</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('report_expiry') %}
+                <a href="{{ url_for('report_expiry') }}" class="collapse-item {% if request.endpoint == 'report_expiry' %}active-link{% endif %}">
+                    <i class="bi bi-calendar-x text-warning"></i><span>Document Expiry</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('report_vehicle_summary') %}
+                <a href="{{ url_for('report_vehicle_summary') }}" class="collapse-item {% if request.endpoint == 'report_vehicle_summary' %}active-link{% endif %}">
+                    <i class="bi bi-truck"></i><span>Vehicle Summary</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('report_project_summary') %}
+                <a href="{{ url_for('report_project_summary') }}" class="collapse-item {% if request.endpoint == 'report_project_summary' %}active-link{% endif %}">
+                    <i class="bi bi-briefcase"></i><span>Project Summary</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('report_district_summary') %}
+                <a href="{{ url_for('report_district_summary') }}" class="collapse-item {% if request.endpoint == 'report_district_summary' %}active-link{% endif %}">
+                    <i class="bi bi-geo-alt"></i><span>District Summary</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('report_parking_utilization') %}
+                <a href="{{ url_for('report_parking_utilization') }}" class="collapse-item {% if request.endpoint == 'report_parking_utilization' %}active-link{% endif %}">
+                    <i class="bi bi-p-square"></i><span>Parking Utilization</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('report_ai') %}
+                <a href="{{ url_for('report_ai') }}" class="collapse-item {% if request.endpoint == 'report_ai' %}active-link{% endif %}">
+                    <i class="bi bi-robot"></i><span>Create Report with AI</span>
+                </a>
+                {% endif %}
             </div>
         </div>
         {% endif %}
 
-        <!-- User & Access (only for users_manage permission) -->
-        {% if 'users_manage' in current_permissions %}
-        <div>
-            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#userAccessMenu" role="button" aria-expanded="{{ 'true' if users_open else 'false' }}">
-                <i class="bi bi-shield-lock"></i><span>User & Access</span>
-            </a>
-            <div class="collapse collapse-item-container {% if users_open %}show{% endif %}"
-                 id="userAccessMenu" data-bs-parent="#sidebarAccordion">
-                <a href="{{ url_for('user_list') }}" class="collapse-item {% if request.endpoint in ['user_list', 'user_form', 'user_edit'] %}active-link{% endif %}">
-                    <i class="bi bi-person-gear text-primary"></i><span>Users</span>
-                </a>
-                <a href="{{ url_for('role_list') }}" class="collapse-item {% if request.endpoint in ['role_list', 'role_form', 'role_edit'] %}active-link{% endif %}">
-                    <i class="bi bi-shield-check text-success"></i><span>Roles & Permissions</span>
-                </a>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Notifications & Reminders (all users) -->
+        <!-- Notifications -->
+        {% if can_see_page('notification_list') %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#notifReminderMenu" role="button" aria-expanded="{{ 'true' if (request.endpoint in ['notification_list', 'notification_add'] or request.endpoint and 'reminder' in request.endpoint) else 'false' }}">
-                <i class="bi bi-bell-fill text-warning"></i><span>Notifications & Reminders</span>
+                <i class="bi bi-bell-fill text-warning"></i><span>Notifications</span>
             </a>
             <div class="collapse collapse-item-container {% if request.endpoint in ['notification_list', 'notification_add'] or request.endpoint and 'reminder' in request.endpoint %}show{% endif %}"
                  id="notifReminderMenu" data-bs-parent="#sidebarAccordion">
                 <a href="{{ url_for('notification_list') }}" class="collapse-item {% if request.endpoint == 'notification_list' %}active-link{% endif %}">
                     <i class="bi bi-bell text-primary"></i><span>All Notifications</span>
                 </a>
+                {% if can_see_page('notification_add') %}
                 <a href="{{ url_for('notification_add') }}" class="collapse-item {% if request.endpoint == 'notification_add' %}active-link{% endif %}">
-                    <i class="bi bi-plus-circle text-success"></i><span>Add Notification (to all users)</span>
+                    <i class="bi bi-plus-circle text-success"></i><span>Create Notification</span>
                 </a>
+                {% endif %}
                 <a href="{{ url_for('reminder_list') }}" class="collapse-item {% if request.endpoint in ['reminder_list', 'reminder_add', 'reminder_edit'] %}active-link{% endif %}">
                     <i class="bi bi-calendar-check text-info"></i><span>My Reminders</span>
                 </a>
             </div>
         </div>
+        {% endif %}
 
-        <!-- Backup & What's New (What's New always last) -->
+        <!-- Administration -->
+        {% if can_see_section('users_manage') %}
+        <div>
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#userAccessMenu" role="button" aria-expanded="{{ 'true' if users_open else 'false' }}">
+                <i class="bi bi-shield-lock"></i><span>Administration</span>
+            </a>
+            <div class="collapse collapse-item-container {% if users_open %}show{% endif %}"
+                 id="userAccessMenu" data-bs-parent="#sidebarAccordion">
+                {% if can_see_page('user_list') %}
+                <a href="{{ url_for('user_list') }}" class="collapse-item {% if request.endpoint in ['user_list', 'user_form', 'user_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-person-gear text-primary"></i><span>User Management</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('role_list') %}
+                <a href="{{ url_for('role_list') }}" class="collapse-item {% if request.endpoint in ['role_list', 'role_form', 'role_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-shield-check text-success"></i><span>Roles & Permissions</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('form_control') %}
+                <a href="{{ url_for('form_control') }}" class="collapse-item {% if request.endpoint == 'form_control' %}active-link{% endif %}">
+                    <i class="bi bi-sliders text-info"></i><span>Setting</span>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- System (bottom) -->
         <div class="mt-3">
-            {% if 'backup' in current_permissions %}
+            {% if can_see_section('backup') %}
             <a href="{{ url_for('backup_index') }}" class="{% if request.endpoint == 'backup_index' %}active-link{% endif %}">
                 <i class="bi bi-cloud-arrow-down text-info"></i><span>Backup</span>
             </a>
             {% endif %}
+            {% if can_see_page('whats_new') %}
             <a href="{{ url_for('whats_new') }}" class="{% if request.endpoint == 'whats_new' %}active-link{% endif %}">
-                <i class="bi bi-megaphone text-warning"></i><span>What's New / Updates</span>
+                <i class="bi bi-megaphone text-warning"></i><span>What's New</span>
             </a>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -602,6 +779,123 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <script>
+    // ─── Activity logging: device ID + geolocation (one-time permission, background updates) ───
+    // Public API:
+    //   getOrCreateDeviceId() - returns UUID from localStorage (creates and saves if missing).
+    //   logActivity(actionName) - sends POST to backend with device_id, action, and latest lat/lng/accuracy.
+    //   data-log-action="Button Click: Save" on any element - clicking it will call logActivity(attr value).
+    // Location is requested ONLY ONCE per session (sessionStorage); then watchPosition keeps coords updated (enableHighAccuracy: true).
+    (function() {
+        var STORAGE_KEY = 'deviceId';
+        var GEO_SESSION_KEY = 'activityLogGeoRequested';
+
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function getOrCreateDeviceId() {
+            try {
+                var id = localStorage.getItem(STORAGE_KEY);
+                if (id && id.length > 0) return id;
+                id = generateUUID();
+                localStorage.setItem(STORAGE_KEY, id);
+                return id;
+            } catch (e) { return null; }
+        }
+
+        window.getOrCreateDeviceId = getOrCreateDeviceId;
+        window.__lastPosition = null;
+        window.__geoWatchId = null;
+        window.__positionLogged = false;
+
+        function onPositionUpdate(p) {
+            window.__lastPosition = { latitude: p.coords.latitude, longitude: p.coords.longitude, accuracy: p.coords.accuracy };
+            if (!window.__positionLogged && typeof window.logActivity === 'function') {
+                window.__positionLogged = true;
+                window.logActivity('Location acquired');
+            }
+        }
+
+        function startGeolocationOnce() {
+            if (!navigator.geolocation) return;
+            // Browser location sirf HTTPS ya localhost par allow karta hai. HTTP (e.g. 192.168.x.x) par na popup aata hai na Allow enable hota.
+            if (typeof window.isSecureContext !== 'undefined' && !window.isSecureContext) {
+                try { sessionStorage.setItem(GEO_SESSION_KEY, '1'); } catch (e) {}
+                return;
+            }
+            if (sessionStorage.getItem(GEO_SESSION_KEY)) {
+                navigator.geolocation.getCurrentPosition(
+                    function(p) {
+                        onPositionUpdate(p);
+                    },
+                    function() {},
+                    { enableHighAccuracy: true, maximumAge: 60000, timeout: 10000 }
+                );
+                if (!window.__geoWatchId) {
+                    window.__geoWatchId = navigator.geolocation.watchPosition(
+                        function(p) { onPositionUpdate(p); },
+                        function() {},
+                        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+                    );
+                }
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                function(p) {
+                    sessionStorage.setItem(GEO_SESSION_KEY, '1');
+                    onPositionUpdate(p);
+                    if (!window.__geoWatchId) {
+                        window.__geoWatchId = navigator.geolocation.watchPosition(
+                            function(pos) { onPositionUpdate(pos); },
+                            function() {},
+                            { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+                        );
+                    }
+                },
+                function() { sessionStorage.setItem(GEO_SESSION_KEY, '1'); },
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+            );
+        }
+
+        window.logActivity = function(actionName) {
+            var deviceId = getOrCreateDeviceId();
+            var pos = window.__lastPosition || null;
+            var payload = {
+                action: (actionName || 'Activity').substring(0, 200),
+                device_id: deviceId || ''
+            };
+            if (pos) {
+                payload.latitude = pos.latitude;
+                payload.longitude = pos.longitude;
+                payload.accuracy = pos.accuracy;
+            }
+            var csrfEl = document.querySelector('meta[name="csrf-token"]');
+            var headers = { 'Content-Type': 'application/json' };
+            if (csrfEl && csrfEl.getAttribute('content')) headers['X-CSRFToken'] = csrfEl.getAttribute('content');
+            fetch('{{ url_for("api_log_activity") }}', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(payload),
+                credentials: 'same-origin'
+            }).catch(function() {});
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            startGeolocationOnce();
+            // Optional: log activity when elements with data-log-action are clicked
+            document.body.addEventListener('click', function(e) {
+                var el = e.target.closest('[data-log-action]');
+                if (el && typeof window.logActivity === 'function') {
+                    var action = (el.getAttribute('data-log-action') || '').trim();
+                    if (action) window.logActivity(action);
+                }
+            }, true);
+        });
+    })();
+
     // Global District datalist for typeahead
     // (Used by inputs with list="districtOptions")
     // Render options once here so all forms can reuse.

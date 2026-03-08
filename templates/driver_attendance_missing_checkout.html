@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}Missing Check-outs{% endblock %}
+
+{% block content %}
+<style>
+  .missing-co-page { --missing-co-primary: #fd7e14; --missing-co-muted: #64748b; }
+  .missing-co-page .page-header { padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.06); margin-bottom: 1rem; }
+  .missing-co-page .page-title { font-size: 1.5rem; font-weight: 700; color: #1e293b; letter-spacing: -0.02em; }
+  .missing-co-filter .card { border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 12px rgba(0,0,0,0.05); overflow: hidden; }
+  .missing-co-filter .card-header { font-weight: 600; color: #334155; padding: 0.5rem 1rem; background: linear-gradient(135deg, #f8fafc 0%, #fff7ed 100%); border-bottom: 1px solid #e2e8f0; font-size: 0.9375rem; }
+  .missing-co-filter .card-header .hint { font-weight: 400; color: var(--missing-co-muted); font-size: 0.75rem; }
+  .missing-co-filter .card-body { padding: 0.75rem 1rem 1rem; }
+  .missing-co-filter .form-label { font-weight: 600; color: #475569; font-size: 0.75rem; margin-bottom: 0.25rem; }
+  .missing-co-filter .form-control, .missing-co-filter .form-select { min-height: 36px; border-radius: 6px; border-color: #e2e8f0; font-size: 0.875rem; }
+  .missing-co-table-card { border-radius: 14px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden; }
+  .missing-co-table-card .card-header { padding: 0.75rem 1.25rem; background: linear-gradient(135deg, #fd7e14 0%, #e8590c 100%); border: none; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; }
+  .missing-co-table-card .card-header .header-title { font-weight: 600; font-size: 1.05rem; }
+  .missing-co-table-card .card-header .list-search-wrap { max-width: 280px; }
+  .missing-co-table-card .card-header .list-search-wrap .form-control { border-radius: 8px; border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.2); color: #fff; min-height: 38px; }
+  .missing-co-table-card .card-header .list-search-wrap .form-control::placeholder { color: rgba(255,255,255,0.85); }
+  .missing-co-table-card .card-header .list-search-wrap .form-control:focus { background: rgba(255,255,255,0.95); color: #1e293b; border-color: #fff; }
+  .missing-co-table-card .table thead th { font-weight: 600; color: #475569; font-size: 0.8125rem; padding: 0.875rem 1rem; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+  .missing-co-table-card .table tbody td { padding: 0.75rem 1rem; vertical-align: middle; }
+  .missing-co-table-card .table tbody tr:hover { background-color: #fff7ed; }
+  .missing-co-table-card .card-footer { padding: 1rem 1.25rem; background: #fff7ed; border-top: 1px solid #e2e8f0; }
+  .info-box { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.875rem; color: #9a3412; }
+</style>
+<div class="container-fluid missing-co-page">
+  <div class="page-header d-flex flex-wrap justify-content-between align-items-center">
+    <h1 class="page-title mb-0"><i class="bi bi-box-arrow-right me-2 text-warning"></i>Missing Check-outs</h1>
+    <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-primary">
+      <i class="bi bi-arrow-left me-1"></i>Back to List
+    </a>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-4 missing-co-filter">
+    <div class="card-header">
+      <i class="bi bi-funnel me-2"></i>Filters
+      <span class="hint ms-2">— Sirf wo drivers jinhone is date ko check-in kiya hai lekin check-out nahi kiya.</span>
+    </div>
+    <div class="card-body">
+      <form method="get" action="{{ url_for('driver_attendance_missing_checkout') }}" id="filterForm" class="row g-2 align-items-end">
+        <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label">Date</label>
+          <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
+        </div>
+        <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label">Project</label>
+          <select name="project_id" id="projectSelect" class="form-select select2-enable" data-placeholder="Search project...">
+            <option value="0" {% if not project_id %}selected{% endif %}>All Projects</option>
+            {% for p in form.project_id.choices if p[0] != 0 %}
+              <option value="{{ p[0] }}" {% if project_id == p[0] %}selected{% endif %}>{{ p[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label">District</label>
+          <select name="district_id" id="districtSelect" class="form-select select2-enable" data-placeholder="Search district...">
+            <option value="0" {% if not district_id %}selected{% endif %}>All Districts</option>
+            {% for d in form.district_id.choices if d[0] != 0 %}
+              <option value="{{ d[0] }}" {% if district_id == d[0] %}selected{% endif %}>{{ d[1] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label">Vehicle No</label>
+          <select name="vehicle_id" id="vehicleSelect" class="form-select select2-enable" data-placeholder="Search vehicle...">
+            <option value="0" {% if not vehicle_id %}selected{% endif %}>All Vehicles</option>
+            {% for v in vehicles %}
+              <option value="{{ v.id }}" {% if vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}{% if v.vehicle_type %} ({{ v.vehicle_type }}){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label">Shift</label>
+          <select name="shift" id="shiftSelect" class="form-select select2-enable" data-placeholder="Shift">
+            <option value="" {% if not shift %}selected{% endif %}>All</option>
+            <option value="Morning" {% if shift == 'Morning' %}selected{% endif %}>Morning</option>
+            <option value="Night" {% if shift == 'Night' %}selected{% endif %}>Night</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label">Driver</label>
+          <select name="driver_id" id="driverSelect" class="form-select select2-enable" data-placeholder="Search driver...">
+            <option value="0" {% if not driver_id %}selected{% endif %}>All Drivers</option>
+            {% for d in vehicle_drivers %}
+              <option value="{{ d.id }}" {% if driver_id == d.id %}selected{% endif %}>{{ d.name }} ({{ d.driver_id or '-' }}) - {{ d.shift or '-' }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label">Search</label>
+          <input type="text" name="search" class="form-control" placeholder="Name, Vehicle..." value="{{ search or '' }}">
+        </div>
+        <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label d-none d-md-block">&nbsp;</label>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-1"></i>Load
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 mb-4 missing-co-table-card">
+    <div class="card-header text-white py-3">
+      <span class="header-title">Check-in ho chuka, check-out nahi — {{ view_date|ddmmyyyy }}</span>
+      {% if records %}
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="list-search-wrap flex-grow-1 flex-md-grow-0">
+          <input type="text" id="missingCoTableSearch" class="form-control" placeholder="Search in list..." aria-label="Search in list">
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="missingCoTable">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">#</th>
+              <th>Project</th>
+              <th>District</th>
+              <th>Vehicle No</th>
+              <th>Vehicle Type</th>
+              <th>Shift</th>
+              <th>Driver</th>
+              <th>Check-in Time</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rec in records %}
+            {% set d = rec.driver %}
+            <tr>
+              <td class="ps-4">{{ loop.index }}</td>
+              <td>{{ rec.project.name if rec.project else (d.project.name if d.project else '-') }}</td>
+              <td>{{ d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else '-') }}</td>
+              <td class="fw-medium">{{ d.vehicle.vehicle_no if d.vehicle else '-' }}</td>
+              <td><span class="badge bg-light text-dark border">{{ d.vehicle.vehicle_type if d.vehicle and d.vehicle.vehicle_type else '-' }}</span></td>
+              <td>{{ d.shift or '-' }}</td>
+              <td>
+                <span class="fw-medium">{{ d.name }}</span>
+                {% if d.driver_id %}<br><small class="text-muted">{{ d.driver_id }}</small>{% endif %}
+              </td>
+              <td><span class="badge bg-success">{{ rec.check_in.strftime('%H:%M') if rec.check_in else '-' }}</span></td>
+              <td>
+                <a href="{{ url_for('driver_attendance_manual_checkout', driver_id=d.id, date=view_date.strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', vehicle_id=vehicle_id or '', shift=shift or '', search=search or '') }}" class="btn btn-sm btn-outline-danger" title="Manual check-out karein">
+                  <i class="bi bi-box-arrow-right me-1"></i>Check-out
+                </a>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="9" class="text-center py-5 text-muted">
+                {% if project_id or district_id or vehicle_id or shift or driver_id or search %}
+                Is date aur filters ke mutabiq koi driver check-in without check-out nahi hai.
+                {% else %}
+                Filters use karein (Date, Project, District, Vehicle, Shift, Driver). Phir <strong>Load</strong> dabayein — sirf wo drivers dikhenge jinhone check-in kiya hai lekin check-out nahi.
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% if records %}
+    <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span class="text-muted small">{{ records|length }} driver(s) — check-in hai, check-out nahi</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+(function() {
+  var projectSelect = document.getElementById('projectSelect');
+  var districtSelect = document.getElementById('districtSelect');
+  var vehicleSelect = document.getElementById('vehicleSelect');
+  var driverSelect = document.getElementById('driverSelect');
+  var shiftSelect = document.getElementById('shiftSelect');
+
+  function initSelect2For(el, placeholder) {
+    if (!el || !$.fn.select2) return;
+    var $el = $(el);
+    if ($el.data('select2')) $el.select2('destroy');
+    $el.select2({ theme: 'bootstrap-5', width: '100%', placeholder: placeholder || 'Search...' });
+  }
+
+  setTimeout(function() {
+    initSelect2For(projectSelect, 'Search project...');
+    initSelect2For(districtSelect, 'Search district...');
+    initSelect2For(vehicleSelect, 'Search vehicle...');
+    initSelect2For(shiftSelect, 'Shift');
+    initSelect2For(driverSelect, 'Search driver...');
+  }, 50);
+
+  if (projectSelect && districtSelect) {
+    projectSelect.addEventListener('change', function() {
+      var pid = this.value;
+      if ($(districtSelect).data('select2')) $(districtSelect).select2('destroy');
+      districtSelect.innerHTML = '<option value="0">All Districts</option>';
+      vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
+      driverSelect.innerHTML = '<option value="0">All Drivers</option>';
+      vehicleSelect.value = '0';
+      driverSelect.value = '0';
+      initSelect2For(vehicleSelect, 'Search vehicle...');
+      initSelect2For(driverSelect, 'Search driver...');
+      if (pid && pid !== '0') {
+        fetch('/get_districts_by_project/' + pid)
+          .then(function(r) { return r.json(); })
+          .then(function(districts) {
+            districts.forEach(function(d) {
+              var opt = document.createElement('option');
+              opt.value = d.id;
+              opt.textContent = d.name;
+              districtSelect.appendChild(opt);
+            });
+            initSelect2For(districtSelect, 'Search district...');
+          });
+        fetch('/get_vehicles_by_project_district?project_id=' + pid + '&district_id=0')
+          .then(function(r) { return r.json(); })
+          .then(function(vehicles) {
+            if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+            vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
+            vehicles.forEach(function(v) {
+              var opt = document.createElement('option');
+              opt.value = v.id;
+              opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+              vehicleSelect.appendChild(opt);
+            });
+            vehicleSelect.value = '0';
+            initSelect2For(vehicleSelect, 'Search vehicle...');
+          });
+      } else {
+        fetch('/get_vehicles_by_project_district')
+          .then(function(r) { return r.json(); })
+          .then(function(vehicles) {
+            if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+            vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
+            vehicles.forEach(function(v) {
+              var opt = document.createElement('option');
+              opt.value = v.id;
+              opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+              vehicleSelect.appendChild(opt);
+            });
+            vehicleSelect.value = '0';
+            initSelect2For(vehicleSelect, 'Search vehicle...');
+          });
+        initSelect2For(districtSelect, 'Search district...');
+      }
+    });
+  }
+  if (districtSelect && vehicleSelect) {
+    districtSelect.addEventListener('change', function() {
+      var pid = projectSelect && projectSelect.value ? projectSelect.value : '0';
+      var did = this.value;
+      if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+      if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
+      vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
+      driverSelect.innerHTML = '<option value="0">All Drivers</option>';
+      vehicleSelect.value = '0';
+      driverSelect.value = '0';
+      initSelect2For(vehicleSelect, 'Search vehicle...');
+      initSelect2For(driverSelect, 'Search driver...');
+      fetch('/get_vehicles_by_project_district?project_id=' + pid + '&district_id=' + did)
+        .then(function(r) { return r.json(); })
+        .then(function(vehicles) {
+          if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+          vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
+          vehicles.forEach(function(v) {
+            var opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+            vehicleSelect.appendChild(opt);
+          });
+          vehicleSelect.value = '0';
+          initSelect2For(vehicleSelect, 'Search vehicle...');
+        });
+    });
+  }
+  if (vehicleSelect && driverSelect) {
+    vehicleSelect.addEventListener('change', function() {
+      var vid = this.value;
+      if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
+      driverSelect.innerHTML = '<option value="0">All Drivers</option>';
+      if (vid && vid !== '0') {
+        fetch('/get_drivers_by_vehicle/' + vid)
+          .then(function(r) { return r.json(); })
+          .then(function(drivers) {
+            drivers.forEach(function(d) {
+              var opt = document.createElement('option');
+              opt.value = d.id;
+              opt.textContent = d.name + (d.driver_id ? ' (' + d.driver_id + ')' : '') + (d.shift ? ' - ' + d.shift : '');
+              driverSelect.appendChild(opt);
+            });
+            driverSelect.value = '0';
+            initSelect2For(driverSelect, 'Search driver...');
+          });
+      } else {
+        driverSelect.value = '0';
+        initSelect2For(driverSelect, 'Search driver...');
+      }
+    });
+  }
+  var missingCoSearch = document.getElementById('missingCoTableSearch');
+  if (missingCoSearch) {
+    missingCoSearch.addEventListener('keyup', function() {
+      var q = this.value.toLowerCase();
+      document.querySelectorAll('#missingCoTable tbody tr').forEach(function(row) {
+        if (row.cells.length < 2) return;
+        var text = row.innerText.toLowerCase();
+        row.style.display = text.indexOf(q) > -1 ? '' : 'none';
+      });
+    });
+  }
+})();
+</script>
+{% endblock %}

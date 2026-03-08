@@ -50,6 +50,7 @@
   <div class="card shadow border-0 rounded-3 overflow-hidden">
     <div class="card-header bg-info text-white py-3">
       <span class="fw-semibold">Monthly Summary</span>
+      <small class="opacity-90 ms-2">(Active drivers with vehicle assigned)</small>
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
@@ -99,7 +100,7 @@
       </div>
     </div>
     <div class="card-footer bg-light text-muted small d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span>Total drivers: <strong>{{ report|length }}</strong></span>
+      <span>Active drivers (vehicle assigned): <strong>{{ report|length }}</strong></span>
       <input type="text" id="reportTableSearch" class="form-control form-control-sm" style="max-width: 220px;" placeholder="Search in report...">
     </div>
   </div>

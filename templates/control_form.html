@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Form Control{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-sliders me-2 text-primary"></i>Form Control</h2>
+    <a href="{{ url_for('user_list') }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left me-1"></i>User & Access</a>
+  </div>
+
+  <p class="text-muted">Yahan different forms ke control set kiye jaate hain. Abi Attendance time window set karein — Morning / Night shift kis time se kis time tak attendance lag sakti hai.</p>
+
+  <div class="row">
+    <div class="col-lg-8">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-light py-3">
+          <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Attendance Time Control</h5>
+        </div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('form_control') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3">
+              <div class="col-12">
+                <p class="text-muted small mb-2">Morning shift walay driver kis time se kis time tak attendance laga sakte hain:</p>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Morning shift: Start time</label>
+                {{ form.morning_start(class="form-control") }}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Morning shift: End time</label>
+                {{ form.morning_end(class="form-control") }}
+              </div>
+              <div class="col-12 mt-3">
+                <p class="text-muted small mb-2">Night shift walay driver kis time se kis time tak attendance laga sakte hain:</p>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Night shift: Start time</label>
+                {{ form.night_start(class="form-control") }}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Night shift: End time</label>
+                {{ form.night_end(class="form-control") }}
+              </div>
+              <div class="col-12 mt-3">
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-check2-circle me-1"></i>Save
+                </button>
+              </div>
+            </div>
+          </form>
+          <p class="text-muted small mt-3 mb-0">
+            Agar koi time blank chhod diya to us shift ke liye time check nahi lagega (koi bhi time allowed).<br>
+            <strong>Night shift overnight:</strong> Agar night window midnight cross kare (e.g. 22:00 – 06:00) to bhi sahi se check hota hai.<br>
+            Ye control sirf <strong>Mark At Attendance (GPS + Camera)</strong> wale flow par apply hota hai.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

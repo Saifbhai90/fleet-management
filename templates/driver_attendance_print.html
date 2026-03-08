@@ -23,37 +23,69 @@
           <thead class="table-light">
             <tr>
               <th>#</th>
-              <th>Vehicle No</th>
-              <th>Name</th>
+              <th>Date</th>
               <th>Driver ID</th>
-              <th>Project / District</th>
+              <th>Name</th>
+              <th>Project / District / Parking</th>
+              <th>Vehicle No</th>
+              <th>Vehicle Type</th>
+              <th>Shift</th>
               <th>Status</th>
               <th>Check In</th>
+              <th>Check In Photo</th>
+              <th>Check In Remarks</th>
               <th>Check Out</th>
-              <th>Remarks</th>
+              <th>Check Out Photo</th>
+              <th>Check Out Remarks</th>
             </tr>
           </thead>
           <tbody>
             {% for driver in drivers %}
             {% set rec = by_driver.get(driver.id) %}
+            {% set district_name = driver.district.name if driver.district else (driver.vehicle.district.name if driver.vehicle and driver.vehicle.district else '-') %}
+            {% set parking_name = driver.vehicle.parking_station.name if driver.vehicle and driver.vehicle.parking_station else '-' %}
+            {% set project_district_parking = (driver.project.name if driver.project else '-') ~ ' / ' ~ district_name ~ ' / ' ~ parking_name %}
+            {% if rec and (rec.check_in_photo_path or (rec.check_in_latitude is not none and rec.check_in_longitude is not none)) %}
+              {% set check_in_remarks_text = 'Check-in via GPS & Camera' %}
+            {% elif rec and rec.remarks and 'Manual check-in:' in rec.remarks %}
+              {% set _pi = (rec.remarks or '').split('Manual check-in:') %}
+              {% set check_in_remarks_text = (_pi[1].split(' | ')[0].strip() if _pi|length > 1 else '') or 'Manual check-in' %}
+            {% else %}
+              {% set check_in_remarks_text = '' %}
+            {% endif %}
+            {% if rec and (rec.check_out_photo_path or (rec.check_out_latitude is not none and rec.check_out_longitude is not none)) %}
+              {% set check_out_remarks_text = 'Check-out via GPS & Camera' %}
+            {% elif rec and rec.remarks and 'Manual check-out' in rec.remarks %}
+              {% set _po = (rec.remarks or '').split('Manual check-out', 1) %}
+              {% set _po_after = (_po[1].split(' | ')[0].strip() if _po|length > 1 else '') %}
+              {% set check_out_remarks_text = (_po_after[2:].strip() if _po_after.startswith(': ') else _po_after) or 'Manual check-out' %}
+            {% else %}
+              {% set check_out_remarks_text = '' %}
+            {% endif %}
             <tr>
               <td>{{ loop.index }}</td>
-              <td>{{ driver.vehicle.vehicle_no if driver.vehicle else '-' }}</td>
-              <td>{{ driver.name }}</td>
+              <td>{{ view_date.strftime('%d-%m-%Y') }}</td>
               <td>{{ driver.driver_id or '-' }}</td>
-              <td class="small">{{ driver.project.name if driver.project else '-' }} / {{ driver.district.name if driver.district else '-' }}</td>
+              <td>{{ driver.name }}</td>
+              <td class="small">{{ project_district_parking }}</td>
+              <td>{{ driver.vehicle.vehicle_no if driver.vehicle else '-' }}</td>
+              <td>{{ (driver.vehicle.vehicle_type if driver.vehicle else '') or '-' }}</td>
+              <td>{{ driver.shift or '-' }}</td>
               <td>
                 {% if rec %}
-                  <span class="badge {% if rec.status == 'Present' %}bg-success{% elif rec.status == 'Absent' %}bg-danger{% elif rec.status == 'Leave' %}bg-info{% elif rec.status == 'Late' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ rec.status }}</span>
+                  <span class="badge {% if rec.status == 'Leave' %}bg-info{% elif rec.status == 'Late' %}bg-warning text-dark{% elif rec.status == 'Half-Day' %}bg-secondary{% elif rec.status == 'Off' %}bg-dark{% else %}bg-secondary{% endif %}">{{ rec.status }}</span>
                 {% else %}-{% endif %}
               </td>
-              <td>{% if rec and rec.check_in %}{{ rec.check_in.strftime('%H:%M') }}{% else %}-{% endif %}</td>
-              <td>{% if rec and rec.check_out %}{{ rec.check_out.strftime('%H:%M') }}{% else %}-{% endif %}</td>
-              <td class="small">{% if rec and rec.remarks %}{{ rec.remarks[:40] }}{% if rec.remarks|length > 40 %}...{% endif %}{% else %}-{% endif %}</td>
+              <td>{% if rec and rec.check_in %}{{ rec.check_in.strftime('%H:%M') }}{% if rec.check_in_latitude is not none and rec.check_in_longitude is not none %} <small class="text-muted">(GPS)</small>{% endif %}{% else %}-{% endif %}</td>
+              <td class="small">{% if rec and rec.check_in_photo_path %}Yes{% else %}-{% endif %}</td>
+              <td class="small">{{ check_in_remarks_text or '-' }}</td>
+              <td>{% if rec and rec.check_out %}{{ rec.check_out.strftime('%H:%M') }}{% if rec.check_out_latitude is not none and rec.check_out_longitude is not none %} <small class="text-muted">(GPS)</small>{% endif %}{% else %}-{% endif %}</td>
+              <td class="small">{% if rec and rec.check_out_photo_path %}Yes{% else %}-{% endif %}</td>
+              <td class="small">{{ check_out_remarks_text or '-' }}</td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="9" class="text-center py-4 text-muted">No marked attendance for this date.</td>
+              <td colspan="16" class="text-center py-4 text-muted">No marked attendance for this date.</td>
             </tr>
             {% endfor %}
           </tbody>

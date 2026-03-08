@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Activity &amp; Login Log Report{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <h2 class="mb-4"><i class="bi bi-journal-check me-2 text-primary"></i>Activity &amp; Login Log Report</h2>
+  <p class="text-muted">Ek hi report: (1) Login sessions — kaun login hua, kab, device/browser, IP, aur session mein kya-kya kiya. (2) Client activity — device ID, action, aur <strong>latitude/longitude</strong> (jab browser location allow ho) with View on Map.</p>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="get" action="{{ url_for('activity_log_report') }}" class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label">Date From</label>
+          <input type="date" name="date_from" class="form-control" value="{{ date_from or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Date To</label>
+          <input type="date" name="date_to" class="form-control" value="{{ date_to or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">User ID</label>
+          <select name="user_id" class="form-select">
+            <option value="">-- All --</option>
+            {% for u in users_for_filter %}
+              <option value="{{ u.id }}" {% if user_id_q == u.id %}selected{% endif %}>{{ u.id }} - {{ u.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">User / Name</label>
+          <input type="text" name="username" class="form-control" placeholder="Username or name" value="{{ username_q or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Device ID</label>
+          <input type="text" name="device_id" class="form-control" placeholder="Client device UUID" value="{{ device_id_q or '' }}">
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-1"></i>Search
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Section 1: Login sessions (server-side, no lat/long) -->
+  <div class="card shadow border-0 rounded-3 overflow-hidden mb-4">
+    <div class="card-header bg-primary text-white py-3">
+      <span class="fw-semibold">1. Login sessions (latest 500) — server-side, sirf IP</span>
+    </div>
+    <div class="card-body p-0">
+      {% if sessions %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">#</th>
+              <th>User ID</th>
+              <th>User</th>
+              <th>Login Date &amp; Time</th>
+              <th>Logout Date &amp; Time</th>
+              <th>Device ID</th>
+              <th>Device / Browser</th>
+              <th>IP</th>
+              <th class="text-center">Actions</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in sessions %}
+            <tr>
+              <td class="ps-3">{{ loop.index }}</td>
+              <td><code>{{ s.user_id }}</code></td>
+              <td>{{ s.user.username }}{% if s.user.full_name %} <span class="text-muted">({{ s.user.full_name }})</span>{% endif %}</td>
+              <td>{{ s.login_at.strftime('%Y-%m-%d %H:%M:%S') if s.login_at else '-' }}</td>
+              <td>{{ s.logout_at.strftime('%Y-%m-%d %H:%M:%S') if s.logout_at else '-' }}</td>
+              <td><code>{{ s.device_id }}</code></td>
+              <td><small title="{{ s.user_agent or '-' }}">{{ (s.user_agent or '-')[:50] }}{% if (s.user_agent or '')|length > 50 %}…{% endif %}</small></td>
+              <td><small>{{ s.ip_address or '-' }}</small></td>
+              <td class="text-center">
+                {% set acts = activities_by_log.get(s.id, []) %}
+                <span class="badge bg-secondary">{{ acts|length }}</span>
+              </td>
+              <td>
+                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#act-{{ s.id }}" aria-expanded="false">
+                  <i class="bi bi-list-ul"></i> Detail
+                </button>
+              </td>
+            </tr>
+            <tr class="collapse" id="act-{{ s.id }}">
+              <td colspan="10" class="bg-light pt-3 pb-3">
+                <strong class="d-block mb-2">User ID {{ s.user_id }}, Device ID <code>{{ s.device_id }}</code> — Is session mein {{ s.login_at.strftime('%Y-%m-%d %H:%M') if s.login_at else '-' }} ye kaam kiye:</strong>
+                {% set acts = activities_by_log.get(s.id, []) %}
+                {% if acts %}
+                <table class="table table-sm table-bordered mb-0">
+                  <thead>
+                    <tr><th>Date &amp; Time</th><th>Action</th><th>Path</th></tr>
+                  </thead>
+                  <tbody>
+                    {% for a in acts %}
+                    <tr>
+                      <td>{{ a.created_at.strftime('%Y-%m-%d %H:%M:%S') if a.created_at else '-' }}</td>
+                      <td>{{ a.description or a.endpoint or '-' }}</td>
+                      <td><small>{{ a.path or '-' }}</small></td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted small mb-0">No actions recorded for this session.</p>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="p-4 text-muted mb-0">No login sessions found. Try a wider date range or remove filters.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Section 2: Client activity (device + geolocation — yahan lat/long & View on Map) -->
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-success text-white py-3">
+      <span class="fw-semibold">2. Client activity (device ID + location) — yahan Latitude, Longitude aur View on Map</span>
+    </div>
+    <div class="card-body p-0">
+      {% if client_logs %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">#</th>
+              <th>User ID</th>
+              <th>User</th>
+              <th>Device ID</th>
+              <th>Action</th>
+              <th>Date &amp; Time</th>
+              <th>Latitude</th>
+              <th>Longitude</th>
+              <th>Accuracy (m)</th>
+              <th>IP</th>
+              <th>View on Map</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in client_logs %}
+            <tr>
+              <td class="ps-3">{{ loop.index }}</td>
+              <td><code>{{ log.user_id }}</code></td>
+              <td>{{ log.user.username }}{% if log.user.full_name %} <span class="text-muted">({{ log.user.full_name }})</span>{% endif %}</td>
+              <td><code>{{ log.device_id or '-' }}</code></td>
+              <td>{{ log.action }}</td>
+              <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '-' }}</td>
+              <td>{{ log.latitude if log.latitude is not none else '-' }}</td>
+              <td>{{ log.longitude if log.longitude is not none else '-' }}</td>
+              <td>{{ log.accuracy if log.accuracy is not none else '-' }}</td>
+              <td><small>{{ log.ip_address or '-' }}</small></td>
+              <td>
+                {% if log.latitude is not none and log.longitude is not none %}
+                <a href="https://www.google.com/maps?q={{ log.latitude }},{{ log.longitude }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary me-1" title="Google Maps">
+                  <i class="bi bi-map"></i> Map
+                </a>
+                <a href="https://www.openstreetmap.org/?mlat={{ log.latitude }}&amp;mlon={{ log.longitude }}&amp;zoom=17" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" title="OpenStreetMap">OSM</a>
+                {% else %}
+                <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="p-4 text-muted mb-0">No client activity logs found. Lat/long aur View on Map tab aate hain jab user browser mein <strong>location allow</strong> kare aur app client-side log bheje (e.g. Dashboard open karne par).</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="alert alert-info border-0 shadow-sm mt-4 mb-0">
+    <strong>Latitude, Longitude aur View on Map kyun kabhi-kabhi nahi dikhte?</strong><br>
+    <strong>Pehli table (Login sessions):</strong> Ye server-side hai — sirf IP address log hota hai. Is table mein lat/long hoti hi nahi.<br>
+    <strong>Dusri table (Client activity):</strong> Yahan lat/long tab aati hai jab user <strong>browser mein location allow</strong> karta hai (login/dashboard ke baad ek baar popup aata hai). Agar user ne location block kar di ya browser ne coordinates nahi diye (e.g. indoor, ya permission deny), to entries to banaenge lekin Latitude/Longitude aur View on Map <strong>-</strong> dikhenge. Device ID aur IP phir bhi save hote hain.<br>
+    <strong class="text-primary">Location popup na aaye ya "Allow" greyed out ho?</strong> Browser location sirf <strong>HTTPS</strong> ya <strong>localhost</strong> (127.0.0.1) par allow karta hai. Agar app <code>http://192.168.18.15:5000</code> jaisi <strong>HTTP</strong> URL se chal rahi hai, to browser location ko block kar deta hai — na popup aata hai, na site settings mein Allow enable hota. <strong>Fix:</strong> App ko HTTPS par chalao (e.g. production par) ya local test ke liye <code>http://127.0.0.1:5000</code> use karo.
+  </div>
+</div>
+{% endblock %}

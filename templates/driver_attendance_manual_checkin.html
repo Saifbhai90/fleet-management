@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Manual Check-in{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-pencil-square me-2 text-success"></i>Manual Check-in</h2>
+    <a href="{{ back_url }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Missing Check IN</a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3" style="max-width: 520px;">
+    <div class="card-body">
+      <p class="text-muted small mb-3">Driver ne abhi check-in nahi kiya; yahan se manually check-in time set karein.</p>
+      <dl class="row mb-0 small">
+        <dt class="col-sm-4">District</dt>
+        <dd class="col-sm-8">{{ driver.district.name if driver.district else (driver.vehicle.district.name if driver.vehicle and driver.vehicle.district else '-') }}</dd>
+        <dt class="col-sm-4">Project</dt>
+        <dd class="col-sm-8">{{ driver.project.name if driver.project else '-' }}</dd>
+        <dt class="col-sm-4">Vehicle No</dt>
+        <dd class="col-sm-8">{{ driver.vehicle.vehicle_no if driver.vehicle else '-' }}</dd>
+        <dt class="col-sm-4">Driver Name</dt>
+        <dd class="col-sm-8">{{ driver.name }}{% if driver.driver_id %} ({{ driver.driver_id }}){% endif %}</dd>
+        <dt class="col-sm-4">Shift</dt>
+        <dd class="col-sm-8">{{ driver.shift or '-' }}</dd>
+        <dt class="col-sm-4">Date</dt>
+        <dd class="col-sm-8">{{ view_date.strftime('%d-%m-%Y') }}</dd>
+      </dl>
+
+      <form method="post" action="{{ url_for('driver_attendance_manual_checkin') }}" class="mt-4" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="driver_id" value="{{ driver.id }}">
+        <input type="hidden" name="date" value="{{ view_date.strftime('%d-%m-%Y') }}">
+        {% for k, v in (back_params or {}).items() %}
+        <input type="hidden" name="{{ k }}" value="{{ v }}">
+        {% endfor %}
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Check-in Time <span class="text-danger">*</span></label>
+          <input type="time" name="check_in_time" class="form-control form-control-lg" required step="60" value="{{ request.form.get('check_in_time', '') }}">
+          <div class="form-text">Format: HH:MM AM/PM (e.g. 9:00 AM, 5:30 PM) — seconds mat likhein.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Reason <span class="text-danger">*</span></label>
+          <input type="text" name="remarks" class="form-control" placeholder="Manual check-in ka reason likhein" value="{{ request.form.get('remarks', '') }}" required>
+          <div class="form-text">Manual check-in kyun kar rahe hain — reason likhein.</div>
+        </div>
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Photo <span class="text-muted">(optional)</span></label>
+          <input type="file" name="photo" class="form-control" accept="image/*" capture="environment">
+          <div class="form-text">Agar chahein to check-in ki photo attach karein.</div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-check2 me-1"></i>Save Check-in
+          </button>
+          <a href="{{ back_url }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

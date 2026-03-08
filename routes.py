@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session, send_file
+from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session, send_file, abort
 from app import app, db
 from models import (
     Company, Project, Vehicle, Driver, ParkingStation, District, EmployeePost, Employee,
@@ -9,7 +9,9 @@ from models import (
     MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
     Notification, NotificationRead,
     User, Role, Permission,
+    LoginLog, ActivityLog, ClientActivityLog,
     Reminder,
+    AttendanceTimeControl,
 )
 from forms import (
     CompanyForm, ProjectForm, VehicleForm, VehicleImportForm, DriverForm, DriverImportForm, ParkingForm, DistrictForm,
@@ -32,6 +34,8 @@ from forms import (
     NotificationForm,
     ReminderForm,
     ChangePasswordForm,
+    SetNewPasswordForm,
+    AttendanceTimeControlForm,
 )
 from datetime import datetime, date, time, timezone
 from datetime import timedelta
@@ -41,7 +45,7 @@ from sqlalchemy import func, text, inspect, or_, cast
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone
-from auth_utils import get_required_permission, user_has_permission, check_password
+from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
 from werkzeug.security import generate_password_hash
 import re
 import os
@@ -55,6 +59,8 @@ def require_login():
         return
     if endpoint in ('login',):
         return
+    if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
+        return  # First-time password set flow (no full login yet)
     if not session.get('user'):
         return redirect(url_for('login'))
     # Session timeout (unless "remember me" made session permanent)
@@ -73,12 +79,63 @@ def require_login():
             flash('Session expired. Please login again.', 'info')
             return redirect(url_for('login'))
     # Role-based access: check if user has permission for this endpoint
+    # Master ke liye role ki value nahi: sab routes allow, koi permission check nahi
+    if session.get('is_master'):
+        session['last_activity'] = now
+        return
     required = get_required_permission(endpoint)
+    if endpoint == 'company_form' and request.view_args and request.view_args.get('id'):
+        required = 'companies_edit'
     if required:
         perms = session.get('permissions') or []
-        if not user_has_permission(perms, required):
+        if not user_can_access(perms, required):
             session['show_no_access'] = True  # show once on login page, not per-request flash
             return redirect(url_for('login'))
+
+
+def _endpoint_description(endpoint, method):
+    """Human-readable short description for activity log."""
+    if not endpoint:
+        return None
+    ep = (endpoint or '').replace('_', ' ').title()
+    if method == 'GET':
+        return f'Viewed {ep}'
+    if method == 'POST':
+        return f'Submitted {ep}'
+    return f'{method} {ep}'
+
+
+@app.after_request
+def log_activity(response):
+    """Log authenticated user activity for activity report (skip static, login, logout, report itself)."""
+    try:
+        endpoint = request.endpoint or ''
+        if endpoint.startswith('static') or endpoint in ('login', 'logout'):
+            return response
+        if endpoint == 'activity_log_report':
+            return response
+        user_id = session.get('user_id')
+        if not user_id:
+            return response
+        login_log_id = session.get('login_log_id')
+        path = (request.path or '')[:500]
+        desc = _endpoint_description(endpoint, request.method)
+        act = ActivityLog(
+            user_id=user_id,
+            login_log_id=login_log_id,
+            endpoint=endpoint[:120] if endpoint else None,
+            method=request.method[:10] if request.method else None,
+            path=path or None,
+            description=desc[:500] if desc else None,
+        )
+        db.session.add(act)
+        db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    return response
 
 
 # ────────────────────────────────────────────────
@@ -218,7 +275,8 @@ def dashboard():
                            total_drivers=total_drivers,
                            total_parking=total_parking,
                            total_districts=total_districts,
-                           notifications=notifications)
+                           notifications=notifications,
+                           from_login=request.args.get('from_login') == '1')
 
 
 @app.route('/notification/<int:pk>/read', methods=['POST'])
@@ -385,6 +443,8 @@ def account_change_password():
             flash('Current password is incorrect.', 'danger')
             return render_template('account_change_password.html', form=form)
         user.password_hash = generate_password_hash(form.new_password.data)
+        if getattr(user, 'force_password_change', None):
+            user.force_password_change = False
         db.session.commit()
         flash('Password changed successfully. Please login again.', 'success')
         session.pop('user_id', None)
@@ -1453,6 +1513,7 @@ def driver_form(id=None):
         title = "Add New Driver"
     if form.validate_on_submit():
         try:
+            u = None
             form.populate_obj(driver)
             if not id:
                 db.session.add(driver)
@@ -1478,7 +1539,18 @@ def driver_form(id=None):
                 driver.document_path = os.path.join('drivers', str(driver.id), fname).replace('\\', '/')
             if photo_file and photo_file.filename or doc_file and doc_file.filename:
                 db.session.commit()
-            flash(f"Driver '{driver.name}' successfully {'updated' if id else 'added'}!", 'success')
+            if not id and driver.cnic_no and (driver.cnic_no or '').strip() and driver.vehicle_id:
+                post_id, role_id = None, None
+                if driver.post and (driver.post or '').strip():
+                    emp_post = EmployeePost.query.filter(EmployeePost.full_name == (driver.post or '').strip()).first()
+                    if emp_post:
+                        post_id = emp_post.id
+                        role_id = emp_post.role_id
+                u = _create_user_for_employee_or_driver(driver.cnic_no.strip(), driver.name, post_id, role_id)
+                if u:
+                    flash("Driver saved! Login user bhi ban gaya: User ID = CNIC, pehli dafa password 123 se login karein, phir naya password set karein.", 'success')
+            if id or not (not id and driver.cnic_no and (driver.cnic_no or '').strip() and u):
+                flash(f"Driver '{driver.name}' successfully {'updated' if id else 'added'}!", 'success')
             return redirect(url_for('drivers_list'))
         except Exception as e:
             db.session.rollback()
@@ -1561,7 +1633,19 @@ def employee_form(id=None):
             if not id:
                 db.session.add(emp)
             db.session.commit()
-            flash('Employee saved successfully!', 'success')
+            # Employee Inactive/Active hone par us CNIC wale User ka login enable/disable
+            if id and emp.cnic_no and (emp.cnic_no or '').strip():
+                _sync_user_active_by_cnic(emp.cnic_no.strip(), (emp.status or '').strip() == 'Active')
+            if not id and emp.cnic_no and (emp.cnic_no or '').strip() and (emp.status or '').strip() == 'Active':
+                post = EmployeePost.query.get(emp.post_id) if emp.post_id else None
+                role_id = post.role_id if post else None
+                u = _create_user_for_employee_or_driver(emp.cnic_no.strip(), emp.name, emp.post_id, role_id)
+                if u:
+                    flash('Employee saved! Login user bhi ban gaya: User ID = CNIC, pehli dafa password 123 se login karein, phir naya password set karein.', 'success')
+                else:
+                    flash('Employee saved successfully!', 'success')
+            else:
+                flash('Employee saved successfully!', 'success')
             return redirect(url_for('employees_list'))
         except Exception as e:
             db.session.rollback()
@@ -1644,19 +1728,77 @@ def login():
         username = (form.username.data or '').strip()
         password = (form.password.data or '').strip()
         user = User.query.filter(func.lower(User.username) == username.lower()).first()
-        if user and user.is_active and check_password(user, password):
-            session['user_id'] = user.id
-            session['user'] = user.full_name or user.username
-            session['permissions'] = user.permission_codes()
-            session.permanent = form.remember_me.data
-            flash(f'Welcome, {session["user"]}!', 'success')
-            return redirect(url_for('dashboard'))
+        if user and _user_effective_active(user):
+            if password == DEFAULT_FIRST_PASSWORD and getattr(user, 'force_password_change', None):
+                if check_password(user, DEFAULT_FIRST_PASSWORD):
+                    session['must_set_password_user_id'] = user.id
+                    return redirect(url_for('set_new_password'))
+                # else wrong password
+            elif password == DEFAULT_FIRST_PASSWORD and not getattr(user, 'force_password_change', None):
+                flash('Invalid user ID or password. Pehli dafa login ke baad naya password set karein; ab 123 kaam nahi karega.', 'danger')
+                return redirect(url_for('login'))
+            elif check_password(user, password):
+                session['user_id'] = user.id
+                session['user'] = user.full_name or user.username
+                is_master = bool(user.role and user.role.name == 'Master')
+                session['is_master'] = is_master
+                # Master ke liye role ki value nahi: hamesha saari permissions (DB se sab codes), taake koi cheez miss na ho
+                if is_master:
+                    session['permissions'] = [p.code for p in Permission.query.all()]
+                else:
+                    session['permissions'] = user.permission_codes()
+                session.permanent = form.remember_me.data
+                try:
+                    login_log = LoginLog(
+                        user_id=user.id,
+                        ip_address=request.remote_addr,
+                        user_agent=(request.headers.get('User-Agent') or '')[:500],
+                    )
+                    db.session.add(login_log)
+                    db.session.commit()
+                    session['login_log_id'] = login_log.id
+                except Exception:
+                    db.session.rollback()
+                flash(f'Welcome, {session["user"]}!', 'success')
+                return redirect(url_for('dashboard', from_login=1))
         flash('Invalid user ID or password.', 'danger')
     return render_template('login.html', form=form)
 
 
+@app.route('/set-new-password', methods=['GET', 'POST'])
+def set_new_password():
+    """First-time password set: user logged in with 123, must set new password. Then redirect to login."""
+    user_id = session.get('must_set_password_user_id')
+    if not user_id:
+        flash('Invalid or expired. Please login with your CNIC and password 123.', 'info')
+        return redirect(url_for('login'))
+    user = User.query.get(user_id)
+    if not user or not getattr(user, 'force_password_change', None):
+        session.pop('must_set_password_user_id', None)
+        flash('Please login with your CNIC and your password.', 'info')
+        return redirect(url_for('login'))
+    form = SetNewPasswordForm()
+    if form.validate_on_submit():
+        user.password_hash = generate_password_hash(form.new_password.data)
+        user.force_password_change = False
+        db.session.commit()
+        session.pop('must_set_password_user_id', None)
+        flash('Password set successfully. Ab apna CNIC aur naya password daal kar login karein.', 'success')
+        return redirect(url_for('login'))
+    return render_template('set_new_password.html', form=form, username=user.username)
+
+
 @app.route('/logout')
 def logout():
+    # Mark logout time for current session's login log if any
+    try:
+        log_id = session.get('login_log_id')
+        if log_id:
+            LoginLog.query.filter_by(id=log_id).update({'logout_at': datetime.utcnow()})
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+    session.pop('login_log_id', None)
     session.pop('user_id', None)
     session.pop('user', None)
     session.pop('permissions', None)
@@ -1665,133 +1807,463 @@ def logout():
 
 
 # ────────────────────────────────────────────────
+# API: Client activity log (device ID + geolocation)
+# ────────────────────────────────────────────────
+@app.route('/api/log-activity', methods=['POST'])
+def api_log_activity():
+    """Accept client-side activity log: action, device_id, latitude, longitude, accuracy. User from session."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'ok': False, 'error': 'Not logged in'}), 401
+    data = request.get_json(silent=True) or {}
+    action = (data.get('action') or '').strip()[:200] or 'Activity'
+    device_id = (data.get('device_id') or '').strip()[:80] or None
+    lat = data.get('latitude')
+    lng = data.get('longitude')
+    accuracy = data.get('accuracy')
+    try:
+        lat = float(lat) if lat is not None else None
+    except (TypeError, ValueError):
+        lat = None
+    try:
+        lng = float(lng) if lng is not None else None
+    except (TypeError, ValueError):
+        lng = None
+    try:
+        accuracy = float(accuracy) if accuracy is not None else None
+    except (TypeError, ValueError):
+        accuracy = None
+    ip_address = (request.remote_addr or '')[:64] or None
+    try:
+        log = ClientActivityLog(
+            user_id=user_id,
+            device_id=device_id,
+            action=action,
+            latitude=lat,
+            longitude=lng,
+            accuracy=accuracy,
+            ip_address=ip_address,
+        )
+        db.session.add(log)
+        db.session.commit()
+        return jsonify({'ok': True, 'id': log.id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ────────────────────────────────────────────────
 # User & Role Management (requires users_manage permission)
 # ────────────────────────────────────────────────
+def _current_user_is_master():
+    return session.get('is_master', False)
+
+def _role_name(role):
+    return (role.name if role else '').strip()
+
+def _user_can_edit_user(editor_is_master, target_user):
+    """Only Master can edit users with role Master or Admin. Others can be edited by Master or Admin."""
+    if not target_user or not target_user.role:
+        return True
+    rname = _role_name(target_user.role)
+    if rname in ('Master', 'Admin'):
+        return editor_is_master
+    return True
+
+
+DEFAULT_FIRST_PASSWORD = '123'
+
+
+def _sync_user_active_by_cnic(cnic, is_active):
+    """User (username=CNIC) ka is_active set karo – Employee Inactive/Active ya Driver Left/Rejoin pe."""
+    if not cnic or not (cnic or '').strip():
+        return
+    username = (cnic or '').strip()
+    u = User.query.filter(func.lower(User.username) == username.lower()).first()
+    if u and u.is_active != is_active:
+        u.is_active = is_active
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+
+def _user_effective_active(user):
+    """Login ke liye: User.is_active + agar Employee/Driver se link hai to unka status bhi Active hona chahiye."""
+    if not user or not user.is_active:
+        return False
+    username = (user.username or '').strip()
+    if len(username) < 5:
+        return True
+    emp = Employee.query.filter(func.lower(Employee.cnic_no) == username.lower()).first()
+    if emp:
+        return (emp.status or '').strip() == 'Active'
+    driver = Driver.query.filter(func.lower(Driver.cnic_no) == username.lower()).first()
+    if driver:
+        return (driver.status or '').strip() == 'Active'
+    return True
+
+
+def _create_user_for_employee_or_driver(username_cnic, full_name, employee_post_id=None, role_id=None):
+    """Auto-create login user when Employee or Driver is added. Username = CNIC, password = 123, must change on first login."""
+    if not username_cnic or not (username_cnic or '').strip():
+        return None
+    username = (username_cnic or '').strip()
+    if len(username) < 5:  # CNIC at least 5 chars
+        return None
+    existing = User.query.filter(func.lower(User.username) == username.lower()).first()
+    if existing:
+        return None
+    try:
+        user = User(
+            username=username,
+            password_hash=generate_password_hash(DEFAULT_FIRST_PASSWORD),
+            full_name=(full_name or '').strip() or username,
+            employee_post_id=employee_post_id,
+            role_id=role_id,
+            is_active=True,
+            force_password_change=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+        return user
+    except Exception:
+        db.session.rollback()
+        return None
+
+
 @app.route('/users')
 def user_list():
     users = User.query.order_by(User.username).all()
+    if not _current_user_is_master():
+        # Admin login: Master user ki koi information show na ho
+        users = [u for u in users if not (u.role and u.role.name == 'Master')]
     return render_template('user_list.html', users=users)
+
+
+@app.route('/users/sync-from-employees-drivers', methods=['POST'])
+def users_sync_from_employees_drivers():
+    """Create User for existing Employees and Drivers who have CNIC and no user yet. Returns JSON {created, total}."""
+    import json as json_module
+
+    def _candidates():
+        out = []
+        # Employees: sirf Active wale (Employees Management – sirf Active employees ke users)
+        for emp in Employee.query.filter(
+            Employee.cnic_no.isnot(None), Employee.cnic_no != '',
+            Employee.status == 'Active'
+        ).all():
+            cnic = (emp.cnic_no or '').strip()
+            if len(cnic) < 5:
+                continue
+            if User.query.filter(func.lower(User.username) == cnic.lower()).first():
+                continue
+            out.append(('employee', emp))
+        # Drivers: sirf jinke paas vehicle assign hai aur status Active (Driver Registration – vehicle-assigned only)
+        for driver in Driver.query.filter(
+            Driver.cnic_no.isnot(None), Driver.cnic_no != '',
+            Driver.status == 'Active',
+            Driver.vehicle_id.isnot(None)
+        ).all():
+            cnic = (driver.cnic_no or '').strip()
+            if len(cnic) < 5:
+                continue
+            if User.query.filter(func.lower(User.username) == cnic.lower()).first():
+                continue
+            out.append(('driver', driver))
+        return out
+
+    try:
+        candidates = _candidates()
+        total = len(candidates)
+        created = 0
+        for kind, rec in candidates:
+            if kind == 'employee':
+                emp = rec
+                cnic = (emp.cnic_no or '').strip()
+                post = EmployeePost.query.get(emp.post_id) if emp.post_id else None
+                role_id = post.role_id if post else None
+                u = _create_user_for_employee_or_driver(cnic, emp.name, emp.post_id, role_id)
+                if u:
+                    created += 1
+            else:
+                driver = rec
+                cnic = (driver.cnic_no or '').strip()
+                post_id, role_id = None, None
+                if driver.post and (driver.post or '').strip():
+                    emp_post = EmployeePost.query.filter(EmployeePost.full_name == (driver.post or '').strip()).first()
+                    if emp_post:
+                        post_id = emp_post.id
+                        role_id = emp_post.role_id
+                u = _create_user_for_employee_or_driver(cnic, driver.name, post_id, role_id)
+                if u:
+                    created += 1
+        return jsonify(created=created, total=total)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(error=str(e)), 500
 
 
 @app.route('/users/new', methods=['GET', 'POST'])
 def user_form():
     form = UserForm()
-    form.role_id.choices = [(0, '-- No Role --')] + [(r.id, r.name) for r in Role.query.order_by(Role.name).all()]
+    is_master = _current_user_is_master()
+    posts = EmployeePost.query.order_by(EmployeePost.full_name).all()
+    form.employee_post_id.choices = [(0, '-- No Post --')] + [(p.id, p.full_name) for p in posts]
     if request.method == 'GET':
-        return render_template('user_form.html', form=form, user=None)
+        return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
     if form.validate_on_submit():
+        employee_post_id = form.employee_post_id.data if form.employee_post_id.data else None
+        role_id = None
+        if employee_post_id:
+            emp_post = EmployeePost.query.get(employee_post_id)
+            if emp_post and emp_post.role_id:
+                role_id = emp_post.role_id
+                role = Role.query.get(role_id)
+                if role and _role_name(role) in ('Master', 'Admin') and not is_master:
+                    flash('Only Master (Developer) can assign a Post that has Admin or Master access.', 'danger')
+                    return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
         username = (form.username.data or '').strip()
         if User.query.filter(func.lower(User.username) == username.lower()).first():
             flash('Username already exists.', 'danger')
-            return render_template('user_form.html', form=form, user=None)
+            return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
         password = (form.password.data or '').strip()
         if not password or len(password) < 4:
             flash('Password must be at least 4 characters.', 'danger')
-            return render_template('user_form.html', form=form, user=None)
+            return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
         user = User(
             username=username,
             password_hash=generate_password_hash(password),
             full_name=(form.full_name.data or '').strip() or None,
-            role_id=form.role_id.data if form.role_id.data else None,
+            role_id=role_id,
+            employee_post_id=employee_post_id,
             is_active=form.is_active.data
         )
         db.session.add(user)
         db.session.commit()
         flash('User created successfully.', 'success')
         return redirect(url_for('user_list'))
-    return render_template('user_form.html', form=form, user=None)
+    return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
 
 
 @app.route('/users/<int:pk>/edit', methods=['GET', 'POST'])
 def user_edit(pk):
     user = User.query.get_or_404(pk)
+    is_master = _current_user_is_master()
+    # Admin ko Master user ki koi info na dikhe – 404
+    if not is_master and user.role and user.role.name == 'Master':
+        abort(404)
+    if not _user_can_edit_user(is_master, user):
+        flash('Only Master (Developer) can edit Admin or Master users.', 'danger')
+        return redirect(url_for('user_list'))
     form = UserForm()
-    form.role_id.choices = [(0, '-- No Role --')] + [(r.id, r.name) for r in Role.query.order_by(Role.name).all()]
+    posts = EmployeePost.query.order_by(EmployeePost.full_name).all()
+    form.employee_post_id.choices = [(0, '-- No Post --')] + [(p.id, p.full_name) for p in posts]
     if request.method == 'GET':
         form.username.data = user.username
         form.full_name.data = user.full_name
-        form.role_id.data = user.role_id or 0
+        form.employee_post_id.data = user.employee_post_id or 0
         form.is_active.data = user.is_active
-        return render_template('user_form.html', form=form, user=user)
+        return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
     if form.validate_on_submit():
+        employee_post_id = form.employee_post_id.data if form.employee_post_id.data else None
+        role_id = None
+        if employee_post_id:
+            emp_post = EmployeePost.query.get(employee_post_id)
+            if emp_post and emp_post.role_id:
+                role_id = emp_post.role_id
+                role = Role.query.get(role_id)
+                if role and _role_name(role) in ('Master', 'Admin') and not is_master:
+                    flash('Only Master (Developer) can assign a Post that has Admin or Master access.', 'danger')
+                    return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
         username = (form.username.data or '').strip()
         other = User.query.filter(func.lower(User.username) == username.lower()).filter(User.id != pk).first()
         if other:
             flash('Username already exists.', 'danger')
-            return render_template('user_form.html', form=form, user=user)
+            return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
         user.username = username
         user.full_name = (form.full_name.data or '').strip() or None
-        user.role_id = form.role_id.data if form.role_id.data else None
+        user.role_id = role_id
+        user.employee_post_id = employee_post_id
         user.is_active = form.is_active.data
         password = (form.password.data or '').strip()
         if password:
             if len(password) < 4:
                 flash('Password must be at least 4 characters.', 'danger')
-                return render_template('user_form.html', form=form, user=user)
+                return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
             user.password_hash = generate_password_hash(password)
+            if getattr(user, 'force_password_change', None):
+                user.force_password_change = False
         db.session.commit()
         flash('User updated successfully.', 'success')
         return redirect(url_for('user_list'))
-    return render_template('user_form.html', form=form, user=user)
+    return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
 
 
 @app.route('/roles')
 def role_list():
     roles = Role.query.order_by(Role.name).all()
+    if not _current_user_is_master():
+        # Admin login: Master role show na ho
+        roles = [r for r in roles if r.name != 'Master']
     return render_template('role_list.html', roles=roles)
+
+
+# ────────────────────────────────────────────────
+# Form Control (User & Access) — Attendance time windows, etc.
+# ────────────────────────────────────────────────
+@app.route('/control', methods=['GET', 'POST'])
+def form_control():
+    """Control form: Attendance time windows (Morning / Night shift). Single row settings."""
+    form = AttendanceTimeControlForm()
+    row = AttendanceTimeControl.query.first()
+    if request.method == 'GET':
+        if row:
+            form.morning_start.data = row.morning_start.strftime('%H:%M') if row.morning_start else ''
+            form.morning_end.data = row.morning_end.strftime('%H:%M') if row.morning_end else ''
+            form.night_start.data = row.night_start.strftime('%H:%M') if row.night_start else ''
+            form.night_end.data = row.night_end.strftime('%H:%M') if row.night_end else ''
+        return render_template('control_form.html', form=form)
+    if form.validate_on_submit():
+        def parse_time(s):
+            if not s or not str(s).strip():
+                return None
+            try:
+                return datetime.strptime(str(s).strip()[:5], '%H:%M').time()
+            except ValueError:
+                return None
+        if not row:
+            row = AttendanceTimeControl()
+            db.session.add(row)
+        row.morning_start = parse_time(form.morning_start.data)
+        row.morning_end = parse_time(form.morning_end.data)
+        row.night_start = parse_time(form.night_start.data)
+        row.night_end = parse_time(form.night_end.data)
+        db.session.commit()
+        flash('Control settings saved.', 'success')
+        return redirect(url_for('form_control'))
+    return render_template('control_form.html', form=form)
 
 
 @app.route('/roles/new', methods=['GET', 'POST'])
 def role_form():
     form = RoleForm()
+    posts = EmployeePost.query.order_by(EmployeePost.full_name).all()
+    form.post_id.choices = [(0, '-- Select Post (searchable) --')] + [(p.id, p.full_name) for p in posts]
+    # Current user sirf apne paas wale permissions hi kisi role ko de sakta hai
+    is_master = _current_user_is_master()
+    user_perm_codes = set(session.get('permissions') or []) if not is_master else None
+    try:
+        from permissions_config import get_permission_tree_grouped_filtered, PERMISSION_DEPENDENCIES
+        permission_by_code = {p.code: p for p in Permission.query.all()}
+        permission_tree = get_permission_tree_grouped_filtered(permission_by_code, allowed_codes=user_perm_codes)
+        allowed_permission_ids = None if is_master else set(p.id for p in Permission.query.filter(Permission.code.in_(user_perm_codes or [])).all())
+    except Exception:
+        permission_tree = []
+        permission_by_code = {}
+        allowed_permission_ids = set()
+        PERMISSION_DEPENDENCIES = {}
     if request.method == 'GET':
-        permissions = Permission.query.order_by(Permission.category, Permission.name).all()
-        return render_template('role_form.html', form=form, role=None, permissions=permissions)
+        return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {})
     if form.validate_on_submit():
-        name = (form.name.data or '').strip()
+        post_id = form.post_id.data if form.post_id.data else 0
+        if post_id == 0:
+            flash('Please select a Post from Employee Posts.', 'danger')
+            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {})
+        post = EmployeePost.query.get(post_id)
+        if not post:
+            flash('Selected post not found.', 'danger')
+            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {})
+        name = (post.full_name or '').strip()
+        if not name:
+            flash('Post has no name.', 'danger')
+            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {})
         if Role.query.filter(func.lower(Role.name) == name.lower()).first():
-            flash('Role name already exists.', 'danger')
-            permissions = Permission.query.order_by(Permission.category, Permission.name).all()
-            return render_template('role_form.html', form=form, role=None, permissions=permissions)
+            flash('A role with this post name already exists. Select another post or edit the existing role.', 'danger')
+            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {})
         role = Role(name=name, description=(form.description.data or '').strip() or None)
         db.session.add(role)
         db.session.commit()
         perm_ids = request.form.getlist('permission_ids', type=int)
+        if perm_ids and allowed_permission_ids is not None:
+            perm_ids = [i for i in perm_ids if i in allowed_permission_ids]
         if perm_ids:
+            from permissions_config import expand_permission_dependencies
+            permission_by_code = {p.code: p for p in Permission.query.all()}
+            codes = {p.code for p in Permission.query.filter(Permission.id.in_(perm_ids)).all()}
+            expanded = expand_permission_dependencies(codes)
+            if allowed_permission_ids is not None:
+                perm_ids = [permission_by_code[c].id for c in expanded if permission_by_code.get(c) and permission_by_code[c].id in allowed_permission_ids]
+            else:
+                perm_ids = [permission_by_code[c].id for c in expanded if permission_by_code.get(c)]
             perms = Permission.query.filter(Permission.id.in_(perm_ids)).all()
             role.permissions = perms
             db.session.commit()
-        flash('Role created successfully.', 'success')
+        flash('Role created successfully and linked to selected Post.', 'success')
         return redirect(url_for('role_list'))
-    permissions = Permission.query.order_by(Permission.category, Permission.name).all()
-    return render_template('role_form.html', form=form, role=None, permissions=permissions)
+    return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {})
 
 
 @app.route('/roles/<int:pk>/edit', methods=['GET', 'POST'])
 def role_edit(pk):
     role = Role.query.get_or_404(pk)
+    is_master = _current_user_is_master()
+    # Admin ko Master role ki koi info na dikhe – 404
+    if not is_master and role.name == 'Master':
+        abort(404)
+    # Admin apni (Admin) role edit na kar sake – sirf Master change kar sakta hai; yahan lock dikhayenge, URL se bhi 404
+    if not is_master and role.name == 'Admin':
+        abort(404)
+    # Current user sirf apne paas wale permissions hi is role ko assign kar sakta hai
+    user_perm_codes = set(session.get('permissions') or []) if not is_master else None
+    try:
+        from permissions_config import get_permission_tree_grouped_filtered, PERMISSION_DEPENDENCIES
+        permission_by_code = {p.code: p for p in Permission.query.all()}
+        permission_tree = get_permission_tree_grouped_filtered(permission_by_code, allowed_codes=user_perm_codes)
+        allowed_permission_ids = None if is_master else set(p.id for p in Permission.query.filter(Permission.code.in_(user_perm_codes or [])).all())
+    except Exception:
+        permission_tree = []
+        allowed_permission_ids = set()
+        PERMISSION_DEPENDENCIES = {}
     form = RoleForm()
     if request.method == 'GET':
         form.name.data = role.name
         form.description.data = role.description
-        permissions = Permission.query.order_by(Permission.category, Permission.name).all()
-        return render_template('role_form.html', form=form, role=role, permissions=permissions)
+        return render_template('role_form.html', form=form, role=role, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES)
     if form.validate_on_submit():
         name = (form.name.data or '').strip()
+        if not name:
+            flash('Role name is required.', 'danger')
+            return render_template('role_form.html', form=form, role=role, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES)
         other = Role.query.filter(func.lower(Role.name) == name.lower()).filter(Role.id != pk).first()
         if other:
             flash('Role name already exists.', 'danger')
-            permissions = Permission.query.order_by(Permission.category, Permission.name).all()
-            return render_template('role_form.html', form=form, role=role, permissions=permissions)
+            return render_template('role_form.html', form=form, role=role, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES)
         role.name = name
         role.description = (form.description.data or '').strip() or None
         perm_ids = request.form.getlist('permission_ids', type=int)
-        role.permissions = Permission.query.filter(Permission.id.in_(perm_ids)).all() if perm_ids else []
+        if is_master or allowed_permission_ids is None:
+            from permissions_config import expand_permission_dependencies
+            permission_by_code = {p.code: p for p in Permission.query.all()}
+            codes = {p.code for p in Permission.query.filter(Permission.id.in_(perm_ids)).all()}
+            expanded = expand_permission_dependencies(codes)
+            perm_ids = [permission_by_code[c].id for c in expanded if permission_by_code.get(c)]
+            role.permissions = Permission.query.filter(Permission.id.in_(perm_ids)).all() if perm_ids else []
+        else:
+            submitted_allowed = set(perm_ids) & allowed_permission_ids
+            current_ids = {p.id for p in role.permissions}
+            keep_unchanged = current_ids - allowed_permission_ids
+            from permissions_config import expand_permission_dependencies
+            permission_by_code = {p.code: p for p in Permission.query.all()}
+            codes = {p.code for p in Permission.query.filter(Permission.id.in_(submitted_allowed)).all()}
+            expanded = expand_permission_dependencies(codes)
+            expanded_ids = {permission_by_code[c].id for c in expanded if permission_by_code.get(c) and permission_by_code[c].id in allowed_permission_ids}
+            new_ids = keep_unchanged | expanded_ids
+            role.permissions = Permission.query.filter(Permission.id.in_(new_ids)).all()
         db.session.commit()
         flash('Role updated successfully.', 'success')
         return redirect(url_for('role_list'))
-    permissions = Permission.query.order_by(Permission.category, Permission.name).all()
-    return render_template('role_form.html', form=form, role=role, permissions=permissions)
+    return render_template('role_form.html', form=form, role=role, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES)
 
 
 @app.route('/driver/delete/<int:id>', methods=['POST'])
@@ -3805,7 +4277,9 @@ def driver_job_left_new():
                 driver.status = 'Left'    # <-- Ye naya add karein
 
                 db.session.commit()
-                
+                # Driver job left → us CNIC wale User ka login band
+                _sync_user_active_by_cnic(driver.cnic_no, False)
+
                 flash(f"Driver {driver.name} successfully marked as Job Left!", "success")
                 return redirect(url_for('drivers_list'))
         else:
@@ -3872,6 +4346,8 @@ def driver_rejoin_new():
             )
             db.session.add(rejoin_log)
             db.session.commit()
+            # Driver rejoin → us CNIC wale User ka login wapas on
+            _sync_user_active_by_cnic(driver.cnic_no, True)
             
             flash(f"Success! Driver {driver.name} is now ACTIVE.", "success")
             return redirect(url_for('driver_rejoin_list'))
@@ -4101,10 +4577,13 @@ def driver_rejoin_view(id):
 @app.route('/driver-attendance/')
 def driver_attendance_list():
     form = DriverAttendanceFilterForm()
-    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    # Sirf assigned projects (company assign kiye gaye)
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
     view_date = date.today()
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
+    vehicle_id = request.args.get('vehicle_id', type=int)
+    shift = (request.args.get('shift') or '').strip()
     search = (request.args.get('search') or '').strip()
     if request.args.get('date'):
         view_date = parse_date(request.args.get('date')) or view_date
@@ -4113,8 +4592,15 @@ def driver_attendance_list():
     if project_id and project_id != 0:
         districts = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name).all()
         form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
+        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id).order_by(Vehicle.vehicle_no).all()
     else:
         form.district_id.choices = [(0, '-- All Districts --')]
+        vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
+    form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicles]
+    form.vehicle_id.data = vehicle_id if vehicle_id else 0
+    shift_rows = db.session.query(Driver.shift).filter(Driver.shift.isnot(None), Driver.shift != '').distinct().order_by(Driver.shift).all()
+    form.shift.choices = [('', '-- All Shifts --')] + [(s[0], s[0]) for s in shift_rows]
+    form.shift.data = shift
     form.district_id.data = district_id if district_id else 0
 
     # Sirf wo records jo Mark Attendance form se mark hue (DriverAttendance table mein hain)
@@ -4127,9 +4613,15 @@ def driver_attendance_list():
     if not driver_ids:
         drivers = []
     else:
-        drivers_query = Driver.query.filter(Driver.id.in_(driver_ids))
+        drivers_query = Driver.query.options(
+            db.joinedload(Driver.vehicle).joinedload(Vehicle.parking_station)
+        ).filter(Driver.id.in_(driver_ids))
         if district_id:
             drivers_query = drivers_query.filter(Driver.district_id == district_id)
+        if vehicle_id:
+            drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
+        if shift:
+            drivers_query = drivers_query.filter(Driver.shift == shift)
         if search:
             q = f'%{search}%'
             drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
@@ -4140,12 +4632,12 @@ def driver_attendance_list():
                 )
             )
         drivers = drivers_query.order_by(Driver.name).all()
-    return render_template('driver_attendance_list.html', form=form, view_date=view_date, drivers=drivers, by_driver=by_driver, project_id=project_id, district_id=district_id, search=search)
+    return render_template('driver_attendance_list.html', form=form, view_date=view_date, drivers=drivers, by_driver=by_driver, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, search=search)
 
 
-def _driver_attendance_marked_list(view_date, project_id=None, district_id=None, search=None):
+def _driver_attendance_marked_list(view_date, project_id=None, district_id=None, vehicle_id=None, shift=None, search=None):
     """Returns (drivers, by_driver) for date - only drivers who have attendance marked (from Mark Attendance form)."""
-    query = DriverAttendance.query.filter_by(attendance_date=view_date)
+    query = DriverAttendance.query.options(db.joinedload(DriverAttendance.parking_station)).filter_by(attendance_date=view_date)
     if project_id:
         query = query.filter(DriverAttendance.project_id == project_id)
     attendance_list = query.order_by(DriverAttendance.driver_id).all()
@@ -4153,9 +4645,15 @@ def _driver_attendance_marked_list(view_date, project_id=None, district_id=None,
     driver_ids = [a.driver_id for a in attendance_list]
     if not driver_ids:
         return [], by_driver
-    drivers_query = Driver.query.filter(Driver.id.in_(driver_ids))
+    drivers_query = Driver.query.options(
+        db.joinedload(Driver.vehicle).joinedload(Vehicle.parking_station)
+    ).filter(Driver.id.in_(driver_ids))
     if district_id:
         drivers_query = drivers_query.filter(Driver.district_id == district_id)
+    if vehicle_id:
+        drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
+    if shift:
+        drivers_query = drivers_query.filter(Driver.shift == shift)
     if search:
         q = f'%{search}%'
         drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
@@ -4168,6 +4666,34 @@ def _driver_attendance_marked_list(view_date, project_id=None, district_id=None,
     return drivers_query.order_by(Driver.name).all(), by_driver
 
 
+def _attendance_check_in_remarks(rec):
+    """Check-in remarks: GPS+Camera auto text, else manual form reason."""
+    if not rec:
+        return ''
+    if rec.check_in_photo_path or (rec.check_in_latitude is not None and rec.check_in_longitude is not None):
+        return 'Check-in via GPS & Camera'
+    r = rec.remarks or ''
+    if 'Manual check-in:' in r:
+        part = r.split('Manual check-in:')[1].split(' | ')[0].strip()
+        return part or 'Manual check-in'
+    return ''
+
+
+def _attendance_check_out_remarks(rec):
+    """Check-out remarks: GPS+Camera auto text, else manual form reason."""
+    if not rec:
+        return ''
+    if rec.check_out_photo_path or (rec.check_out_latitude is not None and rec.check_out_longitude is not None):
+        return 'Check-out via GPS & Camera'
+    r = rec.remarks or ''
+    if 'Manual check-out' in r:
+        part = r.split('Manual check-out', 1)[1].split(' | ')[0].strip()
+        if part.startswith(': '):
+            part = part[2:].strip()
+        return part or 'Manual check-out'
+    return ''
+
+
 @app.route('/driver-attendance/export')
 def driver_attendance_export():
     view_date = date.today()
@@ -4175,24 +4701,33 @@ def driver_attendance_export():
         view_date = parse_date(request.args.get('date')) or view_date
     project_id = request.args.get('project_id', type=int) or None
     district_id = request.args.get('district_id', type=int) or None
+    vehicle_id = request.args.get('vehicle_id', type=int) or None
+    shift = (request.args.get('shift') or '').strip() or None
     search = (request.args.get('search') or '').strip()
-    drivers, by_driver = _driver_attendance_marked_list(view_date, project_id, district_id, search)
-    headers = ['S.No', 'Date', 'Vehicle No', 'Name', 'Driver ID', 'Project', 'District', 'Status', 'Check In', 'Check Out', 'Remarks']
+    drivers, by_driver = _driver_attendance_marked_list(view_date, project_id, district_id, vehicle_id, shift, search)
+    headers = ['S.No', 'Date', 'Driver ID', 'Name', 'Project / District / Parking', 'Vehicle No', 'Vehicle Type', 'Shift', 'Status', 'Check In', 'Check In Photo', 'Check In Remarks', 'Check Out', 'Check Out Photo', 'Check Out Remarks']
     rows = []
     for i, d in enumerate(drivers, 1):
         rec = by_driver.get(d.id)
+        district_name = d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else '-')
+        parking_name = d.vehicle.parking_station.name if d.vehicle and d.vehicle.parking_station else '-'
+        project_district_parking = f"{(d.project.name if d.project else '-')} / {district_name} / {parking_name}"
         rows.append([
             i,
             view_date.strftime('%Y-%m-%d'),
-            d.vehicle.vehicle_no if d.vehicle else '-',
+            d.driver_id or '-',
             d.name or '',
-            d.driver_id or '',
-            d.project.name if d.project else '-',
-            d.district.name if d.district else '-',
-            rec.status if rec else '',
+            project_district_parking,
+            d.vehicle.vehicle_no if d.vehicle else '-',
+            (d.vehicle.vehicle_type if d.vehicle else '') or '-',
+            d.shift or '-',
+            rec.status if rec else '-',
             rec.check_in.strftime('%H:%M') if rec and rec.check_in else '-',
+            'Yes' if rec and rec.check_in_photo_path else '-',
+            _attendance_check_in_remarks(rec) or '-',
             rec.check_out.strftime('%H:%M') if rec and rec.check_out else '-',
-            (rec.remarks or '')[:100] if rec else ''
+            'Yes' if rec and rec.check_out_photo_path else '-',
+            _attendance_check_out_remarks(rec) or '-',
         ])
     filename = f'driver_attendance_{view_date.strftime("%Y-%m-%d")}.xlsx'
     return generate_excel_template(headers, rows, required_columns=[], filename=filename)
@@ -4205,31 +4740,49 @@ def driver_attendance_print():
         view_date = parse_date(request.args.get('date')) or view_date
     project_id = request.args.get('project_id', type=int) or None
     district_id = request.args.get('district_id', type=int) or None
+    vehicle_id = request.args.get('vehicle_id', type=int) or None
+    shift = (request.args.get('shift') or '').strip() or None
     search = (request.args.get('search') or '').strip()
-    drivers, by_driver = _driver_attendance_marked_list(view_date, project_id, district_id, search)
-    return render_template('driver_attendance_print.html', drivers=drivers, by_driver=by_driver, view_date=view_date, project_id=project_id, district_id=district_id, search=search)
+    drivers, by_driver = _driver_attendance_marked_list(view_date, project_id, district_id, vehicle_id, shift, search)
+    return render_template('driver_attendance_print.html', drivers=drivers, by_driver=by_driver, view_date=view_date, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, search=search)
 
 
 @app.route('/driver-attendance/mark', methods=['GET', 'POST'])
 def driver_attendance_mark():
     form = DriverAttendanceFilterForm()
-    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
     view_date = date.today()
-    project_id = request.args.get('project_id', type=int) or (request.form.get('project_id', type=int))
-    district_id = request.args.get('district_id', type=int) or (request.form.get('district_id', type=int))
+    project_id = request.args.get('project_id', type=int) or request.form.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int) or request.form.get('district_id', type=int)
+    vehicle_id = request.args.get('vehicle_id', type=int) or request.form.get('vehicle_id', type=int)
+    shift = (request.args.get('shift') or request.form.get('shift') or '').strip()
+    driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
     search = (request.args.get('search') or request.form.get('search') or '').strip()
+    if project_id == 0:
+        project_id = None
+    if district_id == 0:
+        district_id = None
+    if vehicle_id == 0:
+        vehicle_id = None
+    if driver_id == 0:
+        driver_id = None
     if request.args.get('date'):
         view_date = parse_date(request.args.get('date')) or view_date
     if request.method == 'POST' and request.form.get('attendance_date'):
         view_date = parse_date(request.form.get('attendance_date')) or view_date
-        proj_id = request.form.get('project_id', type=int)
-        if proj_id == 0:
-            proj_id = None
-        project_id = proj_id
-        dist_id = request.form.get('district_id', type=int)
-        if dist_id == 0:
-            dist_id = None
-        district_id = dist_id
+        project_id = request.form.get('project_id', type=int) or None
+        if project_id == 0:
+            project_id = None
+        district_id = request.form.get('district_id', type=int) or None
+        if district_id == 0:
+            district_id = None
+        vehicle_id = request.form.get('vehicle_id', type=int) or None
+        if vehicle_id == 0:
+            vehicle_id = None
+        shift = (request.form.get('shift') or '').strip()
+        driver_id = request.form.get('driver_id', type=int) or None
+        if driver_id == 0:
+            driver_id = None
     if request.method == 'GET' and form.validate_on_submit():
         view_date = form.attendance_date.data
         project_id = form.project_id.data if form.project_id.data else None
@@ -4238,7 +4791,14 @@ def driver_attendance_mark():
         district_id = form.district_id.data if form.district_id.data else None
         if district_id == 0:
             district_id = None
-        return redirect(url_for('driver_attendance_mark', date=view_date.strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', search=search))
+        vehicle_id = request.args.get('vehicle_id', type=int) or None
+        if vehicle_id == 0:
+            vehicle_id = None
+        shift = (request.args.get('shift') or '').strip()
+        driver_id = request.args.get('driver_id', type=int) or None
+        if driver_id == 0:
+            driver_id = None
+        return redirect(url_for('driver_attendance_mark', date=view_date.strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', vehicle_id=request.args.get('vehicle_id') or '', shift=request.args.get('shift') or '', driver_id=request.args.get('driver_id') or '', search=search))
     if request.method == 'GET':
         form.attendance_date.data = view_date
         form.project_id.data = project_id if project_id else 0
@@ -4246,15 +4806,27 @@ def driver_attendance_mark():
         districts = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name).all()
         form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
     else:
-        form.district_id.choices = [(0, '-- All Districts --')]
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     if request.method == 'GET':
         form.district_id.data = district_id if district_id else 0
-    # Sirf wo drivers jo Vehicle ke sath assign ho chuke hain (vehicle_id set hai)
-    drivers_query = Driver.query.filter_by(status='Active').filter(Driver.vehicle_id.isnot(None))
+    vehicles = []
+    if project_id and district_id:
+        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
+    elif project_id:
+        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id).order_by(Vehicle.vehicle_no).all()
+    elif district_id:
+        vehicles = Vehicle.query.filter(Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
+    else:
+        vehicles = Vehicle.query.filter(Vehicle.project_id.isnot(None)).order_by(Vehicle.vehicle_no).all()
+    drivers_query = Driver.query.filter(Driver.status == 'Active').filter(Driver.vehicle_id.isnot(None))
     if project_id:
         drivers_query = drivers_query.filter(Driver.project_id == project_id)
     if district_id:
         drivers_query = drivers_query.filter(Driver.district_id == district_id)
+    if vehicle_id:
+        drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
+    if shift:
+        drivers_query = drivers_query.filter(Driver.shift == shift)
     if search:
         q = f'%{search}%'
         drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
@@ -4264,15 +4836,22 @@ def driver_attendance_mark():
                 Vehicle.vehicle_no.ilike(q),
             )
         )
+    vehicle_drivers = drivers_query.order_by(Driver.name).all()
+    if driver_id:
+        drivers_query = drivers_query.filter(Driver.id == driver_id)
     drivers = drivers_query.order_by(Driver.name).all()
     existing = {a.driver_id: a for a in DriverAttendance.query.filter_by(attendance_date=view_date).all()}
     if request.method == 'POST' and request.form.get('save_attendance'):
+        gps_cam_remark = 'Ye GPS + Camera se attendance lagi hai.'
         for d in drivers:
             did = d.id
-            status = request.form.get(f'driver_{did}_status', 'Absent').strip() or 'Absent'
+            rec = existing.get(did)
+            if rec and rec.remarks and gps_cam_remark in (rec.remarks or ''):
+                continue
+            status = request.form.get(f'driver_{did}_status', 'Leave').strip() or 'Leave'
             check_in_s = request.form.get(f'driver_{did}_check_in', '')
             check_out_s = request.form.get(f'driver_{did}_check_out', '')
-            remarks = request.form.get(f'driver_{did}_remarks', '')
+            remarks = 'Manual entry form ki entry'
             check_in_t = None
             check_out_t = None
             if check_in_s:
@@ -4289,35 +4868,771 @@ def driver_attendance_mark():
                         check_out_t = time(int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0)
                 except (ValueError, IndexError):
                     pass
-            rec = existing.get(did)
+            photo_path = None
+            photo = request.files.get(f'driver_{did}_photo')
+            if photo and photo.filename:
+                try:
+                    upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
+                    os.makedirs(upload_dir, exist_ok=True)
+                    ext = os.path.splitext(secure_filename(photo.filename))[1] or '.jpg'
+                    fname = f"manual_checkin_{did}_{view_date.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}{ext}"
+                    rel_path = os.path.join('attendance', fname)
+                    full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
+                    photo.save(full_path)
+                    photo_path = rel_path.replace('\\', '/')
+                except Exception:
+                    pass
             if rec:
                 rec.status = status
                 rec.check_in = check_in_t
                 rec.check_out = check_out_t
-                rec.remarks = remarks or None
+                rec.remarks = remarks
                 rec.project_id = project_id
                 rec.updated_at = datetime.utcnow()
+                if photo_path:
+                    rec.check_in_photo_path = photo_path
             else:
                 rec = DriverAttendance(
                     driver_id=did, attendance_date=view_date, status=status,
-                    check_in=check_in_t, check_out=check_out_t, remarks=remarks or None,
-                    project_id=project_id
+                    check_in=check_in_t, check_out=check_out_t, remarks=remarks,
+                    project_id=project_id, check_in_photo_path=photo_path
                 )
                 db.session.add(rec)
         try:
             db.session.commit()
-            flash('Attendance saved successfully.', 'success')
+            flash('Status saved successfully.', 'success')
             return redirect(url_for('driver_attendance_list', date=view_date.strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', search=search))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error saving attendance: {str(e)}', 'danger')
-    return render_template('driver_attendance_mark.html', form=form, view_date=view_date, drivers=drivers, existing=existing, project_id=project_id, district_id=district_id, search=search, status_choices=ATTENDANCE_STATUS_CHOICES)
+            flash(f'Error saving status: {str(e)}', 'danger')
+    return render_template('driver_attendance_mark.html', form=form, view_date=view_date, drivers=drivers, existing=existing, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, status_choices=ATTENDANCE_STATUS_CHOICES, vehicles=vehicles, vehicle_drivers=vehicle_drivers)
+
+
+@app.route('/driver-attendance/bulk-off', methods=['GET', 'POST'])
+def driver_attendance_bulk_off():
+    """Bulk Off: Select District + Project + Date, mark all drivers of that project (in that district) as Off for the date."""
+    districts = District.query.join(project_district, District.id == project_district.c.district_id).distinct().order_by(District.name).all()
+    view_date = date.today()
+    district_id = request.args.get('district_id', type=int) or request.form.get('district_id', type=int)
+    project_id = request.args.get('project_id', type=int) or request.form.get('project_id', type=int)
+    if request.args.get('date'):
+        view_date = parse_date(request.args.get('date')) or view_date
+    if request.form.get('bulk_off_date'):
+        view_date = parse_date(request.form.get('bulk_off_date')) or view_date
+    if district_id == 0:
+        district_id = None
+    if project_id == 0:
+        project_id = None
+    projects = []
+    if district_id:
+        projects = Project.query.join(project_district).filter(
+            project_district.c.district_id == district_id
+        ).order_by(Project.name).all()
+    drivers = []
+    if project_id and district_id:
+        drivers = Driver.query.filter(
+            Driver.project_id == project_id,
+            Driver.district_id == district_id,
+            Driver.status == 'Active',
+            Driver.vehicle_id.isnot(None),
+        ).order_by(Driver.name).all()
+
+    if request.method == 'POST' and request.form.get('confirm_bulk_off') and project_id and district_id:
+        count = 0
+        for d in drivers:
+            rec = DriverAttendance.query.filter_by(
+                driver_id=d.id,
+                attendance_date=view_date,
+            ).first()
+            if rec:
+                rec.status = 'Off'
+                rec.check_in = None
+                rec.check_out = None
+                rec.remarks = (rec.remarks or '').rstrip() + (' | Bulk Off' if (rec.remarks or '').strip() else 'Bulk Off')
+                rec.updated_at = datetime.utcnow()
+            else:
+                rec = DriverAttendance(
+                    driver_id=d.id,
+                    attendance_date=view_date,
+                    status='Off',
+                    project_id=d.project_id,
+                    remarks='Bulk Off',
+                )
+                db.session.add(rec)
+            count += 1
+        try:
+            db.session.commit()
+            flash(f'{count} driver(s) ko {view_date.strftime("%d-%m-%Y")} ke liye Off mark kar diya gaya.', 'success')
+            return redirect(url_for('driver_attendance_bulk_off', date=view_date.strftime('%d-%m-%Y'), district_id=district_id or '', project_id=project_id or ''))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error: {str(e)}', 'danger')
+    return render_template(
+        'driver_attendance_bulk_off.html',
+        districts=districts,
+        projects=projects,
+        drivers=drivers,
+        view_date=view_date,
+        district_id=district_id,
+        project_id=project_id,
+    )
+
+
+@app.route('/driver-attendance/pending', methods=['GET'])
+def driver_attendance_pending():
+    """Report: same filters as Mark Attendance, but list only drivers who have NOT marked attendance for the selected date."""
+    form = DriverAttendanceFilterForm()
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    view_date = date.today()
+    if request.args.get('date'):
+        view_date = parse_date(request.args.get('date')) or view_date
+    project_id = request.args.get('project_id', type=int) or None
+    district_id = request.args.get('district_id', type=int) or None
+    vehicle_id = request.args.get('vehicle_id', type=int) or None
+    shift = (request.args.get('shift') or '').strip()
+    driver_id = request.args.get('driver_id', type=int) or None
+    search = (request.args.get('search') or '').strip()
+    if project_id == 0:
+        project_id = None
+    if district_id == 0:
+        district_id = None
+    if vehicle_id == 0:
+        vehicle_id = None
+    if driver_id == 0:
+        driver_id = None
+    form.attendance_date.data = view_date
+    form.project_id.data = project_id if project_id else 0
+    if project_id and project_id != 0:
+        districts = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name).all()
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
+    else:
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    form.district_id.data = district_id if district_id else 0
+    vehicles = []
+    if project_id and district_id:
+        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
+    elif project_id:
+        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id).order_by(Vehicle.vehicle_no).all()
+    elif district_id:
+        vehicles = Vehicle.query.filter(Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
+    else:
+        vehicles = Vehicle.query.filter(Vehicle.project_id.isnot(None)).order_by(Vehicle.vehicle_no).all()
+    drivers_query = Driver.query.filter(Driver.status == 'Active').filter(Driver.vehicle_id.isnot(None))
+    if project_id:
+        drivers_query = drivers_query.filter(Driver.project_id == project_id)
+    if district_id:
+        drivers_query = drivers_query.filter(Driver.district_id == district_id)
+    if vehicle_id:
+        drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
+    if shift:
+        drivers_query = drivers_query.filter(Driver.shift == shift)
+    if search:
+        q = f'%{search}%'
+        drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+            db.or_(
+                Driver.name.ilike(q),
+                Driver.driver_id.ilike(q),
+                Vehicle.vehicle_no.ilike(q),
+            )
+        )
+    vehicle_drivers = drivers_query.order_by(Driver.name).all()
+    if driver_id:
+        drivers_query = drivers_query.filter(Driver.id == driver_id)
+    all_filtered_drivers = drivers_query.order_by(Driver.name).all()
+    existing_ids = {a.driver_id for a in DriverAttendance.query.filter_by(attendance_date=view_date).all()}
+    drivers = [d for d in all_filtered_drivers if d.id not in existing_ids]
+    return render_template('driver_attendance_pending.html', form=form, view_date=view_date, drivers=drivers, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, vehicles=vehicles, vehicle_drivers=vehicle_drivers)
+
+
+@app.route('/driver-attendance/missing-checkout', methods=['GET'])
+def driver_attendance_missing_checkout():
+    """Report: drivers who have check-in for the selected date but no check-out (same filters as Pending Attendance)."""
+    form = DriverAttendanceFilterForm()
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    view_date = date.today()
+    if request.args.get('date'):
+        view_date = parse_date(request.args.get('date')) or view_date
+    project_id = request.args.get('project_id', type=int) or None
+    district_id = request.args.get('district_id', type=int) or None
+    vehicle_id = request.args.get('vehicle_id', type=int) or None
+    shift = (request.args.get('shift') or '').strip()
+    driver_id = request.args.get('driver_id', type=int) or None
+    search = (request.args.get('search') or '').strip()
+    if project_id == 0:
+        project_id = None
+    if district_id == 0:
+        district_id = None
+    if vehicle_id == 0:
+        vehicle_id = None
+    if driver_id == 0:
+        driver_id = None
+    form.attendance_date.data = view_date
+    form.project_id.data = project_id if project_id else 0
+    if project_id and project_id != 0:
+        districts = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name).all()
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
+    else:
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    form.district_id.data = district_id if district_id else 0
+    vehicles = []
+    if project_id and district_id:
+        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
+    elif project_id:
+        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id).order_by(Vehicle.vehicle_no).all()
+    elif district_id:
+        vehicles = Vehicle.query.filter(Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
+    else:
+        vehicles = Vehicle.query.filter(Vehicle.project_id.isnot(None)).order_by(Vehicle.vehicle_no).all()
+    vehicle_drivers_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
+    if project_id:
+        vehicle_drivers_q = vehicle_drivers_q.filter(Driver.project_id == project_id)
+    if district_id:
+        vehicle_drivers_q = vehicle_drivers_q.filter(Driver.district_id == district_id)
+    if vehicle_id:
+        vehicle_drivers_q = vehicle_drivers_q.filter(Driver.vehicle_id == vehicle_id)
+    if shift:
+        vehicle_drivers_q = vehicle_drivers_q.filter(Driver.shift == shift)
+    if search:
+        q = f'%{search}%'
+        vehicle_drivers_q = vehicle_drivers_q.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+            db.or_(
+                Driver.name.ilike(q),
+                Driver.driver_id.ilike(q),
+                Vehicle.vehicle_no.ilike(q),
+            )
+        )
+    vehicle_drivers = vehicle_drivers_q.order_by(Driver.name).all()
+    query = DriverAttendance.query.filter(
+        DriverAttendance.attendance_date == view_date,
+        DriverAttendance.check_in.isnot(None),
+        DriverAttendance.check_out.is_(None),
+    ).join(Driver, DriverAttendance.driver_id == Driver.id).options(db.joinedload(DriverAttendance.driver))
+    if project_id:
+        query = query.filter(DriverAttendance.project_id == project_id)
+    if district_id:
+        query = query.filter(Driver.district_id == district_id)
+    if vehicle_id:
+        query = query.filter(Driver.vehicle_id == vehicle_id)
+    if shift:
+        query = query.filter(Driver.shift == shift)
+    if driver_id:
+        query = query.filter(Driver.id == driver_id)
+    if search:
+        q = f'%{search}%'
+        query = query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+            db.or_(
+                Driver.name.ilike(q),
+                Driver.driver_id.ilike(q),
+                Vehicle.vehicle_no.ilike(q),
+            )
+        )
+    records = query.order_by(Driver.name).all()
+    return render_template(
+        'driver_attendance_missing_checkout.html',
+        form=form,
+        view_date=view_date,
+        records=records,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        shift=shift,
+        driver_id=driver_id,
+        search=search,
+        vehicles=vehicles,
+        vehicle_drivers=vehicle_drivers,
+    )
+
+
+@app.route('/driver-attendance/manual-checkin', methods=['GET', 'POST'])
+def driver_attendance_manual_checkin():
+    """Manual check-in form: set check-in time, reason and optional photo for a driver who has not checked in."""
+    driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
+    date_str = request.args.get('date') or request.form.get('date')
+    view_date = parse_date(date_str) if date_str else date.today()
+    back_params = {}
+    for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search'):
+        v = request.args.get(k) or request.form.get(k)
+        if v is not None and v != '':
+            back_params[k] = v
+    back_url = url_for('driver_attendance_pending', date=view_date.strftime('%d-%m-%Y'), **back_params)
+
+    if not driver_id:
+        flash('Driver select karein.', 'danger')
+        return redirect(back_url)
+
+    driver = Driver.query.get(driver_id)
+    if not driver:
+        flash('Driver nahi mila.', 'danger')
+        return redirect(back_url)
+
+    existing = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=view_date).first()
+    if existing and existing.check_in:
+        flash('Is driver ne is date ko pehle hi check-in kar liya hai.', 'info')
+        return redirect(back_url)
+
+    if request.method == 'POST':
+        time_str = (request.form.get('check_in_time') or '').strip()
+        remarks_add = (request.form.get('remarks') or '').strip()
+        if not time_str:
+            flash('Check-in time zaroori hai.', 'danger')
+            return render_template('driver_attendance_manual_checkin.html', driver=driver, view_date=view_date, back_url=back_url, back_params=back_params)
+        if not remarks_add:
+            flash('Reason zaroori hai (manual check-in kyun kar rahe hain).', 'danger')
+            return render_template('driver_attendance_manual_checkin.html', driver=driver, view_date=view_date, back_url=back_url, back_params=back_params)
+        try:
+            from datetime import time as dt_time
+            parts = time_str.split(':')
+            h = int(parts[0]) if len(parts) > 0 else 0
+            m = int(parts[1]) if len(parts) > 1 else 0
+            s = int(parts[2]) if len(parts) > 2 else 0
+            check_in_t = dt_time(h, m, s)
+        except (ValueError, IndexError):
+            flash('Invalid check-in time. HH:MM format use karein.', 'danger')
+            return render_template('driver_attendance_manual_checkin.html', driver=driver, view_date=view_date, back_url=back_url, back_params=back_params)
+        photo_path = None
+        photo = request.files.get('photo')
+        if photo and photo.filename:
+            try:
+                upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
+                os.makedirs(upload_dir, exist_ok=True)
+                ext = os.path.splitext(secure_filename(photo.filename))[1] or '.jpg'
+                fname = f"checkin_manual_{driver_id}_{view_date.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}{ext}"
+                rel_path = os.path.join('attendance', fname).replace('\\', '/')
+                full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
+                photo.save(full_path)
+                photo_path = rel_path
+            except Exception as e:
+                flash(f'Photo save nahi hua: {str(e)}', 'warning')
+        if existing:
+            existing.check_in = check_in_t
+            existing.remarks = (existing.remarks or '').rstrip() + (' | Manual check-in' + (': ' + remarks_add if remarks_add else ''))
+            if photo_path:
+                existing.check_in_photo_path = photo_path
+            existing.updated_at = datetime.utcnow()
+        else:
+            rec = DriverAttendance(
+                driver_id=driver_id,
+                attendance_date=view_date,
+                status='Present',
+                check_in=check_in_t,
+                project_id=driver.project_id,
+                remarks='Manual check-in' + (': ' + remarks_add if remarks_add else ''),
+                check_in_photo_path=photo_path,
+            )
+            db.session.add(rec)
+        try:
+            db.session.commit()
+            flash('Manual check-in save ho gaya.', 'success')
+            return redirect(back_url)
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error: {str(e)}', 'danger')
+    return render_template('driver_attendance_manual_checkin.html', driver=driver, view_date=view_date, back_url=back_url, back_params=back_params)
+
+
+@app.route('/driver-attendance/manual-checkout', methods=['GET', 'POST'])
+def driver_attendance_manual_checkout():
+    """Manual check-out form: set check-out time (and optional remarks) for a driver who has check-in but no check-out."""
+    driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
+    date_str = request.args.get('date') or request.form.get('date')
+    view_date = parse_date(date_str) if date_str else date.today()
+    back_params = {}
+    for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search'):
+        v = request.args.get(k) or request.form.get(k)
+        if v is not None and v != '':
+            back_params[k] = v
+    back_url = url_for('driver_attendance_missing_checkout', date=view_date.strftime('%d-%m-%Y'), **back_params)
+
+    if not driver_id:
+        flash('Driver select karein.', 'danger')
+        return redirect(back_url)
+
+    driver = Driver.query.get(driver_id)
+    if not driver:
+        flash('Driver nahi mila.', 'danger')
+        return redirect(back_url)
+
+    rec = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=view_date).first()
+    if not rec:
+        flash('Is date ke liye attendance record nahi mila.', 'danger')
+        return redirect(back_url)
+    if rec.check_out:
+        flash('Is driver ka check-out pehle hi lag chuka hai.', 'info')
+        return redirect(back_url)
+
+    if request.method == 'POST':
+        time_str = (request.form.get('check_out_time') or '').strip()
+        remarks_add = (request.form.get('remarks') or '').strip()
+        if not time_str:
+            flash('Check-out time zaroori hai.', 'danger')
+            return render_template('driver_attendance_manual_checkout.html', driver=driver, rec=rec, view_date=view_date, back_url=back_url, back_params=back_params)
+        if not remarks_add:
+            flash('Reason zaroori hai (manual check-out kyun kar rahe hain).', 'danger')
+            return render_template('driver_attendance_manual_checkout.html', driver=driver, rec=rec, view_date=view_date, back_url=back_url, back_params=back_params)
+        try:
+            from datetime import time as dt_time
+            parts = time_str.split(':')
+            h = int(parts[0]) if len(parts) > 0 else 0
+            m = int(parts[1]) if len(parts) > 1 else 0
+            s = int(parts[2]) if len(parts) > 2 else 0
+            check_out_t = dt_time(h, m, s)
+        except (ValueError, IndexError):
+            flash('Invalid check-out time. HH:MM format use karein.', 'danger')
+            return render_template('driver_attendance_manual_checkout.html', driver=driver, rec=rec, view_date=view_date, back_url=back_url, back_params=back_params)
+        photo_path = None
+        photo = request.files.get('photo')
+        if photo and photo.filename:
+            try:
+                upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
+                os.makedirs(upload_dir, exist_ok=True)
+                ext = os.path.splitext(secure_filename(photo.filename))[1] or '.jpg'
+                fname = f"checkout_manual_{driver_id}_{view_date.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}{ext}"
+                rel_path = os.path.join('attendance', fname).replace('\\', '/')
+                full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
+                photo.save(full_path)
+                photo_path = rel_path
+            except Exception as e:
+                flash(f'Photo save nahi hua: {str(e)}', 'warning')
+        rec.check_out = check_out_t
+        rec.remarks = (rec.remarks or '').rstrip() + (' | Manual check-out' + (': ' + remarks_add if remarks_add else ''))
+        if photo_path:
+            rec.check_out_photo_path = photo_path
+        rec.updated_at = datetime.utcnow()
+        try:
+            db.session.commit()
+            flash('Manual check-out save ho gaya.', 'success')
+            return redirect(back_url)
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error: {str(e)}', 'danger')
+    return render_template('driver_attendance_manual_checkout.html', driver=driver, rec=rec, view_date=view_date, back_url=back_url, back_params=back_params)
+
+
+# ────────────────────────────────────────────────
+# Geofenced attendance: driver at parking station + selfie
+# ────────────────────────────────────────────────
+@app.route('/api/parking-stations-with-coords')
+def api_parking_stations_with_coords():
+    """Return parking stations that have latitude and longitude set (for geofence dropdown)."""
+    stations = ParkingStation.query.filter(
+        ParkingStation.latitude.isnot(None),
+        ParkingStation.longitude.isnot(None)
+    ).order_by(ParkingStation.name).all()
+    return jsonify([{
+        'id': s.id,
+        'name': s.name,
+        'district': s.district or '',
+        'latitude': float(s.latitude),
+        'longitude': float(s.longitude),
+    } for s in stations])
+
+
+@app.route('/api/attendance/projects')
+def api_attendance_projects():
+    """Projects linked to the given district (via project_district)."""
+    district_id = request.args.get('district_id', type=int)
+    if not district_id:
+        return jsonify([])
+    projects = Project.query.join(project_district).filter(
+        project_district.c.district_id == district_id
+    ).order_by(Project.name).all()
+    return jsonify([{'id': p.id, 'name': p.name} for p in projects])
+
+
+@app.route('/api/attendance/vehicles')
+def api_attendance_vehicles():
+    """Vehicles for the given project; include parking_station_id and lat/lng if set."""
+    project_id = request.args.get('project_id', type=int)
+    if not project_id:
+        return jsonify([])
+    vehicles = Vehicle.query.filter_by(project_id=project_id).order_by(Vehicle.vehicle_no).all()
+    out = []
+    for v in vehicles:
+        ps = v.parking_station
+        out.append({
+            'id': v.id,
+            'vehicle_no': v.vehicle_no,
+            'vehicle_type': v.vehicle_type or '',
+            'parking_station_id': v.parking_station_id,
+            'parking_name': ps.name if ps else '',
+            'latitude': float(ps.latitude) if ps and ps.latitude is not None else None,
+            'longitude': float(ps.longitude) if ps and ps.longitude is not None else None,
+            'driver_id': v.driver_id,
+        })
+    return jsonify(out)
+
+
+@app.route('/api/attendance/drivers')
+def api_attendance_drivers():
+    """Drivers in the given project with the given shift (Morning/Night)."""
+    project_id = request.args.get('project_id', type=int)
+    shift = (request.args.get('shift') or '').strip()
+    if not project_id:
+        return jsonify([])
+    query = Driver.query.filter_by(project_id=project_id, status='Active').order_by(Driver.name)
+    if shift:
+        query = query.filter(Driver.shift == shift)
+    drivers = query.all()
+    return jsonify([{'id': d.id, 'name': d.name, 'driver_id': d.driver_id, 'shift': d.shift or ''} for d in drivers])
+
+
+@app.route('/api/attendance-time-window')
+def api_attendance_time_window():
+    """Return configured attendance time window for Morning/Night (for frontend check)."""
+    ctrl = AttendanceTimeControl.query.first()
+    if not ctrl:
+        return jsonify({})
+    def t_str(t):
+        return t.strftime('%H:%M') if t else None
+    return jsonify({
+        'morning_start': t_str(ctrl.morning_start),
+        'morning_end': t_str(ctrl.morning_end),
+        'night_start': t_str(ctrl.night_start),
+        'night_end': t_str(ctrl.night_end),
+    })
+
+
+@app.route('/driver-attendance/checkin', methods=['GET', 'POST'])
+def driver_attendance_checkin():
+    """Geofenced check-in: District → Project → Vehicle → Parking (auto) → Shift → Driver. Then location + selfie."""
+    # Sirf wo districts jo kisi project se linked hain (project_district)
+    districts = District.query.join(project_district, District.id == project_district.c.district_id).distinct().order_by(District.name).all()
+    today = date.today()
+    if request.method == 'POST':
+        driver_id = request.form.get('driver_id', type=int)
+        parking_station_id = request.form.get('parking_station_id', type=int)
+        lat_s = request.form.get('latitude', '').strip()
+        lng_s = request.form.get('longitude', '').strip()
+        if not driver_id:
+            flash('Please select a driver.', 'danger')
+            return redirect(url_for('driver_attendance_checkin'))
+        if not parking_station_id:
+            flash('Please select a parking station.', 'danger')
+            return redirect(url_for('driver_attendance_checkin'))
+        try:
+            lat_val = float(lat_s) if lat_s else None
+            lng_val = float(lng_s) if lng_s else None
+        except ValueError:
+            lat_val = lng_val = None
+        driver = Driver.query.get(driver_id)
+        if not driver:
+            flash('Invalid driver.', 'danger')
+            return redirect(url_for('driver_attendance_checkin'))
+        now = datetime.utcnow()
+        now_time = now.time()
+        # Attendance time control: allow only within configured window for driver's shift
+        ctrl = AttendanceTimeControl.query.first()
+        if ctrl:
+            shift = (driver.shift or '').strip()
+            def in_window(t, start_t, end_t):
+                if start_t is None or end_t is None:
+                    return True
+                if end_t < start_t:  # overnight window
+                    return t >= start_t or t <= end_t
+                return start_t <= t <= end_t
+            if shift and shift.lower() == 'morning':
+                if not in_window(now_time, ctrl.morning_start, ctrl.morning_end):
+                    flash('Morning shift ki attendance sirf configured time window mein lag sakti hai. User & Access → Control mein time check karein.', 'danger')
+                    return redirect(url_for('driver_attendance_checkin'))
+            elif shift and shift.lower() == 'night':
+                if not in_window(now_time, ctrl.night_start, ctrl.night_end):
+                    flash('Night shift ki attendance sirf configured time window mein lag sakti hai. User & Access → Control mein time check karein.', 'danger')
+                    return redirect(url_for('driver_attendance_checkin'))
+        # Photo: multipart file or base64
+        photo_path = None
+        photo = request.files.get('photo')
+        if photo and photo.filename:
+            try:
+                upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
+                os.makedirs(upload_dir, exist_ok=True)
+                ext = os.path.splitext(secure_filename(photo.filename))[1] or '.jpg'
+                fname = f"checkin_{driver_id}_{today.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}{ext}"
+                rel_path = os.path.join('attendance', fname)
+                full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
+                photo.save(full_path)
+                photo_path = rel_path.replace('\\', '/')
+            except Exception as e:
+                flash(f'Could not save photo: {str(e)}', 'warning')
+        else:
+            # Try base64 from form (e.g. from canvas capture)
+            b64 = request.form.get('photo_base64', '').strip()
+            if b64 and b64.startswith('data:image'):
+                try:
+                    import base64
+                    header, b64 = b64.split(',', 1)
+                    data = base64.b64decode(b64)
+                    upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
+                    os.makedirs(upload_dir, exist_ok=True)
+                    fname = f"checkin_{driver_id}_{today.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}.jpg"
+                    rel_path = os.path.join('attendance', fname)
+                    full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
+                    with open(full_path, 'wb') as f:
+                        f.write(data)
+                    photo_path = rel_path.replace('\\', '/')
+                except Exception as e:
+                    flash(f'Could not save photo: {str(e)}', 'warning')
+        gps_cam_remark = 'Ye GPS + Camera se attendance lagi hai.'
+        existing = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=today).first()
+        if existing:
+            existing.status = 'Present'
+            existing.check_in = now.time()
+            existing.project_id = driver.project_id
+            existing.parking_station_id = parking_station_id
+            existing.check_in_latitude = lat_val
+            existing.check_in_longitude = lng_val
+            existing.check_in_photo_path = photo_path
+            existing.remarks = gps_cam_remark
+            existing.updated_at = now
+        else:
+            rec = DriverAttendance(
+                driver_id=driver_id,
+                attendance_date=today,
+                status='Present',
+                check_in=now.time(),
+                project_id=driver.project_id,
+                parking_station_id=parking_station_id,
+                check_in_latitude=lat_val,
+                check_in_longitude=lng_val,
+                check_in_photo_path=photo_path,
+                remarks=gps_cam_remark,
+            )
+            db.session.add(rec)
+        try:
+            db.session.commit()
+            flash('Attendance marked successfully. Check-in recorded with photo.', 'success')
+            return redirect(url_for('driver_attendance_list', date=today.strftime('%d-%m-%Y')))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error saving: {str(e)}', 'danger')
+    return render_template('driver_attendance_checkin.html', districts=districts, drivers=[], parking_stations=[])
+
+
+@app.route('/driver-attendance/checkout', methods=['GET', 'POST'])
+def driver_attendance_checkout():
+    """Geofenced check-out: same flow as check-in (District → Project → Vehicle → Parking → Shift → Driver). Location + selfie, then save check_out time and coords."""
+    # Sirf wo districts jo kisi project se linked hain (project_district) — taake dropdown mein aur phir Project list dono kaam karein
+    districts = District.query.join(project_district, District.id == project_district.c.district_id).distinct().order_by(District.name).all()
+    today = date.today()
+    if request.method == 'POST':
+        driver_id = request.form.get('driver_id', type=int)
+        parking_station_id = request.form.get('parking_station_id', type=int)
+        lat_s = request.form.get('latitude', '').strip()
+        lng_s = request.form.get('longitude', '').strip()
+        if not driver_id:
+            flash('Please select a driver.', 'danger')
+            return redirect(url_for('driver_attendance_checkout'))
+        if not parking_station_id:
+            flash('Please select a parking station.', 'danger')
+            return redirect(url_for('driver_attendance_checkout'))
+        try:
+            lat_val = float(lat_s) if lat_s else None
+            lng_val = float(lng_s) if lng_s else None
+        except ValueError:
+            lat_val = lng_val = None
+        driver = Driver.query.get(driver_id)
+        if not driver:
+            flash('Invalid driver.', 'danger')
+            return redirect(url_for('driver_attendance_checkout'))
+        now = datetime.utcnow()
+        now_time = now.time()
+        ctrl = AttendanceTimeControl.query.first()
+        if ctrl:
+            shift = (driver.shift or '').strip()
+            def in_window(t, start_t, end_t):
+                if start_t is None or end_t is None:
+                    return True
+                if end_t < start_t:
+                    return t >= start_t or t <= end_t
+                return start_t <= t <= end_t
+            if shift and shift.lower() == 'morning':
+                if not in_window(now_time, ctrl.morning_start, ctrl.morning_end):
+                    flash('Morning shift ka check-out sirf configured time window mein ho sakta hai.', 'danger')
+                    return redirect(url_for('driver_attendance_checkout'))
+            elif shift and shift.lower() == 'night':
+                if not in_window(now_time, ctrl.night_start, ctrl.night_end):
+                    flash('Night shift ka check-out sirf configured time window mein ho sakta hai.', 'danger')
+                    return redirect(url_for('driver_attendance_checkout'))
+        photo_path = None
+        photo = request.files.get('photo')
+        if photo and photo.filename:
+            try:
+                upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
+                os.makedirs(upload_dir, exist_ok=True)
+                ext = os.path.splitext(secure_filename(photo.filename))[1] or '.jpg'
+                fname = f"checkout_{driver_id}_{today.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}{ext}"
+                rel_path = os.path.join('attendance', fname)
+                full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
+                photo.save(full_path)
+                photo_path = rel_path.replace('\\', '/')
+            except Exception as e:
+                flash(f'Could not save photo: {str(e)}', 'warning')
+        else:
+            b64 = request.form.get('photo_base64', '').strip()
+            if b64 and b64.startswith('data:image'):
+                try:
+                    import base64
+                    header, b64 = b64.split(',', 1)
+                    data = base64.b64decode(b64)
+                    upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
+                    os.makedirs(upload_dir, exist_ok=True)
+                    fname = f"checkout_{driver_id}_{today.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}.jpg"
+                    rel_path = os.path.join('attendance', fname)
+                    full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
+                    with open(full_path, 'wb') as f:
+                        f.write(data)
+                    photo_path = rel_path.replace('\\', '/')
+                except Exception as e:
+                    flash(f'Could not save photo: {str(e)}', 'warning')
+        existing = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=today).first()
+        if existing:
+            existing.check_out = now.time()
+            existing.check_out_latitude = lat_val
+            existing.check_out_longitude = lng_val
+            if photo_path:
+                existing.check_out_photo_path = photo_path
+            existing.updated_at = now
+            if not existing.remarks or 'GPS' not in (existing.remarks or ''):
+                existing.remarks = (existing.remarks or '').rstrip() + (' | Check-out GPS+Cam' if photo_path else ' | Check-out GPS')
+        else:
+            rec = DriverAttendance(
+                driver_id=driver_id,
+                attendance_date=today,
+                status='Present',
+                check_out=now.time(),
+                project_id=driver.project_id,
+                parking_station_id=parking_station_id,
+                check_out_latitude=lat_val,
+                check_out_longitude=lng_val,
+                check_out_photo_path=photo_path,
+                remarks='Check-out GPS+Cam (check-in nahi lagi)',
+            )
+            db.session.add(rec)
+        try:
+            db.session.commit()
+            flash('Check-out recorded successfully with photo.', 'success')
+            return redirect(url_for('driver_attendance_list', date=today.strftime('%d-%m-%Y')))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error saving: {str(e)}', 'danger')
+    return render_template('driver_attendance_checkout.html', districts=districts, drivers=[], parking_stations=[])
 
 
 @app.route('/driver-attendance/report', methods=['GET', 'POST'])
 def driver_attendance_report():
     form = DriverAttendanceReportForm()
-    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    if request.method == 'POST':
+        try:
+            pid = request.form.get('project_id', type=int) or 0
+        except (TypeError, ValueError):
+            pid = 0
+        if pid and pid != 0:
+            districts = District.query.join(project_district).filter(project_district.c.project_id == pid).order_by(District.name).all()
+            form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
+        else:
+            form.district_id.choices = [(0, '-- All Districts --')]
+    else:
+        form.district_id.choices = [(0, '-- All Districts --')]
     today = date.today()
     form.month.data = form.month.data or today.month
     form.year.data = form.year.data or today.year
@@ -4332,7 +5647,7 @@ def driver_attendance_report():
         if district_id == 0:
             district_id = None
         search = (form.search.data or '').strip()
-        drivers_query = Driver.query.filter_by(status='Active')
+        drivers_query = Driver.query.filter(Driver.status == 'Active').filter(Driver.vehicle_id.isnot(None))
         if project_id:
             drivers_query = drivers_query.filter(Driver.project_id == project_id)
         if district_id:
@@ -4371,15 +5686,6 @@ def driver_attendance_report():
                 'total_marked': len(rows),
                 'days_in_month': ndays,
             })
-    if request.method == 'POST' and form.validate_on_submit():
-        project_id = form.project_id.data if form.project_id.data else 0
-        if project_id and project_id != 0:
-            districts = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name).all()
-            form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
-        else:
-            form.district_id.choices = [(0, '-- All Districts --')]
-    else:
-        form.district_id.choices = [(0, '-- All Districts --')]
     return render_template('driver_attendance_report.html', form=form, report=report)
 
 
@@ -4394,13 +5700,16 @@ def get_projects_by_district(district_id):
 
 @app.route('/get_vehicles_by_project_district')
 def get_vehicles_by_project_district():
-    project_id = request.args.get('project_id', type=int)
-    district_id = request.args.get('district_id', type=int)
-    if not project_id:
-        return jsonify([])
-    q = Vehicle.query.filter(Vehicle.project_id == project_id)
-    if district_id:
-        q = q.filter(Vehicle.district_id == district_id)
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    if project_id and district_id:
+        q = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id)
+    elif project_id:
+        q = Vehicle.query.filter(Vehicle.project_id == project_id)
+    elif district_id:
+        q = Vehicle.query.filter(Vehicle.district_id == district_id)
+    else:
+        q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
     vehicles = q.order_by(Vehicle.vehicle_no).all()
     return jsonify([{'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or ''} for v in vehicles])
 
@@ -5438,17 +6747,21 @@ def driver_post_list():
 def driver_post_form(id=None):
     post = EmployeePost.query.get_or_404(id) if id else None
     form = EmployeePostForm(obj=post)
+    form.role_id.choices = [(0, '-- No access role --')] + [(r.id, r.name) for r in Role.query.order_by(Role.name).all()]
     if form.validate_on_submit():
         if not post:
             post = EmployeePost()
         post.short_name = form.short_name.data.strip()
         post.full_name = form.full_name.data.strip()
+        post.role_id = form.role_id.data if form.role_id.data else None
         post.remarks = form.remarks.data.strip() if form.remarks.data else None
         if not id:
             db.session.add(post)
         db.session.commit()
         flash('Post saved.', 'success')
         return redirect(url_for('driver_post_list'))
+    if request.method == 'GET' and post:
+        form.role_id.data = post.role_id or 0
     return render_template('driver_post_form.html', form=form, post=post)
 
 
@@ -6679,6 +7992,86 @@ def employee_expense_list():
 @app.route('/reports/')
 def reports_index():
     return render_template('reports_index.html')
+
+
+@app.route('/reports/activity-log')
+def activity_log_report():
+    """Single report: (1) Login sessions + server-side activity, (2) Client activity with device ID & geolocation (lat/long, View on Map)."""
+    date_from_s = request.args.get('date_from', '').strip()
+    date_to_s = request.args.get('date_to', '').strip()
+    user_id_q = request.args.get('user_id', type=int)
+    username_q = request.args.get('username', '').strip()
+    device_id_q = request.args.get('device_id', '').strip()
+
+    # ─── 1. Login sessions (LoginLog + ActivityLog) ───
+    query_sessions = LoginLog.query.join(User).order_by(LoginLog.login_at.desc())
+    if date_from_s:
+        try:
+            df = datetime.strptime(date_from_s, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            query_sessions = query_sessions.filter(LoginLog.login_at >= df)
+        except ValueError:
+            pass
+    if date_to_s:
+        try:
+            dt = datetime.strptime(date_to_s + ' 23:59:59', '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+            query_sessions = query_sessions.filter(LoginLog.login_at <= dt)
+        except ValueError:
+            pass
+    if user_id_q:
+        query_sessions = query_sessions.filter(LoginLog.user_id == user_id_q)
+    if username_q:
+        like = f'%{username_q}%'
+        query_sessions = query_sessions.filter(or_(User.username.ilike(like), (User.full_name or User.username).ilike(like)))
+    sessions = query_sessions.limit(500).all()
+    log_ids = [s.id for s in sessions]
+    activities_by_log = {}
+    if log_ids:
+        for a in ActivityLog.query.filter(ActivityLog.login_log_id.in_(log_ids)).order_by(ActivityLog.created_at.asc()).all():
+            activities_by_log.setdefault(a.login_log_id, []).append(a)
+
+    # ─── 2. Client activity logs (device_id, lat/long, View on Map) ───
+    query_client = ClientActivityLog.query.join(User).order_by(ClientActivityLog.created_at.desc())
+    if date_from_s:
+        try:
+            df = datetime.strptime(date_from_s, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            query_client = query_client.filter(ClientActivityLog.created_at >= df)
+        except ValueError:
+            pass
+    if date_to_s:
+        try:
+            dt = datetime.strptime(date_to_s + ' 23:59:59', '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+            query_client = query_client.filter(ClientActivityLog.created_at <= dt)
+        except ValueError:
+            pass
+    if user_id_q:
+        query_client = query_client.filter(ClientActivityLog.user_id == user_id_q)
+    if device_id_q:
+        like = f'%{device_id_q}%'
+        query_client = query_client.filter(ClientActivityLog.device_id.ilike(like))
+    if username_q:
+        like = f'%{username_q}%'
+        query_client = query_client.filter(or_(User.username.ilike(like), (User.full_name or User.username).ilike(like)))
+    client_logs = query_client.limit(1000).all()
+
+    users_for_filter = User.query.order_by(User.username).all()
+    return render_template(
+        'reports/activity_log.html',
+        sessions=sessions,
+        activities_by_log=activities_by_log,
+        client_logs=client_logs,
+        users_for_filter=users_for_filter,
+        date_from=date_from_s,
+        date_to=date_to_s,
+        user_id_q=user_id_q,
+        username_q=username_q,
+        device_id_q=device_id_q,
+    )
+
+
+@app.route('/reports/activity-logs-geo')
+def activity_logs_geo_report():
+    """Redirect to combined Activity & Login Log report."""
+    return redirect(url_for('activity_log_report', **request.args))
 
 
 @app.route('/reports/ai', methods=['GET', 'POST'])

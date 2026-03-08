@@ -9,32 +9,53 @@
 
   <div class="card shadow-sm border-0 rounded-3 mb-4">
     <div class="card-body">
-      <form method="POST" action="">
+      <form method="POST" action="" id="role-permission-form">
         {{ form.hidden_tag() }}
         <div class="row g-3">
+          {% if not role %}
+          <div class="col-md-6">
+            {{ form.post_id.label(class="form-label") }}
+            {{ form.post_id(class="form-select select2-enable" + (" is-invalid" if form.post_id.errors else "")) }}
+            <small class="text-muted">Employee Posts se post search karein.</small>
+            {% for e in form.post_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+          {% else %}
           <div class="col-md-6">
             {{ form.name.label(class="form-label") }}
             {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
             {% for e in form.name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
           </div>
+          {% endif %}
           <div class="col-md-6">
             {{ form.description.label(class="form-label") }}
             {{ form.description(class="form-control") }}
           </div>
         </div>
         <hr class="my-4">
-        <h6 class="mb-3">Permissions (select what this role can access)</h6>
-        {% set ns = namespace(last_cat='') %}
-        {% for p in permissions %}
-          {% if p.category != ns.last_cat %}
-            {% set ns.last_cat = p.category %}
-            <div class="fw-semibold text-muted small mt-2 mb-1">{{ p.category or 'General' }}</div>
-          {% endif %}
-          <div class="form-check form-check-inline">
-            <input type="checkbox" name="permission_ids" value="{{ p.id }}" class="form-check-input" id="perm{{ p.id }}"
-                   {% if role and p in role.permissions %}checked{% endif %}>
-            <label class="form-check-label" for="perm{{ p.id }}">{{ p.name }}</label>
+        <h6 class="mb-3">Permissions (Section → Page → Buttons – pehle List/View select karein, phir Add/Edit; dependency auto apply hoti hai)</h6>
+        {% for section_label, pages in permission_tree %}
+        <div class="mb-4">
+          <div class="fw-semibold text-primary mb-2">{{ section_label }}</div>
+          <div class="ps-3">
+            {% for page_label, rows in pages %}
+            <div class="mb-3">
+              <div class="text-secondary small fw-medium mb-1">{{ page_label }}</div>
+              <div class="d-flex flex-wrap gap-2 gap-md-3 ps-2">
+                {% for perm_id, perm_code, perm_name in rows %}
+                <div class="form-check form-check-inline">
+                  <input type="checkbox" name="permission_ids" value="{{ perm_id }}" class="form-check-input perm-cb" id="perm{{ perm_id }}"
+                         data-code="{{ perm_code }}"
+                         {% if role and role.permissions and perm_id in (role.permissions|map(attribute='id')|list) %}checked{% endif %}>
+                  <label class="form-check-label" for="perm{{ perm_id }}">{{ perm_name }}</label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
           </div>
+        </div>
+        {% else %}
+        <p class="text-muted small">No permissions loaded. Run app once so permissions are seeded.</p>
         {% endfor %}
         <div class="mt-4">
           <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
@@ -44,4 +65,50 @@
     </div>
   </div>
 </div>
+<script>
+(function() {
+  var deps = {{ permission_dependencies | tojson | safe }};
+  var codeToId = {};
+  document.querySelectorAll('.perm-cb').forEach(function(cb) {
+    codeToId[cb.getAttribute('data-code')] = cb;
+  });
+
+  function ensureDependencies(code) {
+    var required = deps[code];
+    if (!required || !required.length) return;
+    required.forEach(function(reqCode) {
+      var reqCb = codeToId[reqCode];
+      if (reqCb && !reqCb.checked) {
+        reqCb.checked = true;
+        ensureDependencies(reqCode);
+      }
+    });
+  }
+
+  function uncheckDependents(code) {
+    Object.keys(deps).forEach(function(permCode) {
+      if ((deps[permCode] || []).indexOf(code) !== -1) {
+        var cb = codeToId[permCode];
+        if (cb && cb.checked) {
+          cb.checked = false;
+          uncheckDependents(permCode);
+        }
+      }
+    });
+  }
+
+  var form = document.getElementById('role-permission-form');
+  if (form) {
+    form.addEventListener('change', function(ev) {
+      if (!ev.target.classList.contains('perm-cb')) return;
+      var code = ev.target.getAttribute('data-code');
+      if (ev.target.checked) {
+        ensureDependencies(code);
+      } else {
+        uncheckDependents(code);
+      }
+    });
+  }
+})();
+</script>
 {% endblock %}

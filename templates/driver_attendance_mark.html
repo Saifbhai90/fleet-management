@@ -1,61 +1,131 @@
 {% extends "base.html" %}
-{% block title %}Mark Attendance{% endblock %}
+{% block title %}Leave / Late / Half Day / Off{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-pencil-square me-2 text-success"></i>Mark Attendance</h2>
+<style>
+  .mark-att-page { --mark-att-primary: #0d6efd; --mark-att-success: #198754; --mark-att-muted: #64748b; }
+  .mark-att-page .page-header { padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.06); margin-bottom: 1rem; }
+  .mark-att-page .page-title { font-size: 1.5rem; font-weight: 700; color: #1e293b; letter-spacing: -0.02em; }
+  .mark-att-page .page-title i { opacity: 0.9; }
+  .mark-att-filter .card { border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 12px rgba(0,0,0,0.05); overflow: hidden; }
+  .mark-att-filter .card-header { font-weight: 600; color: #334155; padding: 0.5rem 1rem; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-bottom: 1px solid #e2e8f0; font-size: 0.9375rem; }
+  .mark-att-filter .card-header .hint { font-weight: 400; color: var(--mark-att-muted); font-size: 0.75rem; }
+  .mark-att-filter .card-body { padding: 0.75rem 1rem 1rem; }
+  .mark-att-filter .form-label { font-weight: 600; color: #475569; font-size: 0.75rem; margin-bottom: 0.25rem; }
+  .mark-att-filter .form-control, .mark-att-filter .form-select { min-height: 36px; border-radius: 6px; border-color: #e2e8f0; font-size: 0.875rem; }
+  .mark-att-filter .form-control:focus, .mark-att-filter .form-select:focus { border-color: var(--mark-att-primary); box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.12); }
+  .mark-att-filter .select2-container--bootstrap-5 .select2-selection { min-height: 36px; border-radius: 6px; border-color: #e2e8f0; }
+  .mark-att-filter .select2-container--bootstrap-5 .select2-selection .select2-selection__rendered { line-height: 34px; font-size: 0.875rem; }
+  .mark-att-filter .btn-primary { min-height: 36px; border-radius: 6px; font-weight: 600; font-size: 0.875rem; padding: 0.35rem 0.75rem; }
+  .mark-att-table-card { border-radius: 14px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden; }
+  .mark-att-table-card .card-header { padding: 0.75rem 1.25rem; background: linear-gradient(135deg, #198754 0%, #157347 100%); border: none; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; }
+  .mark-att-table-card .card-header .header-title { font-weight: 600; font-size: 1.05rem; }
+  .mark-att-table-card .card-header .list-search-wrap { max-width: 280px; }
+  .mark-att-table-card .card-header .list-search-wrap .form-control { border-radius: 8px; border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.2); color: #fff; min-height: 38px; }
+  .mark-att-table-card .card-header .list-search-wrap .form-control::placeholder { color: rgba(255,255,255,0.85); }
+  .mark-att-table-card .card-header .list-search-wrap .form-control:focus { background: rgba(255,255,255,0.95); color: #1e293b; border-color: #fff; }
+  .mark-att-table-card .table thead th { font-weight: 600; color: #475569; font-size: 0.8125rem; text-transform: none; padding: 0.875rem 1rem; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+  .mark-att-table-card .table tbody td { padding: 0.75rem 1rem; vertical-align: middle; }
+  .mark-att-table-card .table tbody tr:hover { background-color: #f8fafc; }
+  .mark-att-table-card .card-footer { padding: 1rem 1.25rem; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+  .mark-att-table-card .card-footer .btn-success { border-radius: 8px; font-weight: 600; }
+</style>
+<div class="container-fluid mark-att-page">
+  <div class="page-header d-flex flex-wrap justify-content-between align-items-center">
+    <h1 class="page-title mb-0"><i class="bi bi-pencil-square me-2 text-success"></i>Leave / Late / Half Day / Off</h1>
     <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-primary">
-      <i class="bi bi-list-ul me-1"></i>Back to List
+      <i class="bi bi-arrow-left me-1"></i>Back to List
     </a>
   </div>
 
-  <div class="card shadow-sm border-0 rounded-3 mb-4">
+  <div class="card shadow-sm border-0 mb-4 mark-att-filter">
+    <div class="card-header">
+      <i class="bi bi-funnel me-2"></i>Filters
+      <span class="hint ms-2">— Leave, Late, Half Day ya Off dene ke liye drivers select karein, status set karein.</span>
+    </div>
     <div class="card-body">
-      <form method="get" action="{{ url_for('driver_attendance_mark') }}" id="filterForm" class="row g-3 align-items-end">
-        <div class="col-md-2">
+      <form method="get" action="{{ url_for('driver_attendance_mark') }}" id="filterForm" class="row g-2 align-items-end">
+        <div class="col-6 col-md-4 col-lg-3">
           <label class="form-label">Date</label>
           <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-4 col-lg-3">
           <label class="form-label">Project</label>
-          <select name="project_id" id="projectSelect" class="form-select select2-enable">
+          <select name="project_id" id="projectSelect" class="form-select select2-enable" data-placeholder="Search project...">
             <option value="0" {% if not project_id %}selected{% endif %}>All Projects</option>
             {% for p in form.project_id.choices if p[0] != 0 %}
               <option value="{{ p[0] }}" {% if project_id == p[0] %}selected{% endif %}>{{ p[1] }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-4 col-lg-3">
           <label class="form-label">District</label>
-          <select name="district_id" id="districtSelect" class="form-select select2-enable">
+          <select name="district_id" id="districtSelect" class="form-select select2-enable" data-placeholder="Search district...">
             <option value="0" {% if not district_id %}selected{% endif %}>All Districts</option>
             {% for d in form.district_id.choices if d[0] != 0 %}
               <option value="{{ d[0] }}" {% if district_id == d[0] %}selected{% endif %}>{{ d[1] }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label">Vehicle No</label>
+          <select name="vehicle_id" id="vehicleSelect" class="form-select select2-enable" data-placeholder="Search vehicle...">
+            <option value="0" {% if not vehicle_id %}selected{% endif %}>All Vehicles</option>
+            {% for v in vehicles %}
+              <option value="{{ v.id }}" {% if vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}{% if v.vehicle_type %} ({{ v.vehicle_type }}){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label">Shift</label>
+          <select name="shift" id="shiftSelect" class="form-select select2-enable" data-placeholder="Shift">
+            <option value="" {% if not shift %}selected{% endif %}>All</option>
+            <option value="Morning" {% if shift == 'Morning' %}selected{% endif %}>Morning</option>
+            <option value="Night" {% if shift == 'Night' %}selected{% endif %}>Night</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label">Driver</label>
+          <select name="driver_id" id="driverSelect" class="form-select select2-enable" data-placeholder="Search driver...">
+            <option value="0" {% if not driver_id %}selected{% endif %}>All Drivers</option>
+            {% for d in vehicle_drivers %}
+              <option value="{{ d.id }}" {% if driver_id == d.id %}selected{% endif %}>{{ d.name }} ({{ d.driver_id or '-' }}) - {{ d.shift or '-' }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-4 col-lg-3">
           <label class="form-label">Search</label>
           <input type="text" name="search" class="form-control" placeholder="Name, Vehicle..." value="{{ search or '' }}">
         </div>
-        <div class="col-md-2">
-          <button type="submit" class="btn btn-primary w-100">Load</button>
+        <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label d-none d-md-block">&nbsp;</label>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-1"></i>Load
+          </button>
         </div>
       </form>
     </div>
   </div>
 
-  <form method="post" action="{{ url_for('driver_attendance_mark') }}">
+  <form method="post" action="{{ url_for('driver_attendance_mark') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="save_attendance" value="1">
     <input type="hidden" name="attendance_date" value="{{ view_date.strftime('%d-%m-%Y') }}">
     <input type="hidden" name="project_id" value="{{ project_id or 0 }}">
     <input type="hidden" name="district_id" value="{{ district_id or 0 }}">
+    <input type="hidden" name="vehicle_id" value="{{ vehicle_id or 0 }}">
+    <input type="hidden" name="shift" value="{{ shift or '' }}">
+    <input type="hidden" name="driver_id" value="{{ driver_id or 0 }}">
     <input type="hidden" name="search" value="{{ search or '' }}">
 
-    <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card shadow border-0 mb-4 mark-att-table-card">
       <div class="card-header bg-success text-white py-3">
-        <span class="fw-semibold">Mark attendance for {{ view_date|ddmmyyyy }}</span>
+        <span class="header-title">Leave / Late / Half Day / Off — {{ view_date|ddmmyyyy }}</span>
+        {% if drivers %}
+        <div class="list-search-wrap flex-grow-1 flex-md-grow-0">
+          <input type="text" id="markTableSearch" class="form-control" placeholder="Search in list..." aria-label="Search in list">
+        </div>
+        {% endif %}
       </div>
       <div class="card-body p-0">
         <div class="table-responsive">
@@ -69,40 +139,72 @@
                 <th>Status</th>
                 <th>Check In (HH:MM)</th>
                 <th>Check Out (HH:MM)</th>
+                <th>Photo (optional)</th>
                 <th>Remarks</th>
               </tr>
             </thead>
             <tbody>
               {% for driver in drivers %}
-              <tr>
+              {% set rec = existing.get(driver.id) %}
+              {% set gps_cam_locked = rec and rec.remarks and 'GPS' in (rec.remarks or '') and 'Camera' in (rec.remarks or '') %}
+              <tr class="{% if gps_cam_locked %}table-secondary{% endif %}">
                 <td class="ps-4">{{ loop.index }}</td>
                 <td class="fw-medium">{{ driver.vehicle.vehicle_no if driver.vehicle else '-' }}</td>
                 <td><span class="badge bg-light text-dark border">{{ driver.vehicle.vehicle_type if driver.vehicle and driver.vehicle.vehicle_type else '-' }}</span></td>
                 <td>
                   <span class="fw-medium">{{ driver.name }}</span>
                   <br><small class="text-muted">{{ driver.driver_id }}</small>
+                  {% if gps_cam_locked %}<br><span class="badge bg-success mt-1">GPS+Cam — Locked</span>{% endif %}
                 </td>
                 <td>
+                  {% if gps_cam_locked %}
+                    <span class="text-muted">{{ rec.status if rec else '-' }}</span>
+                  {% else %}
                   <select name="driver_{{ driver.id }}_status" class="form-select form-select-sm" style="min-width: 110px;">
                     {% for val, label in status_choices %}
-                      <option value="{{ val }}" {% if existing.get(driver.id) and existing[driver.id].status == val %}selected{% elif not existing.get(driver.id) and val == 'Absent' %}selected{% endif %}>{{ label }}</option>
+                      <option value="{{ val }}" {% if rec and rec.status == val %}selected{% elif not rec and val == 'Leave' %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                   </select>
+                  {% endif %}
                 </td>
                 <td>
-                  <input type="text" name="driver_{{ driver.id }}_check_in" class="form-control form-control-sm" placeholder="09:00" value="{% if existing.get(driver.id) and existing[driver.id].check_in %}{{ existing[driver.id].check_in.strftime('%H:%M') }}{% endif %}" maxlength="5">
+                  {% if gps_cam_locked %}
+                    <span class="text-muted">{% if rec and rec.check_in %}{{ rec.check_in.strftime('%H:%M') }}{% else %}-{% endif %}</span>
+                  {% else %}
+                  <input type="text" name="driver_{{ driver.id }}_check_in" class="form-control form-control-sm" placeholder="09:00" value="{% if rec and rec.check_in %}{{ rec.check_in.strftime('%H:%M') }}{% endif %}" maxlength="5">
+                  {% endif %}
                 </td>
                 <td>
-                  <input type="text" name="driver_{{ driver.id }}_check_out" class="form-control form-control-sm" placeholder="17:00" value="{% if existing.get(driver.id) and existing[driver.id].check_out %}{{ existing[driver.id].check_out.strftime('%H:%M') }}{% endif %}" maxlength="5">
+                  {% if gps_cam_locked %}
+                    <span class="text-muted">{% if rec and rec.check_out %}{{ rec.check_out.strftime('%H:%M') }}{% else %}-{% endif %}</span>
+                  {% else %}
+                  <input type="text" name="driver_{{ driver.id }}_check_out" class="form-control form-control-sm" placeholder="17:00" value="{% if rec and rec.check_out %}{{ rec.check_out.strftime('%H:%M') }}{% endif %}" maxlength="5">
+                  {% endif %}
                 </td>
                 <td>
-                  <input type="text" name="driver_{{ driver.id }}_remarks" class="form-control form-control-sm" placeholder="Optional" value="{% if existing.get(driver.id) and existing[driver.id].remarks %}{{ existing[driver.id].remarks }}{% endif %}">
+                  {% if gps_cam_locked %}
+                    {% if rec and rec.check_in_photo_path %}
+                    <a href="{{ url_for('uploaded_file', filename=rec.check_in_photo_path) }}" target="_blank" class="btn btn-sm btn-outline-secondary">View Photo</a>
+                    {% else %}<span class="text-muted">-</span>{% endif %}
+                  {% else %}
+                  <input type="file" name="driver_{{ driver.id }}_photo" class="form-control form-control-sm" accept="image/*" title="Optional image">
+                  {% if rec and rec.check_in_photo_path %}
+                  <small class="text-muted d-block">Current: <a href="{{ url_for('uploaded_file', filename=rec.check_in_photo_path) }}" target="_blank">View</a></small>
+                  {% endif %}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if gps_cam_locked %}
+                    <small class="text-muted">{{ rec.remarks[:40] }}{% if rec.remarks|length > 40 %}...{% endif %}</small>
+                  {% else %}
+                    <small class="text-muted">Manual entry form ki entry</small>
+                  {% endif %}
                 </td>
               </tr>
               {% else %}
               <tr>
-                <td colspan="7" class="text-center py-5 text-muted">
-                  No drivers for selected Project / District. Select Project and District above, then click <strong>Load</strong> to show drivers of that project and district.
+                <td colspan="9" class="text-center py-5 text-muted">
+                  Filters use karein (Excel ki tarah — koi bhi alag ya mila kar). Project / District / Vehicle No / Shift / Driver. Phir <strong>Load</strong> dabayein. Sirf assigned data dikhega.
                 </td>
               </tr>
               {% endfor %}
@@ -111,14 +213,13 @@
         </div>
       </div>
       {% if drivers %}
-      <div class="card-footer bg-light d-flex justify-content-between align-items-center flex-wrap">
+      <div class="card-footer bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
           <button type="submit" class="btn btn-success">
-            <i class="bi bi-check2-square me-1"></i>Save Attendance
+            <i class="bi bi-check2-square me-1"></i>Save Status
           </button>
           <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-secondary ms-2">Cancel</a>
         </div>
-        <input type="text" id="markTableSearch" class="form-control form-control-sm" style="max-width: 220px;" placeholder="Search in list...">
       </div>
       {% endif %}
     </div>
@@ -129,12 +230,37 @@
 (function() {
   var projectSelect = document.getElementById('projectSelect');
   var districtSelect = document.getElementById('districtSelect');
+  var vehicleSelect = document.getElementById('vehicleSelect');
+  var driverSelect = document.getElementById('driverSelect');
+  var shiftSelect = document.getElementById('shiftSelect');
+
+  function initSelect2For(el, placeholder) {
+    if (!el || !$.fn.select2) return;
+    var $el = $(el);
+    if ($el.data('select2')) $el.select2('destroy');
+    $el.select2({ theme: 'bootstrap-5', width: '100%', placeholder: placeholder || 'Search...' });
+  }
+
+  // Init Select2 for filter dropdowns (base may already init .select2-enable; re-init here so placeholders work)
+  setTimeout(function() {
+    initSelect2For(projectSelect, 'Search project...');
+    initSelect2For(districtSelect, 'Search district...');
+    initSelect2For(vehicleSelect, 'Search vehicle...');
+    initSelect2For(shiftSelect, 'Shift');
+    initSelect2For(driverSelect, 'Search driver...');
+  }, 50);
+
   if (projectSelect && districtSelect) {
     projectSelect.addEventListener('change', function() {
       var pid = this.value;
-      var $dist = $(districtSelect);
-      if ($dist.data('select2')) $dist.select2('destroy');
+      if ($(districtSelect).data('select2')) $(districtSelect).select2('destroy');
       districtSelect.innerHTML = '<option value="0">All Districts</option>';
+      vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
+      driverSelect.innerHTML = '<option value="0">All Drivers</option>';
+      vehicleSelect.value = '0';
+      driverSelect.value = '0';
+      initSelect2For(vehicleSelect, 'Search vehicle...');
+      initSelect2For(driverSelect, 'Search driver...');
       if (pid && pid !== '0') {
         fetch('/get_districts_by_project/' + pid)
           .then(function(r) { return r.json(); })
@@ -145,10 +271,89 @@
               opt.textContent = d.name;
               districtSelect.appendChild(opt);
             });
-            if ($.fn.select2) $dist.select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search district...' });
+            initSelect2For(districtSelect, 'Search district...');
+          });
+        fetch('/get_vehicles_by_project_district?project_id=' + pid + '&district_id=0')
+          .then(function(r) { return r.json(); })
+          .then(function(vehicles) {
+            if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+            vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
+            vehicles.forEach(function(v) {
+              var opt = document.createElement('option');
+              opt.value = v.id;
+              opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+              vehicleSelect.appendChild(opt);
+            });
+            vehicleSelect.value = '0';
+            initSelect2For(vehicleSelect, 'Search vehicle...');
+          });
+        fetch('/get_vehicles_by_project_district')
+          .then(function(r) { return r.json(); })
+          .then(function(vehicles) {
+            if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+            vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
+            vehicles.forEach(function(v) {
+              var opt = document.createElement('option');
+              opt.value = v.id;
+              opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+              vehicleSelect.appendChild(opt);
+            });
+            vehicleSelect.value = '0';
+            initSelect2For(vehicleSelect, 'Search vehicle...');
+          });
+        initSelect2For(districtSelect, 'Search district...');
+      }
+    });
+  }
+  if (districtSelect && vehicleSelect) {
+    districtSelect.addEventListener('change', function() {
+      var pid = projectSelect && projectSelect.value ? projectSelect.value : '0';
+      var did = this.value;
+      if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+      if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
+      vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
+      driverSelect.innerHTML = '<option value="0">All Drivers</option>';
+      vehicleSelect.value = '0';
+      driverSelect.value = '0';
+      initSelect2For(vehicleSelect, 'Search vehicle...');
+      initSelect2For(driverSelect, 'Search driver...');
+      fetch('/get_vehicles_by_project_district?project_id=' + pid + '&district_id=' + did)
+        .then(function(r) { return r.json(); })
+        .then(function(vehicles) {
+          if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+          vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
+          vehicles.forEach(function(v) {
+            var opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+            vehicleSelect.appendChild(opt);
+          });
+          vehicleSelect.value = '0';
+          initSelect2For(vehicleSelect, 'Search vehicle...');
+        });
+    });
+  }
+  if (vehicleSelect && driverSelect) {
+    vehicleSelect.addEventListener('change', function() {
+      var vid = this.value;
+      if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
+      driverSelect.innerHTML = '<option value="0">All Drivers</option>';
+      if (vid && vid !== '0') {
+        fetch('/get_drivers_by_vehicle/' + vid)
+          .then(function(r) { return r.json(); })
+          .then(function(drivers) {
+            drivers.forEach(function(d) {
+              var opt = document.createElement('option');
+              opt.value = d.id;
+              opt.textContent = d.name + (d.driver_id ? ' (' + d.driver_id + ')' : '') + (d.shift ? ' - ' + d.shift : '');
+              driverSelect.appendChild(opt);
+            });
+            driverSelect.value = '0';
+            initSelect2For(driverSelect, 'Search driver...');
           });
       } else {
-        if ($.fn.select2) $dist.select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search district...' });
+        driverSelect.value = '0';
+        initSelect2For(driverSelect, 'Search driver...');
       }
     });
   }

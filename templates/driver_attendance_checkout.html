@@ -1,0 +1,467 @@
+{% extends "base.html" %}
+{% block title %}Check-out (GPS + Camera){% endblock %}
+
+{% block content %}
+<style>
+  .gps-attendance-page { padding: 0.5rem 0; max-height: calc(100vh - 70px); overflow: auto; }
+  .gps-attendance-page .page-header { margin-bottom: 0.6rem; }
+  .gps-attendance-page .page-header h2 { font-size: 1.35rem; font-weight: 700; }
+  .gps-attendance-page .hint { font-size: 0.8rem; margin-bottom: 0.75rem; line-height: 1.35; }
+  .gps-attendance-page .card { border-radius: 12px; border: none; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  .gps-attendance-page .card-body { padding: 1rem 1.25rem; }
+  .gps-attendance-page .form-label { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.25rem; color: #475569; }
+  .gps-attendance-page .form-select, .gps-attendance-page .form-control { font-size: 0.875rem; min-height: 38px; }
+  .gps-attendance-page .field-row { margin-bottom: 0.5rem; }
+  .gps-attendance-page .status-box { font-size: 0.8rem; padding: 0.5rem 0.75rem; border-radius: 8px; min-height: 2.5rem; }
+  .gps-attendance-page .status-box.success { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+  .gps-attendance-page .status-box.warning { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+  .gps-attendance-page .status-box.info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+  .gps-attendance-page .status-box.neutral { background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; }
+  .gps-attendance-page .btn-mark { font-size: 1rem; padding: 0.6rem 1.5rem; border-radius: 10px; font-weight: 600; box-shadow: 0 2px 8px rgba(220, 53, 69, 0.35); }
+  .gps-attendance-page .btn-mark:disabled { box-shadow: none; }
+  .gps-attendance-page .step-num { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #dc3545, #c82333); color: white; font-size: 0.7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; }
+  .gps-attendance-page .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.4rem; }
+</style>
+
+<div class="container-fluid gps-attendance-page">
+  <div class="d-flex flex-wrap justify-content-between align-items-center page-header">
+    <h2 class="mb-0"><i class="bi bi-box-arrow-right me-2 text-danger"></i>Check-out (GPS + Camera)</h2>
+    <a href="{{ url_for('driver_attendance_list') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-list-ul me-1"></i>Back to List</a>
+  </div>
+
+  <p class="text-muted hint">District → Project → Vehicle (parking auto) → Shift → Driver. 150 m ke andar + time window OK hon par <strong>Mark Check-out</strong> → selfie.</p>
+
+  <div class="row g-2">
+    <div class="col-xl-8">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="section-title"><i class="bi bi-pin-map me-1"></i> Select details</div>
+          <div class="row g-2">
+            <div class="col-md-6 field-row">
+              <label class="form-label"><span class="step-num">1</span>District</label>
+              <select id="districtSelect" class="form-select form-select-sm">
+                <option value="">-- Select District --</option>
+                {% for d in districts or [] %}
+                <option value="{{ d.id }}">{{ d.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6 field-row">
+              <label class="form-label"><span class="step-num">2</span>Project</label>
+              <select id="projectSelect" class="form-select form-select-sm" disabled>
+                <option value="">-- Select Project --</option>
+              </select>
+            </div>
+            <div class="col-md-6 field-row">
+              <label class="form-label"><span class="step-num">3</span>Vehicle</label>
+              <select id="vehicleSelect" class="form-select form-select-sm" disabled>
+                <option value="">-- Select Vehicle --</option>
+              </select>
+            </div>
+            <div class="col-md-6 field-row">
+              <label class="form-label"><span class="step-num">4</span>Parking Station</label>
+              <input type="text" id="parkingDisplay" class="form-control form-control-sm bg-light" readonly placeholder="Auto from vehicle">
+              <input type="hidden" id="parkingId" value="">
+              <input type="hidden" id="parkingLat" value="">
+              <input type="hidden" id="parkingLng" value="">
+              <div id="parkingNotSetMessage" class="alert alert-info py-2 px-2 mt-1 mb-0 d-none small">
+                <i class="bi bi-info-circle me-1"></i>Parking location set nahi. Admin se set karwain.
+              </div>
+            </div>
+            <div class="col-md-6 field-row">
+              <label class="form-label"><span class="step-num">5</span>Shift</label>
+              <select id="shiftSelect" class="form-select form-select-sm" disabled>
+                <option value="">-- Select Shift --</option>
+                <option value="Morning">Morning</option>
+                <option value="Night">Night</option>
+              </select>
+            </div>
+            <div class="col-md-6 field-row">
+              <label class="form-label"><span class="step-num">6</span>Driver</label>
+              <select id="driverSelect" class="form-select form-select-sm" disabled required>
+                <option value="">-- Select Driver --</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="section-title"><i class="bi bi-geo-alt me-1"></i> Location & status</div>
+          <div class="mb-2">
+            <span id="locationSpinner" class="d-none small"><span class="spinner-border spinner-border-sm" role="status"></span> Fetching...</span>
+            <button type="button" id="btnRetryLocation" class="btn btn-outline-primary btn-sm ms-1 d-none">Retry</button>
+          </div>
+          <div id="locationStatus" class="status-box neutral d-none mb-2">
+            <span id="locationText">—</span>
+          </div>
+          <div id="distanceMessage" class="status-box warning d-none mb-2">
+            Move within 150 m of parking.
+          </div>
+          <div id="timeWindowMessage" class="status-box warning d-none mb-2">
+            <span id="timeWindowText">—</span>
+          </div>
+          <div class="d-grid mt-2">
+            <button type="button" id="btnMarkCheckout" class="btn btn-danger btn-mark" disabled>
+              <i class="bi bi-box-arrow-right me-2"></i>Mark Check-out
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Camera modal -->
+<div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-3 overflow-hidden">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title" id="cameraModalLabel"><i class="bi bi-camera-fill me-2"></i>Take selfie (Check-out)</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" id="cameraModalClose"></button>
+      </div>
+      <div class="modal-body text-center p-4">
+        <video id="cameraVideo" autoplay playsinline class="w-100 rounded-3" style="max-height: 360px; background: #111;"></video>
+        <canvas id="cameraCanvas" class="d-none"></canvas>
+        <button type="button" id="btnCapture" class="btn btn-danger btn-lg mt-3 rounded-pill px-4">
+          <i class="bi bi-camera me-2"></i>Capture
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<form id="checkoutForm" method="post" action="{{ url_for('driver_attendance_checkout') }}" enctype="multipart/form-data" class="d-none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="driver_id" id="formDriverId">
+  <input type="hidden" name="parking_station_id" id="formParkingId">
+  <input type="hidden" name="latitude" id="formLat">
+  <input type="hidden" name="longitude" id="formLng">
+  <input type="hidden" name="photo_base64" id="formPhotoBase64">
+</form>
+
+<div id="savingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-center justify-content-center" style="z-index: 9999; background: rgba(255,255,255,0.9);">
+  <div class="text-center">
+    <div class="spinner-border text-danger mb-2" role="status" style="width: 3rem; height: 3rem;"></div>
+    <p class="mb-0 fw-semibold text-dark">Saving check-out...</p>
+  </div>
+</div>
+
+<script>
+(function() {
+  var RADIUS_METERS = 150;
+  var LOCATION_TIMEOUT = 30000;
+  var LOCATION_MAX_AGE = 60000;
+  var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
+  var vehicleSelect = document.getElementById('vehicleSelect');
+  var parkingDisplay = document.getElementById('parkingDisplay');
+  var parkingId = document.getElementById('parkingId');
+  var parkingLat = document.getElementById('parkingLat');
+  var parkingLng = document.getElementById('parkingLng');
+  var shiftSelect = document.getElementById('shiftSelect');
+  var driverSelect = document.getElementById('driverSelect');
+  var btnRetryLocation = document.getElementById('btnRetryLocation');
+  var btnMarkCheckout = document.getElementById('btnMarkCheckout');
+  var locationSpinner = document.getElementById('locationSpinner');
+  var locationStatus = document.getElementById('locationStatus');
+  var locationText = document.getElementById('locationText');
+  var distanceMessage = document.getElementById('distanceMessage');
+  var timeWindowMessage = document.getElementById('timeWindowMessage');
+  var timeWindowText = document.getElementById('timeWindowText');
+  var parkingNotSetMessage = document.getElementById('parkingNotSetMessage');
+  var cameraModal = document.getElementById('cameraModal');
+  var cameraVideo = document.getElementById('cameraVideo');
+  var cameraCanvas = document.getElementById('cameraCanvas');
+  var btnCapture = document.getElementById('btnCapture');
+  var checkoutForm = document.getElementById('checkoutForm');
+  var formDriverId = document.getElementById('formDriverId');
+  var formParkingId = document.getElementById('formParkingId');
+  var formLat = document.getElementById('formLat');
+  var formLng = document.getElementById('formLng');
+  var formPhotoBase64 = document.getElementById('formPhotoBase64');
+
+  var currentPosition = null;
+  var parkingCoords = null;
+  var stream = null;
+  var vehiclesData = [];
+  var timeWindow = {};
+
+  function minutesFromMidnight(hhmm) {
+    if (!hhmm || hhmm.length < 5) return null;
+    var parts = hhmm.split(':');
+    var h = parseInt(parts[0], 10);
+    var m = parseInt(parts[1], 10);
+    if (isNaN(h) || isNaN(m)) return null;
+    return h * 60 + m;
+  }
+
+  function isInTimeWindow(shift, win) {
+    var shiftLower = (shift || '').toLowerCase();
+    var start = null, end = null;
+    if (shiftLower === 'morning') {
+      start = win.morning_start ? minutesFromMidnight(win.morning_start) : null;
+      end = win.morning_end ? minutesFromMidnight(win.morning_end) : null;
+    } else if (shiftLower === 'night') {
+      start = win.night_start ? minutesFromMidnight(win.night_start) : null;
+      end = win.night_end ? minutesFromMidnight(win.night_end) : null;
+    }
+    if (start === null && end === null) return { inWindow: true, label: '' };
+    var now = new Date();
+    var current = now.getHours() * 60 + now.getMinutes();
+    var inWindow = false;
+    var label = (shiftLower === 'morning') ? ('Morning: ' + (win.morning_start || '') + ' – ' + (win.morning_end || '')) : ('Night: ' + (win.night_start || '') + ' – ' + (win.night_end || ''));
+    if (start !== null && end !== null) {
+      inWindow = (end >= start) ? (current >= start && current <= end) : (current >= start || current <= end);
+    } else { inWindow = true; }
+    return { inWindow: inWindow, label: label };
+  }
+
+  function haversineDistance(lat1, lon1, lat2, lon2) {
+    var R = 6371e3;
+    var phi1 = lat1 * Math.PI / 180, phi2 = lat2 * Math.PI / 180;
+    var dphi = (lat2 - lat1) * Math.PI / 180, dlambda = (lon2 - lon1) * Math.PI / 180;
+    var a = Math.sin(dphi/2)*Math.sin(dphi/2) + Math.cos(phi1)*Math.cos(phi2)*Math.sin(dlambda/2)*Math.sin(dlambda/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function updateDistanceUI() {
+    if (!parkingCoords || !parkingCoords.lat || !currentPosition) {
+      btnMarkCheckout.disabled = true;
+      distanceMessage.classList.add('d-none');
+      timeWindowMessage.classList.add('d-none');
+      locationStatus.classList.remove('success', 'warning');
+      locationStatus.classList.add('neutral');
+      return;
+    }
+    var dist = haversineDistance(currentPosition.coords.latitude, currentPosition.coords.longitude, parkingCoords.lat, parkingCoords.lng);
+    locationStatus.classList.remove('d-none', 'warning');
+    locationStatus.classList.add('neutral');
+    locationText.textContent = 'Distance: ' + Math.round(dist) + ' m' + (dist <= RADIUS_METERS ? ' ✓ Within range' : '');
+    if (dist <= RADIUS_METERS) locationStatus.classList.remove('neutral'), locationStatus.classList.add('success');
+    if (dist > RADIUS_METERS) {
+      btnMarkCheckout.disabled = true;
+      distanceMessage.classList.remove('d-none');
+      timeWindowMessage.classList.add('d-none');
+      return;
+    }
+    distanceMessage.classList.add('d-none');
+    var opt = driverSelect.options[driverSelect.selectedIndex];
+    var shift = (opt && opt.dataset.shift) ? opt.dataset.shift : shiftSelect.value;
+    var timeCheck = isInTimeWindow(shift, timeWindow);
+    if (!timeCheck.inWindow) {
+      btnMarkCheckout.disabled = true;
+      timeWindowText.textContent = 'Is waqt check-out allowed nahi. ' + timeCheck.label + ' ke dauran karein.';
+      timeWindowMessage.classList.remove('d-none');
+      return;
+    }
+    timeWindowMessage.classList.add('d-none');
+    btnMarkCheckout.disabled = false;
+  }
+
+  districtSelect.addEventListener('change', function() {
+    var id = districtSelect.value;
+    projectSelect.innerHTML = '<option value="">-- Select Project --</option>';
+    projectSelect.disabled = !id;
+    vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
+    vehicleSelect.disabled = true;
+    shiftSelect.value = ''; shiftSelect.disabled = true;
+    driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
+    driverSelect.disabled = true;
+    parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
+    parkingCoords = null; vehiclesData = []; parkingNotSetMessage.classList.add('d-none');
+    if (!id) return;
+    fetch('{{ url_for("api_attendance_projects") }}?district_id=' + id).then(function(r) { return r.json(); }).then(function(arr) {
+      arr.forEach(function(p) { var o = document.createElement('option'); o.value = p.id; o.textContent = p.name; projectSelect.appendChild(o); });
+    });
+  });
+
+  projectSelect.addEventListener('change', function() {
+    var id = projectSelect.value;
+    vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
+    vehicleSelect.disabled = !id;
+    shiftSelect.value = ''; shiftSelect.disabled = true;
+    driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
+    driverSelect.disabled = true;
+    parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
+    parkingCoords = null; vehiclesData = []; parkingNotSetMessage.classList.add('d-none');
+    if (!id) return;
+    fetch('{{ url_for("api_attendance_vehicles") }}?project_id=' + id).then(function(r) { return r.json(); }).then(function(arr) {
+      vehiclesData = arr;
+      arr.forEach(function(v) {
+        var o = document.createElement('option');
+        o.value = v.id;
+        o.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+        o.dataset.index = arr.indexOf(v).toString();
+        vehicleSelect.appendChild(o);
+      });
+      shiftSelect.disabled = false;
+    });
+  });
+
+  vehicleSelect.addEventListener('change', function() {
+    var opt = vehicleSelect.options[vehicleSelect.selectedIndex];
+    parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
+    parkingCoords = null; parkingNotSetMessage.classList.add('d-none');
+    if (!opt || !opt.value) return;
+    var v = vehiclesData[parseInt(opt.dataset.index, 10)];
+    if (!v) return;
+    parkingDisplay.value = v.parking_name || '—';
+    parkingId.value = v.parking_station_id || '';
+    if (v.latitude != null && v.longitude != null) {
+      parkingLat.value = v.latitude; parkingLng.value = v.longitude;
+      parkingCoords = { lat: v.latitude, lng: v.longitude };
+    } else { parkingNotSetMessage.classList.remove('d-none'); }
+    updateDistanceUI();
+    loadDrivers();
+  });
+
+  shiftSelect.addEventListener('change', function() {
+    loadDrivers();
+    if (currentPosition && parkingCoords) updateDistanceUI();
+  });
+
+  function loadDrivers() {
+    var projectId = projectSelect.value, shift = shiftSelect.value;
+    driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
+    driverSelect.disabled = !projectId || !shift;
+    if (!projectId || !shift) return;
+    fetch('{{ url_for("api_attendance_drivers") }}?project_id=' + projectId + '&shift=' + encodeURIComponent(shift)).then(function(r) { return r.json(); }).then(function(arr) {
+      var vehicleDriverId = null;
+      var vOpt = vehicleSelect.options[vehicleSelect.selectedIndex];
+      if (vOpt && vOpt.value && vehiclesData[parseInt(vOpt.dataset.index, 10)]) vehicleDriverId = vehiclesData[parseInt(vOpt.dataset.index, 10)].driver_id;
+      arr.forEach(function(d) {
+        var o = document.createElement('option');
+        o.value = d.id;
+        o.textContent = d.name + ' (' + d.driver_id + ')';
+        o.dataset.shift = (d.shift || shift || '').trim();
+        if (d.id === vehicleDriverId) o.selected = true;
+        driverSelect.appendChild(o);
+      });
+      if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
+    });
+  }
+
+  driverSelect.addEventListener('change', function() {
+    if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
+  });
+
+  function fetchLocation() {
+    if (!navigator.geolocation) {
+      locationStatus.classList.remove('d-none'); locationStatus.classList.add('warning');
+      locationText.textContent = 'Geolocation not supported.';
+      btnRetryLocation.classList.add('d-none');
+      return;
+    }
+    if (!parkingLat.value || !parkingLng.value) {
+      parkingNotSetMessage.classList.remove('d-none');
+      locationStatus.classList.add('d-none');
+      locationText.textContent = '';
+      return;
+    }
+    parkingNotSetMessage.classList.add('d-none');
+    locationSpinner.classList.remove('d-none');
+    locationStatus.classList.add('d-none');
+    btnRetryLocation.classList.add('d-none');
+    distanceMessage.classList.add('d-none');
+    timeWindowMessage.classList.add('d-none');
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        locationSpinner.classList.add('d-none');
+        currentPosition = pos;
+        updateDistanceUI();
+      },
+      function(err) {
+        locationSpinner.classList.add('d-none');
+        locationStatus.classList.remove('d-none', 'success', 'neutral');
+        locationStatus.classList.add('warning');
+        locationText.textContent = 'Location nahi mili: ' + (err.code === 3 ? 'Timeout. Retry karein.' : (err.message || 'Permission denied.'));
+        btnRetryLocation.classList.remove('d-none');
+        btnMarkCheckout.disabled = true;
+        timeWindowMessage.classList.add('d-none');
+      },
+      { enableHighAccuracy: true, timeout: LOCATION_TIMEOUT, maximumAge: LOCATION_MAX_AGE }
+    );
+  }
+
+  btnRetryLocation.addEventListener('click', fetchLocation);
+  fetch('{{ url_for("api_attendance_time_window") }}').then(function(r) { return r.json(); }).then(function(data) { timeWindow = data || {}; }).catch(function() { timeWindow = {}; });
+
+  function stopCamera() {
+    if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
+  }
+
+  btnMarkCheckout.addEventListener('click', function() {
+    if (!currentPosition || !parkingCoords) return;
+    if (!driverSelect.value) { alert('Please select a driver.'); return; }
+    if (!parkingId.value || !parkingLat.value || !parkingLng.value) {
+      alert('Parking coordinates set nahi. Admin se parking location set karwain.');
+      return;
+    }
+    var modal = new bootstrap.Modal(cameraModal);
+    modal.show();
+    cameraVideo.srcObject = null;
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+        .then(function(s) { stream = s; cameraVideo.srcObject = s; })
+        .catch(function(err) { alert('Camera failed: ' + (err.message || 'Permission denied')); modal.hide(); });
+    } else { alert('Camera not supported.'); modal.hide(); }
+  });
+
+  cameraModal.addEventListener('hidden.bs.modal', function() { stopCamera(); });
+  document.getElementById('cameraModalClose').addEventListener('click', function() { stopCamera(); });
+
+  btnCapture.addEventListener('click', function() {
+    if (!cameraVideo.srcObject || cameraVideo.readyState < 2) return;
+    var w = cameraVideo.videoWidth;
+    var h = cameraVideo.videoHeight;
+    cameraCanvas.width = w;
+    cameraCanvas.height = h;
+    var ctx = cameraCanvas.getContext('2d');
+    ctx.drawImage(cameraVideo, 0, 0);
+    var now = new Date();
+    var dateStr = now.getDate().toString().padStart(2, '0') + '-' + (now.getMonth() + 1).toString().padStart(2, '0') + '-' + now.getFullYear();
+    var timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0');
+    var locStr = '';
+    if (currentPosition && currentPosition.coords) {
+      locStr = currentPosition.coords.latitude.toFixed(6) + ', ' + currentPosition.coords.longitude.toFixed(6);
+    }
+    var line1 = 'Check-out GPS+Cam | ' + dateStr + ' ' + timeStr;
+    var line2 = locStr ? 'Location: ' + locStr : '';
+    var fontSize = Math.max(14, Math.min(24, h / 22));
+    ctx.font = 'bold ' + fontSize + 'px Arial';
+    var tw1 = ctx.measureText(line1).width;
+    var tw2 = line2 ? ctx.measureText(line2).width : 0;
+    var boxW = Math.max(tw1, tw2) + 24;
+    var boxH = line2 ? fontSize * 2.4 : fontSize * 1.6;
+    var pad = 12;
+    var x = w - boxW - pad;
+    var y = h - boxH - pad;
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(x, y, boxW, boxH);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, boxW, boxH);
+    ctx.fillStyle = '#fff';
+    ctx.textBaseline = 'top';
+    ctx.fillText(line1, x + 12, y + 8);
+    if (line2) {
+      ctx.font = fontSize * 0.85 + 'px Arial';
+      ctx.fillText(line2, x + 12, y + 8 + fontSize * 1.15);
+    }
+    var dataUrl = cameraCanvas.toDataURL('image/jpeg', 0.9);
+    stopCamera();
+    bootstrap.Modal.getInstance(cameraModal).hide();
+    formDriverId.value = driverSelect.value;
+    formParkingId.value = parkingId.value;
+    formLat.value = currentPosition.coords.latitude;
+    formLng.value = currentPosition.coords.longitude;
+    formPhotoBase64.value = dataUrl;
+    document.getElementById('savingOverlay').classList.remove('d-none');
+    checkoutForm.submit();
+  });
+})();
+</script>
+{% endblock %}

@@ -3,6 +3,14 @@
 {% block title %}Parking Stations List{% endblock %}
 
 {% block content %}
+<style>
+  .parking-list-table.table { font-size: 0.875rem; }
+  .parking-list-table thead th { padding: 0.4rem 0.5rem; font-weight: 600; font-size: 0.8125rem; white-space: nowrap; }
+  .parking-list-table tbody td { padding: 0.35rem 0.5rem; vertical-align: middle; }
+  .parking-list-table .badge { font-size: 0.7rem; font-weight: 500; padding: 0.2rem 0.4rem; }
+  .parking-list-table .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+  .parking-list-table .actions-cell { white-space: nowrap; }
+</style>
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0 fw-bold"><i class="bi bi-p-square me-2 text-primary"></i>Parking Stations</h2>
@@ -50,35 +58,39 @@
   <div class="card shadow-sm border-0">
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table id="parkingTable" class="table table-hover align-middle mb-0">
+        <table id="parkingTable" class="table table-hover table-sm align-middle mb-0 parking-list-table">
           <thead class="table-dark">
             <tr>
-              <th class="ps-3" width="8%">ID</th>
-              <th width="20%">Station Name</th>
-              <th width="20%">District / Tehsil</th>
-              <th width="12%">Capacity</th>
-              <th width="25%">Address/Location</th>
+              <th class="ps-2" width="5%">ID</th>
+              <th width="16%">Station Name</th>
+              <th width="16%">District / Tehsil</th>
+              <th width="8%">Capacity</th>
+              <th width="11%">Latitude</th>
+              <th width="11%">Longitude</th>
+              <th width="18%">Address/Location</th>
               <th class="text-center" width="15%">Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for parking in parkings %}
             <tr>
-              <td class="ps-3 text-muted">{{ parking.id }}</td>
+              <td class="ps-2 text-muted">{{ parking.id }}</td>
               <td class="fw-bold">{{ parking.name }}</td>
               <td>
-                <span class="text-dark">{{ parking.district or '-' }}</span> / 
+                <span class="text-dark">{{ parking.district or '-' }}</span> /
                 <small class="text-muted">{{ parking.tehsil or '-' }}</small>
               </td>
               <td><span class="badge bg-info text-dark">{{ parking.capacity }} Vehicles</span></td>
-              <td>{{ parking.address_location|truncate(50) or '-' }}</td>
-              <td class="text-center">
+              <td><span class="text-muted" style="font-size:0.8rem;">{{ parking.latitude or '-' }}</span></td>
+              <td><span class="text-muted" style="font-size:0.8rem;">{{ parking.longitude or '-' }}</span></td>
+              <td>{{ parking.address_location|truncate(35) or '-' }}</td>
+              <td class="text-center actions-cell">
                 <a href="{{ url_for('parking_form', id=parking.id) }}" class="btn btn-sm btn-warning me-1" title="Edit">
-                  <i class="bi bi-pencil-square"></i> Edit
+                  <i class="bi bi-pencil-square"></i>
                 </a>
                 <form action="{{ url_for('delete_parking', id=parking.id) }}" method="POST" style="display:inline;">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete parking station {{ parking.name }}?')">
+                  <button type="submit" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete parking station {{ parking.name }}?')">
                     <i class="bi bi-trash"></i>
                   </button>
                 </form>
@@ -86,7 +98,7 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="6" class="text-center py-5">
+              <td colspan="8" class="text-center py-5">
                 <div class="text-muted">
                   <i class="bi bi-geo-alt fs-1 d-block mb-3"></i>
                   <p>No parking stations found. <a href="{{ url_for('parking_form') }}">Add your first station</a>.</p>

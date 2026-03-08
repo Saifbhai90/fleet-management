@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Bulk Off{% endblock %}
+
+{% block content %}
+<style>
+  .bulk-off-page .card { border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 12px rgba(0,0,0,0.05); }
+  .bulk-off-page .card-header { font-weight: 600; padding: 0.75rem 1rem; }
+  .bulk-off-page .form-label { font-weight: 600; font-size: 0.875rem; }
+  .bulk-off-page .btn-bulk { font-weight: 600; padding: 0.5rem 1.25rem; }
+</style>
+<div class="container-fluid bulk-off-page">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-calendar-x me-2 text-secondary"></i>Bulk Off</h2>
+    <a href="{{ url_for('driver_attendance_list') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>Attendance List</a>
+  </div>
+
+  <p class="text-muted mb-4">Kisi <strong>District</strong> ke kisi <strong>Project</strong> ke saare drivers ko ek date ke liye <strong>Off</strong> mark karein. Pehle District aur Project select karein, phir <strong>View Drivers</strong> dabayein, phir <strong>Mark All as Off</strong>.</p>
+
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-light">
+      <i class="bi bi-funnel me-2"></i>Select Date, District & Project
+    </div>
+    <div class="card-body">
+      <form method="get" action="{{ url_for('driver_attendance_bulk_off') }}" id="filterForm">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label">Date</label>
+            <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">District</label>
+            <select name="district_id" id="districtSelect" class="form-select">
+              <option value="0">-- Select District --</option>
+              {% for d in districts %}
+              <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Project</label>
+            <select name="project_id" id="projectSelect" class="form-select">
+              <option value="0">-- Select Project --</option>
+              {% for p in projects %}
+              <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="bi bi-search me-1"></i>View Drivers
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if drivers is defined and drivers %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-dark text-white">
+      <span>Is project ke <strong>{{ drivers|length }}</strong> driver(s) ko {{ view_date.strftime('%d-%m-%Y') }} ke liye Off mark karenge</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">#</th>
+              <th>Driver</th>
+              <th>Vehicle No</th>
+              <th>Shift</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in drivers %}
+            <tr>
+              <td class="ps-4">{{ loop.index }}</td>
+              <td>{{ d.name }}{% if d.driver_id %} <small class="text-muted">({{ d.driver_id }})</small>{% endif %}</td>
+              <td>{{ d.vehicle.vehicle_no if d.vehicle else '-' }}</td>
+              <td>{{ d.shift or '-' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer bg-light">
+      <form method="post" action="{{ url_for('driver_attendance_bulk_off') }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="confirm_bulk_off" value="1">
+        <input type="hidden" name="bulk_off_date" value="{{ view_date.strftime('%d-%m-%Y') }}">
+        <input type="hidden" name="district_id" value="{{ district_id }}">
+        <input type="hidden" name="project_id" value="{{ project_id }}">
+        <button type="submit" class="btn btn-dark btn-bulk" onclick="return confirm('In {{ drivers|length }} driver(s) ko {{ view_date.strftime('%d-%m-%Y') }} ke liye Off mark karna hai?');">
+          <i class="bi bi-check2-all me-1"></i>Mark All as Off
+        </button>
+      </form>
+    </div>
+  </div>
+  {% elif project_id and district_id and drivers is defined %}
+  <div class="alert alert-info">
+    Is project + district ke liye koi active driver (vehicle assigned) nahi mila. Pehle drivers assign karein.
+  </div>
+  {% endif %}
+
+  {% if not district_id and not project_id %}
+  <div class="alert alert-secondary">
+    Upar Date, District aur Project select karke <strong>View Drivers</strong> dabayein.
+  </div>
+  {% endif %}
+</div>
+
+<script>
+(function() {
+  var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = this.value;
+      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+      if (did && did !== '0') {
+        fetch('{{ url_for("api_attendance_projects") }}?district_id=' + did)
+          .then(function(r) { return r.json(); })
+          .then(function(arr) {
+            arr.forEach(function(p) {
+              var opt = document.createElement('option');
+              opt.value = p.id;
+              opt.textContent = p.name;
+              projectSelect.appendChild(opt);
+            });
+          });
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Activity Logs (Device & Location){% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <h2 class="mb-4"><i class="bi bi-geo-alt me-2 text-primary"></i>Activity Logs (Device ID & Geolocation)</h2>
+  <p class="text-muted">Client-side activity logs with device ID and location. Filter by user, device ID, or date range. View on Map opens the coordinates in Google Maps.</p>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="get" action="{{ url_for('activity_logs_geo_report') }}" class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label">Date From</label>
+          <input type="date" name="date_from" class="form-control" value="{{ date_from or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Date To</label>
+          <input type="date" name="date_to" class="form-control" value="{{ date_to or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">User ID</label>
+          <select name="user_id" class="form-select">
+            <option value="">-- All --</option>
+            {% for u in users_for_filter %}
+              <option value="{{ u.id }}" {% if user_id_q == u.id %}selected{% endif %}>{{ u.id }} - {{ u.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Device ID</label>
+          <input type="text" name="device_id" class="form-control" placeholder="Filter by device ID" value="{{ device_id_q or '' }}">
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-1"></i>Search
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-primary text-white py-3">
+      <span class="fw-semibold">Activity logs (latest 1000)</span>
+    </div>
+    <div class="card-body p-0">
+      {% if logs %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">#</th>
+              <th>ID</th>
+              <th>User ID</th>
+              <th>User</th>
+              <th>Device ID</th>
+              <th>Action</th>
+              <th>Date &amp; Time</th>
+              <th>Latitude</th>
+              <th>Longitude</th>
+              <th>Accuracy (m)</th>
+              <th>IP</th>
+              <th>View on Map</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in logs %}
+            <tr>
+              <td class="ps-3">{{ loop.index }}</td>
+              <td><code>{{ log.id }}</code></td>
+              <td><code>{{ log.user_id }}</code></td>
+              <td>{{ log.user.username }}{% if log.user.full_name %} <span class="text-muted">({{ log.user.full_name }})</span>{% endif %}</td>
+              <td><code>{{ log.device_id or '-' }}</code></td>
+              <td>{{ log.action }}</td>
+              <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '-' }}</td>
+              <td>{{ log.latitude if log.latitude is not none else '-' }}</td>
+              <td>{{ log.longitude if log.longitude is not none else '-' }}</td>
+              <td>{{ log.accuracy if log.accuracy is not none else '-' }}</td>
+              <td><small>{{ log.ip_address or '-' }}</small></td>
+              <td>
+                {% if log.latitude is not none and log.longitude is not none %}
+                <a href="https://www.google.com/maps?q={{ log.latitude }},{{ log.longitude }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary me-1" title="Google Maps">
+                  <i class="bi bi-map"></i> Map
+                </a>
+                <a href="https://www.openstreetmap.org/?mlat={{ log.latitude }}&amp;mlon={{ log.longitude }}&amp;zoom=17" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" title="OpenStreetMap">
+                  OSM
+                </a>
+                {% else %}
+                <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="p-4 text-muted mb-0">No activity logs found for the given filters. Client-side logging runs when users open the app (device ID + optional location).</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <p class="text-muted small mt-3">
+    Each row is one client-reported activity (e.g. Login, Page View, Button Click). Device ID is a UUID stored in the browser (localStorage); location is requested <strong>once</strong> after login (or on first dashboard load), then kept updated in the background via <code>watchPosition</code> with GPS-level precision. Use <strong>Map</strong> (Google Maps) or <strong>OSM</strong> (OpenStreetMap) to view the coordinates.
+  </p>
+</div>
+{% endblock %}
