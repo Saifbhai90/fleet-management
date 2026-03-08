@@ -17,11 +17,16 @@
   <p class="text-muted mb-4">Kisi <strong>District</strong> ke kisi <strong>Project</strong> ke saare drivers ko ek date ke liye <strong>Off</strong> mark karein. Pehle District aur Project select karein, phir <strong>View Drivers</strong> dabayein, phir <strong>Mark All as Off</strong>.</p>
 
   <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-light">
-      <i class="bi bi-funnel me-2"></i>Select Date, District & Project
+    <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap">
+      <span><i class="bi bi-funnel me-2"></i>Select Date, District & Project</span>
+      <a href="{{ url_for('driver_attendance_bulk_off') }}" class="btn btn-outline-secondary btn-sm" id="bulkOffResetBtn" title="District aur Project clear karke form reset karein">
+        <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+      </a>
     </div>
     <div class="card-body">
       <form method="get" action="{{ url_for('driver_attendance_bulk_off') }}" id="filterForm">
+        <input type="hidden" name="district_id" id="hiddenDistrictId" value="{{ district_id or '' }}">
+        <input type="hidden" name="project_id" id="hiddenProjectId" value="{{ project_id or '' }}">
         <div class="row g-3 align-items-end">
           <div class="col-md-3">
             <label class="form-label">Date</label>
@@ -29,8 +34,8 @@
           </div>
           <div class="col-md-3">
             <label class="form-label">District</label>
-            <select name="district_id" id="districtSelect" class="form-select select2-enable" data-placeholder="Search district...">
-              <option value="0">-- Select District --</option>
+            <select id="districtSelect" class="form-select select2-enable" data-placeholder="Search district...">
+              <option value="">-- Select District --</option>
               {% for d in districts %}
               <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
               {% endfor %}
@@ -38,8 +43,8 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">Project</label>
-            <select name="project_id" id="projectSelect" class="form-select select2-enable" data-placeholder="Search project...">
-              <option value="0">-- Select Project --</option>
+            <select id="projectSelect" class="form-select select2-enable" data-placeholder="Search project...">
+              <option value="">-- Select Project --</option>
               {% for p in projects %}
               <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
               {% endfor %}
@@ -97,9 +102,9 @@
       </form>
     </div>
   </div>
-  {% elif project_id and district_id and drivers is defined %}
+  {% elif (project_id or district_id) and drivers is defined and not drivers %}
   <div class="alert alert-info">
-    Is project + district ke liye koi active driver (vehicle assigned) nahi mila. Pehle drivers assign karein.
+    Is project/district ke liye koi active driver (vehicle assigned) nahi mila. Pehle drivers assign karein.
   </div>
   {% endif %}
 
@@ -114,33 +119,108 @@
 (function() {
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
-  function initSelect2For(el, placeholder) {
-    if (!el || typeof $ === 'undefined' || !$.fn.select2) return;
-    var $el = $(el);
-    if ($el.data('select2')) $el.select2('destroy');
-    $el.select2({ theme: 'bootstrap-5', width: '100%', placeholder: placeholder || 'Search...' });
+  var hiddenDistrictId = document.getElementById('hiddenDistrictId');
+  var hiddenProjectId = document.getElementById('hiddenProjectId');
+  var projectsApiUrl = '{{ url_for("api_attendance_projects") }}';
+
+  function syncHiddenInputs() {
+    if (hiddenDistrictId && districtSelect) hiddenDistrictId.value = districtSelect.value || '';
+    if (hiddenProjectId && projectSelect) hiddenProjectId.value = projectSelect.value || '';
   }
-  if (districtSelect && projectSelect) {
-    districtSelect.addEventListener('change', function() {
-      var did = this.value;
+
+  function initProjectSelect2() {
+    if (!projectSelect || typeof $ === 'undefined' || !$.fn.select2) return;
+    var $el = $(projectSelect);
+    if ($el.data('select2')) $el.select2('destroy');
+    $el.select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search project...' });
+  }
+
+  var loadProjectsTimeout = null;
+  function loadProjectsForDistrict(districtId) {
+    if (!districtId || districtId === '0' || districtId === '') return;
+    if (loadProjectsTimeout) clearTimeout(loadProjectsTimeout);
+    loadProjectsTimeout = setTimeout(function doLoad() {
+      loadProjectsTimeout = null;
       if ($(projectSelect).data('select2')) $(projectSelect).select2('destroy');
-      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
-      if (did && did !== '0') {
-        fetch('{{ url_for("api_attendance_projects") }}?district_id=' + did)
-          .then(function(r) { return r.json(); })
-          .then(function(arr) {
-            arr.forEach(function(p) {
-              var opt = document.createElement('option');
-              opt.value = p.id;
-              opt.textContent = p.name;
-              projectSelect.appendChild(opt);
-            });
-            initSelect2For(projectSelect, 'Search project...');
+      projectSelect.innerHTML = '<option value="">-- Select Project --</option>';
+      if (hiddenProjectId) hiddenProjectId.value = '';
+      fetch(projectsApiUrl + '?district_id=' + encodeURIComponent(districtId))
+        .then(function(r) { return r.json(); })
+        .then(function(arr) {
+          if (!Array.isArray(arr)) return;
+          var seen = {};
+          var list = [];
+          for (var i = 0; i < arr.length; i++) {
+            var p = arr[i];
+            var id = p && p.id;
+            if (id === undefined || seen[id]) continue;
+            seen[id] = true;
+            list.push(p);
+          }
+          list.forEach(function(p) {
+            var opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name;
+            projectSelect.appendChild(opt);
           });
-      } else {
-        initSelect2For(projectSelect, 'Search project...');
-      }
+          initProjectSelect2();
+        })
+        .catch(function() { initProjectSelect2(); });
+    }, 50);
+  }
+
+  function initBulkOffForm() {
+    if (!districtSelect || !projectSelect) return;
+
+    $(districtSelect).off('change.bulkoff select2:select.bulkoff');
+    $(districtSelect).on('change.bulkoff', function() {
+      var did = districtSelect.value || (hiddenDistrictId && hiddenDistrictId.value);
+      syncHiddenInputs();
+      loadProjectsForDistrict(did);
     });
+    $(districtSelect).on('select2:select.bulkoff', function(e) {
+      var id = e.params && e.params.data && e.params.data.id;
+      if (id !== undefined && id !== null && id !== '') {
+        districtSelect.value = id;
+        if (hiddenDistrictId) hiddenDistrictId.value = id;
+      }
+      loadProjectsForDistrict(id !== undefined && id !== null ? String(id) : (districtSelect.value || ''));
+    });
+
+    $(projectSelect).off('change.bulkoff select2:select.bulkoff');
+    $(projectSelect).on('change.bulkoff', function() { syncHiddenInputs(); });
+    $(projectSelect).on('select2:select.bulkoff', function(e) {
+      var id = e.params && e.params.data && e.params.data.id;
+      if (id !== undefined && id !== null && id !== '') {
+        projectSelect.value = id;
+        if (hiddenProjectId) hiddenProjectId.value = id;
+      }
+      syncHiddenInputs();
+    });
+
+    var filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+      filterForm.removeEventListener('submit', _bulkOffSubmitHandler);
+      filterForm.addEventListener('submit', _bulkOffSubmitHandler);
+    }
+  }
+
+  function _bulkOffSubmitHandler(e) {
+    if (typeof $ !== 'undefined' && $.fn.select2 && districtSelect && projectSelect) {
+      var dVal = $(districtSelect).val();
+      var pVal = $(projectSelect).val();
+      districtSelect.value = (dVal != null && dVal !== '') ? dVal : '';
+      projectSelect.value = (pVal != null && pVal !== '') ? pVal : '';
+    }
+    syncHiddenInputs();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(initBulkOffForm, 150);
+    });
+  } else {
+    setTimeout(initBulkOffForm, 150);
   }
 })();
 </script>

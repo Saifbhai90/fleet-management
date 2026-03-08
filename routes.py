@@ -3551,6 +3551,7 @@ def assign_driver_to_vehicle_new():
             driver.vehicle_id = vehicle.id
             driver.shift = form.shift.data
             driver.project_id = form.project_id.data
+            driver.district_id = form.district_id.data if (form.district_id.data and form.district_id.data != 0) else vehicle.district_id
             driver.assign_date = form.assign_date.data
             driver.assign_remarks = form.remarks.data
             db.session.commit()
@@ -4941,15 +4942,22 @@ def driver_attendance_bulk_off():
             project_district.c.district_id == district_id
         ).order_by(Project.name).all()
     drivers = []
-    if project_id and district_id:
-        drivers = Driver.query.filter(
-            Driver.project_id == project_id,
-            Driver.district_id == district_id,
+    if project_id:
+        drivers_query = Driver.query.filter(
             Driver.status == 'Active',
             Driver.vehicle_id.isnot(None),
-        ).order_by(Driver.name).all()
+            Driver.project_id == project_id,
+        )
+        if district_id:
+            drivers_query = drivers_query.filter(
+                db.or_(
+                    Driver.district_id == district_id,
+                    Driver.district_id.is_(None),
+                )
+            )
+        drivers = drivers_query.order_by(Driver.name).all()
 
-    if request.method == 'POST' and request.form.get('confirm_bulk_off') and project_id and district_id:
+    if request.method == 'POST' and request.form.get('confirm_bulk_off') and project_id:
         count = 0
         for d in drivers:
             rec = DriverAttendance.query.filter_by(
@@ -5347,7 +5355,7 @@ def api_attendance_projects():
         return jsonify([])
     projects = Project.query.join(project_district).filter(
         project_district.c.district_id == district_id
-    ).order_by(Project.name).all()
+    ).distinct().order_by(Project.name).all()
     return jsonify([{'id': p.id, 'name': p.name} for p in projects])
 
 

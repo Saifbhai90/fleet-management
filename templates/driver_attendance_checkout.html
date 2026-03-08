@@ -268,8 +268,8 @@
     btnMarkCheckout.disabled = false;
   }
 
-  districtSelect.addEventListener('change', function() {
-    var id = districtSelect.value;
+  function onDistrictChange(optionalId) {
+    var id = optionalId !== undefined && optionalId !== null ? String(optionalId) : districtSelect.value;
     if ($(projectSelect).data('select2')) $(projectSelect).select2('destroy');
     projectSelect.innerHTML = '<option value="">-- Select Project --</option>';
     projectSelect.disabled = !id;
@@ -288,9 +288,27 @@
       arr.forEach(function(p) { var o = document.createElement('option'); o.value = p.id; o.textContent = p.name; projectSelect.appendChild(o); });
       initSelect2For(projectSelect, 'Search project...');
     });
-  });
+  }
 
-  projectSelect.addEventListener('change', function() {
+  function attachDistrictProjectHandlers() {
+    districtSelect.addEventListener('change', function() { onDistrictChange(); });
+    $(districtSelect).on('select2:select', function(e) {
+      var id = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
+      onDistrictChange(id);
+    });
+    projectSelect.addEventListener('change', function() { onProjectChange(); });
+    $(projectSelect).on('select2:select', function(e) {
+      var id = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
+      setTimeout(function() { projectSelect.value = id; onProjectChange(); }, 0);
+    });
+  }
+  if (typeof $ !== 'undefined' && $.fn.select2) {
+    $(document).ready(attachDistrictProjectHandlers);
+  } else {
+    attachDistrictProjectHandlers();
+  }
+
+  function onProjectChange() {
     var id = projectSelect.value;
     if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
     vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
@@ -316,9 +334,15 @@
       initSelect2For(vehicleSelect, 'Search vehicle...');
       initSelect2For(shiftSelect, 'Shift');
     });
+  }
+
+  vehicleSelect.addEventListener('change', function() { onVehicleChange(); });
+  $(vehicleSelect).on('select2:select', function(e) {
+    var id = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
+    setTimeout(function() { vehicleSelect.value = id; onVehicleChange(); }, 10);
   });
 
-  vehicleSelect.addEventListener('change', function() {
+  function onVehicleChange() {
     var opt = vehicleSelect.options[vehicleSelect.selectedIndex];
     parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
     parkingCoords = null; parkingNotSetMessage.classList.add('d-none');
@@ -333,12 +357,18 @@
     } else { parkingNotSetMessage.classList.remove('d-none'); }
     updateDistanceUI();
     loadDrivers();
+  }
+
+  shiftSelect.addEventListener('change', function() { onShiftChange(); });
+  $(shiftSelect).on('select2:select', function(e) {
+    var val = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
+    setTimeout(function() { shiftSelect.value = val; onShiftChange(); }, 10);
   });
 
-  shiftSelect.addEventListener('change', function() {
+  function onShiftChange() {
     loadDrivers();
     if (currentPosition && parkingCoords) updateDistanceUI();
-  });
+  }
 
   function loadDrivers() {
     var projectId = projectSelect.value, shift = shiftSelect.value;
@@ -363,9 +393,15 @@
     });
   }
 
-  driverSelect.addEventListener('change', function() {
-    if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
+  driverSelect.addEventListener('change', function() { onDriverChange(); });
+  $(driverSelect).on('select2:select', function(e) {
+    var id = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
+    setTimeout(function() { driverSelect.value = id; onDriverChange(); }, 10);
   });
+
+  function onDriverChange() {
+    if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
+  }
 
   function fetchLocation() {
     if (!navigator.geolocation) {
