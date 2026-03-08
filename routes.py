@@ -3125,6 +3125,13 @@ def get_districts_by_project(project_id):
     return jsonify([{"id": d.id, "name": d.name} for d in districts])
 
 
+@app.route('/get_all_districts')
+def get_all_districts():
+    """Return all districts for filter dropdown when no project selected."""
+    districts = District.query.order_by(District.name).all()
+    return jsonify([{"id": d.id, "name": d.name} for d in districts])
+
+
 @app.route('/assign_vehicle_to_district/desassign/<int:vehicle_id>', methods=['POST'])
 def desassign_vehicle_from_district(vehicle_id):
     vehicle = Vehicle.query.get_or_404(vehicle_id)
@@ -4593,9 +4600,18 @@ def driver_attendance_list():
     # Sirf assigned projects (company assign kiye gaye)
     form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
     view_date = date.today()
-    project_id = request.args.get('project_id', type=int)
-    district_id = request.args.get('district_id', type=int)
-    vehicle_id = request.args.get('vehicle_id', type=int)
+    def _int_arg(name):
+        v = request.args.get(name)
+        if v is None or v == '':
+            return None
+        try:
+            n = int(v)
+            return n if n != 0 else None
+        except (TypeError, ValueError):
+            return None
+    project_id = _int_arg('project_id')
+    district_id = _int_arg('district_id')
+    vehicle_id = _int_arg('vehicle_id')
     shift = (request.args.get('shift') or '').strip()
     search = (request.args.get('search') or '').strip()
     if request.args.get('date'):
@@ -4605,11 +4621,21 @@ def driver_attendance_list():
     if project_id and project_id != 0:
         districts = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name).all()
         form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
-        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id).order_by(Vehicle.vehicle_no).all()
+        if district_id:
+            vehicles = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
+        else:
+            vehicles = Vehicle.query.filter(Vehicle.project_id == project_id).order_by(Vehicle.vehicle_no).all()
     else:
-        form.district_id.choices = [(0, '-- All Districts --')]
-        vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+        if district_id:
+            vehicles = Vehicle.query.filter(Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
+        else:
+            vehicles = Vehicle.query.filter(Vehicle.project_id.isnot(None)).order_by(Vehicle.vehicle_no).all()
     form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicles]
+    if vehicle_id and not any(v.id == vehicle_id for v in vehicles):
+        v = Vehicle.query.get(vehicle_id)
+        if v:
+            form.vehicle_id.choices.append((v.id, v.vehicle_no))
     form.vehicle_id.data = vehicle_id if vehicle_id else 0
     shift_rows = db.session.query(Driver.shift).filter(Driver.shift.isnot(None), Driver.shift != '').distinct().order_by(Driver.shift).all()
     form.shift.choices = [('', '-- All Shifts --')] + [(s[0], s[0]) for s in shift_rows]
@@ -4617,27 +4643,44 @@ def driver_attendance_list():
     form.district_id.data = district_id if district_id else 0
 
     # Sirf wo records jo Mark Attendance form se mark hue (DriverAttendance table mein hain)
+    # Jab specific project select ho: attendance.project_id match ho YA attendance.project_id NULL ho aur driver us project ka ho
     query = DriverAttendance.query.filter_by(attendance_date=view_date)
     if project_id:
-        query = query.filter(DriverAttendance.project_id == project_id)
+        query = query.outerjoin(Driver, DriverAttendance.driver_id == Driver.id).filter(
+            db.or_(
+                DriverAttendance.project_id == project_id,
+                db.and_(DriverAttendance.project_id.is_(None), Driver.project_id == project_id)
+            )
+        )
     attendance_list = query.order_by(DriverAttendance.driver_id).all()
     by_driver = {a.driver_id: a for a in attendance_list}
     driver_ids = [a.driver_id for a in attendance_list]
     if not driver_ids:
         drivers = []
     else:
-        drivers_query = Driver.query.options(
-            db.joinedload(Driver.vehicle).joinedload(Vehicle.parking_station)
-        ).filter(Driver.id.in_(driver_ids))
+        need_vehicle_join = bool(district_id or search)
+        if need_vehicle_join:
+            drivers_query = Driver.query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+                Driver.id.in_(driver_ids)
+            )
+            drivers_query = drivers_query.options(
+                db.contains_eager(Driver.vehicle).joinedload(Vehicle.parking_station)
+            )
+        else:
+            drivers_query = Driver.query.options(
+                db.joinedload(Driver.vehicle).joinedload(Vehicle.parking_station)
+            ).filter(Driver.id.in_(driver_ids))
         if district_id:
-            drivers_query = drivers_query.filter(Driver.district_id == district_id)
+            drivers_query = drivers_query.filter(
+                db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
+            )
         if vehicle_id:
             drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
         if shift:
             drivers_query = drivers_query.filter(Driver.shift == shift)
         if search:
             q = f'%{search}%'
-            drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+            drivers_query = drivers_query.filter(
                 or_(
                     Driver.name.ilike(q),
                     Driver.driver_id.ilike(q),
@@ -4834,15 +4877,20 @@ def driver_attendance_mark():
     drivers_query = Driver.query.filter(Driver.status == 'Active').filter(Driver.vehicle_id.isnot(None))
     if project_id:
         drivers_query = drivers_query.filter(Driver.project_id == project_id)
+    need_vehicle_join = bool(district_id or search)
+    if need_vehicle_join:
+        drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
     if district_id:
-        drivers_query = drivers_query.filter(Driver.district_id == district_id)
+        drivers_query = drivers_query.filter(
+            db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
+        )
     if vehicle_id:
         drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
     if shift:
         drivers_query = drivers_query.filter(Driver.shift == shift)
     if search:
         q = f'%{search}%'
-        drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+        drivers_query = drivers_query.filter(
             db.or_(
                 Driver.name.ilike(q),
                 Driver.driver_id.ilike(q),
@@ -5040,15 +5088,20 @@ def driver_attendance_pending():
     drivers_query = Driver.query.filter(Driver.status == 'Active').filter(Driver.vehicle_id.isnot(None))
     if project_id:
         drivers_query = drivers_query.filter(Driver.project_id == project_id)
+    need_vehicle_join_pending = bool(district_id or search)
+    if need_vehicle_join_pending:
+        drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
     if district_id:
-        drivers_query = drivers_query.filter(Driver.district_id == district_id)
+        drivers_query = drivers_query.filter(
+            db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
+        )
     if vehicle_id:
         drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
     if shift:
         drivers_query = drivers_query.filter(Driver.shift == shift)
     if search:
         q = f'%{search}%'
-        drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+        drivers_query = drivers_query.filter(
             db.or_(
                 Driver.name.ilike(q),
                 Driver.driver_id.ilike(q),
@@ -5106,15 +5159,20 @@ def driver_attendance_missing_checkout():
     vehicle_drivers_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
     if project_id:
         vehicle_drivers_q = vehicle_drivers_q.filter(Driver.project_id == project_id)
+    need_vehicle_for_drivers = bool(district_id or search)
+    if need_vehicle_for_drivers:
+        vehicle_drivers_q = vehicle_drivers_q.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
     if district_id:
-        vehicle_drivers_q = vehicle_drivers_q.filter(Driver.district_id == district_id)
+        vehicle_drivers_q = vehicle_drivers_q.filter(
+            db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
+        )
     if vehicle_id:
         vehicle_drivers_q = vehicle_drivers_q.filter(Driver.vehicle_id == vehicle_id)
     if shift:
         vehicle_drivers_q = vehicle_drivers_q.filter(Driver.shift == shift)
     if search:
         q = f'%{search}%'
-        vehicle_drivers_q = vehicle_drivers_q.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+        vehicle_drivers_q = vehicle_drivers_q.filter(
             db.or_(
                 Driver.name.ilike(q),
                 Driver.driver_id.ilike(q),
@@ -5127,10 +5185,13 @@ def driver_attendance_missing_checkout():
         DriverAttendance.check_in.isnot(None),
         DriverAttendance.check_out.is_(None),
     ).join(Driver, DriverAttendance.driver_id == Driver.id).options(db.joinedload(DriverAttendance.driver))
+    need_vehicle_join = bool(district_id or search)
+    if need_vehicle_join:
+        query = query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
     if project_id:
-        query = query.filter(DriverAttendance.project_id == project_id)
+        query = query.filter(Driver.project_id == project_id)
     if district_id:
-        query = query.filter(Driver.district_id == district_id)
+        query = query.filter(db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id))
     if vehicle_id:
         query = query.filter(Driver.vehicle_id == vehicle_id)
     if shift:
@@ -5139,7 +5200,7 @@ def driver_attendance_missing_checkout():
         query = query.filter(Driver.id == driver_id)
     if search:
         q = f'%{search}%'
-        query = query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+        query = query.filter(
             db.or_(
                 Driver.name.ilike(q),
                 Driver.driver_id.ilike(q),
@@ -5394,6 +5455,35 @@ def api_attendance_drivers():
         query = query.filter(Driver.shift == shift)
     drivers = query.all()
     return jsonify([{'id': d.id, 'name': d.name, 'driver_id': d.driver_id, 'shift': d.shift or ''} for d in drivers])
+
+
+@app.route('/api/attendance/filtered_drivers')
+def api_attendance_filtered_drivers():
+    """Drivers filtered by project_id, district_id, vehicle_id, shift - for Missing Check-in / Missing Check-outs dropdown auto-update."""
+    project_id = request.args.get('project_id', type=int) or None
+    district_id = request.args.get('district_id', type=int) or None
+    vehicle_id = request.args.get('vehicle_id', type=int) or None
+    shift = (request.args.get('shift') or '').strip() or None
+    if project_id == 0:
+        project_id = None
+    if district_id == 0:
+        district_id = None
+    if vehicle_id == 0:
+        vehicle_id = None
+    q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
+    if project_id:
+        q = q.filter(Driver.project_id == project_id)
+    need_vehicle = bool(district_id)
+    if need_vehicle:
+        q = q.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+    if district_id:
+        q = q.filter(db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id))
+    if vehicle_id:
+        q = q.filter(Driver.vehicle_id == vehicle_id)
+    if shift:
+        q = q.filter(Driver.shift == shift)
+    drivers = q.order_by(Driver.name).all()
+    return jsonify([{'id': d.id, 'name': d.name, 'driver_id': d.driver_id or '', 'shift': d.shift or ''} for d in drivers])
 
 
 @app.route('/api/attendance-time-window')
