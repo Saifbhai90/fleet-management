@@ -7,6 +7,7 @@ Create Date: 2026-03-06
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import text
 
 
 revision = 'c4d5e6f7a8b9'
@@ -15,7 +16,22 @@ branch_labels = None
 depends_on = None
 
 
+def _table_exists(conn, table_name):
+    if conn.dialect.name == 'sqlite':
+        r = conn.execute(text(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=:t"
+        ), {"t": table_name})
+    else:
+        r = conn.execute(text(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = :t"
+        ), {"t": table_name})
+    return r.scalar() is not None
+
+
 def upgrade():
+    conn = op.get_bind()
+    if _table_exists(conn, 'attendance_time_control'):
+        return
     op.create_table(
         'attendance_time_control',
         sa.Column('id', sa.Integer(), nullable=False),
