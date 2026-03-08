@@ -656,8 +656,20 @@ def whats_new():
     """What's New page: only latest 15 entries (newest first)."""
     entries = [
         {
-            'title': 'Login & access: redirect and error message fixes',
+            'title': 'Roles & Permissions: hierarchical permissions, dependencies, Notifications & What\'s New',
             'label': 'Latest',
+            'bullets': [
+                'Add/Edit Role form: Permissions are now shown in a clear hierarchy (Section → Page → Buttons). For example, under Master Data you see Companies with List/View, Add New, Edit, Delete, Report; you select List/View first, then Add/Edit etc.',
+                'Permission dependencies: If you give a role "Companies – Add New", the system automatically adds "Companies – List / View" so users can open the list before adding. Same for Edit, Delete, Report and for other modules (Projects, Drivers, Users, Roles, Notifications).',
+                'Notifications & What\'s New are now assignable permissions: In Roles & Permissions you can grant "Notifications – List / View", "Notifications – Create", and "What\'s New". Only users with these permissions see the Notifications block and What\'s New link in the sidebar and navbar; others do not.',
+                'Master Data sidebar order updated: Parking Stations → Designations → Employees → Drivers → Parties → Products (Companies, Projects, Districts, Vehicles remain at top).',
+                'Master login: Master user gets all permissions from the database at login; role value is not used. All sidebar links and routes are available to Master regardless of role. No permission is missed.',
+                'Role form shows only permissions the current user can assign: If you have only Fuel under Expense Management, you can assign only Fuel to other roles; Oil/Maintenance stay hidden and cannot be given. When editing a role, permissions you don\'t have are preserved (not removed).',
+            ],
+        },
+        {
+            'title': 'Login & access: redirect and error message fixes',
+            'label': 'Previous update',
             'bullets': [
                 'Redirect fix: When a user has no permission for a page, the app now redirects to the login page instead of the dashboard, so the previous redirect loop is resolved.',
                 "Login page error stack fixed: The 'You do not have access to this page.' message was showing many times on the login screen. Now it is shown only once when redirected due to permission failure (using a session flag instead of flashing on every request).",
