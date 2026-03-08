@@ -29,7 +29,7 @@
           </div>
           <div class="col-md-3">
             <label class="form-label">District</label>
-            <select name="district_id" id="districtSelect" class="form-select">
+            <select name="district_id" id="districtSelect" class="form-select select2-enable" data-placeholder="Search district...">
               <option value="0">-- Select District --</option>
               {% for d in districts %}
               <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -38,7 +38,7 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">Project</label>
-            <select name="project_id" id="projectSelect" class="form-select">
+            <select name="project_id" id="projectSelect" class="form-select select2-enable" data-placeholder="Search project...">
               <option value="0">-- Select Project --</option>
               {% for p in projects %}
               <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
@@ -114,9 +114,16 @@
 (function() {
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
+  function initSelect2For(el, placeholder) {
+    if (!el || typeof $ === 'undefined' || !$.fn.select2) return;
+    var $el = $(el);
+    if ($el.data('select2')) $el.select2('destroy');
+    $el.select2({ theme: 'bootstrap-5', width: '100%', placeholder: placeholder || 'Search...' });
+  }
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
+      if ($(projectSelect).data('select2')) $(projectSelect).select2('destroy');
       projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
       if (did && did !== '0') {
         fetch('{{ url_for("api_attendance_projects") }}?district_id=' + did)
@@ -128,7 +135,10 @@
               opt.textContent = p.name;
               projectSelect.appendChild(opt);
             });
+            initSelect2For(projectSelect, 'Search project...');
           });
+      } else {
+        initSelect2For(projectSelect, 'Search project...');
       }
     });
   }

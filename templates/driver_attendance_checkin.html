@@ -39,7 +39,7 @@
           <div class="row g-2">
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">1</span>District</label>
-              <select id="districtSelect" class="form-select form-select-sm">
+              <select id="districtSelect" class="form-select form-select-sm select2-enable" data-placeholder="Search district...">
                 <option value="">-- Select District --</option>
                 {% for d in districts %}
                 <option value="{{ d.id }}">{{ d.name }}</option>
@@ -48,13 +48,13 @@
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">2</span>Project</label>
-              <select id="projectSelect" class="form-select form-select-sm" disabled>
+              <select id="projectSelect" class="form-select form-select-sm select2-enable" disabled data-placeholder="Search project...">
                 <option value="">-- Select Project --</option>
               </select>
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">3</span>Vehicle</label>
-              <select id="vehicleSelect" class="form-select form-select-sm" disabled>
+              <select id="vehicleSelect" class="form-select form-select-sm select2-enable" disabled data-placeholder="Search vehicle...">
                 <option value="">-- Select Vehicle --</option>
               </select>
             </div>
@@ -70,7 +70,7 @@
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">5</span>Shift</label>
-              <select id="shiftSelect" class="form-select form-select-sm" disabled>
+              <select id="shiftSelect" class="form-select form-select-sm select2-enable" disabled data-placeholder="Search shift...">
                 <option value="">-- Select Shift --</option>
                 <option value="Morning">Morning</option>
                 <option value="Night">Night</option>
@@ -78,7 +78,7 @@
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">6</span>Driver</label>
-              <select id="driverSelect" class="form-select form-select-sm" disabled required>
+              <select id="driverSelect" class="form-select form-select-sm select2-enable" disabled required data-placeholder="Search driver...">
                 <option value="">-- Select Driver --</option>
               </select>
             </div>
@@ -189,6 +189,13 @@
   var vehiclesData = [];
   var timeWindow = {};
 
+  function initSelect2For(el, placeholder) {
+    if (!el || typeof $ === 'undefined' || !$.fn.select2) return;
+    var $el = $(el);
+    if ($el.data('select2')) $el.select2('destroy');
+    $el.select2({ theme: 'bootstrap-5', width: '100%', placeholder: placeholder || 'Search...' });
+  }
+
   function minutesFromMidnight(hhmm) {
     if (!hhmm || hhmm.length < 5) return null;
     var parts = hhmm.split(':');
@@ -263,26 +270,34 @@
 
   districtSelect.addEventListener('change', function() {
     var id = districtSelect.value;
+    if ($(projectSelect).data('select2')) $(projectSelect).select2('destroy');
     projectSelect.innerHTML = '<option value="">-- Select Project --</option>';
     projectSelect.disabled = !id;
+    if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
     vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
     vehicleSelect.disabled = true;
+    if ($(shiftSelect).data('select2')) $(shiftSelect).select2('destroy');
     shiftSelect.value = ''; shiftSelect.disabled = true;
+    if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
     driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
     driverSelect.disabled = true;
     parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
     parkingCoords = null; vehiclesData = []; parkingNotSetMessage.classList.add('d-none');
-    if (!id) return;
+    if (!id) { initSelect2For(projectSelect, 'Search project...'); return; }
     fetch('{{ url_for("api_attendance_projects") }}?district_id=' + id).then(function(r) { return r.json(); }).then(function(arr) {
       arr.forEach(function(p) { var o = document.createElement('option'); o.value = p.id; o.textContent = p.name; projectSelect.appendChild(o); });
+      initSelect2For(projectSelect, 'Search project...');
     });
   });
 
   projectSelect.addEventListener('change', function() {
     var id = projectSelect.value;
+    if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
     vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
     vehicleSelect.disabled = !id;
+    if ($(shiftSelect).data('select2')) $(shiftSelect).select2('destroy');
     shiftSelect.value = ''; shiftSelect.disabled = true;
+    if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
     driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
     driverSelect.disabled = true;
     parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
@@ -298,6 +313,8 @@
         vehicleSelect.appendChild(o);
       });
       shiftSelect.disabled = false;
+      initSelect2For(vehicleSelect, 'Search vehicle...');
+      initSelect2For(shiftSelect, 'Shift');
     });
   });
 
@@ -325,6 +342,7 @@
 
   function loadDrivers() {
     var projectId = projectSelect.value, shift = shiftSelect.value;
+    if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
     driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
     driverSelect.disabled = !projectId || !shift;
     if (!projectId || !shift) return;
@@ -340,6 +358,7 @@
         if (d.id === vehicleDriverId) o.selected = true;
         driverSelect.appendChild(o);
       });
+      initSelect2For(driverSelect, 'Search driver...');
       if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
     });
   }
