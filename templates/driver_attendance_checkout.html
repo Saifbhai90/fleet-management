@@ -103,6 +103,9 @@
           <div id="timeWindowMessage" class="status-box warning d-none mb-2">
             <span id="timeWindowText">—</span>
           </div>
+          <div id="noCheckinMessage" class="status-box warning d-none mb-2">
+            <i class="bi bi-exclamation-triangle me-1"></i>Is driver ka aaj Check-in (GPS + Camera) maujood nahi. Pehle <strong>Mark At Attendance</strong> se Check-in karein, phir Check-out karein.
+          </div>
           <div class="d-grid mt-2">
             <button type="button" id="btnMarkCheckout" class="btn btn-danger btn-mark" disabled>
               <i class="bi bi-box-arrow-right me-2"></i>Mark Check-out
@@ -171,7 +174,7 @@
   var distanceMessage = document.getElementById('distanceMessage');
   var timeWindowMessage = document.getElementById('timeWindowMessage');
   var timeWindowText = document.getElementById('timeWindowText');
-  var parkingNotSetMessage = document.getElementById('parkingNotSetMessage');
+  var noCheckinMessage = document.getElementById('noCheckinMessage');
   var cameraModal = document.getElementById('cameraModal');
   var cameraVideo = document.getElementById('cameraVideo');
   var cameraCanvas = document.getElementById('cameraCanvas');
@@ -188,6 +191,7 @@
   var stream = null;
   var vehiclesData = [];
   var timeWindow = {};
+  var hasGpsCheckin = false;
 
   function initSelect2For(el, placeholder) {
     if (!el || typeof $ === 'undefined' || !$.fn.select2) return;
@@ -226,6 +230,21 @@
     return { inWindow: inWindow, label: label };
   }
 
+  /** Check-out sirf Night shift ke time window mein allowed (Morning shift wala bhi night window mein hi checkout karega). */
+  function isInCheckoutTimeWindow(win) {
+    var start = win.night_start ? minutesFromMidnight(win.night_start) : null;
+    var end = win.night_end ? minutesFromMidnight(win.night_end) : null;
+    if (start === null && end === null) return { inWindow: true, label: '' };
+    var now = new Date();
+    var current = now.getHours() * 60 + now.getMinutes();
+    var inWindow = false;
+    var label = 'Check-out: Night window ' + (win.night_start || '') + ' – ' + (win.night_end || '');
+    if (start !== null && end !== null) {
+      inWindow = (end >= start) ? (current >= start && current <= end) : (current >= start || current <= end);
+    } else { inWindow = true; }
+    return { inWindow: inWindow, label: label };
+  }
+
   function haversineDistance(lat1, lon1, lat2, lon2) {
     var R = 6371e3;
     var phi1 = lat1 * Math.PI / 180, phi2 = lat2 * Math.PI / 180;
@@ -239,6 +258,7 @@
       btnMarkCheckout.disabled = true;
       distanceMessage.classList.add('d-none');
       timeWindowMessage.classList.add('d-none');
+      noCheckinMessage.classList.add('d-none');
       locationStatus.classList.remove('success', 'warning');
       locationStatus.classList.add('neutral');
       return;
@@ -252,20 +272,47 @@
       btnMarkCheckout.disabled = true;
       distanceMessage.classList.remove('d-none');
       timeWindowMessage.classList.add('d-none');
+      noCheckinMessage.classList.add('d-none');
       return;
     }
     distanceMessage.classList.add('d-none');
+    if (driverSelect.value && !hasGpsCheckin) {
+      btnMarkCheckout.disabled = true;
+      noCheckinMessage.classList.remove('d-none');
+      timeWindowMessage.classList.add('d-none');
+      return;
+    }
+    noCheckinMessage.classList.add('d-none');
     var opt = driverSelect.options[driverSelect.selectedIndex];
     var shift = (opt && opt.dataset.shift) ? opt.dataset.shift : shiftSelect.value;
-    var timeCheck = isInTimeWindow(shift, timeWindow);
+    var timeCheck = isInCheckoutTimeWindow(timeWindow);
     if (!timeCheck.inWindow) {
       btnMarkCheckout.disabled = true;
-      timeWindowText.textContent = 'Is waqt check-out allowed nahi. ' + timeCheck.label + ' ke dauran karein.';
+      timeWindowText.textContent = 'Check-out sirf Night shift ke time window mein. ' + (timeCheck.label || '') + ' ke dauran karein.';
       timeWindowMessage.classList.remove('d-none');
       return;
     }
     timeWindowMessage.classList.add('d-none');
     btnMarkCheckout.disabled = false;
+  }
+
+  function fetchHasGpsCheckin() {
+    var driverId = driverSelect.value;
+    if (!driverId) {
+      hasGpsCheckin = false;
+      updateDistanceUI();
+      return;
+    }
+    fetch('{{ url_for("api_attendance_has_gps_checkin") }}?driver_id=' + encodeURIComponent(driverId))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        hasGpsCheckin = data.has_gps_checkin === true;
+        updateDistanceUI();
+      })
+      .catch(function() {
+        hasGpsCheckin = false;
+        updateDistanceUI();
+      });
   }
 
   function onDistrictChange(optionalId) {
@@ -371,12 +418,12 @@
   }
 
   function loadDrivers() {
-    var projectId = projectSelect.value, shift = shiftSelect.value;
+    var projectId = projectSelect.value, vehicleId = vehicleSelect.value, shift = shiftSelect.value;
     if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
     driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
-    driverSelect.disabled = !projectId || !shift;
-    if (!projectId || !shift) return;
-    fetch('{{ url_for("api_attendance_drivers") }}?project_id=' + projectId + '&shift=' + encodeURIComponent(shift)).then(function(r) { return r.json(); }).then(function(arr) {
+    driverSelect.disabled = !projectId || !vehicleId || !shift;
+    if (!projectId || !vehicleId || !shift) return;
+    fetch('{{ url_for("api_attendance_drivers") }}?project_id=' + projectId + '&vehicle_id=' + encodeURIComponent(vehicleId) + '&shift=' + encodeURIComponent(shift)).then(function(r) { return r.json(); }).then(function(arr) {
       var vehicleDriverId = null;
       var vOpt = vehicleSelect.options[vehicleSelect.selectedIndex];
       if (vOpt && vOpt.value && vehiclesData[parseInt(vOpt.dataset.index, 10)]) vehicleDriverId = vehiclesData[parseInt(vOpt.dataset.index, 10)].driver_id;
@@ -389,7 +436,10 @@
         driverSelect.appendChild(o);
       });
       initSelect2For(driverSelect, 'Search driver...');
-      if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
+      if (driverSelect.value && parkingLat.value && parkingLng.value) {
+        fetchHasGpsCheckin();
+        fetchLocation();
+      }
     });
   }
 
@@ -400,7 +450,13 @@
   });
 
   function onDriverChange() {
-    if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
+    hasGpsCheckin = false;
+    if (driverSelect.value && parkingLat.value && parkingLng.value) {
+      fetchHasGpsCheckin();
+      fetchLocation();
+    } else {
+      updateDistanceUI();
+    }
   }
 
   function fetchLocation() {
@@ -436,6 +492,7 @@
         btnRetryLocation.classList.remove('d-none');
         btnMarkCheckout.disabled = true;
         timeWindowMessage.classList.add('d-none');
+        if (noCheckinMessage) noCheckinMessage.classList.add('d-none');
       },
       { enableHighAccuracy: true, timeout: LOCATION_TIMEOUT, maximumAge: LOCATION_MAX_AGE }
     );

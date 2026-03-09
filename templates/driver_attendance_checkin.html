@@ -371,12 +371,12 @@
   }
 
   function loadDrivers() {
-    var projectId = projectSelect.value, shift = shiftSelect.value;
+    var projectId = projectSelect.value, vehicleId = vehicleSelect.value, shift = shiftSelect.value;
     if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
     driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
-    driverSelect.disabled = !projectId || !shift;
-    if (!projectId || !shift) return;
-    fetch('{{ url_for("api_attendance_drivers") }}?project_id=' + projectId + '&shift=' + encodeURIComponent(shift)).then(function(r) { return r.json(); }).then(function(arr) {
+    driverSelect.disabled = !projectId || !vehicleId || !shift;
+    if (!projectId || !vehicleId || !shift) return;
+    fetch('{{ url_for("api_attendance_drivers") }}?project_id=' + projectId + '&vehicle_id=' + encodeURIComponent(vehicleId) + '&shift=' + encodeURIComponent(shift)).then(function(r) { return r.json(); }).then(function(arr) {
       var vehicleDriverId = null;
       var vOpt = vehicleSelect.options[vehicleSelect.selectedIndex];
       if (vOpt && vOpt.value && vehiclesData[parseInt(vOpt.dataset.index, 10)]) vehicleDriverId = vehiclesData[parseInt(vOpt.dataset.index, 10)].driver_id;

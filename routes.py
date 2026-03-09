@@ -56,6 +56,29 @@ import re
 import os
 from werkzeug.utils import secure_filename
 
+
+def _attendance_local_time():
+    """Current time in APP_TIMEZONE for attendance window comparison (Control form times are in local time)."""
+    try:
+        from zoneinfo import ZoneInfo
+        tz_name = app.config.get('APP_TIMEZONE', 'Asia/Karachi')
+        now_utc = datetime.now(timezone.utc)
+        return now_utc.astimezone(ZoneInfo(tz_name)).time()
+    except Exception:
+        return datetime.utcnow().time()
+
+
+def _attendance_local_date():
+    """Today's date in APP_TIMEZONE so check-in/check-out date matches user's calendar."""
+    try:
+        from zoneinfo import ZoneInfo
+        tz_name = app.config.get('APP_TIMEZONE', 'Asia/Karachi')
+        now_utc = datetime.now(timezone.utc)
+        return now_utc.astimezone(ZoneInfo(tz_name)).date()
+    except Exception:
+        return date.today()
+
+
 @app.before_request
 def require_login():
     """Redirect to login if user not logged in. Check permission for endpoint. Session timeout."""
@@ -5909,12 +5932,15 @@ def api_attendance_vehicles():
 
 @app.route('/api/attendance/drivers')
 def api_attendance_drivers():
-    """Drivers in the given project with the given shift (Morning/Night)."""
+    """Drivers: Vehicle + Shift ke hisaab se — sirf wohi driver jo selected vehicle aur selected shift par maujood ho."""
     project_id = request.args.get('project_id', type=int)
+    vehicle_id = request.args.get('vehicle_id', type=int)
     shift = (request.args.get('shift') or '').strip()
     if not project_id:
         return jsonify([])
     query = Driver.query.filter_by(project_id=project_id, status='Active').order_by(Driver.name)
+    if vehicle_id:
+        query = query.filter(Driver.vehicle_id == vehicle_id)
     if shift:
         query = query.filter(Driver.shift == shift)
     drivers = query.all()
@@ -5966,12 +5992,27 @@ def api_attendance_time_window():
     })
 
 
+@app.route('/api/attendance-has-gps-checkin')
+def api_attendance_has_gps_checkin():
+    """Check if driver has GPS+Camera check-in for today (for Check-out form: button enable only if true)."""
+    driver_id = request.args.get('driver_id', type=int)
+    if not driver_id:
+        return jsonify({'has_gps_checkin': False})
+    today = _attendance_local_date()
+    rec = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=today).first()
+    if not rec or rec.check_in is None:
+        return jsonify({'has_gps_checkin': False})
+    rem = (rec.remarks or '') or ''
+    has_photo = bool((rec.check_in_photo_path or '').strip())
+    has_remarks = 'GPS' in rem or 'Ye GPS' in rem or 'Camera' in rem or 'GPS+Cam' in rem
+    return jsonify({'has_gps_checkin': bool(has_photo or has_remarks)})
+
+
 @app.route('/driver-attendance/checkin', methods=['GET', 'POST'])
 def driver_attendance_checkin():
     """Geofenced check-in: District → Project → Vehicle → Parking (auto) → Shift → Driver. Then location + selfie."""
-    # Sirf wo districts jo kisi project se linked hain (project_district)
     districts = District.query.join(project_district, District.id == project_district.c.district_id).distinct().order_by(District.name).all()
-    today = date.today()
+    today = _attendance_local_date()
     if request.method == 'POST':
         driver_id = request.form.get('driver_id', type=int)
         parking_station_id = request.form.get('parking_station_id', type=int)
@@ -5993,8 +6034,8 @@ def driver_attendance_checkin():
             flash('Invalid driver.', 'danger')
             return redirect(url_for('driver_attendance_checkin'))
         now = datetime.utcnow()
-        now_time = now.time()
-        # Attendance time control: allow only within configured window for driver's shift
+        now_time = _attendance_local_time()
+        # Attendance time control: allow only within configured window for driver's shift (times in local timezone)
         ctrl = AttendanceTimeControl.query.first()
         if ctrl:
             shift = (driver.shift or '').strip()
@@ -6084,9 +6125,8 @@ def driver_attendance_checkin():
 @app.route('/driver-attendance/checkout', methods=['GET', 'POST'])
 def driver_attendance_checkout():
     """Geofenced check-out: same flow as check-in (District → Project → Vehicle → Parking → Shift → Driver). Location + selfie, then save check_out time and coords."""
-    # Sirf wo districts jo kisi project se linked hain (project_district) — taake dropdown mein aur phir Project list dono kaam karein
     districts = District.query.join(project_district, District.id == project_district.c.district_id).distinct().order_by(District.name).all()
-    today = date.today()
+    today = _attendance_local_date()
     if request.method == 'POST':
         driver_id = request.form.get('driver_id', type=int)
         parking_station_id = request.form.get('parking_station_id', type=int)
@@ -6107,8 +6147,23 @@ def driver_attendance_checkout():
         if not driver:
             flash('Invalid driver.', 'danger')
             return redirect(url_for('driver_attendance_checkout'))
+        # Check-out tab tab allow: jab aaj ki check-in attendance maujood ho AUR wo Mark At Attendance (GPS + Camera) se lagi ho
+        existing = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=today).first()
+        if not existing:
+            flash('Is driver ki aaj ki Check-in attendance maujood nahi. Pehle Mark At Attendance (GPS + Camera) se Check-in karein, phir Check-out karein.', 'danger')
+            return redirect(url_for('driver_attendance_checkout'))
+        if existing.check_in is None:
+            flash('Is driver ka aaj Check-in record nahi hai. Pehle Mark At Attendance (GPS + Camera) se Check-in karein, phir Check-out karein.', 'danger')
+            return redirect(url_for('driver_attendance_checkout'))
+        # GPS+Camera checkout sirf tab: jab check-in bhi GPS+Camera se hua ho (photo/remarks se pehchan)
+        rem = (existing.remarks or '') or ''
+        has_gps_checkin = bool((existing.check_in_photo_path or '').strip())
+        has_gps_remarks = 'GPS' in rem or 'Ye GPS' in rem or 'Camera' in rem or 'GPS+Cam' in rem
+        if not has_gps_checkin and not has_gps_remarks:
+            flash('Check-out (GPS + Camera) sirf tab allow hai jab driver ne Mark At Attendance (GPS + Camera) se Check-in kiya ho. Is driver ka check-in is tareeqe se nahi laga.', 'danger')
+            return redirect(url_for('driver_attendance_checkout'))
         now = datetime.utcnow()
-        now_time = now.time()
+        now_time = _attendance_local_time()
         ctrl = AttendanceTimeControl.query.first()
         if ctrl:
             shift = (driver.shift or '').strip()
@@ -6118,9 +6173,11 @@ def driver_attendance_checkout():
                 if end_t < start_t:
                     return t >= start_t or t <= end_t
                 return start_t <= t <= end_t
+            # Check-out: Morning shift driver sirf Night window mein checkout kar sakta (jab night shift time start ho).
+            # Night shift driver bhi night window mein hi checkout karega.
             if shift and shift.lower() == 'morning':
-                if not in_window(now_time, ctrl.morning_start, ctrl.morning_end):
-                    flash('Morning shift ka check-out sirf configured time window mein ho sakta hai.', 'danger')
+                if not in_window(now_time, ctrl.night_start, ctrl.night_end):
+                    flash('Morning shift ka check-out sirf Night shift ke time window mein ho sakta hai (jab night attendance ka time start ho). Abhi allowed nahi.', 'danger')
                     return redirect(url_for('driver_attendance_checkout'))
             elif shift and shift.lower() == 'night':
                 if not in_window(now_time, ctrl.night_start, ctrl.night_end):
@@ -6159,7 +6216,12 @@ def driver_attendance_checkout():
                     flash(f'Could not save photo: {str(e)}', 'warning')
         existing = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=today).first()
         if existing:
-            existing.check_out = now.time()
+            # Check-out time check-in time se pehle nahi ho sakta
+            check_out_time = now.time()
+            if existing.check_in is not None and check_out_time <= existing.check_in:
+                flash('Check-out ka time check-in time se pehle ya barabar nahi ho sakta. Pehle check-in time check karein.', 'danger')
+                return redirect(url_for('driver_attendance_checkout'))
+            existing.check_out = check_out_time
             existing.check_out_latitude = lat_val
             existing.check_out_longitude = lng_val
             if photo_path:
@@ -6168,19 +6230,8 @@ def driver_attendance_checkout():
             if not existing.remarks or 'GPS' not in (existing.remarks or ''):
                 existing.remarks = (existing.remarks or '').rstrip() + (' | Check-out GPS+Cam' if photo_path else ' | Check-out GPS')
         else:
-            rec = DriverAttendance(
-                driver_id=driver_id,
-                attendance_date=today,
-                status='Present',
-                check_out=now.time(),
-                project_id=driver.project_id,
-                parking_station_id=parking_station_id,
-                check_out_latitude=lat_val,
-                check_out_longitude=lng_val,
-                check_out_photo_path=photo_path,
-                remarks='Check-out GPS+Cam (check-in nahi lagi)',
-            )
-            db.session.add(rec)
+            flash('Is driver ki aaj ki Check-in attendance maujood nahi. Pehle Check-in karein.', 'danger')
+            return redirect(url_for('driver_attendance_checkout'))
         try:
             db.session.commit()
             flash('Check-out recorded successfully with photo.', 'success')

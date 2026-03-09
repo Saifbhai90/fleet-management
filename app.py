@@ -60,6 +60,8 @@ if os.environ.get('SESSION_COOKIE_SECURE', '').lower() in ('1', 'true', 'yes'):
     app.config['SESSION_COOKIE_SECURE'] = True
 # Avoid redirect/cookie issues behind HTTPS proxy (Render)
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# Attendance time control: timezone for comparing current time with Morning/Night windows (e.g. Asia/Karachi)
+app.config['APP_TIMEZONE'] = os.environ.get('APP_TIMEZONE', 'Asia/Karachi').strip() or 'Asia/Karachi'
 csrf = CSRFProtect(app)
 
 # Initialize SQLAlchemy
