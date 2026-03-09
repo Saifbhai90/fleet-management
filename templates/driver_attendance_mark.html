@@ -189,12 +189,24 @@
                 <td>
                   {% if gps_cam_locked %}
                     {% if rec and rec.check_in_photo_path %}
-                    <a href="{{ url_for('uploaded_file', filename=rec.check_in_photo_path) }}" target="_blank" class="btn btn-sm btn-outline-secondary">View Photo</a>
+                    {% set photo_url = rec.check_in_photo_path %}
+                    {% if photo_url.startswith('http') %}
+                    <a href="{{ photo_url }}" target="_blank" class="btn btn-sm btn-outline-secondary">View Photo</a>
+                    {% else %}
+                    <a href="{{ url_for('uploaded_file', filename=photo_url) }}" target="_blank" class="btn btn-sm btn-outline-secondary">View Photo</a>
+                    {% endif %}
                     {% else %}<span class="text-muted">-</span>{% endif %}
                   {% else %}
                   <input type="file" name="driver_{{ driver.id }}_photo" class="form-control form-control-sm" accept="image/*" title="Optional image">
                   {% if rec and rec.check_in_photo_path %}
-                  <small class="text-muted d-block">Current: <a href="{{ url_for('uploaded_file', filename=rec.check_in_photo_path) }}" target="_blank">View</a></small>
+                  {% set photo_url = rec.check_in_photo_path %}
+                  <small class="text-muted d-block">Current:
+                    {% if photo_url.startswith('http') %}
+                    <a href="{{ photo_url }}" target="_blank">View</a>
+                    {% else %}
+                    <a href="{{ url_for('uploaded_file', filename=photo_url) }}" target="_blank">View</a>
+                    {% endif %}
+                  </small>
                   {% endif %}
                   {% endif %}
                 </td>

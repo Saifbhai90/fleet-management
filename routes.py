@@ -55,6 +55,7 @@ from werkzeug.security import generate_password_hash
 import re
 import os
 from werkzeug.utils import secure_filename
+from r2_storage import upload_image_file, upload_image_bytes
 
 
 def _attendance_local_time():
@@ -5531,16 +5532,12 @@ def driver_attendance_mark():
             photo = request.files.get(f'driver_{did}_photo')
             if photo and photo.filename:
                 try:
-                    upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
-                    os.makedirs(upload_dir, exist_ok=True)
-                    ext = os.path.splitext(secure_filename(photo.filename))[1] or '.jpg'
-                    fname = f"manual_checkin_{did}_{view_date.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}{ext}"
-                    rel_path = os.path.join('attendance', fname)
-                    full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
-                    photo.save(full_path)
-                    photo_path = rel_path.replace('\\', '/')
+                    # Upload resized/compressed image to Cloudflare R2 (no local disk usage)
+                    photo.stream.seek(0)
+                    photo_path = upload_image_file(photo, folder="attendance")
                 except Exception:
-                    pass
+                    # Agar R2 upload fail ho jaye to silently ignore (status phir bhi save ho jaye)
+                    photo_path = None
             if rec:
                 rec.status = status
                 rec.check_in = check_in_t
@@ -5872,16 +5869,10 @@ def driver_attendance_manual_checkin():
         photo = request.files.get('photo')
         if photo and photo.filename:
             try:
-                upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
-                os.makedirs(upload_dir, exist_ok=True)
-                ext = os.path.splitext(secure_filename(photo.filename))[1] or '.jpg'
-                fname = f"checkin_manual_{driver_id}_{view_date.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}{ext}"
-                rel_path = os.path.join('attendance', fname).replace('\\', '/')
-                full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
-                photo.save(full_path)
-                photo_path = rel_path
+                photo.stream.seek(0)
+                photo_path = upload_image_file(photo, folder="attendance")
             except Exception as e:
-                flash(f'Photo save nahi hua: {str(e)}', 'warning')
+                flash(f'Photo save nahi hua (cloud storage): {str(e)}', 'warning')
         if existing:
             existing.check_in = check_in_t
             existing.remarks = (existing.remarks or '').rstrip() + (' | Manual check-in' + (': ' + remarks_add if remarks_add else ''))
@@ -5962,16 +5953,10 @@ def driver_attendance_manual_checkout():
         photo = request.files.get('photo')
         if photo and photo.filename:
             try:
-                upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
-                os.makedirs(upload_dir, exist_ok=True)
-                ext = os.path.splitext(secure_filename(photo.filename))[1] or '.jpg'
-                fname = f"checkout_manual_{driver_id}_{view_date.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}{ext}"
-                rel_path = os.path.join('attendance', fname).replace('\\', '/')
-                full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
-                photo.save(full_path)
-                photo_path = rel_path
+                photo.stream.seek(0)
+                photo_path = upload_image_file(photo, folder="attendance")
             except Exception as e:
-                flash(f'Photo save nahi hua: {str(e)}', 'warning')
+                flash(f'Photo save nahi hua (cloud storage): {str(e)}', 'warning')
         rec.check_out = check_out_t
         rec.remarks = (rec.remarks or '').rstrip() + (' | Manual check-out' + (': ' + remarks_add if remarks_add else ''))
         if photo_path:
@@ -6173,16 +6158,11 @@ def driver_attendance_checkin():
         photo = request.files.get('photo')
         if photo and photo.filename:
             try:
-                upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
-                os.makedirs(upload_dir, exist_ok=True)
-                ext = os.path.splitext(secure_filename(photo.filename))[1] or '.jpg'
-                fname = f"checkin_{driver_id}_{today.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}{ext}"
-                rel_path = os.path.join('attendance', fname)
-                full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
-                photo.save(full_path)
-                photo_path = rel_path.replace('\\', '/')
-            except Exception as e:
-                flash(f'Could not save photo: {str(e)}', 'warning')
+                photo.stream.seek(0)
+                photo_path = upload_image_file(photo, folder="attendance")
+            except Exception:
+                flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
+                return redirect(url_for('driver_attendance_checkin'))
         else:
             # Try base64 from form (e.g. from canvas capture)
             b64 = request.form.get('photo_base64', '').strip()
@@ -6191,16 +6171,10 @@ def driver_attendance_checkin():
                     import base64
                     header, b64 = b64.split(',', 1)
                     data = base64.b64decode(b64)
-                    upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
-                    os.makedirs(upload_dir, exist_ok=True)
-                    fname = f"checkin_{driver_id}_{today.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}.jpg"
-                    rel_path = os.path.join('attendance', fname)
-                    full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
-                    with open(full_path, 'wb') as f:
-                        f.write(data)
-                    photo_path = rel_path.replace('\\', '/')
-                except Exception as e:
-                    flash(f'Could not save photo: {str(e)}', 'warning')
+                    photo_path = upload_image_bytes(data, folder="attendance")
+                except Exception:
+                    flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
+                    return redirect(url_for('driver_attendance_checkin'))
         gps_cam_remark = 'Ye GPS + Camera se attendance lagi hai.'
         existing = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=today).first()
         if existing:
@@ -6302,16 +6276,11 @@ def driver_attendance_checkout():
         photo = request.files.get('photo')
         if photo and photo.filename:
             try:
-                upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
-                os.makedirs(upload_dir, exist_ok=True)
-                ext = os.path.splitext(secure_filename(photo.filename))[1] or '.jpg'
-                fname = f"checkout_{driver_id}_{today.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}{ext}"
-                rel_path = os.path.join('attendance', fname)
-                full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
-                photo.save(full_path)
-                photo_path = rel_path.replace('\\', '/')
-            except Exception as e:
-                flash(f'Could not save photo: {str(e)}', 'warning')
+                photo.stream.seek(0)
+                photo_path = upload_image_file(photo, folder="attendance")
+            except Exception:
+                flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
+                return redirect(url_for('driver_attendance_checkout'))
         else:
             b64 = request.form.get('photo_base64', '').strip()
             if b64 and b64.startswith('data:image'):
@@ -6319,16 +6288,10 @@ def driver_attendance_checkout():
                     import base64
                     header, b64 = b64.split(',', 1)
                     data = base64.b64decode(b64)
-                    upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attendance')
-                    os.makedirs(upload_dir, exist_ok=True)
-                    fname = f"checkout_{driver_id}_{today.isoformat()}_{datetime.utcnow().strftime('%H%M%S')}.jpg"
-                    rel_path = os.path.join('attendance', fname)
-                    full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel_path)
-                    with open(full_path, 'wb') as f:
-                        f.write(data)
-                    photo_path = rel_path.replace('\\', '/')
-                except Exception as e:
-                    flash(f'Could not save photo: {str(e)}', 'warning')
+                    photo_path = upload_image_bytes(data, folder="attendance")
+                except Exception:
+                    flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
+                    return redirect(url_for('driver_attendance_checkout'))
         existing = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=today).first()
         if existing:
             # Check-out time check-in time se pehle nahi ho sakta

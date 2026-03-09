@@ -168,7 +168,12 @@
               </td>
               <td>
                 {% if rec and rec.check_in_photo_path %}
-                  <a href="{{ url_for('uploaded_file', filename=rec.check_in_photo_path) }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Check-in photo"> <i class="bi bi-image"></i> </a>
+                  {% set photo_url = rec.check_in_photo_path %}
+                  {% if photo_url.startswith('http') %}
+                  <a href="{{ photo_url }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Check-in photo"> <i class="bi bi-image"></i> </a>
+                  {% else %}
+                  <a href="{{ url_for('uploaded_file', filename=photo_url) }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Check-in photo"> <i class="bi bi-image"></i> </a>
+                  {% endif %}
                 {% else %}<span class="text-muted">-</span>{% endif %}
               </td>
               <td class="small text-muted" style="max-width:160px;">{{ check_in_remarks_text or '-' }}</td>
@@ -182,7 +187,12 @@
               </td>
               <td>
                 {% if rec and rec.check_out_photo_path %}
-                  <a href="{{ url_for('uploaded_file', filename=rec.check_out_photo_path) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Check-out photo"> <i class="bi bi-image"></i> </a>
+                  {% set photo_url = rec.check_out_photo_path %}
+                  {% if photo_url.startswith('http') %}
+                  <a href="{{ photo_url }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Check-out photo"> <i class="bi bi-image"></i> </a>
+                  {% else %}
+                  <a href="{{ url_for('uploaded_file', filename=photo_url) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Check-out photo"> <i class="bi bi-image"></i> </a>
+                  {% endif %}
                 {% else %}<span class="text-muted">-</span>{% endif %}
               </td>
               <td class="small text-muted" style="max-width:160px;">{{ check_out_remarks_text or '-' }}</td>
