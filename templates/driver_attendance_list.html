@@ -112,21 +112,23 @@
             {% set district_name = driver.district.name if driver.district else (driver.vehicle.district.name if driver.vehicle and driver.vehicle.district else '-') %}
             {% set parking_name = driver.vehicle.parking_station.name if driver.vehicle and driver.vehicle.parking_station else '-' %}
             {% set project_district_parking = (driver.project.name if driver.project else '-') ~ ' / ' ~ district_name ~ ' / ' ~ parking_name %}
-            {% if rec and rec.check_in_photo_path or (rec and rec.check_in_latitude is not none and rec.check_in_longitude is not none) %}
-              {% set check_in_remarks_text = 'Check-in via GPS & Camera' %}
-            {% elif rec and rec.remarks and 'Manual check-in:' in rec.remarks %}
+            {# Manual check-in ki remarks ko GPS se pehle priority dein #}
+            {% if rec and rec.remarks and 'Manual check-in:' in rec.remarks %}
               {% set _parts = (rec.remarks or '').split('Manual check-in:') %}
               {% set _after = _parts[1].split(' | ')[0].strip() if _parts|length > 1 else '' %}
               {% set check_in_remarks_text = _after or 'Manual check-in' %}
+            {% elif rec and rec.check_in_photo_path or (rec and rec.check_in_latitude is not none and rec.check_in_longitude is not none) %}
+              {% set check_in_remarks_text = 'Check-in via GPS & Camera' %}
             {% else %}
               {% set check_in_remarks_text = '' %}
             {% endif %}
-            {% if rec and rec.check_out_photo_path or (rec and rec.check_out_latitude is not none and rec.check_out_longitude is not none) %}
-              {% set check_out_remarks_text = 'Check-out via GPS & Camera' %}
-            {% elif rec and rec.remarks and 'Manual check-out' in (rec.remarks or '') %}
+            {# Manual check-out ki remarks ko bhi priority dein #}
+            {% if rec and rec.remarks and 'Manual check-out' in (rec.remarks or '') %}
               {% set _parts = (rec.remarks or '').split('Manual check-out') %}
               {% set _after = _parts[1].split(' | ')[0].strip() if _parts|length > 1 else '' %}
               {% set check_out_remarks_text = (_after[2:].strip() if _after.startswith(': ') else _after) or 'Manual check-out' %}
+            {% elif rec and rec.check_out_photo_path or (rec and rec.check_out_latitude is not none and rec.check_out_longitude is not none) %}
+              {% set check_out_remarks_text = 'Check-out via GPS & Camera' %}
             {% else %}
               {% set check_out_remarks_text = '' %}
             {% endif %}
