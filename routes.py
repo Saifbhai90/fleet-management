@@ -3069,6 +3069,9 @@ def districts_list():
     search = request.args.get('search', '')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
+    direction = request.args.get('direction', 'asc')
+    if direction not in ('asc', 'desc'):
+        direction = 'asc'
 
     query = District.query
     if search:
@@ -3076,10 +3079,12 @@ def districts_list():
             District.name.ilike(f'%{search}%') |
             District.province.ilike(f'%{search}%')
         )
-    districts_pagination = query.order_by(District.id).paginate(page=page, per_page=per_page, error_out=False)
+    order_col = District.name.asc() if direction == 'asc' else District.name.desc()
+    districts_pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     districts = districts_pagination.items
     return render_template('districts_list.html', districts=districts, search=search,
-                           pagination=districts_pagination, per_page=per_page)
+                           pagination=districts_pagination, per_page=per_page,
+                           sort_direction=direction)
 
 
 @app.route('/districts/export')
@@ -3092,7 +3097,7 @@ def districts_export():
             District.name.ilike(f'%{search}%') |
             District.province.ilike(f'%{search}%')
         )
-    districts = query.order_by(District.id).all()
+    districts = query.order_by(District.name.asc()).all()
     headers = ['ID', 'District Name', 'Province/Region', 'Remarks', 'Created']
     rows = []
     for d in districts:
@@ -5909,11 +5914,15 @@ def api_attendance_projects():
 
 @app.route('/api/attendance/vehicles')
 def api_attendance_vehicles():
-    """Vehicles for the given project; include parking_station_id and lat/lng if set."""
+    """Vehicles for the given project and district; include parking_station_id and lat/lng if set."""
     project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
     if not project_id:
         return jsonify([])
-    vehicles = Vehicle.query.filter_by(project_id=project_id).order_by(Vehicle.vehicle_no).all()
+    query = Vehicle.query.filter(Vehicle.project_id == project_id)
+    if district_id:
+        query = query.filter(Vehicle.district_id == district_id)
+    vehicles = query.order_by(Vehicle.vehicle_no).all()
     out = []
     for v in vehicles:
         ps = v.parking_station

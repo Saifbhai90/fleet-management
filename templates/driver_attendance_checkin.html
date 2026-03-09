@@ -321,7 +321,7 @@
     parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
     parkingCoords = null; vehiclesData = []; parkingNotSetMessage.classList.add('d-none');
     if (!id) return;
-    fetch('{{ url_for("api_attendance_vehicles") }}?project_id=' + id).then(function(r) { return r.json(); }).then(function(arr) {
+    fetch('{{ url_for("api_attendance_vehicles") }}?project_id=' + id + '&district_id=' + encodeURIComponent(districtSelect.value || '')).then(function(r) { return r.json(); }).then(function(arr) {
       vehiclesData = arr;
       arr.forEach(function(v) {
         var o = document.createElement('option');
