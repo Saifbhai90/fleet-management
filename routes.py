@@ -537,11 +537,15 @@ def delete_company(id):
 @app.route('/projects/')
 def projects_list():
     search = request.args.get('search', '').strip()
+    direction = request.args.get('direction', 'asc')
+    if direction not in ('asc', 'desc'):
+        direction = 'asc'
     query = Project.query
     if search:
         query = query.filter(Project.name.ilike(f'%{search}%'))
-    projects = query.order_by(Project.name).all()
-    return render_template('projects_list.html', projects=projects, search=search)
+    order_col = Project.name.asc() if direction == 'asc' else Project.name.desc()
+    projects = query.order_by(order_col).all()
+    return render_template('projects_list.html', projects=projects, search=search, sort_direction=direction)
 
 
 @app.route('/projects/export')
@@ -664,6 +668,9 @@ def vehicles_list():
     search = request.args.get('search', '').strip()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
+    direction = request.args.get('direction', 'asc')
+    if direction not in ('asc', 'desc'):
+        direction = 'asc'
 
     query = Vehicle.query
     if search:
@@ -673,10 +680,14 @@ def vehicles_list():
             Vehicle.model.ilike(like) |
             Vehicle.vehicle_type.ilike(like)
         )
-    pagination = query.order_by(Vehicle.id).paginate(page=page, per_page=per_page, error_out=False)
+    if direction == 'asc':
+        order_cols = [Vehicle.vehicle_no.asc(), Vehicle.model.asc()]
+    else:
+        order_cols = [Vehicle.vehicle_no.desc(), Vehicle.model.desc()]
+    pagination = query.order_by(*order_cols).paginate(page=page, per_page=per_page, error_out=False)
     vehicles = pagination.items
     return render_template('vehicles_list.html', vehicles=vehicles, search=search,
-                           pagination=pagination, per_page=per_page)
+                           pagination=pagination, per_page=per_page, sort_direction=direction)
 
 
 @app.route('/whats-new')
@@ -1224,6 +1235,9 @@ def drivers_list():
     search = request.args.get('search', '').strip()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
+    direction = request.args.get('direction', 'asc')
+    if direction not in ('asc', 'desc'):
+        direction = 'asc'
 
     query = Driver.query
     if search:
@@ -1238,11 +1252,13 @@ def drivers_list():
             Driver.phone1.ilike(like) |
             Driver.driver_district.ilike(like)
         )
-    drivers_pagination = query.order_by(Driver.id.asc()).paginate(page=page, per_page=per_page, error_out=False)
+    order_col = Driver.name.asc() if direction == 'asc' else Driver.name.desc()
+    drivers_pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     drivers = drivers_pagination.items
     today = date.today()
     return render_template('drivers_list.html', drivers=drivers, search=search, today=today,
-                           pagination=drivers_pagination, per_page=per_page)
+                           pagination=drivers_pagination, per_page=per_page,
+                           sort_direction=direction)
 
 
 @app.route('/drivers/export')
@@ -2790,6 +2806,9 @@ def parking_list():
     search = request.args.get('search', '')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
+    direction = request.args.get('direction', 'asc')
+    if direction not in ('asc', 'desc'):
+        direction = 'asc'
 
     query = ParkingStation.query
     if search:
@@ -2798,10 +2817,12 @@ def parking_list():
             ParkingStation.district.ilike(f'%{search}%') |
             ParkingStation.address_location.ilike(f'%{search}%')
         )
-    parkings_pagination = query.order_by(ParkingStation.id).paginate(page=page, per_page=per_page, error_out=False)
+    order_col = ParkingStation.name.asc() if direction == 'asc' else ParkingStation.name.desc()
+    parkings_pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     parkings = parkings_pagination.items
     return render_template('parking_list.html', parkings=parkings, search=search,
-                           pagination=parkings_pagination, per_page=per_page)
+                           pagination=parkings_pagination, per_page=per_page,
+                           sort_direction=direction)
 
 
 @app.route('/parking/import', methods=['GET', 'POST'])

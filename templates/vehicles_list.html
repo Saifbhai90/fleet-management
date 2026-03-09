@@ -44,6 +44,7 @@
         </div>
       </div>
     </div>
+    <input type="hidden" name="direction" value="{{ sort_direction or 'asc' }}">
   </form>
 
   <!-- Table Section -->
@@ -53,8 +54,19 @@
         <table id="vehiclesTable" class="table table-hover align-middle mb-0">
           <thead class="table-dark">
             <tr>
-              <th class="ps-4">ID</th>
-              <th>Vehicle No#</th>
+              <th class="ps-4">Sr #</th>
+              <th>ID</th>
+              <th>
+                <a href="{{ url_for('vehicles_list', page=pagination.page if pagination else 1, per_page=per_page, search=search, direction='desc' if (sort_direction or 'asc') == 'asc' else 'asc') }}"
+                   class="text-white text-decoration-none d-inline-flex align-items-center">
+                  Vehicle No#
+                  {% if (sort_direction or 'asc') == 'asc' %}
+                    <i class="bi bi-sort-alpha-down ms-1"></i>
+                  {% else %}
+                    <i class="bi bi-sort-alpha-up ms-1"></i>
+                  {% endif %}
+                </a>
+              </th>
               <th>Model</th>
               <th>Vehicle Type</th>
               <th>Capacity</th> <!-- NAYA COLUMN -->
@@ -66,7 +78,14 @@
           <tbody>
             {% for vehicle in vehicles %}
             <tr>
-              <td class="ps-4 text-muted">{{ vehicle.id }}</td>
+              <td class="ps-4 text-muted">
+                {% if pagination %}
+                  {{ (pagination.page - 1) * per_page + loop.index }}
+                {% else %}
+                  {{ loop.index }}
+                {% endif %}
+              </td>
+              <td class="text-muted">{{ vehicle.id }}</td>
               <td class="fw-bold text-navy">{{ vehicle.vehicle_no }}{% if vehicle.document_path %} <a href="{{ url_for('uploaded_file', filename=vehicle.document_path) }}" target="_blank" class="text-primary ms-1" title="View document"><i class="bi bi-file-earmark-pdf"></i></a>{% endif %}</td>
               <td>{{ vehicle.model }}</td>
               <td><span class="badge bg-light text-primary border">{{ vehicle.vehicle_type }}</span></td>
@@ -96,7 +115,7 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="8" class="text-center py-5">
+              <td colspan="9" class="text-center py-5">
                 <div class="text-muted">
                   <i class="bi bi-truck-flatbed fs-1 d-block mb-3 opacity-25"></i>
                   <p>No vehicles found. <a href="{{ url_for('vehicle_form') }}" class="fw-bold">Add a new vehicle now</a>.</p>
@@ -118,13 +137,13 @@
         <ul class="pagination pagination-sm mb-0">
           {% if pagination.has_prev %}
           <li class="page-item">
-            <a class="page-link" href="{{ url_for('vehicles_list', page=pagination.prev_num, per_page=per_page, search=search) }}">Previous</a>
+            <a class="page-link" href="{{ url_for('vehicles_list', page=pagination.prev_num, per_page=per_page, search=search, direction=sort_direction or 'asc') }}">Previous</a>
           </li>
           {% endif %}
           {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
             {% if p %}
               <li class="page-item {% if p == pagination.page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('vehicles_list', page=p, per_page=per_page, search=search) }}">{{ p }}</a>
+                <a class="page-link" href="{{ url_for('vehicles_list', page=p, per_page=per_page, search=search, direction=sort_direction or 'asc') }}">{{ p }}</a>
               </li>
             {% else %}
               <li class="page-item disabled"><span class="page-link">…</span></li>
@@ -132,7 +151,7 @@
           {% endfor %}
           {% if pagination.has_next %}
           <li class="page-item">
-            <a class="page-link" href="{{ url_for('vehicles_list', page=pagination.next_num, per_page=per_page, search=search) }}">Next</a>
+            <a class="page-link" href="{{ url_for('vehicles_list', page=pagination.next_num, per_page=per_page, search=search, direction=sort_direction or 'asc') }}">Next</a>
           </li>
           {% endif %}
         </ul>

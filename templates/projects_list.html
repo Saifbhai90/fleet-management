@@ -23,6 +23,7 @@
       <input type="text" name="search" class="form-control border-start-0 ps-0" placeholder="Search project name..." value="{{ search }}" data-realtime-table="projectsTable">
       <button class="btn btn-primary px-4" type="submit">Search</button>
     </div>
+      <input type="hidden" name="direction" value="{{ sort_direction or 'asc' }}">
   </form>
 
   <div class="card shadow-sm border-0">
@@ -31,8 +32,19 @@
         <table id="projectsTable" class="table table-hover align-middle mb-0">
           <thead class="table-dark">
             <tr>
-              <th class="ps-3" width="8%">ID</th>
-              <th width="35%">Project Name</th>
+              <th class="ps-3" width="6%">Sr #</th>
+              <th width="8%">ID</th>
+              <th width="35%">
+                <a href="{{ url_for('projects_list', search=search, direction='desc' if (sort_direction or 'asc') == 'asc' else 'asc') }}"
+                   class="text-white text-decoration-none d-inline-flex align-items-center">
+                  Project Name
+                  {% if (sort_direction or 'asc') == 'asc' %}
+                    <i class="bi bi-sort-alpha-down ms-1"></i>
+                  {% else %}
+                    <i class="bi bi-sort-alpha-up ms-1"></i>
+                  {% endif %}
+                </a>
+              </th>
               <th width="20%">Start Date</th>
               <th width="15%">Status</th>
               <th width="22%" class="text-center">Actions</th>
@@ -41,7 +53,8 @@
           <tbody>
             {% for project in projects %}
             <tr>
-              <td class="ps-3 text-muted">{{ project.id }}</td>
+              <td class="ps-3 text-muted">{{ loop.index }}</td>
+              <td class="text-muted">{{ project.id }}</td>
               <td>
                 <a href="{{ url_for('project_detail', id=project.id) }}" class="fw-bold text-decoration-none text-primary">
                   {{ project.name }}
@@ -81,7 +94,7 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="5" class="text-center py-5">
+              <td colspan="6" class="text-center py-5">
                 <div class="text-muted">
                   <i class="bi bi-inbox fs-1 d-block mb-3"></i>
                   <p>No projects found. <a href="{{ url_for('project_form') }}">Create your first project</a>.</p>
