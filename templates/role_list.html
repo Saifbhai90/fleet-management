@@ -18,6 +18,7 @@
               <th class="ps-4">#</th>
               <th>Role Name</th>
               <th>Description</th>
+              <th>Users</th>
               <th>Permissions</th>
               <th class="text-center pe-4">Edit</th>
             </tr>
@@ -29,11 +30,23 @@
               <td class="fw-medium">{{ r.name }}</td>
               <td>{{ r.description or '-' }}</td>
               <td>
-                {% for p in r.permissions %}
-                  <span class="badge bg-light text-dark border me-1">{{ p.name }}</span>
+                <span class="badge bg-light text-dark border">
+                  {{ r.users|length }} user{{ '' if r.users|length == 1 else 's' }}
+                </span>
+              </td>
+              <td>
+                {% set perms = r.permissions|list %}
+                {% if perms %}
+                  {% set preview = perms[:6] %}
+                  {% for p in preview %}
+                    <span class="badge bg-light text-dark border me-1 mb-1">{{ p.name }}</span>
+                  {% endfor %}
+                  {% if perms|length > preview|length %}
+                    <span class="badge bg-secondary text-white mb-1">+{{ perms|length - preview|length }} more</span>
+                  {% endif %}
                 {% else %}
                   <span class="text-muted">None</span>
-                {% endfor %}
+                {% endif %}
               </td>
               <td class="text-center pe-4">
                 {% if not current_user_is_master and r.name == 'Admin' %}

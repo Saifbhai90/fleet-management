@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Project & District Assignment{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3">
+  <div class="row justify-content-center">
+    <div class="col-xl-8 col-lg-9">
+      <div class="card shadow-sm border-0 mt-3" style="border-radius: 14px;">
+        <div class="card-header bg-warning text-dark py-2" style="border-radius: 14px 14px 0 0;">
+          <h6 class="mb-0 fw-bold"><i class="bi bi-geo-alt me-2"></i>Project & District Assignment</h6>
+        </div>
+        <div class="card-body p-4 bg-light">
+          {% if draft_summary %}
+          <div class="alert alert-info py-2 mb-3">
+            <strong>Employee:</strong> {{ draft_summary }}
+            {% if employee %}
+              <br><small class="text-muted">Existing employee — sirf assignment update hoga.</small>
+            {% else %}
+              <br><small class="text-muted">Naya employee + assignment dono save honge.</small>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          <form method="POST">
+            {{ form.hidden_tag() }}
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                {{ form.project_ids.label(class="form-label fw-bold") }}
+                {{ form.project_ids(class="form-select " + ("is-invalid" if form.project_ids.errors else "")) }}
+                <small class="text-muted">Ctrl+Click se multiple select karein.</small>
+                {% for error in form.project_ids.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+              </div>
+              <div class="col-md-6">
+                {{ form.district_ids.label(class="form-label fw-bold") }}
+                {{ form.district_ids(class="form-select " + ("is-invalid" if form.district_ids.errors else "")) }}
+                <small class="text-muted">Ctrl+Click se multiple select karein.</small>
+                {% for error in form.district_ids.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="row mt-4">
+              <div class="col-12 text-center">
+                <button type="submit" class="btn btn-success px-5 fw-bold">
+                  <i class="bi bi-check2-square me-2"></i>Save Employee & Assignment
+                </button>
+                <a href="{% if employee %}{{ url_for('employee_form', id=employee.id) }}{% else %}{{ url_for('employee_form') }}{% endif %}" class="btn btn-outline-secondary px-4 ms-2 fw-bold">
+                  <i class="bi bi-arrow-left me-1"></i>Wapas Employee Form
+                </a>
+                <a href="{{ url_for('employees_list') }}" class="btn btn-outline-dark px-4 ms-2 fw-bold">Cancel</a>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

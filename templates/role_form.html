@@ -3,74 +3,154 @@
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-shield-plus me-2 text-primary"></i>{{ 'Edit Role' if role else 'Add Role' }}</h2>
-    <a href="{{ url_for('role_list') }}" class="btn btn-outline-secondary btn-sm">Back to Roles</a>
+    <div>
+      <h2 class="mb-1">
+        <i class="bi bi-shield-plus me-2 text-primary"></i>{{ 'Edit Role' if role else 'Add Role' }}
+      </h2>
+      <p class="text-muted small mb-0">
+        Role ka naam / description select karein, phir neeche se sections ke hisaab se permissions choose karein.
+      </p>
+    </div>
+    <a href="{{ url_for('role_list') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Roles
+    </a>
   </div>
 
-  <div class="card shadow-sm border-0 rounded-3 mb-4">
-    <div class="card-body">
-      <form method="POST" action="" id="role-permission-form">
-        {{ form.hidden_tag() }}
-        <div class="row g-3">
-          {% if not role %}
-          <div class="col-md-6">
-            {{ form.post_id.label(class="form-label") }}
-            {{ form.post_id(class="form-select select2-enable" + (" is-invalid" if form.post_id.errors else "")) }}
-            <small class="text-muted">Employee Posts se post search karein.</small>
-            {% for e in form.post_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
-          </div>
-          {% else %}
-          <div class="col-md-6">
-            {{ form.name.label(class="form-label") }}
-            {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
-            {% for e in form.name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
-          </div>
-          {% endif %}
-          <div class="col-md-6">
-            {{ form.description.label(class="form-label") }}
-            {{ form.description(class="form-control") }}
+  <form method="POST" action="" id="role-permission-form">
+    {{ form.hidden_tag() }}
+    <div class="row">
+      <!-- Left: basic role info -->
+      <div class="col-lg-4 mb-4">
+        <div class="card shadow-sm border-0 rounded-3 h-100">
+          <div class="card-body">
+            <h6 class="text-uppercase text-muted fw-bold small mb-3">Role Details</h6>
+            <div class="mb-3">
+              {% if not role %}
+                {{ form.post_id.label(class="form-label fw-semibold") }}
+                {{ form.post_id(class="form-select select2-enable" + (" is-invalid" if form.post_id.errors else "")) }}
+                <small class="text-muted d-block mt-1">Employee Posts se post search karein, role ka naam auto set ho jayega.</small>
+                {% for e in form.post_id.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+              {% else %}
+                {{ form.name.label(class="form-label fw-semibold") }}
+                {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+                {% for e in form.name.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+              {% endif %}
+            </div>
+            <div class="mb-3">
+              {{ form.description.label(class="form-label fw-semibold") }}
+              {{ form.description(class="form-control", rows="2") }}
+              <small class="text-muted d-block mt-1">Short description taake baad mein samajhna asaan ho.</small>
+            </div>
           </div>
         </div>
-        <hr class="my-4">
-        <h6 class="mb-3">Permissions (Section → Page → Buttons – pehle List/View select karein, phir Add/Edit; dependency auto apply hoti hai)</h6>
-        {% for section_label, pages in permission_tree %}
-        <div class="mb-4">
-          <div class="fw-semibold text-primary mb-2">{{ section_label }}</div>
-          <div class="ps-3">
-            {% for page_label, rows in pages %}
-            <div class="mb-3">
-              <div class="text-secondary small fw-medium mb-1">{{ page_label }}</div>
-              <div class="d-flex flex-wrap gap-2 gap-md-3 ps-2">
-                {% for perm_id, perm_code, perm_name in rows %}
-                <div class="form-check form-check-inline">
-                  <input type="checkbox" name="permission_ids" value="{{ perm_id }}" class="form-check-input perm-cb" id="perm{{ perm_id }}"
-                         data-code="{{ perm_code }}"
-                         {% if role and role.permissions and perm_id in (role.permissions|map(attribute='id')|list) %}checked{% endif %}>
-                  <label class="form-check-label" for="perm{{ perm_id }}">{{ perm_name }}</label>
-                </div>
-                {% endfor %}
+      </div>
+
+      <!-- Right: permissions matrix -->
+      <div class="col-lg-8">
+      <div class="card shadow-sm border-0 rounded-3 mb-3">
+        <div class="card-body border-bottom pb-3">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+              <h6 class="text-uppercase text-muted fw-bold small mb-1">Permissions</h6>
+              <p class="text-muted small mb-0">
+                Har section &rarr; page &rarr; action. Pehle <strong>List / View</strong> select karein, phir <strong>Add / Edit / Delete</strong>. Dependencies auto select ho jati hain.
+              </p>
+            </div>
+            <div class="ms-auto" style="max-width: 260px;">
+              <div class="input-group input-group-sm">
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" id="permissionSearch" class="form-control border-start-0 ps-0" placeholder="Search sections / pages / actions...">
               </div>
             </div>
-            {% endfor %}
           </div>
         </div>
-        {% else %}
-        <p class="text-muted small">No permissions loaded. Run app once so permissions are seeded.</p>
-        {% endfor %}
-        <div class="mt-4">
-          <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
-          <a href="{{ url_for('role_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+
+        <div class="card-body">
+          {% for section_label, pages in permission_tree %}
+          <div class="mb-3 permission-section" data-section="{{ section_label }}">
+            <div class="d-flex align-items-center mb-2">
+              <div class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle rounded-pill px-3 py-2 me-2">
+                {{ section_label }}
+              </div>
+            </div>
+            <div class="ps-2 ps-md-3">
+              {% for page_label, rows in pages %}
+              <div class="mb-3 p-2 rounded-3 bg-light">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <div class="text-secondary small fw-semibold">
+                    {{ page_label }}
+                  </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 gap-md-3 ps-1">
+                  {% for perm_id, perm_code, perm_name in rows %}
+                  <div class="form-check form-check-inline me-3 mb-1">
+                    <input type="checkbox"
+                           name="permission_ids"
+                           value="{{ perm_id }}"
+                           class="form-check-input perm-cb"
+                           id="perm{{ perm_id }}"
+                           data-code="{{ perm_code }}"
+                           data-section="{{ section_label }}"
+                           {% if 'full' in page_label|lower %}data-full="1"{% endif %}
+                           {% if role and role.permissions and perm_id in (role.permissions|map(attribute='id')|list) %}checked{% endif %}>
+                    <label class="form-check-label small" for="perm{{ perm_id }}">{{ perm_name }}</label>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% else %}
+          <p class="text-muted small">No permissions loaded. Run app once so permissions are seeded.</p>
+          {% endfor %}
         </div>
-      </form>
+
+        <div class="card-footer bg-light border-0 d-flex justify-content-between align-items-center">
+          <div class="text-muted small">
+            Dependencies automatically handle base permissions (List/View &rarr; Add/Edit/Delete).
+          </div>
+          <div class="text-end">
+            <div id="dangerSummary" class="text-danger small fw-semibold d-none mb-1">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i>
+              <span id="dangerSummaryText"></span>
+            </div>
+            <button type="submit" form="role-permission-form" class="btn btn-primary">
+              {{ form.submit.label.text }}
+            </button>
+            <a href="{{ url_for('role_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
+  </form>
 </div>
 <script>
 (function() {
   var deps = {{ permission_dependencies | tojson | safe }};
   var codeToId = {};
+  var sections = {};
+  var sectionFull = {};
+
+  // Index all checkboxes by code + section + mark destructive ones
   document.querySelectorAll('.perm-cb').forEach(function(cb) {
-    codeToId[cb.getAttribute('data-code')] = cb;
+    var code = cb.getAttribute('data-code');
+    var section = cb.getAttribute('data-section') || '';
+    codeToId[code] = cb;
+    if (!sections[section]) sections[section] = [];
+    sections[section].push(cb);
+    if (cb.getAttribute('data-full') === '1') {
+      sectionFull[section] = cb;
+    }
+
+    // Mark delete-level permissions for styling & summary
+    if (code && code.endsWith('_delete')) {
+      cb.classList.add('perm-danger');
+      var label = cb.closest('.form-check')?.querySelector('label');
+      if (label) {
+        label.classList.add('text-danger', 'fw-semibold');
+      }
+    }
   });
 
   function ensureDependencies(code) {
@@ -98,17 +178,136 @@
   }
 
   var form = document.getElementById('role-permission-form');
-  if (form) {
-    form.addEventListener('change', function(ev) {
-      if (!ev.target.classList.contains('perm-cb')) return;
-      var code = ev.target.getAttribute('data-code');
-      if (ev.target.checked) {
-        ensureDependencies(code);
-      } else {
-        uncheckDependents(code);
+  var suppressFullHandler = false;
+
+  // Initial normalisation:
+  // "full" checkbox ka state sirf children ke basis par set karo.
+  // Agar section ke saare children checked hain -> full = true, warna false.
+  Object.keys(sectionFull).forEach(function(section) {
+    var fullCb = sectionFull[section];
+    if (!fullCb) return;
+    var list = sections[section] || [];
+    var allChildrenChecked = true;
+    list.forEach(function(cb) {
+      if (cb === fullCb) return;
+      if (!cb.checked) {
+        allChildrenChecked = false;
       }
     });
+    fullCb.checked = allChildrenChecked;
+  });
+
+  if (!form) return;
+
+  var searchInput = document.getElementById('permissionSearch');
+  var dangerSummary = document.getElementById('dangerSummary');
+  var dangerSummaryText = document.getElementById('dangerSummaryText');
+
+  function updateDangerSummary() {
+    var count = 0;
+    Object.keys(codeToId).forEach(function(code) {
+      if (code && code.endsWith('_delete')) {
+        var cb = codeToId[code];
+        if (cb && cb.checked) count += 1;
+      }
+    });
+    if (!dangerSummary) return;
+    if (count > 0) {
+      dangerSummary.classList.remove('d-none');
+      if (dangerSummaryText) {
+        dangerSummaryText.textContent = count + ' Delete permissions selected in this role.';
+      }
+    } else {
+      dangerSummary.classList.add('d-none');
+    }
   }
+
+  // Initial delete summary
+  updateDangerSummary();
+
+  // Filter permissions by search text
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      var q = (searchInput.value || '').toLowerCase().trim();
+      var sectionsEls = document.querySelectorAll('.permission-section');
+      sectionsEls.forEach(function(sec) {
+        if (!q) {
+          sec.classList.remove('d-none');
+          return;
+        }
+        var text = (sec.textContent || '').toLowerCase();
+        if (text.indexOf(q) !== -1) {
+          sec.classList.remove('d-none');
+        } else {
+          sec.classList.add('d-none');
+        }
+      });
+    });
+  }
+
+  form.addEventListener('change', function(ev) {
+    if (!ev.target.classList.contains('perm-cb')) return;
+    if (suppressFullHandler) return;
+
+    var cb = ev.target;
+    var code = cb.getAttribute('data-code');
+    var section = cb.getAttribute('data-section') || '';
+    var isFull = cb.getAttribute('data-full') === '1';
+
+    if (isFull) {
+      // Clicking "Section (full)" – select/deselect all within this section
+      var list = sections[section] || [];
+      if (cb.checked) {
+        list.forEach(function(other) {
+          if (!other.checked) {
+            other.checked = true;
+            ensureDependencies(other.getAttribute('data-code'));
+          }
+        });
+      } else {
+        // Unchecking full manually: remove all children in this section
+        list.forEach(function(other) {
+          if (other !== cb && other.checked) {
+            other.checked = false;
+            uncheckDependents(other.getAttribute('data-code'));
+          }
+        });
+      }
+      return;
+    }
+
+    // Child permission toggled
+    if (cb.checked) {
+      ensureDependencies(code);
+    } else {
+      uncheckDependents(code);
+    }
+
+    // After any child change, recompute section "full" checkbox:
+    // - Agar saare children checked hain -> full ko auto check karo
+    // - Agar koi bhi child unchecked hai -> full ko uncheck rakho
+    var fullCb = sectionFull[section];
+    if (fullCb) {
+      var list = sections[section] || [];
+      var allChildrenChecked = true;
+      list.forEach(function(other) {
+        if (other === fullCb) return;
+        if (!other.checked) {
+          allChildrenChecked = false;
+        }
+      });
+      suppressFullHandler = true;
+      if (allChildrenChecked) {
+        fullCb.checked = true;
+      } else {
+        fullCb.checked = false;
+      }
+      suppressFullHandler = false;
+    }
+
+    // Update destructive permissions summary whenever any checkbox changes
+    updateDangerSummary();
+  });
 })();
 </script>
 {% endblock %}

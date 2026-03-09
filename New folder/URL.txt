@@ -9,3 +9,8 @@ postgresql://saifbhai:0uOHtbvtXVW2gPrEN36SBcdsPcRDOhEs@dpg-d6k6omn5r7bs73a8crcg-
 
 PSQL Command:
 PGPASSWORD=0uOHtbvtXVW2gPrEN36SBcdsPcRDOhEs psql -h dpg-d6k6omn5r7bs73a8crcg-a.singapore-postgres.render.com -U saifbhai company_management_w27v
+
+Backup Email.
+ID:webapplicationbackup@gmail.com
+Password: 1034@1122
+Recovery Email: ssaifsajid11@gmail.com

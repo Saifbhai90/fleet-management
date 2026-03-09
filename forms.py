@@ -762,6 +762,7 @@ class UserForm(FlaskForm):
                           render_kw={"placeholder": "Login name"})
     password = PasswordField('Password', validators=[Optional(), Length(min=4)],
                              render_kw={"placeholder": "Leave blank to keep current (edit)"})
+    reset_password = BooleanField('Reset password to default (123)', default=False, validators=[Optional()])
     full_name = StringField('Full Name', validators=[Optional(), Length(max=120)],
                             render_kw={"placeholder": "Display name"})
     employee_post_id = SelectField('Post', coerce=int, validators=[Optional()], choices=[])

@@ -112,8 +112,28 @@ def require_login():
         session['last_activity'] = now
         return
     required = get_required_permission(endpoint)
-    if endpoint == 'company_form' and request.view_args and request.view_args.get('id'):
-        required = 'companies_edit'
+    # For master-data forms, switch Add → Edit permission when editing existing record (id present)
+    if request.view_args and request.view_args.get('id'):
+        if endpoint == 'company_form':
+            required = 'companies_edit'
+        elif endpoint == 'project_form':
+            required = 'projects_edit'
+        elif endpoint == 'district_form':
+            required = 'districts_edit'
+        elif endpoint == 'vehicle_form':
+            required = 'vehicles_edit'
+        elif endpoint == 'parking_form':
+            required = 'parking_edit'
+        elif endpoint == 'driver_form':
+            required = 'drivers_edit'
+        elif endpoint == 'employee_form':
+            required = 'employees_edit'
+        elif endpoint == 'driver_post_form':
+            required = 'driver_post_edit'
+        elif endpoint == 'party_form':
+            required = 'party_edit'
+        elif endpoint == 'product_form':
+            required = 'product_edit'
     if required:
         perms = session.get('permissions') or []
         if not user_can_access(perms, required):
@@ -2244,6 +2264,38 @@ def login():
         password = (form.password.data or '').strip()
         user = User.query.filter(func.lower(User.username) == username.lower()).first()
         if user and _user_effective_active(user):
+            # Auto-fix: agar user ke paas role_id nahi, to Employee/Driver ke post se role assign kar dein
+            try:
+                role_fixed = False
+                if not user.role_id:
+                    # 1) Agar user.employee_post_id set hai to uske linked role se bind karein
+                    if user.employee_post_id:
+                        emp_post = EmployeePost.query.get(user.employee_post_id)
+                        if emp_post and emp_post.role_id:
+                            user.role_id = emp_post.role_id
+                            role_fixed = True
+                    # 2) Agar employee_post_id nahi, to Employee record (CNIC=username) se post/role lein
+                    if not role_fixed:
+                        emp = Employee.query.filter(func.lower(Employee.cnic_no) == username.lower()).first()
+                        if emp and emp.post_id:
+                            user.employee_post_id = emp.post_id
+                            emp_post = EmployeePost.query.get(emp.post_id)
+                            if emp_post and emp_post.role_id:
+                                user.role_id = emp_post.role_id
+                                role_fixed = True
+                    # 3) Agar phir bhi nahi mila, to Driver record se post (full_name) match karke role lein
+                    if not role_fixed:
+                        drv = Driver.query.filter(func.lower(Driver.cnic_no) == username.lower()).first()
+                        if drv and drv.post:
+                            emp_post = EmployeePost.query.filter(EmployeePost.full_name == (drv.post or '').strip()).first()
+                            if emp_post:
+                                user.employee_post_id = emp_post.id
+                                user.role_id = emp_post.role_id
+                                role_fixed = True
+                if role_fixed:
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
             if password == DEFAULT_FIRST_PASSWORD and getattr(user, 'force_password_change', None):
                 if check_password(user, DEFAULT_FIRST_PASSWORD):
                     session['must_set_password_user_id'] = user.id
@@ -2259,9 +2311,10 @@ def login():
                 session['is_master'] = is_master
                 # Master ke liye role ki value nahi: hamesha saari permissions (DB se sab codes), taake koi cheez miss na ho
                 if is_master:
-                    session['permissions'] = [p.code for p in Permission.query.all()]
+                    perms = [p.code for p in Permission.query.all()]
                 else:
-                    session['permissions'] = user.permission_codes()
+                    perms = user.permission_codes()
+                session['permissions'] = perms
                 session.permanent = form.remember_me.data
                 try:
                     login_log = LoginLog(
@@ -2274,8 +2327,24 @@ def login():
                     session['login_log_id'] = login_log.id
                 except Exception:
                     db.session.rollback()
+                # Login ke baad default landing page:
+                # 1) Agar dashboard ki access hai to hamesha pehle Dashboard pe le jao.
+                # 2) Agar dashboard nahi hai lekin Attendance hai to Attendance pages pe.
+                # 3) Warna bhi fallback Dashboard hi hai (permission check before_request mein ho jayega).
+                target_endpoint = None
+                codes = perms or []
+                if 'dashboard' in codes:
+                    target_endpoint = 'dashboard'
+                elif 'driver_attendance' in codes:
+                    target_endpoint = 'driver_attendance_list'
+                elif 'driver_attendance_report' in codes:
+                    target_endpoint = 'driver_attendance_report'
+                else:
+                    target_endpoint = 'dashboard'
                 flash(f'Welcome, {session["user"]}!', 'success')
-                return redirect(url_for('dashboard', from_login=1))
+                if target_endpoint == 'dashboard':
+                    return redirect(url_for('dashboard', from_login=1))
+                return redirect(url_for(target_endpoint))
         flash('Invalid user ID or password.', 'danger')
     return render_template('login.html', form=form)
 
@@ -2449,11 +2518,21 @@ def _create_user_for_employee_or_driver(username_cnic, full_name, employee_post_
 
 @app.route('/users')
 def user_list():
-    users = User.query.order_by(User.username).all()
+    search = request.args.get('search', '').strip()
+    query = User.query
+    if search:
+        like = f'%{search}%'
+        query = query.filter(
+            db.or_(
+                User.username.ilike(like),
+                User.full_name.ilike(like),
+            )
+        )
+    users = query.order_by(User.username).all()
     if not _current_user_is_master():
         # Admin login: Master user ki koi information show na ho
         users = [u for u in users if not (u.role and u.role.name == 'Master')]
-    return render_template('user_list.html', users=users)
+    return render_template('user_list.html', users=users, search=search)
 
 
 @app.route('/users/sync-from-employees-drivers', methods=['POST'])
@@ -2602,13 +2681,19 @@ def user_edit(pk):
         user.employee_post_id = employee_post_id
         user.is_active = form.is_active.data
         password = (form.password.data or '').strip()
+        reset_flag = bool(form.reset_password.data)
         if password:
             if len(password) < 4:
                 flash('Password must be at least 4 characters.', 'danger')
                 return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
             user.password_hash = generate_password_hash(password)
+            # Manual new password set kiya gaya: first-login flag hata dein
             if getattr(user, 'force_password_change', None):
                 user.force_password_change = False
+        elif reset_flag:
+            # Reset to default first-time password and force change on next login
+            user.password_hash = generate_password_hash(DEFAULT_FIRST_PASSWORD)
+            user.force_password_change = True
         db.session.commit()
         flash('User updated successfully.', 'success')
         return redirect(url_for('user_list'))

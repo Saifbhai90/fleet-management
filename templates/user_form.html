@@ -23,6 +23,15 @@
             {% if user %}<small class="text-muted">Leave blank to keep current password.</small>{% endif %}
             {% for e in form.password.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
           </div>
+          {% if user %}
+          <div class="col-md-6">
+            <div class="form-check mt-4">
+              {{ form.reset_password(class="form-check-input") }}
+              {{ form.reset_password.label(class="form-check-label small") }}
+            </div>
+            <small class="text-muted d-block mt-1">Is option se user ka password <strong>123</strong> ho jayega, aur next login par user se naya password set karwaya jayega.</small>
+          </div>
+          {% endif %}
           <div class="col-md-6">
             {{ form.full_name.label(class="form-label") }}
             {{ form.full_name(class="form-control") }}

@@ -11,7 +11,8 @@ PERMISSION_DASHBOARD = 'dashboard'
 PERMISSION_MASTER = 'master'
 PERMISSION_ASSIGNMENT = 'assignment'
 PERMISSION_TRANSFER = 'transfer'
-PERMISSION_DRIVER_STATUS = 'driver_status'
+PERMISSION_DRIVER_STATUS = 'driver_status'  # Workforce (Resignation, Rejoin, Penalties)
+PERMISSION_ATTENDANCE = 'attendance'        # Attendance (Check-in/out, list, etc.)
 PERMISSION_TASK_REPORT = 'task_report'
 PERMISSION_EXPENSES = 'expenses'
 PERMISSION_ACCOUNTS = 'accounts'
@@ -24,7 +25,8 @@ ALL_PERMISSION_CODES = [
     (PERMISSION_MASTER, 'Master (Companies, Projects, Drivers, etc.)', 'Master'),
     (PERMISSION_ASSIGNMENT, 'Assignment', 'Assignment'),
     (PERMISSION_TRANSFER, 'Transfer', 'Transfer'),
-    (PERMISSION_DRIVER_STATUS, 'Driver Status (Attendance, Penalty, etc.)', 'Driver Status'),
+    (PERMISSION_DRIVER_STATUS, 'Workforce (Driver Status, Penalties)', 'Driver Status'),
+    (PERMISSION_ATTENDANCE, 'Attendance', 'Attendance'),
     (PERMISSION_TASK_REPORT, 'Task Report', 'Task Report'),
     (PERMISSION_EXPENSES, 'Expenses (Fuel, Oil, Maintenance, Employee)', 'Expenses'),
     (PERMISSION_ACCOUNTS, 'Accounts', 'Accounts'),
@@ -43,46 +45,153 @@ ENDPOINT_PERMISSION_MAP = [
     ('projects_list', 'projects_list'),
     ('project_detail', 'project_detail'),
     ('project_form', 'projects_add'),
+    ('delete_project', 'projects_delete'),
+    ('toggle_project_status', 'projects_edit'),
     ('districts_list', 'districts_list'),
     ('district_form', 'districts_add'),
+    ('delete_district', 'districts_delete'),
     ('vehicles_list', 'vehicles_list'),
     ('vehicle_form', 'vehicles_add'),
+    ('delete_vehicle', 'vehicles_delete'),
     ('parking_list', 'parking_list'),
     ('parking_form', 'parking_add'),
+    ('delete_parking', 'parking_delete'),
     ('drivers_list', 'drivers_list'),
     ('driver_form', 'drivers_add'),
+    ('delete_driver', 'drivers_delete'),
     ('employees_list', 'employees_list'),
     ('employee_form', 'employees_add'),
     ('driver_post_list', 'driver_post_list'),
     ('driver_post_form', 'driver_post_add'),
+    ('driver_post_delete', 'driver_post_delete'),
     ('party_list', 'party_list'),
     ('party_form', 'party_add'),
+    ('party_delete', 'party_delete'),
     ('product_list', 'product_list'),
     ('product_form', 'product_add'),
+    ('product_delete', 'product_delete'),
+    # Assignments – granular per feature
+    # Project → Company
+    ('assign_project_to_company_edit', 'assign_project_to_company_edit'),
+    ('assign_project_to_company_new', 'assign_project_to_company_add'),
+    ('desassign_project_from_company', 'assign_project_to_company_desassign'),
+    ('assign_project_to_company_export', 'assign_project_to_company'),
+    ('assign_project_to_company_print', 'assign_project_to_company'),
     ('assign_project_to_company', 'assign_project_to_company'),
+    # District → Project
+    ('assign_project_to_district_edit', 'assign_project_to_district_edit'),
+    ('assign_project_to_district_new', 'assign_project_to_district_add'),
+    ('desassign_district_from_project', 'assign_project_to_district_desassign'),
+    ('assign_project_to_district_export', 'assign_project_to_district'),
+    ('assign_project_to_district_print', 'assign_project_to_district'),
     ('assign_project_to_district', 'assign_project_to_district'),
+    # Vehicle → District
+    ('assign_vehicle_to_district_edit', 'assign_vehicle_to_district_edit'),
+    ('assign_vehicle_to_district_new', 'assign_vehicle_to_district_add'),
+    ('desassign_vehicle_from_district', 'assign_vehicle_to_district_desassign'),
+    ('assign_vehicle_to_district_export', 'assign_vehicle_to_district'),
+    ('assign_vehicle_to_district_print', 'assign_vehicle_to_district'),
     ('assign_vehicle_to_district', 'assign_vehicle_to_district'),
+    # Vehicle → Parking
+    ('assign_vehicle_to_parking_edit', 'assign_vehicle_to_parking_edit'),
+    ('assign_vehicle_to_parking_new', 'assign_vehicle_to_parking_add'),
+    ('desassign_vehicle_from_parking', 'assign_vehicle_to_parking_desassign'),
+    ('assign_vehicle_to_parking_export', 'assign_vehicle_to_parking'),
+    ('assign_vehicle_to_parking_print', 'assign_vehicle_to_parking'),
     ('assign_vehicle_to_parking', 'assign_vehicle_to_parking'),
+    # Driver → Vehicle
+    ('assign_driver_to_vehicle_edit', 'assign_driver_to_vehicle_edit'),
+    ('assign_driver_to_vehicle_new', 'assign_driver_to_vehicle_add'),
+    ('desassign_driver_from_vehicle', 'assign_driver_to_vehicle_desassign'),
+    ('assign_driver_to_vehicle_export', 'assign_driver_to_vehicle'),
+    ('assign_driver_to_vehicle_print', 'assign_driver_to_vehicle'),
     ('assign_driver_to_vehicle', 'assign_driver_to_vehicle'),
-    ('project_transfers', 'project_transfers'),
-    ('project_transfer', 'project_transfers'),
-    ('vehicle_transfers', 'vehicle_transfers'),
-    ('vehicle_transfer', 'vehicle_transfers'),
-    ('driver_transfers', 'driver_transfers'),
-    ('driver_transfer', 'driver_transfers'),
-    ('driver_job_left', 'driver_job_left'),
-    ('driver_rejoin', 'driver_rejoin'),
-    ('driver_attendance', 'driver_attendance'),
-    ('penalty_record', 'penalty_record'),
-    ('task_report', 'task_report'),
-    ('red_task', 'red_task'),
-    ('without_task', 'without_task'),
-    ('task_report_logbook', 'task_report_logbook'),
-    ('fuel_expense', 'fuel_expense'),
-    ('oil_expense', 'oil_expense'),
-    ('maintenance_expense', 'maintenance_expense'),
-    ('employee_expense', 'employee_expense'),
-    ('accounts_', 'accounts'),
+    # Transfers – granular
+    # Project Transfer
+    ('project-transfers', 'project_transfers'),
+    ('project_transfer_new', 'project_transfers_add'),
+    ('project_transfer_edit', 'project_transfers_edit'),
+    ('project_transfer_delete', 'project_transfers_delete'),
+    # Vehicle Transfer
+    ('vehicle-transfers', 'vehicle_transfers'),
+    ('vehicle_transfer_new', 'vehicle_transfers_add'),
+    ('vehicle_transfer_edit', 'vehicle_transfers_edit'),
+    ('vehicle_transfer_delete', 'vehicle_transfers_delete'),
+    # Driver Transfer
+    ('driver-transfers', 'driver_transfers'),
+    ('driver_transfer_new', 'driver_transfers_add'),
+    ('driver_transfer_edit', 'driver_transfers_edit'),
+    ('driver_transfer_delete', 'driver_transfers_delete'),
+    # Workforce / Driver Status
+    ('driver_job_left_new', 'driver_job_left'),
+    ('driver_job_left_list', 'driver_job_left_list'),
+    ('driver_job_left_view', 'driver_job_left_list'),
+    ('driver_job_left_edit', 'driver_job_left_edit'),
+    ('driver_job_left_delete', 'driver_job_left_delete'),
+    ('driver_rejoin_new', 'driver_rejoin'),
+    ('driver_rejoin_list', 'driver_rejoin_list'),
+    ('driver_rejoin_view', 'driver_rejoin_view'),
+    ('penalty_record_list', 'penalty_record'),
+    ('penalty_record_export', 'penalty_record'),
+    ('penalty_record_print', 'penalty_record'),
+    ('penalty_record_new', 'penalty_record_add'),
+    ('penalty_record_edit', 'penalty_record_edit'),
+    # Attendance – GPS + Camera + manual list/mark
+    ('driver_attendance_checkin', 'driver_attendance_checkin'),
+    ('driver_attendance_checkout', 'driver_attendance_checkout'),
+    ('driver_attendance_list', 'driver_attendance_list'),
+    ('driver_attendance_export', 'driver_attendance_list'),
+    ('driver_attendance_print', 'driver_attendance_list'),
+    ('driver_attendance_mark', 'driver_attendance_mark'),
+    ('driver_attendance_bulk_off', 'driver_attendance_bulk_off'),
+    ('driver_attendance_pending', 'driver_attendance_pending'),
+    ('driver_attendance_missing_checkout', 'driver_attendance_missing_checkout'),
+    ('driver_attendance_manual_checkin', 'driver_attendance_list'),
+    ('driver_attendance_manual_checkout', 'driver_attendance_list'),
+    # Task & Logbook
+    ('task_report_upload', 'task_report_upload'),
+    ('task_report_upload_emergency', 'task_report_upload'),
+    ('task_report_upload_mileage', 'task_report_upload'),
+    # Daily Task Report
+    ('task-report', 'task_report_list'),
+    ('task_report_list', 'task_report_list'),
+    ('task_report_new', 'task_report_add'),
+    # Red Task
+    ('red_task_list', 'red_task'),
+    ('red_task_new', 'red_task_add'),
+    ('red_task_edit', 'red_task_edit'),
+    # Movement without Task
+    ('without_task_list', 'without_task'),
+    ('without_task_new', 'without_task_add'),
+    ('without_task_edit', 'without_task_edit'),
+    # Logbook Covers
+    ('task_report_logbook_cover', 'task_report_logbook'),
+    ('task_report_logbook_view', 'task_report_logbook'),
+    ('task_report_logbook_view_all', 'task_report_logbook'),
+    # Expense Management
+    # Fuel
+    ('fuel_expense_list', 'fuel_expense'),
+    ('fuel_expense_add', 'fuel_expense_add'),
+    ('fuel_expense_edit', 'fuel_expense_edit'),
+    ('fuel_expense_delete', 'fuel_expense_delete'),
+    # Oil & Lubricants
+    ('oil_expense_list', 'oil_expense'),
+    ('oil_expense_form', 'oil_expense_add'),
+    ('oil_expense_delete', 'oil_expense_delete'),
+    # Maintenance
+    ('maintenance_expense_list', 'maintenance_expense'),
+    ('maintenance_expense_form', 'maintenance_expense_add'),
+    ('maintenance_expense_delete', 'maintenance_expense_delete'),
+    # Employee Expenses
+    ('employee_expense_list', 'employee_expense'),
+    # Finance
+    ('accounts_quick_payment', 'accounts_quick_payment'),
+    ('accounts_quick_receipt', 'accounts_quick_receipt'),
+    ('accounts_bank_entry', 'accounts_bank_entry'),
+    ('accounts_jv', 'accounts_jv'),
+    ('accounts_future_entry', 'accounts_future_entry'),
+    ('accounts_balance_sheet', 'accounts_balance_sheet'),
+    ('accounts_account_ledger', 'accounts_account_ledger'),
     # Reports & analytics: map each endpoint to its own granular permission
     ('reports_index', 'reports_index'),
     ('report_vehicle_summary', 'report_vehicle_summary'),
@@ -144,16 +253,19 @@ def user_has_permission(permission_codes, code):
 
 
 def user_can_access(permission_codes, required_code):
-    """True if user has required_code OR the section that grants it (e.g. master grants companies_list)."""
+    """
+    True if user has the exact required_code.
+
+    NOTE: Pehle yahan section-level codes (e.g. 'transfer', 'assignment') ko
+    full access ke liye treat kiya jata tha. Ab granular permissions use ho
+    rahi hain is liye sirf exact code hi access dega. Agar kisi section ke
+    andar kisi ek page ki access hata di jaye to "full" code akela us page ka
+    access nahi dega.
+    """
     if not required_code:
         return True
     codes = permission_codes or []
-    if required_code in codes:
-        return True
-    section = SECTION_FOR_PERMISSION.get(required_code)
-    if section and section in codes:
-        return True
-    return False
+    return required_code in codes
 
 
 def seed_auth_tables(app):

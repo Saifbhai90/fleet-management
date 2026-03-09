@@ -5,14 +5,19 @@
 {% block content %}
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-briefcase me-2"></i>All Projects</h2>
+    <div>
+      <h2 class="mb-1"><i class="bi bi-briefcase me-2"></i>All Projects</h2>
+      <p class="text-muted small mb-0">Project list with quick actions based on your permissions.</p>
+    </div>
     <div class="d-flex gap-2">
       <a href="{{ url_for('projects_export', search=search) }}" class="btn btn-outline-secondary">
         <i class="bi bi-download me-1"></i>Export CSV
       </a>
+      {% if can_see_page('projects_add') %}
       <a href="{{ url_for('project_form') }}" class="btn btn-success">
         <i class="bi bi-plus-square me-1"></i>Add New Project
       </a>
+      {% endif %}
     </div>
   </div>
 
@@ -67,29 +72,48 @@
                 </span>
               </td>
               <td class="text-center">
-                <a href="{{ url_for('project_form', id=project.id) }}" class="btn btn-sm btn-warning me-1" title="Edit">
-                  <i class="bi bi-pencil-square"></i> Edit
-                </a>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Project actions">
+                  {% if can_see_page('projects_edit') %}
+                  <a href="{{ url_for('project_form', id=project.id) }}"
+                     class="btn btn-outline-warning"
+                     title="Edit Project">
+                    <i class="bi bi-pencil-square"></i>
+                  </a>
+                  {% endif %}
 
-                {% if project.status == 'Active' %}
-                  <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" style="display:inline;">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary me-1" onclick="return confirm('Mark as Inactive?')">
-                      <i class="bi bi-toggle-off"></i> Inactive
+                  {% if can_see_page('projects_edit') %}
+                    {% if project.status == 'Active' %}
+                    <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" style="display:inline;">
+                      <button type="submit"
+                              class="btn btn-outline-secondary"
+                              title="Mark as Inactive"
+                              onclick="return confirm('Mark as Inactive?')">
+                        <i class="bi bi-toggle-off"></i>
+                      </button>
+                    </form>
+                    {% else %}
+                    <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" style="display:inline;">
+                      <button type="submit"
+                              class="btn btn-outline-success"
+                              title="Mark as Active"
+                              onclick="return confirm('Mark as Active?')">
+                        <i class="bi bi-toggle-on"></i>
+                      </button>
+                    </form>
+                    {% endif %}
+                  {% endif %}
+
+                  {% if can_see_page('projects_delete') %}
+                  <form action="{{ url_for('delete_project', id=project.id) }}" method="POST" style="display:inline;">
+                    <button type="submit"
+                            class="btn btn-outline-danger"
+                            title="Delete Project"
+                            onclick="return confirm('Delete this project?')">
+                      <i class="bi bi-trash"></i>
                     </button>
                   </form>
-                {% else %}
-                  <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" style="display:inline;">
-                    <button type="submit" class="btn btn-sm btn-outline-success me-1" onclick="return confirm('Mark as Active?')">
-                      <i class="bi bi-toggle-on"></i> Active
-                    </button>
-                  </form>
-                {% endif %}
-
-                <form action="{{ url_for('delete_project', id=project.id) }}" method="POST" style="display:inline;">
-                  <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this project?')">
-                    <i class="bi bi-trash"></i>
-                  </button>
-                </form>
+                  {% endif %}
+                </div>
               </td>
             </tr>
             {% else %}
