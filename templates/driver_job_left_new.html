@@ -257,7 +257,14 @@
                         <div class="col-6">
                             <div class="form-group">
                                 <label class="form-label">Leaving Date <span class="text-danger">*</span></label>
-                                {{ form.leave_date(class="form-control " + ("is-invalid" if form.leave_date.errors else ""), type="date", placeholder="Select date") }}
+                                <div class="input-group-custom">
+                                    <i class="bi bi-calendar-event"></i>
+                                    {{ form.leave_date(
+                                        class="form-control datepicker " + ("is-invalid" if form.leave_date.errors else ""),
+                                        placeholder="dd-mm-yyyy",
+                                        autocomplete="off"
+                                    ) }}
+                                </div>
                                 {% for error in form.leave_date.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                             </div>
                         </div>

@@ -24,23 +24,29 @@
         <div class="card shadow-sm border-0 rounded-3 h-100">
           <div class="card-body">
             <h6 class="text-uppercase text-muted fw-bold small mb-3">Role Details</h6>
+            {% if not role %}
             <div class="mb-3">
-              {% if not role %}
-                {{ form.post_id.label(class="form-label fw-semibold") }}
-                {{ form.post_id(class="form-select select2-enable" + (" is-invalid" if form.post_id.errors else "")) }}
-                <small class="text-muted d-block mt-1">Employee Posts se post search karein, role ka naam auto set ho jayega.</small>
-                {% for e in form.post_id.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
-              {% else %}
-                {{ form.name.label(class="form-label fw-semibold") }}
-                {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
-                {% for e in form.name.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
-              {% endif %}
+              {{ form.post_id.label(class="form-label fw-semibold") }}
+              {{ form.post_id(class="form-select select2-enable" + (" is-invalid" if form.post_id.errors else "")) }}
+              <small class="text-muted d-block mt-1">Employee Posts se post search karein, role ka naam auto set ho jayega.</small>
+              {% for e in form.post_id.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
             </div>
             <div class="mb-3">
               {{ form.description.label(class="form-label fw-semibold") }}
               {{ form.description(class="form-control", rows="2") }}
               <small class="text-muted d-block mt-1">Short description taake baad mein samajhna asaan ho.</small>
             </div>
+            {% else %}
+            <!-- Edit mode: Role details read-only (sirf dekhein, change na karein) -->
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Role Name</label>
+              <div class="form-control-plaintext fw-bold">{{ role.name }}</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Description</label>
+              <div class="form-control-plaintext">{{ role.description or '-' }}</div>
+            </div>
+            {% endif %}
           </div>
         </div>
       </div>

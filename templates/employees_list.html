@@ -7,18 +7,22 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0 fw-bold"><i class="bi bi-people-fill me-2 text-primary"></i>Employees Management</h2>
     <div class="d-flex gap-2">
+      {% if can_see_page('employees_import') %}
       <a href="{{ url_for('employees_import') }}" class="btn btn-outline-secondary shadow-sm">
         <i class="bi bi-upload me-1"></i>Import Excel
       </a>
+      {% endif %}
       <a href="{{ url_for('employees_export', search=search) }}" class="btn btn-outline-secondary shadow-sm">
         <i class="bi bi-download me-1"></i>Export Excel
       </a>
       <a href="{{ url_for('employees_print', search=search) }}" target="_blank" class="btn btn-outline-primary shadow-sm">
         <i class="bi bi-printer me-1"></i>Print / PDF
       </a>
+      {% if can_see_page('employees_add') %}
       <a href="{{ url_for('employee_form') }}" class="btn btn-success shadow-sm">
         <i class="bi bi-plus-circle me-1"></i>Add New Employee
       </a>
+      {% endif %}
     </div>
   </div>
 
@@ -102,9 +106,19 @@
                   <a href="{{ url_for('employee_profile_print', id=emp.id) }}" class="btn btn-sm btn-info" title="View Profile" target="_blank">
                     <i class="bi bi-eye"></i>
                   </a>
+                  {% if can_see_page('employees_edit') %}
                   <a href="{{ url_for('employee_form', id=emp.id) }}" class="btn btn-sm btn-warning" title="Edit">
                     <i class="bi bi-pencil-square"></i>
                   </a>
+                  {% endif %}
+                  {% if can_see_page('employees_delete') %}
+                  <form method="POST" action="{{ url_for('employee_delete', id=emp.id) }}" class="d-inline" onsubmit="return confirm('Ye employee record delete karna hai? Is ka user, attendance waghera aap alag se handle karein.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                  {% endif %}
                 </div>
               </td>
             </tr>
@@ -113,7 +127,7 @@
               <td colspan="11" class="text-center py-5">
                 <div class="text-muted">
                   <i class="bi bi-people-fill fs-1 d-block mb-3 opacity-25"></i>
-                  <p>No employees found. <a href="{{ url_for('employee_form') }}" class="fw-bold">Add a new employee now</a>.</p>
+                  <p>No employees found.{% if can_see_page('employees_add') %} <a href="{{ url_for('employee_form') }}" class="fw-bold">Add a new employee now</a>.{% endif %}</p>
                 </div>
               </td>
             </tr>

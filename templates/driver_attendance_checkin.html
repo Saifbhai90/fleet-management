@@ -21,6 +21,7 @@
   .gps-attendance-page .btn-mark:disabled { box-shadow: none; }
   .gps-attendance-page .step-num { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; font-size: 0.7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; }
   .gps-attendance-page .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.4rem; }
+.gps-attendance-page.auto-locking .field-row { opacity: 0; pointer-events: none; }
 </style>
 
 <div class="container-fluid gps-attendance-page">
@@ -70,10 +71,17 @@
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">5</span>Shift</label>
+              {% set allowed_shifts = session.get('allowed_shifts') or [] %}
               <select id="shiftSelect" class="form-select form-select-sm select2-enable" disabled data-placeholder="Search shift...">
                 <option value="">-- Select Shift --</option>
-                <option value="Morning">Morning</option>
-                <option value="Night">Night</option>
+                {% if not allowed_shifts %}
+                  <option value="Morning">Morning</option>
+                  <option value="Night">Night</option>
+                {% else %}
+                  {% for s in allowed_shifts %}
+                  <option value="{{ s }}">{{ s }}</option>
+                  {% endfor %}
+                {% endif %}
               </select>
             </div>
             <div class="col-md-6 field-row">
@@ -188,6 +196,12 @@
   var stream = null;
   var vehiclesData = [];
   var timeWindow = {};
+  var userScope = {
+    projects: {{ (session.get('allowed_projects') or []) | tojson }},
+    districts: {{ (session.get('allowed_districts') or []) | tojson }},
+    vehicles: {{ (session.get('allowed_vehicles') or []) | tojson }},
+    shifts: {{ (session.get('allowed_shifts') or []) | tojson }}
+  };
 
   function initSelect2For(el, placeholder) {
     if (!el || typeof $ === 'undefined' || !$.fn.select2) return;
@@ -308,6 +322,74 @@
     attachDistrictProjectHandlers();
   }
 
+  // Auto-select & lock sirf single-scope user (1 district, 1 project, 1 vehicle, 1 shift)
+  function autoLockScopeIfSingle() {
+    var page = document.querySelector('.gps-attendance-page');
+    var dIds = userScope.districts || [];
+    var pIds = userScope.projects || [];
+    var vIds = userScope.vehicles || [];
+    var sVals = userScope.shifts || [];
+    var hasSingle = dIds.length === 1 && pIds.length === 1 && vIds.length === 1 && sVals.length === 1;
+    if (!hasSingle) {
+      // Multi-scope users ke liye kabhi bhi auto-locking class active na rahe
+      if (page) page.classList.remove('auto-locking');
+      return;
+    }
+    if (page) page.classList.add('auto-locking');
+    // 1) District
+    var dId = String(dIds[0]);
+    districtSelect.value = dId;
+    districtSelect.disabled = true;
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+      $(districtSelect).trigger('change.select2');
+    }
+    // 2) Project (load via API then select)
+    fetch('{{ url_for("api_attendance_projects") }}?district_id=' + encodeURIComponent(dId))
+      .then(function(r) { return r.json(); })
+      .then(function(projects) {
+        projectSelect.innerHTML = '<option value="">-- Select Project --</option>';
+        projects.forEach(function(p) {
+          var o = document.createElement('option');
+          o.value = p.id;
+          o.textContent = p.name;
+          projectSelect.appendChild(o);
+        });
+        projectSelect.value = String(pIds[0] || '');
+        projectSelect.disabled = true;
+        initSelect2For(projectSelect, 'Search project...');
+        // 3) Vehicles
+        var projId = projectSelect.value;
+        return fetch('{{ url_for("api_attendance_vehicles") }}?project_id=' + encodeURIComponent(projId) + '&district_id=' + encodeURIComponent(dId));
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(vehicles) {
+        vehiclesData = vehicles;
+        vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
+        vehicles.forEach(function(v, idx) {
+          var o = document.createElement('option');
+          o.value = v.id;
+          o.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+          o.dataset.index = String(idx);
+          vehicleSelect.appendChild(o);
+        });
+        vehicleSelect.value = String(vIds[0] || '');
+        vehicleSelect.disabled = true;
+        initSelect2For(vehicleSelect, 'Search vehicle...');
+        // 4) Shift pehle set karein taa ke drivers load ho saken
+        shiftSelect.value = String(sVals[0] || '');
+        shiftSelect.disabled = true;
+        if (typeof $ !== 'undefined' && $.fn.select2) {
+          $(shiftSelect).trigger('change.select2');
+        }
+        // Ab vehicle change handler se parking + driver dono load honge
+        onVehicleChange();
+        if (page) page.classList.remove('auto-locking');
+      })
+      .catch(function() {
+        if (page) page.classList.remove('auto-locking');
+      });
+  }
+
   function onProjectChange() {
     var id = projectSelect.value;
     if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
@@ -380,7 +462,7 @@
       var vehicleDriverId = null;
       var vOpt = vehicleSelect.options[vehicleSelect.selectedIndex];
       if (vOpt && vOpt.value && vehiclesData[parseInt(vOpt.dataset.index, 10)]) vehicleDriverId = vehiclesData[parseInt(vOpt.dataset.index, 10)].driver_id;
-      arr.forEach(function(d) {
+      arr.forEach(function(d, idx) {
         var o = document.createElement('option');
         o.value = d.id;
         o.textContent = d.name + ' (' + d.driver_id + ')';
@@ -388,7 +470,20 @@
         if (d.id === vehicleDriverId) o.selected = true;
         driverSelect.appendChild(o);
       });
+      // Agar abhi tak driver select nahi hua aur kam az kam 1 hai to first ko auto select karein
+      if (!driverSelect.value && arr.length > 0) {
+        driverSelect.value = String(arr[0].id);
+      }
+      // Agar user ka scope single hai to driver dropdown ko bhi lock kar dein
+      var isSingleScope = (userScope.projects.length === 1 && userScope.districts.length === 1 && userScope.vehicles.length === 1 && userScope.shifts.length === 1);
+      if (isSingleScope) {
+        driverSelect.disabled = true;
+      }
       initSelect2For(driverSelect, 'Search driver...');
+      // Select2 UI ko bhi sync karo taa ke user ko selected driver nazar aaye
+      if (typeof $ !== 'undefined' && $.fn.select2 && driverSelect.value) {
+        $(driverSelect).val(driverSelect.value).trigger('change.select2');
+      }
       if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
     });
   }
@@ -443,6 +538,8 @@
 
   btnRetryLocation.addEventListener('click', fetchLocation);
   fetch('{{ url_for("api_attendance_time_window") }}').then(function(r) { return r.json(); }).then(function(data) { timeWindow = data || {}; }).catch(function() { timeWindow = {}; });
+  // Initialize auto-lock after DOM setup
+  autoLockScopeIfSingle();
 
   function stopCamera() {
     if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }

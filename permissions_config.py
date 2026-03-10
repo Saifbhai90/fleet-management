@@ -45,6 +45,13 @@ PERMISSION_TREE = {
         ('employees_list', 'Employees – List / View'),
         ('employees_add', 'Employees – Add New'),
         ('employees_edit', 'Employees – Edit'),
+        ('vehicles_import', 'Vehicles – Import'),
+        ('drivers_import', 'Drivers – Import'),
+        ('employees_import', 'Employees – Import'),
+        ('parking_import', 'Parking Stations – Import'),
+        ('party_import', 'Parties – Import'),
+        ('product_import', 'Products – Import'),
+        ('employees_delete', 'Employees – Delete'),
         ('driver_post_list', 'Designations – List / View'),
         ('driver_post_add', 'Designations – Add New'),
         ('driver_post_edit', 'Designations – Edit'),
@@ -203,6 +210,7 @@ PERMISSION_TREE = {
         ('user_list', 'Users – List / Sync'),
         ('user_add', 'Users – Add'),
         ('user_edit', 'Users – Edit'),
+        ('user_delete', 'Users – Delete'),
         ('role_list', 'Roles – List'),
         ('role_add', 'Roles – Add'),
         ('role_edit', 'Roles – Edit'),
@@ -228,6 +236,40 @@ SECTION_LABELS = {
     PERMISSION_USERS_MANAGE: 'Administration',
 }
 
+# Section "full" permission code -> SECTION_PAGE_GROUPS key (for login expansion)
+SECTION_FULL_TO_GROUP = {
+    'dashboard': PERMISSION_DASHBOARD,
+    'master': PERMISSION_MASTER,
+    'assignment': PERMISSION_ASSIGNMENT,
+    'transfer': PERMISSION_TRANSFER,
+    'driver_status': PERMISSION_DRIVER_STATUS,
+    'driver_attendance': PERMISSION_ATTENDANCE,
+    'expenses': PERMISSION_EXPENSES,
+    'accounts': PERMISSION_ACCOUNTS,
+    'reports': PERMISSION_REPORTS,
+    'backup': PERMISSION_BACKUP,
+    'users_manage': PERMISSION_USERS_MANAGE,
+}
+
+
+def expand_login_permissions(perm_codes):
+    """
+    When a user has a section-level "full" code (e.g. 'assignment'), add all
+    granular permission codes from that section so they can access pages and
+    assign those permissions to other roles. Returns expanded list (no duplicates).
+    """
+    if not perm_codes:
+        return list(perm_codes) if perm_codes else []
+    codes = set(perm_codes)
+    for section_full, section_key in SECTION_FULL_TO_GROUP.items():
+        if section_full not in codes:
+            continue
+        for _page_label, items in SECTION_PAGE_GROUPS.get(section_key, []):
+            for code, _name in items:
+                codes.add(code)
+    return list(codes)
+
+
 # Permission code -> list of required permission codes (e.g. Add New requires List/View so user doesn't get error)
 PERMISSION_DEPENDENCIES = {
     'companies_add': ['companies_list'],
@@ -252,6 +294,13 @@ PERMISSION_DEPENDENCIES = {
     'drivers_delete': ['drivers_list'],
     'employees_add': ['employees_list'],
     'employees_edit': ['employees_list'],
+    'employees_delete': ['employees_list'],
+    'vehicles_import': ['vehicles_list'],
+    'drivers_import': ['drivers_list'],
+    'employees_import': ['employees_list'],
+    'parking_import': ['parking_list'],
+    'party_import': ['party_list'],
+    'product_import': ['product_list'],
     'driver_post_add': ['driver_post_list'],
     'driver_post_edit': ['driver_post_list'],
     'driver_post_delete': ['driver_post_list'],
@@ -344,6 +393,7 @@ PERMISSION_DEPENDENCIES = {
     'task_report_logbook': ['task_report'],
     'user_add': ['user_list'],
     'user_edit': ['user_list'],
+    'user_delete': ['user_list'],
     'role_add': ['role_list'],
     'role_edit': ['role_list'],
     'notification_add': ['notification_list'],
@@ -381,12 +431,14 @@ SECTION_PAGE_GROUPS = {
             ('vehicles_add', 'Add New'),
             ('vehicles_edit', 'Edit'),
             ('vehicles_delete', 'Delete'),
+            ('vehicles_import', 'Import'),
         ]),
         ('Parking Stations', [
             ('parking_list', 'List / View'),
             ('parking_add', 'Add New'),
             ('parking_edit', 'Edit'),
             ('parking_delete', 'Delete'),
+            ('parking_import', 'Import'),
         ]),
         ('Designations', [
             ('driver_post_list', 'List / View'),
@@ -398,24 +450,29 @@ SECTION_PAGE_GROUPS = {
             ('employees_list', 'List / View'),
             ('employees_add', 'Add New'),
             ('employees_edit', 'Edit'),
+            ('employees_delete', 'Delete'),
+            ('employees_import', 'Import'),
         ]),
         ('Drivers', [
             ('drivers_list', 'List / View'),
             ('drivers_add', 'Add New'),
             ('drivers_edit', 'Edit'),
             ('drivers_delete', 'Delete'),
+            ('drivers_import', 'Import'),
         ]),
         ('Parties', [
             ('party_list', 'List / View'),
             ('party_add', 'Add New'),
             ('party_edit', 'Edit'),
             ('party_delete', 'Delete'),
+            ('party_import', 'Import'),
         ]),
         ('Products', [
             ('product_list', 'List / View'),
             ('product_add', 'Add New'),
             ('product_edit', 'Edit'),
             ('product_delete', 'Delete'),
+            ('product_import', 'Import'),
         ]),
     ],
     PERMISSION_ASSIGNMENT: [
@@ -599,6 +656,7 @@ SECTION_PAGE_GROUPS = {
             ('user_list', 'List / Sync'),
             ('user_add', 'Add'),
             ('user_edit', 'Edit'),
+            ('user_delete', 'Delete'),
         ]),
         ('Roles', [
             ('role_list', 'List'),
@@ -621,6 +679,10 @@ PAGE_VISIBLE = {
     'companies': ['master', 'companies_list', 'companies_add', 'companies_edit', 'companies_delete', 'company_report'],
     'projects': ['master', 'projects_list', 'projects_add', 'project_detail'],
     # Per-action visibility keys for use in templates (buttons on list screens)
+    'companies_add': ['companies_add'],
+    'companies_edit': ['companies_edit'],
+    'companies_delete': ['companies_delete'],
+    'company_report': ['company_report'],
     'projects_add': ['projects_add'],
     'projects_edit': ['projects_edit'],
     'projects_delete': ['projects_delete'],
@@ -629,22 +691,72 @@ PAGE_VISIBLE = {
     'parking': ['master', 'parking_list', 'parking_add'],
     'drivers': ['master', 'drivers_list', 'drivers_add'],
     'employees': ['master', 'employees_list', 'employees_add'],
+    'employees_add': ['employees_add'],
+    'employees_edit': ['employees_edit'],
+    'employees_delete': ['employees_delete'],
     'driver_post': ['master', 'driver_post_list', 'driver_post_add'],
+    'driver_post_add': ['driver_post_add'],
+    'driver_post_edit': ['driver_post_edit'],
+    'driver_post_delete': ['driver_post_delete'],
     'party': ['master', 'party_list', 'party_add'],
     'product': ['master', 'product_list', 'product_add'],
-    # Assignments
+    # Per-action visibility keys for list buttons (Add/Edit/Delete/etc.)
+    'districts_add': ['districts_add'],
+    'districts_edit': ['districts_edit'],
+    'districts_delete': ['districts_delete'],
+    'vehicles_add': ['vehicles_add'],
+    'vehicles_edit': ['vehicles_edit'],
+    'vehicles_delete': ['vehicles_delete'],
+    'parking_add': ['parking_add'],
+    'parking_edit': ['parking_edit'],
+    'parking_delete': ['parking_delete'],
+    'drivers_add': ['drivers_add'],
+    'drivers_edit': ['drivers_edit'],
+    'drivers_delete': ['drivers_delete'],
+    # Per-action visibility keys for Import buttons
+    'vehicles_import': ['vehicles_import'],
+    'drivers_import': ['drivers_import'],
+    'employees_import': ['employees_import'],
+    'parking_import': ['parking_import'],
+    'party_import': ['party_import'],
+    'product_import': ['product_import'],
+    # Assignments (sidebar links)
     'assign_project_to_company': ['assignment', 'assign_project_to_company'],
     'assign_project_to_district': ['assignment', 'assign_project_to_district'],
     'assign_vehicle_to_district': ['assignment', 'assign_vehicle_to_district'],
     'assign_vehicle_to_parking': ['assignment', 'assign_vehicle_to_parking'],
     'assign_driver_to_vehicle': ['assignment', 'assign_driver_to_vehicle'],
+    # Assignments – per-action buttons on list screens
+    'assign_project_to_company_add': ['assign_project_to_company_add'],
+    'assign_project_to_company_edit': ['assign_project_to_company_edit'],
+    'assign_project_to_company_desassign': ['assign_project_to_company_desassign'],
+    'assign_project_to_district_add': ['assign_project_to_district_add'],
+    'assign_project_to_district_edit': ['assign_project_to_district_edit'],
+    'assign_project_to_district_desassign': ['assign_project_to_district_desassign'],
+    'assign_vehicle_to_district_add': ['assign_vehicle_to_district_add'],
+    'assign_vehicle_to_district_edit': ['assign_vehicle_to_district_edit'],
+    'assign_vehicle_to_district_desassign': ['assign_vehicle_to_district_desassign'],
+    'assign_vehicle_to_parking_add': ['assign_vehicle_to_parking_add'],
+    'assign_vehicle_to_parking_edit': ['assign_vehicle_to_parking_edit'],
+    'assign_vehicle_to_parking_desassign': ['assign_vehicle_to_parking_desassign'],
+    'assign_driver_to_vehicle_add': ['assign_driver_to_vehicle_add'],
+    'assign_driver_to_vehicle_edit': ['assign_driver_to_vehicle_edit'],
+    'assign_driver_to_vehicle_desassign': ['assign_driver_to_vehicle_desassign'],
     # Transfers
     'project_transfers': ['transfer', 'project_transfers'],
     'vehicle_transfers': ['transfer', 'vehicle_transfers'],
+    'vehicle_transfers_add': ['vehicle_transfers_add'],
+    'vehicle_transfers_edit': ['vehicle_transfers_edit'],
+    'vehicle_transfers_delete': ['vehicle_transfers_delete'],
     'driver_transfers': ['transfer', 'driver_transfers'],
+    'driver_transfers_add': ['driver_transfers_add'],
+    'driver_transfers_edit': ['driver_transfers_edit'],
+    'driver_transfers_delete': ['driver_transfers_delete'],
     # Workforce
-    'driver_job_left': ['driver_status', 'driver_job_left'],
-    'driver_rejoin': ['driver_status', 'driver_rejoin'],
+    'driver_job_left': ['driver_status', 'driver_job_left', 'driver_job_left_list'],
+    'driver_job_left_add': ['driver_job_left'],
+    'driver_rejoin': ['driver_status', 'driver_rejoin', 'driver_rejoin_list'],
+    'driver_rejoin_add': ['driver_rejoin'],
     'penalty_record': ['driver_status', 'penalty_record'],
     # Attendance
     'driver_attendance_checkin': ['attendance', 'driver_attendance', 'driver_attendance_checkin'],

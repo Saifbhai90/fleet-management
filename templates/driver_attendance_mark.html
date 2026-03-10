@@ -83,10 +83,17 @@
         </div>
         <div class="col-6 col-md-4 col-lg-3">
           <label class="form-label">Shift</label>
+          {% set allowed_shifts = session.get('allowed_shifts') or [] %}
           <select id="shiftSelect" class="form-select select2-enable" data-placeholder="Shift">
             <option value="" {% if not shift %}selected{% endif %}>All</option>
+            {% if not allowed_shifts %}
             <option value="Morning" {% if shift == 'Morning' %}selected{% endif %}>Morning</option>
             <option value="Night" {% if shift == 'Night' %}selected{% endif %}>Night</option>
+            {% else %}
+            {% for s in allowed_shifts %}
+            <option value="{{ s }}" {% if shift == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+            {% endif %}
           </select>
         </div>
         <div class="col-6 col-md-4 col-lg-3">
@@ -255,6 +262,25 @@
   var hiddenVehicleId = document.getElementById('hiddenVehicleId');
   var hiddenShift = document.getElementById('hiddenShift');
   var hiddenDriverId = document.getElementById('hiddenDriverId');
+
+  var scope = {
+    projects: {{ (session.get('allowed_projects') or []) | tojson }},
+    districts: {{ (session.get('allowed_districts') or []) | tojson }},
+    vehicles: {{ (session.get('allowed_vehicles') or []) | tojson }},
+    shifts: {{ (session.get('allowed_shifts') or []) | tojson }}
+  };
+  var hasSingle = scope.projects.length === 1 && scope.districts.length === 1 && scope.vehicles.length === 1 && scope.shifts.length === 1;
+  if (hasSingle && projectSelect && districtSelect && vehicleSelect && shiftSelect) {
+    projectSelect.value = String(scope.projects[0]);
+    projectSelect.disabled = true;
+    districtSelect.value = String(scope.districts[0]);
+    districtSelect.disabled = true;
+    vehicleSelect.value = String(scope.vehicles[0]);
+    vehicleSelect.disabled = true;
+    shiftSelect.value = String(scope.shifts[0]);
+    shiftSelect.disabled = true;
+    syncHiddenFromSelects();
+  }
 
   function syncHiddenFromSelects() {
     if (hiddenProjectId && projectSelect) hiddenProjectId.value = projectSelect.value || '0';

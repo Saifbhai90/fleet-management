@@ -73,6 +73,10 @@
     .search-input:focus { border-color: #dc3545; box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1); }
 </style>
 
+<!-- DataTables CSS for export/print -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+
 <div class="page-container">
     <!-- Header Section -->
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
@@ -80,28 +84,76 @@
             <h3 class="fw-bold text-dark mb-0">Driver Job Left <span class="text-danger">History</span></h3>
             <p class="text-muted small mb-0">Audited list of drivers who have officially left the organization.</p>
         </div>
+        {% if can_see_page('driver_job_left_add') %}
         <a href="{{ url_for('driver_job_left_new') }}" class="btn btn-danger shadow-sm px-4">
             <i class="bi bi-plus-circle me-2"></i>Mark New Record
         </a>
+        {% endif %}
     </div>
 
-    <!-- Stats & Search Bar -->
-    <div class="row mb-3 align-items-center">
-        <div class="col-md-6">
-            <div class="search-container">
-                <i class="bi bi-search"></i>
-                <input type="text" id="tableSearch" class="form-control search-input shadow-sm" placeholder="Search name, date, or ID...">
+    <!-- Stats & Filters (single row) -->
+    <form method="GET" class="d-flex flex-wrap align-items-end gap-2 mb-3">
+        <div class="flex-grow-0" style="min-width: 170px;">
+            <label class="form-label small text-muted mb-1">From Date</label>
+            <input
+                type="text"
+                id="from_date_filter"
+                name="from_date"
+                class="form-control form-control-sm datepicker"
+                placeholder="dd-mm-yyyy"
+                value="{{ from_date or '' }}"
+            >
+        </div>
+        <div class="flex-grow-0" style="min-width: 170px;">
+            <label class="form-label small text-muted mb-1">To Date</label>
+            <input
+                type="text"
+                id="to_date_filter"
+                name="to_date"
+                class="form-control form-control-sm datepicker"
+                placeholder="dd-mm-yyyy"
+                value="{{ to_date or '' }}"
+            >
+        </div>
+        <div class="flex-grow-0" style="min-width: 180px;">
+            <label class="form-label small text-muted mb-1">Project</label>
+            <select name="project_id" class="form-select form-select-sm">
+                {% for val, label in project_choices %}
+                <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex-grow-0" style="min-width: 180px;">
+            <label class="form-label small text-muted mb-1">District</label>
+            <select name="district_id" class="form-select form-select-sm">
+                {% for val, label in district_choices %}
+                <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex-grow-1" style="min-width: 220px;">
+            <label class="form-label small text-muted mb-1">Search</label>
+            <div class="d-flex gap-2">
+                <input type="text" name="q" class="form-control form-control-sm" placeholder="Name, ID, project, district..." value="{{ q or '' }}">
+                <button type="submit" class="btn btn-danger btn-sm">Apply</button>
+                {% if q or project_id or district_id or from_date or to_date %}
+                <a href="{{ url_for('driver_job_left_list') }}" class="btn btn-outline-secondary btn-sm">Clear</a>
+                {% endif %}
             </div>
         </div>
-        <div class="col-md-6 text-md-end mt-2 mt-md-0">
+        <div class="ms-auto">
             <span class="badge bg-white text-dark border py-2 px-3 shadow-sm rounded-pill">
                 <span class="text-muted me-1">Total Archived:</span> <strong>{{ records|length }}</strong>
             </span>
         </div>
-    </div>
+    </form>
 
     <!-- Main Table -->
     <div class="custom-card shadow-sm">
+        <!-- Export / Print Buttons (right aligned) -->
+        <div class="d-flex justify-content-end align-items-center px-3 pt-2">
+            <div id="exportButtonsArea"></div>
+        </div>
         <div class="table-responsive">
             <table class="table align-middle mb-0" id="mainTable">
                 <thead>
@@ -166,16 +218,71 @@
     </div>
 </div>
 
+<!-- DataTables & Buttons scripts -->
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
 <script>
-    // Live Search Functionality
-    document.getElementById('tableSearch').addEventListener('keyup', function() {
-        let value = this.value.toLowerCase();
-        let rows = document.querySelectorAll('#mainTable tbody tr');
-        
-        rows.forEach(row => {
-            let rowText = row.innerText.toLowerCase();
-            row.style.display = rowText.includes(value) ? '' : 'none';
+    $(document).ready(function () {
+        var table = $('#mainTable').DataTable({
+            pageLength: 25,
+            searching: false, // filters upar wale form se aa rahe hain
+            order: [[0, 'desc']],
+            dom: 'rt<"d-flex justify-content-between align-items-center p-2"ip>',
+            buttons: [
+                {
+                    extend: 'excelHtml5',
+                    text: '<i class="bi bi-file-earmark-excel me-1"></i> Excel',
+                    className: 'btn btn-success btn-sm'
+                },
+                {
+                    extend: 'print',
+                    text: '<i class="bi bi-printer me-1"></i> Print / Preview',
+                    className: 'btn btn-secondary btn-sm',
+                    autoPrint: false,
+                    customize: function (win) {
+                        var $body = $(win.document.body);
+                        $body.css('font-family', '"Segoe UI", Tahoma, sans-serif');
+                        $body.css('padding', '20px');
+
+                        // Title styling
+                        $body.find('h1').css({
+                            'font-size': '20px',
+                            'margin-bottom': '10px',
+                            'text-align': 'left'
+                        });
+
+                        // Add custom print button on top of preview
+                        var $toolbar = $('<div style="display:flex; justify-content:flex-end; margin-bottom:10px;"></div>');
+                        var $printBtn = $('<button style="padding:6px 12px; border-radius:4px; border:1px solid #333; background:#333; color:white; font-size:12px;">Print</button>');
+                        $printBtn.on('click', function () { win.print(); });
+                        $toolbar.append($printBtn);
+                        $body.prepend($toolbar);
+
+                        // Make table look clean for print
+                        var $table = $body.find('table');
+                        $table.addClass('table table-sm');
+                        $table.css({
+                            'border-collapse': 'collapse',
+                            'width': '100%',
+                            'font-size': '12px'
+                        });
+                        $table.find('th, td').css({
+                            'border': '1px solid #ccc',
+                            'padding': '4px 6px'
+                        });
+                    }
+                }
+            ]
         });
+
+        // Move buttons into custom container on the right
+        table.buttons().container().appendTo('#exportButtonsArea');
     });
 </script>
 {% endblock %}

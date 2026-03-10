@@ -44,19 +44,51 @@
 <div class="container-fluid py-4 px-lg-5">
   
   <!-- Page Header -->
-  <div class="row align-items-center mb-4">
+  <div class="row align-items-center mb-3">
     <div class="col-md-7">
       <h2 class="fw-bold text-dark mb-1">Driver Transfers</h2>
       <p class="text-muted mb-0">Monitor driver re-assignments, vehicle changes, and shift movements.</p>
     </div>
     <div class="col-md-5 text-md-end mt-3 mt-md-0">
       <div class="d-inline-flex gap-2">
+        {% if can_see_page('driver_transfers_add') %}
         <a href="{{ url_for('driver_transfer_new') }}" class="btn btn-warning fw-bold px-4 shadow-sm border-0 py-2" style="border-radius: 12px;">
           <i class="bi bi-person-plus-fill me-2"></i> New Transfer
         </a>
+        {% endif %}
       </div>
     </div>
   </div>
+
+  <!-- Filters: Project, District, Search -->
+  <form method="GET" class="row g-2 align-items-end mb-3">
+    <div class="col-md-3">
+      <label class="form-label small text-muted mb-0">Project</label>
+      <select name="project_id" class="form-select form-select-sm">
+        {% for val, label in project_choices %}
+        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small text-muted mb-0">District</label>
+      <select name="district_id" class="form-select form-select-sm">
+        {% for val, label in district_choices %}
+        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label small text-muted mb-0">Search</label>
+      <input type="text" name="q" class="form-control form-control-sm" placeholder="Driver, Vehicle, Project, District, Date, Remarks..." value="{{ q or '' }}">
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+      <button type="submit" class="btn btn-dark btn-sm w-100">Apply</button>
+      {% if q or project_id or district_id %}
+      <a href="{{ url_for('driver_transfers') }}" class="btn btn-outline-secondary btn-sm w-100">Clear</a>
+      {% endif %}
+    </div>
+  </form>
 
   <!-- Main Table Card -->
   <div class="card table-card bg-white">
@@ -169,11 +201,14 @@
             <!-- Actions -->
             <td class="text-end pe-4">
                 <div class="d-flex justify-content-end gap-2">
+                    {% if can_see_page('driver_transfers_delete') %}
                     <form action="{{ url_for('driver_transfer_delete', id=t.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this transfer record permanently?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn-action btn-delete text-danger shadow-sm" title="Delete">
                             <i class="bi bi-trash3"></i>
                         </button>
                     </form>
+                    {% endif %}
                 </div>
             </td>
           </tr>
@@ -201,13 +236,14 @@
     var table = $('#transferTable').DataTable({
       "pageLength": 10,
       "order": [[2, "desc"]], // Newest transfers first
-      "dom": '<"d-flex justify-content-between align-items-center p-3"fB>rt<"d-flex justify-content-between align-items-center p-3"ip>',
+      // Upar custom filter form use ho raha hai, DataTables ka search hide
+      "searching": false,
+      "dom": '<"d-flex justify-content-between align-items-center p-3"B>rt<"d-flex justify-content-between align-items-center p-3"ip>',
       "buttons": [
         { extend: 'excelHtml5', text: '<i class="bi bi-file-earmark-excel me-1"></i> Excel', className: 'btn-success btn-sm' },
         { extend: 'pdfHtml5', text: '<i class="bi bi-file-earmark-pdf me-1"></i> PDF', className: 'btn-danger btn-sm' },
         { extend: 'print', text: '<i class="bi bi-printer me-1"></i> Print', className: 'btn-info btn-sm text-white' }
-      ],
-      "language": { "search": "", "searchPlaceholder": "Search driver or project..." }
+      ]
     });
     table.buttons().container().appendTo('#exportButtonsArea');
   });

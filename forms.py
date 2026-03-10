@@ -293,32 +293,66 @@ class AssignDriverToVehicleForm(FlaskForm):
     
     submit = SubmitField('Finalize Driver Assignment')
 
+    def validate_assign_date(self, field):
+        """Future date par driver assignment allow na karein."""
+        if field.data and field.data > date.today():
+            raise ValidationError('Assignment date cannot be in the future.')
+
 
 class ProjectTransferForm(FlaskForm):
     project_id = SelectField('Select Project to Transfer', coerce=int, validators=[DataRequired(message='Please select a project.')], choices=[])
     new_company_id = SelectField('Transfer to New Company', coerce=int, validators=[DataRequired(message='Please select a company.')], choices=[])
-    transfer_date = DateField('Transfer Date', format='%Y-%m-%d', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
+    transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
     remarks = TextAreaField('Transfer Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Confirm Transfer')
 
 class VehicleTransferForm(FlaskForm):
-    from_project_id = SelectField('From Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')])
-    from_district_id = SelectField('From District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')])
+    from_project_id = SelectField(
+        'From Project',
+        coerce=int,
+        validators=[
+            DataRequired(message='Please select project.'),
+            NumberRange(min=1, message='Please select project.')
+        ],
+        choices=[(0, '-- Select Project --')]
+    )
+    from_district_id = SelectField(
+        'From District',
+        coerce=int,
+        validators=[
+            DataRequired(message='Please select district.'),
+            NumberRange(min=1, message='Please select district.')
+        ],
+        choices=[(0, '-- Select District --')]
+    )
     vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired(message='Please select vehicle.'), NumberRange(min=1, message='Please select a vehicle.')], choices=[(0, '-- Select Vehicle --')])
     
     new_project_id = SelectField('Transfer to Project', coerce=int, validators=[DataRequired(message='Please select new project.'), NumberRange(min=1, message='Please select new project.')], choices=[(0, '-- Select Project --')])
     new_district_id = SelectField('Transfer to District', coerce=int, validators=[DataRequired(message='Please select new district.'), NumberRange(min=1, message='Please select new district.')], choices=[(0, '-- Select District --')])
-    new_parking_id = SelectField('Transfer to Parking (Optional)', coerce=int, validators=[Optional()], choices=[(0, '-- No Parking --')])
+    new_parking_id = SelectField(
+        'Transfer to Parking',
+        coerce=int,
+        validators=[
+            DataRequired(message='Please select parking.'),
+            NumberRange(min=1, message='Please select parking.')
+        ],
+        choices=[(0, '-- Select Parking --')]
+    )
     
-    transfer_date = DateField('Transfer Date', format='%Y-%m-%d', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
+    transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
     remarks = TextAreaField('Transfer Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Confirm Transfer')
+
+    def validate_transfer_date(self, field):
+        """Future date par vehicle transfer allow na karein."""
+        if field.data and field.data > date.today():
+            raise ValidationError('Transfer date cannot be in the future.')
 
 class EditVehicleTransferForm(FlaskForm):
     new_project_id = SelectField('Transfer to Project', coerce=int, validators=[DataRequired(message='Please select new project.'), NumberRange(min=1, message='Please select new project.')], choices=[(0, '-- Select Project --')])
     new_district_id = SelectField('Transfer to District', coerce=int, validators=[DataRequired(message='Please select new district.'), NumberRange(min=1, message='Please select new district.')], choices=[(0, '-- Select District --')])
     new_parking_id = SelectField('Transfer to Parking (Optional)', coerce=int, validators=[Optional()], choices=[(0, '-- No Parking --')])
-    transfer_date = DateField('Transfer Date', format='%Y-%m-%d', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
+    transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
     remarks = TextAreaField('Transfer Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Update Transfer')
 
@@ -334,9 +368,14 @@ class DriverTransferForm(FlaskForm):
     new_vehicle_id = SelectField('Transfer to Vehicle', coerce=int, validators=[DataRequired()])
     new_shift = SelectField('Select Shift', choices=[('', '-- Select Shift --')], validators=[DataRequired()])
     
-    transfer_date = DateField('Transfer Date', format='%Y-%m-%d', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
+    transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
     remarks = TextAreaField('Transfer Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Confirm Transfer')
+
+    def validate_transfer_date(self, field):
+        """Future date par transfer allow na karein."""
+        if field.data and field.data > date.today():
+            raise ValidationError('Transfer date cannot be in the future.')
 
 class DriverJobLeftForm(FlaskForm):
     project_id = SelectField('Select Project', coerce=int, validators=[DataRequired(message='Please select project.')])
@@ -360,15 +399,22 @@ class DriverJobLeftForm(FlaskForm):
     other_reason = StringField('Other Reason (if selected)', 
                                validators=[Optional(), Length(max=200)])
     
-    leave_date = DateField('Leave Date', 
-                           format='%Y-%m-%d', 
-                           validators=[DataRequired(message='Please select leave date.')],
-                           render_kw={'placeholder': 'Select date'})
+    leave_date = DateField(
+        'Leave Date',
+        format='%d-%m-%Y',
+        validators=[DataRequired(message='Please select leave date.')],
+        render_kw={'placeholder': 'Select date', 'class': 'form-control datepicker'}
+    )
     
     remarks = TextAreaField('Remarks (Optional)', 
                             validators=[Optional(), Length(max=500)])
     
     submit = SubmitField('Confirm Job Left')
+
+    def validate_leave_date(self, field):
+        """Future date par driver job left allow na karein."""
+        if field.data and field.data > date.today():
+            raise ValidationError('Leave date cannot be in the future.')
 
 class DriverRejoinForm(FlaskForm):
     driver_id = SelectField('Select Driver to Rejoin', coerce=int, validators=[DataRequired(message='Please select driver.')])
@@ -378,10 +424,20 @@ class DriverRejoinForm(FlaskForm):
     vehicle_id = SelectField('Vehicle', coerce=int, validators=[DataRequired(message='Please select vehicle.')])
     shift = SelectField('Shift', choices=[], validators=[DataRequired(message='Please select shift.')])  # dynamic
     
-    rejoin_date = DateField('Rejoin Date', format='%Y-%m-%d', validators=[DataRequired(message='Please select rejoin date.')], render_kw={'placeholder': 'Select date'})
+    rejoin_date = DateField(
+        'Rejoin Date',
+        format='%d-%m-%Y',
+        validators=[DataRequired(message='Please select rejoin date.')],
+        render_kw={'placeholder': 'Select date', 'class': 'form-control datepicker'}
+    )
     remarks = TextAreaField('Rejoin Remarks', validators=[Optional()])
     
     submit = SubmitField('Confirm Rejoin')
+
+    def validate_rejoin_date(self, field):
+        """Future date par driver rejoin allow na karein."""
+        if field.data and field.data > date.today():
+            raise ValidationError('Rejoin date cannot be in the future.')
 
 
 # Driver Attendance (Leave / Late / Half Day / Off form — Present & Absent removed)
@@ -708,6 +764,8 @@ class EmployeeFormStep1(FlaskForm):
     ], render_kw={"placeholder": "32304-1111111-5"})
     district = StringField('District', validators=[DataRequired(), Length(max=100)], render_kw={"list": "districtOptions"})
     address = TextAreaField('Address', validators=[DataRequired()], render_kw={"rows": 2})
+    joining_date = DateField('Joining Date', format='%d-%m-%Y', validators=[DataRequired()],
+                             render_kw={"class": "form-control datepicker"})
 
 
 class EmployeeFormStep2(FlaskForm):
@@ -715,8 +773,6 @@ class EmployeeFormStep2(FlaskForm):
     phone1 = StringField('Phone No 1', validators=[DataRequired(), Length(max=20)], render_kw={"placeholder": "03xx-xxxxxxx"})
     phone2 = StringField('Phone No 2', validators=[DataRequired(), Length(max=20)], render_kw={"placeholder": "03xx-xxxxxxx"})
     email = StringField('Email', validators=[Optional(), Email(), Length(max=120)])
-    joining_date = DateField('Joining Date', format='%d-%m-%Y', validators=[DataRequired()],
-                             render_kw={"class": "form-control datepicker"})
     status = SelectField('Status', choices=[
         ('Active', 'Active'), ('Inactive', 'Inactive'), ('Left', 'Left'),
     ], default='Active', validators=[DataRequired()])

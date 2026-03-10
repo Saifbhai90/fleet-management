@@ -76,11 +76,21 @@
                 {% if u.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}
               </td>
               <td class="text-center pe-4">
-                {% if current_user_is_master or (not u.role or u.role.name not in ['Master', 'Admin']) %}
-                <a href="{{ url_for('user_edit', pk=u.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
-                {% else %}
-                <span class="text-muted small" title="Only Master can edit">—</span>
-                {% endif %}
+                <div class="btn-group">
+                  {% if current_user_is_master or (not u.role or u.role.name not in ['Master', 'Admin']) %}
+                  <a href="{{ url_for('user_edit', pk=u.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                  {% else %}
+                  <span class="text-muted small px-2" title="Only Master can edit">—</span>
+                  {% endif %}
+                  {% if can_see_page('user_delete') and (not u.role or u.role.name not in ['Master', 'Admin']) %}
+                  <form method="POST" action="{{ url_for('user_delete', pk=u.id) }}" class="d-inline" onsubmit="return confirm('Ye user delete karna hai? Is user ka linked employee/driver record as-it-is rahega.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                  {% endif %}
+                </div>
               </td>
             </tr>
             {% else %}

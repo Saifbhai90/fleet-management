@@ -6,10 +6,10 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-calendar-check me-2 text-primary"></i>Attendance List</h2>
     <div class="d-flex flex-wrap gap-2">
-      <a href="{{ url_for('driver_attendance_export') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-success btn-sm">
+      <a href="{{ url_for('driver_attendance_export') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-success btn-sm">
         <i class="bi bi-file-earmark-excel me-1"></i> Export to Excel
       </a>
-      <a href="{{ url_for('driver_attendance_print') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
+      <a href="{{ url_for('driver_attendance_print') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-printer me-1"></i> Print Preview
       </a>
       <a href="{{ url_for('driver_attendance_report') }}" class="btn btn-outline-info btn-sm">
@@ -20,59 +20,71 @@
 
   <div class="card shadow-sm border-0 rounded-3 mb-4">
     <div class="card-body">
-      <form method="GET" action="{{ url_for('driver_attendance_list') }}" id="filterForm" class="row g-3 align-items-end">
+      <form method="GET" action="{{ url_for('driver_attendance_list') }}" id="filterForm" class="mb-2">
         <input type="hidden" name="project_id" id="hiddenProjectId" value="{{ project_id or '0' }}">
         <input type="hidden" name="district_id" id="hiddenDistrictId" value="{{ district_id or '0' }}">
         <input type="hidden" name="vehicle_id" id="hiddenVehicleId" value="{{ vehicle_id or '0' }}">
         <input type="hidden" name="shift" id="hiddenShift" value="{{ shift or '' }}">
-        <div class="col-md-2">
-          <label class="form-label">Date</label>
-          <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
+
+        <!-- Row 1: Date range -->
+        <div class="row g-3 align-items-end mb-2">
+          <div class="col-md-3 col-lg-2">
+            <label class="form-label">From Date</label>
+            <input type="text" name="from_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ from_date or view_date.strftime('%d-%m-%Y') }}">
+          </div>
+          <div class="col-md-3 col-lg-2">
+            <label class="form-label">To Date</label>
+            <input type="text" name="to_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ to_date or view_date.strftime('%d-%m-%Y') }}">
+          </div>
         </div>
-        <div class="col-md-2">
-          <label class="form-label">Project</label>
-          <select id="projectSelect" class="form-select select2-enable" data-placeholder="Search project...">
-            <option value="0" {% if not project_id %}selected{% endif %}>All Projects</option>
-            {% for p in form.project_id.choices if p[0] != 0 %}
-              <option value="{{ p[0] }}" {% if project_id == p[0] %}selected{% endif %}>{{ p[1] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">District</label>
-          <select id="districtSelect" class="form-select select2-enable" data-placeholder="Search district...">
-            <option value="0" {% if not district_id %}selected{% endif %}>All Districts</option>
-            {% for d in form.district_id.choices if d[0] != 0 %}
-              <option value="{{ d[0] }}" {% if district_id == d[0] %}selected{% endif %}>{{ d[1] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Vehicle</label>
-          <select id="vehicleSelect" class="form-select select2-enable" data-placeholder="Search vehicle...">
-            <option value="0" {% if not vehicle_id %}selected{% endif %}>All Vehicles</option>
-            {% for v in form.vehicle_id.choices if v[0] != 0 %}
-              <option value="{{ v[0] }}" {% if vehicle_id == v[0] %}selected{% endif %}>{{ v[1] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Shift</label>
-          <select id="shiftSelect" class="form-select select2-enable" data-placeholder="Shift">
-            <option value="" {% if not shift %}selected{% endif %}>All Shifts</option>
-            {% for s in form.shift.choices if s[0] != '' %}
-              <option value="{{ s[0] }}" {% if shift == s[0] %}selected{% endif %}>{{ s[1] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Search</label>
-          <input type="text" name="search" class="form-control" placeholder="Name, Driver ID, Vehicle..." value="{{ search or '' }}">
-        </div>
-        <div class="col-md-2">
-          <button type="submit" class="btn btn-primary w-100">
-            <i class="bi bi-search me-1"></i> View
-          </button>
+
+        <!-- Row 2: Project / District / Vehicle / Shift / Search + View -->
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3 col-lg-2">
+            <label class="form-label">Project</label>
+            <select id="projectSelect" class="form-select select2-enable" data-placeholder="Search project...">
+              <option value="0" {% if not project_id %}selected{% endif %}>All Projects</option>
+              {% for p in form.project_id.choices if p[0] != 0 %}
+                <option value="{{ p[0] }}" {% if project_id == p[0] %}selected{% endif %}>{{ p[1] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3 col-lg-2">
+            <label class="form-label">District</label>
+            <select id="districtSelect" class="form-select select2-enable" data-placeholder="Search district...">
+              <option value="0" {% if not district_id %}selected{% endif %}>All Districts</option>
+              {% for d in form.district_id.choices if d[0] != 0 %}
+                <option value="{{ d[0] }}" {% if district_id == d[0] %}selected{% endif %}>{{ d[1] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3 col-lg-2">
+            <label class="form-label">Vehicle</label>
+            <select id="vehicleSelect" class="form-select select2-enable" data-placeholder="Search vehicle...">
+              <option value="0" {% if not vehicle_id %}selected{% endif %}>All Vehicles</option>
+              {% for v in form.vehicle_id.choices if v[0] != 0 %}
+                <option value="{{ v[0] }}" {% if vehicle_id == v[0] %}selected{% endif %}>{{ v[1] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3 col-lg-2">
+            <label class="form-label">Shift</label>
+            <select id="shiftSelect" class="form-select select2-enable" data-placeholder="Shift">
+              <option value="" {% if not shift %}selected{% endif %}>All Shifts</option>
+              {% for s in form.shift.choices if s[0] != '' %}
+                <option value="{{ s[0] }}" {% if shift == s[0] %}selected{% endif %}>{{ s[1] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4 col-lg-3">
+            <label class="form-label">Search</label>
+            <input type="text" name="search" class="form-control" placeholder="Name, Driver ID, Vehicle..." value="{{ search or '' }}">
+          </div>
+          <div class="col-md-2 col-lg-1">
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="bi bi-search me-1"></i> View
+            </button>
+          </div>
         </div>
       </form>
     </div>
@@ -80,7 +92,20 @@
 
   <div class="card shadow border-0 rounded-3 overflow-hidden">
     <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span class="fw-semibold">Attendance for {{ view_date|ddmmyyyy }}{% if project_id %} · Project filter{% endif %}{% if district_id %} · District filter{% endif %}{% if vehicle_id %} · Vehicle filter{% endif %}{% if shift %} · Shift filter{% endif %}{% if search %} · Search{% endif %} <small class="opacity-75">(Only marked attendance)</small></span>
+      <span class="fw-semibold">
+        Attendance for
+        {% if from_date or to_date %}
+          {{ from_date or view_date|ddmmyyyy }} — {{ to_date or view_date|ddmmyyyy }}
+        {% else %}
+          {{ view_date|ddmmyyyy }}
+        {% endif %}
+        {% if project_id %} · Project filter{% endif %}
+        {% if district_id %} · District filter{% endif %}
+        {% if vehicle_id %} · Vehicle filter{% endif %}
+        {% if shift %} · Shift filter{% endif %}
+        {% if search %} · Search{% endif %}
+        <small class="opacity-75">(Only marked attendance)</small>
+      </span>
       <input type="text" id="tableSearch" class="form-control form-control-sm text-dark bg-light border-0" style="max-width: 220px;" placeholder="Search in list...">
     </div>
     <div class="card-body p-0">

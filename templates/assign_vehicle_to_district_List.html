@@ -22,31 +22,54 @@
             <p class="text-muted mb-0 small"><i class="bi bi-info-circle me-1"></i> Managing fleet distribution across active projects.</p>
         </div>
         <div class="col-md-6 text-md-end mt-3 mt-md-0">
-            <a href="{{ url_for('assign_vehicle_to_district_export', search=search or '') }}" class="btn btn-success shadow-sm px-3 fw-bold me-2">
+            <a href="{{ url_for('assign_vehicle_to_district_export', search=search or '', project_id=project_id, district_id=district_id) }}" class="btn btn-success shadow-sm px-3 fw-bold me-2">
                 <i class="bi bi-file-earmark-excel me-2"></i>Export to Excel
             </a>
-            <a href="{{ url_for('assign_vehicle_to_district_print', search=search or '') }}" target="_blank" class="btn btn-outline-primary shadow-sm px-3 fw-bold me-2">
+            <a href="{{ url_for('assign_vehicle_to_district_print', search=search or '', project_id=project_id, district_id=district_id) }}" target="_blank" class="btn btn-outline-primary shadow-sm px-3 fw-bold me-2">
                 <i class="bi bi-eye me-2"></i>Print Preview
             </a>
+            {% if can_see_page('assign_vehicle_to_district_add') %}
             <a href="{{ url_for('assign_vehicle_to_district_new') }}" class="btn btn-primary shadow-sm px-4 fw-bold">
                 <i class="bi bi-plus-lg me-2"></i>New Deployment
             </a>
+            {% endif %}
         </div>
     </div>
 
     <!-- Search & Stats Area -->
     <div class="row g-3 mb-4">
         <div class="col-lg-8">
-            <form method="GET" class="d-flex gap-2">
-                <div class="input-group shadow-sm rounded-3 overflow-hidden">
-                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                    <input type="text" name="search" class="form-control border-start-0 ps-0 py-2" placeholder="Search by Vehicle No, Project, or District..." value="{{ search }}">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-0">Project</label>
+                    <select name="project_id" class="form-select form-select-sm">
+                        {% for val, label in project_choices %}
+                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <button type="submit" class="btn btn-dark px-4">Filter</button>
-                {% if search %}
-                    <a href="{{ url_for('assign_vehicle_to_district') }}" class="btn btn-outline-secondary px-3">Clear</a>
-                {% endif %}
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-0">District</label>
+                    <select name="district_id" class="form-select form-select-sm">
+                        {% for val, label in district_choices %}
+                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted mb-0">Search</label>
+                    <div class="input-group input-group-sm shadow-sm rounded-3 overflow-hidden">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                        <input type="text" name="search" class="form-control border-start-0 ps-0 py-2" placeholder="Vehicle No, Project, District..." value="{{ search or '' }}">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-dark btn-sm w-100">Filter</button>
+                </div>
             </form>
+            {% if search or project_id or district_id %}
+            <a href="{{ url_for('assign_vehicle_to_district') }}" class="btn btn-outline-secondary btn-sm mt-2">Clear</a>
+            {% endif %}
         </div>
         <div class="col-lg-4 text-end">
             <div class="bg-white p-2 px-3 rounded-3 border d-inline-block shadow-sm">
@@ -104,23 +127,28 @@
                                 <!-- Spacing for Action Buttons -->
                                 <div class="d-flex justify-content-end gap-3">
                                     {% if v.parking_station_id or v.driver_id %}
-                                    <span class="badge bg-secondary align-self-center" title="Linked with {% if v.parking_station_id %}Parking{% endif %}{% if v.parking_station_id and v.driver_id %} & {% endif %}{% if v.driver_id %}Driver{% endif %} — Edit/Deassign not allowed">
-                                        <i class="bi bi-lock me-1"></i>Locked
-                                    </span>
+                                      {% if can_see_page('assign_vehicle_to_district_edit') or can_see_page('assign_vehicle_to_district_desassign') %}
+                                      <span class="badge bg-secondary align-self-center" title="Linked with {% if v.parking_station_id %}Parking{% endif %}{% if v.parking_station_id and v.driver_id %} & {% endif %}{% if v.driver_id %}Driver{% endif %} — Edit/Deassign not allowed">
+                                          <i class="bi bi-lock me-1"></i>Locked
+                                      </span>
+                                      {% endif %}
                                     {% else %}
-                                    <a href="{{ url_for('assign_vehicle_to_district_edit', vehicle_id=v.id) }}" 
-                                       class="btn-action btn-edit-alt" title="Edit Assignment">
-                                        <i class="bi bi-pencil-square"></i>
-                                    </a>
-                                    
-                                    <form action="{{ url_for('desassign_vehicle_from_district', vehicle_id=v.id) }}" method="POST" class="m-0">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <button type="submit" class="btn-action btn-delete-alt" 
-                                                onclick="return confirm('WARNING: Are you sure you want to deassign vehicle {{ v.vehicle_no }}?')" 
-                                                title="Deassign / Remove Link">
-                                            <i class="bi bi-link-45deg"></i>
-                                        </button>
-                                    </form>
+                                      {% if can_see_page('assign_vehicle_to_district_edit') %}
+                                      <a href="{{ url_for('assign_vehicle_to_district_edit', vehicle_id=v.id) }}" 
+                                         class="btn-action btn-edit-alt" title="Edit Assignment">
+                                          <i class="bi bi-pencil-square"></i>
+                                      </a>
+                                      {% endif %}
+                                      {% if can_see_page('assign_vehicle_to_district_desassign') %}
+                                      <form action="{{ url_for('desassign_vehicle_from_district', vehicle_id=v.id) }}" method="POST" class="m-0">
+                                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                          <button type="submit" class="btn-action btn-delete-alt" 
+                                                  onclick="return confirm('WARNING: Are you sure you want to deassign vehicle {{ v.vehicle_no }}?')" 
+                                                  title="Deassign / Remove Link">
+                                              <i class="bi bi-link-45deg"></i>
+                                          </button>
+                                      </form>
+                                      {% endif %}
                                     {% endif %}
                                 </div>
                             </td>
@@ -131,7 +159,9 @@
                                 <div class="py-4">
                                     <i class="bi bi-truck-flatbed display-4 text-muted opacity-25"></i>
                                     <p class="text-muted mt-3">No active vehicle deployments found matching your search.</p>
+                                    {% if can_see_page('assign_vehicle_to_district_add') %}
                                     <a href="{{ url_for('assign_vehicle_to_district_new') }}" class="btn btn-sm btn-primary">Assign New Vehicle</a>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>

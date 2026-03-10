@@ -95,20 +95,25 @@
                     {{ form1.place_of_birth(class="form-control form-control-sm " + ("is-invalid" if form1.place_of_birth.errors else ""), placeholder="Place of Birth") }}
                     {% for e in form1.place_of_birth.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                   </div>
-                  <div class="col-6 col-md-4">
+                  <div class="col-6 col-md-3">
                     <label class="form-label lbl">DOB</label>
                     {{ form1.dob(class="form-control form-control-sm datepicker " + ("is-invalid" if form1.dob.errors else "")) }}
                     {% for e in form1.dob.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                   </div>
-                  <div class="col-6 col-md-4">
+                  <div class="col-6 col-md-3">
                     <label class="form-label lbl">Education</label>
                     {{ form1.education(class="form-select form-select-sm " + ("is-invalid" if form1.education.errors else "")) }}
                     {% for e in form1.education.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                   </div>
-                  <div class="col-6 col-md-4">
+                  <div class="col-6 col-md-3">
                     <label class="form-label lbl">Marital</label>
                     {{ form1.marital_status(class="form-select form-select-sm " + ("is-invalid" if form1.marital_status.errors else "")) }}
                     {% for e in form1.marital_status.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+                  </div>
+                  <div class="col-6 col-md-3">
+                    <label class="form-label lbl">Joining Date</label>
+                    {{ form1.joining_date(class="form-control form-control-sm datepicker " + ("is-invalid" if form1.joining_date.errors else "")) }}
+                    {% for e in form1.joining_date.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                   </div>
                   <div class="col-12 col-md-4">
                     <label class="form-label lbl">CNIC</label>
@@ -156,11 +161,6 @@
                     <label class="form-label lbl">Email</label>
                     {{ form2.email(class="form-control form-control-sm " + ("is-invalid" if form2.email.errors else ""), placeholder="email@example.com") }}
                     {% for e in form2.email.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
-                  </div>
-                  <div class="col-6 col-md-3">
-                    <label class="form-label lbl">Joining Date</label>
-                    {{ form2.joining_date(class="form-control form-control-sm datepicker " + ("is-invalid" if form2.joining_date.errors else "")) }}
-                    {% for e in form2.joining_date.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                   </div>
                   <div class="col-6 col-md-3">
                     <label class="form-label lbl">Status</label>

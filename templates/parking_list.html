@@ -21,12 +21,16 @@
       <a href="{{ url_for('parking_print', search=search) }}" target="_blank" class="btn btn-outline-primary shadow-sm">
         <i class="bi bi-printer me-1"></i>Print / PDF
       </a>
+      {% if can_see_page('parking_import') %}
       <a href="{{ url_for('parking_import') }}" class="btn btn-outline-secondary shadow-sm">
         <i class="bi bi-upload me-1"></i>Import Excel
       </a>
+      {% endif %}
+      {% if can_see_page('parking_add') %}
       <a href="{{ url_for('parking_form') }}" class="btn btn-success shadow-sm">
         <i class="bi bi-plus-circle me-1"></i>Add New Parking
       </a>
+      {% endif %}
     </div>
   </div>
 
@@ -104,15 +108,19 @@
               <td><span class="text-muted" style="font-size:0.8rem;">{{ parking.longitude or '-' }}</span></td>
               <td>{{ parking.address_location|truncate(35) or '-' }}</td>
               <td class="text-center actions-cell">
+                {% if can_see_page('parking_edit') %}
                 <a href="{{ url_for('parking_form', id=parking.id) }}" class="btn btn-sm btn-warning me-1" title="Edit">
                   <i class="bi bi-pencil-square"></i>
                 </a>
+                {% endif %}
+                {% if can_see_page('parking_delete') %}
                 <form action="{{ url_for('delete_parking', id=parking.id) }}" method="POST" style="display:inline;">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete parking station {{ parking.name }}?')">
                     <i class="bi bi-trash"></i>
                   </button>
                 </form>
+                {% endif %}
               </td>
             </tr>
             {% else %}
@@ -120,7 +128,7 @@
               <td colspan="9" class="text-center py-5">
                 <div class="text-muted">
                   <i class="bi bi-geo-alt fs-1 d-block mb-3"></i>
-                  <p>No parking stations found. <a href="{{ url_for('parking_form') }}">Add your first station</a>.</p>
+                  <p>No parking stations found.{% if can_see_page('parking_add') %} <a href="{{ url_for('parking_form') }}">Add your first station</a>.{% endif %}</p>
                 </div>
               </td>
             </tr>

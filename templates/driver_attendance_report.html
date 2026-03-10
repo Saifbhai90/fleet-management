@@ -3,44 +3,79 @@
 
 {% block content %}
 <div class="container-fluid">
-  <h2 class="mb-4"><i class="bi bi-bar-chart me-2 text-info"></i>Driver Attendance Report</h2>
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="mb-0"><i class="bi bi-bar-chart me-2 text-info"></i>Driver Attendance Report</h2>
+    <div id="attendanceReportExportButtons" class="d-flex gap-2"></div>
+  </div>
 
   <div class="card shadow-sm border-0 rounded-3 mb-4">
     <div class="card-body">
-      <form method="post" action="{{ url_for('driver_attendance_report') }}" id="reportForm" class="row g-3 align-items-end">
+      <form method="post" action="{{ url_for('driver_attendance_report') }}" id="reportForm">
         {{ form.hidden_tag() }}
-        <div class="col-md-2">
-          <label class="form-label">Month</label>
-          <input type="number" name="month" class="form-control" min="1" max="12" value="{{ form.month.data or '' }}" placeholder="1-12" required>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Year</label>
-          <input type="number" name="year" class="form-control" min="2020" max="2030" value="{{ form.year.data or '' }}" placeholder="2025" required>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Project</label>
-          <select name="project_id" id="reportProjectSelect" class="form-select">
-            {% for val, label in form.project_id.choices %}
-              <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">District</label>
-          <select name="district_id" id="reportDistrictSelect" class="form-select">
-            {% for val, label in form.district_id.choices %}
-              <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Search</label>
-          <input type="text" name="search" class="form-control" placeholder="Name, Driver ID, Vehicle" value="{{ form.search.data or '' }}">
-        </div>
-        <div class="col-md-2">
-          <button type="submit" class="btn btn-primary w-100">
-            <i class="bi bi-search me-1"></i>Show Report
-          </button>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-2 col-lg-1">
+            <label class="form-label">Month</label>
+            <input type="number" name="month" class="form-control" min="1" max="12" value="{{ form.month.data or '' }}" placeholder="1-12" required>
+          </div>
+          <div class="col-md-2 col-lg-1">
+            <label class="form-label">Year</label>
+            <input type="number" name="year" class="form-control" min="2020" max="2030" value="{{ form.year.data or '' }}" placeholder="2025" required>
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Project</label>
+            <select name="project_id" id="reportProjectSelect" class="form-select">
+              {% for val, label in form.project_id.choices %}
+                <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">District</label>
+            <select name="district_id" id="reportDistrictSelect" class="form-select">
+              {% for val, label in form.district_id.choices %}
+                <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Vehicle</label>
+            <select name="vehicle_id" id="reportVehicleSelect" class="form-select">
+              <option value="0">-- All Vehicles --</option>
+              {% if vehicle_choices %}
+                {% for v_id, v_label in vehicle_choices %}
+              <option value="{{ v_id }}" {% if selected_vehicle_id == v_id %}selected{% endif %}>{{ v_label }}</option>
+                {% endfor %}
+              {% elif has_single_scope and single_vehicle %}
+              <option value="{{ single_vehicle.id }}" selected>
+                {{ single_vehicle.vehicle_no }}{% if single_vehicle.vehicle_type %} ({{ single_vehicle.vehicle_type }}){% endif %}
+              </option>
+              {% endif %}
+            </select>
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Shift</label>
+            {% set allowed_shifts = session.get('allowed_shifts') or [] %}
+            <select name="shift" id="reportShiftSelect" class="form-select">
+              <option value="">-- All Shifts --</option>
+              {% if not allowed_shifts %}
+              <option value="Morning" {% if (selected_shift or '') == 'Morning' %}selected{% endif %}>Morning</option>
+              <option value="Night" {% if (selected_shift or '') == 'Night' %}selected{% endif %}>Night</option>
+              {% else %}
+                {% for s in allowed_shifts %}
+                <option value="{{ s }}" {% if (selected_shift or '') == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+              {% endif %}
+            </select>
+          </div>
+          <div class="col-md-4 col-lg-2">
+            <label class="form-label">Search</label>
+            <div class="input-group input-group-sm">
+              <input type="text" name="search" class="form-control" placeholder="Name, Driver ID, Vehicle" value="{{ form.search.data or '' }}">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-search me-1"></i>Show
+              </button>
+            </div>
+          </div>
         </div>
       </form>
     </div>
@@ -58,8 +93,11 @@
           <thead class="table-light">
             <tr>
               <th class="ps-4">#</th>
-              <th>Driver</th>
+              <th>Project</th>
+              <th>District</th>
               <th>Vehicle (Type)</th>
+              <th>Driver</th>
+              <th>Shift</th>
               <th class="text-center">Present</th>
               <th class="text-center">Absent</th>
               <th class="text-center">Leave</th>
@@ -72,19 +110,23 @@
           </thead>
           <tbody>
             {% for row in report %}
+            {% set d = row.driver %}
             <tr>
               <td class="ps-4">{{ loop.index }}</td>
+              <td>{{ d.project.name if d.project else '-' }}</td>
+              <td>{{ d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else '-') }}</td>
               <td>
-                <span class="fw-medium">{{ row.driver.name }}</span>
-                <br><small class="text-muted">{{ row.driver.driver_id }}</small>
-              </td>
-              <td>
-                {% if row.driver.vehicle %}
-                  {{ row.driver.vehicle.vehicle_no }}{% if row.driver.vehicle.vehicle_type %} ({{ row.driver.vehicle.vehicle_type }}){% endif %}
+                {% if d.vehicle %}
+                  {{ d.vehicle.vehicle_no }}{% if d.vehicle.vehicle_type %} ({{ d.vehicle.vehicle_type }}){% endif %}
                 {% else %}
                   <span class="text-muted">-</span>
                 {% endif %}
               </td>
+              <td>
+                <span class="fw-medium">{{ d.name }}</span>
+                <br><small class="text-muted">{{ d.driver_id }}</small>
+              </td>
+              <td>{{ d.shift or '-' }}</td>
               <td class="text-center"><span class="badge bg-success">{{ row.present }}</span></td>
               <td class="text-center"><span class="badge bg-danger">{{ row.absent }}</span></td>
               <td class="text-center"><span class="badge bg-info">{{ row.leave }}</span></td>
@@ -110,14 +152,39 @@
   </div>
   {% endif %}
 </div>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
 
 <script>
-document.getElementById('reportProjectSelect').addEventListener('change', function() {
-  var pid = this.value;
+(function() {
+  var projectSelect = document.getElementById('reportProjectSelect');
   var districtSelect = document.getElementById('reportDistrictSelect');
-  districtSelect.innerHTML = '<option value="0">-- All Districts --</option>';
-  if (pid && pid !== '0') {
-    fetch('/get_districts_by_project/' + pid)
+  var vehicleSelect = document.getElementById('reportVehicleSelect');
+  var shiftSelect = document.getElementById('reportShiftSelect');
+
+  // Scope object (har load par available)
+  var scope = {
+    projects: {{ (session.get('allowed_projects') or []) | tojson }},
+    districts: {{ (session.get('allowed_districts') or []) | tojson }},
+    vehicles: {{ (session.get('allowed_vehicles') or []) | tojson }},
+    shifts: {{ (session.get('allowed_shifts') or []) | tojson }}
+  };
+  var hasSingle = scope.projects.length === 1 && scope.districts.length === 1 && scope.vehicles.length === 1 && scope.shifts.length === 1;
+
+  function loadDistricts(projectId) {
+    if (hasSingle) return;  // single-scope users ke liye options already server se filtered hain
+    districtSelect.innerHTML = '<option value="0">-- All Districts --</option>';
+    if (!projectId || projectId === '0') {
+      return;
+    }
+    fetch('/get_districts_by_project/' + projectId)
       .then(function(r) { return r.json(); })
       .then(function(districts) {
         districts.forEach(function(d) {
@@ -128,7 +195,71 @@ document.getElementById('reportProjectSelect').addEventListener('change', functi
         });
       });
   }
-});
+
+  function loadVehicles() {
+    var pid = projectSelect.value || '0';
+    var did = districtSelect.value || '0';
+    vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+    if (!pid && !did) {
+      return;
+    }
+    fetch('/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
+      .then(function(r) { return r.json(); })
+      .then(function(vehicles) {
+        vehicles.forEach(function(v) {
+          var opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+          vehicleSelect.appendChild(opt);
+        });
+        // Single-scope user ke liye yahin par vehicle ko lock karo
+        if (hasSingle && scope.vehicles.length === 1) {
+          vehicleSelect.value = String(scope.vehicles[0]);
+          vehicleSelect.disabled = true;
+        }
+      });
+  }
+
+  projectSelect.addEventListener('change', function() {
+    loadDistricts(this.value);
+    loadVehicles();
+  });
+
+  districtSelect.addEventListener('change', function() {
+    loadVehicles();
+  });
+
+  // Multi-scope: options server se aa chuke hain (GET par "All", POST par selected). Load sirf user change par karo, taake POST ke baad District/Vehicle reset na hon.
+  // Single-scope: server already sab set kar chuka hai; neeche lock karo.
+  if (hasSingle) {
+    if (scope.projects.length === 1) {
+      projectSelect.value = String(scope.projects[0]);
+      projectSelect.disabled = true;
+    }
+    if (scope.districts.length === 1) {
+      districtSelect.value = String(scope.districts[0]);
+      districtSelect.disabled = true;
+    }
+    if (scope.vehicles.length === 1) {
+      vehicleSelect.value = String(scope.vehicles[0]);
+      vehicleSelect.disabled = true;
+    }
+    if (scope.shifts.length === 1) {
+      shiftSelect.value = String(scope.shifts[0]);
+      shiftSelect.disabled = true;
+    }
+  }
+
+  {% if request.method == 'GET' and not report %}
+  // Sirf pehli GET load par auto-submit
+  if (hasSingle) {
+    setTimeout(function() {
+      document.getElementById('reportForm').submit();
+    }, 200);
+  }
+  {% endif %}
+})();
+
 var reportSearch = document.getElementById('reportTableSearch');
 if (reportSearch) {
   reportSearch.addEventListener('keyup', function() {
@@ -139,5 +270,32 @@ if (reportSearch) {
     });
   });
 }
+
+// DataTables Excel / Print for monthly summary
+$(document).ready(function () {
+  var $t = $('#reportTable');
+  if ($t.length) {
+    var dt = $t.DataTable({
+      pageLength: 50,
+      searching: false,
+      ordering: true,
+      dom: 'rt<"d-flex justify-content-between align-items-center p-2"ip>',
+      buttons: [
+        {
+          extend: 'excelHtml5',
+          text: '<i class="bi bi-file-earmark-excel me-1"></i> Excel',
+          className: 'btn btn-success btn-sm'
+        },
+        {
+          extend: 'print',
+          text: '<i class="bi bi-printer me-1"></i> Print / Preview',
+          className: 'btn btn-secondary btn-sm',
+          autoPrint: false
+        }
+      ]
+    });
+    dt.buttons().container().appendTo('#attendanceReportExportButtons');
+  }
+});
 </script>
 {% endblock %}

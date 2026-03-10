@@ -22,21 +22,65 @@
             <a href="{{ url_for('driver_rejoin_print', search=search or '') }}" target="_blank" class="btn btn-outline-primary shadow-sm px-3 rounded-pill">
                 <i class="bi bi-printer me-1"></i> Print Preview
             </a>
+            {% if can_see_page('driver_rejoin_add') %}
             <a href="{{ url_for('driver_rejoin_new') }}" class="btn btn-success shadow-sm px-4 rounded-pill">
                 <i class="bi bi-person-plus-fill me-2"></i> Mark New Rejoin
             </a>
+            {% endif %}
         </div>
     </div>
 
-    <form method="GET" action="{{ url_for('driver_rejoin_list') }}" class="mb-4">
-        <div class="input-group shadow-sm rounded-pill overflow-hidden" style="max-width: 400px;">
-            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-            <input type="text" name="search" class="form-control border-start-0" placeholder="Search by Driver name, ID, Project or Vehicle..." value="{{ search or '' }}">
-            <button type="submit" class="btn btn-primary px-4">Search</button>
+    <!-- Filters: date range + project/district + search -->
+    <form method="GET" action="{{ url_for('driver_rejoin_list') }}" class="d-flex flex-wrap align-items-end gap-2 mb-4">
+        <div class="flex-grow-0" style="min-width: 170px;">
+            <label class="form-label small text-muted mb-1">From Date</label>
+            <input
+                type="text"
+                name="from_date"
+                class="form-control form-control-sm datepicker"
+                placeholder="dd-mm-yyyy"
+                value="{{ from_date or '' }}"
+                autocomplete="off"
+            >
         </div>
-        {% if search %}
-        <a href="{{ url_for('driver_rejoin_list') }}" class="btn btn-link btn-sm text-muted mt-2">Clear search</a>
-        {% endif %}
+        <div class="flex-grow-0" style="min-width: 170px;">
+            <label class="form-label small text-muted mb-1">To Date</label>
+            <input
+                type="text"
+                name="to_date"
+                class="form-control form-control-sm datepicker"
+                placeholder="dd-mm-yyyy"
+                value="{{ to_date or '' }}"
+                autocomplete="off"
+            >
+        </div>
+        <div class="flex-grow-0" style="min-width: 180px;">
+            <label class="form-label small text-muted mb-1">Project</label>
+            <select name="project_id" class="form-select form-select-sm">
+                {% for val, label in project_choices %}
+                <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex-grow-0" style="min-width: 180px;">
+            <label class="form-label small text-muted mb-1">District</label>
+            <select name="district_id" class="form-select form-select-sm">
+                {% for val, label in district_choices %}
+                <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex-grow-1" style="min-width: 220px;">
+            <label class="form-label small text-muted mb-1">Search</label>
+            <div class="input-group input-group-sm">
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" name="search" class="form-control border-start-0" placeholder="Driver, ID, project, vehicle..." value="{{ search or '' }}">
+                <button type="submit" class="btn btn-success px-3">Apply</button>
+                {% if search or project_id or district_id or from_date or to_date %}
+                <a href="{{ url_for('driver_rejoin_list') }}" class="btn btn-outline-secondary px-3">Clear</a>
+                {% endif %}
+            </div>
+        </div>
     </form>
 
     <div class="custom-card">
@@ -55,7 +99,10 @@
                     {% for record in records %}
                     <tr>
                         <td class="ps-4">
-                            <span class="fw-bold"><i class="bi bi-calendar-check text-success me-2"></i>{{ record.change_date.strftime('%Y-%m-%d') }}</span>
+                            <span class="fw-bold">
+                                <i class="bi bi-calendar-check text-success me-2"></i>
+                                {{ record.change_date.strftime('%d-%m-%Y') }}
+                            </span>
                         </td>
                         <td>
                             <div class="d-flex align-items-center">

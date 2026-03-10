@@ -57,24 +57,34 @@
                         <div class="section-title">01. Previous Context</div>
                         <div class="mb-3">
                             <label class="form-label">Old Project</label>
-                            <select id="old_project" class="form-select">
+                            <select id="old_project" name="old_project" class="form-select">
                                 <option value="">-- Select Project --</option>
                                 {% for p in projects %}
-                                <option value="{{ p.id }}">{{ p.name }}</option>
+                                <option value="{{ p.id }}" {% if old_project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Old District</label>
-                            <select id="old_district" class="form-select" disabled><option value="">-- Select District --</option></select>
+                            <select id="old_district" name="old_district" class="form-select" {% if not old_project_id %}disabled{% endif %}>
+                                <option value="">-- Select District --</option>
+                                {% for d in old_districts %}
+                                <option value="{{ d.id }}" {% if old_district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Old Vehicle</label>
-                            <select id="old_vehicle" class="form-select" disabled><option value="">-- Select Vehicle --</option></select>
+                            <select id="old_vehicle" name="old_vehicle" class="form-select" {% if not old_district_id %}disabled{% endif %}>
+                                <option value="">-- Select Vehicle --</option>
+                                {% for v in old_vehicles %}
+                                <option value="{{ v.id }}" {% if old_vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                         <div class="mb-0">
                             <label class="form-label text-danger">Left Driver Name <span class="text-danger">*</span></label>
-                            {{ form.driver_id(class="form-select border-danger " + ("is-invalid" if form.driver_id.errors else ""), id="target_driver", disabled=True) }}
+                            {{ form.driver_id(class="form-select border-danger " + ("is-invalid" if form.driver_id.errors else ""), id="target_driver") }}
                             {% for error in form.driver_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                         </div>
                     </div>
@@ -108,7 +118,11 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Rejoin Date <span class="text-danger">*</span></label>
-                                {{ form.rejoin_date(class="form-control " + ("is-invalid" if form.rejoin_date.errors else ""), type="date", placeholder="Select date") }}
+                                {{ form.rejoin_date(
+                                    class="form-control datepicker " + ("is-invalid" if form.rejoin_date.errors else ""),
+                                    placeholder="dd-mm-yyyy",
+                                    autocomplete="off"
+                                ) }}
                                 {% for error in form.rejoin_date.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                             </div>
                         </div>
@@ -116,7 +130,7 @@
                             <label class="form-label">Remarks</label>
                             {{ form.remarks(class="form-control", rows=2) }}
                         </div>
-                        <button type="submit" id="submitBtn" class="btn-rejoin shadow-sm" disabled>Finalize Rejoin</button>
+                        <button type="submit" id="submitBtn" class="btn-rejoin shadow-sm">Finalize Rejoin</button>
                     </div>
                 </div>
             </div>
@@ -211,8 +225,7 @@ $(document).ready(function() {
     });
 });
 $('#rejoinForm').on('submit', function() {
-    // Submit hone se theek pehle fields enable kar dein taake data server par chala jaye
-    $('#target_driver').prop('disabled', false);
+    // Submit hone se theek pehle Previous Context fields enable kar dein taake data server par chala jaye
     $('#old_project, #old_district, #old_vehicle').prop('disabled', false);
 });
 </script>

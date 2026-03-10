@@ -10,25 +10,52 @@
       Assign District to Project
     </h2>
     <div class="d-flex flex-wrap gap-2">
-      <a href="{{ url_for('assign_project_to_district_export', search=search) }}" class="btn btn-outline-success btn-sm">
+      <a href="{{ url_for('assign_project_to_district_export', search=search or '', project_id=project_id, district_id=district_id) }}" class="btn btn-outline-success btn-sm">
         <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
       </a>
-      <a href="{{ url_for('assign_project_to_district_print', search=search) }}" target="_blank" class="btn btn-outline-primary btn-sm">
+      <a href="{{ url_for('assign_project_to_district_print', search=search or '', project_id=project_id, district_id=district_id) }}" target="_blank" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-printer me-1"></i>Print / Preview
       </a>
+      {% if can_see_page('assign_project_to_district_add') %}
       <a href="{{ url_for('assign_project_to_district_new') }}" class="btn btn-success">
         <i class="bi bi-plus-circle me-1"></i>Assign New District
       </a>
+      {% endif %}
     </div>
   </div>
 
   <form method="GET" class="mb-3">
-    <div class="input-group shadow-sm">
-      <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
-      <input type="text" name="search" class="form-control" placeholder="Search by Project Name, District Name, Assign Date or Remarks..." value="{{ search or '' }}">
-      <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1"></i>Search</button>
-      {% if search %}
-      <a href="{{ url_for('assign_project_to_district') }}" class="btn btn-outline-secondary">Clear</a>
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-0">Project</label>
+        <select name="project_id" class="form-select form-select-sm">
+          {% for val, label in project_choices %}
+          <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-0">District</label>
+        <select name="district_id" class="form-select form-select-sm">
+          {% for val, label in district_choices %}
+          <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small text-muted mb-0">Search</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+          <input type="text" name="search" class="form-control" placeholder="Project, District, Date, Remarks..." value="{{ search or '' }}">
+        </div>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-primary btn-sm w-100" type="submit"><i class="bi bi-search me-1"></i>Apply</button>
+      </div>
+    </div>
+    <div class="mt-2">
+      {% if search or project_id or district_id %}
+      <a href="{{ url_for('assign_project_to_district') }}" class="btn btn-outline-secondary btn-sm">Clear</a>
       {% endif %}
     </div>
   </form>
@@ -57,10 +84,13 @@
               <td>{{ link.assign_date.strftime('%Y-%m-%d') if link.assign_date else '-' }}</td>
               <td>{{ link.remarks or '-' }}</td>
               <td class="text-end">
+                {% if can_see_page('assign_project_to_district_edit') %}
                 <a href="{{ url_for('assign_project_to_district_edit', project_id=project.id, district_id=district.id) }}" 
                    class="btn btn-sm btn-warning me-1">
                   <i class="bi bi-pencil-square"></i> Edit
                 </a>
+                {% endif %}
+                {% if can_see_page('assign_project_to_district_desassign') %}
                 <form action="{{ url_for('desassign_district_from_project', project_id=project.id, district_id=district.id) }}" 
                       method="POST" style="display:inline;">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -69,6 +99,7 @@
                     <i class="bi bi-arrow-left-right"></i> Desassign
                   </button>
                 </form>
+                {% endif %}
               </td>
             </tr>
             {% else %}
@@ -86,7 +117,7 @@
       </div>
     </div>
     <div class="card-footer bg-light text-muted small">
-      Total: <strong>{{ assigned|length }}</strong> assignment(s){% if search %} matching "{{ search }}"{% endif %}
+      Total: <strong>{{ assigned|length }}</strong> assignment(s){% if search %} matching "{{ search }}"{% endif %}{% if project_id %} for selected project{% endif %}{% if district_id %} for selected district{% endif %}
     </div>
   </div>
 </div>

@@ -137,9 +137,13 @@ def require_login():
             required = 'product_edit'
     if required:
         perms = session.get('permissions') or []
+        # Explicit: assignment (full) grants all assignment sub-pages (Vehicle to Parking, etc.)
         if not user_can_access(perms, required):
-            session['show_no_access'] = True  # show once on login page, not per-request flash
-            return redirect(url_for('login'))
+            if required and required.startswith('assign_') and ('assignment' in perms):
+                pass  # allow
+            else:
+                session['show_no_access'] = True  # show once on login page, not per-request flash
+                return redirect(url_for('login'))
 
 
 def _endpoint_description(endpoint, method):
@@ -1716,10 +1720,10 @@ def employee_form(id=None):
         form1.cnic_no.data = emp.cnic_no or ''
         form1.district.data = emp.district or ''
         form1.address.data = emp.address or ''
+        form1.joining_date.data = parse_date(emp.joining_date) if isinstance(emp.joining_date, str) else emp.joining_date
         form2.phone1.data = emp.phone1 or ''
         form2.phone2.data = emp.phone2 or ''
         form2.email.data = emp.email or ''
-        form2.joining_date.data = parse_date(emp.joining_date) if isinstance(emp.joining_date, str) else emp.joining_date
         form2.status.data = emp.status or 'Active'
         form2.bank_name.data = emp.bank_name or ''
         form2.account_no.data = emp.account_no or ''
@@ -1760,6 +1764,7 @@ def employee_form(id=None):
                     emp.cnic_no = (form1.cnic_no.data or '').strip()
                     emp.district = (form1.district.data or '').strip()
                     emp.address = (form1.address.data or '').strip()
+                    emp.joining_date = form1.joining_date.data
                     db.session.commit()
                     flash('Step 1 saved. Ab Contact & Job bharo.', 'success')
                     return redirect(url_for('employee_form', id=emp.id, tab=2))
@@ -1775,7 +1780,7 @@ def employee_form(id=None):
                     emp.phone1 = (form2.phone1.data or '').strip()
                     emp.phone2 = (form2.phone2.data or '').strip()
                     emp.email = (form2.email.data or '').strip()
-                    emp.joining_date = form2.joining_date.data
+                    # joining_date pehle hi Step 1 me required aur save ho chuki hoti hai
                     emp.status = (form2.status.data or 'Active').strip()
                     emp.bank_name = (form2.bank_name.data or '').strip()
                     emp.account_no = (form2.account_no.data or '').strip()
@@ -2262,8 +2267,19 @@ def login():
         flash('You do not have access to this page.', 'danger')
     if form.validate_on_submit():
         username = (form.username.data or '').strip()
+        # CNIC: normalize digits+hyphens to digits-only; login accept kare 3230409072265 ya 32304-0907226-5 dono
+        if username and re.match(r'^[\d\-]+$', username):
+            username = re.sub(r'\D', '', username)
         password = (form.password.data or '').strip()
         user = User.query.filter(func.lower(User.username) == username.lower()).first()
+        # Agar 13 digits mein user na mila to hyphen wala format try karein (DB mein 32304-0907226-5 ho sakta hai)
+        if not user and len(username) == 13 and username.isdigit():
+            username_formatted = username[:5] + '-' + username[5:12] + '-' + username[12:]
+            user = User.query.filter(func.lower(User.username) == username_formatted.lower()).first()
+        # CNIC dono format se match (3230409072265 ya 32304-0907226-5) Employee/Driver ke liye
+        cnic_variants = [username]
+        if len(username) == 13 and username.isdigit():
+            cnic_variants.append(username[:5] + '-' + username[5:12] + '-' + username[12:])
         if user and _user_effective_active(user):
             # Auto-fix: agar user ke paas role_id nahi, to Employee/Driver ke post se role assign kar dein
             try:
@@ -2277,7 +2293,11 @@ def login():
                             role_fixed = True
                     # 2) Agar employee_post_id nahi, to Employee record (CNIC=username) se post/role lein
                     if not role_fixed:
-                        emp = Employee.query.filter(func.lower(Employee.cnic_no) == username.lower()).first()
+                        emp = None
+                        for c in cnic_variants:
+                            emp = Employee.query.filter(func.lower(Employee.cnic_no) == c.lower()).first()
+                            if emp:
+                                break
                         if emp and emp.post_id:
                             user.employee_post_id = emp.post_id
                             emp_post = EmployeePost.query.get(emp.post_id)
@@ -2286,7 +2306,11 @@ def login():
                                 role_fixed = True
                     # 3) Agar phir bhi nahi mila, to Driver record se post (full_name) match karke role lein
                     if not role_fixed:
-                        drv = Driver.query.filter(func.lower(Driver.cnic_no) == username.lower()).first()
+                        drv = None
+                        for c in cnic_variants:
+                            drv = Driver.query.filter(func.lower(Driver.cnic_no) == c.lower()).first()
+                            if drv:
+                                break
                         if drv and drv.post:
                             emp_post = EmployeePost.query.filter(EmployeePost.full_name == (drv.post or '').strip()).first()
                             if emp_post:
@@ -2308,15 +2332,74 @@ def login():
             elif check_password(user, password):
                 session['user_id'] = user.id
                 session['user'] = user.full_name or user.username
-                is_master = bool(user.role and user.role.name == 'Master')
+                role_name = (user.role.name if user.role else '').strip() if user.role else ''
+                is_master = bool(role_name == 'Master')
+                is_admin = bool(role_name == 'Admin')
                 session['is_master'] = is_master
+                session['is_admin'] = is_admin
                 # Master ke liye role ki value nahi: hamesha saari permissions (DB se sab codes), taake koi cheez miss na ho
                 if is_master:
                     perms = [p.code for p in Permission.query.all()]
                 else:
                     perms = user.permission_codes()
+                try:
+                    from permissions_config import expand_login_permissions
+                    perms = expand_login_permissions(perms)
+                except Exception:
+                    pass
                 session['permissions'] = perms
                 session.permanent = form.remember_me.data
+
+                # ── User scope: projects/districts/vehicles/shifts ───────────────────────────────
+                allowed_projects = set()
+                allowed_districts = set()
+                allowed_vehicles = set()
+                allowed_shifts = set()
+                if not (is_master or is_admin):
+                    # Employee assignments (projects/districts) via CNIC
+                    try:
+                        emp = None
+                        for c in cnic_variants:
+                            emp = Employee.query.filter(func.lower(Employee.cnic_no) == c.lower()).first()
+                            if emp:
+                                break
+                    except Exception:
+                        emp = None
+                    if emp:
+                        for p in emp.projects:
+                            if p and p.id:
+                                allowed_projects.add(p.id)
+                        for d in emp.districts:
+                            if d and d.id:
+                                allowed_districts.add(d.id)
+                    # Driver assignment (project/vehicle/shift) via CNIC
+                    try:
+                        drv = None
+                        for c in cnic_variants:
+                            drv = Driver.query.filter(func.lower(Driver.cnic_no) == c.lower()).first()
+                            if drv:
+                                break
+                    except Exception:
+                        drv = None
+                    if drv:
+                        if getattr(drv, 'project_id', None):
+                            allowed_projects.add(drv.project_id)
+                        if getattr(drv, 'vehicle_id', None):
+                            allowed_vehicles.add(drv.vehicle_id)
+                        if getattr(drv, 'district_id', None):
+                            allowed_districts.add(drv.district_id)
+                        if (drv.shift or '').strip():
+                            allowed_shifts.add((drv.shift or '').strip())
+                    # Agar kisi bhi cheez ka assignment nahi mila to login block karein
+                    if not (allowed_projects or allowed_districts or allowed_vehicles or allowed_shifts):
+                        flash('Aap ke liye koi Project / District / Vehicle / Shift assign nahi hai. Admin se contact karein.', 'danger')
+                        session.clear()
+                        return redirect(url_for('login'))
+
+                session['allowed_projects'] = list(allowed_projects)
+                session['allowed_districts'] = list(allowed_districts)
+                session['allowed_vehicles'] = list(allowed_vehicles)
+                session['allowed_shifts'] = list(allowed_shifts)
                 try:
                     login_log = LoginLog(
                         user_id=user.id,
@@ -2443,6 +2526,28 @@ def api_log_activity():
 def _current_user_is_master():
     return session.get('is_master', False)
 
+
+def _user_has_full_scope():
+    """Master/Admin users ko full access (koi project/district/vehicle/shift filter nahi)."""
+    if session.get('is_master'):
+        return True
+    return bool(session.get('is_admin'))
+
+
+def _get_user_scope():
+    """
+    Login ke waqt session me store ki hui user scope (projects/districts/vehicles/shifts) ko read karein.
+    Master/Admin ke liye None return hota hai taa ke queries unko na filter karein.
+    """
+    if _user_has_full_scope():
+        return None, None, None, None
+    return (
+        session.get('allowed_projects') or [],
+        session.get('allowed_districts') or [],
+        session.get('allowed_vehicles') or [],
+        session.get('allowed_shifts') or [],
+    )
+
 def _role_name(role):
     return (role.name if role else '').strip()
 
@@ -2498,7 +2603,23 @@ def _create_user_for_employee_or_driver(username_cnic, full_name, employee_post_
         return None
     existing = User.query.filter(func.lower(User.username) == username.lower()).first()
     if existing:
-        return None
+        # User already bana hua hai → sirf sync/update karein (post/role) taa ke Roles & Permissions view me sahi count aaye
+        updated = False
+        if employee_post_id and existing.employee_post_id != employee_post_id:
+            existing.employee_post_id = employee_post_id
+            updated = True
+        if role_id and existing.role_id != role_id:
+            # Safety: yahan Master/Admin auto-assign na karein (wo sirf manual user_form se ho)
+            role = Role.query.get(role_id)
+            if role and _role_name(role) not in ('Master', 'Admin'):
+                existing.role_id = role_id
+                updated = True
+        if updated:
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+        return existing
     try:
         user = User(
             username=username,
@@ -2536,6 +2657,28 @@ def user_list():
     return render_template('user_list.html', users=users, search=search)
 
 
+@app.route('/users/<int:pk>/delete', methods=['POST'])
+def user_delete(pk):
+    user = User.query.get_or_404(pk)
+    is_master = _current_user_is_master()
+    # Master/Admin users ko kabhi delete na karein yahan se
+    if user.role and _role_name(user.role) in ('Master', 'Admin'):
+        flash('Master / Admin users delete nahi kiye ja sakte.', 'danger')
+        return redirect(url_for('user_list'))
+    try:
+        # Pehle is user ke saare logs clean karein (FK/NOT NULL issues avoid)
+        ActivityLog.query.filter_by(user_id=user.id).delete()
+        ClientActivityLog.query.filter_by(user_id=user.id).delete()
+        LoginLog.query.filter_by(user_id=user.id).delete()
+        db.session.delete(user)
+        db.session.commit()
+        flash('User deleted successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting user: {str(e)}', 'danger')
+    return redirect(url_for('user_list'))
+
+
 @app.route('/users/sync-from-employees-drivers', methods=['POST'])
 def users_sync_from_employees_drivers():
     """Create User for existing Employees and Drivers who have CNIC and no user yet. Returns JSON {created, total}."""
@@ -2551,8 +2694,6 @@ def users_sync_from_employees_drivers():
             cnic = (emp.cnic_no or '').strip()
             if len(cnic) < 5:
                 continue
-            if User.query.filter(func.lower(User.username) == cnic.lower()).first():
-                continue
             out.append(('employee', emp))
         # Drivers: sirf jinke paas vehicle assign hai aur status Active (Driver Registration – vehicle-assigned only)
         for driver in Driver.query.filter(
@@ -2562,8 +2703,6 @@ def users_sync_from_employees_drivers():
         ).all():
             cnic = (driver.cnic_no or '').strip()
             if len(cnic) < 5:
-                continue
-            if User.query.filter(func.lower(User.username) == cnic.lower()).first():
                 continue
             out.append(('driver', driver))
         return out
@@ -2755,10 +2894,12 @@ def role_form():
     is_master = _current_user_is_master()
     user_perm_codes = set(session.get('permissions') or []) if not is_master else None
     try:
-        from permissions_config import get_permission_tree_grouped_filtered, PERMISSION_DEPENDENCIES
+        from permissions_config import get_permission_tree_grouped_filtered, PERMISSION_DEPENDENCIES, expand_login_permissions
         permission_by_code = {p.code: p for p in Permission.query.all()}
-        permission_tree = get_permission_tree_grouped_filtered(permission_by_code, allowed_codes=user_perm_codes)
-        allowed_permission_ids = None if is_master else set(p.id for p in Permission.query.filter(Permission.code.in_(user_perm_codes or [])).all())
+        # Expand section-level codes (e.g. assignment -> assign_vehicle_to_parking) so Admin can assign them
+        user_perm_codes_expanded = set(expand_login_permissions(list(user_perm_codes or []))) if user_perm_codes is not None else None
+        permission_tree = get_permission_tree_grouped_filtered(permission_by_code, allowed_codes=user_perm_codes_expanded)
+        allowed_permission_ids = None if is_master else set(p.id for p in Permission.query.filter(Permission.code.in_(user_perm_codes_expanded or [])).all())
     except Exception:
         permission_tree = []
         permission_by_code = {}
@@ -2785,6 +2926,12 @@ def role_form():
         role = Role(name=name, description=(form.description.data or '').strip() or None)
         db.session.add(role)
         db.session.commit()
+        # Agar koi Employee Post select ki gayi thi to usko is naye Role se link karein
+        if post_id:
+            emp_post = EmployeePost.query.get(post_id)
+            if emp_post:
+                emp_post.role_id = role.id
+                db.session.commit()
         perm_ids = request.form.getlist('permission_ids', type=int)
         if perm_ids and allowed_permission_ids is not None:
             perm_ids = [i for i in perm_ids if i in allowed_permission_ids]
@@ -2818,53 +2965,67 @@ def role_edit(pk):
     # Current user sirf apne paas wale permissions hi is role ko assign kar sakta hai
     user_perm_codes = set(session.get('permissions') or []) if not is_master else None
     try:
-        from permissions_config import get_permission_tree_grouped_filtered, PERMISSION_DEPENDENCIES
+        from permissions_config import get_permission_tree_grouped_filtered, PERMISSION_DEPENDENCIES, expand_login_permissions
         permission_by_code = {p.code: p for p in Permission.query.all()}
-        permission_tree = get_permission_tree_grouped_filtered(permission_by_code, allowed_codes=user_perm_codes)
-        allowed_permission_ids = None if is_master else set(p.id for p in Permission.query.filter(Permission.code.in_(user_perm_codes or [])).all())
+        # Expand section-level codes so Admin can assign e.g. Vehicle to Parking when they have Assignment (full)
+        user_perm_codes_expanded = set(expand_login_permissions(list(user_perm_codes or []))) if user_perm_codes is not None else None
+        permission_tree = get_permission_tree_grouped_filtered(permission_by_code, allowed_codes=user_perm_codes_expanded)
+        allowed_permission_ids = None if is_master else set(p.id for p in Permission.query.filter(Permission.code.in_(user_perm_codes_expanded or [])).all())
     except Exception:
         permission_tree = []
         allowed_permission_ids = set()
         PERMISSION_DEPENDENCIES = {}
     form = RoleForm()
     if request.method == 'GET':
-        form.name.data = role.name
-        form.description.data = role.description
+        # Edit mode: Role name/description sirf read-only dikhaani hain (change ki ijazat nahi)
         return render_template('role_form.html', form=form, role=role, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES)
     if form.validate_on_submit():
-        name = (form.name.data or '').strip()
-        if not name:
-            flash('Role name is required.', 'danger')
-            return render_template('role_form.html', form=form, role=role, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES)
-        other = Role.query.filter(func.lower(Role.name) == name.lower()).filter(Role.id != pk).first()
-        if other:
-            flash('Role name already exists.', 'danger')
-            return render_template('role_form.html', form=form, role=role, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES)
-        role.name = name
-        role.description = (form.description.data or '').strip() or None
+        # Role Details (name/description) ko edit ki permission nahi – sirf permissions update honge
         perm_ids = request.form.getlist('permission_ids', type=int)
+        from permissions_config import expand_permission_dependencies
+        permission_by_code = {p.code: p for p in Permission.query.all()}
+
         if is_master or allowed_permission_ids is None:
-            from permissions_config import expand_permission_dependencies
-            permission_by_code = {p.code: p for p in Permission.query.all()}
+            # Master: saare selected permissions (dependencies ke sath) allow
             codes = {p.code for p in Permission.query.filter(Permission.id.in_(perm_ids)).all()}
             expanded = expand_permission_dependencies(codes)
             perm_ids = [permission_by_code[c].id for c in expanded if permission_by_code.get(c)]
             role.permissions = Permission.query.filter(Permission.id.in_(perm_ids)).all() if perm_ids else []
         else:
-            submitted_allowed = set(perm_ids) & allowed_permission_ids
-            current_ids = {p.id for p in role.permissions}
-            keep_unchanged = current_ids - allowed_permission_ids
-            from permissions_config import expand_permission_dependencies
-            permission_by_code = {p.code: p for p in Permission.query.all()}
+            # Non-master (Admin, etc.): sirf wohi permissions assign ho sakti hain jo current user ke paas bhi hon.
+            # Iska matlab: admin kisi role ko apne aap se zyada access nahi de sakta,
+            # aur pehle se maujood "hidden" permissions bhi edit/save pe hata di jayengi.
+            submitted_allowed = set(perm_ids) & (allowed_permission_ids or set())
             codes = {p.code for p in Permission.query.filter(Permission.id.in_(submitted_allowed)).all()}
             expanded = expand_permission_dependencies(codes)
-            expanded_ids = {permission_by_code[c].id for c in expanded if permission_by_code.get(c) and permission_by_code[c].id in allowed_permission_ids}
-            new_ids = keep_unchanged | expanded_ids
-            role.permissions = Permission.query.filter(Permission.id.in_(new_ids)).all()
+            expanded_ids = {permission_by_code[c].id for c in expanded if permission_by_code.get(c) and permission_by_code[c].id in (allowed_permission_ids or set())}
+            role.permissions = Permission.query.filter(Permission.id.in_(expanded_ids)).all() if expanded_ids else []
         db.session.commit()
         flash('Role updated successfully.', 'success')
         return redirect(url_for('role_list'))
     return render_template('role_form.html', form=form, role=role, permission_tree=permission_tree, permission_dependencies=PERMISSION_DEPENDENCIES)
+
+
+@app.route('/roles/<int:pk>/delete', methods=['POST'])
+def role_delete(pk):
+    role = Role.query.get_or_404(pk)
+    is_master = _current_user_is_master()
+    # Master/Admin roles kabhi delete nahi ho sakte
+    if role.name in ('Master', 'Admin'):
+        flash('Master / Admin role delete nahi kiya ja sakta.', 'danger')
+        return redirect(url_for('role_list'))
+    # Agar is role ke saath users linked hain to delete block karein
+    if role.users:
+        flash('Is role ke saath users linked hain. Pehle users ko kisi aur role par shift karein, phir delete karein.', 'danger')
+        return redirect(url_for('role_list'))
+    try:
+        db.session.delete(role)
+        db.session.commit()
+        flash('Role deleted successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting role: {str(e)}', 'danger')
+    return redirect(url_for('role_list'))
 
 
 @app.route('/driver/delete/<int:id>', methods=['POST'])
@@ -3454,17 +3615,33 @@ def desassign_project_from_company(project_id):
 @app.route('/assign_project_to_district')
 def assign_project_to_district():
     search = request.args.get('search', '').strip()
-    assigned_structured = _assign_project_to_district_data(search)
-    return render_template('assign_project_to_district.html', assigned=assigned_structured, search=search)
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    assigned_structured = _assign_project_to_district_data(search=search, project_id=project_id, district_id=district_id)
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    return render_template(
+        'assign_project_to_district.html',
+        assigned=assigned_structured,
+        search=search,
+        project_id=project_id or 0,
+        district_id=district_id or 0,
+        project_choices=projects,
+        district_choices=districts,
+    )
 
 
-def _assign_project_to_district_data(search):
-    """Shared query for list, print, export."""
+def _assign_project_to_district_data(search=None, project_id=None, district_id=None):
+    """Shared query for list, print, export. Optional filter by project_id and/or district_id."""
     query = db.session.query(
         Project, District, project_district.c.assign_date, project_district.c.remarks
     ).join(project_district, Project.id == project_district.c.project_id).join(
         District, District.id == project_district.c.district_id
     )
+    if project_id:
+        query = query.filter(Project.id == project_id)
+    if district_id:
+        query = query.filter(District.id == district_id)
     if search:
         like = f'%{search}%'
         query = query.filter(or_(
@@ -3483,7 +3660,9 @@ def _assign_project_to_district_data(search):
 @app.route('/assign_project_to_district/export')
 def assign_project_to_district_export():
     search = request.args.get('search', '').strip()
-    assigned_structured = _assign_project_to_district_data(search)
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    assigned_structured = _assign_project_to_district_data(search=search, project_id=project_id, district_id=district_id)
     headers = ['Project Name', 'District Name', 'Assign Date', 'Remarks']
     rows = []
     for link_data, proj, dist in assigned_structured:
@@ -3500,7 +3679,9 @@ def assign_project_to_district_export():
 @app.route('/assign_project_to_district/print')
 def assign_project_to_district_print():
     search = request.args.get('search', '').strip()
-    assigned_structured = _assign_project_to_district_data(search)
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    assigned_structured = _assign_project_to_district_data(search=search, project_id=project_id, district_id=district_id)
     return render_template('assign_project_to_district_print.html', assigned=assigned_structured, search=search)
 
 
@@ -3630,9 +3811,13 @@ def desassign_district_from_project(project_id, district_id):
 # ────────────────────────────────────────────────
 # Assignment: Vehicle → District
 # ────────────────────────────────────────────────
-def _assign_vehicle_to_district_data(search=None):
-    """Query assigned vehicles (optionally filtered by search). Returns list of Vehicle."""
+def _assign_vehicle_to_district_data(search=None, project_id=None, district_id=None):
+    """Query assigned vehicles (optionally filtered by search, project_id, district_id). Returns list of Vehicle."""
     query = Vehicle.query.filter(Vehicle.district_id.isnot(None))
+    if project_id:
+        query = query.filter(Vehicle.project_id == project_id)
+    if district_id:
+        query = query.filter(Vehicle.district_id == district_id)
     if search:
         query = query.outerjoin(Project, Vehicle.project_id == Project.id).outerjoin(
             District, Vehicle.district_id == District.id
@@ -3647,14 +3832,28 @@ def _assign_vehicle_to_district_data(search=None):
 @app.route('/assign_vehicle_to_district')
 def assign_vehicle_to_district():
     search = request.args.get('search', '').strip()
-    assigned = _assign_vehicle_to_district_data(search)
-    return render_template('assign_vehicle_to_district_List.html', assigned_vehicles=assigned, search=search)
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    assigned = _assign_vehicle_to_district_data(search=search, project_id=project_id, district_id=district_id)
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    return render_template(
+        'assign_vehicle_to_district_List.html',
+        assigned_vehicles=assigned,
+        search=search,
+        project_id=project_id or 0,
+        district_id=district_id or 0,
+        project_choices=projects,
+        district_choices=districts,
+    )
 
 
 @app.route('/assign_vehicle_to_district/export')
 def assign_vehicle_to_district_export():
     search = request.args.get('search', '').strip()
-    assigned = _assign_vehicle_to_district_data(search)
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    assigned = _assign_vehicle_to_district_data(search=search, project_id=project_id, district_id=district_id)
     headers = ['Vehicle No', 'Model', 'Project', 'District', 'Assignment Date', 'Remarks']
     rows = []
     for v in assigned:
@@ -3673,7 +3872,9 @@ def assign_vehicle_to_district_export():
 @app.route('/assign_vehicle_to_district/print')
 def assign_vehicle_to_district_print():
     search = request.args.get('search', '').strip()
-    assigned = _assign_vehicle_to_district_data(search)
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    assigned = _assign_vehicle_to_district_data(search=search, project_id=project_id, district_id=district_id)
     return render_template(
         'assign_vehicle_to_district_print.html',
         assigned_vehicles=assigned,
@@ -3721,6 +3922,12 @@ def get_districts_by_project(project_id):
     districts = District.query.join(project_district) \
                      .filter(project_district.c.project_id == project_id) \
                      .order_by(District.name).all()
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    if scope_districts:
+        allowed = set(scope_districts)
+        districts = [d for d in districts if d.id in allowed]
+    if scope_projects and project_id not in (scope_projects or []):
+        districts = []
     return jsonify([{"id": d.id, "name": d.name} for d in districts])
 
 
@@ -3728,6 +3935,10 @@ def get_districts_by_project(project_id):
 def get_all_districts():
     """Return all districts for filter dropdown when no project selected."""
     districts = District.query.order_by(District.name).all()
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    if scope_districts:
+        allowed = set(scope_districts)
+        districts = [d for d in districts if d.id in allowed]
     return jsonify([{"id": d.id, "name": d.name} for d in districts])
 
 
@@ -3930,13 +4141,29 @@ def get_parking_by_district(district_id):
 @app.route('/assign_vehicle_to_parking')
 def assign_vehicle_to_parking_list():
     search = request.args.get('search', '').strip()
-    parked_vehicles = _assign_vehicle_to_parking_data(search)
-    return render_template('assign_vehicle_to_parking_list.html', parked_vehicles=parked_vehicles, search=search)
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    parked_vehicles = _assign_vehicle_to_parking_data(search=search, project_id=project_id, district_id=district_id)
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    return render_template(
+        'assign_vehicle_to_parking_list.html',
+        parked_vehicles=parked_vehicles,
+        search=search,
+        project_id=project_id or 0,
+        district_id=district_id or 0,
+        project_choices=projects,
+        district_choices=districts,
+    )
 
 
-def _assign_vehicle_to_parking_data(search=None):
-    """Query vehicles with parking assigned (optionally filtered). Returns list of Vehicle."""
+def _assign_vehicle_to_parking_data(search=None, project_id=None, district_id=None):
+    """Query vehicles with parking assigned (optionally filtered by search, project_id, district_id). Returns list of Vehicle."""
     query = Vehicle.query.filter(Vehicle.parking_station_id.isnot(None))
+    if project_id:
+        query = query.filter(Vehicle.project_id == project_id)
+    if district_id:
+        query = query.filter(Vehicle.district_id == district_id)
     if search:
         query = query.join(Project).join(ParkingStation).filter(
             (Vehicle.vehicle_no.ilike(f'%{search}%')) |
@@ -3949,7 +4176,9 @@ def _assign_vehicle_to_parking_data(search=None):
 @app.route('/assign_vehicle_to_parking/export')
 def assign_vehicle_to_parking_export():
     search = request.args.get('search', '').strip()
-    parked_vehicles = _assign_vehicle_to_parking_data(search)
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    parked_vehicles = _assign_vehicle_to_parking_data(search=search, project_id=project_id, district_id=district_id)
     headers = ['Vehicle No', 'Model', 'Project', 'Parking Station', 'District', 'Remarks']
     rows = []
     for v in parked_vehicles:
@@ -3968,7 +4197,9 @@ def assign_vehicle_to_parking_export():
 @app.route('/assign_vehicle_to_parking/print')
 def assign_vehicle_to_parking_print():
     search = request.args.get('search', '').strip()
-    parked_vehicles = _assign_vehicle_to_parking_data(search)
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    parked_vehicles = _assign_vehicle_to_parking_data(search=search, project_id=project_id, district_id=district_id)
     return render_template(
         'assign_vehicle_to_parking_print.html',
         parked_vehicles=parked_vehicles,
@@ -4204,13 +4435,29 @@ def get_vehicle_parking(vehicle_id):
 @app.route('/assign_driver_to_vehicle')
 def assign_driver_to_vehicle_list():
     search = request.args.get('search', '').strip()
-    assigned_drivers = _assign_driver_to_vehicle_data(search)
-    return render_template('assign_driver_to_vehicle_list.html', assigned_drivers=assigned_drivers, search=search)
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id)
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    return render_template(
+        'assign_driver_to_vehicle_list.html',
+        assigned_drivers=assigned_drivers,
+        search=search,
+        project_id=project_id or 0,
+        district_id=district_id or 0,
+        project_choices=projects,
+        district_choices=districts,
+    )
 
 
-def _assign_driver_to_vehicle_data(search=None):
-    """Query (Driver, Vehicle) pairs for assigned drivers. Returns list of tuples."""
+def _assign_driver_to_vehicle_data(search=None, project_id=None, district_id=None):
+    """Query (Driver, Vehicle) pairs for assigned drivers. Optional filter by project_id, district_id."""
     query = db.session.query(Driver, Vehicle).join(Vehicle, Driver.vehicle_id == Vehicle.id)
+    if project_id:
+        query = query.filter(Driver.project_id == project_id)
+    if district_id:
+        query = query.filter(Vehicle.district_id == district_id)
     if search:
         query = query.outerjoin(Project, Driver.project_id == Project.id).filter(
             (Driver.name.ilike(f'%{search}%')) |
@@ -4224,8 +4471,10 @@ def _assign_driver_to_vehicle_data(search=None):
 @app.route('/assign_driver_to_vehicle/export')
 def assign_driver_to_vehicle_export():
     search = request.args.get('search', '').strip()
-    assigned_drivers = _assign_driver_to_vehicle_data(search)
-    headers = ['S.No', 'Driver Name', 'Driver ID', 'Project', 'Vehicle No', 'Model', 'Shift']
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id)
+    headers = ['S.No', 'Driver Name', 'Driver ID', 'Project', 'District', 'Vehicle No', 'Model', 'Shift']
     rows = []
     for i, (driver, vehicle) in enumerate(assigned_drivers, 1):
         rows.append([
@@ -4233,6 +4482,7 @@ def assign_driver_to_vehicle_export():
             driver.name or '',
             driver.driver_id or '',
             driver.project.name if driver.project else '',
+            vehicle.district.name if vehicle.district else '',
             vehicle.vehicle_no or '',
             vehicle.model or '',
             driver.shift or ''
@@ -4244,7 +4494,9 @@ def assign_driver_to_vehicle_export():
 @app.route('/assign_driver_to_vehicle/print')
 def assign_driver_to_vehicle_print():
     search = request.args.get('search', '').strip()
-    assigned_drivers = _assign_driver_to_vehicle_data(search)
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id)
     return render_template(
         'assign_driver_to_vehicle_print.html',
         assigned_drivers=assigned_drivers,
@@ -4444,8 +4696,41 @@ def project_transfer_delete(id):
 
 @app.route('/vehicle-transfers')
 def vehicle_transfers():
-    transfers = VehicleTransfer.query.order_by(VehicleTransfer.transfer_date.desc()).all()
-    return render_template('vehicle_transfers.html', transfers=transfers)
+    # Optional filters (destination side): Project + District
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = (request.args.get('q') or '').strip()
+
+    query = VehicleTransfer.query
+    if project_id:
+        query = query.filter(VehicleTransfer.new_project_id == project_id)
+    if district_id:
+        query = query.filter(VehicleTransfer.new_district_id == district_id)
+    if q:
+        like = f'%{q}%'
+        query = query.join(Vehicle).outerjoin(Project, VehicleTransfer.new_project_id == Project.id).outerjoin(
+            District, VehicleTransfer.new_district_id == District.id
+        ).filter(or_(
+            Vehicle.vehicle_no.ilike(like),
+            Project.name.ilike(like),
+            District.name.ilike(like),
+            VehicleTransfer.remarks.ilike(like),
+            cast(VehicleTransfer.transfer_date, SAString).ilike(like),
+        ))
+
+    transfers = query.order_by(VehicleTransfer.transfer_date.desc()).all()
+
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    return render_template(
+        'vehicle_transfers.html',
+        transfers=transfers,
+        project_id=project_id,
+        district_id=district_id,
+        q=q,
+        project_choices=projects,
+        district_choices=districts,
+    )
 
 @app.route('/vehicle-transfer/new', methods=['GET', 'POST'])
 def vehicle_transfer_new():
@@ -4469,7 +4754,7 @@ def vehicle_transfer_new():
             
             new_p_id = form.new_project_id.data
             new_d_id = form.new_district_id.data
-            new_park_id = form.new_parking_id.data if form.new_parking_id.data != 0 else None
+            new_park_id = form.new_parking_id.data
 
             if old_p_id == new_p_id and old_d_id == new_d_id and old_park_id == new_park_id:
                 flash("Cannot transfer! The vehicle is already at this exact Location.", "danger")
@@ -4545,9 +4830,9 @@ def vehicle_transfer_edit(id):
     if did and did != 0:
         dist = District.query.get(did)
         stations = ParkingStation.query.filter_by(district=dist.name).all()
-        form.new_parking_id.choices = [(0, '-- No Parking --')] + [(s.id, s.name) for s in stations]
+        form.new_parking_id.choices = [(0, '-- Select Parking --')] + [(s.id, s.name) for s in stations]
     else:
-        form.new_parking_id.choices = [(0, '-- No Parking --')]
+        form.new_parking_id.choices = [(0, '-- Select Parking --')]
 
     if request.method == 'GET':
         form.new_project_id.data = transfer.new_project_id
@@ -4557,7 +4842,7 @@ def vehicle_transfer_edit(id):
         form.remarks.data = transfer.remarks
 
     if form.validate_on_submit():
-        new_park_id = form.new_parking_id.data if form.new_parking_id.data != 0 else None
+        new_park_id = form.new_parking_id.data
         
         if new_park_id and new_park_id != transfer.new_parking_id:
             parking = ParkingStation.query.get(new_park_id)
@@ -4590,9 +4875,26 @@ def vehicle_transfer_edit(id):
 def vehicle_transfer_delete(id):
     transfer_record = VehicleTransfer.query.get_or_404(id)
     try:
+        # Pehle check karein ke is vehicle ke sath koi driver assigned tu nahi
+        vehicle = transfer_record.vehicle
+        if vehicle:
+            assigned_driver = Driver.query.filter_by(vehicle_id=vehicle.id).first()
+            if assigned_driver:
+                flash(
+                    f"Cannot delete transfer log. Driver '{assigned_driver.name}' (ID: {assigned_driver.driver_id}) is currently assigned to vehicle {vehicle.vehicle_no}. "
+                    "Please free/unassign the driver first.",
+                    'danger'
+                )
+                return redirect(url_for('vehicle_transfers'))
+
+            # Revert vehicle back to old (From) project, district and parking before deleting transfer
+            vehicle.project_id = transfer_record.old_project_id
+            vehicle.district_id = transfer_record.old_district_id
+            vehicle.parking_station_id = transfer_record.old_parking_id
+
         db.session.delete(transfer_record)
         db.session.commit()
-        flash('Transfer record permanently deleted.', 'success')
+        flash('Transfer record deleted. Vehicle reverted to previous project, district and parking.', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting record: {str(e)}', 'danger')
@@ -4651,8 +4953,48 @@ def get_available_shifts(vehicle_id):
 
 @app.route('/driver-transfers')
 def driver_transfers():
-    transfers = DriverTransfer.query.order_by(DriverTransfer.transfer_date.desc()).all()
-    return render_template('driver_transfers.html', transfers=transfers)
+    # Optional filters: Project + District (destination side)
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = (request.args.get('q') or '').strip()
+
+    query = DriverTransfer.query
+    if project_id:
+        query = query.filter(DriverTransfer.new_project_id == project_id)
+    if district_id:
+        # new_vehicle_id ke zarye district filter (vehicle.district_id)
+        query = query.join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id).filter(
+            Vehicle.district_id == district_id
+        )
+    if q:
+        like = f'%{q}%'
+        query = query.join(Driver).join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id).outerjoin(
+            Project, DriverTransfer.new_project_id == Project.id
+        ).outerjoin(
+            District, Vehicle.district_id == District.id
+        ).filter(or_(
+            Driver.name.ilike(like),
+            Driver.driver_id.ilike(like),
+            Vehicle.vehicle_no.ilike(like),
+            Project.name.ilike(like),
+            District.name.ilike(like),
+            DriverTransfer.remarks.ilike(like),
+            cast(DriverTransfer.transfer_date, SAString).ilike(like),
+        ))
+
+    transfers = query.order_by(DriverTransfer.transfer_date.desc()).all()
+
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    return render_template(
+        'driver_transfers.html',
+        transfers=transfers,
+        project_id=project_id,
+        district_id=district_id,
+        q=q,
+        project_choices=projects,
+        district_choices=districts,
+    )
 
 @app.route('/driver-transfer/new', methods=['GET', 'POST'])
 def driver_transfer_new():
@@ -4777,13 +5119,28 @@ def driver_transfer_delete(id):
         flash("Associated driver record not found.", "danger")
         return redirect(url_for('driver_transfers'))
 
-    # Optional: Sirf sabse latest transfer hi delete hone de (safety ke liye)
-    latest_transfer = DriverTransfer.query.filter_by(driver_id=driver.id)\
-                                           .order_by(DriverTransfer.created_at.desc())\
-                                           .first()
+    # NEW RULE: Before delete, ensure driver has no attendance on the NEW vehicle
+    # on or after this transfer's effective date.
+    try:
+        conflict_attendance = DriverAttendance.query.filter(
+            DriverAttendance.driver_id == driver.id,
+            DriverAttendance.attendance_date >= transfer.transfer_date,
+            DriverAttendance.project_id == transfer.new_project_id
+        ).first()
 
-    if transfer.id != latest_transfer.id:
-        flash("Only the most recent transfer can be deleted to avoid breaking history.", "warning")
+        if conflict_attendance:
+            flash(
+                "This transfer record cannot be deleted because the driver has already performed duty on the new assignment "
+                "on or after the effective date.",
+                "danger"
+            )
+            return redirect(url_for('driver_transfers'))
+    except Exception:
+        # In case of any unexpected error during safety check, just block deletion
+        flash(
+            "Unable to delete this transfer record because the system detected existing duty records for this driver.",
+            "danger"
+        )
         return redirect(url_for('driver_transfers'))
 
     try:
@@ -4911,7 +5268,7 @@ def driver_job_left_new():
 def driver_rejoin_new():
     form = DriverRejoinForm()
     projects = Project.query.order_by(Project.name).all()
-    
+
     # 1. Base Choices (Initial)
     form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in projects]
     form.district_id.choices = [(0, '-- Select District --')]
@@ -4919,8 +5276,40 @@ def driver_rejoin_new():
     form.driver_id.choices = [(0, '-- Select Driver --')]
     form.shift.choices = [('', 'Select'), ('Morning', 'Morning'), ('Night', 'Night')]
 
+    # For Previous Context (Old Project/District/Vehicle) – preserve selections on validation error
+    old_project_id = None
+    old_district_id = None
+    old_vehicle_id = None
+    old_districts = []
+    old_vehicles = []
+
     # 2. Re-populate choices BEFORE validation if it's a POST request
     if request.method == 'POST':
+        # Previous Context values from POST (not part of WTForms form)
+        try:
+            old_project_id = int(request.form.get('old_project') or 0) or None
+        except ValueError:
+            old_project_id = None
+        try:
+            old_district_id = int(request.form.get('old_district') or 0) or None
+        except ValueError:
+            old_district_id = None
+        try:
+            old_vehicle_id = int(request.form.get('old_vehicle') or 0) or None
+        except ValueError:
+            old_vehicle_id = None
+
+        # Build district / vehicle lists so that Old dropdowns don't reset on errors
+        if old_project_id:
+            old_districts = District.query.join(project_district).filter(
+                project_district.c.project_id == old_project_id
+            ).order_by(District.name).all()
+        if old_project_id and old_district_id:
+            old_vehicles = Vehicle.query.filter_by(
+                project_id=old_project_id,
+                district_id=old_district_id
+            ).order_by(Vehicle.vehicle_no).all()
+
         # Hum posted data se choices dubara bana rahe hain taake validation pass ho
         if form.project_id.data and form.project_id.data != 0:
             p_id = form.project_id.data
@@ -4981,18 +5370,81 @@ def driver_rejoin_new():
             print("Form Validation Errors:", form.errors)
             flash("Form validation failed. Check terminal for details.", "warning")
 
-    return render_template('driver_rejoin_new.html', form=form, projects=projects)
+    return render_template(
+        'driver_rejoin_new.html',
+        form=form,
+        projects=projects,
+        old_project_id=old_project_id,
+        old_district_id=old_district_id,
+        old_vehicle_id=old_vehicle_id,
+        old_districts=old_districts,
+        old_vehicles=old_vehicles,
+    )
 
 @app.route('/driver/job-left/list')
 def driver_job_left_list():
-    # Saare job left records order by date descending
-    left_records = DriverStatusChange.query.filter_by(action_type='left') \
-                                 .order_by(DriverStatusChange.change_date.desc()) \
-                                 .all()
-    
-    return render_template('driver_job_left_list.html', 
-                           records=left_records,
-                           title="Driver Job Left History")
+    # Optional filters: Project + District + Date Range + Search
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = (request.args.get('q') or '').strip()
+    from_date_str = (request.args.get('from_date') or '').strip()
+    to_date_str = (request.args.get('to_date') or '').strip()
+
+    from_date = None
+    to_date = None
+    try:
+        if from_date_str:
+            # UI uses day-month-year (dd-mm-yyyy) via datepicker
+            from_date = datetime.strptime(from_date_str, '%d-%m-%Y').date()
+    except ValueError:
+        from_date = None
+    try:
+        if to_date_str:
+            to_date = datetime.strptime(to_date_str, '%d-%m-%Y').date()
+    except ValueError:
+        to_date = None
+
+    query = DriverStatusChange.query.filter_by(action_type='left')
+
+    if project_id:
+        query = query.filter(DriverStatusChange.left_project_id == project_id)
+    if district_id:
+        query = query.filter(DriverStatusChange.left_district_id == district_id)
+    if from_date:
+        query = query.filter(DriverStatusChange.change_date >= from_date)
+    if to_date:
+        query = query.filter(DriverStatusChange.change_date <= to_date)
+    if q:
+        like = f"%{q}%"
+        query = query.join(Driver).outerjoin(Project, DriverStatusChange.left_project_id == Project.id) \
+                     .outerjoin(District, DriverStatusChange.left_district_id == District.id) \
+                     .filter(or_(
+                         Driver.name.ilike(like),
+                         Driver.driver_id.ilike(like),
+                         Project.name.ilike(like),
+                         District.name.ilike(like),
+                         DriverStatusChange.reason.ilike(like),
+                         DriverStatusChange.remarks.ilike(like),
+                         cast(DriverStatusChange.change_date, SAString).ilike(like),
+                     ))
+
+    left_records = query.order_by(DriverStatusChange.change_date.desc()).all()
+
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+
+    return render_template(
+        'driver_job_left_list.html',
+        records=left_records,
+        title="Driver Job Left History",
+        project_id=project_id,
+        district_id=district_id,
+        q=q,
+        from_date=from_date_str,
+        to_date=to_date_str,
+        project_choices=projects,
+        district_choices=districts,
+    )
 
 @app.route('/driver-job-left/view/<int:id>')
 def driver_job_left_view(id):
@@ -5068,11 +5520,40 @@ def driver_job_left_delete(id):
 # routes.py mein ye function add karein
 @app.route('/driver/rejoin/list')
 def driver_rejoin_list():
-    search = request.args.get('search', '').strip()
+    # Filters: date range, project, district, search
+    search = (request.args.get('search') or '').strip()
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    from_date_str = (request.args.get('from_date') or '').strip()
+    to_date_str = (request.args.get('to_date') or '').strip()
+
+    from_date = None
+    to_date = None
+    try:
+        if from_date_str:
+            from_date = datetime.strptime(from_date_str, '%d-%m-%Y').date()
+    except ValueError:
+        from_date = None
+    try:
+        if to_date_str:
+            to_date = datetime.strptime(to_date_str, '%d-%m-%Y').date()
+    except ValueError:
+        to_date = None
+
     query = DriverStatusChange.query.filter_by(action_type='rejoin') \
-                         .join(Driver, DriverStatusChange.driver_id == Driver.id) \
-                         .outerjoin(Project, DriverStatusChange.new_project_id == Project.id) \
-                         .outerjoin(Vehicle, DriverStatusChange.new_vehicle_id == Vehicle.id)
+        .join(Driver, DriverStatusChange.driver_id == Driver.id) \
+        .outerjoin(Project, DriverStatusChange.new_project_id == Project.id) \
+        .outerjoin(Vehicle, DriverStatusChange.new_vehicle_id == Vehicle.id) \
+        .outerjoin(District, DriverStatusChange.new_district_id == District.id)
+
+    if project_id:
+        query = query.filter(DriverStatusChange.new_project_id == project_id)
+    if district_id:
+        query = query.filter(DriverStatusChange.new_district_id == district_id)
+    if from_date:
+        query = query.filter(DriverStatusChange.change_date >= from_date)
+    if to_date:
+        query = query.filter(DriverStatusChange.change_date <= to_date)
     if search:
         like = f'%{search}%'
         query = query.filter(
@@ -5080,14 +5561,28 @@ def driver_rejoin_list():
                 Driver.name.ilike(like),
                 Driver.driver_id.ilike(like),
                 Project.name.ilike(like),
+                District.name.ilike(like),
                 Vehicle.vehicle_no.ilike(like)
             )
         )
+
     rejoin_records = query.order_by(DriverStatusChange.change_date.desc()).all()
-    return render_template('driver_rejoin_list.html',
-                           records=rejoin_records,
-                           search=search,
-                           title="Driver Rejoin History")
+
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+
+    return render_template(
+        'driver_rejoin_list.html',
+        records=rejoin_records,
+        search=search,
+        title="Driver Rejoin History",
+        project_id=project_id,
+        district_id=district_id,
+        from_date=from_date_str,
+        to_date=to_date_str,
+        project_choices=projects,
+        district_choices=districts,
+    )
 
 
 @app.route('/driver/rejoin/export')
@@ -5198,6 +5693,7 @@ def driver_attendance_list():
     form = DriverAttendanceFilterForm()
     # Sirf assigned projects (company assign kiye gaye)
     form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    # Default: aaj ki date; from/to support ke liye base date phir bhi chahiye
     view_date = date.today()
     def _int_arg(name):
         v = request.args.get(name)
@@ -5213,8 +5709,29 @@ def driver_attendance_list():
     vehicle_id = _int_arg('vehicle_id')
     shift = (request.args.get('shift') or '').strip()
     search = (request.args.get('search') or '').strip()
-    if request.args.get('date'):
+    # From / To date range (strings in dd-mm-yyyy)
+    from_date_str = (request.args.get('from_date') or '').strip()
+    to_date_str = (request.args.get('to_date') or '').strip()
+
+    from_date = None
+    to_date = None
+    try:
+        if from_date_str:
+            from_date = parse_date(from_date_str)
+    except ValueError:
+        from_date = None
+    try:
+        if to_date_str:
+            to_date = parse_date(to_date_str)
+    except ValueError:
+        to_date = None
+
+    # Agar single-date filter (purana param) diya ho to usse from/to ke roop mein treat karein
+    if request.args.get('date') and not from_date and not to_date:
         view_date = parse_date(request.args.get('date')) or view_date
+        from_date = to_date = view_date
+        from_date_str = to_date_str = view_date.strftime('%d-%m-%Y')
+
     form.attendance_date.data = view_date
     form.project_id.data = project_id if project_id else 0
     if project_id and project_id != 0:
@@ -5242,8 +5759,16 @@ def driver_attendance_list():
     form.district_id.data = district_id if district_id else 0
 
     # Sirf wo records jo Mark Attendance form se mark hue (DriverAttendance table mein hain)
-    # Jab specific project select ho: attendance.project_id match ho YA attendance.project_id NULL ho aur driver us project ka ho
-    query = DriverAttendance.query.filter_by(attendance_date=view_date)
+    # Agar from/to diya ho to date range, warna single view_date
+    query = DriverAttendance.query
+    if from_date and to_date:
+        query = query.filter(DriverAttendance.attendance_date.between(from_date, to_date))
+    elif from_date:
+        query = query.filter(DriverAttendance.attendance_date >= from_date)
+    elif to_date:
+        query = query.filter(DriverAttendance.attendance_date <= to_date)
+    else:
+        query = query.filter(DriverAttendance.attendance_date == view_date)
     if project_id:
         query = query.outerjoin(Driver, DriverAttendance.driver_id == Driver.id).filter(
             db.or_(
@@ -5269,6 +5794,16 @@ def driver_attendance_list():
             drivers_query = Driver.query.options(
                 db.joinedload(Driver.vehicle).joinedload(Vehicle.parking_station)
             ).filter(Driver.id.in_(driver_ids))
+
+        # Current user ki scope apply karein (Master/Admin ke ilawa)
+        scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+        if scope_projects:
+            drivers_query = drivers_query.filter(Driver.project_id.in_(scope_projects))
+        if scope_vehicles:
+            drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
+        if scope_shifts:
+            drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
+
         if district_id:
             drivers_query = drivers_query.filter(
                 db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
@@ -5303,6 +5838,16 @@ def _driver_attendance_marked_list(view_date, project_id=None, district_id=None,
     drivers_query = Driver.query.options(
         db.joinedload(Driver.vehicle).joinedload(Vehicle.parking_station)
     ).filter(Driver.id.in_(driver_ids))
+
+    # Scope apply karein (non Master/Admin users ke liye)
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    if scope_projects:
+        drivers_query = drivers_query.filter(Driver.project_id.in_(scope_projects))
+    if scope_vehicles:
+        drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
+    if scope_shifts:
+        drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
+
     if district_id:
         drivers_query = drivers_query.filter(Driver.district_id == district_id)
     if vehicle_id:
@@ -5405,7 +5950,17 @@ def driver_attendance_print():
 @app.route('/driver-attendance/mark', methods=['GET', 'POST'])
 def driver_attendance_mark():
     form = DriverAttendanceFilterForm()
-    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    project_query = Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name)
+    if scope_projects:
+        project_query = project_query.filter(Project.id.in_(scope_projects))
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_query.all()]
+    has_single_scope = bool(
+        scope_projects and len(scope_projects) == 1 and
+        scope_districts and len(scope_districts) == 1 and
+        scope_vehicles and len(scope_vehicles) == 1 and
+        scope_shifts and len(scope_shifts) == 1
+    )
     view_date = date.today()
     project_id = request.args.get('project_id', type=int) or request.form.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int) or request.form.get('district_id', type=int)
@@ -5424,7 +5979,12 @@ def driver_attendance_mark():
     if request.args.get('date'):
         view_date = parse_date(request.args.get('date')) or view_date
     if request.method == 'POST' and request.form.get('attendance_date'):
-        view_date = parse_date(request.form.get('attendance_date')) or view_date
+        candidate = parse_date(request.form.get('attendance_date')) or view_date
+        # Future date par Leave / Late / Half-Day / Off ya koi bhi manual status allow na karein
+        if candidate and candidate > date.today():
+            flash('Attendance status cannot be marked for a future date.', 'danger')
+            return redirect(url_for('driver_attendance_mark', date=date.today().strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', vehicle_id=vehicle_id or '', shift=shift or '', driver_id=driver_id or '', search=search))
+        view_date = candidate
         project_id = request.form.get('project_id', type=int) or None
         if project_id == 0:
             project_id = None
@@ -5458,22 +6018,60 @@ def driver_attendance_mark():
         form.attendance_date.data = view_date
         form.project_id.data = project_id if project_id else 0
     if project_id and project_id != 0:
-        districts = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name).all()
+        districts_query = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name)
+        if scope_districts:
+            districts_query = districts_query.filter(District.id.in_(scope_districts))
+        districts = districts_query.all()
         form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
     else:
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+        districts_query = District.query.order_by(District.name)
+        if scope_districts:
+            districts_query = districts_query.filter(District.id.in_(scope_districts))
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts_query.all()]
     if request.method == 'GET':
         form.district_id.data = district_id if district_id else 0
     vehicles = []
     if project_id and district_id:
-        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
+        vq = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id)
+        if scope_vehicles:
+            vq = vq.filter(Vehicle.id.in_(scope_vehicles))
+        if scope_projects:
+            vq = vq.filter(Vehicle.project_id.in_(scope_projects))
+        if scope_districts:
+            vq = vq.filter(Vehicle.district_id.in_(scope_districts))
+        vehicles = vq.order_by(Vehicle.vehicle_no).all()
     elif project_id:
-        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id).order_by(Vehicle.vehicle_no).all()
+        vq = Vehicle.query.filter(Vehicle.project_id == project_id)
+        if scope_vehicles:
+            vq = vq.filter(Vehicle.id.in_(scope_vehicles))
+        if scope_districts:
+            vq = vq.filter(Vehicle.district_id.in_(scope_districts))
+        vehicles = vq.order_by(Vehicle.vehicle_no).all()
     elif district_id:
-        vehicles = Vehicle.query.filter(Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
+        vq = Vehicle.query.filter(Vehicle.district_id == district_id)
+        if scope_vehicles:
+            vq = vq.filter(Vehicle.id.in_(scope_vehicles))
+        if scope_projects:
+            vq = vq.filter(Vehicle.project_id.in_(scope_projects))
+        vehicles = vq.order_by(Vehicle.vehicle_no).all()
     else:
-        vehicles = Vehicle.query.filter(Vehicle.project_id.isnot(None)).order_by(Vehicle.vehicle_no).all()
+        vq = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+        if scope_vehicles:
+            vq = vq.filter(Vehicle.id.in_(scope_vehicles))
+        if scope_projects:
+            vq = vq.filter(Vehicle.project_id.in_(scope_projects))
+        if scope_districts:
+            vq = vq.filter(Vehicle.district_id.in_(scope_districts))
+        vehicles = vq.order_by(Vehicle.vehicle_no).all()
     drivers_query = Driver.query.filter(Driver.status == 'Active').filter(Driver.vehicle_id.isnot(None))
+    if scope_projects:
+        drivers_query = drivers_query.filter(Driver.project_id.in_(scope_projects))
+    if scope_districts:
+        drivers_query = drivers_query.filter(Driver.district_id.in_(scope_districts))
+    if scope_vehicles:
+        drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
+    if scope_shifts:
+        drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
     if project_id:
         drivers_query = drivers_query.filter(Driver.project_id == project_id)
     need_vehicle_join = bool(district_id or search)
@@ -5561,7 +6159,7 @@ def driver_attendance_mark():
         except Exception as e:
             db.session.rollback()
             flash(f'Error saving status: {str(e)}', 'danger')
-    return render_template('driver_attendance_mark.html', form=form, view_date=view_date, drivers=drivers, existing=existing, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, status_choices=ATTENDANCE_STATUS_CHOICES, vehicles=vehicles, vehicle_drivers=vehicle_drivers)
+    return render_template('driver_attendance_mark.html', form=form, view_date=view_date, drivers=drivers, existing=existing, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, status_choices=ATTENDANCE_STATUS_CHOICES, vehicles=vehicles, vehicle_drivers=vehicle_drivers, has_single_scope=has_single_scope)
 
 
 @app.route('/driver-attendance/bulk-off', methods=['GET', 'POST'])
@@ -5572,8 +6170,10 @@ def driver_attendance_bulk_off():
     district_id = request.args.get('district_id', type=int) or request.form.get('district_id', type=int)
     project_id = request.args.get('project_id', type=int) or request.form.get('project_id', type=int)
     if request.args.get('date'):
+        # Report kisi bhi date ke liye dekh sakte hain (including future)
         view_date = parse_date(request.args.get('date')) or view_date
     if request.form.get('bulk_off_date'):
+        # Form se aane wali date ko bhi direct view_date bana do (sirf list / confirmation ke liye)
         view_date = parse_date(request.form.get('bulk_off_date')) or view_date
     if district_id == 0:
         district_id = None
@@ -5584,23 +6184,42 @@ def driver_attendance_bulk_off():
         projects = Project.query.join(project_district).filter(
             project_district.c.district_id == district_id
         ).order_by(Project.name).all()
-    drivers = []
-    if project_id:
-        drivers_query = Driver.query.filter(
-            Driver.status == 'Active',
-            Driver.vehicle_id.isnot(None),
-            Driver.project_id == project_id,
-        )
-        if district_id:
-            drivers_query = drivers_query.filter(
-                db.or_(
-                    Driver.district_id == district_id,
-                    Driver.district_id.is_(None),
-                )
-            )
-        drivers = drivers_query.order_by(Driver.name).all()
+    else:
+        # Agar district select nahi hai to sab projects dikhao (better UX)
+        projects = Project.query.order_by(Project.name).all()
 
-    if request.method == 'POST' and request.form.get('confirm_bulk_off') and project_id:
+    # Drivers list: agar project/district select nahi bhi kiye, to bhi date ke liye complete list dikhao
+    drivers_query = Driver.query.filter(
+        Driver.status == 'Active',
+        Driver.vehicle_id.isnot(None),
+    )
+    if project_id:
+        drivers_query = drivers_query.filter(Driver.project_id == project_id)
+    if district_id:
+        drivers_query = drivers_query.filter(
+            db.or_(
+                Driver.district_id == district_id,
+                Driver.district_id.is_(None),
+            )
+        )
+    drivers = drivers_query.order_by(Driver.name).all()
+
+    if request.method == 'POST' and request.form.get('confirm_bulk_off'):
+        # Future date par Bulk Off allow na karein (sirf past / today)
+        if view_date > date.today():
+            flash('Bulk Off cannot be applied for a future date.', 'danger')
+            return redirect(url_for('driver_attendance_bulk_off',
+                                    date=date.today().strftime('%d-%m-%Y'),
+                                    district_id=district_id or '',
+                                    project_id=project_id or ''))
+
+        if not drivers:
+            flash('No drivers found for the selected filters to apply Bulk Off.', 'warning')
+            return redirect(url_for('driver_attendance_bulk_off',
+                                    date=view_date.strftime('%d-%m-%Y'),
+                                    district_id=district_id or '',
+                                    project_id=project_id or ''))
+
         count = 0
         for d in drivers:
             rec = DriverAttendance.query.filter_by(
@@ -5648,6 +6267,7 @@ def driver_attendance_pending():
     form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
     view_date = date.today()
     if request.args.get('date'):
+        # Report kisi bhi date ke liye dekh sakte hain (including future)
         view_date = parse_date(request.args.get('date')) or view_date
     project_id = request.args.get('project_id', type=int) or None
     district_id = request.args.get('district_id', type=int) or None
@@ -5719,6 +6339,7 @@ def driver_attendance_missing_checkout():
     form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
     view_date = date.today()
     if request.args.get('date'):
+        # Report kisi bhi date ke liye dekh sakte hain (including future)
         view_date = parse_date(request.args.get('date')) or view_date
     project_id = request.args.get('project_id', type=int) or None
     district_id = request.args.get('district_id', type=int) or None
@@ -5825,6 +6446,9 @@ def driver_attendance_manual_checkin():
     driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
     date_str = request.args.get('date') or request.form.get('date')
     view_date = parse_date(date_str) if date_str else date.today()
+    if view_date > date.today():
+        flash('Manual check-in cannot be recorded for a future date.', 'danger')
+        return redirect(url_for('driver_attendance_pending', date=date.today().strftime('%d-%m-%Y')))
     back_params = {}
     for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search'):
         v = request.args.get(k) or request.form.get(k)
@@ -5906,6 +6530,9 @@ def driver_attendance_manual_checkout():
     driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
     date_str = request.args.get('date') or request.form.get('date')
     view_date = parse_date(date_str) if date_str else date.today()
+    if view_date > date.today():
+        flash('Manual check-out cannot be recorded for a future date.', 'danger')
+        return redirect(url_for('driver_attendance_missing_checkout', date=date.today().strftime('%d-%m-%Y')))
     back_params = {}
     for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search'):
         v = request.args.get(k) or request.form.get(k)
@@ -5997,9 +6624,14 @@ def api_attendance_projects():
     district_id = request.args.get('district_id', type=int)
     if not district_id:
         return jsonify([])
-    projects = Project.query.join(project_district).filter(
+    projects_query = Project.query.join(project_district).filter(
         project_district.c.district_id == district_id
-    ).distinct().order_by(Project.name).all()
+    )
+    # User scope: agar specific projects allowed hain to wahi dikhayein
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    if scope_projects:
+        projects_query = projects_query.filter(Project.id.in_(scope_projects))
+    projects = projects_query.distinct().order_by(Project.name).all()
     return jsonify([{'id': p.id, 'name': p.name} for p in projects])
 
 
@@ -6013,6 +6645,14 @@ def api_attendance_vehicles():
     query = Vehicle.query.filter(Vehicle.project_id == project_id)
     if district_id:
         query = query.filter(Vehicle.district_id == district_id)
+    # Scope: vehicles/projects allowed for this user
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    if scope_projects:
+        query = query.filter(Vehicle.project_id.in_(scope_projects))
+    if scope_districts:
+        query = query.filter(Vehicle.district_id.in_(scope_districts))
+    if scope_vehicles:
+        query = query.filter(Vehicle.id.in_(scope_vehicles))
     vehicles = query.order_by(Vehicle.vehicle_no).all()
     out = []
     for v in vehicles:
@@ -6038,12 +6678,19 @@ def api_attendance_drivers():
     shift = (request.args.get('shift') or '').strip()
     if not project_id:
         return jsonify([])
-    query = Driver.query.filter_by(project_id=project_id, status='Active').order_by(Driver.name)
+    query = Driver.query.filter_by(project_id=project_id, status='Active')
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    if scope_projects:
+        query = query.filter(Driver.project_id.in_(scope_projects))
+    if scope_vehicles:
+        query = query.filter(Driver.vehicle_id.in_(scope_vehicles))
+    if scope_shifts:
+        query = query.filter(Driver.shift.in_(scope_shifts))
     if vehicle_id:
         query = query.filter(Driver.vehicle_id == vehicle_id)
     if shift:
         query = query.filter(Driver.shift == shift)
-    drivers = query.all()
+    drivers = query.order_by(Driver.name).all()
     return jsonify([{'id': d.id, 'name': d.name, 'driver_id': d.driver_id, 'shift': d.shift or ''} for d in drivers])
 
 
@@ -6061,6 +6708,15 @@ def api_attendance_filtered_drivers():
     if vehicle_id == 0:
         vehicle_id = None
     q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    if scope_projects:
+        q = q.filter(Driver.project_id.in_(scope_projects))
+    if scope_districts:
+        q = q.filter(Driver.district_id.in_(scope_districts))
+    if scope_vehicles:
+        q = q.filter(Driver.vehicle_id.in_(scope_vehicles))
+    if scope_shifts:
+        q = q.filter(Driver.shift.in_(scope_shifts))
     if project_id:
         q = q.filter(Driver.project_id == project_id)
     need_vehicle = bool(district_id)
@@ -6111,7 +6767,13 @@ def api_attendance_has_gps_checkin():
 @app.route('/driver-attendance/checkin', methods=['GET', 'POST'])
 def driver_attendance_checkin():
     """Geofenced check-in: District → Project → Vehicle → Parking (auto) → Shift → Driver. Then location + selfie."""
-    districts = District.query.join(project_district, District.id == project_district.c.district_id).distinct().order_by(District.name).all()
+    districts_query = District.query.join(project_district, District.id == project_district.c.district_id)
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    if scope_districts:
+        districts_query = districts_query.filter(District.id.in_(scope_districts))
+    elif scope_projects:
+        districts_query = districts_query.filter(project_district.c.project_id.in_(scope_projects))
+    districts = districts_query.distinct().order_by(District.name).all()
     today = _attendance_local_date()
     if request.method == 'POST':
         driver_id = request.form.get('driver_id', type=int)
@@ -6323,41 +6985,116 @@ def driver_attendance_checkout():
 @app.route('/driver-attendance/report', methods=['GET', 'POST'])
 def driver_attendance_report():
     form = DriverAttendanceReportForm()
-    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    # User scope apply karein (Master/Admin ke ilawa)
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    has_single_scope = bool(
+        scope_projects and len(scope_projects) == 1 and
+        scope_districts and len(scope_districts) == 1 and
+        scope_vehicles and len(scope_vehicles) == 1 and
+        scope_shifts and len(scope_shifts) == 1
+    )
+    single_vehicle = None
+    if has_single_scope and scope_vehicles:
+        single_vehicle = Vehicle.query.get(scope_vehicles[0])
+
+    project_query = Project.query.filter(Project.company_id.isnot(None))
+    if scope_projects:
+        project_query = project_query.filter(Project.id.in_(scope_projects))
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_query.order_by(Project.name).all()]
+
+    # District choices: project ke hisaab se, warna scope/districts ke hisaab se
     if request.method == 'POST':
         try:
             pid = request.form.get('project_id', type=int) or 0
         except (TypeError, ValueError):
             pid = 0
         if pid and pid != 0:
-            districts = District.query.join(project_district).filter(project_district.c.project_id == pid).order_by(District.name).all()
-            form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
+            districts_query = District.query.join(project_district).filter(project_district.c.project_id == pid)
         else:
-            form.district_id.choices = [(0, '-- All Districts --')]
+            districts_query = District.query
+        if scope_districts:
+            districts_query = districts_query.filter(District.id.in_(scope_districts))
+        districts = districts_query.order_by(District.name).all()
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
     else:
-        form.district_id.choices = [(0, '-- All Districts --')]
+        districts_query = District.query
+        if scope_districts:
+            districts_query = districts_query.filter(District.id.in_(scope_districts))
+        districts = districts_query.order_by(District.name).all()
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
     today = date.today()
     form.month.data = form.month.data or today.month
     form.year.data = form.year.data or today.year
     report = []
+    selected_vehicle_id = 0
+    selected_shift = ''
+    vehicle_choices = []  # [(id, label), ...] for multi-scope POST so dropdown retains selection
+    if request.method == 'POST':
+        try:
+            selected_vehicle_id = request.form.get('vehicle_id', type=int) or 0
+        except (TypeError, ValueError):
+            selected_vehicle_id = 0
+        selected_shift = (request.form.get('shift') or '').strip()
+        # Build vehicle options for POST so template can render them (no reset)
+        pid = form.project_id.data or 0
+        did = form.district_id.data or 0
+        if pid and did:
+            vq = Vehicle.query.filter(Vehicle.project_id == pid, Vehicle.district_id == did)
+            if scope_vehicles:
+                vq = vq.filter(Vehicle.id.in_(scope_vehicles))
+            if scope_projects:
+                vq = vq.filter(Vehicle.project_id.in_(scope_projects))
+            if scope_districts:
+                vq = vq.filter(Vehicle.district_id.in_(scope_districts))
+            for v in vq.order_by(Vehicle.vehicle_no).all():
+                label = v.vehicle_no + ((' (' + v.vehicle_type + ')') if v.vehicle_type else '')
+                vehicle_choices.append((v.id, label))
     if request.method == 'POST' and form.validate_on_submit():
         month = form.month.data
         year = form.year.data
-        project_id = form.project_id.data if form.project_id.data else 0
+        project_id = form.project_id.data or 0
         if project_id == 0:
             project_id = None
-        district_id = form.district_id.data if form.district_id.data else 0
+        district_id = form.district_id.data or 0
         if district_id == 0:
             district_id = None
+        vehicle_id = request.form.get('vehicle_id', type=int) or 0
+        if vehicle_id == 0:
+            vehicle_id = None
+        shift = (request.form.get('shift') or '').strip()
         search = (form.search.data or '').strip()
         drivers_query = Driver.query.filter(Driver.status == 'Active').filter(Driver.vehicle_id.isnot(None))
+        # Scope enforce karein
+        if scope_projects:
+            drivers_query = drivers_query.filter(Driver.project_id.in_(scope_projects))
+        if scope_districts:
+            drivers_query = drivers_query.filter(Driver.district_id.in_(scope_districts))
+        if scope_vehicles:
+            drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
+        if scope_shifts:
+            drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
         if project_id:
             drivers_query = drivers_query.filter(Driver.project_id == project_id)
+
+        # District filter ko Driver.district_id + Vehicle.district_id dono par apply karein
+        need_vehicle_join = bool(district_id or search)
+        if need_vehicle_join:
+            drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
         if district_id:
-            drivers_query = drivers_query.filter(Driver.district_id == district_id)
+            drivers_query = drivers_query.filter(
+                db.or_(
+                    Driver.district_id == district_id,
+                    Vehicle.district_id == district_id,
+                )
+            )
+
+        if vehicle_id:
+            drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
+        if shift:
+            drivers_query = drivers_query.filter(Driver.shift == shift)
         if search:
             q = f'%{search}%'
-            drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+            drivers_query = drivers_query.filter(
                 db.or_(
                     Driver.name.ilike(q),
                     Driver.driver_id.ilike(q),
@@ -6389,7 +7126,7 @@ def driver_attendance_report():
                 'total_marked': len(rows),
                 'days_in_month': ndays,
             })
-    return render_template('driver_attendance_report.html', form=form, report=report)
+    return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices)
 
 
 # ─── Task Report ─────────────────────────────────
@@ -6413,6 +7150,13 @@ def get_vehicles_by_project_district():
         q = Vehicle.query.filter(Vehicle.district_id == district_id)
     else:
         q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    if scope_projects:
+        q = q.filter(Vehicle.project_id.in_(scope_projects))
+    if scope_districts:
+        q = q.filter(Vehicle.district_id.in_(scope_districts))
+    if scope_vehicles:
+        q = q.filter(Vehicle.id.in_(scope_vehicles))
     vehicles = q.order_by(Vehicle.vehicle_no).all()
     return jsonify([{'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or ''} for v in vehicles])
 
@@ -8963,17 +9707,52 @@ def _render_ai_report_table(headers, rows):
 
 @app.route('/reports/project-summary')
 def report_project_summary():
-    projects = Project.query.order_by(Project.name).all()
+    from_date_str = (request.args.get('from_date') or '').strip()
+    to_date_str = (request.args.get('to_date') or '').strip()
+    project_id = request.args.get('project_id', type=int) or 0
+
+    from_date = parse_date(from_date_str) if from_date_str else None
+    to_date = parse_date(to_date_str) if to_date_str else None
+
+    projects_q = Project.query.order_by(Project.name)
+    if project_id:
+        projects_q = projects_q.filter(Project.id == project_id)
+
+    projects = projects_q.all()
     data = []
     for p in projects:
+        vehicle_q = Vehicle.query.filter(Vehicle.project_id == p.id)
+        if from_date:
+            vehicle_q = vehicle_q.filter(Vehicle.active_date >= from_date)
+        if to_date:
+            vehicle_q = vehicle_q.filter(Vehicle.active_date <= to_date)
+
+        vehicles = vehicle_q.all()
+        vehicle_ids = [v.id for v in vehicles]
+
+        driver_q = Driver.query.filter(Driver.project_id == p.id)
+        if vehicle_ids:
+            driver_q = driver_q.filter(Driver.vehicle_id.in_(vehicle_ids))
+        drivers = driver_q.all()
+
         data.append({
             'project': p,
-            'vehicle_count': len(p.vehicles),
-            'driver_count': len(p.drivers),
+            'vehicle_count': len(vehicles),
+            'driver_count': len(drivers),
             'parking_count': len(p.parking_stations),
             'district_count': p.districts.count(),
         })
-    return render_template('report_project_summary.html', data=data)
+
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+
+    return render_template(
+        'report_project_summary.html',
+        data=data,
+        from_date=from_date_str,
+        to_date=to_date_str,
+        project_id=project_id,
+        project_choices=project_choices,
+    )
 
 
 @app.route('/reports/district-summary')
@@ -8991,8 +9770,49 @@ def report_district_summary():
 
 @app.route('/reports/vehicle-summary')
 def report_vehicle_summary():
-    vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
-    return render_template('report_vehicle_summary.html', vehicles=vehicles)
+    from_date_str = (request.args.get('from_date') or '').strip()
+    to_date_str = (request.args.get('to_date') or '').strip()
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+
+    from_date = parse_date(from_date_str) if from_date_str else None
+    to_date = parse_date(to_date_str) if to_date_str else None
+
+    # Base query: sirf active date non-null vehicles
+    query = Vehicle.query.filter(Vehicle.active_date.isnot(None))
+    if project_id:
+        query = query.filter(Vehicle.project_id == project_id)
+    if district_id:
+        query = query.filter(Vehicle.district_id == district_id)
+    if vehicle_id:
+        query = query.filter(Vehicle.id == vehicle_id)
+    # Shift filter via joined drivers (current assignment)
+
+    if from_date:
+        query = query.filter(Vehicle.active_date >= from_date)
+    if to_date:
+        query = query.filter(Vehicle.active_date <= to_date)
+
+    vehicles = query.order_by(Vehicle.vehicle_no).all()
+
+    # Dropdown choices
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in Vehicle.query.filter(Vehicle.project_id.isnot(None)).order_by(Vehicle.vehicle_no).all()]
+
+    return render_template(
+        'report_vehicle_summary.html',
+        vehicles=vehicles,
+        from_date=from_date_str,
+        to_date=to_date_str,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        vehicle_choices=vehicle_choices,
+    )
 
 
 @app.route('/reports/driver-profile/<int:driver_id>')
@@ -9021,8 +9841,29 @@ def report_expiry():
     days = request.args.get('days', type=int)
     if days is None:
         days = 0
+    only = (request.args.get('only') or 'all').lower()
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    shift = (request.args.get('shift') or '').strip()
     end = today + timedelta(days=days) if days > 0 else today
-    drivers = Driver.query.filter(Driver.status == 'Active').all()
+
+    # Base driver query with optional filters
+    # Sirf woh drivers jinke sath koi vehicle assigned hai
+    driver_q = Driver.query.filter(
+        Driver.status == 'Active',
+        Driver.vehicle_id.isnot(None),
+    )
+    if project_id:
+        driver_q = driver_q.filter(Driver.project_id == project_id)
+    if district_id:
+        driver_q = driver_q.filter(Driver.district_id == district_id)
+    if vehicle_id:
+        driver_q = driver_q.filter(Driver.vehicle_id == vehicle_id)
+    if shift:
+        driver_q = driver_q.filter(Driver.shift == shift)
+
+    drivers = driver_q.all()
     expiring = []
     for d in drivers:
         row = {'driver': d, 'license_expiry': d.license_expiry_date, 'cnic_expiry': d.cnic_expiry_date}
@@ -9030,9 +9871,48 @@ def report_expiry():
         row['cnic_expired'] = bool(d.cnic_expiry_date and d.cnic_expiry_date < today)
         row['license_soon'] = bool(days > 0 and d.license_expiry_date and today <= d.license_expiry_date <= end)
         row['cnic_soon'] = bool(days > 0 and d.cnic_expiry_date and today <= d.cnic_expiry_date <= end)
-        if row['license_expired'] or row['cnic_expired'] or row['license_soon'] or row['cnic_soon']:
-            expiring.append(row)
-    return render_template('report_expiry.html', expiring=expiring, days=days)
+
+        has_license_issue = row['license_expired'] or row['license_soon']
+        has_cnic_issue = row['cnic_expired'] or row['cnic_soon']
+
+        if only == 'license' and not has_license_issue:
+            continue
+        if only == 'cnic' and not has_cnic_issue:
+            continue
+        if not (has_license_issue or has_cnic_issue):
+            continue
+
+        expiring.append(row)
+
+    # Dropdown choices
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    vehicle_choices = [(0, '-- All Vehicles --')]
+    base_vehicle_q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+    if project_id:
+        base_vehicle_q = base_vehicle_q.filter(Vehicle.project_id == project_id)
+    if district_id:
+        base_vehicle_q = base_vehicle_q.filter(Vehicle.district_id == district_id)
+    vehicle_choices += [(v.id, v.vehicle_no) for v in base_vehicle_q.order_by(Vehicle.vehicle_no).all()]
+
+    # Shift list from active drivers
+    shift_rows = db.session.query(Driver.shift).filter(Driver.shift.isnot(None), Driver.shift != '').distinct().order_by(Driver.shift).all()
+    shift_choices = [('', '-- All Shifts --')] + [(s[0], s[0]) for s in shift_rows]
+
+    return render_template(
+        'report_expiry.html',
+        expiring=expiring,
+        days=days,
+        only=only,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        vehicle_choices=vehicle_choices,
+        shift_choices=shift_choices,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        shift=shift,
+    )
 
 
 @app.route('/reports/parking-utilization')

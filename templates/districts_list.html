@@ -33,9 +33,11 @@
       <a href="{{ url_for('districts_print', search=search) }}" target="_blank" class="btn btn-outline-primary">
         <i class="bi bi-printer me-1"></i>Print / PDF
       </a>
+      {% if can_see_page('districts_add') %}
       <a href="{{ url_for('district_form') }}" class="btn btn-success">
         <i class="bi bi-plus-circle me-1"></i>Add New District
       </a>
+      {% endif %}
     </div>
   </div>
 
@@ -103,14 +105,18 @@
               <td>{{ district.remarks|truncate(80) or '-' }}</td>
               <td>{{ district.created_at.strftime('%Y-%m-%d') }}</td>
               <td>
+                {% if can_see_page('districts_edit') %}
                 <a href="{{ url_for('district_form', id=district.id) }}" class="btn btn-sm btn-warning me-1" title="Edit">
                   <i class="bi bi-pencil-square"></i> Edit
                 </a>
+                {% endif %}
+                {% if can_see_page('districts_delete') %}
                 <form action="{{ url_for('delete_district', id=district.id) }}" method="POST" style="display:inline;">
                   <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete district {{ district.name }}?')">
                     <i class="bi bi-trash"></i> Delete
                   </button>
                 </form>
+                {% endif %}
               </td>
             </tr>
             {% else %}
@@ -118,7 +124,9 @@
               <td colspan="7" class="text-center py-5">
                 <div class="alert alert-info mb-0">
                   <i class="bi bi-info-circle-fill me-2 fs-4"></i>No districts found.
+                  {% if can_see_page('districts_add') %}
                   <a href="{{ url_for('district_form') }}" class="alert-link">Add a new district now</a>.
+                  {% endif %}
                 </div>
               </td>
             </tr>

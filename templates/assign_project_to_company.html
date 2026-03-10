@@ -94,9 +94,11 @@
             <a href="{{ url_for('assign_project_to_company_print', search=search or '') }}" target="_blank" class="btn btn-outline-primary shadow-sm px-3 rounded-3">
                 <i class="bi bi-eye me-2"></i>Report Preview
             </a>
+            {% if can_see_page('assign_project_to_company_add') %}
             <a href="{{ url_for('assign_project_to_company_new') }}" class="btn btn-primary btn-lg shadow-sm px-4 rounded-3">
                 <i class="bi bi-plus-lg me-2"></i>Assign New Project
             </a>
+            {% endif %}
         </div>
     </div>
 
@@ -155,24 +157,32 @@
                         <td class="text-end">
                             <div class="d-flex justify-content-end gap-2">
                                 {% if proj.id in project_ids_with_districts %}
-                                <span class="btn btn-action btn-edit locked" title="District linked – Edit disabled">
-                                    <i class="bi bi-lock-fill me-1"></i> Edit
-                                </span>
-                                <span class="btn btn-action btn-deassign locked" title="District linked – Deassign disabled">
-                                    <i class="bi bi-lock-fill me-1"></i> Deassign
-                                </span>
+                                  {% if can_see_page('assign_project_to_company_edit') %}
+                                  <span class="btn btn-action btn-edit locked" title="District linked – Edit disabled">
+                                      <i class="bi bi-lock-fill me-1"></i> Edit
+                                  </span>
+                                  {% endif %}
+                                  {% if can_see_page('assign_project_to_company_desassign') %}
+                                  <span class="btn btn-action btn-deassign locked" title="District linked – Deassign disabled">
+                                      <i class="bi bi-lock-fill me-1"></i> Deassign
+                                  </span>
+                                  {% endif %}
                                 {% else %}
-                                <a href="{{ url_for('assign_project_to_company_edit', project_id=proj.id) }}" 
-                                   class="btn btn-action btn-edit text-decoration-none">
-                                    <i class="bi bi-pencil-square"></i> Edit
-                                </a>
-                                <form action="{{ url_for('desassign_project_from_company', project_id=proj.id) }}" method="POST" class="m-0">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-action btn-deassign" 
-                                            onclick="return confirm('Do you want to deassign project: {{ proj.name }}?')">
-                                        <i class="bi bi-link-45deg"></i> Deassign
-                                    </button>
-                                </form>
+                                  {% if can_see_page('assign_project_to_company_edit') %}
+                                  <a href="{{ url_for('assign_project_to_company_edit', project_id=proj.id) }}"
+                                     class="btn btn-action btn-edit text-decoration-none">
+                                      <i class="bi bi-pencil-square"></i> Edit
+                                  </a>
+                                  {% endif %}
+                                  {% if can_see_page('assign_project_to_company_desassign') %}
+                                  <form action="{{ url_for('desassign_project_from_company', project_id=proj.id) }}" method="POST" class="m-0">
+                                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                      <button type="submit" class="btn btn-action btn-deassign"
+                                              onclick="return confirm('Do you want to deassign project: {{ proj.name }}?')">
+                                          <i class="bi bi-link-45deg"></i> Deassign
+                                      </button>
+                                  </form>
+                                  {% endif %}
                                 {% endif %}
                             </div>
                         </td>

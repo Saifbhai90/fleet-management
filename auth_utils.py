@@ -53,23 +53,31 @@ ENDPOINT_PERMISSION_MAP = [
     ('vehicles_list', 'vehicles_list'),
     ('vehicle_form', 'vehicles_add'),
     ('delete_vehicle', 'vehicles_delete'),
+    ('vehicles_import', 'vehicles_import'),
     ('parking_list', 'parking_list'),
     ('parking_form', 'parking_add'),
     ('delete_parking', 'parking_delete'),
+    ('parking_import', 'parking_import'),
     ('drivers_list', 'drivers_list'),
     ('driver_form', 'drivers_add'),
     ('delete_driver', 'drivers_delete'),
+    ('drivers_import', 'drivers_import'),
     ('employees_list', 'employees_list'),
     ('employee_form', 'employees_add'),
+    ('employee_delete', 'employees_delete'),
+    ('employees_import', 'employees_import'),
+    ('role_delete', 'role_edit'),
     ('driver_post_list', 'driver_post_list'),
     ('driver_post_form', 'driver_post_add'),
     ('driver_post_delete', 'driver_post_delete'),
     ('party_list', 'party_list'),
     ('party_form', 'party_add'),
     ('party_delete', 'party_delete'),
+    ('party_import', 'party_import'),
     ('product_list', 'product_list'),
     ('product_form', 'product_add'),
     ('product_delete', 'product_delete'),
+    ('product_import', 'product_import'),
     # Assignments – granular per feature
     # Project → Company
     ('assign_project_to_company_edit', 'assign_project_to_company_edit'),
@@ -98,14 +106,14 @@ ENDPOINT_PERMISSION_MAP = [
     ('desassign_vehicle_from_parking', 'assign_vehicle_to_parking_desassign'),
     ('assign_vehicle_to_parking_export', 'assign_vehicle_to_parking'),
     ('assign_vehicle_to_parking_print', 'assign_vehicle_to_parking'),
-    ('assign_vehicle_to_parking', 'assign_vehicle_to_parking'),
+    ('assign_vehicle_to_parking_list', 'assign_vehicle_to_parking'),
     # Driver → Vehicle
     ('assign_driver_to_vehicle_edit', 'assign_driver_to_vehicle_edit'),
     ('assign_driver_to_vehicle_new', 'assign_driver_to_vehicle_add'),
     ('desassign_driver_from_vehicle', 'assign_driver_to_vehicle_desassign'),
     ('assign_driver_to_vehicle_export', 'assign_driver_to_vehicle'),
     ('assign_driver_to_vehicle_print', 'assign_driver_to_vehicle'),
-    ('assign_driver_to_vehicle', 'assign_driver_to_vehicle'),
+    ('assign_driver_to_vehicle_list', 'assign_driver_to_vehicle'),
     # Transfers – granular
     # Project Transfer
     ('project-transfers', 'project_transfers'),
@@ -210,6 +218,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('user_list', 'user_list'),
     ('user_form', 'user_add'),
     ('user_edit', 'user_edit'),
+    ('user_delete', 'user_delete'),
     ('users_sync_from_employees_drivers', 'user_list'),
     ('role_list', 'role_list'),
     ('role_form', 'role_add'),
@@ -222,14 +231,18 @@ ENDPOINT_PERMISSION_MAP = [
 
 
 def get_required_permission(endpoint):
-    """Return permission code required for this endpoint, or None if no restriction."""
+    """Return permission code required for this endpoint, or None if no restriction.
+    Uses longest matching key so e.g. assign_vehicle_to_parking_list matches before parking_list."""
     if not endpoint:
         return None
     endpoint = endpoint.lower()
+    best_perm = None
+    best_key_len = 0
     for key, perm in ENDPOINT_PERMISSION_MAP:
-        if key in endpoint:
-            return perm
-    return None
+        if key in endpoint and len(key) > best_key_len:
+            best_perm = perm
+            best_key_len = len(key)
+    return best_perm
 
 
 # Section that grants full access to a permission (e.g. master grants companies_list)
@@ -254,18 +267,27 @@ def user_has_permission(permission_codes, code):
 
 def user_can_access(permission_codes, required_code):
     """
-    True if user has the exact required_code.
-
-    NOTE: Pehle yahan section-level codes (e.g. 'transfer', 'assignment') ko
-    full access ke liye treat kiya jata tha. Ab granular permissions use ho
-    rahi hain is liye sirf exact code hi access dega. Agar kisi section ke
-    andar kisi ek page ki access hata di jaye to "full" code akela us page ka
-    access nahi dega.
+    True if user has the exact required_code, or a section-level "full" code
+    that includes this permission (e.g. 'assignment' grants assign_vehicle_to_parking).
     """
     if not required_code:
         return True
     codes = permission_codes or []
-    return required_code in codes
+    if required_code in codes:
+        return True
+    # Section-level full codes: grant access to granular pages in that section
+    try:
+        from permissions_config import SECTION_FULL_TO_GROUP, SECTION_PAGE_GROUPS
+        for section_full, section_key in SECTION_FULL_TO_GROUP.items():
+            if section_full not in codes:
+                continue
+            for _page_label, items in SECTION_PAGE_GROUPS.get(section_key, []):
+                for code, _name in items:
+                    if code == required_code:
+                        return True
+    except Exception:
+        pass
+    return False
 
 
 def seed_auth_tables(app):
@@ -290,6 +312,18 @@ def seed_auth_tables(app):
             p = Permission.query.filter_by(code=code).first()
             if not p:
                 p = Permission(code=code, name=name, category=category)
+                db.session.add(p)
+        db.session.commit()
+
+        # Ensure assignment granular permissions exist (in case added to config after first seed)
+        for code, name in [
+            ('assign_vehicle_to_parking', 'Vehicle to Parking – List / View'),
+            ('assign_vehicle_to_parking_add', 'Vehicle to Parking – Add New'),
+            ('assign_vehicle_to_parking_edit', 'Vehicle to Parking – Edit'),
+            ('assign_vehicle_to_parking_desassign', 'Vehicle to Parking – Deassign'),
+        ]:
+            if not Permission.query.filter_by(code=code).first():
+                p = Permission(code=code, name=name, category='Assignments')
                 db.session.add(p)
         db.session.commit()
 

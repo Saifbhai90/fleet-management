@@ -6,9 +6,11 @@
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0 fw-bold"><i class="bi bi-person-vcard me-2 text-primary"></i>Employee Posts</h2>
+    {% if can_see_page('driver_post_add') %}
     <a href="{{ url_for('driver_post_form') }}" class="btn btn-success shadow-sm">
       <i class="bi bi-plus-circle me-1"></i>Add New Post
     </a>
+    {% endif %}
   </div>
 
   <form method="GET" class="mb-3">
@@ -41,9 +43,12 @@
               <td>{{ post.full_name }}</td>
               <td>{{ post.remarks or '-' }}</td>
               <td class="text-center">
+                {% if can_see_page('driver_post_edit') %}
                 <a href="{{ url_for('driver_post_form', id=post.id) }}" class="btn btn-sm btn-warning me-1">
                   <i class="bi bi-pencil-square"></i> Edit
                 </a>
+                {% endif %}
+                {% if can_see_page('driver_post_delete') %}
                 <form action="{{ url_for('driver_post_delete', id=post.id) }}" method="POST" style="display:inline;">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-sm btn-danger"
@@ -51,6 +56,7 @@
                     <i class="bi bi-trash"></i>
                   </button>
                 </form>
+                {% endif %}
               </td>
             </tr>
             {% else %}
@@ -58,7 +64,7 @@
               <td colspan="4" class="text-center py-5">
                 <div class="text-muted">
                   <i class="bi bi-person-vcard fs-1 d-block mb-3"></i>
-                  <p>No posts found. <a href="{{ url_for('driver_post_form') }}">Add your first post</a>.</p>
+                  <p>No posts found.{% if can_see_page('driver_post_add') %} <a href="{{ url_for('driver_post_form') }}">Add your first post</a>.{% endif %}</p>
                 </div>
               </td>
             </tr>

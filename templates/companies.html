@@ -6,7 +6,7 @@
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0 fw-bold text-navy">Companies Directory</h2>
-    {% if 'companies_add' in current_permissions or 'master' in current_permissions %}
+    {% if can_see_page('companies_add') %}
     <a href="{{ url_for('company_form') }}" class="btn btn-success shadow-sm">
       <i class="bi bi-plus-circle me-2"></i>Add New Company
     </a>
@@ -63,12 +63,12 @@
                     <i class="bi bi-file-earmark-bar-graph"></i> Report
                   </a>
                   {% endif %}
-                  {% if 'companies_edit' in current_permissions or 'master' in current_permissions %}
+                  {% if can_see_page('companies_edit') %}
                   <a href="{{ url_for('company_form', id=company.id) }}" class="btn btn-sm btn-warning" title="Edit">
                     <i class="bi bi-pencil-square"></i> Edit
                   </a>
                   {% endif %}
-                  {% if 'companies_delete' in current_permissions or 'master' in current_permissions %}
+                  {% if can_see_page('companies_delete') %}
                   <form action="{{ url_for('delete_company', id=company.id) }}" method="POST" style="display:inline;">
                     <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this company permanently?')">
                       <i class="bi bi-trash"></i>

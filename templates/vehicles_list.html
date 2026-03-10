@@ -7,18 +7,22 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0 fw-bold"><i class="bi bi-truck me-2 text-primary"></i>Vehicles Management</h2>
     <div class="d-flex gap-2">
+      {% if can_see_page('vehicles_import') %}
       <a href="{{ url_for('vehicles_import') }}" class="btn btn-outline-secondary">
         <i class="bi bi-upload me-1"></i>Import Excel
       </a>
+      {% endif %}
       <a href="{{ url_for('vehicles_export', search=search) }}" class="btn btn-outline-secondary">
         <i class="bi bi-download me-1"></i>Export Excel
       </a>
       <a href="{{ url_for('vehicles_print', search=search) }}" target="_blank" class="btn btn-outline-primary">
         <i class="bi bi-printer me-1"></i>Print / PDF
       </a>
+      {% if can_see_page('vehicles_add') %}
       <a href="{{ url_for('vehicle_form') }}" class="btn btn-success">
         <i class="bi bi-plus-circle me-1"></i>Add New Vehicle
       </a>
+      {% endif %}
     </div>
   </div>
 
@@ -102,14 +106,18 @@
                     <a href="{{ url_for('report_vehicle_profile', vehicle_id=vehicle.id) }}" class="btn btn-sm btn-info" title="Vehicle Profile Report">
                       <i class="bi bi-file-text"></i>
                     </a>
+                    {% if can_see_page('vehicles_edit') %}
                     <a href="{{ url_for('vehicle_form', id=vehicle.id) }}" class="btn btn-sm btn-warning" title="Edit">
                       <i class="bi bi-pencil-square"></i>
                     </a>
+                    {% endif %}
+                    {% if can_see_page('vehicles_delete') %}
                     <form action="{{ url_for('delete_vehicle', id=vehicle.id) }}" method="POST" style="display:inline;">
                       <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete vehicle {{ vehicle.vehicle_no }}?')">
                         <i class="bi bi-trash"></i>
                       </button>
                     </form>
+                    {% endif %}
                 </div>
               </td>
             </tr>
@@ -118,7 +126,7 @@
               <td colspan="9" class="text-center py-5">
                 <div class="text-muted">
                   <i class="bi bi-truck-flatbed fs-1 d-block mb-3 opacity-25"></i>
-                  <p>No vehicles found. <a href="{{ url_for('vehicle_form') }}" class="fw-bold">Add a new vehicle now</a>.</p>
+                  <p>No vehicles found.{% if can_see_page('vehicles_add') %} <a href="{{ url_for('vehicle_form') }}" class="fw-bold">Add a new vehicle now</a>.{% endif %}</p>
                 </div>
               </td>
             </tr>
