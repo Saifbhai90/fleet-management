@@ -32,7 +32,7 @@ employee_district = db.Table('employee_district',
 # ────────────────────────────────────────────────
 class Company(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), unique=True, nullable=False)
+    name = db.Column(db.String(120), unique=True, nullable=False, index=True)
     office_address = db.Column(db.String(200))
     state = db.Column(db.String(100))
     district = db.Column(db.String(100))
@@ -53,13 +53,13 @@ class Company(db.Model):
 # ────────────────────────────────────────────────
 class Project(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(150), nullable=False)
-    start_date = db.Column(db.Date)
-    status = db.Column(db.String(20), default='Active')  # 'Active' or 'Inactive'
+    name = db.Column(db.String(150), nullable=False, index=True)
+    start_date = db.Column(db.Date, index=True)
+    status = db.Column(db.String(20), default='Active', index=True)  # 'Active' or 'Inactive'
     inactive_date = db.Column(db.Date)
     
     # Project Assignment Info (Project -> Company)
-    assign_date = db.Column(db.Date, nullable=True)
+    assign_date = db.Column(db.Date, nullable=True, index=True)
     assign_remarks = db.Column(db.Text, nullable=True)
     
     remarks = db.Column(db.Text)
@@ -176,9 +176,9 @@ class Driver(db.Model):
     driver_id = db.Column(db.String(20), unique=True, nullable=False)
     post = db.Column(db.String(50))
     application_date = db.Column(db.Date, nullable=False)
-    name = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(100), nullable=False, index=True)
     father_name = db.Column(db.String(100))
-    phone1 = db.Column(db.String(20))
+    phone1 = db.Column(db.String(20), index=True)
     phone2 = db.Column(db.String(20))
     education = db.Column(db.String(50))
     dob = db.Column(db.Date)
@@ -209,8 +209,8 @@ class Driver(db.Model):
     jacket_size = db.Column(db.String(10))
     
     shift       = db.Column(db.String(20), nullable=True)          # Morning / Night
-    driver_district = db.Column(db.String(50))
-    assign_date = db.Column(db.Date, nullable=True)
+    driver_district = db.Column(db.String(50), index=True)
+    assign_date = db.Column(db.Date, nullable=True, index=True)
     assign_remarks = db.Column(db.Text, nullable=True)
     remarks = db.Column(db.Text)
     status = db.Column(db.String(20), default='Active') # Active / Left
@@ -234,13 +234,13 @@ class Driver(db.Model):
 # ────────────────────────────────────────────────
 class Vehicle(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    vehicle_no = db.Column(db.String(50), unique=True, nullable=False)
-    model = db.Column(db.String(100), nullable=False)
+    vehicle_no = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    model = db.Column(db.String(100), nullable=False, index=True)
     engine_no = db.Column(db.String(50))
     chassis_no = db.Column(db.String(50))
-    vehicle_type = db.Column(db.String(50))
+    vehicle_type = db.Column(db.String(50), index=True)
     phone_no = db.Column(db.String(20))
-    active_date = db.Column(db.Date)
+    active_date = db.Column(db.Date, index=True)
     driver_capacity = db.Column(db.Integer, default=1)
     remarks = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -252,11 +252,11 @@ class Vehicle(db.Model):
     driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True)
 
     # Assignment Details (Vehicle -> District)
-    assign_to_district_date = db.Column(db.Date)
+    assign_to_district_date = db.Column(db.Date, index=True)
     assignment_remarks = db.Column(db.Text)
 
     # NAYE COLUMNS: Ye Parking assignment ke liye hain (Inhein add karein)
-    parking_assign_date = db.Column(db.Date)
+    parking_assign_date = db.Column(db.Date, index=True)
     parking_remarks = db.Column(db.Text)
 
     # Vehicle documents (single PDF)
@@ -273,15 +273,15 @@ class Vehicle(db.Model):
 # ────────────────────────────────────────────────
 class ParkingStation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    district = db.Column(db.String(100))
-    tehsil = db.Column(db.String(100))
+    name = db.Column(db.String(100), nullable=False, index=True)
+    district = db.Column(db.String(100), index=True)
+    tehsil = db.Column(db.String(100), index=True)
     mouza = db.Column(db.String(100))
     uc_name = db.Column(db.String(100))
-    create_date = db.Column(db.Date, default=date.today)
+    create_date = db.Column(db.Date, default=date.today, index=True)
     address_location = db.Column(db.Text)
     remarks = db.Column(db.Text)
-    capacity = db.Column(db.Integer, nullable=False)
+    capacity = db.Column(db.Integer, nullable=False, index=True)
     latitude = db.Column(db.Numeric(10, 6), nullable=True)
     longitude = db.Column(db.Numeric(10, 6), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -297,10 +297,10 @@ class ParkingStation(db.Model):
 # ────────────────────────────────────────────────
 class District(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False)
-    province = db.Column(db.String(100))
+    name = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    province = db.Column(db.String(100), index=True)
     remarks = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     def __repr__(self):
         return f'<District {self.name}>'
@@ -312,7 +312,7 @@ class ProjectTransfer(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
     old_company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=True)
     new_company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=False)
-    transfer_date = db.Column(db.Date, nullable=False, default=date.today)
+    transfer_date = db.Column(db.Date, nullable=False, default=date.today, index=True)
     remarks = db.Column(db.Text)
     transferred_by = db.Column(db.String(100))  # future mein user login se
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -336,7 +336,7 @@ vehicle_district = db.Table('vehicle_district',
 class VehicleTransfer(db.Model):
     __tablename__ = 'vehicle_transfer'
     id = db.Column(db.Integer, primary_key=True)
-    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False, index=True)
     
     # Old Locations
     old_project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
@@ -348,7 +348,7 @@ class VehicleTransfer(db.Model):
     new_district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=False)
     new_parking_id = db.Column(db.Integer, db.ForeignKey('parking_station.id'), nullable=True)
     
-    transfer_date = db.Column(db.Date, nullable=False, default=date.today)
+    transfer_date = db.Column(db.Date, nullable=False, default=date.today, index=True)
     remarks = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -371,7 +371,7 @@ class VehicleTransfer(db.Model):
 class DriverTransfer(db.Model):
     __tablename__ = 'driver_transfer'
     id = db.Column(db.Integer, primary_key=True)
-    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=False)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=False, index=True)
     
     # Old Location
     old_project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
@@ -385,7 +385,7 @@ class DriverTransfer(db.Model):
     new_shift     = db.Column(db.String(20), nullable=False)
     new_district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=False)  # ← yeh column
     
-    transfer_date = db.Column(db.Date, nullable=False, default=date.today)
+    transfer_date = db.Column(db.Date, nullable=False, default=date.today, index=True)
     remarks = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

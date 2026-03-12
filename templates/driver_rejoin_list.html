@@ -3,138 +3,190 @@
 
 {% block content %}
 <style>
-    .page-container { background-color: #f0fdf4; min-height: 100vh; padding: 2rem; }
-    .custom-card { background: #fff; border-radius: 15px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.05); overflow: hidden; }
-    .table thead th { background: #f8fafc; color: #16a34a; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 1px; padding: 1.2rem; }
-    .driver-avatar { width: 40px; height: 40px; background: #dcfce7; color: #16a34a; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+    body { background: #f8f9fa; }
+    
+    .page-header-gradient { 
+        background: #fff; 
+        padding: 0; 
+        margin-bottom: 1rem; 
+    }
+    .page-header-gradient h2 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+    .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+    
+    .section-heading { 
+        background: #28a745; 
+        color: white; 
+        padding: 0.75rem 1rem; 
+        font-size: 1rem; 
+        font-weight: 600; 
+        border-radius: 4px 4px 0 0; 
+        margin: 0;
+    }
+    
+    .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+    .filter-input:focus { border-color: #28a745; box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.1); }
+    
+    .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .compact-table { font-size: 0.875rem; margin: 0; }
+    .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #28a745; }
+    .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
+    
+    .compact-table tbody tr { 
+        border-bottom: 1px solid #f0f0f0; 
+        transition: all 0.3s ease; 
+        cursor: pointer;
+    }
+    .compact-table tbody tr:hover { 
+        background: linear-gradient(to right, #d4edda 0%, #ffffff 100%); 
+        transform: translateX(5px);
+        box-shadow: 0 2px 8px rgba(40, 167, 69, 0.15);
+    }
+    .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+    
+    .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+    .badge-success { background: #28a745; color: white; }
+    
+    .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+    .btn-view-compact { background: #0d6efd; color: white; border: none; }
+    .btn-view-compact:hover { background: #0b5ed7; transform: translateY(-2px); }
+    
+    .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .btn-primary-compact { background: #2196f3; color: white; border: none; }
+    .btn-primary-compact:hover { background: #1976d2; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4); }
+    .btn-success-compact { background: #28a745; color: white; border: none; }
+    .btn-success-compact:hover { background: #218838; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4); }
+    .btn-outline-compact { background: #ff9800; color: white; border: none; }
+    .btn-outline-compact:hover { background: #f57c00; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4); }
+    
+    .table-footer { background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666; }
 </style>
 
-<div class="page-container">
-    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-        <div>
-            <h3 class="fw-bold text-dark mb-0">Driver Rejoin <span class="text-success">History</span></h3>
-            <p class="text-muted small mb-0">List of drivers who rejoined and resumed their duties.</p>
-        </div>
-        <div class="d-flex flex-wrap gap-2">
-            <a href="{{ url_for('driver_rejoin_export', search=search or '') }}" class="btn btn-success shadow-sm px-3 rounded-pill">
-                <i class="bi bi-file-earmark-excel me-1"></i> Export to Excel
-            </a>
-            <a href="{{ url_for('driver_rejoin_print', search=search or '') }}" target="_blank" class="btn btn-outline-primary shadow-sm px-3 rounded-pill">
-                <i class="bi bi-printer me-1"></i> Print Preview
-            </a>
-            {% if can_see_page('driver_rejoin_add') %}
-            <a href="{{ url_for('driver_rejoin_new') }}" class="btn btn-success shadow-sm px-4 rounded-pill">
-                <i class="bi bi-person-plus-fill me-2"></i> Mark New Rejoin
-            </a>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Filters: date range + project/district + search -->
-    <form method="GET" action="{{ url_for('driver_rejoin_list') }}" class="d-flex flex-wrap align-items-end gap-2 mb-4">
-        <div class="flex-grow-0" style="min-width: 170px;">
-            <label class="form-label small text-muted mb-1">From Date</label>
-            <input
-                type="text"
-                name="from_date"
-                class="form-control form-control-sm datepicker"
-                placeholder="dd-mm-yyyy"
-                value="{{ from_date or '' }}"
-                autocomplete="off"
-            >
-        </div>
-        <div class="flex-grow-0" style="min-width: 170px;">
-            <label class="form-label small text-muted mb-1">To Date</label>
-            <input
-                type="text"
-                name="to_date"
-                class="form-control form-control-sm datepicker"
-                placeholder="dd-mm-yyyy"
-                value="{{ to_date or '' }}"
-                autocomplete="off"
-            >
-        </div>
-        <div class="flex-grow-0" style="min-width: 180px;">
-            <label class="form-label small text-muted mb-1">Project</label>
-            <select name="project_id" class="form-select form-select-sm">
-                {% for val, label in project_choices %}
-                <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="flex-grow-0" style="min-width: 180px;">
-            <label class="form-label small text-muted mb-1">District</label>
-            <select name="district_id" class="form-select form-select-sm">
-                {% for val, label in district_choices %}
-                <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="flex-grow-1" style="min-width: 220px;">
-            <label class="form-label small text-muted mb-1">Search</label>
-            <div class="input-group input-group-sm">
-                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                <input type="text" name="search" class="form-control border-start-0" placeholder="Driver, ID, project, vehicle..." value="{{ search or '' }}">
-                <button type="submit" class="btn btn-success px-3">Apply</button>
-                {% if search or project_id or district_id or from_date or to_date %}
-                <a href="{{ url_for('driver_rejoin_list') }}" class="btn btn-outline-secondary px-3">Clear</a>
+<div class="container-fluid py-4 px-4">
+    <div class="page-header-gradient">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2><i class="bi bi-person-plus-fill me-2"></i>Driver Re-employment</h2>
+                <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>Track drivers who have rejoined the organization</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('driver_rejoin_export', search=search or '') }}" class="btn btn-outline-compact top-btn-compact">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Export
+                </a>
+                <a href="{{ url_for('driver_rejoin_print', search=search or '') }}" target="_blank" class="btn btn-outline-compact top-btn-compact">
+                    <i class="bi bi-eye me-1"></i>Print
+                </a>
+                {% if can_see_page('driver_rejoin_add') %}
+                <a href="{{ url_for('driver_rejoin_new') }}" class="btn btn-success-compact top-btn-compact">
+                    <i class="bi bi-plus-lg me-1"></i>Mark Rejoin
+                </a>
                 {% endif %}
             </div>
         </div>
-    </form>
+    </div>
 
-    <div class="custom-card">
+    <div class="filter-bar">
+        <form method="GET" action="{{ url_for('driver_rejoin_list') }}">
+            <div class="row g-2 align-items-center mb-2">
+                <div class="col-md-2">
+                    <input type="text" name="from_date" class="form-control filter-input datepicker" 
+                           placeholder="From Date (dd-mm-yyyy)" value="{{ from_date or '' }}" autocomplete="off">
+                </div>
+                <div class="col-md-2">
+                    <input type="text" name="to_date" class="form-control filter-input datepicker" 
+                           placeholder="To Date (dd-mm-yyyy)" value="{{ to_date or '' }}" autocomplete="off">
+                </div>
+                <div class="col-md-2">
+                    <select name="project_id" class="form-select filter-input">
+                        {% for val, label in project_choices %}
+                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="district_id" class="form-select filter-input">
+                        {% for val, label in district_choices %}
+                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="text" name="search" class="form-control filter-input" 
+                           placeholder="Search..." 
+                           value="{{ search or '' }}">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary-compact w-100">
+                        <i class="bi bi-funnel"></i>
+                    </button>
+                </div>
+            </div>
+            {% if search or project_id or district_id or from_date or to_date %}
+            <a href="{{ url_for('driver_rejoin_list') }}" class="btn btn-outline-secondary btn-sm">Clear Filters</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="data-table-wrapper">
+        <div class="section-heading">Re-employment Records</div>
         <div class="table-responsive">
-            <table class="table align-middle mb-0">
+            <table class="table table-sm align-middle mb-0 compact-table">
                 <thead>
                     <tr>
-                        <th class="ps-4">Rejoin Date</th>
-                        <th>Driver Detail</th>
-                        <th>New Assignment</th>
-                        <th>Shift</th>
-                        <th class="text-end pe-4">Action</th>
+                        <th width="5%">Sr No</th>
+                        <th width="12%">Rejoin Date</th>
+                        <th width="18%">Driver</th>
+                        <th width="30%">New Assignment</th>
+                        <th width="12%">Shift</th>
+                        <th width="15%">Remarks</th>
+                        <th class="text-center" width="8%">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for record in records %}
                     <tr>
-                        <td class="ps-4">
-                            <span class="fw-bold">
-                                <i class="bi bi-calendar-check text-success me-2"></i>
-                                {{ record.change_date.strftime('%d-%m-%Y') }}
-                            </span>
+                        <td>
+                            <span class="badge-sm badge-success">{{ loop.index }}</span>
                         </td>
                         <td>
-                            <div class="d-flex align-items-center">
-                                <div class="driver-avatar me-3">{{ record.driver.name[0] }}</div>
-                                <div>
-                                    <div class="fw-bold text-dark">{{ record.driver.name }}</div>
-                                    <small class="text-muted">ID: {{ record.driver.driver_id }}</small>
-                                </div>
+                            <small><i class="bi bi-calendar-check me-1"></i>{{ record.change_date.strftime('%d %b, %Y') }}</small>
+                        </td>
+                        <td>
+                            <div><i class="bi bi-person-badge me-1 text-info"></i><strong>{{ record.driver.name }}</strong></div>
+                            <small class="text-muted">ID: {{ record.driver.driver_id }}</small>
+                        </td>
+                        <td>
+                            <div style="font-size: 0.75rem;">
+                                <div><i class="bi bi-folder2 me-1"></i>{{ record.new_project.name if record.new_project else '-' }}</div>
+                                <div><i class="bi bi-geo-alt me-1"></i>{{ record.new_district.name if record.new_district else '-' }}</div>
+                                <div><i class="bi bi-truck me-1"></i><strong>{{ record.new_vehicle.vehicle_no if record.new_vehicle else '-' }}</strong></div>
                             </div>
                         </td>
                         <td>
-                            <div class="small">
-                                <div class="text-dark fw-600"><i class="bi bi-buildings me-1 text-muted"></i> {{ record.new_project.name if record.new_project else 'N/A' }}</div>
-                                <div class="text-muted"><i class="bi bi-truck me-1"></i> {{ record.new_vehicle.vehicle_no if record.new_vehicle else 'N/A' }}</div>
-                            </div>
+                            <span class="badge-sm badge-success">{{ record.new_shift }}</span>
                         </td>
                         <td>
-                            <span class="badge bg-light text-success border border-success-subtle px-3">{{ record.new_shift }}</span>
+                            <small class="text-muted">{{ record.remarks[:20] if record.remarks else '-' }}{{ '...' if record.remarks and record.remarks|length > 20 else '' }}</small>
                         </td>
-                        <td class="text-end pe-4">
-                            <a href="{{ url_for('driver_rejoin_view', id=record.id) }}" class="btn btn-sm btn-outline-success rounded-pill px-3">
-                                <i class="bi bi-eye"></i> View Report
+                        <td class="text-center">
+                            <a href="{{ url_for('driver_rejoin_view', id=record.id) }}" class="btn btn-compact btn-view-compact" title="View Details">
+                                <i class="bi bi-eye"></i>
                             </a>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="text-center py-5 text-muted">No rejoin records found.</td>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+                            No re-employment records found.
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+        <div class="table-footer">
+            Showing {{ '1' if records|length > 0 else '0' }} to {{ records|length }} of {{ records|length }} entries
         </div>
     </div>
 </div>

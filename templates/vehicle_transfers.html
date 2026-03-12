@@ -2,140 +2,260 @@
 {% block title %}Vehicle Transfers History{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
-
 <style>
-  .table-hover tbody tr:hover { background-color: #fff9e6 !important; }
-  .dt-buttons .btn { border-radius: 8px !important; font-size: 0.85rem; font-weight: bold; border: none;}
-  .buttons-excel { background-color: #198754 !important; color: white !important; }
-  .buttons-pdf { background-color: #dc3545 !important; color: white !important; }
+    body { background: #f8f9fa; }
+    
+    .page-header-gradient { 
+        background: #fff; 
+        padding: 0; 
+        margin-bottom: 1rem; 
+    }
+    .page-header-gradient h2 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+    .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+    
+    .section-heading { 
+        background: #00bcd4; 
+        color: white; 
+        padding: 0.75rem 1rem; 
+        font-size: 1rem; 
+        font-weight: 600; 
+        border-radius: 4px 4px 0 0; 
+        margin: 0;
+    }
+    
+    .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+    .filter-input:focus { border-color: #00bcd4; box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.1); }
+    
+    .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .compact-table { font-size: 0.875rem; margin: 0; }
+    .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #00bcd4; }
+    .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
+    
+    .compact-table tbody tr { 
+        border-bottom: 1px solid #f0f0f0; 
+        transition: all 0.3s ease; 
+        cursor: pointer;
+    }
+    .compact-table tbody tr:hover { 
+        background: linear-gradient(to right, #e0f7fa 0%, #ffffff 100%); 
+        transform: translateX(5px);
+        box-shadow: 0 2px 8px rgba(0, 188, 212, 0.15);
+    }
+    .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+    
+    .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+    .badge-primary { background: linear-gradient(135deg, #00bcd4 0%, #00acc1 100%); color: white; }
+    .badge-info { background: #17a2b8; color: white; }
+    .badge-success { background: #28a745; color: white; }
+    .badge-danger { background: #dc3545; color: white; }
+    
+    .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+    .btn-edit-compact { background: #ffc107; color: #000; border: none; }
+    .btn-edit-compact:hover { background: #e0a800; transform: translateY(-2px); }
+    .btn-delete-compact { background: #dc3545; color: white; border: none; }
+    .btn-delete-compact:hover { background: #c82333; transform: translateY(-2px); }
+    
+    .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .btn-primary-compact { background: #2196f3; color: white; border: none; }
+    .btn-primary-compact:hover { background: #1976d2; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4); }
+    .btn-success-compact { background: #4caf50; color: white; border: none; }
+    .btn-success-compact:hover { background: #388e3c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4); }
+    .btn-outline-compact { background: #ff9800; color: white; border: none; }
+    .btn-outline-compact:hover { background: #f57c00; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4); }
+    
+    .location-badge { background: #fff; border: 1px solid #e0e0e0; padding: 0.3rem 0.6rem; border-radius: 4px; display: inline-block; margin: 2px 0; font-size: 0.75rem; }
+    .arrow-icon { color: #00bcd4; font-size: 1.2rem; }
+    
+    .table-footer { background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666; }
+    
+    /* Sortable Headers */
+    .sortable-header { cursor: pointer; user-select: none; transition: all 0.2s; position: relative; padding-right: 1.5rem !important; }
+    .sortable-header:hover { background: rgba(0, 188, 212, 0.1); }
+    .sort-icon { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; opacity: 0.5; }
+    .sortable-header.active .sort-icon { opacity: 1; }
 </style>
 
-<div class="container-fluid py-4 px-lg-5">
-  <div class="d-md-flex align-items-center justify-content-between mb-4">
-    <div>
-      <h2 class="fw-bold mb-1 text-dark">Vehicle Transfer Logs</h2>
-      <p class="text-muted small mb-0">Track all vehicle movements across projects and districts.</p>
-    </div>
-    <div class="d-flex gap-2">
-      {% if can_see_page('vehicle_transfers_add') %}
-      <a href="{{ url_for('vehicle_transfer_new') }}" class="btn btn-warning fw-bold px-4 shadow-sm" style="border-radius: 10px;">
-        <i class="bi bi-truck me-1"></i> New Transfer
-      </a>
-      {% endif %}
-    </div>
-  </div>
+<script src="https://unpkg.com/lucide@latest"></script>
 
-  <div class="card border-0 shadow-sm rounded-4">
-    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
-      <h6 class="mb-0 fw-bold">Transfer History</h6>
-      <div id="exportButtonsArea"></div>
-    </div>
-    <div class="card-body">
-      <form method="GET" class="row g-2 align-items-end mb-3">
-        <div class="col-md-3">
-          <label class="form-label small text-muted mb-0">Project</label>
-          <select name="project_id" class="form-select form-select-sm">
-            {% for val, label in project_choices %}
-            <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small text-muted mb-0">District</label>
-          <select name="district_id" class="form-select form-select-sm">
-            {% for val, label in district_choices %}
-            <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small text-muted mb-0">Search</label>
-          <input type="text" name="q" class="form-control form-control-sm" placeholder="Vehicle, Project, District, Date, Remarks..." value="{{ q or '' }}">
-        </div>
-        <div class="col-md-2 d-flex gap-2">
-          <button type="submit" class="btn btn-dark btn-sm w-100">Apply</button>
-          {% if q or project_id or district_id %}
-          <a href="{{ url_for('vehicle_transfers') }}" class="btn btn-outline-secondary btn-sm w-100">Clear</a>
-          {% endif %}
-        </div>
-      </form>
-      <div class="table-responsive">
-        <table class="table table-hover align-middle" id="transferTable">
-          <thead class="bg-light">
-            <tr class="text-uppercase fw-bold text-muted small">
-              <th>Vehicle</th>
-              <th>From (Old Location)</th>
-              <th>To (New Location)</th>
-              <th>Date</th>
-              <th>Remarks</th>
-              <th class="text-end">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for t in transfers %}
-            <tr>
-              <td class="fw-bold text-dark">{{ t.vehicle.vehicle_no }}</td>
-              <td class="small">
-                <span class="text-muted">Proj:</span> {{ t.old_project.name if t.old_project else '---' }}<br>
-                <span class="text-muted">Dist:</span> {{ t.old_district.name if t.old_district else '---' }}<br>
-                <span class="text-muted">Park:</span> <span class="text-danger">{{ t.old_parking.name if t.old_parking else 'Free' }}</span>
-              </td>
-              <td class="small">
-                <span class="text-muted">Proj:</span> {{ t.new_project.name }}<br>
-                <span class="text-muted">Dist:</span> {{ t.new_district.name }}<br>
-                <span class="text-muted">Park:</span> <span class="text-success fw-bold">{{ t.new_parking.name if t.new_parking else 'Free' }}</span>
-              </td>
-              <td class="small fw-medium">{{ t.transfer_date.strftime('%d %b, %Y') }}</td>
-              <td class="small text-muted" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ t.remarks }}">
-                {{ t.remarks if t.remarks else '---' }}
-              </td>
-              <td class="text-end">
-                {% if can_see_page('vehicle_transfers_edit') %}
-                <a href="{{ url_for('vehicle_transfer_edit', id=t.id) }}" class="btn btn-sm btn-outline-primary" title="Edit">
-                  <i class="bi bi-pencil-square"></i>
+<div class="container-fluid py-4 px-4">
+    <div class="page-header-gradient">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2><i class="bi bi-truck me-2"></i>Vehicle Transfer Management</h2>
+                <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>Track vehicle movements across projects</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('vehicle_transfers_export', project_id=project_id, district_id=district_id, q=q or '') }}" class="btn btn-outline-compact top-btn-compact">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Export
+                </a>
+                <a href="{{ url_for('vehicle_transfers_print', project_id=project_id, district_id=district_id, q=q or '') }}" target="_blank" class="btn btn-outline-compact top-btn-compact">
+                    <i class="bi bi-eye me-1"></i>Print
+                </a>
+                {% if can_see_page('vehicle_transfers_add') %}
+                <a href="{{ url_for('vehicle_transfer_new') }}" class="btn btn-success-compact top-btn-compact">
+                    <i class="bi bi-plus-lg me-1"></i>New Transfer
                 </a>
                 {% endif %}
-                {% if can_see_page('vehicle_transfers_delete') %}
-                <form action="{{ url_for('vehicle_transfer_delete', id=t.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this log?');">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash3"></i></button>
-                </form>
-                {% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+            </div>
+        </div>
     </div>
-  </div>
+
+    <div class="filter-bar">
+        <form method="GET" action="{{ url_for('vehicle_transfers') }}">
+            <div class="row g-2 align-items-center mb-2">
+                <div class="col-md-2">
+                    <input type="text" name="from_date" class="form-control filter-input datepicker" 
+                           placeholder="From Date (dd-mm-yyyy)" value="{{ from_date or '' }}" autocomplete="off">
+                </div>
+                <div class="col-md-2">
+                    <input type="text" name="to_date" class="form-control filter-input datepicker" 
+                           placeholder="To Date (dd-mm-yyyy)" value="{{ to_date or '' }}" autocomplete="off">
+                </div>
+                <div class="col-md-2">
+                    <select name="project_id" class="form-select filter-input">
+                        {% for val, label in project_choices %}
+                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="district_id" class="form-select filter-input">
+                        {% for val, label in district_choices %}
+                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="text" name="q" class="form-control filter-input" 
+                           placeholder="Search..." 
+                           value="{{ q or '' }}">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary-compact w-100">
+                        <i class="bi bi-funnel"></i>
+                    </button>
+                </div>
+            </div>
+            {% if q or project_id or district_id or from_date or to_date %}
+            <a href="{{ url_for('vehicle_transfers') }}" class="btn btn-outline-secondary btn-sm">Clear Filters</a>
+            {% endif %}
+        </form>
+    </div>
+    <div class="data-table-wrapper">
+        <div class="section-heading">Transfer History</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 compact-table">
+                <thead>
+                    <tr>
+                        <th width="5%">Sr No</th>
+                        <th width="15%" class="sortable-header {% if sort_by == 'vehicle' %}active{% endif %}" onclick="sortTable('vehicle')">
+                            Vehicle
+                            <i data-lucide="{% if sort_by == 'vehicle' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'vehicle' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+                        </th>
+                        <th width="25%">From (Old Location)</th>
+                        <th width="25%" class="sortable-header {% if sort_by == 'project' %}active{% endif %}" onclick="sortTable('project')">
+                            To (New Location)
+                            <i data-lucide="{% if sort_by == 'project' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'project' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+                        </th>
+                        <th width="12%" class="sortable-header {% if sort_by == 'transfer_date' %}active{% endif %}" onclick="sortTable('transfer_date')">
+                            Transfer Date
+                            <i data-lucide="{% if sort_by == 'transfer_date' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'transfer_date' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+                        </th>
+                        <th width="10%">Remarks</th>
+                        <th class="text-center" width="8%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in transfers %}
+                    <tr>
+                        <td>
+                            <span class="badge-sm badge-primary">{{ loop.index }}</span>
+                        </td>
+                        <td>
+                            <i class="bi bi-truck me-1 text-info"></i><strong>{{ t.vehicle.vehicle_no }}</strong>
+                        </td>
+                        <td>
+                            <div class="location-badge">
+                                <i class="bi bi-folder2 me-1"></i>{{ t.old_project.name if t.old_project else '-' }}
+                            </div>
+                            <div class="location-badge">
+                                <i class="bi bi-geo-alt me-1"></i>{{ t.old_district.name if t.old_district else '-' }}
+                            </div>
+                            <div class="location-badge">
+                                <i class="bi bi-p-square me-1"></i>{{ t.old_parking.name if t.old_parking else 'Free' }}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="location-badge">
+                                <i class="bi bi-folder2 me-1"></i>{{ t.new_project.name if t.new_project else '-' }}
+                            </div>
+                            <div class="location-badge">
+                                <i class="bi bi-geo-alt me-1"></i>{{ t.new_district.name if t.new_district else '-' }}
+                            </div>
+                            <div class="location-badge">
+                                <i class="bi bi-p-square me-1"></i><strong>{{ t.new_parking.name if t.new_parking else 'Free' }}</strong>
+                            </div>
+                        </td>
+                        <td>
+                            <small><i class="bi bi-calendar-check me-1"></i>{{ t.transfer_date.strftime('%d %b, %Y') }}</small>
+                        </td>
+                        <td>
+                            <small class="text-muted">{{ t.remarks[:20] if t.remarks else '-' }}{{ '...' if t.remarks and t.remarks|length > 20 else '' }}</small>
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex justify-content-center gap-1">
+                                {% if can_see_page('vehicle_transfers_edit') %}
+                                <a href="{{ url_for('vehicle_transfer_edit', id=t.id) }}" class="btn btn-compact btn-edit-compact" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% endif %}
+                                {% if can_see_page('vehicle_transfers_delete') %}
+                                <form action="{{ url_for('vehicle_transfer_delete', id=t.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this transfer log?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-compact btn-delete-compact" title="Delete">
+                                        <i class="bi bi-trash3"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+                            No vehicle transfer records found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="table-footer">
+            Showing {{ '1' if transfers|length > 0 else '0' }} to {{ transfers|length }} of {{ transfers|length }} entries
+        </div>
+    </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.7.0.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
-
 <script>
-  $(document).ready(function() {
-    var table = $('#transferTable').DataTable({
-      "pageLength": 10,
-      // Custom search form upar already hai, isliye DataTables ka apna search box hide kar diya
-      "searching": false,
-      "dom": '<"row"<"col-sm-12 col-md-12 text-end"B>>rt<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>',
-      "buttons": [
-        { extend: 'excelHtml5', text: '<i class="bi bi-file-earmark-excel"></i> Excel', className: 'buttons-excel' },
-        { extend: 'pdfHtml5', text: '<i class="bi bi-file-earmark-pdf"></i> PDF', className: 'buttons-pdf' }
-      ]
-    });
-    table.buttons().container().appendTo('#exportButtonsArea');
-  });
+    // Initialize Lucide icons
+    lucide.createIcons();
+    
+    function sortTable(column) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentSort = urlParams.get('sort_by');
+        const currentOrder = urlParams.get('sort_order') || 'desc';
+        
+        let newOrder = 'asc';
+        if (currentSort === column && currentOrder === 'asc') {
+            newOrder = 'desc';
+        }
+        
+        urlParams.set('sort_by', column);
+        urlParams.set('sort_order', newOrder);
+        
+        window.location.search = urlParams.toString();
+    }
 </script>
 {% endblock %}

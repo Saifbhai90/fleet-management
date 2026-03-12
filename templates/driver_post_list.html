@@ -3,65 +3,172 @@
 {% block title %}Employee Posts{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0 fw-bold"><i class="bi bi-person-vcard me-2 text-primary"></i>Employee Posts</h2>
-    {% if can_see_page('driver_post_add') %}
-    <a href="{{ url_for('driver_post_form') }}" class="btn btn-success shadow-sm">
-      <i class="bi bi-plus-circle me-1"></i>Add New Post
-    </a>
-    {% endif %}
+<style>
+  body { background: #f8f9fa; }
+  
+  .page-header-gradient { 
+    background: #fff; 
+    padding: 0; 
+    margin-bottom: 1rem; 
+  }
+  .page-header-gradient h3 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+  .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+  
+  .section-heading { 
+    background: #e91e63; 
+    color: white; 
+    padding: 0.75rem 1rem; 
+    font-size: 1rem; 
+    font-weight: 600; 
+    border-radius: 4px 4px 0 0; 
+    margin: 0;
+  }
+  
+  .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .compact-table { font-size: 0.875rem; margin: 0; }
+  .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #e91e63; }
+  .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
+  
+  .compact-table tbody tr { 
+    border-bottom: 1px solid #f0f0f0; 
+    transition: all 0.3s ease; 
+    cursor: pointer;
+  }
+  .compact-table tbody tr:hover { 
+    background: linear-gradient(to right, #fce4ec 0%, #ffffff 100%); 
+    transform: translateX(5px);
+    box-shadow: 0 2px 8px rgba(233, 30, 99, 0.15);
+  }
+  .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+  
+  .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+  .badge-success { background: #4caf50; color: white; }
+  
+  .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+  .btn-edit-compact { background: #ffc107; color: #000; border: none; }
+  .btn-edit-compact:hover { background: #e0a800; transform: translateY(-2px); }
+  .btn-delete-compact { background: #dc3545; color: white; border: none; }
+  .btn-delete-compact:hover { background: #c82333; transform: translateY(-2px); }
+  
+  .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .btn-success-compact { background: #4caf50; color: white; border: none; }
+  .btn-success-compact:hover { background: #388e3c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4); }
+  
+  .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+  .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+  .filter-input:focus { border-color: #e91e63; box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.1); }
+  
+  .table-footer { background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666; }
+  
+  .sortable-header { cursor: pointer; user-select: none; transition: all 0.2s; position: relative; padding-right: 1.5rem !important; }
+  .sortable-header:hover { background: rgba(233, 30, 99, 0.1); }
+  .sort-icon { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; opacity: 0.5; }
+  .sortable-header.active .sort-icon { opacity: 1; }
+</style>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<div class="container-fluid py-4 px-4">
+  <div class="page-header-gradient">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <h3><i class="bi bi-person-vcard me-2"></i>Employee Posts</h3>
+        <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>Manage employee post designations</p>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('driver_post_export', search=search) }}" class="btn btn-outline-compact top-btn-compact" style="background: #ff9800; color: white; border: none;">
+          <i class="bi bi-file-earmark-excel me-1"></i>Export
+        </a>
+        <a href="{{ url_for('driver_post_print', search=search) }}" target="_blank" class="btn btn-outline-compact top-btn-compact" style="background: #ff9800; color: white; border: none;">
+          <i class="bi bi-eye me-1"></i>Preview
+        </a>
+        {% if can_see_page('driver_post_add') %}
+        <a href="{{ url_for('driver_post_form') }}" class="btn btn-success-compact top-btn-compact">
+          <i class="bi bi-plus-lg me-1"></i>Add New Post
+        </a>
+        {% endif %}
+      </div>
+    </div>
   </div>
 
-  <form method="GET" class="mb-3">
-    <div class="input-group input-group-lg shadow-sm">
-      <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-      <input type="text" name="search" class="form-control border-start-0 ps-0"
-             placeholder="Search by short or full name..." value="{{ search or '' }}" data-realtime-table="driverPostTable">
-      <button class="btn btn-primary px-4" type="submit">Search</button>
-    </div>
-  </form>
+  <div class="filter-bar">
+    <form method="GET">
+      <div class="row g-2">
+        <div class="col-md-10">
+          <input type="text" name="search" class="form-control filter-input" placeholder="Search by short or full name..." value="{{ search or '' }}">
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-success-compact w-100" type="submit"><i class="bi bi-search"></i></button>
+        </div>
+      </div>
+    </form>
+  </div>
 
-  <div class="card shadow-sm border-0">
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table id="driverPostTable" class="table table-hover align-middle mb-0">
-          <thead class="table-dark">
-            <tr>
-              <th class="ps-3" style="width: 10%;">ID</th>
-              <th style="width: 20%;">Post Short Name</th>
-              <th style="width: 30%;">Post Full Name</th>
-              <th>Remarks</th>
-              <th class="text-center" style="width: 15%;">Actions</th>
-            </tr>
-          </thead>
+  <div class="data-table-wrapper">
+    <div class="section-heading d-flex justify-content-between align-items-center">
+      <span>Employee Posts</span>
+      <div class="d-flex align-items-center gap-2">
+        <span style="font-size: 0.875rem; font-weight: 400;">Per Page:</span>
+        <select class="form-select form-select-sm" style="width: 80px; background: white; color: #333; border: 1px solid rgba(255,255,255,0.3);" onchange="window.location.href='{{ url_for('driver_post_list', search=search, sort_by=sort_by, sort_order=sort_order) }}&per_page=' + this.value">
+          <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+          <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+          <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table id="driverPostTable" class="table table-sm mb-0 compact-table">
+        <thead>
+          <tr>
+            <th width="5%">S.No</th>
+            <th width="8%" class="sortable-header {% if sort_by == 'id' %}active{% endif %}" onclick="sortTable('id')">
+              ID
+              <i data-lucide="{% if sort_by == 'id' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'id' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th width="20%" class="sortable-header {% if sort_by == 'short_name' %}active{% endif %}" onclick="sortTable('short_name')">
+              Post Short Name
+              <i data-lucide="{% if sort_by == 'short_name' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'short_name' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th width="30%" class="sortable-header {% if sort_by == 'full_name' %}active{% endif %}" onclick="sortTable('full_name')">
+              Post Full Name
+              <i data-lucide="{% if sort_by == 'full_name' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'full_name' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th width="25%">Remarks</th>
+            <th class="text-center" width="12%">Actions</th>
+          </tr>
+        </thead>
           <tbody>
             {% for post in posts %}
             <tr>
-              <td class="ps-3 text-muted">{{ post.id }}</td>
+              <td>
+                <span class="badge-sm badge-success">{{ loop.index }}</span>
+              </td>
+              <td class="text-muted">{{ post.id }}</td>
               <td class="fw-bold">{{ post.short_name }}</td>
               <td>{{ post.full_name }}</td>
               <td>{{ post.remarks or '-' }}</td>
               <td class="text-center">
-                {% if can_see_page('driver_post_edit') %}
-                <a href="{{ url_for('driver_post_form', id=post.id) }}" class="btn btn-sm btn-warning me-1">
-                  <i class="bi bi-pencil-square"></i> Edit
-                </a>
-                {% endif %}
-                {% if can_see_page('driver_post_delete') %}
-                <form action="{{ url_for('driver_post_delete', id=post.id) }}" method="POST" style="display:inline;">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-sm btn-danger"
-                          onclick="return confirm('Delete post {{ post.full_name }}?')">
-                    <i class="bi bi-trash"></i>
-                  </button>
-                </form>
-                {% endif %}
+                <div class="btn-group btn-group-sm" role="group">
+                  {% if can_see_page('driver_post_edit') %}
+                  <a href="{{ url_for('driver_post_form', id=post.id) }}" class="btn btn-edit-compact" title="Edit">
+                    <i class="bi bi-pencil-square"></i>
+                  </a>
+                  {% endif %}
+                  {% if can_see_page('driver_post_delete') %}
+                  <form action="{{ url_for('driver_post_delete', id=post.id) }}" method="POST" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-delete-compact" onclick="return confirm('Delete post {{ post.full_name }}?')">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                  {% endif %}
+                </div>
               </td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="4" class="text-center py-5">
+              <td colspan="6" class="text-center py-4">
                 <div class="text-muted">
                   <i class="bi bi-person-vcard fs-1 d-block mb-3"></i>
                   <p>No posts found.{% if can_see_page('driver_post_add') %} <a href="{{ url_for('driver_post_form') }}">Add your first post</a>.{% endif %}</p>
@@ -73,7 +180,81 @@
         </table>
       </div>
     </div>
+    <div class="table-footer">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <i class="bi bi-list-ul me-1"></i>Showing 
+          {% if pagination %}
+            {{ (pagination.page - 1) * per_page + 1 }} to {{ (pagination.page - 1) * per_page + posts|length }} of {{ pagination.total }}
+          {% else %}
+            {{ '1' if posts|length > 0 else '0' }} to {{ posts|length }} of {{ posts|length }}
+          {% endif %}
+          entries
+        </div>
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            {% if pagination and pagination.has_prev %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('driver_post_list', page=pagination.prev_num, per_page=per_page, search=search, sort_by=sort_by, sort_order=sort_order) }}">
+                <i class="bi bi-chevron-left"></i>
+              </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+              <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+            </li>
+            {% endif %}
+            {% if pagination %}
+              {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if p %}
+                  <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('driver_post_list', page=p, per_page=per_page, search=search, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+                  </li>
+                {% else %}
+                  <li class="page-item disabled"><span class="page-link">…</span></li>
+                {% endif %}
+              {% endfor %}
+            {% else %}
+              <li class="page-item active">
+                <span class="page-link">1</span>
+              </li>
+            {% endif %}
+            {% if pagination and pagination.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('driver_post_list', page=pagination.next_num, per_page=per_page, search=search, sort_by=sort_by, sort_order=sort_order) }}">
+                <i class="bi bi-chevron-right"></i>
+              </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+              <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+            </li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+    </div>
   </div>
 </div>
+
+<script>
+  lucide.createIcons();
+  
+  function sortTable(column) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentSort = urlParams.get('sort_by');
+    const currentOrder = urlParams.get('sort_order') || 'asc';
+    
+    let newOrder = 'asc';
+    if (currentSort === column && currentOrder === 'asc') {
+      newOrder = 'desc';
+    }
+    
+    urlParams.set('sort_by', column);
+    urlParams.set('sort_order', newOrder);
+    
+    window.location.search = urlParams.toString();
+  }
+</script>
 {% endblock %}
 

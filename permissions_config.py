@@ -214,6 +214,7 @@ PERMISSION_TREE = {
         ('role_list', 'Roles – List'),
         ('role_add', 'Roles – Add'),
         ('role_edit', 'Roles – Edit'),
+        ('role_delete', 'Roles – Delete'),
         ('form_control', 'Setting'),
         ('notification_list', 'Notifications – List / View'),
         ('notification_add', 'Notifications – Create'),
@@ -396,6 +397,7 @@ PERMISSION_DEPENDENCIES = {
     'user_delete': ['user_list'],
     'role_add': ['role_list'],
     'role_edit': ['role_list'],
+    'role_delete': ['role_list'],
     'notification_add': ['notification_list'],
 }
 
@@ -662,6 +664,7 @@ SECTION_PAGE_GROUPS = {
             ('role_list', 'List'),
             ('role_add', 'Add'),
             ('role_edit', 'Edit'),
+            ('role_delete', 'Delete'),
         ]),
         ('Setting', [('form_control', 'Setting')]),
         ('Notifications', [
@@ -726,6 +729,8 @@ PAGE_VISIBLE = {
     'assign_vehicle_to_district': ['assignment', 'assign_vehicle_to_district'],
     'assign_vehicle_to_parking': ['assignment', 'assign_vehicle_to_parking'],
     'assign_driver_to_vehicle': ['assignment', 'assign_driver_to_vehicle'],
+    # Administration – role actions
+    'role_delete': ['role_delete'],
     # Assignments – per-action buttons on list screens
     'assign_project_to_company_add': ['assign_project_to_company_add'],
     'assign_project_to_company_edit': ['assign_project_to_company_edit'],

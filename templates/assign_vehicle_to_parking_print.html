@@ -27,6 +27,7 @@
               <th>Project</th>
               <th>Parking Station</th>
               <th>District</th>
+              <th>Assign Date</th>
               <th>Remarks</th>
             </tr>
           </thead>
@@ -38,11 +39,12 @@
               <td>{{ v.project.name if v.project else '-' }}</td>
               <td>{{ v.parking_station.name if v.parking_station else '-' }}</td>
               <td>{{ v.district.name if v.district else '-' }}</td>
+              <td>{{ v.parking_assign_date.strftime('%d %b, %Y') if v.parking_assign_date else '-' }}</td>
               <td>{{ v.parking_remarks|truncate(40) or '-' }}</td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="6" class="text-center py-4 text-muted">No assignments found.</td>
+              <td colspan="7" class="text-center py-4 text-muted">No assignments found.</td>
             </tr>
             {% endfor %}
           </tbody>

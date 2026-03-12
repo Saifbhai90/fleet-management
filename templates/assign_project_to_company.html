@@ -4,182 +4,189 @@
 
 {% block content %}
 <style>
-    :root {
-        --primary-color: #0d6efd;
-        --bg-light: #f4f7f9;
-        --text-muted: #6c757d;
-    }
-    body { background-color: var(--bg-light); }
+    body { background: #f8f9fa; }
     
-    /* Table Styling */
-    .assignment-table {
-        background: white;
-        border-radius: 12px;
-        overflow: hidden;
-        border: 1px solid #e0e6ed;
+    /* Simple Modern Blue Heading Bar */
+    .page-header-gradient { 
+        background: #fff; 
+        padding: 0; 
+        margin-bottom: 1rem; 
     }
-    .assignment-table thead {
-        background-color: #f8f9fa;
-        border-bottom: 2px solid #e0e6ed;
-    }
-    .assignment-table th {
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 700;
-        color: var(--text-muted);
-        padding: 15px 20px;
-    }
-    .assignment-table td {
-        padding: 18px 20px;
-        vertical-align: middle;
-        border-bottom: 1px solid #f0f2f5;
+    .page-header-gradient h3 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+    .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+    
+    .table-footer { background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666; }
+    
+    .section-heading { 
+        background: #ec407a; 
+        color: white; 
+        padding: 0.75rem 1rem; 
+        font-size: 1rem; 
+        font-weight: 600; 
+        border-radius: 4px 4px 0 0; 
+        margin: 0;
     }
     
-    /* Project Title & Badge */
-    .project-name { font-weight: 700; color: #2c3e50; font-size: 1rem; margin-bottom: 2px; }
-    .company-badge {
-        background-color: #eef2ff;
-        color: #4338ca;
-        padding: 6px 12px;
-        border-radius: 6px;
-        font-weight: 600;
-        font-size: 0.85rem;
-        display: inline-flex;
-        align-items: center;
-    }
+    .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+    .filter-input:focus { border-color: #f093fb; box-shadow: 0 0 0 2px rgba(240, 147, 251, 0.1); }
     
-    /* Custom Search Bar */
-    .search-container {
-        background: white;
-        border-radius: 10px;
-        padding: 6px;
-        display: flex;
-        border: 1px solid #dce1e7;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-    }
-    .search-input { border: none; outline: none; flex-grow: 1; padding: 8px 15px; }
+    .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .compact-table { font-size: 0.875rem; margin: 0; }
+    .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #ec407a; }
+    .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
     
-    /* Action Buttons */
-    .btn-action {
-        padding: 6px 14px;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 0.85rem;
-        transition: all 0.2s;
+    /* Hover Effect - Record Highlight */
+    .compact-table tbody tr { 
+        border-bottom: 1px solid #f0f0f0; 
+        transition: all 0.3s ease; 
+        cursor: pointer;
     }
-    .btn-edit { background-color: #fff9db; color: #92522d; border: 1px solid #ffe066; }
-    .btn-edit:hover { background-color: #ffec99; }
-    .btn-deassign { background-color: #fff5f5; color: #c92a2a; border: 1px solid #ffa8a8; }
-    .btn-deassign:hover { background-color: #ffe3e3; }
-    .btn-action:disabled, .btn-action.locked {
-        opacity: 0.65;
-        cursor: not-allowed;
-        pointer-events: none;
+    .compact-table tbody tr:hover { 
+        background: linear-gradient(to right, #fff5f8 0%, #ffffff 100%); 
+        transform: translateX(5px);
+        box-shadow: 0 2px 8px rgba(240, 147, 251, 0.15);
     }
-
+    .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+    
+    .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+    .badge-primary { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+    .badge-info { background: #17a2b8; color: white; }
+    .badge-light { background: #f8f9fa; color: #495057; border: 1px solid #dee2e6; }
+    .badge-warning { background: #ffc107; color: #000; }
+    
+    .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+    .btn-edit-compact { background: #ffc107; color: #000; border: none; }
+    .btn-edit-compact:hover { background: #e0a800; transform: translateY(-2px); }
+    .btn-deassign-compact { background: #dc3545; color: white; border: none; }
+    .btn-deassign-compact:hover { background: #c82333; transform: translateY(-2px); }
+    .btn-locked { background: #6c757d; color: white; border: none; cursor: not-allowed; opacity: 0.6; }
+    
+    .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .btn-success-compact { background: #4caf50; color: white; border: none; }
+    .btn-success-compact:hover { background: #388e3c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4); }
+    .btn-outline-compact { background: #ff9800; color: white; border: none; }
+    .btn-outline-compact:hover { background: #f57c00; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4); }
+    
+    /* Sortable Headers */
+    .sortable-header { cursor: pointer; user-select: none; transition: all 0.2s; position: relative; padding-right: 1.5rem !important; }
+    .sortable-header:hover { background: rgba(236, 64, 122, 0.1); }
+    .sort-icon { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; opacity: 0.5; }
+    .sortable-header.active .sort-icon { opacity: 1; }
 </style>
 
-<div class="container-fluid py-4 px-4">
-    <!-- Header Section -->
-    <div class="d-flex justify-content-between align-items-end mb-4">
-        <div>
-            <h3 class="fw-bold mb-1 text-dark">Project Assignments</h3>
-            <span class="text-muted"><i class="bi bi-info-circle me-1"></i> Managing <strong>{{ assigned_projects|length }}</strong> active projects</span>
-        </div>
-        <div class="d-flex gap-2 align-items-center">
-            <a href="{{ url_for('assign_project_to_company_export', search=search or '') }}" class="btn btn-success shadow-sm px-3 rounded-3">
-                <i class="bi bi-file-earmark-excel me-2"></i>Export to Excel
-            </a>
-            <a href="{{ url_for('assign_project_to_company_print', search=search or '') }}" target="_blank" class="btn btn-outline-primary shadow-sm px-3 rounded-3">
-                <i class="bi bi-eye me-2"></i>Report Preview
-            </a>
-            {% if can_see_page('assign_project_to_company_add') %}
-            <a href="{{ url_for('assign_project_to_company_new') }}" class="btn btn-primary btn-lg shadow-sm px-4 rounded-3">
-                <i class="bi bi-plus-lg me-2"></i>Assign New Project
-            </a>
-            {% endif %}
-        </div>
-    </div>
+<script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- Stats & Search Row -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-8">
-            <form method="GET" class="search-container">
-                <i class="bi bi-search ms-2 text-muted mt-2"></i>
-                <input type="text" name="search" class="search-input" placeholder="Search by Project Name or Company..." value="{{ request.args.get('search', '') }}">
-                <button type="submit" class="btn btn-dark rounded-3 px-4">Search</button>
-            </form>
-        </div>
-        <div class="col-md-4 text-md-end">
-            <div class="bg-white p-2 px-3 rounded-3 border d-inline-block shadow-sm text-center">
-                <small class="text-muted d-block" style="font-size: 0.7rem; text-transform: uppercase;">Active Connections</small>
-                <span class="fw-bold fs-5 text-primary">{{ assigned_projects|length }}</span>
+<div class="container-fluid py-4 px-4">
+    <div class="page-header-gradient">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h3><i class="bi bi-diagram-3-fill me-2"></i>Project Assignments</h3>
+                <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>Manage project-company assignments</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('assign_project_to_company_export', search=search or '') }}" class="btn btn-outline-compact top-btn-compact">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Export
+                </a>
+                <a href="{{ url_for('assign_project_to_company_print', search=search or '') }}" target="_blank" class="btn btn-outline-compact top-btn-compact">
+                    <i class="bi bi-eye me-1"></i>Preview
+                </a>
+                {% if can_see_page('assign_project_to_company_add') %}
+                <a href="{{ url_for('assign_project_to_company_new') }}" class="btn btn-success-compact top-btn-compact">
+                    <i class="bi bi-plus-lg me-1"></i>Assign New
+                </a>
+                {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Data Table -->
-    <div class="assignment-table shadow-sm">
+    <div class="filter-bar">
+        <form method="GET">
+            <div class="row g-2 align-items-center mb-2">
+                <div class="col-md-2">
+                    <input type="text" name="from_date" class="form-control filter-input datepicker" 
+                           placeholder="From Date (dd-mm-yyyy)" value="{{ request.args.get('from_date', '') }}" autocomplete="off">
+                </div>
+                <div class="col-md-2">
+                    <input type="text" name="to_date" class="form-control filter-input datepicker" 
+                           placeholder="To Date (dd-mm-yyyy)" value="{{ request.args.get('to_date', '') }}" autocomplete="off">
+                </div>
+                <div class="col-md-7">
+                    <input type="text" name="search" class="form-control filter-input" placeholder="Search by Project Name or Company..." value="{{ request.args.get('search', '') }}">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-success-compact w-100">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+            </div>
+            {% if request.args.get('search') or request.args.get('from_date') or request.args.get('to_date') %}
+            <a href="{{ url_for('assign_project_to_company') }}" class="btn btn-outline-secondary btn-sm">Clear Filters</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="data-table-wrapper">
+        <div class="section-heading">Assigned Projects</div>
         <div class="table-responsive">
-            <table class="table mb-0">
+            <table class="table table-sm mb-0 compact-table">
                 <thead>
                     <tr>
-                        <th>Project Info</th>
-                        <th>Assigned Company</th>
-                        <th>Assign Date</th>
-                        <th>Remarks</th>
-                        <th class="text-end">Actions</th>
+                        <th width="5%">Sr No</th>
+                        <th width="25%" class="sortable-header {% if sort_by == 'company' %}active{% endif %}" onclick="sortTable('company')">
+                            Assigned Company
+                            <i data-lucide="{% if sort_by == 'company' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'company' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+                        </th>
+                        <th width="25%" class="sortable-header {% if sort_by == 'project' %}active{% endif %}" onclick="sortTable('project')">
+                            Project Info
+                            <i data-lucide="{% if sort_by == 'project' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'project' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+                        </th>
+                        <th width="15%" class="sortable-header {% if sort_by == 'assign_date' %}active{% endif %}" onclick="sortTable('assign_date')">
+                            Assign Date
+                            <i data-lucide="{% if sort_by == 'assign_date' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'assign_date' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+                        </th>
+                        <th width="20%">Remarks</th>
+                        <th class="text-end" width="10%">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for proj in assigned_projects %}
                     <tr>
                         <td>
-                            <div class="project-name">{{ proj.name }}</div>
-                            <code class="text-muted small">ID: #{{ proj.id }}</code>
+                            <span class="badge-sm badge-primary">{{ loop.index }}</span>
                         </td>
                         <td>
-                            <div class="company-badge">
-                                <i class="bi bi-building-fill me-2"></i>
-                                {{ proj.company.name if proj.company else 'Not Assigned' }}
-                            </div>
+                            <strong><i class="bi bi-building me-1 text-primary"></i>{{ proj.company.name if proj.company else 'Not Assigned' }}</strong>
                         </td>
                         <td>
-                            <div class="text-dark small fw-semibold">
-                                <i class="bi bi-calendar3 me-1 text-muted"></i>
-                                {{ proj.assign_date.strftime('%d %b, %Y') if proj.assign_date else '-' }}
-                            </div>
+                            <div><i class="bi bi-folder2 me-1 text-success"></i><strong>{{ proj.name }}</strong></div>
+                            <small class="text-muted">ID: #{{ proj.id }}</small>
                         </td>
                         <td>
-                            <span class="text-muted small">{{ proj.assign_remarks or '---' }}</span>
+                            <small><i class="bi bi-calendar-check me-1"></i>{{ proj.assign_date.strftime('%d %b, %Y') if proj.assign_date else 'Not Set' }}</small>
+                        </td>
+                        <td>
+                            <small class="text-muted"><i class="bi bi-chat-left-text me-1"></i>{{ proj.assign_remarks or 'No remarks' }}</small>
                         </td>
                         <td class="text-end">
-                            <div class="d-flex justify-content-end gap-2">
+                            <div class="d-flex justify-content-end gap-1">
                                 {% if proj.id in project_ids_with_districts %}
-                                  {% if can_see_page('assign_project_to_company_edit') %}
-                                  <span class="btn btn-action btn-edit locked" title="District linked – Edit disabled">
-                                      <i class="bi bi-lock-fill me-1"></i> Edit
+                                  <span class="btn btn-compact btn-locked" title="District linked – Edit disabled">
+                                      <i class="bi bi-lock-fill"></i>
                                   </span>
-                                  {% endif %}
-                                  {% if can_see_page('assign_project_to_company_desassign') %}
-                                  <span class="btn btn-action btn-deassign locked" title="District linked – Deassign disabled">
-                                      <i class="bi bi-lock-fill me-1"></i> Deassign
-                                  </span>
-                                  {% endif %}
                                 {% else %}
                                   {% if can_see_page('assign_project_to_company_edit') %}
                                   <a href="{{ url_for('assign_project_to_company_edit', project_id=proj.id) }}"
-                                     class="btn btn-action btn-edit text-decoration-none">
-                                      <i class="bi bi-pencil-square"></i> Edit
+                                     class="btn btn-compact btn-edit-compact">
+                                      <i class="bi bi-pencil"></i>
                                   </a>
                                   {% endif %}
                                   {% if can_see_page('assign_project_to_company_desassign') %}
                                   <form action="{{ url_for('desassign_project_from_company', project_id=proj.id) }}" method="POST" class="m-0">
                                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                      <button type="submit" class="btn btn-action btn-deassign"
+                                      <button type="submit" class="btn btn-compact btn-deassign-compact"
                                               onclick="return confirm('Do you want to deassign project: {{ proj.name }}?')">
-                                          <i class="bi bi-link-45deg"></i> Deassign
+                                          <i class="bi bi-link-45deg"></i>
                                       </button>
                                   </form>
                                   {% endif %}
@@ -189,8 +196,8 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="text-center py-5 text-muted">
-                            <i class="bi bi-folder-x display-4 d-block mb-3 opacity-25"></i>
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            <i class="bi bi-folder-x fs-3 d-block mb-2"></i>
                             No assignments found.
                         </td>
                     </tr>
@@ -198,6 +205,30 @@
                 </tbody>
             </table>
         </div>
+        <div class="table-footer">
+            Showing {{ '1' if assigned_projects|length > 0 else '0' }} to {{ assigned_projects|length }} of {{ assigned_projects|length }} entries
+        </div>
     </div>
 </div>
+
+<script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+    
+    function sortTable(column) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentSort = urlParams.get('sort_by');
+        const currentOrder = urlParams.get('sort_order') || 'desc';
+        
+        let newOrder = 'asc';
+        if (currentSort === column && currentOrder === 'asc') {
+            newOrder = 'desc';
+        }
+        
+        urlParams.set('sort_by', column);
+        urlParams.set('sort_order', newOrder);
+        
+        window.location.search = urlParams.toString();
+    }
+</script>
 {% endblock %}

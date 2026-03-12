@@ -3,172 +3,219 @@
 {% block title %}Project Transfers History{% endblock %}
 
 {% block content %}
-<!-- Fonts & Extra CSS -->
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
-
 <style>
-  body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
-  .x-small { font-size: 0.72rem; }
-  .table-hover tbody tr:hover { background-color: #fff9e6 !important; }
-  .project-icon-box { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: #212529; border-radius: 10px; color: #ffc107; }
-  
-  /* Action Buttons Styling */
-  .btn-action { width: 32px; height: 32px; pading: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; transition: all 0.2s; border: 1px solid #eee; background: white; }
-  .btn-edit:hover { background-color: #eef2ff; color: #4f46e5; border-color: #4f46e5; }
-  .btn-delete:hover { background-color: #fff1f2; color: #e11d48; border-color: #e11d48; }
-  
-  /* Export Button Styling */
-  .dt-buttons .btn { border-radius: 8px !important; font-weight: 600; font-size: 0.85rem; border: none !important; shadow: 0 2px 4px rgba(0,0,0,0.05); }
-  .buttons-excel { background-color: #198754 !important; color: white !important; }
-  .buttons-pdf { background-color: #dc3545 !important; color: white !important; }
-  .buttons-print { background-color: #0dcaf0 !important; color: white !important; }
-  .dataTables_filter input { border-radius: 10px; border: 1px solid #ddd; padding: 6px 15px; }
+    body { background: #f8f9fa; }
+    
+    .page-header-gradient { 
+        background: #fff; 
+        padding: 0; 
+        margin-bottom: 1rem; 
+    }
+    .page-header-gradient h2 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+    .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+    
+    .section-heading { 
+        background: #ff5722; 
+        color: white; 
+        padding: 0.75rem 1rem; 
+        font-size: 1rem; 
+        font-weight: 600; 
+        border-radius: 4px 4px 0 0; 
+        margin: 0;
+    }
+    
+    .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .compact-table { font-size: 0.875rem; margin: 0; }
+    .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #ff5722; }
+    .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
+    
+    .compact-table tbody tr { 
+        border-bottom: 1px solid #f0f0f0; 
+        transition: all 0.3s ease; 
+        cursor: pointer;
+    }
+    .compact-table tbody tr:hover { 
+        background: linear-gradient(to right, #fff3e0 0%, #ffffff 100%); 
+        transform: translateX(5px);
+        box-shadow: 0 2px 8px rgba(255, 87, 34, 0.15);
+    }
+    .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+    
+    .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+    .badge-primary { background: linear-gradient(135deg, #ff5722 0%, #ff9800 100%); color: white; }
+    .badge-info { background: #17a2b8; color: white; }
+    .badge-warning { background: #ffc107; color: #000; }
+    
+    .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+    .btn-edit-compact { background: #ffc107; color: #000; border: none; }
+    .btn-edit-compact:hover { background: #e0a800; transform: translateY(-2px); }
+    .btn-delete-compact { background: #dc3545; color: white; border: none; }
+    .btn-delete-compact:hover { background: #c82333; transform: translateY(-2px); }
+    
+    .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .btn-success-compact { background: #4caf50; color: white; border: none; }
+    .btn-success-compact:hover { background: #388e3c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4); }
+    .btn-outline-compact { background: #ff9800; color: white; border: none; }
+    .btn-outline-compact:hover { background: #f57c00; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4); }
+    .btn-primary-compact { background: #2196f3; color: white; border: none; }
+    .btn-primary-compact:hover { background: #1976d2; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4); }
+    
+    .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+    .filter-input:focus { border-color: #ff5722; box-shadow: 0 0 0 2px rgba(255, 87, 34, 0.1); }
+    
+    .transition-badge { background: #fff; border: 1px solid #e0e0e0; padding: 0.4rem 0.8rem; border-radius: 20px; display: inline-flex; align-items: center; gap: 0.5rem; }
+    
+    /* Sortable Headers */
+    .sortable-header { cursor: pointer; user-select: none; transition: all 0.2s; position: relative; padding-right: 1.5rem !important; }
+    .sortable-header:hover { background: rgba(255, 87, 34, 0.1); }
+    .sort-icon { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; opacity: 0.5; }
+    .sortable-header.active .sort-icon { opacity: 1; }
 </style>
 
-<div class="container-fluid py-4 px-lg-5">
-  
-  <!-- Top Header Section -->
-  <div class="d-md-flex align-items-center justify-content-between mb-4">
-    <div>
-      <h2 class="fw-bold mb-1 text-dark">Transfer Management</h2>
-      <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i> View and manage project transitions across your organization.</p>
-    </div>
-    <div class="mt-3 mt-md-0 d-flex gap-2">
-      <a href="{{ url_for('project_transfer_new') }}" class="btn btn-warning fw-bold px-4 shadow-sm border-0" style="border-radius: 10px;">
-        <i class="bi bi-plus-lg me-1"></i> New Transfer
-      </a>
-    </div>
-  </div>
+<script src="https://unpkg.com/lucide@latest"></script>
 
-  <!-- Main Table Card -->
-  <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
-    <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
-      <h5 class="mb-0 fw-bold text-dark">Recent Activity Logs</h5>
-      <!-- Placeholder for DataTables Buttons -->
-      <div id="exportButtonsArea"></div>
+<div class="container-fluid py-4 px-4">
+    <div class="page-header-gradient">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2><i class="bi bi-arrow-left-right me-2"></i>Transfer Management</h2>
+                <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>View and manage project transitions</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('project_transfers_export', search=search or '', from_date=from_date or '', to_date=to_date or '') }}" class="btn btn-outline-compact top-btn-compact">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Export
+                </a>
+                <a href="{{ url_for('project_transfers_print', search=search or '', from_date=from_date or '', to_date=to_date or '') }}" target="_blank" class="btn btn-outline-compact top-btn-compact">
+                    <i class="bi bi-eye me-1"></i>Print
+                </a>
+                <a href="{{ url_for('project_transfer_new') }}" class="btn btn-success-compact top-btn-compact">
+                    <i class="bi bi-plus-lg me-1"></i>New Transfer
+                </a>
+            </div>
+        </div>
     </div>
-    
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" id="transferDataTable">
-          <thead class="bg-light">
-            <tr class="text-uppercase x-small fw-bold text-muted">
-              <th class="ps-4 py-3">Project Details</th>
-              <th>Company Transition</th>
-              <th>Transfer Date</th>
-              <th>Remarks</th>
-              <th class="text-end pe-4">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for t in transfers %}
-            <tr>
-              <!-- Project Info -->
-              <td class="ps-4">
-                <div class="d-flex align-items-center">
-                  <div class="project-icon-box me-3 shadow-sm">
-                    <i class="bi bi-stack fs-6"></i>
-                  </div>
-                  <div>
-                    <div class="fw-bold text-dark fs-6">{{ t.project.name }}</div>
-                    <div class="text-muted x-small">ID: #TR-{{ t.id }}</div>
-                  </div>
-                </div>
-              </td>
-              
-              <!-- Transition Flow -->
-              <td>
-                <div class="d-inline-flex align-items-center bg-white rounded-pill px-3 py-1 border shadow-sm">
-                  <span class="small fw-medium text-muted">{{ t.old_company.name if t.old_company else 'Initial' }}</span>
-                  <i class="bi bi-arrow-right-short mx-2 text-warning fs-5"></i>
-                  <span class="small fw-bold text-dark">{{ t.new_company.name }}</span>
-                </div>
-              </td>
-              
-              <!-- Date -->
-              <td>
-                <div class="d-flex flex-column">
-                  <span class="fw-medium text-dark">{{ t.transfer_date.strftime('%d %b, %Y') }}</span>
-                  <span class="text-muted x-small text-uppercase">{{ t.transfer_date.strftime('%A') }}</span>
-                </div>
-              </td>
-              
-              <!-- Remarks -->
-              <td>
-                <span class="text-muted small text-truncate d-inline-block" style="max-width: 180px;" title="{{ t.remarks }}">
-                  {{ t.remarks if t.remarks else '---' }}
-                </span>
-              </td>
 
-              <!-- Actions (Direct Buttons) -->
-              <td class="text-end pe-4">
-                <div class="d-flex justify-content-end gap-2">
-                  <a href="{{ url_for('project_transfer_edit', id=t.id) }}" class="btn-action btn-edit text-muted" title="Edit Record">
-                    <i class="bi bi-pencil-square"></i>
-                  </a>
-                  <form action="{{ url_for('project_transfer_delete', id=t.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Permanently delete this transfer record?');">
-                    <button type="submit" class="btn-action btn-delete text-muted" title="Delete Record">
-                      <i class="bi bi-trash3"></i>
+    <div class="filter-bar">
+        <form method="GET" action="{{ url_for('project_transfers') }}">
+            <div class="row g-2 align-items-center mb-2">
+                <div class="col-md-2">
+                    <input type="text" name="from_date" class="form-control filter-input datepicker" 
+                           placeholder="From Date (dd-mm-yyyy)" value="{{ from_date or '' }}" autocomplete="off">
+                </div>
+                <div class="col-md-2">
+                    <input type="text" name="to_date" class="form-control filter-input datepicker" 
+                           placeholder="To Date (dd-mm-yyyy)" value="{{ to_date or '' }}" autocomplete="off">
+                </div>
+                <div class="col-md-7">
+                    <input type="text" name="search" class="form-control filter-input" 
+                           placeholder="Search by Project, Company, or Remarks..." 
+                           value="{{ search or '' }}">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary-compact w-100">
+                        <i class="bi bi-funnel"></i>
                     </button>
-                  </form>
                 </div>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+            </div>
+            {% if search or from_date or to_date %}
+            <a href="{{ url_for('project_transfers') }}" class="btn btn-outline-secondary btn-sm">Clear Filters</a>
+            {% endif %}
+        </form>
     </div>
-  </div>
+
+    <div class="data-table-wrapper">
+        <div class="section-heading">Transfer History</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 compact-table">
+                <thead>
+                    <tr>
+                        <th width="5%">Sr No</th>
+                        <th width="25%" class="sortable-header {% if sort_by == 'project' %}active{% endif %}" onclick="sortTable('project')">
+                            Project Details
+                            <i data-lucide="{% if sort_by == 'project' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'project' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+                        </th>
+                        <th width="30%" class="sortable-header {% if sort_by == 'company' %}active{% endif %}" onclick="sortTable('company')">
+                            Company Transition
+                            <i data-lucide="{% if sort_by == 'company' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'company' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+                        </th>
+                        <th width="15%" class="sortable-header {% if sort_by == 'transfer_date' %}active{% endif %}" onclick="sortTable('transfer_date')">
+                            Transfer Date
+                            <i data-lucide="{% if sort_by == 'transfer_date' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'transfer_date' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+                        </th>
+                        <th width="15%">Remarks</th>
+                        <th class="text-center" width="10%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in transfers %}
+                    <tr>
+                        <td>
+                            <span class="badge-sm badge-primary">{{ loop.index }}</span>
+                        </td>
+                        <td>
+                            <div>
+                                <i class="bi bi-folder2 me-1 text-primary"></i><strong>{{ t.project.name }}</strong>
+                            </div>
+                            <small class="text-muted">ID: #TR-{{ t.id }}</small>
+                        </td>
+                        <td>
+                            <div class="transition-badge">
+                                <span class="text-muted small">{{ t.old_company.name if t.old_company else 'Initial' }}</span>
+                                <i class="bi bi-arrow-right text-warning"></i>
+                                <strong class="small">{{ t.new_company.name }}</strong>
+                            </div>
+                        </td>
+                        <td>
+                            <div>
+                                <i class="bi bi-calendar-check me-1"></i><strong>{{ t.transfer_date.strftime('%d %b, %Y') }}</strong>
+                            </div>
+                            <small class="text-muted">{{ t.transfer_date.strftime('%A') }}</small>
+                        </td>
+                        <td>
+                            <small class="text-muted">{{ t.remarks if t.remarks else '-' }}</small>
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex justify-content-center gap-1">
+                                <a href="{{ url_for('project_transfer_edit', id=t.id) }}" class="btn btn-compact btn-edit-compact" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form action="{{ url_for('project_transfer_delete', id=t.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Permanently delete this transfer record?');">
+                                    <button type="submit" class="btn btn-compact btn-delete-compact" title="Delete">
+                                        <i class="bi bi-trash3"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="table-footer" style="background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666;">
+            Showing {{ '1' if transfers|length > 0 else '0' }} to {{ transfers|length }} of {{ transfers|length }} entries
+        </div>
+    </div>
 </div>
 
-<!-- Scripts Integration -->
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
-<script src="https://code.jquery.com/jquery-3.7.0.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-
-<!-- DataTables Buttons Scripts -->
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
-
 <script>
-  $(document).ready(function() {
-    var table = $('#transferDataTable').DataTable({
-      "pageLength": 10,
-      "ordering": true,
-      "dom": '<"d-flex justify-content-between align-items-center p-3"fB>t<"d-flex justify-content-between align-items-center p-3"ip>',
-      "buttons": [
-        {
-          extend: 'excelHtml5',
-          text: '<i class="bi bi-file-earmark-excel me-1"></i> Excel',
-          className: 'buttons-excel'
-        },
-        {
-          extend: 'pdfHtml5',
-          text: '<i class="bi bi-file-earmark-pdf me-1"></i> PDF',
-          className: 'buttons-pdf'
-        },
-        {
-          extend: 'print',
-          text: '<i class="bi bi-printer me-1"></i> Print',
-          className: 'buttons-print'
+    // Initialize Lucide icons
+    lucide.createIcons();
+    
+    function sortTable(column) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentSort = urlParams.get('sort_by');
+        const currentOrder = urlParams.get('sort_order') || 'desc';
+        
+        let newOrder = 'asc';
+        if (currentSort === column && currentOrder === 'asc') {
+            newOrder = 'desc';
         }
-      ],
-      "language": {
-        "search": "",
-        "searchPlaceholder": "Search logs..."
-      }
-    });
-
-    // Move buttons to the custom area in the header if you want, or keep them in the DOM
-    table.buttons().container().appendTo('#exportButtonsArea');
-  });
+        
+        urlParams.set('sort_by', column);
+        urlParams.set('sort_order', newOrder);
+        
+        window.location.search = urlParams.toString();
+    }
 </script>
 {% endblock %}

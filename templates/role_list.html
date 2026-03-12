@@ -55,7 +55,7 @@
                   {% else %}
                   <a href="{{ url_for('role_edit', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                   {% endif %}
-                  {% if r.name not in ['Master', 'Admin'] %}
+                  {% if r.name not in ['Master', 'Admin'] and (current_user_is_master or can_see_page('role_delete')) %}
                   <form method="POST" action="{{ url_for('role_delete', pk=r.id) }}" class="d-inline" onsubmit="return confirm('Ye role delete karna hai? Iske saath linked users pehle check kar lein.');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete">

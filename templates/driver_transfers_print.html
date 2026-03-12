@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Driver Transfers - Print View</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        @media print {
+            .no-print { display: none; }
+            @page { margin: 1cm; }
+        }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { text-align: center; color: #9c27b0; margin-bottom: 10px; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 20px; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #9c27b0; color: white; padding: 10px; text-align: left; font-size: 11px; }
+        td { padding: 8px; border-bottom: 1px solid #ddd; font-size: 10px; }
+        tr:hover { background: #f5f5f5; }
+        .transfer-flow { display: flex; gap: 8px; align-items: center; font-size: 9px; }
+        .flow-box { border: 1px solid #ddd; padding: 6px; border-radius: 4px; background: #f9f9f9; }
+        .flow-item { display: block; margin: 2px 0; }
+        .flow-arrow { color: #9c27b0; font-size: 14px; font-weight: bold; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 8px; font-weight: bold; }
+        .badge-danger { background: #dc3545; color: white; }
+        .badge-success { background: #28a745; color: white; }
+        .print-btn { background: #4caf50; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px; margin-bottom: 20px; }
+        .print-btn:hover { background: #388e3c; }
+    </style>
+</head>
+<body>
+    <button onclick="window.print()" class="print-btn no-print">🖨️ Print</button>
+    
+    <h1>👤 Driver Transfer History</h1>
+    <div class="subtitle">Driver Movement Tracking Report{% if q %} - Search: "{{ q }}"{% endif %}</div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th width="5%">Sr No</th>
+                <th width="15%">Driver</th>
+                <th width="40%">Transfer Flow</th>
+                <th width="12%">Transfer Date</th>
+                <th width="28%">Remarks</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in transfers %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>
+                    <strong>{{ t.driver.name if t.driver else '-' }}</strong><br>
+                    <small style="color: #666;">ID: {{ t.driver.driver_id if t.driver else '-' }}</small>
+                </td>
+                <td>
+                    <div class="transfer-flow">
+                        <div class="flow-box">
+                            <span class="flow-item"><i class="bi bi-folder2"></i> {{ t.old_project.name if t.old_project else 'Initial' }}</span>
+                            <span class="flow-item"><i class="bi bi-geo-alt"></i> {{ t.old_vehicle.district.name if t.old_vehicle and t.old_vehicle.district else '-' }}</span>
+                            <span class="flow-item"><i class="bi bi-truck"></i> {{ t.old_vehicle.vehicle_no if t.old_vehicle else '-' }}</span>
+                            <span class="flow-item"><i class="bi bi-clock"></i> <span class="badge badge-danger">{{ t.old_shift if t.old_shift else '-' }}</span></span>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box">
+                            <span class="flow-item"><i class="bi bi-folder2"></i> <strong>{{ t.new_project.name if t.new_project else '-' }}</strong></span>
+                            <span class="flow-item"><i class="bi bi-geo-alt"></i> <strong>{{ t.new_vehicle.district.name if t.new_vehicle and t.new_vehicle.district else '-' }}</strong></span>
+                            <span class="flow-item"><i class="bi bi-truck"></i> <strong>{{ t.new_vehicle.vehicle_no if t.new_vehicle else '-' }}</strong></span>
+                            <span class="flow-item"><i class="bi bi-clock"></i> <span class="badge badge-success">{{ t.new_shift if t.new_shift else '-' }}</span></span>
+                        </div>
+                    </div>
+                </td>
+                <td>{{ t.transfer_date.strftime('%d %b, %Y') if t.transfer_date else '-' }}</td>
+                <td>{{ t.remarks or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 20px; color: #999;">
+                    No driver transfer records found.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <div style="margin-top: 30px; text-align: center; color: #999; font-size: 11px;">
+        Total Records: {{ transfers|length }}
+    </div>
+</body>
+</html>

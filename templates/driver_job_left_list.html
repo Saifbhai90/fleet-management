@@ -3,287 +3,193 @@
 
 {% block content %}
 <style>
-    :root {
-        --danger-btn: #dc3545;
-        --border-color: #ebedef;
-    }
-
-    .page-container { background-color: #f4f7f6; min-height: 100vh; padding: 1.5rem; }
-
-    /* Glassmorphism Card Effect */
-    .custom-card {
-        background: #ffffff;
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-        overflow: hidden;
-    }
-
-    /* Table Styling */
-    .table thead th {
-        background-color: #f8fafb;
-        color: #495057;
-        font-weight: 600;
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        padding: 1rem;
-        border-bottom: 2px solid #f1f3f5;
-    }
-
-    .table tbody tr { transition: background 0.2s; }
-    .table tbody tr:hover { background-color: #f9fbff; }
-
-    /* Simple & Searchable Date Style */
-    .date-text {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        color: #2d3436;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-    .date-icon { color: #adb5bd; margin-right: 8px; font-size: 0.9rem; }
-
-    /* Driver Profile Info */
-    .driver-name { font-weight: 700; color: #1a1a1a; margin-bottom: 2px; }
-    .driver-id-badge { font-size: 0.75rem; background: #e9ecef; color: #495057; padding: 2px 8px; border-radius: 4px; }
-
-    /* Service Detail Icons */
-    .service-info i { width: 20px; color: #6c757d; font-size: 0.85rem; }
-    .service-info div { margin-bottom: 3px; }
-
-    /* Action Buttons Styling */
-    .action-group { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+    body { background: #f8f9fa; }
     
-    .btn-act {
-        width: 38px; height: 38px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 10px; transition: all 0.3s ease;
-        border: 1px solid #dee2e6; background: white;
-        text-decoration: none;
-        padding: 0;
+    .page-header-gradient { 
+        background: #fff; 
+        padding: 0; 
+        margin-bottom: 1rem; 
+    }
+    .page-header-gradient h2 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+    .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+    
+    .section-heading { 
+        background: #dc3545; 
+        color: white; 
+        padding: 0.75rem 1rem; 
+        font-size: 1rem; 
+        font-weight: 600; 
+        border-radius: 4px 4px 0 0; 
+        margin: 0;
     }
     
-    .btn-view { color: #0d6efd; } 
-    .btn-view:hover { background: #0d6efd; color: white; box-shadow: 0 4px 8px rgba(13,110,253,0.2); border-color: #0d6efd; }
-
-    /* Modern Search Input */
-    .search-container { position: relative; max-width: 400px; }
-    .search-container i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #adb5bd; }
-    .search-input { padding-left: 35px; border-radius: 10px; border: 1px solid #ced4da; height: 42px; }
-    .search-input:focus { border-color: #dc3545; box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1); }
+    .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+    .filter-input:focus { border-color: #dc3545; box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.1); }
+    
+    .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .compact-table { font-size: 0.875rem; margin: 0; }
+    .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #dc3545; }
+    .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
+    
+    .compact-table tbody tr { 
+        border-bottom: 1px solid #f0f0f0; 
+        transition: all 0.3s ease; 
+        cursor: pointer;
+    }
+    .compact-table tbody tr:hover { 
+        background: linear-gradient(to right, #fee 0%, #ffffff 100%); 
+        transform: translateX(5px);
+        box-shadow: 0 2px 8px rgba(220, 53, 69, 0.15);
+    }
+    .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+    
+    .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+    .badge-danger { background: #dc3545; color: white; }
+    
+    .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+    .btn-view-compact { background: #0d6efd; color: white; border: none; }
+    .btn-view-compact:hover { background: #0b5ed7; transform: translateY(-2px); }
+    
+    .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .btn-primary-compact { background: #2196f3; color: white; border: none; }
+    .btn-primary-compact:hover { background: #1976d2; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4); }
+    .btn-danger-compact { background: #dc3545; color: white; border: none; }
+    .btn-danger-compact:hover { background: #c82333; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4); }
+    .btn-outline-compact { background: #ff9800; color: white; border: none; }
+    .btn-outline-compact:hover { background: #f57c00; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4); }
+    
+    .table-footer { background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666; }
 </style>
 
-<!-- DataTables CSS for export/print -->
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
-
-<div class="page-container">
-    <!-- Header Section -->
-    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-        <div>
-            <h3 class="fw-bold text-dark mb-0">Driver Job Left <span class="text-danger">History</span></h3>
-            <p class="text-muted small mb-0">Audited list of drivers who have officially left the organization.</p>
-        </div>
-        {% if can_see_page('driver_job_left_add') %}
-        <a href="{{ url_for('driver_job_left_new') }}" class="btn btn-danger shadow-sm px-4">
-            <i class="bi bi-plus-circle me-2"></i>Mark New Record
-        </a>
-        {% endif %}
-    </div>
-
-    <!-- Stats & Filters (single row) -->
-    <form method="GET" class="d-flex flex-wrap align-items-end gap-2 mb-3">
-        <div class="flex-grow-0" style="min-width: 170px;">
-            <label class="form-label small text-muted mb-1">From Date</label>
-            <input
-                type="text"
-                id="from_date_filter"
-                name="from_date"
-                class="form-control form-control-sm datepicker"
-                placeholder="dd-mm-yyyy"
-                value="{{ from_date or '' }}"
-            >
-        </div>
-        <div class="flex-grow-0" style="min-width: 170px;">
-            <label class="form-label small text-muted mb-1">To Date</label>
-            <input
-                type="text"
-                id="to_date_filter"
-                name="to_date"
-                class="form-control form-control-sm datepicker"
-                placeholder="dd-mm-yyyy"
-                value="{{ to_date or '' }}"
-            >
-        </div>
-        <div class="flex-grow-0" style="min-width: 180px;">
-            <label class="form-label small text-muted mb-1">Project</label>
-            <select name="project_id" class="form-select form-select-sm">
-                {% for val, label in project_choices %}
-                <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="flex-grow-0" style="min-width: 180px;">
-            <label class="form-label small text-muted mb-1">District</label>
-            <select name="district_id" class="form-select form-select-sm">
-                {% for val, label in district_choices %}
-                <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="flex-grow-1" style="min-width: 220px;">
-            <label class="form-label small text-muted mb-1">Search</label>
+<div class="container-fluid py-4 px-4">
+    <div class="page-header-gradient">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2><i class="bi bi-person-x me-2"></i>Driver Resignation / Exit</h2>
+                <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>Track drivers who have left the organization</p>
+            </div>
             <div class="d-flex gap-2">
-                <input type="text" name="q" class="form-control form-control-sm" placeholder="Name, ID, project, district..." value="{{ q or '' }}">
-                <button type="submit" class="btn btn-danger btn-sm">Apply</button>
-                {% if q or project_id or district_id or from_date or to_date %}
-                <a href="{{ url_for('driver_job_left_list') }}" class="btn btn-outline-secondary btn-sm">Clear</a>
+                <a href="{{ url_for('driver_job_left_export', project_id=project_id, district_id=district_id, q=q or '') }}" class="btn btn-outline-compact top-btn-compact">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Export
+                </a>
+                <a href="{{ url_for('driver_job_left_print', project_id=project_id, district_id=district_id, q=q or '') }}" target="_blank" class="btn btn-outline-compact top-btn-compact">
+                    <i class="bi bi-eye me-1"></i>Print
+                </a>
+                {% if can_see_page('driver_job_left_add') %}
+                <a href="{{ url_for('driver_job_left_new') }}" class="btn btn-danger-compact top-btn-compact">
+                    <i class="bi bi-plus-lg me-1"></i>Mark Job Left
+                </a>
                 {% endif %}
             </div>
         </div>
-        <div class="ms-auto">
-            <span class="badge bg-white text-dark border py-2 px-3 shadow-sm rounded-pill">
-                <span class="text-muted me-1">Total Archived:</span> <strong>{{ records|length }}</strong>
-            </span>
-        </div>
-    </form>
+    </div>
 
-    <!-- Main Table -->
-    <div class="custom-card shadow-sm">
-        <!-- Export / Print Buttons (right aligned) -->
-        <div class="d-flex justify-content-end align-items-center px-3 pt-2">
-            <div id="exportButtonsArea"></div>
-        </div>
+    <div class="filter-bar">
+        <form method="GET" action="{{ url_for('driver_job_left_list') }}">
+            <div class="row g-2 align-items-center mb-2">
+                <div class="col-md-2">
+                    <input type="text" name="from_date" class="form-control filter-input datepicker" 
+                           placeholder="From Date (dd-mm-yyyy)" value="{{ from_date or '' }}" autocomplete="off">
+                </div>
+                <div class="col-md-2">
+                    <input type="text" name="to_date" class="form-control filter-input datepicker" 
+                           placeholder="To Date (dd-mm-yyyy)" value="{{ to_date or '' }}" autocomplete="off">
+                </div>
+                <div class="col-md-2">
+                    <select name="project_id" class="form-select filter-input">
+                        {% for val, label in project_choices %}
+                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="district_id" class="form-select filter-input">
+                        {% for val, label in district_choices %}
+                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="text" name="q" class="form-control filter-input" 
+                           placeholder="Search..." 
+                           value="{{ q or '' }}">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary-compact w-100">
+                        <i class="bi bi-funnel"></i>
+                    </button>
+                </div>
+            </div>
+            {% if q or project_id or district_id or from_date or to_date %}
+            <a href="{{ url_for('driver_job_left_list') }}" class="btn btn-outline-secondary btn-sm">Clear Filters</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="data-table-wrapper">
+        <div class="section-heading">Resignation / Exit Records</div>
         <div class="table-responsive">
-            <table class="table align-middle mb-0" id="mainTable">
+            <table class="table table-sm align-middle mb-0 compact-table">
                 <thead>
                     <tr>
-                        <th class="ps-4">Leaving Date</th>
-                        <th>Driver Info</th>
-                        <th>Deployment History</th>
-                        <th>Reason</th>
-                        <th>Remarks</th>
-                        <th class="text-end pe-4">View Report</th>
+                        <th width="5%">Sr No</th>
+                        <th width="12%">Exit Date</th>
+                        <th width="15%">Driver</th>
+                        <th width="25%">Last Assignment</th>
+                        <th width="15%">Reason</th>
+                        <th width="18%">Remarks</th>
+                        <th class="text-center" width="10%">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for record in records %}
                     <tr>
-                        <td class="ps-4">
-                            <div class="date-text">
-                                <i class="bi bi-calendar3 date-icon"></i>{{ record.change_date.strftime('%Y-%m-%d') }}
+                        <td>
+                            <span class="badge-sm badge-danger">{{ loop.index }}</span>
+                        </td>
+                        <td>
+                            <small><i class="bi bi-calendar-check me-1"></i>{{ record.change_date.strftime('%d %b, %Y') }}</small>
+                        </td>
+                        <td>
+                            <div><i class="bi bi-person-badge me-1 text-info"></i><strong>{{ record.driver.name }}</strong></div>
+                            <small class="text-muted">ID: {{ record.driver.driver_id or 'N/A' }}</small>
+                        </td>
+                        <td>
+                            <div style="font-size: 0.75rem;">
+                                <div><i class="bi bi-folder2 me-1"></i>{{ record.left_project.name if record.left_project else '-' }}</div>
+                                <div><i class="bi bi-geo-alt me-1"></i>{{ record.left_district.name if record.left_district else '-' }}</div>
+                                <div><i class="bi bi-truck me-1"></i><strong>{{ record.left_vehicle.vehicle_no if record.left_vehicle else '-' }}</strong></div>
+                                <div><i class="bi bi-clock me-1"></i><span class="badge-sm badge-danger">{{ record.left_shift if record.left_shift else '-' }}</span></div>
                             </div>
                         </td>
                         <td>
-                            <div class="driver-name">{{ record.driver.name }}</div>
-                            <span class="driver-id-badge">ID: {{ record.driver.driver_id or 'N/A' }}</span>
+                            <span class="badge-sm badge-danger">{{ record.reason }}</span>
                         </td>
                         <td>
-                            <div class="service-info small">
-                                <div><i class="bi bi-briefcase"></i> {{ record.left_project.name if record.left_project else '---' }}</div>
-                                <div><i class="bi bi-geo-alt text-danger"></i> {{ record.left_district.name if record.left_district else '---' }}</div>
-                                <div><i class="bi bi-truck"></i> <span class="fw-bold">{{ record.left_vehicle.vehicle_no if record.left_vehicle else '---' }}</span></div>
-                            </div>
+                            <small class="text-muted">{{ record.remarks[:30] if record.remarks else '-' }}{{ '...' if record.remarks and record.remarks|length > 30 else '' }}</small>
                         </td>
-                        <td>
-                            <span class="badge rounded-pill bg-light text-danger border border-danger-subtle px-3 py-2">
-                                {{ record.reason }}
-                            </span>
-                        </td>
-                        <td>
-                            <p class="text-muted small mb-0 text-wrap" style="max-width: 200px; line-height: 1.4;">
-                                {{ record.remarks or '-' }}
-                            </p>
-                        </td>
-                        <td class="pe-4">
-                            <div class="action-group">
-                                <!-- Sirf View Button rakha gaya hai -->
-                                <a href="{{ url_for('driver_job_left_view', id=record.id) }}" class="btn-act btn-view" title="View Detailed Report">
-                                    <i class="bi bi-eye-fill"></i>
-                                </a>
-                            </div>
+                        <td class="text-center">
+                            <a href="{{ url_for('driver_job_left_view', id=record.id) }}" class="btn btn-compact btn-view-compact" title="View Details">
+                                <i class="bi bi-eye"></i>
+                            </a>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td class="text-center py-5 text-muted">
-                            <i class="bi bi-folder-x display-4 d-block mb-3 opacity-50"></i>
-                            No history records found.
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+                            No resignation/exit records found.
                         </td>
-                        <td></td><td></td><td></td><td></td><td></td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        <div class="table-footer">
+            Showing {{ '1' if records|length > 0 else '0' }} to {{ records|length }} of {{ records|length }} entries
+        </div>
     </div>
 </div>
 
-<!-- DataTables & Buttons scripts -->
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
-
-<script>
-    $(document).ready(function () {
-        var table = $('#mainTable').DataTable({
-            pageLength: 25,
-            searching: false, // filters upar wale form se aa rahe hain
-            order: [[0, 'desc']],
-            dom: 'rt<"d-flex justify-content-between align-items-center p-2"ip>',
-            buttons: [
-                {
-                    extend: 'excelHtml5',
-                    text: '<i class="bi bi-file-earmark-excel me-1"></i> Excel',
-                    className: 'btn btn-success btn-sm'
-                },
-                {
-                    extend: 'print',
-                    text: '<i class="bi bi-printer me-1"></i> Print / Preview',
-                    className: 'btn btn-secondary btn-sm',
-                    autoPrint: false,
-                    customize: function (win) {
-                        var $body = $(win.document.body);
-                        $body.css('font-family', '"Segoe UI", Tahoma, sans-serif');
-                        $body.css('padding', '20px');
-
-                        // Title styling
-                        $body.find('h1').css({
-                            'font-size': '20px',
-                            'margin-bottom': '10px',
-                            'text-align': 'left'
-                        });
-
-                        // Add custom print button on top of preview
-                        var $toolbar = $('<div style="display:flex; justify-content:flex-end; margin-bottom:10px;"></div>');
-                        var $printBtn = $('<button style="padding:6px 12px; border-radius:4px; border:1px solid #333; background:#333; color:white; font-size:12px;">Print</button>');
-                        $printBtn.on('click', function () { win.print(); });
-                        $toolbar.append($printBtn);
-                        $body.prepend($toolbar);
-
-                        // Make table look clean for print
-                        var $table = $body.find('table');
-                        $table.addClass('table table-sm');
-                        $table.css({
-                            'border-collapse': 'collapse',
-                            'width': '100%',
-                            'font-size': '12px'
-                        });
-                        $table.find('th, td').css({
-                            'border': '1px solid #ccc',
-                            'padding': '4px 6px'
-                        });
-                    }
-                }
-            ]
-        });
-
-        // Move buttons into custom container on the right
-        table.buttons().container().appendTo('#exportButtonsArea');
-    });
-</script>
 {% endblock %}

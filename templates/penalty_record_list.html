@@ -1,108 +1,182 @@
 {% extends "base.html" %}
 {% block title %}Penalty Record{% endblock %}
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-cash-coin me-2 text-secondary"></i>Penalty Record</h2>
-    <a href="{{ url_for('penalty_record_new') }}" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus-circle me-1"></i>Add Penalty Record
-    </a>
-  </div>
+<style>
+    body { background: #f8f9fa; }
+    
+    .page-header-gradient { 
+        background: #fff; 
+        padding: 0; 
+        margin-bottom: 1rem; 
+    }
+    .page-header-gradient h2 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+    .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+    
+    .section-heading { 
+        background: #ff9800; 
+        color: white; 
+        padding: 0.75rem 1rem; 
+        font-size: 1rem; 
+        font-weight: 600; 
+        border-radius: 4px 4px 0 0; 
+        margin: 0;
+    }
+    
+    .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+    .filter-input:focus { border-color: #ff9800; box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.1); }
+    
+    .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .compact-table { font-size: 0.875rem; margin: 0; }
+    .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #ff9800; }
+    .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
+    
+    .compact-table tbody tr { 
+        border-bottom: 1px solid #f0f0f0; 
+        transition: all 0.3s ease; 
+        cursor: pointer;
+    }
+    .compact-table tbody tr:hover { 
+        background: linear-gradient(to right, #fff3e0 0%, #ffffff 100%); 
+        transform: translateX(5px);
+        box-shadow: 0 2px 8px rgba(255, 152, 0, 0.15);
+    }
+    .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+    
+    .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+    .badge-warning { background: #ff9800; color: white; }
+    
+    .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+    .btn-edit-compact { background: #ffc107; color: #000; border: none; }
+    .btn-edit-compact:hover { background: #e0a800; transform: translateY(-2px); }
+    
+    .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .btn-primary-compact { background: #2196f3; color: white; border: none; }
+    .btn-primary-compact:hover { background: #1976d2; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4); }
+    .btn-warning-compact { background: #ff9800; color: white; border: none; }
+    .btn-warning-compact:hover { background: #f57c00; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4); }
+    
+    .table-footer { background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666; }
+</style>
 
-  <div class="card shadow-sm border-0 rounded-3 mb-4">
-    <div class="card-body">
-      <form method="POST" action="{{ url_for('penalty_record_list') }}" class="row g-3 align-items-end">
-        {{ form.hidden_tag() }}
-        <div class="col-md-2">
-          <label class="form-label">From Date</label>
-          {{ form.from_date(class="form-control datepicker") }}
+<div class="container-fluid py-4 px-4">
+    <div class="page-header-gradient">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2><i class="bi bi-cash-coin me-2"></i>Driver Penalty Records</h2>
+                <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>Track driver penalties and fines</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('penalty_record_new') }}" class="btn btn-warning-compact top-btn-compact">
+                    <i class="bi bi-plus-lg me-1"></i>Add Penalty
+                </a>
+            </div>
         </div>
-        <div class="col-md-2">
-          <label class="form-label">To Date</label>
-          {{ form.to_date(class="form-control datepicker") }}
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">District</label>
-          <select name="district_id" id="districtSelect" class="form-select">
-            {% for val, label in form.district_id.choices %}
-              <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Project</label>
-          <select name="project_id" id="projectSelect" class="form-select">
-            {% for val, label in form.project_id.choices %}
-              <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <button type="submit" class="btn btn-primary w-100">
-            <i class="bi bi-search me-1"></i>View Report
-          </button>
-        </div>
-      </form>
     </div>
-  </div>
 
-  <div class="card shadow border-0 rounded-3 overflow-hidden">
-    <div class="card-header bg-secondary text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
-      <span class="fw-semibold">Report from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
-      <div class="d-flex flex-wrap align-items-center gap-2">
-        <a href="{{ url_for('penalty_record_export', from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), district_id=district_id or 0, project_id=project_id or 0) }}" class="btn btn-success btn-sm">
-          <i class="bi bi-file-earmark-excel me-1"></i>Export to Excel
-        </a>
-        <a href="{{ url_for('penalty_record_print', from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), district_id=district_id or 0, project_id=project_id or 0) }}" target="_blank" class="btn btn-outline-light btn-sm">
-          <i class="bi bi-printer me-1"></i>Print Preview
-        </a>
-        <input type="text" id="penaltySearch" class="form-control form-control-sm" placeholder="Search..." style="max-width: 220px;" autocomplete="off">
-      </div>
+    <div class="filter-bar">
+        <form method="POST" action="{{ url_for('penalty_record_list') }}">
+            {{ form.hidden_tag() }}
+            <div class="row g-2 align-items-center mb-2">
+                <div class="col-md-2">
+                    {{ form.from_date(class="form-control filter-input datepicker", placeholder="From Date (dd-mm-yyyy)") }}
+                </div>
+                <div class="col-md-2">
+                    {{ form.to_date(class="form-control filter-input datepicker", placeholder="To Date (dd-mm-yyyy)") }}
+                </div>
+                <div class="col-md-2">
+                    <select name="project_id" id="projectSelect" class="form-select filter-input">
+                        {% for val, label in form.project_id.choices %}
+                        <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="district_id" id="districtSelect" class="form-select filter-input">
+                        {% for val, label in form.district_id.choices %}
+                        <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="text" id="penaltySearch" class="form-control filter-input" 
+                           placeholder="Search..." 
+                           autocomplete="off">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary-compact w-100">
+                        <i class="bi bi-funnel"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
     </div>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" id="penaltyTable">
-          <thead class="table-light">
-            <tr>
-              <th class="ps-4">#</th>
-              <th>District</th>
-              <th>Project</th>
-              <th>Vehicle</th>
-              <th>Driver Name</th>
-              <th>Date</th>
-              <th>Fine</th>
-              <th>Remarks</th>
-              <th class="text-center">Edit</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in rows %}
-            <tr class="penalty-row">
-              <td class="ps-4">{{ loop.index }}</td>
-              <td>{{ row.district.name if row.district else '-' }}</td>
-              <td>{{ row.project.name if row.project else '-' }}</td>
-              <td class="fw-medium">{{ row.vehicle.vehicle_no if row.vehicle else '-' }}</td>
-              <td>{{ row.driver.name if row.driver else '-' }}</td>
-              <td>{{ row.record_date|ddmmyyyy }}</td>
-              <td>{{ row.fine or '-' }}</td>
-              <td>{{ row.remarks or '-' }}</td>
-              <td class="text-center">
-                <a href="{{ url_for('penalty_record_edit', pk=row.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
-              </td>
-            </tr>
-            {% else %}
-            <tr>
-              <td colspan="9" class="text-center py-5 text-muted">
-                <i class="bi bi-cash-coin display-6 d-block mb-2"></i>
-                No penalty records. <a href="{{ url_for('penalty_record_new') }}">Add Penalty Record</a>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+
+    <div class="data-table-wrapper">
+        <div class="section-heading">Penalty Records</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 compact-table" id="penaltyTable">
+                <thead>
+                    <tr>
+                        <th width="5%">Sr No</th>
+                        <th width="12%">Date</th>
+                        <th width="15%">Driver</th>
+                        <th width="12%">Vehicle</th>
+                        <th width="15%">Project</th>
+                        <th width="12%">District</th>
+                        <th width="10%">Fine Amount</th>
+                        <th width="15%">Remarks</th>
+                        <th class="text-center" width="8%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr class="penalty-row">
+                        <td>
+                            <span class="badge-sm badge-warning">{{ loop.index }}</span>
+                        </td>
+                        <td>
+                            <small><i class="bi bi-calendar-check me-1"></i>{{ row.record_date|ddmmyyyy }}</small>
+                        </td>
+                        <td>
+                            <div><i class="bi bi-person-badge me-1 text-info"></i><strong>{{ row.driver.name if row.driver else '-' }}</strong></div>
+                        </td>
+                        <td>
+                            <small><i class="bi bi-truck me-1"></i>{{ row.vehicle.vehicle_no if row.vehicle else '-' }}</small>
+                        </td>
+                        <td>
+                            <small><i class="bi bi-folder2 me-1"></i>{{ row.project.name if row.project else '-' }}</small>
+                        </td>
+                        <td>
+                            <small><i class="bi bi-geo-alt me-1"></i>{{ row.district.name if row.district else '-' }}</small>
+                        </td>
+                        <td>
+                            <span class="badge-sm badge-warning">{{ row.fine or '-' }}</span>
+                        </td>
+                        <td>
+                            <small class="text-muted">{{ row.remarks[:20] if row.remarks else '-' }}{{ '...' if row.remarks and row.remarks|length > 20 else '' }}</small>
+                        </td>
+                        <td class="text-center">
+                            <a href="{{ url_for('penalty_record_edit', pk=row.id) }}" class="btn btn-compact btn-edit-compact" title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-4">
+                            <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+                            No penalty records found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="table-footer">
+            Showing {{ '1' if rows|length > 0 else '0' }} to {{ rows|length }} of {{ rows|length }} entries
+        </div>
     </div>
-  </div>
 </div>
 
 <script>

@@ -33,6 +33,7 @@ ALL_PERMISSION_CODES = [
     (PERMISSION_REPORTS, 'Reports', 'Reports'),
     (PERMISSION_BACKUP, 'Backup', 'General'),
     (PERMISSION_USERS_MANAGE, 'User & Role Management', 'Admin'),
+    ('role_delete', 'Roles – Delete', 'Admin'),
 ]
 
 # Endpoint -> required permission code (granular where defined)
@@ -66,7 +67,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('employee_form', 'employees_add'),
     ('employee_delete', 'employees_delete'),
     ('employees_import', 'employees_import'),
-    ('role_delete', 'role_edit'),
+    ('role_delete', 'role_delete'),
     ('driver_post_list', 'driver_post_list'),
     ('driver_post_form', 'driver_post_add'),
     ('driver_post_delete', 'driver_post_delete'),
@@ -341,10 +342,21 @@ def seed_auth_tables(app):
         # Create Admin role with all permissions if missing
         admin_role = Role.query.filter_by(name='Admin').first()
         if not admin_role:
-            admin_role = Role(name='Admin', description='Full access; can assign other roles (except Master/Admin) to users')
+            admin_role = Role(name='Admin', description='System admin – access limited to what Master assigns')
             db.session.add(admin_role)
             db.session.commit()
-            admin_role.permissions = all_perms
+            # Default Admin permissions are intentionally limited.
+            # Master (Developer) will grant additional permissions as needed.
+            default_admin_codes = {
+                PERMISSION_DASHBOARD,
+                PERMISSION_USERS_MANAGE,
+                'user_list', 'user_add', 'user_edit', 'user_delete',
+                'role_list', 'role_add', 'role_edit', 'role_delete',
+                'form_control',
+                'notification_list', 'notification_add',
+            }
+            default_admin_perms = Permission.query.filter(Permission.code.in_(list(default_admin_codes))).all()
+            admin_role.permissions = default_admin_perms
             db.session.commit()
 
         # Create default master (developer) user if no Master user exists

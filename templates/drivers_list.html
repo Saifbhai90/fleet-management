@@ -3,176 +3,234 @@
 {% block title %}Drivers List{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-person-badge-fill me-2 text-primary"></i>Drivers Management</h2>
-    <div class="d-flex gap-2">
-      {% if can_see_page('drivers_import') %}
-      <a href="{{ url_for('drivers_import') }}" class="btn btn-outline-secondary shadow-sm">
-        <i class="bi bi-upload me-1"></i>Import Excel
-      </a>
-      {% endif %}
-      <a href="{{ url_for('drivers_export', search=search) }}" class="btn btn-outline-secondary shadow-sm">
-        <i class="bi bi-download me-1"></i>Export Excel
-      </a>
-      <a href="{{ url_for('drivers_print', search=search) }}" target="_blank" class="btn btn-outline-primary shadow-sm">
-        <i class="bi bi-printer me-1"></i>Print / PDF
-      </a>
-      {% if can_see_page('drivers_add') %}
-      <a href="{{ url_for('driver_form') }}" class="btn btn-success shadow-sm">
-        <i class="bi bi-person-plus-fill me-1"></i>Add New Driver
-      </a>
-      {% endif %}
+<style>
+  body { background: #f8f9fa; }
+  .page-header-gradient { background: #fff; padding: 0; margin-bottom: 1rem; }
+  .page-header-gradient h3 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+  .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+  .section-heading { background: #3f51b5; color: white; padding: 0.75rem 1rem; font-size: 1rem; font-weight: 600; border-radius: 4px 4px 0 0; margin: 0; }
+  .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .compact-table { font-size: 0.875rem; margin: 0; }
+  .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #3f51b5; }
+  .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
+  .compact-table tbody tr { border-bottom: 1px solid #f0f0f0; transition: all 0.3s ease; cursor: pointer; }
+  .compact-table tbody tr:hover { background: linear-gradient(to right, #e8eaf6 0%, #ffffff 100%); transform: translateX(5px); box-shadow: 0 2px 8px rgba(63, 81, 181, 0.15); }
+  .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+  .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+  .badge-success { background: #4caf50; color: white; }
+  .badge-danger { background: #dc3545; color: white; }
+  .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+  .btn-info-compact { background: #17a2b8; color: white; border: none; }
+  .btn-info-compact:hover { background: #138496; transform: translateY(-2px); }
+  .btn-edit-compact { background: #ffc107; color: #000; border: none; }
+  .btn-edit-compact:hover { background: #e0a800; transform: translateY(-2px); }
+  .btn-delete-compact { background: #dc3545; color: white; border: none; }
+  .btn-delete-compact:hover { background: #c82333; transform: translateY(-2px); }
+  .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .btn-success-compact { background: #4caf50; color: white; border: none; }
+  .btn-success-compact:hover { background: #388e3c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4); }
+  .btn-outline-compact { background: #ff9800; color: white; border: none; }
+  .btn-outline-compact:hover { background: #f57c00; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4); }
+  .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+  .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+  .filter-input:focus { border-color: #3f51b5; box-shadow: 0 0 0 2px rgba(63, 81, 181, 0.1); }
+  .table-footer { background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666; }
+  .sortable-header { cursor: pointer; user-select: none; transition: all 0.2s; position: relative; padding-right: 1.5rem !important; }
+  .sortable-header:hover { background: rgba(63, 81, 181, 0.1); }
+  .sort-icon { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; opacity: 0.5; }
+  .sortable-header.active .sort-icon { opacity: 1; }
+</style>
+<script src="https://unpkg.com/lucide@latest"></script>
+<div class="container-fluid py-4 px-4">
+  <div class="page-header-gradient">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <h3><i class="bi bi-person-badge-fill me-2"></i>Drivers Management</h3>
+        <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>Manage driver records and information</p>
+      </div>
+      <div class="d-flex gap-2">
+        {% if can_see_page('drivers_import') %}
+        <a href="{{ url_for('drivers_import') }}" class="btn btn-outline-compact top-btn-compact">
+          <i class="bi bi-upload me-1"></i>Import
+        </a>
+        {% endif %}
+        <a href="{{ url_for('drivers_export', search=search) }}" class="btn btn-outline-compact top-btn-compact">
+          <i class="bi bi-file-earmark-excel me-1"></i>Export
+        </a>
+        <a href="{{ url_for('drivers_print', search=search) }}" target="_blank" class="btn btn-outline-compact top-btn-compact">
+          <i class="bi bi-eye me-1"></i>Preview
+        </a>
+        {% if can_see_page('drivers_add') %}
+        <a href="{{ url_for('driver_form') }}" class="btn btn-success-compact top-btn-compact">
+          <i class="bi bi-plus-lg me-1"></i>Add New
+        </a>
+        {% endif %}
+      </div>
     </div>
   </div>
 
-  <!-- Search + Per-page -->
-  <form method="GET" class="mb-3 auto-search-form">
-    <div class="row g-2 align-items-center">
-      <div class="col-lg-8">
-        <div class="input-group input-group-lg shadow-sm">
-          <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-      <input type="text" name="search" class="form-control border-start-0"
-                 placeholder="Search by Driver ID, Name, CNIC, CNIC Status, License, License Status, Phone or District..."
-                 value="{{ search }}">
-          <button class="btn btn-primary" type="submit">
-            <i class="bi bi-search me-1"></i>Search
-          </button>
+  <div class="filter-bar">
+    <form method="GET">
+      <div class="row g-2">
+        <div class="col-md-10">
+          <input type="text" name="search" class="form-control filter-input" placeholder="Search by Driver ID, Name, CNIC, License, Phone or District..." value="{{ search }}">
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-success-compact w-100" type="submit"><i class="bi bi-search"></i></button>
         </div>
       </div>
-      <div class="col-lg-4 text-lg-end mt-2 mt-lg-0">
-        <div class="d-inline-flex align-items-center gap-2">
-          <span class="small text-muted">Records per page</span>
-          <select name="per_page" class="form-select form-select-sm" onchange="this.form.submit()">
-            {% for size in [10, 20, 50, 100] %}
-              <option value="{{ size }}" {% if per_page == size %}selected{% endif %}>{{ size }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-    </div>
-    <input type="hidden" name="direction" value="{{ sort_direction or 'asc' }}">
-  </form>
+      <input type="hidden" name="sort_by" value="{{ sort_by or 'name' }}">
+      <input type="hidden" name="sort_order" value="{{ sort_order or 'asc' }}">
+    </form>
+  </div>
 
-  <!-- Drivers Table -->
-  <div class="card shadow border-0 rounded-4 overflow-hidden">
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table id="driversTable" class="table table-hover table-striped mb-0 align-middle">
-          <thead class="table-dark">
-            <tr>
-              <th class="ps-4">Sr #</th>
-              <th>Driver ID</th>
-              <th>
-                <a href="{{ url_for('drivers_list', page=pagination.page if pagination else 1, per_page=per_page, search=search, direction='desc' if (sort_direction or 'asc') == 'asc' else 'asc') }}"
-                   class="text-white text-decoration-none d-inline-flex align-items-center">
-                  Name
-                  {% if (sort_direction or 'asc') == 'asc' %}
-                    <i class="bi bi-sort-alpha-down ms-1"></i>
-                  {% else %}
-                    <i class="bi bi-sort-alpha-up ms-1"></i>
-                  {% endif %}
-                </a>
-              </th>
-              <th>CNIC No</th>
-              <th>CNIC Status</th>
-              <th>License No</th>
-              <th>License Status</th>
-              <th>Phone</th>
-              <th>Driver District</th>
-              <th class="text-end pe-4">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for driver in drivers %}
-            <tr>
-              <td class="ps-4">
-                {% if pagination %}
-                  {{ (pagination.page - 1) * per_page + loop.index }}
-                {% else %}
-                  {{ loop.index }}
-                {% endif %}
-              </td>
-              <td class="fw-bold">{{ driver.driver_id }}</td>
-              <td class="fw-medium">{{ driver.name }}{% if driver.photo_path %} <i class="bi bi-image text-info" title="Photo uploaded"></i>{% endif %}{% if driver.document_path %} <a href="{{ url_for('uploaded_file', filename=driver.document_path) }}" target="_blank" class="text-primary ms-1" title="View documents"><i class="bi bi-file-earmark-pdf"></i></a>{% endif %}</td>
-              <td>{{ driver.cnic_no|cnic_fmt or '-' }}</td>
-              <td>
-                {% if driver.cnic_status == 'Valid' %}
-                  <span class="badge bg-success px-3 py-2">Valid</span>
-                {% elif driver.cnic_status == 'Expired' %}
-                  <span class="badge bg-danger px-3 py-2">Expired</span>
-                {% else %}
-                  <span class="badge bg-secondary px-3 py-2">N/A</span>
-                {% endif %}
-              </td>
-              <td>{{ driver.license_no or '-' }}</td>
-              <td>
-                {% if driver.license_status == 'Valid' %}
-                  <span class="badge bg-success px-3 py-2">Valid</span>
-                {% elif driver.license_status == 'Expired' %}
-                  <span class="badge bg-danger px-3 py-2">Expired</span>
-                {% else %}
-                  <span class="badge bg-secondary px-3 py-2">N/A</span>
-                {% endif %}
-              </td>
-              <td>{{ driver.phone1|phone_fmt or '-' }}</td>
-              <td>{{ driver.driver_district or '-' }}</td>
-              <td class="text-end pe-4">
-                <a href="{{ url_for('report_driver_profile', driver_id=driver.id) }}" class="btn btn-sm btn-info me-1" title="Profile Report">
-                  <i class="bi bi-file-text"></i>
-                </a>
-                {% if can_see_page('drivers_edit') %}
-                <a href="{{ url_for('driver_form', id=driver.id) }}" class="btn btn-sm btn-warning me-1" title="Edit Driver">
-                  <i class="bi bi-pencil-square"></i>
-                </a>
-                {% endif %}
-                {% if can_see_page('drivers_delete') %}
-                <form action="{{ url_for('delete_driver', id=driver.id) }}" method="POST" style="display:inline;">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-sm btn-danger" title="Delete Driver" onclick="return confirm('Are you sure you want to delete {{ driver.name }}? This action cannot be undone.')">
-                    <i class="bi bi-trash"></i>
-                  </button>
-                </form>
-                {% endif %}
-              </td>
-            </tr>
-            {% else %}
-            <tr>
-              <td colspan="10" class="text-center py-5">
-                <div class="alert alert-info border-0 shadow-sm mb-0">
-                  <i class="bi bi-info-circle-fill me-2 fs-4"></i>
-                  No drivers found in the system.
-                  <br class="d-block d-sm-none">
-                  {% if can_see_page('drivers_add') %}
-                  <a href="{{ url_for('driver_form') }}" class="alert-link fw-bold">Add a new driver now</a>.
-                  {% endif %}
-                </div>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+  <div class="data-table-wrapper">
+    <div class="section-heading d-flex justify-content-between align-items-center">
+      <span>All Drivers</span>
+      <div class="d-flex align-items-center gap-2">
+        <span style="font-size: 0.875rem; font-weight: 400;">Per Page:</span>
+        <select class="form-select form-select-sm" style="width: 80px; background: white; color: #333; border: 1px solid rgba(255,255,255,0.3);" onchange="window.location.href='{{ url_for('drivers_list', search=search, sort_by=sort_by, sort_order=sort_order) }}&per_page=' + this.value">
+          <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+          <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+          <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+        </select>
       </div>
     </div>
-    <div class="card-footer bg-light text-muted small d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-      <div class="mb-2 mb-md-0">
-        <span>Total Drivers: <strong class="text-dark">{{ pagination.total if pagination else drivers|length }}</strong></span>
-        {% if search %}
-          <span class="ms-2">Filtered by: <strong class="text-primary">"{{ search }}"</strong></span>
+    <div class="table-responsive">
+      <table id="driversTable" class="table table-sm mb-0 compact-table">
+        <thead>
+          <tr>
+            <th class="ps-4">Sr #</th>
+            <th class="sortable-header {% if sort_by == 'driver_id' %}active{% endif %}" onclick="sortTable('driver_id')">
+              Driver ID
+              <i data-lucide="{% if sort_by == 'driver_id' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'driver_id' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th class="sortable-header {% if sort_by == 'name' %}active{% endif %}" onclick="sortTable('name')">
+              Driver Name
+              <i data-lucide="{% if sort_by == 'name' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'name' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th class="sortable-header {% if sort_by == 'cnic_no' %}active{% endif %}" onclick="sortTable('cnic_no')">
+              CNIC No
+              <i data-lucide="{% if sort_by == 'cnic_no' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'cnic_no' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th>CNIC Status</th>
+            <th class="sortable-header {% if sort_by == 'license_no' %}active{% endif %}" onclick="sortTable('license_no')">
+              License No
+              <i data-lucide="{% if sort_by == 'license_no' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'license_no' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th>License Status</th>
+            <th class="sortable-header {% if sort_by == 'phone' %}active{% endif %}" onclick="sortTable('phone')">
+              Phone
+              <i data-lucide="{% if sort_by == 'phone' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'phone' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th class="sortable-header {% if sort_by == 'district' %}active{% endif %}" onclick="sortTable('district')">
+              Driver District
+              <i data-lucide="{% if sort_by == 'district' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'district' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th class="text-end pe-4">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for driver in drivers %}
+          <tr>
+            <td class="ps-4">
+              {% if pagination %}
+                {{ (pagination.page - 1) * per_page + loop.index }}
+              {% else %}
+                {{ loop.index }}
+              {% endif %}
+            </td>
+            <td class="fw-bold">{{ driver.driver_id }}</td>
+            <td class="fw-medium">{{ driver.name }}{% if driver.photo_path %} <i class="bi bi-image text-info" title="Photo uploaded"></i>{% endif %}{% if driver.document_path %} <a href="{{ url_for('uploaded_file', filename=driver.document_path) }}" target="_blank" class="text-primary ms-1" title="View documents"><i class="bi bi-file-earmark-pdf"></i></a>{% endif %}</td>
+            <td>{{ driver.cnic_no|cnic_fmt or '-' }}</td>
+            <td>
+              {% if driver.cnic_status == 'Valid' %}
+                <span class="badge badge-sm badge-success">Valid</span>
+              {% elif driver.cnic_status == 'Expired' %}
+                <span class="badge badge-sm badge-danger">Expired</span>
+              {% else %}
+                <span class="badge badge-sm badge-secondary">N/A</span>
+              {% endif %}
+            </td>
+            <td>{{ driver.license_no or '-' }}</td>
+            <td>
+              {% if driver.license_status == 'Valid' %}
+                <span class="badge badge-sm badge-success">Valid</span>
+              {% elif driver.license_status == 'Expired' %}
+                <span class="badge badge-sm badge-danger">Expired</span>
+              {% else %}
+                <span class="badge badge-sm badge-secondary">N/A</span>
+              {% endif %}
+            </td>
+            <td>{{ driver.phone1|phone_fmt or '-' }}</td>
+            <td>{{ driver.driver_district or '-' }}</td>
+            <td class="text-end pe-4">
+              <a href="{{ url_for('report_driver_profile', driver_id=driver.id) }}" class="btn btn-sm btn-info-compact me-1" title="Profile Report">
+                <i class="bi bi-file-text"></i>
+              </a>
+              {% if can_see_page('drivers_edit') %}
+              <a href="{{ url_for('driver_form', id=driver.id) }}" class="btn btn-sm btn-edit-compact me-1" title="Edit Driver">
+                <i class="bi bi-pencil-square"></i>
+              </a>
+              {% endif %}
+              {% if can_see_page('drivers_delete') %}
+              <form action="{{ url_for('delete_driver', id=driver.id) }}" method="POST" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-delete-compact" title="Delete Driver" onclick="return confirm('Are you sure you want to delete {{ driver.name }}? This action cannot be undone.')">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="10" class="text-center py-5">
+              <div class="alert alert-info border-0 shadow-sm mb-0">
+                <i class="bi bi-info-circle-fill me-2 fs-4"></i>
+                No drivers found in the system.
+                <br class="d-block d-sm-none">
+                {% if can_see_page('drivers_add') %}
+                <a href="{{ url_for('driver_form') }}" class="alert-link fw-bold">Add a new driver now</a>.
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="table-footer">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <i class="bi bi-list-ul me-1"></i>Showing 
+        {% if pagination %}
+          {{ (pagination.page - 1) * per_page + 1 }} to {{ (pagination.page - 1) * per_page + drivers|length }} of {{ pagination.total }}
+        {% else %}
+          {{ '1' if drivers|length > 0 else '0' }} to {{ drivers|length }} of {{ drivers|length }}
         {% endif %}
+        entries
       </div>
       {% if pagination %}
       <nav>
         <ul class="pagination pagination-sm mb-0">
           {% if pagination.has_prev %}
           <li class="page-item">
-            <a class="page-link" href="{{ url_for('drivers_list', page=pagination.prev_num, per_page=per_page, search=search, direction=sort_direction or 'asc') }}">Previous</a>
+            <a class="page-link" href="{{ url_for('drivers_list', page=pagination.prev_num, per_page=per_page, search=search, sort_by=sort_by, sort_order=sort_order) }}">
+              <i class="bi bi-chevron-left"></i>
+            </a>
+          </li>
+          {% else %}
+          <li class="page-item disabled">
+            <span class="page-link"><i class="bi bi-chevron-left"></i></span>
           </li>
           {% endif %}
           {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
             {% if p %}
               <li class="page-item {% if p == pagination.page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('drivers_list', page=p, per_page=per_page, search=search, direction=sort_direction or 'asc') }}">{{ p }}</a>
+                <a class="page-link" href="{{ url_for('drivers_list', page=p, per_page=per_page, search=search, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
               </li>
             {% else %}
               <li class="page-item disabled"><span class="page-link">…</span></li>
@@ -180,7 +238,13 @@
           {% endfor %}
           {% if pagination.has_next %}
           <li class="page-item">
-            <a class="page-link" href="{{ url_for('drivers_list', page=pagination.next_num, per_page=per_page, search=search, direction=sort_direction or 'asc') }}">Next</a>
+            <a class="page-link" href="{{ url_for('drivers_list', page=pagination.next_num, per_page=per_page, search=search, sort_by=sort_by, sort_order=sort_order) }}">
+              <i class="bi bi-chevron-right"></i>
+            </a>
+          </li>
+          {% else %}
+          <li class="page-item disabled">
+            <span class="page-link"><i class="bi bi-chevron-right"></i></span>
           </li>
           {% endif %}
         </ul>
@@ -190,9 +254,23 @@
   </div>
 </div>
 
-<style>
-  tr:hover {
-    background-color: rgba(13, 110, 253, 0.05) !important;
+<script>
+  lucide.createIcons();
+  
+  function sortTable(column) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentSort = urlParams.get('sort_by');
+    const currentOrder = urlParams.get('sort_order') || 'asc';
+    
+    let newOrder = 'asc';
+    if (currentSort === column && currentOrder === 'asc') {
+      newOrder = 'desc';
+    }
+    
+    urlParams.set('sort_by', column);
+    urlParams.set('sort_order', newOrder);
+    
+    window.location.search = urlParams.toString();
   }
-</style>
+</script>
 {% endblock %}

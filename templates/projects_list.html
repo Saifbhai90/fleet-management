@@ -3,136 +3,270 @@
 {% block title %}All Projects{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-      <h2 class="mb-1"><i class="bi bi-briefcase me-2"></i>All Projects</h2>
-      <p class="text-muted small mb-0">Project list with quick actions based on your permissions.</p>
-    </div>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('projects_export', search=search) }}" class="btn btn-outline-secondary">
-        <i class="bi bi-download me-1"></i>Export CSV
-      </a>
-      {% if can_see_page('projects_add') %}
-      <a href="{{ url_for('project_form') }}" class="btn btn-success">
-        <i class="bi bi-plus-square me-1"></i>Add New Project
-      </a>
-      {% endif %}
+<style>
+  body { background: #f8f9fa; }
+  
+  .page-header-gradient { 
+    background: #fff; 
+    padding: 0; 
+    margin-bottom: 1rem; 
+  }
+  .page-header-gradient h3 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+  .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+  
+  .section-heading { 
+    background: #2196f3; 
+    color: white; 
+    padding: 0.75rem 1rem; 
+    font-size: 1rem; 
+    font-weight: 600; 
+    border-radius: 4px 4px 0 0; 
+    margin: 0;
+  }
+  
+  .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .compact-table { font-size: 0.875rem; margin: 0; }
+  .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #2196f3; }
+  .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
+  
+  .compact-table tbody tr { 
+    border-bottom: 1px solid #f0f0f0; 
+    transition: all 0.3s ease; 
+    cursor: pointer;
+  }
+  .compact-table tbody tr:hover { 
+    background: linear-gradient(to right, #e3f2fd 0%, #ffffff 100%); 
+    transform: translateX(5px);
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.15);
+  }
+  .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+  
+  .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+  .badge-success { background: #4caf50; color: white; }
+  .badge-danger { background: #dc3545; color: white; }
+  
+  .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+  .btn-edit-compact { background: #ffc107; color: #000; border: none; }
+  .btn-edit-compact:hover { background: #e0a800; transform: translateY(-2px); }
+  .btn-toggle-compact { background: #6c757d; color: white; border: none; }
+  .btn-toggle-compact:hover { background: #5a6268; transform: translateY(-2px); }
+  .btn-delete-compact { background: #dc3545; color: white; border: none; }
+  .btn-delete-compact:hover { background: #c82333; transform: translateY(-2px); }
+  
+  .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .btn-success-compact { background: #4caf50; color: white; border: none; }
+  .btn-success-compact:hover { background: #388e3c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4); }
+  .btn-outline-compact { background: #ff9800; color: white; border: none; }
+  .btn-outline-compact:hover { background: #f57c00; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4); }
+  
+  .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+  .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+  .filter-input:focus { border-color: #2196f3; box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1); }
+  
+  .table-footer { background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666; }
+  
+  .sortable-header { cursor: pointer; user-select: none; transition: all 0.2s; position: relative; padding-right: 1.5rem !important; }
+  .sortable-header:hover { background: rgba(33, 150, 243, 0.1); }
+  .sort-icon { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; opacity: 0.5; }
+  .sortable-header.active .sort-icon { opacity: 1; }
+</style>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<div class="container-fluid py-4 px-4">
+  <div class="page-header-gradient">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <h3><i class="bi bi-briefcase me-2"></i>Projects Management</h3>
+        <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>Manage all projects with quick actions</p>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('projects_export', search=search) }}" class="btn btn-outline-compact top-btn-compact">
+          <i class="bi bi-file-earmark-excel me-1"></i>Export
+        </a>
+        <a href="{{ url_for('projects_print', search=search) }}" target="_blank" class="btn btn-outline-compact top-btn-compact">
+          <i class="bi bi-eye me-1"></i>Preview
+        </a>
+        {% if can_see_page('projects_add') %}
+        <a href="{{ url_for('project_form') }}" class="btn btn-success-compact top-btn-compact">
+          <i class="bi bi-plus-lg me-1"></i>Add New Project
+        </a>
+        {% endif %}
+      </div>
     </div>
   </div>
 
-  <!-- Search Section -->
-  <form method="GET" class="mb-4">
-    <div class="input-group input-group-lg shadow-sm">
-      <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-      <input type="text" name="search" class="form-control border-start-0 ps-0" placeholder="Search project name..." value="{{ search }}" data-realtime-table="projectsTable">
-      <button class="btn btn-primary px-4" type="submit">Search</button>
+  <div class="filter-bar">
+    <form method="GET">
+      <div class="row g-2">
+        <div class="col-md-10">
+          <input type="text" name="search" class="form-control filter-input" placeholder="Search project name..." value="{{ search }}" data-realtime-table="projectsTable">
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-success-compact w-100" type="submit"><i class="bi bi-search"></i></button>
+        </div>
+      </div>
+      <input type="hidden" name="sort_by" value="{{ sort_by or 'name' }}">
+      <input type="hidden" name="sort_order" value="{{ sort_order or 'asc' }}">
+    </form>
+  </div>
+
+  <div class="data-table-wrapper">
+    <div class="section-heading d-flex justify-content-between align-items-center">
+      <span>All Projects</span>
+      <div class="d-flex align-items-center gap-2">
+        <span style="font-size: 0.875rem; font-weight: 400;">Per Page:</span>
+        <select class="form-select form-select-sm" style="width: 80px; background: white; color: #333; border: 1px solid rgba(255,255,255,0.3);" onchange="window.location.href='{{ url_for('projects_list', search=search) }}&per_page=' + this.value">
+          <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+          <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+          <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+        </select>
+      </div>
     </div>
-      <input type="hidden" name="direction" value="{{ sort_direction or 'asc' }}">
-  </form>
-
-  <div class="card shadow-sm border-0">
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table id="projectsTable" class="table table-hover align-middle mb-0">
-          <thead class="table-dark">
-            <tr>
-              <th class="ps-3" width="6%">Sr #</th>
-              <th width="8%">ID</th>
-              <th width="35%">
-                <a href="{{ url_for('projects_list', search=search, direction='desc' if (sort_direction or 'asc') == 'asc' else 'asc') }}"
-                   class="text-white text-decoration-none d-inline-flex align-items-center">
-                  Project Name
-                  {% if (sort_direction or 'asc') == 'asc' %}
-                    <i class="bi bi-sort-alpha-down ms-1"></i>
-                  {% else %}
-                    <i class="bi bi-sort-alpha-up ms-1"></i>
-                  {% endif %}
+    <div class="table-responsive">
+      <table id="projectsTable" class="table table-sm mb-0 compact-table">
+        <thead>
+          <tr>
+            <th width="5%" class="sortable-header {% if sort_by == 'id' %}active{% endif %}" onclick="sortTable('id')">
+              S.No
+              <i data-lucide="{% if sort_by == 'id' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'id' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th width="8%" class="sortable-header {% if sort_by == 'id' %}active{% endif %}" onclick="sortTable('id')">
+              ID
+              <i data-lucide="{% if sort_by == 'id' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'id' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th width="30%" class="sortable-header {% if sort_by == 'name' %}active{% endif %}" onclick="sortTable('name')">
+              Project Name
+              <i data-lucide="{% if sort_by == 'name' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'name' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th width="18%" class="sortable-header {% if sort_by == 'start_date' %}active{% endif %}" onclick="sortTable('start_date')">
+              Start Date
+              <i data-lucide="{% if sort_by == 'start_date' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'start_date' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th width="12%" class="sortable-header {% if sort_by == 'status' %}active{% endif %}" onclick="sortTable('status')">
+              Status
+              <i data-lucide="{% if sort_by == 'status' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'status' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th class="text-center" width="15%">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for project in projects %}
+          <tr>
+            <td>
+              <span class="badge-sm badge-success">{{ loop.index }}</span>
+            </td>
+            <td class="text-muted">{{ project.id }}</td>
+            <td>
+              <a href="{{ url_for('project_detail', id=project.id) }}" class="text-decoration-none fw-bold text-primary">
+                {{ project.name }}
+              </a>
+            </td>
+            <td>{{ project.start_date.strftime('%d-%b-%Y') if project.start_date else 'N/A' }}</td>
+            <td>
+              <span class="badge badge-sm {{ 'badge-success' if project.status == 'Active' else 'badge-danger' }}">
+                {{ project.status }}
+              </span>
+            </td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm" role="group">
+                {% if can_see_page('projects_edit') %}
+                <a href="{{ url_for('project_form', id=project.id) }}"
+                   class="btn btn-edit-compact"
+                   title="Edit Project">
+                  <i class="bi bi-pencil-square"></i>
                 </a>
-              </th>
-              <th width="20%">Start Date</th>
-              <th width="15%">Status</th>
-              <th width="22%" class="text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for project in projects %}
-            <tr>
-              <td class="ps-3 text-muted">{{ loop.index }}</td>
-              <td class="text-muted">{{ project.id }}</td>
-              <td>
-                <a href="{{ url_for('project_detail', id=project.id) }}" class="fw-bold text-decoration-none text-primary">
-                  {{ project.name }}
-                </a>
-              </td>
-              <td>{{ project.start_date.strftime('%d-%b-%Y') if project.start_date else 'N/A' }}</td>
-              <td>
-                <span class="badge bg-{{ 'success' if project.status == 'Active' else 'danger' }} px-3 py-2">
-                  {{ project.status }}
-                </span>
-              </td>
-              <td class="text-center">
-                <div class="btn-group btn-group-sm" role="group" aria-label="Project actions">
-                  {% if can_see_page('projects_edit') %}
-                  <a href="{{ url_for('project_form', id=project.id) }}"
-                     class="btn btn-outline-warning"
-                     title="Edit Project">
-                    <i class="bi bi-pencil-square"></i>
-                  </a>
-                  {% endif %}
+                {% endif %}
 
-                  {% if can_see_page('projects_edit') %}
-                    {% if project.status == 'Active' %}
-                    <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" style="display:inline;">
-                      <button type="submit"
-                              class="btn btn-outline-secondary"
-                              title="Mark as Inactive"
-                              onclick="return confirm('Mark as Inactive?')">
-                        <i class="bi bi-toggle-off"></i>
-                      </button>
-                    </form>
-                    {% else %}
-                    <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" style="display:inline;">
-                      <button type="submit"
-                              class="btn btn-outline-success"
-                              title="Mark as Active"
-                              onclick="return confirm('Mark as Active?')">
-                        <i class="bi bi-toggle-on"></i>
-                      </button>
-                    </form>
-                    {% endif %}
-                  {% endif %}
-
-                  {% if can_see_page('projects_delete') %}
-                  <form action="{{ url_for('delete_project', id=project.id) }}" method="POST" style="display:inline;">
+                {% if can_see_page('projects_edit') %}
+                  {% if project.status == 'Active' %}
+                  <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" style="display:inline;">
                     <button type="submit"
-                            class="btn btn-outline-danger"
-                            title="Delete Project"
-                            onclick="return confirm('Delete this project?')">
-                      <i class="bi bi-trash"></i>
+                            class="btn btn-toggle-compact"
+                            title="Mark as Inactive"
+                            onclick="return confirm('Mark as Inactive?')">
+                      <i class="bi bi-toggle-off"></i>
+                    </button>
+                  </form>
+                  {% else %}
+                  <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" style="display:inline;">
+                    <button type="submit"
+                            class="btn btn-toggle-compact"
+                            title="Mark as Active"
+                            onclick="return confirm('Mark as Active?')">
+                      <i class="bi bi-toggle-on"></i>
                     </button>
                   </form>
                   {% endif %}
-                </div>
-              </td>
-            </tr>
-            {% else %}
-            <tr>
-              <td colspan="6" class="text-center py-5">
-                <div class="text-muted">
-                  <i class="bi bi-inbox fs-1 d-block mb-3"></i>
-                  <p>No projects found. <a href="{{ url_for('project_form') }}">Create your first project</a>.</p>
-                </div>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+                {% endif %}
+
+                {% if can_see_page('projects_delete') %}
+                <form action="{{ url_for('delete_project', id=project.id) }}" method="POST" style="display:inline;">
+                  <button type="submit"
+                          class="btn btn-delete-compact"
+                          title="Delete Project"
+                          onclick="return confirm('Delete this project?')">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="text-center py-4">
+              <div class="text-muted">
+                <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                <p class="mb-0">No projects found. <a href="{{ url_for('project_form') }}">Create your first project</a>.</p>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    <div class="card-footer bg-light text-muted text-end border-0 px-4">
-      Total Projects: <strong>{{ projects|length }}</strong>
+    <div class="table-footer">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <i class="bi bi-list-ul me-1"></i>Showing {{ '1' if projects|length > 0 else '0' }} to {{ projects|length }} of {{ projects|length }} entries
+        </div>
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            <li class="page-item disabled">
+              <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+            </li>
+            <li class="page-item active">
+              <span class="page-link">1</span>
+            </li>
+            <li class="page-item disabled">
+              <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+            </li>
+          </ul>
+        </nav>
+      </div>
     </div>
   </div>
 </div>
+
+<script>
+  lucide.createIcons();
+  
+  function sortTable(column) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentSort = urlParams.get('sort_by');
+    const currentOrder = urlParams.get('sort_order') || 'asc';
+    
+    let newOrder = 'asc';
+    if (currentSort === column && currentOrder === 'asc') {
+      newOrder = 'desc';
+    }
+    
+    urlParams.set('sort_by', column);
+    urlParams.set('sort_order', newOrder);
+    
+    window.location.search = urlParams.toString();
+  }
+</script>
 {% endblock %}

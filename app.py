@@ -5,6 +5,7 @@ from flask_wtf.csrf import CSRFProtect
 from dotenv import load_dotenv
 from datetime import timedelta
 import os
+import sys
 
 # Load .env from app folder (so it works even when run from another directory)
 _app_dir = os.path.dirname(os.path.abspath(__file__))
@@ -12,6 +13,11 @@ load_dotenv(os.path.join(_app_dir, '.env'))
 
 print("Starting app...")
 app = Flask(__name__)
+
+# When running as a script, this file is loaded as '__main__'.
+# routes.py imports 'app', which would otherwise cause this file to execute twice.
+# Map the current module to 'app' to avoid double initialization.
+sys.modules.setdefault('app', sys.modules[__name__])
 
 # When behind a reverse proxy (e.g. Render), trust X-Forwarded-Proto and X-Forwarded-Host
 # so redirects and session cookies use the correct scheme (https) and host. Fixes ERR_TOO_MANY_REDIRECTS.
@@ -54,7 +60,6 @@ app.config['BACKUP_EMAIL_TO'] = (os.environ.get('BACKUP_EMAIL_TO') or '').strip(
 
 # Session timeout; PERMANENT_SESSION_LIFETIME when "Remember me" is checked
 app.config['SESSION_TIMEOUT_MINUTES'] = int(os.environ.get('SESSION_TIMEOUT_MINUTES', '60'))
-app.config['PERMANENT_SESSION_LIFETIME'] = __import__('datetime').timedelta(days=7)
 # On Render: set SESSION_COOKIE_SECURE=true in Environment so cookie is sent only over HTTPS (use with ProxyFix).
 if os.environ.get('SESSION_COOKIE_SECURE', '').lower() in ('1', 'true', 'yes'):
     app.config['SESSION_COOKIE_SECURE'] = True
@@ -128,64 +133,91 @@ def inject_all_districts():
     return dict(all_districts=districts)
 
 # Create all tables if not exist (backward compatibility; new changes use migrations)
-with app.app_context():
-    print("Creating tables if needed...")
-    db.create_all()
-    # Ensure notification.created_by_user_id and related tables exist (SQLite fallback if migration not run)
-    try:
-        uri = (app.config.get('SQLALCHEMY_DATABASE_URI') or '').strip()
-        if uri and 'sqlite' in uri:
-            with db.engine.connect() as conn:
-                r = conn.execute(db.text("PRAGMA table_info(notification)"))
-                cols = [row[1] for row in r]
-                if 'created_by_user_id' not in cols:
-                    conn.execute(db.text("ALTER TABLE notification ADD COLUMN created_by_user_id INTEGER REFERENCES user(id)"))
+_run_startup_tasks = (not app.debug) or (os.environ.get('WERKZEUG_RUN_MAIN') == 'true')
+if _run_startup_tasks:
+    with app.app_context():
+        print("Creating tables if needed...")
+        db.create_all()
+        # Ensure notification.created_by_user_id and related tables exist (SQLite fallback if migration not run)
+        try:
+            uri = (app.config.get('SQLALCHEMY_DATABASE_URI') or '').strip()
+            if uri and 'sqlite' in uri:
+                with db.engine.connect() as conn:
+                    r = conn.execute(db.text("PRAGMA table_info(notification)"))
+                    cols = [row[1] for row in r]
+                    if 'created_by_user_id' not in cols:
+                        conn.execute(db.text("ALTER TABLE notification ADD COLUMN created_by_user_id INTEGER REFERENCES user(id)"))
+                        conn.commit()
+                        print("Added notification.created_by_user_id.")
+                with db.engine.connect() as conn:
+                    conn.execute(db.text("""
+                        CREATE TABLE IF NOT EXISTS notification_read (
+                            notification_id INTEGER NOT NULL,
+                            user_id INTEGER NOT NULL,
+                            read_at DATETIME NOT NULL,
+                            PRIMARY KEY (notification_id, user_id),
+                            FOREIGN KEY(notification_id) REFERENCES notification(id) ON DELETE CASCADE,
+                            FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE
+                        )
+                    """))
                     conn.commit()
-                    print("Added notification.created_by_user_id.")
-            with db.engine.connect() as conn:
-                conn.execute(db.text("""
-                    CREATE TABLE IF NOT EXISTS notification_read (
-                        notification_id INTEGER NOT NULL,
-                        user_id INTEGER NOT NULL,
-                        read_at DATETIME NOT NULL,
-                        PRIMARY KEY (notification_id, user_id),
-                        FOREIGN KEY(notification_id) REFERENCES notification(id) ON DELETE CASCADE,
-                        FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE
-                    )
-                """))
-                conn.commit()
-            with db.engine.connect() as conn:
-                conn.execute(db.text("""
-                    CREATE TABLE IF NOT EXISTS reminder (
-                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        title VARCHAR(200) NOT NULL,
-                        message TEXT,
-                        reminder_date DATE NOT NULL,
-                        reminder_time TIME,
-                        is_completed BOOLEAN NOT NULL DEFAULT 0,
-                        created_at DATETIME,
-                        FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE
-                    )
-                """))
-                conn.commit()
-    except Exception as e:
-        print("DB schema fallback skip:", e)
-    print("Database ready.")
-    # Seed default permissions, Admin role, and admin user (if none exist)
-    try:
-        from auth_utils import seed_auth_tables
-        seed_auth_tables(app)
-        print("Auth seed done.")
-    except Exception as e:
-        print("Auth seed skip or error:", e)
+                with db.engine.connect() as conn:
+                    conn.execute(db.text("""
+                        CREATE TABLE IF NOT EXISTS reminder (
+                            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                            user_id INTEGER NOT NULL,
+                            title VARCHAR(200) NOT NULL,
+                            message TEXT,
+                            reminder_date DATE NOT NULL,
+                            reminder_time TIME,
+                            is_completed BOOLEAN NOT NULL DEFAULT 0,
+                            created_at DATETIME,
+                            FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE
+                        )
+                    """))
+                    conn.commit()
+        except Exception as e:
+            print("DB schema fallback skip:", e)
+        print("Database ready.")
+        # Create indexes for sorting columns (IF NOT EXISTS = safe for existing DBs)
+        try:
+            if uri and 'sqlite' in uri:
+                with db.engine.connect() as conn:
+                    indexes = [
+                        "CREATE INDEX IF NOT EXISTS ix_project_start_date ON project (start_date)",
+                        "CREATE INDEX IF NOT EXISTS ix_project_status ON project (status)",
+                        "CREATE INDEX IF NOT EXISTS ix_driver_phone1 ON driver (phone1)",
+                        "CREATE INDEX IF NOT EXISTS ix_driver_district ON driver (driver_district)",
+                        "CREATE INDEX IF NOT EXISTS ix_vehicle_model ON vehicle (model)",
+                        "CREATE INDEX IF NOT EXISTS ix_vehicle_type ON vehicle (vehicle_type)",
+                        "CREATE INDEX IF NOT EXISTS ix_vehicle_active_date ON vehicle (active_date)",
+                        "CREATE INDEX IF NOT EXISTS ix_parking_district ON parking_station (district)",
+                        "CREATE INDEX IF NOT EXISTS ix_parking_tehsil ON parking_station (tehsil)",
+                        "CREATE INDEX IF NOT EXISTS ix_parking_capacity ON parking_station (capacity)",
+                        "CREATE INDEX IF NOT EXISTS ix_parking_create_date ON parking_station (create_date)",
+                        "CREATE INDEX IF NOT EXISTS ix_district_province ON district (province)",
+                        "CREATE INDEX IF NOT EXISTS ix_district_created_at ON district (created_at)",
+                    ]
+                    for idx_sql in indexes:
+                        conn.execute(db.text(idx_sql))
+                    conn.commit()
+                    print("Sorting indexes created/verified.")
+        except Exception as e:
+            print("Index creation skip:", e)
+        # Seed default permissions, Admin role, and admin user (if none exist)
+        try:
+            from auth_utils import seed_auth_tables
+            seed_auth_tables(app)
+            print("Auth seed done.")
+        except Exception as e:
+            print("Auth seed skip or error:", e)
 
 # Import routes after app & db are ready
 from routes import *  # noqa: E402,F401
 
 # Start backup scheduler if enabled
 _backup_scheduler = None
-if app.config.get('BACKUP_SCHEDULE_ENABLED'):
+if _run_startup_tasks and app.config.get('BACKUP_SCHEDULE_ENABLED'):
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         from backup_utils import run_scheduled_backup
@@ -205,7 +237,8 @@ if app.config.get('BACKUP_SCHEDULE_ENABLED'):
 
 if __name__ == '__main__':
     print("\n" + "="*50)
-    print("Server starting at: http://127.0.0.1:5000")
+    port = int(os.environ.get('PORT', '5000'))
+    print(f"Server starting at: http://127.0.0.1:{port}")
     print("Browser mein ye URL open karein. Band karne ke liye Ctrl+C")
     print("="*50 + "\n")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=port, use_reloader=False)

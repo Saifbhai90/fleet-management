@@ -45,7 +45,9 @@ from forms import (
 from datetime import datetime, date, time, timezone
 from datetime import timedelta
 import csv
-from io import StringIO
+from io import StringIO, BytesIO
+import io
+import xlsxwriter
 from sqlalchemy import func, text, inspect, or_, cast
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError
@@ -556,21 +558,41 @@ def delete_company(id):
     return redirect(url_for('companies'))
 
 
+@app.route('/companies/print')
+def companies_print():
+    search = request.args.get('search', '')
+    query = Company.query
+    if search:
+        query = query.filter(Company.name.ilike(f'%{search}%'))
+    companies_list = query.order_by(Company.name).all()
+    return render_template('companies_print.html', companies=companies_list, search=search)
+
+
 # ────────────────────────────────────────────────
 # Projects
 # ────────────────────────────────────────────────
 @app.route('/projects/')
 def projects_list():
     search = request.args.get('search', '').strip()
-    direction = request.args.get('direction', 'asc')
-    if direction not in ('asc', 'desc'):
-        direction = 'asc'
+    sort_by = request.args.get('sort_by', 'name')
+    sort_order = request.args.get('sort_order', 'asc')
+    
     query = Project.query
     if search:
         query = query.filter(Project.name.ilike(f'%{search}%'))
-    order_col = Project.name.asc() if direction == 'asc' else Project.name.desc()
+    
+    # Apply sorting based on sort_by column
+    if sort_by == 'id':
+        order_col = Project.id.asc() if sort_order == 'asc' else Project.id.desc()
+    elif sort_by == 'start_date':
+        order_col = Project.start_date.asc() if sort_order == 'asc' else Project.start_date.desc()
+    elif sort_by == 'status':
+        order_col = Project.status.asc() if sort_order == 'asc' else Project.status.desc()
+    else:  # default to name
+        order_col = Project.name.asc() if sort_order == 'asc' else Project.name.desc()
+    
     projects = query.order_by(order_col).all()
-    return render_template('projects_list.html', projects=projects, search=search, sort_direction=direction)
+    return render_template('projects_list.html', projects=projects, search=search, sort_by=sort_by, sort_order=sort_order)
 
 
 @app.route('/projects/export')
@@ -592,6 +614,17 @@ def projects_export():
         ])
     filename = 'projects.csv' if not search else f'projects_search_{search}.csv'
     return generate_csv_response(headers, rows, filename=filename)
+
+
+@app.route('/projects/print')
+def projects_print():
+    """Print/Preview projects list."""
+    search = request.args.get('search', '').strip()
+    query = Project.query
+    if search:
+        query = query.filter(Project.name.ilike(f'%{search}%'))
+    projects = query.order_by(Project.name).all()
+    return render_template('projects_print.html', projects=projects, search=search)
 
 
 @app.route('/project/<int:id>')
@@ -683,8 +716,6 @@ def toggle_project_status(id):
         flash('Project marked as Active.', 'success')
     db.session.commit()
     return redirect(url_for('projects_list'))
-
-
 # ────────────────────────────────────────────────
 # Vehicles
 # ────────────────────────────────────────────────
@@ -693,9 +724,8 @@ def vehicles_list():
     search = request.args.get('search', '').strip()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    direction = request.args.get('direction', 'asc')
-    if direction not in ('asc', 'desc'):
-        direction = 'asc'
+    sort_by = request.args.get('sort_by', 'vehicle_no')
+    sort_order = request.args.get('sort_order', 'asc')
 
     query = Vehicle.query
     if search:
@@ -705,14 +735,27 @@ def vehicles_list():
             Vehicle.model.ilike(like) |
             Vehicle.vehicle_type.ilike(like)
         )
-    if direction == 'asc':
-        order_cols = [Vehicle.vehicle_no.asc(), Vehicle.model.asc()]
-    else:
-        order_cols = [Vehicle.vehicle_no.desc(), Vehicle.model.desc()]
-    pagination = query.order_by(*order_cols).paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Apply sorting based on sort_by column
+    if sort_by == 'id':
+        order_col = Vehicle.id.asc() if sort_order == 'asc' else Vehicle.id.desc()
+    elif sort_by == 'model':
+        order_col = Vehicle.model.asc() if sort_order == 'asc' else Vehicle.model.desc()
+    elif sort_by == 'vehicle_type':
+        order_col = Vehicle.vehicle_type.asc() if sort_order == 'asc' else Vehicle.vehicle_type.desc()
+    elif sort_by == 'active_date':
+        order_col = Vehicle.active_date.asc() if sort_order == 'asc' else Vehicle.active_date.desc()
+    elif sort_by == 'project':
+        order_col = Vehicle.project_id.asc() if sort_order == 'asc' else Vehicle.project_id.desc()
+    elif sort_by == 'district':
+        order_col = Vehicle.district_id.asc() if sort_order == 'asc' else Vehicle.district_id.desc()
+    else:  # default to vehicle_no
+        order_col = Vehicle.vehicle_no.asc() if sort_order == 'asc' else Vehicle.vehicle_no.desc()
+    
+    pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     vehicles = pagination.items
     return render_template('vehicles_list.html', vehicles=vehicles, search=search,
-                           pagination=pagination, per_page=per_page, sort_direction=direction)
+                           pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
 
 
 @app.route('/whats-new')
@@ -745,9 +788,8 @@ def whats_new():
             'bullets': [
                 'Driver to Vehicle: Required field errors shown below each field. Assign date must be entered by user (no auto-select). Cancel button added. Selected vehicle\'s parking station shown below Vehicle dropdown. If vehicle has no parking station, Finalize shows message and form is not saved or reset. Unassign form now includes CSRF token (fixes Bad Request).',
                 'Project to Company list: Projects that have districts linked now have Edit and Deassign locked (with lock icon). Export to Excel and Report Preview (print) buttons added. List search filter applied to export and print.',
-                'New Project Assignment & District to Project: Company/Project and Project/District must be selected by user (no auto-select); placeholder options and validation. District to Project: Clear button resets Project and District to placeholder. Required field errors shown below fields.',
-                'District to Project: Select Project shows only projects assigned to a company. After selecting a project, District dropdown shows only districts not already linked to that project (via AJAX).',
-                'Vehicle to District: Project dropdown shows only company-assigned projects. Clear button clears all fields (Project, District, Vehicle, Date). Export to Excel and Print Preview buttons added on list.',
+                'New Project Assignment & District to Project: Company/Project and Project/District must be selected by user (no auto-select); placeholder options and validation. District to Project: Select Project shows only projects assigned to a company. After selecting a project, District dropdown shows only districts not already linked to that project (via AJAX).',
+                'Vehicle to District: Project dropdown shows only company-assigned projects. Clear button resets Project and District to placeholder. Required field errors shown below fields.',
                 'Vehicle to Parking: Project dropdown shows only company-assigned projects. Vehicle list shows only vehicles without parking assigned (and current vehicle on edit). Vehicles with a driver attached have Edit and Deassign locked on parking list; edit and deassign routes also block when driver is attached. Export to Excel and Print Preview buttons added on list.',
                 'Driver to Vehicle: Project dropdown shows only company-assigned projects. Export to Excel and Print Preview buttons added on list.',
             ],
@@ -1260,9 +1302,8 @@ def drivers_list():
     search = request.args.get('search', '').strip()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    direction = request.args.get('direction', 'asc')
-    if direction not in ('asc', 'desc'):
-        direction = 'asc'
+    sort_by = request.args.get('sort_by', 'name')
+    sort_order = request.args.get('sort_order', 'asc')
 
     query = Driver.query
     if search:
@@ -1277,13 +1318,27 @@ def drivers_list():
             Driver.phone1.ilike(like) |
             Driver.driver_district.ilike(like)
         )
-    order_col = Driver.name.asc() if direction == 'asc' else Driver.name.desc()
+    
+    # Apply sorting based on sort_by column
+    if sort_by == 'driver_id':
+        order_col = Driver.driver_id.asc() if sort_order == 'asc' else Driver.driver_id.desc()
+    elif sort_by == 'cnic_no':
+        order_col = Driver.cnic_no.asc() if sort_order == 'asc' else Driver.cnic_no.desc()
+    elif sort_by == 'license_no':
+        order_col = Driver.license_no.asc() if sort_order == 'asc' else Driver.license_no.desc()
+    elif sort_by == 'phone':
+        order_col = Driver.phone1.asc() if sort_order == 'asc' else Driver.phone1.desc()
+    elif sort_by == 'district':
+        order_col = Driver.driver_district.asc() if sort_order == 'asc' else Driver.driver_district.desc()
+    else:  # default to name
+        order_col = Driver.name.asc() if sort_order == 'asc' else Driver.name.desc()
+    
     drivers_pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     drivers = drivers_pagination.items
     today = date.today()
     return render_template('drivers_list.html', drivers=drivers, search=search, today=today,
                            pagination=drivers_pagination, per_page=per_page,
-                           sort_direction=direction)
+                           sort_by=sort_by, sort_order=sort_order)
 
 
 @app.route('/drivers/export')
@@ -1647,6 +1702,8 @@ def employees_list():
     search = request.args.get('search', '').strip()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
+    sort_by = request.args.get('sort_by', 'name')
+    sort_order = request.args.get('sort_order', 'asc')
 
     query = Employee.query
     if search:
@@ -1657,10 +1714,25 @@ def employees_list():
             Employee.department.ilike(like) |
             Employee.cnic_no.ilike(like)
         )
-    pagination = query.order_by(Employee.id.asc()).paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Apply sorting based on sort_by column
+    if sort_by == 'code':
+        order_col = Employee.code.asc() if sort_order == 'asc' else Employee.code.desc()
+    elif sort_by == 'cnic':
+        order_col = Employee.cnic_no.asc() if sort_order == 'asc' else Employee.cnic_no.desc()
+    elif sort_by == 'post':
+        order_col = Employee.post_id.asc() if sort_order == 'asc' else Employee.post_id.desc()
+    elif sort_by == 'department':
+        order_col = Employee.department.asc() if sort_order == 'asc' else Employee.department.desc()
+    elif sort_by == 'phone':
+        order_col = Employee.phone.asc() if sort_order == 'asc' else Employee.phone.desc()
+    else:  # default to name
+        order_col = Employee.name.asc() if sort_order == 'asc' else Employee.name.desc()
+    
+    pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     employees = pagination.items
     return render_template('employees_list.html', employees=employees, search=search,
-                           pagination=pagination, per_page=per_page)
+                           pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
 
 
 @app.route('/employee/add', methods=['GET', 'POST'])
@@ -2166,6 +2238,7 @@ def employees_import():
                     existing_cnic = Employee.query.filter(Employee.cnic_no == cnic).first()
                     if existing_cnic:
                         row_issues.append(f'CNIC "{cnic}" already exists.')
+
                 phone1 = clean_text(row.get('phone1'))
                 if not phone1:
                     row_issues.append('Field "phone1" is required.')
@@ -2298,12 +2371,12 @@ def login():
                             emp = Employee.query.filter(func.lower(Employee.cnic_no) == c.lower()).first()
                             if emp:
                                 break
-                        if emp and emp.post_id:
-                            user.employee_post_id = emp.post_id
-                            emp_post = EmployeePost.query.get(emp.post_id)
-                            if emp_post and emp_post.role_id:
-                                user.role_id = emp_post.role_id
-                                role_fixed = True
+                    if emp and emp.post_id:
+                        user.employee_post_id = emp.post_id
+                        emp_post = EmployeePost.query.get(emp.post_id)
+                        if emp_post and emp_post.role_id:
+                            user.role_id = emp_post.role_id
+                            role_fixed = True
                     # 3) Agar phir bhi nahi mila, to Driver record se post (full_name) match karke role lein
                     if not role_fixed:
                         drv = None
@@ -2311,12 +2384,12 @@ def login():
                             drv = Driver.query.filter(func.lower(Driver.cnic_no) == c.lower()).first()
                             if drv:
                                 break
-                        if drv and drv.post:
-                            emp_post = EmployeePost.query.filter(EmployeePost.full_name == (drv.post or '').strip()).first()
-                            if emp_post:
-                                user.employee_post_id = emp_post.id
-                                user.role_id = emp_post.role_id
-                                role_fixed = True
+                    if drv and drv.post:
+                        emp_post = EmployeePost.query.filter(EmployeePost.full_name == (drv.post or '').strip()).first()
+                        if emp_post:
+                            user.employee_post_id = emp_post.id
+                            user.role_id = emp_post.role_id
+                            role_fixed = True
                 if role_fixed:
                     db.session.commit()
             except Exception:
@@ -2332,7 +2405,7 @@ def login():
             elif check_password(user, password):
                 session['user_id'] = user.id
                 session['user'] = user.full_name or user.username
-                role_name = (user.role.name if user.role else '').strip() if user.role else ''
+                role_name = (user.role.name if user.role else '').strip()
                 is_master = bool(role_name == 'Master')
                 is_admin = bool(role_name == 'Admin')
                 session['is_master'] = is_master
@@ -2527,6 +2600,33 @@ def _current_user_is_master():
     return session.get('is_master', False)
 
 
+def _current_user_effective_permission_codes():
+    """Effective permission codes for current user, including section-level expansions."""
+    codes = set(session.get('permissions') or [])
+    try:
+        from permissions_config import expand_login_permissions
+        codes = set(expand_login_permissions(list(codes)))
+    except Exception:
+        pass
+    return codes
+
+
+def _role_effective_permission_codes(role):
+    """Effective permission codes for a role, including section-level expansions."""
+    if not role:
+        return set()
+    try:
+        codes = set(role.permission_codes())
+    except Exception:
+        codes = set()
+    try:
+        from permissions_config import expand_login_permissions
+        codes = set(expand_login_permissions(list(codes)))
+    except Exception:
+        pass
+    return codes
+
+
 def _user_has_full_scope():
     """Master/Admin users ko full access (koi project/district/vehicle/shift filter nahi)."""
     if session.get('is_master'):
@@ -2548,8 +2648,10 @@ def _get_user_scope():
         session.get('allowed_shifts') or [],
     )
 
+
 def _role_name(role):
     return (role.name if role else '').strip()
+
 
 def _user_can_edit_user(editor_is_master, target_user):
     """Only Master can edit users with role Master or Admin. Others can be edited by Master or Admin."""
@@ -2744,23 +2846,32 @@ def user_form():
     is_master = _current_user_is_master()
     posts = EmployeePost.query.order_by(EmployeePost.full_name).all()
     form.employee_post_id.choices = [(0, '-- No Post --')] + [(p.id, p.full_name) for p in posts]
+
     if request.method == 'GET':
         return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
     if form.validate_on_submit():
         employee_post_id = form.employee_post_id.data if form.employee_post_id.data else None
         role_id = None
         if employee_post_id:
-            emp_post = EmployeePost.query.get(employee_post_id)
-            if emp_post and emp_post.role_id:
-                role_id = emp_post.role_id
+            post = EmployeePost.query.get(employee_post_id)
+            if post and post.role_id:
+                role_id = post.role_id
                 role = Role.query.get(role_id)
-                if role and _role_name(role) in ('Master', 'Admin') and not is_master:
-                    flash('Only Master (Developer) can assign a Post that has Admin or Master access.', 'danger')
+                if role and _role_name(role) in ('Master',) and not is_master:
+                    flash('Only Master (Developer) can assign Master access.', 'danger')
                     return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
+                # Delegation rule: non-master can only assign roles whose effective permissions are subset of their own
+                if role and not is_master:
+                    current_codes = _current_user_effective_permission_codes()
+                    role_codes = _role_effective_permission_codes(role)
+                    if not role_codes.issubset(current_codes):
+                        flash('Aap apne se zyada access assign nahi kar sakte. Pehle apne permissions update karwayen.', 'danger')
+                        return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
         username = (form.username.data or '').strip()
         if User.query.filter(func.lower(User.username) == username.lower()).first():
             flash('Username already exists.', 'danger')
             return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
+
         password = (form.password.data or '').strip()
         if not password or len(password) < 4:
             flash('Password must be at least 4 characters.', 'danger')
@@ -2784,6 +2895,7 @@ def user_form():
 def user_edit(pk):
     user = User.query.get_or_404(pk)
     is_master = _current_user_is_master()
+
     # Admin ko Master user ki koi info na dikhe – 404
     if not is_master and user.role and user.role.name == 'Master':
         abort(404)
@@ -2793,6 +2905,7 @@ def user_edit(pk):
     form = UserForm()
     posts = EmployeePost.query.order_by(EmployeePost.full_name).all()
     form.employee_post_id.choices = [(0, '-- No Post --')] + [(p.id, p.full_name) for p in posts]
+
     if request.method == 'GET':
         form.username.data = user.username
         form.full_name.data = user.full_name
@@ -2803,23 +2916,31 @@ def user_edit(pk):
         employee_post_id = form.employee_post_id.data if form.employee_post_id.data else None
         role_id = None
         if employee_post_id:
-            emp_post = EmployeePost.query.get(employee_post_id)
-            if emp_post and emp_post.role_id:
-                role_id = emp_post.role_id
+            post = EmployeePost.query.get(employee_post_id)
+            if post and post.role_id:
+                role_id = post.role_id
                 role = Role.query.get(role_id)
-                if role and _role_name(role) in ('Master', 'Admin') and not is_master:
-                    flash('Only Master (Developer) can assign a Post that has Admin or Master access.', 'danger')
+                if role and _role_name(role) in ('Master',) and not is_master:
+                    flash('Only Master (Developer) can assign Master access.', 'danger')
                     return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
+                if role and not is_master:
+                    current_codes = _current_user_effective_permission_codes()
+                    role_codes = _role_effective_permission_codes(role)
+                    if not role_codes.issubset(current_codes):
+                        flash('Aap apne se zyada access assign nahi kar sakte. Pehle apne permissions update karwayen.', 'danger')
+                        return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
         username = (form.username.data or '').strip()
         other = User.query.filter(func.lower(User.username) == username.lower()).filter(User.id != pk).first()
         if other:
             flash('Username already exists.', 'danger')
             return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
+
         user.username = username
         user.full_name = (form.full_name.data or '').strip() or None
         user.role_id = role_id
         user.employee_post_id = employee_post_id
         user.is_active = form.is_active.data
+
         password = (form.password.data or '').strip()
         reset_flag = bool(form.reset_password.data)
         if password:
@@ -3043,8 +3164,6 @@ def delete_driver(id):
         db.session.rollback()
         flash(f'Error deleting driver: {str(e)}', 'danger')
     return redirect(url_for('drivers_list'))
-
-
 # ────────────────────────────────────────────────
 # Parking Stations
 # ────────────────────────────────────────────────
@@ -3053,9 +3172,8 @@ def parking_list():
     search = request.args.get('search', '')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    direction = request.args.get('direction', 'asc')
-    if direction not in ('asc', 'desc'):
-        direction = 'asc'
+    sort_by = request.args.get('sort_by', 'name')
+    sort_order = request.args.get('sort_order', 'asc')
 
     query = ParkingStation.query
     if search:
@@ -3064,12 +3182,26 @@ def parking_list():
             ParkingStation.district.ilike(f'%{search}%') |
             ParkingStation.address_location.ilike(f'%{search}%')
         )
-    order_col = ParkingStation.name.asc() if direction == 'asc' else ParkingStation.name.desc()
+    
+    # Apply sorting based on sort_by column
+    if sort_by == 'id':
+        order_col = ParkingStation.id.asc() if sort_order == 'asc' else ParkingStation.id.desc()
+    elif sort_by == 'district':
+        order_col = ParkingStation.district.asc() if sort_order == 'asc' else ParkingStation.district.desc()
+    elif sort_by == 'tehsil':
+        order_col = ParkingStation.tehsil.asc() if sort_order == 'asc' else ParkingStation.tehsil.desc()
+    elif sort_by == 'capacity':
+        order_col = ParkingStation.capacity.asc() if sort_order == 'asc' else ParkingStation.capacity.desc()
+    elif sort_by == 'create_date':
+        order_col = ParkingStation.create_date.asc() if sort_order == 'asc' else ParkingStation.create_date.desc()
+    else:  # default to name
+        order_col = ParkingStation.name.asc() if sort_order == 'asc' else ParkingStation.name.desc()
+    
     parkings_pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     parkings = parkings_pagination.items
     return render_template('parking_list.html', parkings=parkings, search=search,
                            pagination=parkings_pagination, per_page=per_page,
-                           sort_direction=direction)
+                           sort_by=sort_by, sort_order=sort_order)
 
 
 @app.route('/parking/import', methods=['GET', 'POST'])
@@ -3337,9 +3469,8 @@ def districts_list():
     search = request.args.get('search', '')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    direction = request.args.get('direction', 'asc')
-    if direction not in ('asc', 'desc'):
-        direction = 'asc'
+    sort_by = request.args.get('sort_by', 'name')
+    sort_order = request.args.get('sort_order', 'asc')
 
     query = District.query
     if search:
@@ -3347,12 +3478,22 @@ def districts_list():
             District.name.ilike(f'%{search}%') |
             District.province.ilike(f'%{search}%')
         )
-    order_col = District.name.asc() if direction == 'asc' else District.name.desc()
+    
+    # Apply sorting based on sort_by column
+    if sort_by == 'id':
+        order_col = District.id.asc() if sort_order == 'asc' else District.id.desc()
+    elif sort_by == 'province':
+        order_col = District.province.asc() if sort_order == 'asc' else District.province.desc()
+    elif sort_by == 'created_at':
+        order_col = District.created_at.asc() if sort_order == 'asc' else District.created_at.desc()
+    else:  # default to name
+        order_col = District.name.asc() if sort_order == 'asc' else District.name.desc()
+    
     districts_pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     districts = districts_pagination.items
     return render_template('districts_list.html', districts=districts, search=search,
                            pagination=districts_pagination, per_page=per_page,
-                           sort_direction=direction)
+                           sort_by=sort_by, sort_order=sort_order)
 
 
 @app.route('/districts/export')
@@ -3447,21 +3588,40 @@ def export_vehicles(id):
 # ────────────────────────────────────────────────
 # Assignment: Project → Company
 # ────────────────────────────────────────────────
-def _assign_project_to_company_data(search=None):
+def _assign_project_to_company_data(search=None, sort_by='assign_date', sort_order='desc'):
     """Query assigned projects (optionally filtered by search). Returns list of Project."""
-    q = Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name)
+    q = Project.query.filter(Project.company_id.isnot(None))
     if search:
         like = f'%{search}%'
         q = q.outerjoin(Company, Project.company_id == Company.id).filter(
             or_(Project.name.ilike(like), (Company.name.ilike(like)))
         )
+    
+    # Apply sorting - database level for performance
+    if sort_by == 'project':
+        order_col = Project.name
+    elif sort_by == 'company':
+        q = q.join(Company, Project.company_id == Company.id)
+        order_col = Company.name
+    elif sort_by == 'assign_date':
+        order_col = Project.assign_date
+    else:
+        order_col = Project.assign_date
+    
+    if sort_order == 'asc':
+        q = q.order_by(order_col.asc())
+    else:
+        q = q.order_by(order_col.desc())
+    
     return q.all()
 
 
 @app.route('/assign_project_to_company')
 def assign_project_to_company():
     search = request.args.get('search', '').strip()
-    assigned_projects = _assign_project_to_company_data(search)
+    sort_by = request.args.get('sort_by', 'assign_date')
+    sort_order = request.args.get('sort_order', 'desc')
+    assigned_projects = _assign_project_to_company_data(search, sort_by, sort_order)
     # Project IDs that have at least one district linked (lock Edit/Deassign)
     project_ids_with_districts = set(
         r[0] for r in db.session.query(project_district.c.project_id).distinct().all()
@@ -3470,6 +3630,8 @@ def assign_project_to_company():
         'assign_project_to_company.html',
         assigned_projects=assigned_projects,
         search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
         project_ids_with_districts=project_ids_with_districts
     )
 
@@ -3811,7 +3973,7 @@ def desassign_district_from_project(project_id, district_id):
 # ────────────────────────────────────────────────
 # Assignment: Vehicle → District
 # ────────────────────────────────────────────────
-def _assign_vehicle_to_district_data(search=None, project_id=None, district_id=None):
+def _assign_vehicle_to_district_data(search=None, project_id=None, district_id=None, sort_by='assign_date', sort_order='desc'):
     """Query assigned vehicles (optionally filtered by search, project_id, district_id). Returns list of Vehicle."""
     query = Vehicle.query.filter(Vehicle.district_id.isnot(None))
     if project_id:
@@ -3826,6 +3988,26 @@ def _assign_vehicle_to_district_data(search=None, project_id=None, district_id=N
             (Project.name.ilike(f'%{search}%')) |
             (District.name.ilike(f'%{search}%'))
         )
+    
+    # Apply sorting - database level for performance
+    if sort_by == 'vehicle':
+        order_col = Vehicle.vehicle_no
+    elif sort_by == 'project':
+        query = query.join(Project, Vehicle.project_id == Project.id)
+        order_col = Project.name
+    elif sort_by == 'district':
+        query = query.join(District, Vehicle.district_id == District.id)
+        order_col = District.name
+    elif sort_by == 'assign_date':
+        order_col = Vehicle.assign_to_district_date
+    else:
+        order_col = Vehicle.assign_to_district_date
+    
+    if sort_order == 'asc':
+        query = query.order_by(order_col.asc())
+    else:
+        query = query.order_by(order_col.desc())
+    
     return query.all()
 
 
@@ -3834,7 +4016,9 @@ def assign_vehicle_to_district():
     search = request.args.get('search', '').strip()
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
-    assigned = _assign_vehicle_to_district_data(search=search, project_id=project_id, district_id=district_id)
+    sort_by = request.args.get('sort_by', 'assign_date')
+    sort_order = request.args.get('sort_order', 'desc')
+    assigned = _assign_vehicle_to_district_data(search=search, project_id=project_id, district_id=district_id, sort_by=sort_by, sort_order=sort_order)
     projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
     districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     return render_template(
@@ -3843,6 +4027,8 @@ def assign_vehicle_to_district():
         search=search,
         project_id=project_id or 0,
         district_id=district_id or 0,
+        sort_by=sort_by,
+        sort_order=sort_order,
         project_choices=projects,
         district_choices=districts,
     )
@@ -4143,7 +4329,13 @@ def assign_vehicle_to_parking_list():
     search = request.args.get('search', '').strip()
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
-    parked_vehicles = _assign_vehicle_to_parking_data(search=search, project_id=project_id, district_id=district_id)
+    from_date_str = request.args.get('from_date', '').strip()
+    to_date_str = request.args.get('to_date', '').strip()
+    sort_by = request.args.get('sort_by', 'assign_date')
+    sort_order = request.args.get('sort_order', 'desc')
+    from_date = parse_date_dmy(from_date_str) if from_date_str else None
+    to_date = parse_date_dmy(to_date_str) if to_date_str else None
+    parked_vehicles = _assign_vehicle_to_parking_data(search=search, project_id=project_id, district_id=district_id, from_date=from_date, to_date=to_date, sort_by=sort_by, sort_order=sort_order)
     projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
     districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     return render_template(
@@ -4152,24 +4344,52 @@ def assign_vehicle_to_parking_list():
         search=search,
         project_id=project_id or 0,
         district_id=district_id or 0,
+        from_date=from_date_str,
+        to_date=to_date_str,
         project_choices=projects,
         district_choices=districts,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
 
 
-def _assign_vehicle_to_parking_data(search=None, project_id=None, district_id=None):
-    """Query vehicles with parking assigned (optionally filtered by search, project_id, district_id). Returns list of Vehicle."""
+def _assign_vehicle_to_parking_data(search=None, project_id=None, district_id=None, from_date=None, to_date=None, sort_by='assign_date', sort_order='desc'):
+    """Query vehicles with parking assigned (optionally filtered by search, project_id, district_id, date range). Returns list of Vehicle."""
     query = Vehicle.query.filter(Vehicle.parking_station_id.isnot(None))
     if project_id:
         query = query.filter(Vehicle.project_id == project_id)
     if district_id:
         query = query.filter(Vehicle.district_id == district_id)
+    if from_date:
+        query = query.filter(Vehicle.parking_assign_date >= from_date)
+    if to_date:
+        query = query.filter(Vehicle.parking_assign_date <= to_date)
     if search:
         query = query.join(Project).join(ParkingStation).filter(
             (Vehicle.vehicle_no.ilike(f'%{search}%')) |
             (Project.name.ilike(f'%{search}%')) |
             (ParkingStation.name.ilike(f'%{search}%'))
         )
+    
+    # Apply sorting - database level for performance
+    if sort_by == 'vehicle':
+        order_col = Vehicle.vehicle_no
+    elif sort_by == 'project':
+        query = query.join(Project, Vehicle.project_id == Project.id)
+        order_col = Project.name
+    elif sort_by == 'parking':
+        query = query.join(ParkingStation, Vehicle.parking_station_id == ParkingStation.id)
+        order_col = ParkingStation.name
+    elif sort_by == 'assign_date':
+        order_col = Vehicle.parking_assign_date
+    else:
+        order_col = Vehicle.parking_assign_date
+    
+    if sort_order == 'asc':
+        query = query.order_by(order_col.asc())
+    else:
+        query = query.order_by(order_col.desc())
+    
     return query.all()
 
 
@@ -4178,8 +4398,12 @@ def assign_vehicle_to_parking_export():
     search = request.args.get('search', '').strip()
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
-    parked_vehicles = _assign_vehicle_to_parking_data(search=search, project_id=project_id, district_id=district_id)
-    headers = ['Vehicle No', 'Model', 'Project', 'Parking Station', 'District', 'Remarks']
+    from_date_str = request.args.get('from_date', '').strip()
+    to_date_str = request.args.get('to_date', '').strip()
+    from_date = parse_date_dmy(from_date_str) if from_date_str else None
+    to_date = parse_date_dmy(to_date_str) if to_date_str else None
+    parked_vehicles = _assign_vehicle_to_parking_data(search=search, project_id=project_id, district_id=district_id, from_date=from_date, to_date=to_date)
+    headers = ['Vehicle No', 'Model', 'Project', 'Parking Station', 'District', 'Assign Date', 'Remarks']
     rows = []
     for v in parked_vehicles:
         rows.append([
@@ -4188,6 +4412,7 @@ def assign_vehicle_to_parking_export():
             v.project.name if v.project else '',
             v.parking_station.name if v.parking_station else '',
             v.district.name if v.district else '',
+            v.parking_assign_date.strftime('%d-%m-%Y') if v.parking_assign_date else '',
             (v.parking_remarks or '').replace('\r\n', ' ').replace('\n', ' ')[:200]
         ])
     filename = 'vehicle_parking_assignments.xlsx' if not search else f'vehicle_parking_assignments_{search[:30].replace("/", "-")}.xlsx'
@@ -4199,12 +4424,21 @@ def assign_vehicle_to_parking_print():
     search = request.args.get('search', '').strip()
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
-    parked_vehicles = _assign_vehicle_to_parking_data(search=search, project_id=project_id, district_id=district_id)
+    from_date_str = request.args.get('from_date', '').strip()
+    to_date_str = request.args.get('to_date', '').strip()
+    from_date = parse_date_dmy(from_date_str) if from_date_str else None
+    to_date = parse_date_dmy(to_date_str) if to_date_str else None
+    parked_vehicles = _assign_vehicle_to_parking_data(search=search, project_id=project_id, district_id=district_id, from_date=from_date, to_date=to_date)
     return render_template(
         'assign_vehicle_to_parking_print.html',
         parked_vehicles=parked_vehicles,
-        search=search
+        search=search,
+        project_id=project_id or 0,
+        district_id=district_id or 0,
+        from_date=from_date_str,
+        to_date=to_date_str,
     )
+
 
 @app.route('/assign_vehicle_to_parking/desassign/<int:vehicle_id>', methods=['POST'])
 def desassign_vehicle_from_parking(vehicle_id):
@@ -4437,7 +4671,9 @@ def assign_driver_to_vehicle_list():
     search = request.args.get('search', '').strip()
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
-    assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id)
+    sort_by = request.args.get('sort_by', 'driver')
+    sort_order = request.args.get('sort_order', 'asc')
+    assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id, sort_by=sort_by, sort_order=sort_order)
     projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
     districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     return render_template(
@@ -4446,12 +4682,14 @@ def assign_driver_to_vehicle_list():
         search=search,
         project_id=project_id or 0,
         district_id=district_id or 0,
+        sort_by=sort_by,
+        sort_order=sort_order,
         project_choices=projects,
         district_choices=districts,
     )
 
 
-def _assign_driver_to_vehicle_data(search=None, project_id=None, district_id=None):
+def _assign_driver_to_vehicle_data(search=None, project_id=None, district_id=None, sort_by='driver', sort_order='asc'):
     """Query (Driver, Vehicle) pairs for assigned drivers. Optional filter by project_id, district_id."""
     query = db.session.query(Driver, Vehicle).join(Vehicle, Driver.vehicle_id == Vehicle.id)
     if project_id:
@@ -4465,6 +4703,26 @@ def _assign_driver_to_vehicle_data(search=None, project_id=None, district_id=Non
             (Vehicle.vehicle_no.ilike(f'%{search}%')) |
             (Project.name.ilike(f'%{search}%'))
         )
+    
+    # Apply sorting - database level for performance
+    if sort_by == 'driver':
+        order_col = Driver.name
+    elif sort_by == 'vehicle':
+        order_col = Vehicle.vehicle_no
+    elif sort_by == 'project':
+        query = query.join(Project, Driver.project_id == Project.id)
+        order_col = Project.name
+    elif sort_by == 'district':
+        query = query.join(District, Vehicle.district_id == District.id)
+        order_col = District.name
+    else:
+        order_col = Driver.name
+    
+    if sort_order == 'asc':
+        query = query.order_by(order_col.asc())
+    else:
+        query = query.order_by(order_col.desc())
+    
     return query.all()
 
 
@@ -4613,8 +4871,38 @@ def assign_driver_to_vehicle_edit(driver_id):
 # Transfer Section - Project
 @app.route('/project-transfers')
 def project_transfers():
-    transfers = ProjectTransfer.query.order_by(ProjectTransfer.transfer_date.desc()).all()
-    return render_template('project_transfers.html', transfers=transfers)
+    search = request.args.get('search', '').strip()
+    sort_by = request.args.get('sort_by', 'transfer_date')
+    sort_order = request.args.get('sort_order', 'desc')
+    
+    query = ProjectTransfer.query
+    
+    if search:
+        query = query.join(Project).join(Company, ProjectTransfer.new_company_id == Company.id).filter(
+            (Project.name.ilike(f'%{search}%')) |
+            (Company.name.ilike(f'%{search}%')) |
+            (ProjectTransfer.remarks.ilike(f'%{search}%'))
+        )
+    
+    # Apply sorting
+    if sort_by == 'project':
+        query = query.join(Project)
+        order_col = Project.name
+    elif sort_by == 'company':
+        query = query.join(Company, ProjectTransfer.new_company_id == Company.id)
+        order_col = Company.name
+    elif sort_by == 'transfer_date':
+        order_col = ProjectTransfer.transfer_date
+    else:
+        order_col = ProjectTransfer.transfer_date
+    
+    if sort_order == 'asc':
+        query = query.order_by(order_col.asc())
+    else:
+        query = query.order_by(order_col.desc())
+    
+    transfers = query.all()
+    return render_template('project_transfers.html', transfers=transfers, search=search, sort_by=sort_by, sort_order=sort_order)
 
 @app.route('/project-transfer/new', methods=['GET', 'POST'])
 def project_transfer_new():
@@ -4690,6 +4978,70 @@ def project_transfer_delete(id):
         flash(f'Error deleting record: {str(e)}', 'danger')
     return redirect(url_for('project_transfers'))
 
+@app.route('/project-transfers/export')
+def project_transfers_export():
+    search = request.args.get('search', '').strip()
+    query = ProjectTransfer.query
+    
+    if search:
+        query = query.join(Project).join(Company, ProjectTransfer.new_company_id == Company.id).filter(
+            (Project.name.ilike(f'%{search}%')) |
+            (Company.name.ilike(f'%{search}%')) |
+            (ProjectTransfer.remarks.ilike(f'%{search}%'))
+        )
+    
+    transfers = query.order_by(ProjectTransfer.transfer_date.desc()).all()
+    
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output)
+    worksheet = workbook.add_worksheet('Project Transfers')
+    
+    header_format = workbook.add_format({'bold': True, 'bg_color': '#ff5722', 'font_color': 'white', 'border': 1})
+    cell_format = workbook.add_format({'border': 1, 'text_wrap': True})
+    
+    headers = ['Sr No', 'Project Name', 'Old Company', 'New Company', 'Transfer Date', 'Remarks']
+    for col, header in enumerate(headers):
+        worksheet.write(0, col, header, header_format)
+    
+    for idx, t in enumerate(transfers, start=1):
+        worksheet.write(idx, 0, idx, cell_format)
+        worksheet.write(idx, 1, t.project.name if t.project else '', cell_format)
+        worksheet.write(idx, 2, t.old_company.name if t.old_company else 'Initial', cell_format)
+        worksheet.write(idx, 3, t.new_company.name if t.new_company else '', cell_format)
+        worksheet.write(idx, 4, t.transfer_date.strftime('%d %b, %Y') if t.transfer_date else '', cell_format)
+        worksheet.write(idx, 5, t.remarks or '', cell_format)
+    
+    worksheet.set_column(0, 0, 8)
+    worksheet.set_column(1, 1, 30)
+    worksheet.set_column(2, 3, 25)
+    worksheet.set_column(4, 4, 15)
+    worksheet.set_column(5, 5, 30)
+    
+    workbook.close()
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'project_transfers_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@app.route('/project-transfers/print')
+def project_transfers_print():
+    search = request.args.get('search', '').strip()
+    query = ProjectTransfer.query
+    
+    if search:
+        query = query.join(Project).join(Company, ProjectTransfer.new_company_id == Company.id).filter(
+            (Project.name.ilike(f'%{search}%')) |
+            (Company.name.ilike(f'%{search}%')) |
+            (ProjectTransfer.remarks.ilike(f'%{search}%'))
+        )
+    
+    transfers = query.order_by(ProjectTransfer.transfer_date.desc()).all()
+    return render_template('project_transfers_print.html', transfers=transfers, search=search)
+
 # ==========================================
 # VEHICLE TRANSFER ROUTES
 # ==========================================
@@ -4700,6 +5052,8 @@ def vehicle_transfers():
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
     q = (request.args.get('q') or '').strip()
+    sort_by = request.args.get('sort_by', 'transfer_date')
+    sort_order = request.args.get('sort_order', 'desc')
 
     query = VehicleTransfer.query
     if project_id:
@@ -4718,7 +5072,27 @@ def vehicle_transfers():
             cast(VehicleTransfer.transfer_date, SAString).ilike(like),
         ))
 
-    transfers = query.order_by(VehicleTransfer.transfer_date.desc()).all()
+    # Apply sorting
+    if sort_by == 'vehicle':
+        query = query.join(Vehicle)
+        order_col = Vehicle.vehicle_no
+    elif sort_by == 'project':
+        query = query.join(Project, VehicleTransfer.new_project_id == Project.id)
+        order_col = Project.name
+    elif sort_by == 'district':
+        query = query.join(District, VehicleTransfer.new_district_id == District.id)
+        order_col = District.name
+    elif sort_by == 'transfer_date':
+        order_col = VehicleTransfer.transfer_date
+    else:
+        order_col = VehicleTransfer.transfer_date
+    
+    if sort_order == 'asc':
+        query = query.order_by(order_col.asc())
+    else:
+        query = query.order_by(order_col.desc())
+
+    transfers = query.all()
 
     projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
     districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
@@ -4728,6 +5102,8 @@ def vehicle_transfers():
         project_id=project_id,
         district_id=district_id,
         q=q,
+        sort_by=sort_by,
+        sort_order=sort_order,
         project_choices=projects,
         district_choices=districts,
     )
@@ -4900,6 +5276,96 @@ def vehicle_transfer_delete(id):
         flash(f'Error deleting record: {str(e)}', 'danger')
     return redirect(url_for('vehicle_transfers'))
 
+@app.route('/vehicle-transfers/export')
+def vehicle_transfers_export():
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = (request.args.get('q') or '').strip()
+    
+    query = VehicleTransfer.query
+    if project_id:
+        query = query.filter(VehicleTransfer.new_project_id == project_id)
+    if district_id:
+        query = query.filter(VehicleTransfer.new_district_id == district_id)
+    if q:
+        like = f'%{q}%'
+        query = query.join(Vehicle).outerjoin(Project, VehicleTransfer.new_project_id == Project.id).outerjoin(
+            District, VehicleTransfer.new_district_id == District.id
+        ).filter(or_(
+            Vehicle.vehicle_no.ilike(like),
+            Project.name.ilike(like),
+            District.name.ilike(like),
+            VehicleTransfer.remarks.ilike(like),
+            cast(VehicleTransfer.transfer_date, SAString).ilike(like),
+        ))
+    
+    transfers = query.order_by(VehicleTransfer.transfer_date.desc()).all()
+    
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output)
+    worksheet = workbook.add_worksheet('Vehicle Transfers')
+    
+    header_format = workbook.add_format({'bold': True, 'bg_color': '#00bcd4', 'font_color': 'white', 'border': 1})
+    cell_format = workbook.add_format({'border': 1, 'text_wrap': True})
+    
+    headers = ['Sr No', 'Vehicle No', 'Old Project', 'Old District', 'Old Parking', 'New Project', 'New District', 'New Parking', 'Transfer Date', 'Remarks']
+    for col, header in enumerate(headers):
+        worksheet.write(0, col, header, header_format)
+    
+    for idx, t in enumerate(transfers, start=1):
+        worksheet.write(idx, 0, idx, cell_format)
+        worksheet.write(idx, 1, t.vehicle.vehicle_no if t.vehicle else '', cell_format)
+        worksheet.write(idx, 2, t.old_project.name if t.old_project else '-', cell_format)
+        worksheet.write(idx, 3, t.old_district.name if t.old_district else '-', cell_format)
+        worksheet.write(idx, 4, t.old_parking.name if t.old_parking else 'Free', cell_format)
+        worksheet.write(idx, 5, t.new_project.name if t.new_project else '-', cell_format)
+        worksheet.write(idx, 6, t.new_district.name if t.new_district else '-', cell_format)
+        worksheet.write(idx, 7, t.new_parking.name if t.new_parking else 'Free', cell_format)
+        worksheet.write(idx, 8, t.transfer_date.strftime('%d %b, %Y') if t.transfer_date else '', cell_format)
+        worksheet.write(idx, 9, t.remarks or '', cell_format)
+    
+    worksheet.set_column(0, 0, 8)
+    worksheet.set_column(1, 1, 15)
+    worksheet.set_column(2, 7, 20)
+    worksheet.set_column(8, 8, 15)
+    worksheet.set_column(9, 9, 30)
+    
+    workbook.close()
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'vehicle_transfers_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@app.route('/vehicle-transfers/print')
+def vehicle_transfers_print():
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = (request.args.get('q') or '').strip()
+    
+    query = VehicleTransfer.query
+    if project_id:
+        query = query.filter(VehicleTransfer.new_project_id == project_id)
+    if district_id:
+        query = query.filter(VehicleTransfer.new_district_id == district_id)
+    if q:
+        like = f'%{q}%'
+        query = query.join(Vehicle).outerjoin(Project, VehicleTransfer.new_project_id == Project.id).outerjoin(
+            District, VehicleTransfer.new_district_id == District.id
+        ).filter(or_(
+            Vehicle.vehicle_no.ilike(like),
+            Project.name.ilike(like),
+            District.name.ilike(like),
+            VehicleTransfer.remarks.ilike(like),
+            cast(VehicleTransfer.transfer_date, SAString).ilike(like),
+        ))
+    
+    transfers = query.order_by(VehicleTransfer.transfer_date.desc()).all()
+    return render_template('vehicle_transfers_print.html', transfers=transfers, q=q, project_id=project_id, district_id=district_id)
+
 @app.route('/get_vehicle_current_info/<int:vehicle_id>')
 def get_vehicle_current_info(vehicle_id):
     v = Vehicle.query.get(vehicle_id)
@@ -4946,7 +5412,6 @@ def get_available_shifts(vehicle_id):
     if cap == 1:
         if "Morning" not in existing_shifts: shifts.append({"id": "Morning", "name": "Morning"})
     else:
-        if "Morning" not in existing_shifts: shifts.append({"id": "Morning", "name": "Morning"})
         if "Night" not in existing_shifts: shifts.append({"id": "Night", "name": "Night"})
         
     return jsonify(shifts)
@@ -4957,6 +5422,8 @@ def driver_transfers():
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
     q = (request.args.get('q') or '').strip()
+    sort_by = request.args.get('sort_by', 'transfer_date')
+    sort_order = request.args.get('sort_order', 'desc')
 
     query = DriverTransfer.query
     if project_id:
@@ -4982,7 +5449,27 @@ def driver_transfers():
             cast(DriverTransfer.transfer_date, SAString).ilike(like),
         ))
 
-    transfers = query.order_by(DriverTransfer.transfer_date.desc()).all()
+    # Apply sorting
+    if sort_by == 'driver':
+        query = query.join(Driver)
+        order_col = Driver.name
+    elif sort_by == 'vehicle':
+        query = query.join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id)
+        order_col = Vehicle.vehicle_no
+    elif sort_by == 'project':
+        query = query.join(Project, DriverTransfer.new_project_id == Project.id)
+        order_col = Project.name
+    elif sort_by == 'transfer_date':
+        order_col = DriverTransfer.transfer_date
+    else:
+        order_col = DriverTransfer.transfer_date
+    
+    if sort_order == 'asc':
+        query = query.order_by(order_col.asc())
+    else:
+        query = query.order_by(order_col.desc())
+
+    transfers = query.all()
 
     projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
     districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
@@ -4991,6 +5478,8 @@ def driver_transfers():
         transfers=transfers,
         project_id=project_id,
         district_id=district_id,
+        sort_by=sort_by,
+        sort_order=sort_order,
         q=q,
         project_choices=projects,
         district_choices=districts,
@@ -5159,13 +5648,117 @@ def driver_transfer_delete(id):
         db.session.delete(transfer)
         db.session.commit()
 
-        flash(f"Transfer record deleted and driver {driver.name} reverted to previous assignment.", "success")
-
+        flash("Transfer record deleted. Driver reverted to previous assignment.", "success")
     except Exception as e:
         db.session.rollback()
-        flash(f"Error while reverting transfer: {str(e)}", "danger")
+        flash(f"Error deleting transfer: {str(e)}", "danger")
 
     return redirect(url_for('driver_transfers'))
+
+@app.route('/driver-transfers/export')
+def driver_transfers_export():
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = (request.args.get('q') or '').strip()
+    
+    query = DriverTransfer.query
+    if project_id:
+        query = query.filter(DriverTransfer.new_project_id == project_id)
+    if district_id:
+        query = query.join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id).filter(
+            Vehicle.district_id == district_id
+        )
+    if q:
+        like = f'%{q}%'
+        query = query.join(Driver).join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id).outerjoin(
+            Project, DriverTransfer.new_project_id == Project.id
+        ).outerjoin(
+            District, Vehicle.district_id == District.id
+        ).filter(or_(
+            Driver.name.ilike(like),
+            Driver.driver_id.ilike(like),
+            Vehicle.vehicle_no.ilike(like),
+            Project.name.ilike(like),
+            District.name.ilike(like),
+            DriverTransfer.remarks.ilike(like),
+            cast(DriverTransfer.transfer_date, SAString).ilike(like),
+        ))
+    
+    transfers = query.order_by(DriverTransfer.transfer_date.desc()).all()
+    
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output)
+    worksheet = workbook.add_worksheet('Driver Transfers')
+    
+    header_format = workbook.add_format({'bold': True, 'bg_color': '#9c27b0', 'font_color': 'white', 'border': 1})
+    cell_format = workbook.add_format({'border': 1, 'text_wrap': True})
+    
+    headers = ['Sr No', 'Driver Name', 'Driver ID', 'Old Project', 'Old District', 'Old Vehicle', 'Old Shift', 'New Project', 'New District', 'New Vehicle', 'New Shift', 'Transfer Date', 'Remarks']
+    for col, header in enumerate(headers):
+        worksheet.write(0, col, header, header_format)
+    
+    for idx, t in enumerate(transfers, start=1):
+        worksheet.write(idx, 0, idx, cell_format)
+        worksheet.write(idx, 1, t.driver.name if t.driver else '', cell_format)
+        worksheet.write(idx, 2, t.driver.driver_id if t.driver else '', cell_format)
+        worksheet.write(idx, 3, t.old_project.name if t.old_project else 'Initial', cell_format)
+        worksheet.write(idx, 4, t.old_vehicle.district.name if t.old_vehicle and t.old_vehicle.district else '-', cell_format)
+        worksheet.write(idx, 5, t.old_vehicle.vehicle_no if t.old_vehicle else '-', cell_format)
+        worksheet.write(idx, 6, t.old_shift or '-', cell_format)
+        worksheet.write(idx, 7, t.new_project.name if t.new_project else '-', cell_format)
+        worksheet.write(idx, 8, t.new_vehicle.district.name if t.new_vehicle and t.new_vehicle.district else '-', cell_format)
+        worksheet.write(idx, 9, t.new_vehicle.vehicle_no if t.new_vehicle else '-', cell_format)
+        worksheet.write(idx, 10, t.new_shift or '-', cell_format)
+        worksheet.write(idx, 11, t.transfer_date.strftime('%d %b, %Y') if t.transfer_date else '', cell_format)
+        worksheet.write(idx, 12, t.remarks or '', cell_format)
+    
+    worksheet.set_column(0, 0, 8)
+    worksheet.set_column(1, 2, 15)
+    worksheet.set_column(3, 10, 18)
+    worksheet.set_column(11, 11, 15)
+    worksheet.set_column(12, 12, 30)
+    
+    workbook.close()
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'driver_transfers_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@app.route('/driver-transfers/print')
+def driver_transfers_print():
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = (request.args.get('q') or '').strip()
+    
+    query = DriverTransfer.query
+    if project_id:
+        query = query.filter(DriverTransfer.new_project_id == project_id)
+    if district_id:
+        query = query.join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id).filter(
+            Vehicle.district_id == district_id
+        )
+    if q:
+        like = f'%{q}%'
+        query = query.join(Driver).join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id).outerjoin(
+            Project, DriverTransfer.new_project_id == Project.id
+        ).outerjoin(
+            District, Vehicle.district_id == District.id
+        ).filter(or_(
+            Driver.name.ilike(like),
+            Driver.driver_id.ilike(like),
+            Vehicle.vehicle_no.ilike(like),
+            Project.name.ilike(like),
+            District.name.ilike(like),
+            DriverTransfer.remarks.ilike(like),
+            cast(DriverTransfer.transfer_date, SAString).ilike(like),
+        ))
+    
+    transfers = query.order_by(DriverTransfer.transfer_date.desc()).all()
+    return render_template('driver_transfers_print.html', transfers=transfers, q=q, project_id=project_id, district_id=district_id)
 
 # API: Ek makhsoos gaari (Vehicle) par assign drivers nikalna
 @app.route('/get_drivers_by_vehicle/<int:vehicle_id>')
@@ -5516,6 +6109,99 @@ def driver_job_left_delete(id):
         flash('Error deleting record.', 'danger')
         
     return redirect(url_for('driver_job_left_list'))
+
+@app.route('/driver-job-left/export')
+def driver_job_left_export():
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = (request.args.get('q') or '').strip()
+    
+    query = DriverStatusChange.query.filter_by(action_type='left')
+    if project_id:
+        query = query.filter(DriverStatusChange.left_project_id == project_id)
+    if district_id:
+        query = query.filter(DriverStatusChange.left_district_id == district_id)
+    if q:
+        like = f'%{q}%'
+        query = query.join(Driver).outerjoin(Project, DriverStatusChange.left_project_id == Project.id).outerjoin(
+            District, DriverStatusChange.left_district_id == District.id
+        ).filter(or_(
+            Driver.name.ilike(like),
+            Driver.driver_id.ilike(like),
+            Project.name.ilike(like),
+            District.name.ilike(like),
+            DriverStatusChange.reason.ilike(like),
+            DriverStatusChange.remarks.ilike(like),
+        ))
+    
+    records = query.order_by(DriverStatusChange.change_date.desc()).all()
+    
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output)
+    worksheet = workbook.add_worksheet('Driver Job Left')
+    
+    header_format = workbook.add_format({'bold': True, 'bg_color': '#dc3545', 'font_color': 'white', 'border': 1})
+    cell_format = workbook.add_format({'border': 1, 'text_wrap': True})
+    
+    headers = ['Sr No', 'Exit Date', 'Driver Name', 'Driver ID', 'Project', 'District', 'Vehicle', 'Shift', 'Reason', 'Remarks']
+    for col, header in enumerate(headers):
+        worksheet.write(0, col, header, header_format)
+    
+    for idx, record in enumerate(records, start=1):
+        worksheet.write(idx, 0, idx, cell_format)
+        worksheet.write(idx, 1, record.change_date.strftime('%d %b, %Y') if record.change_date else '', cell_format)
+        worksheet.write(idx, 2, record.driver.name if record.driver else '', cell_format)
+        worksheet.write(idx, 3, record.driver.driver_id if record.driver else '', cell_format)
+        worksheet.write(idx, 4, record.left_project.name if record.left_project else '-', cell_format)
+        worksheet.write(idx, 5, record.left_district.name if record.left_district else '-', cell_format)
+        worksheet.write(idx, 6, record.left_vehicle.vehicle_no if record.left_vehicle else '-', cell_format)
+        worksheet.write(idx, 7, record.left_shift or '-', cell_format)
+        worksheet.write(idx, 8, record.reason or '', cell_format)
+        worksheet.write(idx, 9, record.remarks or '', cell_format)
+    
+    worksheet.set_column(0, 0, 8)
+    worksheet.set_column(1, 1, 15)
+    worksheet.set_column(2, 3, 18)
+    worksheet.set_column(4, 7, 18)
+    worksheet.set_column(8, 8, 15)
+    worksheet.set_column(9, 9, 30)
+    
+    workbook.close()
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'driver_job_left_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@app.route('/driver-job-left/print')
+def driver_job_left_print():
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = (request.args.get('q') or '').strip()
+    
+    query = DriverStatusChange.query.filter_by(action_type='left')
+    if project_id:
+        query = query.filter(DriverStatusChange.left_project_id == project_id)
+    if district_id:
+        query = query.filter(DriverStatusChange.left_district_id == district_id)
+    if q:
+        like = f'%{q}%'
+        query = query.join(Driver).outerjoin(Project, DriverStatusChange.left_project_id == Project.id).outerjoin(
+            District, DriverStatusChange.left_district_id == District.id
+        ).filter(or_(
+            Driver.name.ilike(like),
+            Driver.driver_id.ilike(like),
+            Project.name.ilike(like),
+            District.name.ilike(like),
+            DriverStatusChange.reason.ilike(like),
+            DriverStatusChange.remarks.ilike(like),
+        ))
+    
+    records = query.order_by(DriverStatusChange.change_date.desc()).all()
+    return render_template('driver_job_left_print.html', records=records, q=q, project_id=project_id, district_id=district_id)
 
 # routes.py mein ye function add karein
 @app.route('/driver/rejoin/list')
@@ -8182,11 +8868,28 @@ def penalty_record_edit(pk):
 @app.route('/driver-posts')
 def driver_post_list():
     search = request.args.get('search', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    sort_by = request.args.get('sort_by', 'full_name')
+    sort_order = request.args.get('sort_order', 'asc')
+    
     query = EmployeePost.query
     if search:
         query = query.filter(EmployeePost.full_name.ilike(f'%{search}%'))
-    posts = query.order_by(EmployeePost.full_name).all()
-    return render_template('driver_post_list.html', posts=posts, search=search)
+    
+    # Apply sorting
+    if sort_by == 'id':
+        order_col = EmployeePost.id.asc() if sort_order == 'asc' else EmployeePost.id.desc()
+    elif sort_by == 'short_name':
+        order_col = EmployeePost.short_name.asc() if sort_order == 'asc' else EmployeePost.short_name.desc()
+    else:  # default to full_name
+        order_col = EmployeePost.full_name.asc() if sort_order == 'asc' else EmployeePost.full_name.desc()
+    
+    pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
+    posts = pagination.items
+    
+    return render_template('driver_post_list.html', posts=posts, search=search, 
+                         pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
 
 
 @app.route('/driver-post/add', methods=['GET', 'POST'])
@@ -8221,6 +8924,31 @@ def driver_post_delete(id):
     return redirect(url_for('driver_post_list'))
 
 
+@app.route('/driver-posts/export')
+def driver_post_export():
+    search = request.args.get('search', '').strip()
+    query = EmployeePost.query
+    if search:
+        query = query.filter(EmployeePost.full_name.ilike(f'%{search}%'))
+    posts = query.order_by(EmployeePost.full_name).all()
+    headers = ['ID', 'Short Name', 'Full Name', 'Remarks']
+    rows = []
+    for p in posts:
+        rows.append([p.id, p.short_name, p.full_name, p.remarks or ''])
+    filename = 'employee_posts.csv' if not search else f'employee_posts_search_{search}.csv'
+    return generate_csv_response(headers, rows, filename=filename)
+
+
+@app.route('/driver-posts/print')
+def driver_post_print():
+    search = request.args.get('search', '').strip()
+    query = EmployeePost.query
+    if search:
+        query = query.filter(EmployeePost.full_name.ilike(f'%{search}%'))
+    posts = query.order_by(EmployeePost.full_name).all()
+    return render_template('driver_post_print.html', posts=posts, search=search)
+
+
 @app.route('/parties')
 def party_list():
     search = request.args.get('search', '').strip()
@@ -8228,17 +8956,28 @@ def party_list():
     per_page_default = session.get('per_page_default', 20)
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', per_page_default, type=int)
+    sort_by = request.args.get('sort_by', 'name')
+    sort_order = request.args.get('sort_order', 'asc')
 
     query = Party.query
     if party_type:
         query = query.filter(Party.party_type == party_type)
     if search:
         query = query.filter(Party.name.ilike(f'%{search}%'))
-    pagination = query.order_by(Party.party_type, Party.name).paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Apply sorting based on sort_by column
+    if sort_by == 'party_type':
+        order_col = Party.party_type.asc() if sort_order == 'asc' else Party.party_type.desc()
+    elif sort_by == 'district':
+        order_col = Party.district_id.asc() if sort_order == 'asc' else Party.district_id.desc()
+    else:  # default to name
+        order_col = Party.name.asc() if sort_order == 'asc' else Party.name.desc()
+    
+    pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     parties = pagination.items
     session['per_page_default'] = per_page
     return render_template('party_list.html', parties=parties, search=search, party_type=party_type,
-                           pagination=pagination, per_page=per_page)
+                           pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
 
 
 @app.route('/party/add', methods=['GET', 'POST'])
@@ -8426,15 +9165,26 @@ def product_list():
     per_page_default = session.get('per_page_default', 20)
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', per_page_default, type=int)
+    sort_by = request.args.get('sort_by', 'name')
+    sort_order = request.args.get('sort_order', 'asc')
 
     query = Product.query
     if search:
         query = query.filter(Product.name.ilike(f'%{search}%'))
-    pagination = query.order_by(Product.name).paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Apply sorting
+    if sort_by == 'name':
+        order_col = Product.name.asc() if sort_order == 'asc' else Product.name.desc()
+    elif sort_by == 'used_in_forms':
+        order_col = Product.used_in_forms.asc() if sort_order == 'asc' else Product.used_in_forms.desc()
+    else:  # default to name
+        order_col = Product.name.asc() if sort_order == 'asc' else Product.name.desc()
+    
+    pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     products = pagination.items
     session['per_page_default'] = per_page
     return render_template('product_list.html', products=products, search=search,
-                           pagination=pagination, per_page=per_page)
+                           pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
 
 
 @app.route('/product/add', methods=['GET', 'POST'])

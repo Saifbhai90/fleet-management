@@ -3,96 +3,153 @@
 {% block title %}Companies List{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0 fw-bold text-navy">Companies Directory</h2>
-    {% if can_see_page('companies_add') %}
-    <a href="{{ url_for('company_form') }}" class="btn btn-success shadow-sm">
-      <i class="bi bi-plus-circle me-2"></i>Add New Company
-    </a>
-    {% endif %}
-  </div>
-
-  <form method="GET" class="mb-4">
-    <div class="input-group shadow-sm">
-      <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
-      <input type="text" name="search" class="form-control border-start-0" placeholder="Search by company name..." value="{{ search }}" data-realtime-table="companiesTable">
-      <button class="btn btn-primary px-4" type="submit">Search</button>
-    </div>
-  </form>
-
-  <div class="card shadow-sm border-0">
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table id="companiesTable" class="table table-hover align-middle mb-0">
-          <thead class="table-dark">
-            <tr>
-              <th style="width: 5%;" class="ps-3">ID</th>
-              <th style="width: 25%;">Company Name</th>
-              <th style="width: 20%;">Contact Info</th>
-              <th style="width: 25%;">Office Address</th>
-              <th style="width: 25%;" class="text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for company in companies %}
-            <tr>
-              <td class="ps-3 text-muted">{{ company.id }}</td>
-              <td><span class="fw-bold text-dark">{{ company.name }}</span></td>
-              <td>
-                {% if company.email or company.mobile %}
-                  <div class="small">
-                    {% if company.email %}<div><i class="bi bi-envelope me-1 text-primary"></i>{{ company.email }}</div>{% endif %}
-                    {% if company.mobile %}<div><i class="bi bi-phone me-1 text-success"></i>{{ company.mobile }}</div>{% endif %}
-                  </div>
-                {% else %}
-                  <span class="text-muted small italic">No contact info</span>
-                {% endif %}
-              </td>
-              <td class="small text-secondary">
-                {% if company.office_address %}
-                  <i class="bi bi-geo-alt me-1 text-danger"></i>{{ company.office_address }}
-                {% else %}
-                  <span class="text-muted">---</span>
-                {% endif %}
-              </td>
-              <td class="text-center">
-                <div class="btn-group shadow-sm">
-                  {% if 'company_report' in current_permissions or 'master' in current_permissions %}
-                  <a href="{{ url_for('company_report', id=company.id) }}" class="btn btn-sm btn-info text-white" title="Full Report">
-                    <i class="bi bi-file-earmark-bar-graph"></i> Report
-                  </a>
-                  {% endif %}
-                  {% if can_see_page('companies_edit') %}
-                  <a href="{{ url_for('company_form', id=company.id) }}" class="btn btn-sm btn-warning" title="Edit">
-                    <i class="bi bi-pencil-square"></i> Edit
-                  </a>
-                  {% endif %}
-                  {% if can_see_page('companies_delete') %}
-                  <form action="{{ url_for('delete_company', id=company.id) }}" method="POST" style="display:inline;">
-                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this company permanently?')">
-                      <i class="bi bi-trash"></i>
-                    </button>
-                  </form>
-                  {% endif %}
-                </div>
-              </td>
-            </tr>
-            {% else %}
-            <tr>
-              <td colspan="5" class="text-center py-5">
-                <i class="bi bi-building-exclamation display-4 text-muted mb-3 d-block"></i>
-                <p class="text-muted">No company records found.</p>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+<style>
+  body { background: #f8f9fa; }
+  .page-header-gradient { background: #fff; padding: 0; margin-bottom: 1rem; }
+  .page-header-gradient h3 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+  .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+  .section-heading { background: #2196f3; color: white; padding: 0.75rem 1rem; font-size: 1rem; font-weight: 600; border-radius: 4px 4px 0 0; margin: 0; }
+  .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .compact-table { font-size: 0.875rem; margin: 0; }
+  .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #2196f3; }
+  .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
+  .compact-table tbody tr { border-bottom: 1px solid #f0f0f0; transition: all 0.3s ease; cursor: pointer; }
+  .compact-table tbody tr:hover { background: linear-gradient(to right, #e3f2fd 0%, #ffffff 100%); transform: translateX(5px); box-shadow: 0 2px 8px rgba(33, 150, 243, 0.15); }
+  .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+  .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+  .badge-success { background: #4caf50; color: white; }
+  .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+  .btn-info-compact { background: #17a2b8; color: white; border: none; }
+  .btn-info-compact:hover { background: #138496; transform: translateY(-2px); }
+  .btn-edit-compact { background: #ffc107; color: #000; border: none; }
+  .btn-edit-compact:hover { background: #e0a800; transform: translateY(-2px); }
+  .btn-delete-compact { background: #dc3545; color: white; border: none; }
+  .btn-delete-compact:hover { background: #c82333; transform: translateY(-2px); }
+  .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .btn-success-compact { background: #4caf50; color: white; border: none; }
+  .btn-success-compact:hover { background: #388e3c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4); }
+  .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+  .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+  .filter-input:focus { border-color: #2196f3; box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1); }
+  .table-footer { background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666; }
+</style>
+<script src="https://unpkg.com/lucide@latest"></script>
+<div class="container-fluid py-4 px-4">
+  <div class="page-header-gradient">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <h3><i class="bi bi-building me-2"></i>Companies Directory</h3>
+        <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>Manage company information and contacts</p>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('companies_print', search=search) }}" target="_blank" class="btn btn-outline-compact top-btn-compact">
+          <i class="bi bi-eye me-1"></i>Preview
+        </a>
+        {% if can_see_page('companies_add') %}
+        <a href="{{ url_for('company_form') }}" class="btn btn-success-compact top-btn-compact">
+          <i class="bi bi-plus-lg me-1"></i>Add New Company
+        </a>
+        {% endif %}
       </div>
     </div>
-    <div class="card-footer bg-white border-top-0 py-3">
-      <span class="badge bg-secondary">Total Records: {{ companies|length }}</span>
+  </div>
+
+  <div class="filter-bar">
+    <form method="GET">
+      <div class="row g-2">
+        <div class="col-md-10">
+          <input type="text" name="search" class="form-control filter-input" placeholder="Search by company name..." value="{{ search }}">
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-success-compact w-100" type="submit"><i class="bi bi-search"></i></button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="data-table-wrapper">
+    <div class="section-heading">Companies Directory</div>
+    <div class="table-responsive">
+      <table id="companiesTable" class="table table-sm mb-0 compact-table">
+        <thead>
+          <tr>
+            <th width="5%">S.No</th>
+            <th width="5%">ID</th>
+            <th width="25%">Company Name</th>
+            <th width="20%">Contact Info</th>
+            <th width="25%">Office Address</th>
+            <th class="text-center" width="20%">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for company in companies %}
+          <tr>
+            <td>
+              <span class="badge-sm badge-success">{{ loop.index }}</span>
+            </td>
+            <td class="text-muted">{{ company.id }}</td>
+            <td><span class="fw-bold text-dark">{{ company.name }}</span></td>
+            <td>
+              {% if company.email or company.mobile %}
+                <div class="small">
+                  {% if company.email %}<div><i class="bi bi-envelope me-1 text-primary"></i>{{ company.email }}</div>{% endif %}
+                  {% if company.mobile %}<div><i class="bi bi-phone me-1 text-success"></i>{{ company.mobile }}</div>{% endif %}
+                </div>
+              {% else %}
+                <span class="text-muted small italic">No contact info</span>
+              {% endif %}
+            </td>
+            <td class="small text-secondary">
+              {% if company.office_address %}
+                <i class="bi bi-geo-alt me-1 text-danger"></i>{{ company.office_address }}
+              {% else %}
+                <span class="text-muted">---</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm" role="group">
+                {% if 'company_report' in current_permissions or 'master' in current_permissions %}
+                <a href="{{ url_for('company_report', id=company.id) }}" class="btn btn-info-compact" title="Full Report">
+                  <i class="bi bi-file-earmark-bar-graph"></i>
+                </a>
+                {% endif %}
+                {% if can_see_page('companies_edit') %}
+                <a href="{{ url_for('company_form', id=company.id) }}" class="btn btn-edit-compact" title="Edit">
+                  <i class="bi bi-pencil-square"></i>
+                </a>
+                {% endif %}
+                {% if can_see_page('companies_delete') %}
+                <form action="{{ url_for('delete_company', id=company.id) }}" method="POST" style="display:inline;">
+                  <button type="submit" class="btn btn-delete-compact" onclick="return confirm('Delete this company permanently?')">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="text-center py-4">
+              <i class="bi bi-building-exclamation display-4 text-muted mb-3 d-block"></i>
+              <p class="text-muted">No company records found.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="table-footer">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <i class="bi bi-list-ul me-1"></i>Showing {{ '1' if companies|length > 0 else '0' }} to {{ companies|length }} of {{ companies|length }} entries
+      </div>
     </div>
   </div>
 </div>
+
+<script>
+  lucide.createIcons();
+</script>
 {% endblock %}

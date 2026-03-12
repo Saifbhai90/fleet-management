@@ -4,169 +4,293 @@
 
 {% block content %}
 <style>
-  .parking-list-table.table { font-size: 0.875rem; }
-  .parking-list-table thead th { padding: 0.4rem 0.5rem; font-weight: 600; font-size: 0.8125rem; white-space: nowrap; }
-  .parking-list-table tbody td { padding: 0.35rem 0.5rem; vertical-align: middle; }
-  .parking-list-table .badge { font-size: 0.7rem; font-weight: 500; padding: 0.2rem 0.4rem; }
-  .parking-list-table .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
-  .parking-list-table .actions-cell { white-space: nowrap; }
+  body { background: #f8f9fa; }
+  
+  /* Simple Modern Blue Heading Bar */
+  .page-header-gradient { 
+    background: #fff; 
+    padding: 0; 
+    margin-bottom: 1rem; 
+  }
+  .page-header-gradient h2 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+  .page-header-gradient .subtitle { display: none; }
+  
+  .section-heading { 
+    background: #7c4dff; 
+    color: white; 
+    padding: 0.75rem 1rem; 
+    font-size: 1rem; 
+    font-weight: 600; 
+    border-radius: 4px 4px 0 0; 
+    margin: 0;
+  }
+  
+  .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+  .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+  .filter-input:focus { border-color: #667eea; box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1); }
+  
+  .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .compact-table { font-size: 0.875rem; margin: 0; }
+  .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #7c4dff; }
+  .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
+  
+  /* Hover Effect - Record Highlight */
+  .compact-table tbody tr { 
+    border-bottom: 1px solid #f0f0f0; 
+    transition: all 0.3s ease; 
+    cursor: pointer;
+  }
+  .compact-table tbody tr:hover { 
+    background: linear-gradient(to right, #f8f9ff 0%, #ffffff 100%); 
+    transform: translateX(5px);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+  }
+  .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+  
+  .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+  .badge-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+  .badge-secondary { background: #6c757d; color: white; }
+  .badge-info { background: #17a2b8; color: white; }
+  .badge-light { background: #f8f9fa; color: #495057; border: 1px solid #dee2e6; }
+  
+  .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+  .btn-edit-compact { background: #ffc107; color: #000; border: none; }
+  .btn-edit-compact:hover { background: #e0a800; transform: translateY(-2px); }
+  .btn-delete-compact { background: #dc3545; color: white; border: none; }
+  .btn-delete-compact:hover { background: #c82333; transform: translateY(-2px); }
+  
+  .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .btn-primary-compact { background: #2196f3; color: white; border: none; }
+  .btn-primary-compact:hover { background: #1976d2; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4); }
+  .btn-success-compact { background: #4caf50; color: white; border: none; }
+  .btn-success-compact:hover { background: #388e3c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4); }
+  .btn-outline-compact { background: #ff9800; color: white; border: none; }
+  .btn-outline-compact:hover { background: #f57c00; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4); }
+  
+  .stats-compact { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 0.5rem 1rem; border-radius: 6px; display: inline-block; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3); }
+  .stats-compact .label { font-size: 0.7rem; opacity: 0.9; }
+  .stats-compact .value { font-size: 1.25rem; font-weight: 600; }
+  
+  .pagination .page-link { padding: 0.3rem 0.6rem; font-size: 0.875rem; border-radius: 4px; margin: 0 2px; }
+  
+  .sortable-header { cursor: pointer; user-select: none; transition: all 0.2s; position: relative; padding-right: 1.5rem !important; }
+  .sortable-header:hover { background: rgba(124, 77, 255, 0.1); }
+  .sort-icon { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; opacity: 0.5; }
+  .sortable-header.active .sort-icon { opacity: 1; }
+  
+  .table-footer { background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666; }
 </style>
+
+<script src="https://unpkg.com/lucide@latest"></script>
 <div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0 fw-bold"><i class="bi bi-p-square me-2 text-primary"></i>Parking Stations</h2>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('parking_export', search=search) }}" class="btn btn-outline-secondary shadow-sm">
-        <i class="bi bi-download me-1"></i>Export Excel
-      </a>
-      <a href="{{ url_for('parking_print', search=search) }}" target="_blank" class="btn btn-outline-primary shadow-sm">
-        <i class="bi bi-printer me-1"></i>Print / PDF
-      </a>
-      {% if can_see_page('parking_import') %}
-      <a href="{{ url_for('parking_import') }}" class="btn btn-outline-secondary shadow-sm">
-        <i class="bi bi-upload me-1"></i>Import Excel
-      </a>
-      {% endif %}
-      {% if can_see_page('parking_add') %}
-      <a href="{{ url_for('parking_form') }}" class="btn btn-success shadow-sm">
-        <i class="bi bi-plus-circle me-1"></i>Add New Parking
-      </a>
-      {% endif %}
+  <div class="page-header-gradient">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <h2><i class="bi bi-p-square-fill me-2"></i>Parking Stations</h2>
+        <p class="subtitle mb-0" style="display: block; color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem;"><i class="bi bi-info-circle me-1"></i>Manage all parking stations with quick actions</p>
+      </div>
+      <div class="d-flex gap-2">
+        {% if can_see_page('parking_import') %}
+        <a href="{{ url_for('parking_import') }}" class="btn btn-outline-compact top-btn-compact">
+          <i class="bi bi-upload me-1"></i>Import
+        </a>
+        {% endif %}
+        <a href="{{ url_for('parking_export', search=search) }}" class="btn btn-outline-compact top-btn-compact">
+          <i class="bi bi-download me-1"></i>Export
+        </a>
+        <a href="{{ url_for('parking_print', search=search) }}" target="_blank" class="btn btn-outline-compact top-btn-compact">
+          <i class="bi bi-printer me-1"></i>Print
+        </a>
+        {% if can_see_page('parking_add') %}
+        <a href="{{ url_for('parking_form') }}" class="btn btn-success-compact top-btn-compact">
+          <i class="bi bi-plus-circle me-1"></i>Add New
+        </a>
+        {% endif %}
+      </div>
     </div>
   </div>
 
-  <!-- Search + Per-page -->
-  <form method="GET" class="mb-3 auto-search-form">
-    <div class="row g-2 align-items-center">
-      <div class="col-lg-8">
-        <div class="input-group input-group-lg shadow-sm">
-      <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-      <input type="text" name="search" class="form-control border-start-0 ps-0"
-                 placeholder="Search by name, district or location..." value="{{ search }}">
-          <button class="btn btn-primary px-4" type="submit">Search</button>
+  <div class="filter-bar">
+    <form method="GET">
+      <div class="row g-2 align-items-center">
+        <div class="col-md-10">
+          <input type="text" name="search" class="form-control filter-input"
+                 placeholder="Search by station name, district, or location..." value="{{ search }}">
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-primary-compact w-100" type="submit">
+            <i class="bi bi-search"></i>
+          </button>
         </div>
       </div>
-      <div class="col-lg-4 text-lg-end mt-2 mt-lg-0">
-        <div class="d-inline-flex align-items-center gap-2">
-          <span class="small text-muted">Records per page</span>
-          <select name="per_page" class="form-select form-select-sm" onchange="this.form.submit()">
-            {% for size in [10, 20, 50, 100] %}
-              <option value="{{ size }}" {% if per_page == size %}selected{% endif %}>{{ size }}</option>
-            {% endfor %}
-          </select>
-        </div>
+      <input type="hidden" name="sort_by" value="{{ sort_by or 'name' }}">
+      <input type="hidden" name="sort_order" value="{{ sort_order or 'asc' }}">
+    </form>
+  </div>
+
+  <div class="data-table-wrapper">
+    <div class="section-heading d-flex justify-content-between align-items-center">
+      <span>Parking Stations</span>
+      <div class="d-flex align-items-center gap-2">
+        <span style="font-size: 0.875rem; font-weight: 400;">Per Page:</span>
+        <select class="form-select form-select-sm" style="width: 80px; background: white; color: #333; border: 1px solid rgba(255,255,255,0.3);" onchange="window.location.href='{{ url_for('parking_list', search=search, sort_by=sort_by, sort_order=sort_order) }}&per_page=' + this.value">
+          <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+          <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+          <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+        </select>
       </div>
     </div>
-    <input type="hidden" name="direction" value="{{ sort_direction or 'asc' }}">
-  </form>
-
-  <!-- Table Section -->
-  <div class="card shadow-sm border-0">
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table id="parkingTable" class="table table-hover table-sm align-middle mb-0 parking-list-table">
-          <thead class="table-dark">
-            <tr>
-              <th class="ps-2" width="5%">Sr #</th>
-              <th width="5%">ID</th>
-              <th width="16%">
-                <a href="{{ url_for('parking_list', page=pagination.page if pagination else 1, per_page=per_page, search=search, direction='desc' if (sort_direction or 'asc') == 'asc' else 'asc') }}"
-                   class="text-white text-decoration-none d-inline-flex align-items-center">
-                  Station Name
-                  {% if (sort_direction or 'asc') == 'asc' %}
-                    <i class="bi bi-sort-alpha-down ms-1"></i>
-                  {% else %}
-                    <i class="bi bi-sort-alpha-up ms-1"></i>
-                  {% endif %}
-                </a>
-              </th>
-              <th width="16%">District / Tehsil</th>
-              <th width="8%">Capacity</th>
-              <th width="11%">Latitude</th>
-              <th width="11%">Longitude</th>
-              <th width="18%">Address/Location</th>
-              <th class="text-center" width="15%">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for parking in parkings %}
-            <tr>
-              <td class="ps-2 text-muted">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0 compact-table">
+        <thead>
+          <tr>
+            <th width="5%">S.No</th>
+            <th width="5%" class="sortable-header {% if sort_by == 'id' %}active{% endif %}" onclick="sortTable('id')">
+              ID
+              <i data-lucide="{% if sort_by == 'id' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'id' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th width="16%" class="sortable-header {% if sort_by == 'district' %}active{% endif %}" onclick="sortTable('district')">
+              District / Tehsil
+              <i data-lucide="{% if sort_by == 'district' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'district' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th width="16%" class="sortable-header {% if sort_by == 'name' %}active{% endif %}" onclick="sortTable('name')">
+              Station Name
+              <i data-lucide="{% if sort_by == 'name' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'name' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th width="8%" class="sortable-header {% if sort_by == 'capacity' %}active{% endif %}" onclick="sortTable('capacity')">
+              Capacity
+              <i data-lucide="{% if sort_by == 'capacity' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'capacity' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
+            <th width="11%">Latitude</th>
+            <th width="11%">Longitude</th>
+            <th width="18%">Address</th>
+            <th class="text-center" width="10%">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for parking in parkings %}
+          <tr>
+            <td>
+              <span class="badge-sm badge-success">
                 {% if pagination %}
                   {{ (pagination.page - 1) * per_page + loop.index }}
                 {% else %}
                   {{ loop.index }}
                 {% endif %}
-              </td>
-              <td class="text-muted">{{ parking.id }}</td>
-              <td class="fw-bold">{{ parking.name }}</td>
-              <td>
-                <span class="text-dark">{{ parking.district or '-' }}</span> /
-                <small class="text-muted">{{ parking.tehsil or '-' }}</small>
-              </td>
-              <td><span class="badge bg-info text-dark">{{ parking.capacity }} Vehicles</span></td>
-              <td><span class="text-muted" style="font-size:0.8rem;">{{ parking.latitude or '-' }}</span></td>
-              <td><span class="text-muted" style="font-size:0.8rem;">{{ parking.longitude or '-' }}</span></td>
-              <td>{{ parking.address_location|truncate(35) or '-' }}</td>
-              <td class="text-center actions-cell">
+              </span>
+            </td>
+            <td><span class="badge-sm badge-light">#{{ parking.id }}</span></td>
+            <td>
+              <div><i class="bi bi-geo-alt-fill me-1 text-primary"></i><strong>{{ parking.district or '-' }}</strong></div>
+              <small class="text-muted">{{ parking.tehsil or '-' }}</small>
+            </td>
+            <td><i class="bi bi-building me-1 text-success"></i><strong>{{ parking.name }}</strong></td>
+            <td><span class="badge-sm badge-info"><i class="bi bi-car-front me-1"></i>{{ parking.capacity }}</span></td>
+            <td><small class="text-muted"><i class="bi bi-compass me-1"></i>{{ parking.latitude or '-' }}</small></td>
+            <td><small class="text-muted"><i class="bi bi-compass me-1"></i>{{ parking.longitude or '-' }}</small></td>
+            <td><small><i class="bi bi-pin-map me-1"></i>{{ parking.address_location|truncate(30) or '-' }}</small></td>
+            <td class="text-center">
+              <div class="d-flex gap-1 justify-content-center">
                 {% if can_see_page('parking_edit') %}
-                <a href="{{ url_for('parking_form', id=parking.id) }}" class="btn btn-sm btn-warning me-1" title="Edit">
-                  <i class="bi bi-pencil-square"></i>
+                <a href="{{ url_for('parking_form', id=parking.id) }}" class="btn btn-compact btn-edit-compact" title="Edit">
+                  <i class="bi bi-pencil"></i>
                 </a>
                 {% endif %}
                 {% if can_see_page('parking_delete') %}
                 <form action="{{ url_for('delete_parking', id=parking.id) }}" method="POST" style="display:inline;">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete parking station {{ parking.name }}?')">
+                  <button type="submit" class="btn btn-compact btn-delete-compact" title="Delete" onclick="return confirm('Delete parking station {{ parking.name }}?')">
                     <i class="bi bi-trash"></i>
                   </button>
                 </form>
                 {% endif %}
-              </td>
-            </tr>
-            {% else %}
-            <tr>
-              <td colspan="9" class="text-center py-5">
-                <div class="text-muted">
-                  <i class="bi bi-geo-alt fs-1 d-block mb-3"></i>
-                  <p>No parking stations found.{% if can_see_page('parking_add') %} <a href="{{ url_for('parking_form') }}">Add your first station</a>.{% endif %}</p>
-                </div>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div class="card-footer bg-light text-muted border-0 px-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-      <div class="mb-2 mb-md-0">
-        Total Stations: <strong>{{ pagination.total if pagination else parkings|length }}</strong>
-      </div>
-      {% if pagination %}
-      <nav>
-        <ul class="pagination pagination-sm mb-0">
-          {% if pagination.has_prev %}
-          <li class="page-item">
-            <a class="page-link" href="{{ url_for('parking_list', page=pagination.prev_num, per_page=per_page, search=search, direction=sort_direction or 'asc') }}">Previous</a>
-          </li>
-          {% endif %}
-          {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-            {% if p %}
-              <li class="page-item {% if p == pagination.page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('parking_list', page=p, per_page=per_page, search=search, direction=sort_direction or 'asc') }}">{{ p }}</a>
-              </li>
-            {% else %}
-              <li class="page-item disabled"><span class="page-link">…</span></li>
-            {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" class="text-center py-4">
+              <div class="text-muted">
+                <i class="bi bi-geo-alt fs-3 d-block mb-2"></i>
+                <p>No parking stations found.{% if can_see_page('parking_add') %} <a href="{{ url_for('parking_form') }}">Add your first station</a>.{% endif %}</p>
+              </div>
+            </td>
+          </tr>
           {% endfor %}
-          {% if pagination.has_next %}
-          <li class="page-item">
-            <a class="page-link" href="{{ url_for('parking_list', page=pagination.next_num, per_page=per_page, search=search, direction=sort_direction or 'asc') }}">Next</a>
-          </li>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-footer">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <i class="bi bi-list-ul me-1"></i>Showing 
+          {% if pagination %}
+            {{ (pagination.page - 1) * per_page + 1 }} to {{ (pagination.page - 1) * per_page + parkings|length }} of {{ pagination.total }}
+          {% else %}
+            {{ '1' if parkings|length > 0 else '0' }} to {{ parkings|length }} of {{ parkings|length }}
           {% endif %}
-        </ul>
-      </nav>
-      {% endif %}
+          entries
+        </div>
+        {% if pagination %}
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            {% if pagination.has_prev %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('parking_list', page=pagination.prev_num, per_page=per_page, search=search, sort_by=sort_by, sort_order=sort_order) }}">
+                <i class="bi bi-chevron-left"></i>
+              </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+              <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+            </li>
+            {% endif %}
+            {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+              {% if p %}
+                <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                  <a class="page-link" href="{{ url_for('parking_list', page=p, per_page=per_page, search=search, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+                </li>
+              {% else %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+              {% endif %}
+            {% endfor %}
+            {% if pagination.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('parking_list', page=pagination.next_num, per_page=per_page, search=search, sort_by=sort_by, sort_order=sort_order) }}">
+                <i class="bi bi-chevron-right"></i>
+              </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+              <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+            </li>
+            {% endif %}
+          </ul>
+        </nav>
+        {% endif %}
+      </div>
     </div>
   </div>
 </div>
+
+<script>
+  lucide.createIcons();
+  
+  function sortTable(column) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentSort = urlParams.get('sort_by');
+    const currentOrder = urlParams.get('sort_order') || 'asc';
+    
+    let newOrder = 'asc';
+    if (currentSort === column && currentOrder === 'asc') {
+      newOrder = 'desc';
+    }
+    
+    urlParams.set('sort_by', column);
+    urlParams.set('sort_order', newOrder);
+    
+    window.location.search = urlParams.toString();
+  }
+</script>
 {% endblock %}

@@ -3,122 +3,239 @@
 {% block title %}Assign District to Project{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <h2 class="mb-0">
-      <i class="bi bi-geo-alt-fill me-2 text-primary"></i>
-      Assign District to Project
-    </h2>
-    <div class="d-flex flex-wrap gap-2">
-      <a href="{{ url_for('assign_project_to_district_export', search=search or '', project_id=project_id, district_id=district_id) }}" class="btn btn-outline-success btn-sm">
-        <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
-      </a>
-      <a href="{{ url_for('assign_project_to_district_print', search=search or '', project_id=project_id, district_id=district_id) }}" target="_blank" class="btn btn-outline-primary btn-sm">
-        <i class="bi bi-printer me-1"></i>Print / Preview
-      </a>
-      {% if can_see_page('assign_project_to_district_add') %}
-      <a href="{{ url_for('assign_project_to_district_new') }}" class="btn btn-success">
-        <i class="bi bi-plus-circle me-1"></i>Assign New District
-      </a>
-      {% endif %}
-    </div>
-  </div>
+<style>
+    body { background: #f8f9fa; }
+    
+    .page-header-gradient { 
+        background: #fff; 
+        padding: 0; 
+        margin-bottom: 1rem; 
+    }
+    .page-header-gradient h2 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+    .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+    
+    .table-footer { background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666; }
+    
+    .section-heading { 
+        background: #9c27b0; 
+        color: white; 
+        padding: 0.75rem 1rem; 
+        font-size: 1rem; 
+        font-weight: 600; 
+        border-radius: 4px 4px 0 0; 
+        margin: 0;
+    }
+    
+    .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+    .filter-input:focus { border-color: #9c27b0; box-shadow: 0 0 0 2px rgba(156, 39, 176, 0.1); }
+    
+    .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .compact-table { font-size: 0.875rem; margin: 0; }
+    .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #9c27b0; }
+    .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
+    
+    .compact-table tbody tr { 
+        border-bottom: 1px solid #f0f0f0; 
+        transition: all 0.3s ease; 
+        cursor: pointer;
+    }
+    .compact-table tbody tr:hover { 
+        background: linear-gradient(to right, #f9f0ff 0%, #ffffff 100%); 
+        transform: translateX(5px);
+        box-shadow: 0 2px 8px rgba(156, 39, 176, 0.15);
+    }
+    .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+    
+    .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+    .badge-primary { background: linear-gradient(135deg, #9c27b0 0%, #e91e63 100%); color: white; }
+    .badge-info { background: #17a2b8; color: white; }
+    .badge-success { background: #28a745; color: white; }
+    .badge-light { background: #f8f9fa; color: #495057; border: 1px solid #dee2e6; }
+    
+    .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+    .btn-edit-compact { background: #ffc107; color: #000; border: none; }
+    .btn-edit-compact:hover { background: #e0a800; transform: translateY(-2px); }
+    .btn-delete-compact { background: #dc3545; color: white; border: none; }
+    .btn-delete-compact:hover { background: #c82333; transform: translateY(-2px); }
+    
+    .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .btn-primary-compact { background: #2196f3; color: white; border: none; }
+    .btn-primary-compact:hover { background: #1976d2; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4); }
+    .btn-success-compact { background: #4caf50; color: white; border: none; }
+    .btn-success-compact:hover { background: #388e3c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4); }
+    .btn-outline-compact { background: #ff9800; color: white; border: none; }
+    .btn-outline-compact:hover { background: #f57c00; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4); }
+    
+    /* Sortable Headers */
+    .sortable-header { cursor: pointer; user-select: none; transition: all 0.2s; position: relative; padding-right: 1.5rem !important; }
+    .sortable-header:hover { background: rgba(156, 39, 176, 0.1); }
+    .sort-icon { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; opacity: 0.5; }
+    .sortable-header.active .sort-icon { opacity: 1; }
+</style>
 
-  <form method="GET" class="mb-3">
-    <div class="row g-2 align-items-end">
-      <div class="col-md-3">
-        <label class="form-label small text-muted mb-0">Project</label>
-        <select name="project_id" class="form-select form-select-sm">
-          {% for val, label in project_choices %}
-          <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label small text-muted mb-0">District</label>
-        <select name="district_id" class="form-select form-select-sm">
-          {% for val, label in district_choices %}
-          <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-4">
-        <label class="form-label small text-muted mb-0">Search</label>
-        <div class="input-group input-group-sm">
-          <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
-          <input type="text" name="search" class="form-control" placeholder="Project, District, Date, Remarks..." value="{{ search or '' }}">
-        </div>
-      </div>
-      <div class="col-md-2">
-        <button class="btn btn-primary btn-sm w-100" type="submit"><i class="bi bi-search me-1"></i>Apply</button>
-      </div>
-    </div>
-    <div class="mt-2">
-      {% if search or project_id or district_id %}
-      <a href="{{ url_for('assign_project_to_district') }}" class="btn btn-outline-secondary btn-sm">Clear</a>
-      {% endif %}
-    </div>
-  </form>
+<script src="https://unpkg.com/lucide@latest"></script>
 
-  <div class="card shadow-sm">
-    <div class="card-header bg-primary text-white">
-      <h5 class="mb-0">Assigned Districts</h5>
-    </div>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-striped table-hover mb-0">
-          <thead>
-            <tr>
-              <th>Project Name</th>
-              <th>District Name</th>
-              <th>Assign Date</th>
-              <th>Remarks</th>
-              <th class="text-end">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for link, project, district in assigned %}
-            <tr>
-              <td>{{ project.name }}</td>
-              <td>{{ district.name }}</td>
-              <td>{{ link.assign_date.strftime('%Y-%m-%d') if link.assign_date else '-' }}</td>
-              <td>{{ link.remarks or '-' }}</td>
-              <td class="text-end">
-                {% if can_see_page('assign_project_to_district_edit') %}
-                <a href="{{ url_for('assign_project_to_district_edit', project_id=project.id, district_id=district.id) }}" 
-                   class="btn btn-sm btn-warning me-1">
-                  <i class="bi bi-pencil-square"></i> Edit
+<div class="container-fluid py-4 px-4">
+    <div class="page-header-gradient">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2><i class="bi bi-geo-alt-fill me-2"></i>District to Project Assignments</h2>
+                <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>Manage district assignments to projects</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('assign_project_to_district_export', search=search or '', project_id=project_id, district_id=district_id) }}" class="btn btn-outline-compact top-btn-compact">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Export
+                </a>
+                <a href="{{ url_for('assign_project_to_district_print', search=search or '', project_id=project_id, district_id=district_id) }}" target="_blank" class="btn btn-outline-compact top-btn-compact">
+                    <i class="bi bi-eye me-1"></i>Print
+                </a>
+                {% if can_see_page('assign_project_to_district_add') %}
+                <a href="{{ url_for('assign_project_to_district_new') }}" class="btn btn-success-compact top-btn-compact">
+                    <i class="bi bi-plus-lg me-1"></i>Assign New
                 </a>
                 {% endif %}
-                {% if can_see_page('assign_project_to_district_desassign') %}
-                <form action="{{ url_for('desassign_district_from_project', project_id=project.id, district_id=district.id) }}" 
-                      method="POST" style="display:inline;">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-sm btn-outline-danger" 
-                          onclick="return confirm('Desassign {{ district.name }} from {{ project.name }}?')">
-                    <i class="bi bi-arrow-left-right"></i> Desassign
-                  </button>
-                </form>
-                {% endif %}
-              </td>
-            </tr>
-            {% else %}
-            <tr>
-              <td colspan="5" class="text-center py-5">
-                <div class="alert alert-info mb-0">
-                  No districts assigned to any project yet.
-                  <a href="{{ url_for('assign_project_to_district_new') }}" class="alert-link">Assign now</a>.
+            </div>
+        </div>
+    </div>
+
+    <div class="filter-bar">
+        <form method="GET" action="{{ url_for('assign_project_to_district') }}">
+            <div class="row g-2 align-items-center mb-2">
+                <div class="col-md-2">
+                    <input type="text" name="from_date" class="form-control filter-input datepicker" 
+                           placeholder="From Date (dd-mm-yyyy)" value="{{ from_date or '' }}" autocomplete="off">
                 </div>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+                <div class="col-md-2">
+                    <input type="text" name="to_date" class="form-control filter-input datepicker" 
+                           placeholder="To Date (dd-mm-yyyy)" value="{{ to_date or '' }}" autocomplete="off">
+                </div>
+                <div class="col-md-2">
+                    <select name="project_id" class="form-select filter-input">
+                        {% for val, label in project_choices %}
+                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="district_id" class="form-select filter-input">
+                        {% for val, label in district_choices %}
+                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="text" name="search" class="form-control filter-input" 
+                           placeholder="Search..." 
+                           value="{{ search or '' }}">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary-compact w-100">
+                        <i class="bi bi-funnel"></i>
+                    </button>
+                </div>
+            </div>
+            {% if search or project_id or district_id or from_date or to_date %}
+            <a href="{{ url_for('assign_project_to_district') }}" class="btn btn-outline-secondary btn-sm">Clear Filters</a>
+            {% endif %}
+        </form>
     </div>
-    <div class="card-footer bg-light text-muted small">
-      Total: <strong>{{ assigned|length }}</strong> assignment(s){% if search %} matching "{{ search }}"{% endif %}{% if project_id %} for selected project{% endif %}{% if district_id %} for selected district{% endif %}
+
+    <div class="data-table-wrapper">
+        <div class="section-heading">Assigned Districts</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 compact-table">
+                <thead>
+                    <tr>
+                        <th width="5%">Sr No</th>
+                        <th width="30%" class="sortable-header {% if sort_by == 'project' %}active{% endif %}" onclick="sortTable('project')">
+                            Project Name
+                            <i data-lucide="{% if sort_by == 'project' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'project' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+                        </th>
+                        <th width="25%" class="sortable-header {% if sort_by == 'district' %}active{% endif %}" onclick="sortTable('district')">
+                            District Name
+                            <i data-lucide="{% if sort_by == 'district' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'district' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+                        </th>
+                        <th width="15%" class="sortable-header {% if sort_by == 'assign_date' %}active{% endif %}" onclick="sortTable('assign_date')">
+                            Assign Date
+                            <i data-lucide="{% if sort_by == 'assign_date' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'assign_date' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+                        </th>
+                        <th width="15%">Remarks</th>
+                        <th class="text-center" width="10%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for link, project, district in assigned %}
+                    <tr>
+                        <td>
+                            <span class="badge-sm badge-primary">{{ loop.index }}</span>
+                        </td>
+                        <td>
+                            <i class="bi bi-folder2 me-1 text-primary"></i><strong>{{ project.name }}</strong>
+                        </td>
+                        <td>
+                            <span class="badge-sm badge-info"><i class="bi bi-geo-alt me-1"></i>{{ district.name }}</span>
+                        </td>
+                        <td>
+                            <small><i class="bi bi-calendar-check me-1"></i>{{ link.assign_date.strftime('%d %b, %Y') if link.assign_date else 'Not Set' }}</small>
+                        </td>
+                        <td>
+                            <small class="text-muted">{{ link.remarks or '-' }}</small>
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex justify-content-center gap-1">
+                                {% if can_see_page('assign_project_to_district_edit') %}
+                                <a href="{{ url_for('assign_project_to_district_edit', project_id=project.id, district_id=district.id) }}" class="btn btn-compact btn-edit-compact" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% endif %}
+                                
+                                {% if can_see_page('assign_project_to_district_desassign') %}
+                                <form action="{{ url_for('desassign_district_from_project', project_id=project.id, district_id=district.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Desassign {{ district.name }} from {{ project.name }}?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-compact btn-delete-compact" title="Desassign">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+                            No districts assigned to any project yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="table-footer">
+            Showing {{ '1' if assigned|length > 0 else '0' }} to {{ assigned|length }} of {{ assigned|length }} entries
+        </div>
     </div>
-  </div>
 </div>
+
+<script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+    
+    function sortTable(column) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentSort = urlParams.get('sort_by');
+        const currentOrder = urlParams.get('sort_order') || 'desc';
+        
+        let newOrder = 'asc';
+        if (currentSort === column && currentOrder === 'asc') {
+            newOrder = 'desc';
+        }
+        
+        urlParams.set('sort_by', column);
+        urlParams.set('sort_order', newOrder);
+        
+        window.location.search = urlParams.toString();
+    }
+</script>
 {% endblock %}
