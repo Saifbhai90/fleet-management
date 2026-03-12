@@ -228,6 +228,45 @@ ENDPOINT_PERMISSION_MAP = [
     ('notification_list', 'notification_list'),
     ('notification_add', 'notification_add'),
     ('notification_mark_read', 'notification_list'),
+    # Master data – Print / Export (require same permission as the list page)
+    ('companies_print', 'companies_list'),
+    ('company_projects', 'projects_list'),
+    ('projects_print', 'projects_list'),
+    ('projects_export', 'projects_list'),
+    ('vehicles_print', 'vehicles_list'),
+    ('vehicles_export', 'vehicles_list'),
+    ('drivers_print', 'drivers_list'),
+    ('drivers_export', 'drivers_list'),
+    ('employees_print', 'employees_list'),
+    ('employees_export', 'employees_list'),
+    ('parking_print', 'parking_list'),
+    ('parking_export', 'parking_list'),
+    # Internal API helpers – tied to their feature permissions
+    ('api_check_cnic', 'drivers_list'),
+    ('api_check_license', 'drivers_list'),
+    ('api_parties', 'party_list'),
+    ('get_left_drivers_by_vehicle', 'driver_rejoin_list'),
+    ('check_vehicle_shifts', 'assign_driver_to_vehicle'),
+    # Fuel expense helper APIs
+    ('api_fuel_expense_last_reading', 'fuel_expense'),
+    ('api_fuel_expense_task_readings', 'fuel_expense'),
+    ('api_fuel_expense_suggested_price', 'fuel_expense'),
+    ('api_fuel_expense_price_hint', 'fuel_expense'),
+    # Oil expense helper APIs
+    ('api_oil_expense_last_reading', 'oil_expense'),
+    ('api_oil_expense_products_for_oil', 'oil_expense'),
+    ('api_oil_expense_product_balance', 'oil_expense'),
+    # Maintenance expense helper APIs
+    ('api_maintenance_expense_last_reading', 'maintenance_expense'),
+    ('api_maintenance_expense_products', 'maintenance_expense'),
+    # Attendance helper APIs
+    ('api_parking_stations_with_coords', 'driver_attendance_checkin'),
+    ('api_attendance_projects', 'driver_attendance_checkin'),
+    ('api_attendance_vehicles', 'driver_attendance_checkin'),
+    ('api_attendance_drivers', 'driver_attendance_checkin'),
+    ('api_attendance_filtered_drivers', 'driver_attendance_list'),
+    ('api_attendance_time_window', 'driver_attendance_checkin'),
+    ('api_attendance_has_gps_checkin', 'driver_attendance_checkout'),
 ]
 
 
@@ -366,7 +405,8 @@ def seed_auth_tables(app):
                 password_hash=generate_password_hash('master'),
                 full_name='Master (Developer)',
                 role_id=master_role.id,
-                is_active=True
+                is_active=True,
+                force_password_change=True,
             )
             db.session.add(master_user)
             db.session.commit()
@@ -378,7 +418,8 @@ def seed_auth_tables(app):
                 password_hash=generate_password_hash('admin'),
                 full_name='Administrator',
                 role_id=admin_role.id,
-                is_active=True
+                is_active=True,
+                force_password_change=True,
             )
             db.session.add(admin_user)
             db.session.commit()

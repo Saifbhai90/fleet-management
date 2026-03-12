@@ -28,8 +28,15 @@ try:
 except ImportError:
     pass
 
-# Secret key / DB config (env first, fallback to current defaults)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-me-please-make-it-strong')
+# Secret key — MUST be set via environment variable. No fallback allowed (prevents session forgery).
+_secret_key = os.environ.get('SECRET_KEY', '').strip()
+if not _secret_key:
+    raise RuntimeError(
+        "SECRET_KEY environment variable is not set. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\" "
+        "and add it to your .env file or deployment environment."
+    )
+app.config['SECRET_KEY'] = _secret_key
 # When "Remember me" is checked, session lasts this long (default 7 days)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=int(os.environ.get('SESSION_DAYS', '7')))
 
@@ -60,9 +67,11 @@ app.config['BACKUP_EMAIL_TO'] = (os.environ.get('BACKUP_EMAIL_TO') or '').strip(
 
 # Session timeout; PERMANENT_SESSION_LIFETIME when "Remember me" is checked
 app.config['SESSION_TIMEOUT_MINUTES'] = int(os.environ.get('SESSION_TIMEOUT_MINUTES', '60'))
-# On Render: set SESSION_COOKIE_SECURE=true in Environment so cookie is sent only over HTTPS (use with ProxyFix).
-if os.environ.get('SESSION_COOKIE_SECURE', '').lower() in ('1', 'true', 'yes'):
-    app.config['SESSION_COOKIE_SECURE'] = True
+# Secure by default (HTTPS only). Set SESSION_COOKIE_SECURE=false in .env for local HTTP development only.
+_cookie_secure_env = os.environ.get('SESSION_COOKIE_SECURE', 'true').lower()
+app.config['SESSION_COOKIE_SECURE'] = _cookie_secure_env not in ('0', 'false', 'no')
+# HttpOnly: JS cannot read the session cookie (XSS mitigation)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
 # Avoid redirect/cookie issues behind HTTPS proxy (Render)
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 # Attendance time control: timezone for comparing current time with Morning/Night windows (e.g. Asia/Karachi)

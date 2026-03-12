@@ -94,6 +94,18 @@ def require_login():
         return  # First-time password set flow (no full login yet)
     if not session.get('user'):
         return redirect(url_for('login'))
+    # Remember Me revocation: permanent sessions bypass timeout, so verify user is still active in DB
+    if getattr(session, 'permanent', False):
+        try:
+            _uid = session.get('user_id')
+            if _uid:
+                _u = User.query.get(_uid)
+                if not _u or not _u.is_active:
+                    session.clear()
+                    flash('Your account has been deactivated. Please contact administrator.', 'danger')
+                    return redirect(url_for('login'))
+        except Exception:
+            pass
     # Session timeout (unless "remember me" made session permanent)
     timeout_mins = app.config.get('SESSION_TIMEOUT_MINUTES', 60)
     last = session.get('last_activity')
@@ -2539,10 +2551,7 @@ def logout():
             db.session.commit()
     except Exception:
         db.session.rollback()
-    session.pop('login_log_id', None)
-    session.pop('user_id', None)
-    session.pop('user', None)
-    session.pop('permissions', None)
+    session.clear()  # Destroy ALL session data: is_master, is_admin, permissions, allowed_*, last_activity, etc.
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
