@@ -168,6 +168,13 @@ class DriverImportForm(FlaskForm):
     submit = SubmitField('Import')
 
 
+class EmployeeImportForm(FlaskForm):
+    file = FileField('Employee Excel/CSV', validators=[
+        FileAllowed(['xlsx', 'xls', 'csv'], 'Only Excel or CSV files allowed')
+    ])
+    submit = SubmitField('Import')
+
+
 # Parking Form
 class ParkingForm(FlaskForm):
     name = StringField('Parking Station Name', validators=[DataRequired(), Length(max=100)])
