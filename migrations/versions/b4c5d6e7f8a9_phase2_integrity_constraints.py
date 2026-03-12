@@ -24,17 +24,32 @@ branch_labels = None
 depends_on = None
 
 
+def _is_sqlite(conn):
+    return conn.dialect.name == 'sqlite'
+
+
 def _table_exists(conn, table_name):
-    result = conn.execute(sa.text(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=:t"
-    ), {'t': table_name})
+    if _is_sqlite(conn):
+        result = conn.execute(sa.text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=:t"
+        ), {'t': table_name})
+    else:
+        result = conn.execute(sa.text(
+            "SELECT tablename FROM information_schema.tables "
+            "WHERE table_schema='public' AND tablename=:t"
+        ), {'t': table_name})
     return result.fetchone() is not None
 
 
 def _index_exists(conn, index_name):
-    result = conn.execute(sa.text(
-        "SELECT name FROM sqlite_master WHERE type='index' AND name=:n"
-    ), {'n': index_name})
+    if _is_sqlite(conn):
+        result = conn.execute(sa.text(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name=:n"
+        ), {'n': index_name})
+    else:
+        result = conn.execute(sa.text(
+            "SELECT indexname FROM pg_indexes WHERE indexname=:n"
+        ), {'n': index_name})
     return result.fetchone() is not None
 
 
