@@ -35,8 +35,8 @@ def _table_exists(conn, table_name):
         ), {'t': table_name})
     else:
         result = conn.execute(sa.text(
-            "SELECT tablename FROM information_schema.tables "
-            "WHERE table_schema='public' AND tablename=:t"
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema='public' AND table_name=:t"
         ), {'t': table_name})
     return result.fetchone() is not None
 
