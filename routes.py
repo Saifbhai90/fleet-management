@@ -1700,6 +1700,9 @@ def driver_form(id=None):
             if id or not (not id and driver.cnic_no and (driver.cnic_no or '').strip() and u):
                 flash(f"Driver '{driver.name}' successfully {'updated' if id else 'added'}!", 'success')
             return redirect(url_for('drivers_list'))
+        except IntegrityError:
+            db.session.rollback()
+            flash('Duplicate entry: Driver ID, CNIC, or License No already exists in the system.', 'danger')
         except Exception as e:
             db.session.rollback()
             flash(f"Error saving driver: {str(e)}", 'danger')
@@ -4098,9 +4101,17 @@ def assign_vehicle_to_district_new():
     if form.validate_on_submit():
         try:
             vehicle = Vehicle.query.get(form.vehicle_id.data)
-            if vehicle:
-                vehicle.project_id = form.project_id.data
-                vehicle.district_id = form.district_id.data
+            project = Project.query.get(form.project_id.data)
+            district = District.query.get(form.district_id.data)
+            if not vehicle:
+                flash("Selected vehicle not found.", "danger")
+            elif not project:
+                flash("Selected project does not exist.", "danger")
+            elif not district:
+                flash("Selected district does not exist.", "danger")
+            else:
+                vehicle.project_id = project.id
+                vehicle.district_id = district.id
                 vehicle.assign_to_district_date = form.assign_date.data
                 vehicle.assignment_remarks = form.remarks.data
                 db.session.commit()

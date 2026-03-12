@@ -83,6 +83,18 @@ print("Connecting to database...")
 db.init_app(app)
 Migrate(app, db)
 
+# SQLite: FK constraints are OFF by default. Enable them for every new connection.
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+import sqlite3
+
+@event.listens_for(Engine, "connect")
+def _set_sqlite_pragma(dbapi_conn, connection_record):
+    if isinstance(dbapi_conn, sqlite3.Connection):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 # Jinja filters: date dd-mm-yyyy, CNIC, phone
 from utils import format_date_ddmmyyyy, format_cnic, format_phone
 app.jinja_env.filters['ddmmyyyy'] = format_date_ddmmyyyy

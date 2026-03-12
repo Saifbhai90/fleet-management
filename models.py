@@ -53,7 +53,7 @@ class Company(db.Model):
 # ────────────────────────────────────────────────
 class Project(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(150), nullable=False, index=True)
+    name = db.Column(db.String(150), nullable=False, unique=True, index=True)
     start_date = db.Column(db.Date, index=True)
     status = db.Column(db.String(20), default='Active', index=True)  # 'Active' or 'Inactive'
     inactive_date = db.Column(db.Date)
@@ -127,7 +127,7 @@ class Employee(db.Model):
     dob = db.Column(db.Date)
     education = db.Column(db.String(50))
     marital_status = db.Column(db.String(20))
-    cnic_no = db.Column(db.String(20))
+    cnic_no = db.Column(db.String(20), unique=True)
     district = db.Column(db.String(100))
     address = db.Column(db.Text)
 
@@ -236,8 +236,8 @@ class Vehicle(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     vehicle_no = db.Column(db.String(50), unique=True, nullable=False, index=True)
     model = db.Column(db.String(100), nullable=False, index=True)
-    engine_no = db.Column(db.String(50))
-    chassis_no = db.Column(db.String(50))
+    engine_no = db.Column(db.String(50), unique=True)
+    chassis_no = db.Column(db.String(50), unique=True)
     vehicle_type = db.Column(db.String(50), index=True)
     phone_no = db.Column(db.String(20))
     active_date = db.Column(db.Date, index=True)
@@ -272,6 +272,7 @@ class Vehicle(db.Model):
 # Parking Station Model
 # ────────────────────────────────────────────────
 class ParkingStation(db.Model):
+    __table_args__ = (db.UniqueConstraint('name', 'district', name='uq_parking_name_district'),)
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, index=True)
     district = db.Column(db.String(100), index=True)
@@ -445,6 +446,7 @@ class DriverStatusChange(db.Model):
 # ────────────────────────────────────────────────
 class DriverAttendance(db.Model):
     __tablename__ = 'driver_attendance'
+    __table_args__ = (db.UniqueConstraint('driver_id', 'attendance_date', name='uq_attendance_driver_date'),)
     id = db.Column(db.Integer, primary_key=True)
     driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=False)
     attendance_date = db.Column(db.Date, nullable=False)
@@ -609,6 +611,7 @@ class Party(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
     party_type = db.Column(db.String(30), nullable=False)  # Pump, Workshop, Spare parts shop
+    __table_args__ = (db.UniqueConstraint('name', 'party_type', name='uq_party_name_type'),)
     district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
     contact = db.Column(db.String(100), nullable=True)
     address = db.Column(db.String(255), nullable=True)
@@ -627,7 +630,7 @@ class Party(db.Model):
 class Product(db.Model):
     __tablename__ = 'product'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(150), nullable=False)
+    name = db.Column(db.String(150), nullable=False, unique=True)
     used_in_forms = db.Column(db.String(100), nullable=True)  # comma-separated: Fueling,Oil,Maintenance
     remarks = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

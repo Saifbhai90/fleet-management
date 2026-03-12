@@ -93,9 +93,9 @@ class DriverForm(FlaskForm):
     name = StringField('Full Name', validators=[DataRequired()])
     father_name = StringField('Father Name', validators=[DataRequired()])
     dob = DateField('Date of Birth', format='%d-%m-%Y', validators=[DataRequired()])
-    phone1 = StringField('Phone No 1', validators=[DataRequired()], render_kw={"placeholder": "0300-1110810"})
-    phone2 = StringField('Phone No 2', render_kw={"placeholder": "03xx-xxxxxxx"})
-    emergency_no = StringField('Emergency No', validators=[DataRequired()], render_kw={"placeholder": "03xx-xxxxxxx"})
+    phone1 = StringField('Phone No 1', validators=[DataRequired(), Regexp(r'^03[0-9]{2}-[0-9]{7}$', message='Format: 0300-1110810')], render_kw={"placeholder": "0300-1110810"})
+    phone2 = StringField('Phone No 2', validators=[Optional(), Regexp(r'^03[0-9]{2}-[0-9]{7}$', message='Format: 0300-1110810')], render_kw={"placeholder": "03xx-xxxxxxx"})
+    emergency_no = StringField('Emergency No', validators=[DataRequired(), Regexp(r'^03[0-9]{2}-[0-9]{7}$', message='Format: 03xx-xxxxxxx')], render_kw={"placeholder": "03xx-xxxxxxx"})
     address = TextAreaField('Address', validators=[DataRequired()])
     education = SelectField('Education', choices=[
         ('Middle', 'Middle'),
@@ -140,16 +140,29 @@ class DriverForm(FlaskForm):
 
     submit = SubmitField('Save Driver Data')
 
+    def validate_cnic_expiry_date(self, field):
+        if field.data and self.cnic_issue_date.data:
+            if field.data <= self.cnic_issue_date.data:
+                raise ValidationError('CNIC Expiry Date must be after Issue Date.')
+
+    def validate_license_expiry_date(self, field):
+        if field.data and self.license_issue_date.data:
+            if field.data <= self.license_issue_date.data:
+                raise ValidationError('License Expiry Date must be after Issue Date.')
+
+    def validate_dob(self, field):
+        if field.data:
+            from datetime import date
+            today = date.today()
+            if field.data >= today:
+                raise ValidationError('Date of Birth cannot be today or in the future.')
+            age = (today - field.data).days // 365
+            if age < 18:
+                raise ValidationError('Driver must be at least 18 years old.')
+
 
 class DriverImportForm(FlaskForm):
     file = FileField('Driver Excel/CSV', validators=[
-        FileAllowed(['xlsx', 'xls', 'csv'], 'Only Excel or CSV files allowed')
-    ])
-    submit = SubmitField('Import')
-
-
-class EmployeeImportForm(FlaskForm):
-    file = FileField('Employee Excel/CSV', validators=[
         FileAllowed(['xlsx', 'xls', 'csv'], 'Only Excel or CSV files allowed')
     ])
     submit = SubmitField('Import')
@@ -238,7 +251,7 @@ class AssignVehicleToParkingForm(FlaskForm):
     project_id = SelectField('Select Project', coerce=int, validators=[DataRequired()])
     district_id = SelectField('Select District', coerce=int, validators=[DataRequired()])
     vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired()])
-    parking_station_id = SelectField('Select Parking Station', coerce=int, validators=[DataRequired()])
+    parking_station_id = SelectField('Select Parking Station', coerce=int, validators=[DataRequired(), NumberRange(min=1, message='Please select a parking station.')])
     assign_date = DateField('Assign Date', format='%d-%m-%Y', validators=[DataRequired()])
     remarks = TextAreaField('Remarks (Optional)')
     submit = SubmitField('Finalize Parking Assignment')
