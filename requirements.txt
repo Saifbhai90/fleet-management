@@ -3,8 +3,6 @@ APScheduler==3.10.4
 blinker==1.9.0
 click==8.3.1
 colorama==0.4.6
-customtkinter==5.2.2
-darkdetect==0.8.0
 dnspython==2.8.0
 email-validator==2.3.0
 et_xmlfile==2.0.0
@@ -34,3 +32,4 @@ typing_extensions==4.15.0
 tzdata==2025.3
 Werkzeug==3.1.6
 WTForms==3.2.1
+XlsxWriter==3.2.3
