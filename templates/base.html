@@ -218,9 +218,23 @@
         .mobile-nav-item i { font-size: 1.25rem; line-height: 1; }
         .mobile-nav-item svg { width: 22px; height: 22px; }
         .mobile-nav-item.active { color: #60a5fa; position: relative; }
-        .mobile-nav-item.active::after { content: ''; position: absolute; top: 5px; left: 50%; transform: translateX(-50%); width: 22px; height: 3px; background: #60a5fa; border-radius: 3px; }
-        .mobile-nav-item.active i, .mobile-nav-item.active svg { filter: drop-shadow(0 0 5px rgba(96,165,250,0.75)); }
-        .mobile-nav-item:active { background: rgba(255,255,255,0.07); color: #fff; }
+        .mobile-nav-item.active::before {
+            content: ''; position: absolute; top: 5px; left: 50%;
+            transform: translateX(-50%) scale(1);
+            width: 48px; height: 30px;
+            background: rgba(96,165,250,0.18);
+            border-radius: 24px; z-index: 0;
+            transition: transform 0.25s cubic-bezier(.34,1.56,.64,1);
+        }
+        .mobile-nav-item > i, .mobile-nav-item > svg, .mobile-nav-item > span { position: relative; z-index: 1; }
+        .mobile-nav-item.active i, .mobile-nav-item.active svg {
+            filter: drop-shadow(0 0 6px rgba(96,165,250,0.9));
+            transform: translateY(-2px);
+            transition: transform 0.2s cubic-bezier(.34,1.56,.64,1);
+        }
+        .mobile-nav-item.active span { font-weight: 700; color: #93c5fd; }
+        .mobile-nav-item:not(.active) i, .mobile-nav-item:not(.active) svg { transition: transform 0.2s; }
+        .mobile-nav-item:active { opacity: 0.6; transition: opacity 0.1s; }
 
         /* ─── Pull-to-Refresh indicator ─── */
         #pullRefreshBar {
@@ -443,13 +457,53 @@
         .mobile-fab.open { background: linear-gradient(135deg,#ef4444,#b91c1c); transform: rotate(45deg); box-shadow: 0 4px 20px rgba(239,68,68,0.5); }
         .mobile-fab svg { width: 26px; height: 26px; }
 
+        /* ── FAB Backdrop ── */
+        .fab-backdrop {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+            z-index: 1050;
+            animation: backdropFadeIn 0.2s ease;
+        }
+        .fab-backdrop.show { display: block; }
+        @keyframes backdropFadeIn { from { opacity:0; } to { opacity:1; } }
+
         /* ── Page Fade-In ── */
         .main-content { animation: appFadeUp 0.25s ease both; }
         @keyframes appFadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
 
         /* ── Top Loading Bar ── */
-        #topLoadBar { position:fixed; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#3b82f6,#8b5cf6,#3b82f6); background-size:200% 100%; z-index:9999; display:none; }
-        #topLoadBar.active { display:block; animation:loadBarMove 1.2s linear infinite; }
+        #pullRefreshBar { position:fixed; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#3b82f6,#8b5cf6,#3b82f6); background-size:200% 100%; z-index:9999; display:none; }
+        #pullRefreshBar.active { display:block; animation:loadBarMove 1.2s linear infinite; }
+
+        /* ── Pull-to-Refresh Overlay ── */
+        #ptrOverlay {
+            position: fixed; top: 0; left: 50%;
+            transform: translateX(-50%) translateY(-72px);
+            z-index: 9998; background: #1e293b; color: #e2e8f0;
+            padding: 9px 22px; border-radius: 0 0 22px 22px;
+            font-size: 0.8rem; font-weight: 600;
+            display: flex; align-items: center; gap: 9px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+            transition: transform 0.28s cubic-bezier(.34,1.56,.64,1);
+            letter-spacing: 0.03em; pointer-events: none;
+        }
+        #ptrOverlay.ptr-visible { transform: translateX(-50%) translateY(0); }
+        .ptr-spinner {
+            width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.25);
+            border-top-color: #60a5fa;
+            border-radius: 50%;
+            animation: ptrSpin 0.7s linear infinite;
+            display: none; flex-shrink: 0;
+        }
+        #ptrOverlay.ptr-releasing .ptr-spinner { display: block; }
+        @keyframes ptrSpin { to { transform: rotate(360deg); } }
+        .ptr-arrow {
+            font-size: 1rem; transition: transform 0.2s ease;
+            display: inline-block;
+        }
+        #ptrOverlay.ptr-releasing .ptr-arrow { transform: rotate(180deg); }
         @keyframes loadBarMove { 0%{background-position:100% 0} 100%{background-position:-100% 0} }
 
         /* ── Skeleton Loader ── */
@@ -477,6 +531,28 @@
         .mobile-card-value .badge { font-size:0.72rem !important; }
         .mobile-card-actions { display:flex; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid #f1f5f9; flex-wrap:wrap; }
         .mobile-card-actions .btn { flex:1; min-width:80px; font-size:0.8rem !important; min-height:40px !important; border-radius:10px !important; }
+        /* ── Card status-accent borders ── */
+        .mobile-data-card[data-status="active"] { border-left-color: #10b981; }
+        .mobile-data-card[data-status="inactive"] { border-left-color: #94a3b8; }
+        .mobile-data-card[data-status="present"] { border-left-color: #10b981; }
+        .mobile-data-card[data-status="absent"] { border-left-color: #ef4444; }
+        .mobile-data-card[data-status="late"] { border-left-color: #f59e0b; }
+        .mobile-data-card[data-status="leave"] { border-left-color: #8b5cf6; }
+        .mobile-data-card[data-status="left"] { border-left-color: #ef4444; }
+        .mobile-data-card[data-status="warning"] { border-left-color: #f59e0b; }
+        /* ── Card header row: bold + slightly larger ── */
+        .mobile-data-card .mc-title-row {
+            font-size: 1rem; font-weight: 700; color: #0f172a;
+            padding-bottom: 10px; margin-bottom: 4px;
+            border-bottom: 2px solid #e0eaff;
+        }
+        /* ── Status badge inside card ── */
+        .mobile-data-card .badge-active { background:#dcfce7; color:#166534; }
+        .mobile-data-card .badge-inactive { background:#f1f5f9; color:#475569; }
+        .mobile-data-card .badge-present { background:#dcfce7; color:#166534; }
+        .mobile-data-card .badge-absent { background:#fee2e2; color:#991b1b; }
+        .mobile-data-card .badge-late { background:#fef3c7; color:#92400e; }
+        .mobile-data-card .badge-leave { background:#ede9fe; color:#5b21b6; }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -1050,6 +1126,13 @@
 <!-- Pull-to-Refresh indicator bar -->
 <div id="pullRefreshBar"></div>
 
+<!-- Pull-to-Refresh Overlay -->
+<div id="ptrOverlay">
+    <span class="ptr-arrow">↓</span>
+    <div class="ptr-spinner"></div>
+    <span id="ptrText">Pull down to refresh</span>
+</div>
+
 <!-- Top Loading Bar -->
 <div id="topLoadBar"></div>
 
@@ -1075,10 +1158,10 @@
         <i data-lucide="calendar-check"></i>
         <span>Attendance</span>
     </a>
-    <a href="{{ url_for('fuel_expense_list') }}"
-       class="mobile-nav-item {% if request.endpoint and ('expense' in request.endpoint or request.endpoint in ['accounts_quick_payment','accounts_quick_receipt','accounts_balance_sheet','accounts_account_ledger']) %}active{% endif %}">
-        <i data-lucide="wallet"></i>
-        <span>Accounts</span>
+    <a href="{{ url_for('task_report_list') }}"
+       class="mobile-nav-item {% if request.endpoint and ('task_report' in request.endpoint or 'red_task' in request.endpoint or 'without_task' in request.endpoint) %}active{% endif %}">
+        <i data-lucide="clipboard-list"></i>
+        <span>Tasks</span>
     </a>
     <a href="{{ url_for('account_change_password') }}"
        class="mobile-nav-item {% if request.endpoint and request.endpoint in ['account_change_password','user_list','user_form','role_list','role_form'] %}active{% endif %}">
@@ -1086,6 +1169,9 @@
         <span>Profile</span>
     </a>
 </nav>
+
+<!-- FAB Backdrop -->
+<div class="fab-backdrop" id="fabBackdrop"></div>
 
 <!-- FAB Speed-Dial -->
 <div class="mobile-fab-wrap" id="mobileFabWrap">
@@ -1111,6 +1197,14 @@
             <span class="fab-dial-label">Check In</span>
             <a href="{{ url_for('driver_attendance_checkin') }}" class="fab-dial-btn">
                 <i data-lucide="calendar-check-2"></i>
+            </a>
+        </div>
+        {% endif %}
+        {% if can_see_page('assign_driver_to_vehicle') %}
+        <div class="fab-dial-item">
+            <span class="fab-dial-label">New Assignment</span>
+            <a href="{{ url_for('assign_driver_to_vehicle_new') }}" class="fab-dial-btn">
+                <i data-lucide="link"></i>
             </a>
         </div>
         {% endif %}
@@ -1640,29 +1734,48 @@
         }
     })();
 
-    // ── Pull-to-Refresh ───────────────────────────────────────────────────
+    // ── Pull-to-Refresh (with overlay spinner) ──────────────────────────
     (function() {
+        if (!('ontouchstart' in window)) return;
         var bar = document.getElementById('pullRefreshBar');
-        if (!bar || !('ontouchstart' in window)) return;
-        var startY = 0, pulling = false, threshold = 65;
+        var overlay = document.getElementById('ptrOverlay');
+        var ptrText = document.getElementById('ptrText');
+        var startY = 0, pulling = false, threshold = 70, triggered = false;
         document.addEventListener('touchstart', function(e) {
-            if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; }
+            if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; triggered = false; }
         }, { passive: true });
         document.addEventListener('touchmove', function(e) {
             if (!pulling) return;
-            var dist = Math.min(e.touches[0].clientY - startY, threshold * 1.5);
-            if (dist > 0) {
-                bar.style.transform = 'scaleX(' + (dist / threshold) + ')';
-                bar.style.transition = 'none';
+            var dist = e.touches[0].clientY - startY;
+            if (dist <= 0) return;
+            var capped = Math.min(dist, threshold * 1.6);
+            if (bar) { bar.style.transform = 'scaleX(' + (capped / threshold) + ')'; bar.style.transition = 'none'; }
+            if (overlay) {
+                overlay.classList.add('ptr-visible');
+                if (capped >= threshold) {
+                    overlay.classList.add('ptr-releasing');
+                    if (ptrText) ptrText.textContent = 'Release to refresh';
+                } else {
+                    overlay.classList.remove('ptr-releasing');
+                    if (ptrText) ptrText.textContent = 'Pull down to refresh';
+                }
             }
         }, { passive: true });
         document.addEventListener('touchend', function(e) {
             if (!pulling) return;
             pulling = false;
             var dist = e.changedTouches[0].clientY - startY;
-            bar.style.transition = 'transform 0.3s';
-            bar.style.transform = 'scaleX(0)';
-            if (dist >= threshold) { setTimeout(function() { window.location.reload(); }, 200); }
+            if (bar) { bar.style.transition = 'transform 0.3s'; bar.style.transform = 'scaleX(0)'; }
+            if (overlay) {
+                if (dist >= threshold && !triggered) {
+                    triggered = true;
+                    if (ptrText) ptrText.textContent = 'Refreshing…';
+                    setTimeout(function() { window.location.reload(); }, 300);
+                } else {
+                    overlay.classList.remove('ptr-visible', 'ptr-releasing');
+                    if (ptrText) ptrText.textContent = 'Pull down to refresh';
+                }
+            }
         }, { passive: true });
     })();
 
@@ -1880,6 +1993,17 @@
                 card.className = 'mobile-data-card';
                 var rowsHtml = '';
                 var actionsHtml = '';
+                // Detect status from row text for accent color
+                var rowText = tr.textContent.toLowerCase();
+                var statusMap = [
+                    [/\bpresent\b/, 'present'], [/\babsent\b/, 'absent'],
+                    [/\b(late|late arrival)\b/, 'late'], [/\b(leave|on leave)\b/, 'leave'],
+                    [/\bactive\b/, 'active'], [/\binactive\b/, 'inactive'],
+                    [/\bjob left\b|\bresigned\b/, 'left']
+                ];
+                for (var s = 0; s < statusMap.length; s++) {
+                    if (statusMap[s][0].test(rowText)) { card.dataset.status = statusMap[s][1]; break; }
+                }
                 tr.querySelectorAll('td').forEach(function(td, idx) {
                     var hdr = headers[idx] || '';
                     if (isActionCol(hdr, td)) {
@@ -1887,8 +2011,8 @@
                     } else {
                         var val = td.innerHTML.trim();
                         if (idx === 0) {
-                            rowsHtml += '<div class="mobile-card-row" style="border-bottom:2px solid #e0eaff;padding-bottom:10px;margin-bottom:4px;">' +
-                                '<span class="mobile-card-value" style="font-size:0.97rem;font-weight:700;color:#0f172a;text-align:left;">' + val + '</span></div>';
+                            rowsHtml += '<div class="mobile-card-row mc-title-row">' +
+                                '<span style="font-size:0.97rem;font-weight:700;color:#0f172a;">' + val + '</span></div>';
                         } else if (hdr) {
                             rowsHtml += '<div class="mobile-card-row"><span class="mobile-card-label">' +
                                 hdr + '</span><span class="mobile-card-value">' + val + '</span></div>';
@@ -1910,20 +2034,31 @@
         });
     })();
 
-    // ── FAB Speed-Dial Toggle ──────────────────────────────────────────────
+    // ── FAB Speed-Dial Toggle (with backdrop) ─────────────────────────────
     (function() {
         var fabBtn = document.getElementById('mobileFabBtn');
         var dialMenu = document.getElementById('fabDialMenu');
+        var backdrop = document.getElementById('fabBackdrop');
         if (!fabBtn || !dialMenu) return;
+        function openDial() {
+            dialMenu.classList.add('open');
+            fabBtn.classList.add('open');
+            if (backdrop) backdrop.classList.add('show');
+            if (window.lucide) lucide.createIcons();
+        }
+        function closeDial() {
+            dialMenu.classList.remove('open');
+            fabBtn.classList.remove('open');
+            if (backdrop) backdrop.classList.remove('show');
+        }
         fabBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            dialMenu.classList.toggle('open');
-            fabBtn.classList.toggle('open');
-            if (window.lucide) lucide.createIcons();
+            dialMenu.classList.contains('open') ? closeDial() : openDial();
         });
-        document.addEventListener('click', function() {
-            if (dialMenu.classList.contains('open')) {
-                dialMenu.classList.remove('open');
+        if (backdrop) backdrop.addEventListener('click', closeDial);
+        document.addEventListener('click', function(e) {
+            if (dialMenu.classList.contains('open') && !e.target.closest('#mobileFabWrap')) {
+                closeDial();
             }
         });
     })();
