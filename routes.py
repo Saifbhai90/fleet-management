@@ -1093,35 +1093,17 @@ def whats_new():
 
 
 # ────────────────────────────────────────────────
-# Accounts (Quick Payment, Quick Receipt, Bank Entry, JV, Future Entry)
+# Accounts - Actual routes are now in routes_finance.py and registered in app.py
 # ────────────────────────────────────────────────
-@app.route('/accounts/quick-payment')
-def accounts_quick_payment():
-    return render_template('accounts_placeholder.html', title='Quick Payment', description='Record quick payments here. (Coming soon)')
-
-@app.route('/accounts/quick-receipt')
-def accounts_quick_receipt():
-    return render_template('accounts_placeholder.html', title='Quick Receipt', description='Record quick receipts here. (Coming soon)')
-
-@app.route('/accounts/bank-entry')
-def accounts_bank_entry():
-    return render_template('accounts_placeholder.html', title='Bank Entry', description='Bank transactions entry. (Coming soon)')
+# Placeholder routes removed - finance routes now active
 
 @app.route('/accounts/jv')
 def accounts_jv():
-    return render_template('accounts_placeholder.html', title='JV (Journal Voucher)', description='Journal voucher entry. (Coming soon)')
+    return render_template('accounts_placeholder.html', title='JV (Journal Voucher)', description='Manual journal voucher entry. (Coming soon)')
 
 @app.route('/accounts/future-entry')
 def accounts_future_entry():
     return render_template('accounts_placeholder.html', title='Future Entry', description='Future-dated entries. (Coming soon)')
-
-@app.route('/accounts/balance-sheet')
-def accounts_balance_sheet():
-    return render_template('accounts_placeholder.html', title='Balance Sheet', description='View balance sheet report. (Coming soon)')
-
-@app.route('/accounts/account-ledger')
-def accounts_account_ledger():
-    return render_template('accounts_placeholder.html', title='Account Ledger', description='View account ledger. (Coming soon)')
 
 
 # ────────────────────────────────────────────────
