@@ -40,9 +40,26 @@
           </div>
 
           <div class="d-grid mt-3">
-            <button type="submit" class="btn btn-danger fw-bold">
+            <button type="submit" id="loginSubmitBtn" class="btn btn-danger fw-bold">
               <i class="bi bi-box-arrow-in-right me-1"></i>Sign in
             </button>
+          </div>
+
+          <!-- Biometric Login Button (shown only on native if enabled) -->
+          <div id="bioLoginWrap" style="display:none;margin-top:16px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+              <hr style="flex:1;border-color:rgba(255,255,255,0.12);">
+              <span style="font-size:0.72rem;color:#94a3b8;font-weight:600;letter-spacing:0.05em;">OR</span>
+              <hr style="flex:1;border-color:rgba(255,255,255,0.12);">
+            </div>
+            <button type="button" id="bioLoginBtn"
+              style="width:100%;background:rgba(59,130,246,0.12);border:1.5px solid rgba(59,130,246,0.35);border-radius:14px;color:#93c5fd;padding:13px;font-weight:700;font-size:0.9rem;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;transition:all 0.18s;">
+              <svg style="width:24px;height:24px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+              </svg>
+              Sign in with Biometrics
+            </button>
+            <p style="text-align:center;margin-top:8px;font-size:0.72rem;color:#64748b;">Touch ID / Face ID</p>
           </div>
         </form>
       </div>
@@ -60,6 +77,70 @@
       if (pwd) pwd.focus();
     }
   });
+})();
+
+/* ── Biometric Login ──────────────────────────────────────────────── */
+(function() {
+  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+
+  var bioWrap = document.getElementById('bioLoginWrap');
+  var bioBtn  = document.getElementById('bioLoginBtn');
+  var form    = document.querySelector('form');
+
+  var BIO_KEY  = 'fleet_bio_enabled';
+  var BIO_USER = 'fleet_bio_user';
+
+  /* Show fingerprint button if previously enabled */
+  var isEnabled = localStorage.getItem(BIO_KEY) === '1';
+  var bioPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
+
+  if (isEnabled && bioPlugin && bioWrap) {
+    /* Verify hardware actually supports it */
+    bioPlugin.checkBiometry().then(function(info) {
+      if (info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable)) {
+        bioWrap.style.display = 'block';
+      }
+    }).catch(function() {
+      bioWrap.style.display = 'block'; /* show anyway */
+    });
+  }
+
+  /* Handle biometric button tap */
+  if (bioBtn && bioPlugin) {
+    bioBtn.addEventListener('click', function() {
+      bioBtn.disabled = true;
+      bioBtn.style.opacity = '0.7';
+
+      bioPlugin.authenticate({
+        reason: 'Verify your identity to sign in',
+        cancelTitle: 'Use Password',
+        allowDeviceCredential: false,
+        iosFallbackTitle: 'Use Password'
+      }).then(function() {
+        /* Biometric success — navigate to dashboard (session still valid via remember_me) */
+        window.location.href = '/dashboard';
+      }).catch(function(err) {
+        bioBtn.disabled = false;
+        bioBtn.style.opacity = '1';
+        if (err && err.code !== 'biometricCanceled' && err.code !== 10) {
+          /* Biometric failed/locked — clear flag and hide button */
+          if (err.code === 'biometricLockout' || err.code === 'biometricPermanentLockout') {
+            localStorage.removeItem(BIO_KEY);
+            bioWrap.style.display = 'none';
+          }
+        }
+      });
+    });
+  }
+
+  /* On manual form submit — set pending flag so dashboard can prompt to enable */
+  if (form) {
+    form.addEventListener('submit', function() {
+      if (!isEnabled) {
+        sessionStorage.setItem('fleet_bio_prompt', '1');
+      }
+    });
+  }
 })();
 </script>
 {% endblock %}

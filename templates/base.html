@@ -603,10 +603,107 @@
         .mobile-data-card .badge-absent { background:#fee2e2; color:#991b1b; }
         .mobile-data-card .badge-late { background:#fef3c7; color:#92400e; }
         .mobile-data-card .badge-leave { background:#ede9fe; color:#5b21b6; }
+
+        /* ══════════════════════════════════════════════════════════════
+           NATIVE MOBILE FEATURES
+        ══════════════════════════════════════════════════════════════ */
+
+        /* ── No Internet Connection Banner ── */
+        #no-internet-banner {
+            display: none;
+            position: fixed; top: 60px; left: 0; right: 0;
+            z-index: 1049;
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 9px 16px;
+            font-size: 0.82rem; font-weight: 600;
+            border-bottom: 2px solid #ef4444;
+            align-items: center; justify-content: center; gap: 8px;
+            letter-spacing: 0.01em;
+        }
+        #no-internet-banner.show { display: flex; animation: slideDownBanner 0.3s ease; }
+        @keyframes slideDownBanner {
+            from { transform: translateY(-100%); opacity: 0; }
+            to   { transform: translateY(0); opacity: 1; }
+        }
+        #no-internet-banner .inet-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #ef4444; flex-shrink: 0;
+            animation: blink 1.1s ease-in-out infinite;
+        }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        /* ── Form Submit Spinner ── */
+        .btn-spinner {
+            display: none;
+            width: 15px; height: 15px;
+            border: 2.5px solid rgba(255,255,255,0.32);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: btnSpin 0.65s linear infinite;
+            vertical-align: middle; margin-right: 7px; flex-shrink: 0;
+        }
+        .btn-loading .btn-spinner { display: inline-block; }
+        .btn-loading { pointer-events: none !important; opacity: 0.80; }
+        @keyframes btnSpin { to { transform: rotate(360deg); } }
+
+        /* ── Native Sticky Submit (Thumb Zone) — mobile only ── */
+        @media (max-width: 767.98px) {
+            .capacitor-native .main-content {
+                padding-bottom: 130px !important;
+            }
+            .capacitor-native .native-submit-sticky {
+                position: sticky;
+                bottom: 72px;
+                background: rgba(241,245,249,0.97);
+                -webkit-backdrop-filter: blur(8px);
+                backdrop-filter: blur(8px);
+                padding: 10px 4px;
+                margin: 12px -4px -4px;
+                z-index: 100;
+                border-top: 1px solid rgba(0,0,0,0.07);
+            }
+            .capacitor-native .native-submit-sticky .btn {
+                width: 100% !important;
+                min-height: 52px !important;
+                font-size: 1rem !important;
+                font-weight: 700 !important;
+                border-radius: 16px !important;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+            }
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
+
+<!-- ── No Internet Connection Banner ── -->
+<div id="no-internet-banner" role="alert" aria-live="assertive">
+    <span class="inet-dot"></span>
+    <i data-lucide="wifi-off" style="width:15px;height:15px;flex-shrink:0;color:#ef4444;"></i>
+    No internet connection — some features may not work
+</div>
+
+<!-- ── Biometric Enable Modal (first login prompt, native only) ── -->
+<div id="bioEnableModal" style="display:none;position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;">
+    <div style="background:#1e293b;border-radius:24px 24px 0 0;padding:28px 24px 36px;width:100%;max-width:480px;margin:0 auto;color:#f1f5f9;">
+        <div style="text-align:center;margin-bottom:20px;">
+            <div style="width:60px;height:60px;background:rgba(59,130,246,0.15);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+                </svg>
+            </div>
+            <h5 style="font-weight:700;font-size:1.1rem;margin-bottom:8px;color:#f8fafc;">Enable Biometric Login?</h5>
+            <p style="font-size:0.85rem;color:#94a3b8;line-height:1.5;">Sign in instantly next time using your fingerprint or Face ID — no password needed.</p>
+        </div>
+        <button id="bioEnableYes" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:14px;padding:14px;font-size:1rem;font-weight:700;margin-bottom:10px;cursor:pointer;">
+            Enable Biometric Login
+        </button>
+        <button id="bioEnableNo" style="width:100%;background:rgba(255,255,255,0.07);color:#94a3b8;border:1.5px solid rgba(255,255,255,0.1);border-radius:14px;padding:12px;font-size:0.9rem;font-weight:600;cursor:pointer;">
+            Not now
+        </button>
+    </div>
+</div>
 
 <!-- NAVBAR -->
 <nav class="navbar navbar-dark bg-dark fixed-top px-3 shadow">
@@ -2142,6 +2239,220 @@
         btn.addEventListener('click', function() {
             sidebar.classList.toggle('mobile-open');
             if (overlay) overlay.classList.toggle('show');
+        });
+    })();
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  NATIVE MOBILE FEATURES  (all guarded by Capacitor.isNativePlatform)
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── 0. Biometric Enable Prompt (after first manual login) ──────────────
+    (function() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+        if (sessionStorage.getItem('fleet_bio_prompt') !== '1') return;
+        sessionStorage.removeItem('fleet_bio_prompt');
+
+        var bioPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
+        if (!bioPlugin) return;
+
+        bioPlugin.checkBiometry().then(function(info) {
+            var avail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
+            if (!avail) return;
+
+            var modal = document.getElementById('bioEnableModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+
+            document.getElementById('bioEnableYes').addEventListener('click', function() {
+                localStorage.setItem('fleet_bio_enabled', '1');
+                modal.style.display = 'none';
+            });
+            document.getElementById('bioEnableNo').addEventListener('click', function() {
+                modal.style.display = 'none';
+            });
+        }).catch(function() {});
+    })();
+
+    // ── 1. Status Bar color to match app theme ────────────────────────────
+    (function() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+        document.addEventListener('DOMContentLoaded', function() {
+            var SB = window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar;
+            if (!SB) return;
+            SB.setBackgroundColor({ color: '#0f172a' }).catch(function(){});
+            SB.setStyle({ style: 'DARK' }).catch(function(){});
+            SB.setOverlaysWebView({ overlay: false }).catch(function(){});
+        });
+    })();
+
+    // ── 2. Android / iOS Back Button Handler ──────────────────────────────
+    (function() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+        var AppPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+        if (!AppPlugin) return;
+
+        var backPressCount = 0;
+        var backPressTimer = null;
+        var DASHBOARD_PATHS = ['/', '/dashboard', '/dashboard/'];
+
+        function isOnDashboard() {
+            var p = window.location.pathname.replace(/\/$/, '') || '/';
+            return DASHBOARD_PATHS.indexOf(p) !== -1;
+        }
+
+        function showExitToast(msg) {
+            var old = document.getElementById('nativeToast');
+            if (old) old.remove();
+            var t = document.createElement('div');
+            t.id = 'nativeToast';
+            t.textContent = msg || 'Press back again to exit';
+            t.style.cssText = [
+                'position:fixed;bottom:90px;left:50%;transform:translateX(-50%)',
+                'background:#1e293b;color:#f8fafc;padding:11px 24px',
+                'border-radius:28px;font-size:0.82rem;font-weight:600',
+                'z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.35)',
+                'letter-spacing:0.02em;pointer-events:none;white-space:nowrap'
+            ].join(';');
+            document.body.appendChild(t);
+            setTimeout(function() { if (t.parentNode) t.remove(); }, 2300);
+        }
+
+        function tryCloseOverlay() {
+            // Bootstrap modals
+            var modals = document.querySelectorAll('.modal.show');
+            if (modals.length) {
+                var m = modals[modals.length - 1];
+                var inst = window.bootstrap && bootstrap.Modal ? bootstrap.Modal.getInstance(m) : null;
+                if (inst) { inst.hide(); return true; }
+            }
+            // Select2 dropdown
+            if (document.querySelector('.select2-dropdown')) {
+                if (window.$) $(document).trigger('click');
+                return true;
+            }
+            // FAB dial
+            var dial = document.getElementById('fabDialMenu');
+            if (dial && dial.classList.contains('open')) {
+                dial.classList.remove('open');
+                var fabBtn = document.getElementById('mobileFabBtn');
+                if (fabBtn) fabBtn.classList.remove('open');
+                var bd = document.getElementById('fabBackdrop');
+                if (bd) bd.classList.remove('show');
+                return true;
+            }
+            // Mobile sidebar
+            var sb = document.getElementById('sidebar');
+            if (sb && sb.classList.contains('mobile-open')) {
+                sb.classList.remove('mobile-open');
+                var ov = document.getElementById('sidebarOverlay');
+                if (ov) ov.classList.remove('show');
+                return true;
+            }
+            return false;
+        }
+
+        AppPlugin.addListener('backButton', function() {
+            // Priority 1 — close any open overlay / modal
+            if (tryCloseOverlay()) return;
+
+            // Priority 2 — double-tap to exit from dashboard
+            if (isOnDashboard()) {
+                backPressCount++;
+                if (backPressCount >= 2) {
+                    clearTimeout(backPressTimer);
+                    AppPlugin.exitApp();
+                } else {
+                    showExitToast('Press back again to exit');
+                    backPressTimer = setTimeout(function() { backPressCount = 0; }, 2300);
+                }
+                return;
+            }
+
+            // Priority 3 — normal history back (NEVER exits from a form)
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = '/dashboard';
+            }
+        });
+    })();
+
+    // ── 3. No Internet Connection Banner ──────────────────────────────────
+    (function() {
+        var banner = document.getElementById('no-internet-banner');
+        if (!banner) return;
+        function update() {
+            if (!navigator.onLine) {
+                banner.classList.add('show');
+                if (window.lucide) lucide.createIcons();
+            } else {
+                banner.classList.remove('show');
+            }
+        }
+        window.addEventListener('offline', update);
+        window.addEventListener('online',  update);
+        update();
+    })();
+
+    // ── 4. Form Submit: Loading Spinner + Prevent Double Submit ───────────
+    (function() {
+        document.addEventListener('submit', function(e) {
+            var form = e.target;
+            if (!form || form.tagName !== 'FORM') return;
+            if (form.dataset.noSpinner === '1') return;
+            form.querySelectorAll('button[type="submit"]').forEach(function(btn) {
+                // Inject spinner if not present
+                if (!btn.querySelector('.btn-spinner')) {
+                    var sp = document.createElement('span');
+                    sp.className = 'btn-spinner';
+                    btn.insertBefore(sp, btn.firstChild);
+                }
+                btn.classList.add('btn-loading');
+            });
+            // Safety: re-enable after 8 s (server timeout guard)
+            setTimeout(function() {
+                form.querySelectorAll('.btn-loading').forEach(function(b) {
+                    b.classList.remove('btn-loading');
+                });
+            }, 8000);
+        }, true);
+
+        // Restore on browser back
+        window.addEventListener('pageshow', function(e) {
+            if (e.persisted) {
+                document.querySelectorAll('.btn-loading').forEach(function(b) {
+                    b.classList.remove('btn-loading');
+                });
+            }
+        });
+    })();
+
+    // ── 5. Native Sticky Submit Buttons (Thumb Zone) ─────────────────────
+    (function() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+        if (window.innerWidth > 768) return;
+        document.addEventListener('DOMContentLoaded', function() {
+            var content = document.querySelector('.main-content');
+            if (!content) return;
+            content.querySelectorAll('form').forEach(function(form) {
+                // Skip nav/fab forms
+                if (form.closest('.mobile-bottom-nav, .mobile-fab-wrap, .navbar, #sidebar')) return;
+                // Find last .d-grid that contains a submit button
+                var grids = form.querySelectorAll('.d-grid');
+                var target = null;
+                for (var i = grids.length - 1; i >= 0; i--) {
+                    if (grids[i].querySelector('button[type="submit"]')) {
+                        target = grids[i];
+                        break;
+                    }
+                }
+                if (!target) {
+                    // Fallback: parent of last submit button
+                    var btns = form.querySelectorAll('button[type="submit"]');
+                    if (btns.length) target = btns[btns.length - 1].parentElement;
+                }
+                if (target) target.classList.add('native-submit-sticky');
+            });
         });
     })();
 </script>
