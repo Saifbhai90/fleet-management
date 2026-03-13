@@ -2,61 +2,369 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Login{% endblock %}</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a1628">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>{% block title %}Fleet Manager{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <style>
-    body {
-      min-height: 100vh;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #1e293b no-repeat center center fixed;
-      background-size: cover;
+    *, *::before, *::after { box-sizing: border-box; }
+
+    :root {
+      --bg-deep:   #070e1a;
+      --bg-mid:    #0d1b2e;
+      --accent:    #2563eb;
+      --accent-lt: #3b82f6;
+      --card-bg:   #ffffff;
+      --text-dark: #0f172a;
+      --text-mid:  #475569;
+      --text-muted:#94a3b8;
+      --border:    #e2e8f0;
+      --input-bg:  #f8fafc;
+      --danger:    #ef4444;
+      --success:   #10b981;
     }
-    body.bg-loaded {
-      background-image: url("{{ url_for('static', filename='images/login-bg.jpg') }}");
+
+    html, body {
+      height: 100%; margin: 0; padding: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg-deep);
+      overflow-x: hidden;
     }
-    .login-overlay {
-      position: absolute;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.45);
+
+    /* ── Background ── */
+    .lp-bg {
+      position: fixed; inset: 0; z-index: 0;
+      background: linear-gradient(160deg, #0a1628 0%, #0d1b2e 45%, #0f2040 100%);
+      overflow: hidden;
     }
-    .login-container {
-      position: relative;
-      z-index: 2;
+    .lp-bg::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 0%, rgba(37,99,235,0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 80% 80%, rgba(59,130,246,0.1) 0%, transparent 60%);
     }
+    /* Subtle animated grid */
+    .lp-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(37,99,235,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(37,99,235,0.06) 1px, transparent 1px);
+      background-size: 40px 40px;
+      animation: gridDrift 20s linear infinite;
+    }
+    @keyframes gridDrift { from{background-position:0 0} to{background-position:40px 40px} }
+
+    /* ── Glow orbs ── */
+    .lp-orb {
+      position: absolute; border-radius: 50%;
+      filter: blur(70px); pointer-events: none;
+    }
+    .lp-orb1 { width:260px;height:260px;top:-60px;left:-60px;background:rgba(37,99,235,0.18); }
+    .lp-orb2 { width:200px;height:200px;bottom:30%;right:-40px;background:rgba(16,185,129,0.1); }
+    .lp-orb3 { width:150px;height:150px;bottom:0;left:20%;background:rgba(37,99,235,0.12); }
+
+    /* ── Brand section (top) ── */
+    .lp-brand {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: flex-end;
+      padding: 0 0 32px;
+      min-height: 38vh;
+      padding-top: env(safe-area-inset-top, 20px);
+    }
+    .lp-logo-ring {
+      width: 80px; height: 80px;
+      background: linear-gradient(135deg, rgba(37,99,235,0.25), rgba(59,130,246,0.12));
+      border: 1.5px solid rgba(59,130,246,0.35);
+      border-radius: 24px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 18px;
+      box-shadow: 0 0 0 8px rgba(37,99,235,0.08), 0 8px 32px rgba(0,0,0,0.3);
+      animation: logoPulse 3s ease-in-out infinite;
+    }
+    @keyframes logoPulse {
+      0%,100% { box-shadow: 0 0 0 8px rgba(37,99,235,0.08), 0 8px 32px rgba(0,0,0,0.3); }
+      50%      { box-shadow: 0 0 0 14px rgba(37,99,235,0.12), 0 8px 40px rgba(0,0,0,0.35); }
+    }
+    .lp-app-name {
+      font-size: 1.6rem; font-weight: 800;
+      color: #fff; letter-spacing: -0.03em; margin-bottom: 4px;
+    }
+    .lp-app-name span { color: #60a5fa; }
+    .lp-tagline {
+      font-size: 0.8rem; color: rgba(148,163,184,0.9);
+      font-weight: 500; letter-spacing: 0.04em;
+    }
+
+    /* ── Bottom Sheet Card ── */
+    .lp-sheet {
+      position: relative; z-index: 2;
+      background: var(--card-bg);
+      border-radius: 28px 28px 0 0;
+      padding: 32px 24px 24px;
+      padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+      box-shadow: 0 -8px 48px rgba(0,0,0,0.35);
+      animation: sheetUp 0.45s cubic-bezier(0.16,1,0.3,1) both;
+    }
+    @keyframes sheetUp {
+      from { transform: translateY(60px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+    .lp-sheet-handle {
+      width: 36px; height: 4px;
+      background: #e2e8f0; border-radius: 2px;
+      margin: 0 auto 24px;
+    }
+    .lp-section-title {
+      font-size: 1.35rem; font-weight: 800;
+      color: var(--text-dark); margin-bottom: 4px; letter-spacing: -0.02em;
+    }
+    .lp-section-sub {
+      font-size: 0.82rem; color: var(--text-muted); margin-bottom: 28px;
+    }
+
+    /* ── Floating Label Inputs ── */
+    .lp-field {
+      position: relative; margin-bottom: 18px;
+    }
+    .lp-field input {
+      width: 100%; height: 56px;
+      background: var(--input-bg);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 48px 6px 16px;
+      font-size: 0.95rem; font-weight: 500;
+      color: var(--text-dark);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      -webkit-appearance: none;
+    }
+    .lp-field input:focus {
+      border-color: var(--accent);
+      background: #fff;
+      box-shadow: 0 0 0 4px rgba(37,99,235,0.1);
+    }
+    .lp-field input.is-invalid {
+      border-color: var(--danger);
+      background: #fff5f5;
+    }
+    .lp-field input.is-invalid:focus {
+      box-shadow: 0 0 0 4px rgba(239,68,68,0.1);
+    }
+    .lp-field label {
+      position: absolute; left: 16px; top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.88rem; font-weight: 500;
+      color: var(--text-muted);
+      transition: all 0.18s ease;
+      pointer-events: none;
+    }
+    .lp-field input:focus ~ label,
+    .lp-field input:not(:placeholder-shown) ~ label {
+      top: 10px; transform: none;
+      font-size: 0.7rem; font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.03em;
+    }
+    .lp-field input.is-invalid ~ label { color: var(--danger); }
+    .lp-field .field-icon {
+      position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); font-size: 1.05rem; cursor: pointer;
+      padding: 4px; line-height: 1;
+    }
+    .lp-field .invalid-msg {
+      font-size: 0.75rem; color: var(--danger);
+      margin-top: 5px; padding-left: 4px; font-weight: 500;
+    }
+    .lp-field .field-lead-icon {
+      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); font-size: 1rem; pointer-events: none;
+    }
+    .lp-field.has-lead-icon input {
+      padding-left: 42px;
+    }
+    .lp-field.has-lead-icon label { left: 42px; }
+
+    /* ── Remember Me toggle ── */
+    .lp-remember {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .lp-remember-label { font-size: 0.83rem; color: var(--text-mid); font-weight: 500; }
+    .lp-toggle {
+      position: relative; display: inline-block; width: 44px; height: 24px;
+    }
+    .lp-toggle input { opacity: 0; width: 0; height: 0; }
+    .lp-toggle-track {
+      position: absolute; inset: 0; border-radius: 24px;
+      background: #e2e8f0; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .lp-toggle-track::before {
+      content: ''; position: absolute;
+      width: 18px; height: 18px; left: 3px; top: 3px;
+      background: #fff; border-radius: 50%;
+      transition: transform 0.2s; box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+    }
+    .lp-toggle input:checked + .lp-toggle-track { background: var(--accent); }
+    .lp-toggle input:checked + .lp-toggle-track::before { transform: translateX(20px); }
+
+    /* ── Sign In Button ── */
+    .lp-btn-signin {
+      width: 100%; height: 54px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff; border: none; border-radius: 16px;
+      font-size: 1rem; font-weight: 700; letter-spacing: 0.01em;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      box-shadow: 0 4px 20px rgba(37,99,235,0.38);
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .lp-btn-signin:active { transform: scale(0.98); box-shadow: 0 2px 10px rgba(37,99,235,0.25); }
+    .lp-btn-signin:disabled { opacity: 0.7; pointer-events: none; }
+    .lp-btn-signin .lp-spinner {
+      display: none; width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.35);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+    }
+    .lp-btn-signin.loading .lp-spinner { display: block; }
+    .lp-btn-signin.loading .lp-btn-text { opacity: 0.7; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Biometric Button ── */
+    .lp-bio-divider {
+      display: flex; align-items: center; gap: 12px; margin: 22px 0 18px;
+    }
+    .lp-bio-divider::before, .lp-bio-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .lp-bio-divider span {
+      font-size: 0.72rem; color: var(--text-muted); font-weight: 600; letter-spacing: 0.05em;
+    }
+    .lp-btn-bio {
+      width: 100%; height: 52px;
+      background: #f0f9ff;
+      border: 1.5px solid #bfdbfe;
+      border-radius: 16px;
+      color: #1d4ed8;
+      font-size: 0.88rem; font-weight: 700;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: all 0.18s; -webkit-tap-highlight-color: transparent;
+    }
+    .lp-btn-bio:active { background: #e0f2fe; transform: scale(0.98); }
+    .lp-btn-bio:disabled { opacity: 0.6; pointer-events: none; }
+    .lp-bio-hint {
+      text-align: center; font-size: 0.72rem;
+      color: var(--text-muted); margin-top: 8px;
+    }
+
+    /* ── Toast alerts ── */
+    .lp-toast-wrap {
+      position: fixed; top: calc(env(safe-area-inset-top, 16px) + 16px);
+      left: 50%; transform: translateX(-50%);
+      z-index: 9999; width: calc(100% - 32px); max-width: 400px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .lp-toast {
+      background: #fff; border-radius: 14px;
+      padding: 13px 16px; font-size: 0.83rem; font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      display: flex; align-items: center; gap: 10px;
+      animation: toastIn 0.35s cubic-bezier(0.16,1,0.3,1) both;
+      border-left: 4px solid;
+    }
+    @keyframes toastIn { from{transform:translateY(-20px);opacity:0} to{transform:translateY(0);opacity:1} }
+    .lp-toast.danger { border-color: #ef4444; color: #991b1b; }
+    .lp-toast.success { border-color: #10b981; color: #065f46; }
+    .lp-toast.warning { border-color: #f59e0b; color: #92400e; }
+    .lp-toast.info    { border-color: #3b82f6; color: #1e40af; }
+    .lp-toast.message { border-color: #f59e0b; color: #92400e; }
   </style>
 </head>
 <body>
-  <div class="login-overlay"></div>
-  <div class="login-container w-100">
-    <!-- Flash messages on login screen -->
-    <div class="position-fixed top-0 start-50 translate-middle-x mt-3" style="max-width: 420px; z-index: 2000;">
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for category, message in messages %}
-            <div class="alert alert-{{ 'warning' if category == 'message' else category }} alert-dismissible fade show shadow-sm mb-2" role="alert">
-              {{ message }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-          {% endfor %}
-        {% endif %}
-      {% endwith %}
+  <!-- Background -->
+  <div class="lp-bg">
+    <div class="lp-grid"></div>
+    <div class="lp-orb lp-orb1"></div>
+    <div class="lp-orb lp-orb2"></div>
+    <div class="lp-orb lp-orb3"></div>
+  </div>
+
+  <!-- Flash Toast Messages -->
+  <div class="lp-toast-wrap" id="lpToastWrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="lp-toast {{ category }}">
+            {% if category == 'danger' %}<i class="bi bi-exclamation-circle-fill" style="font-size:1rem;color:#ef4444;flex-shrink:0;"></i>
+            {% elif category == 'success' %}<i class="bi bi-check-circle-fill" style="font-size:1rem;color:#10b981;flex-shrink:0;"></i>
+            {% elif category == 'warning' or category == 'message' %}<i class="bi bi-exclamation-triangle-fill" style="font-size:1rem;color:#f59e0b;flex-shrink:0;"></i>
+            {% else %}<i class="bi bi-info-circle-fill" style="font-size:1rem;color:#3b82f6;flex-shrink:0;"></i>
+            {% endif %}
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <!-- Page layout: brand top + sheet bottom -->
+  <div style="display:flex;flex-direction:column;min-height:100vh;position:relative;z-index:1;">
+
+    <!-- Brand Header -->
+    <div class="lp-brand">
+      <div class="lp-logo-ring">
+        <!-- Fleet SVG icon -->
+        <svg width="44" height="44" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="10" y="44" width="52" height="30" rx="6" fill="white" opacity="0.95"/>
+          <path d="M60 32 L82 32 Q88 32 88 38 L88 74 L60 74 Z" fill="white" opacity="0.95"/>
+          <rect x="63" y="35" width="22" height="18" rx="3" fill="#3b82f6" opacity="0.5"/>
+          <circle cx="24" cy="74" r="10" fill="#1e3a8a"/>
+          <circle cx="24" cy="74" r="6"  fill="#60a5fa"/>
+          <circle cx="24" cy="74" r="2.5" fill="white"/>
+          <circle cx="72" cy="74" r="10" fill="#1e3a8a"/>
+          <circle cx="72" cy="74" r="6"  fill="#60a5fa"/>
+          <circle cx="72" cy="74" r="2.5" fill="white"/>
+          <path d="M3 58 L10 44" stroke="#60a5fa" stroke-width="3" stroke-linecap="round"/>
+          <path d="M5 66 L12 54" stroke="#93c5fd" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+        </svg>
+      </div>
+      <div class="lp-app-name">Fleet<span>Manager</span></div>
+      <div class="lp-tagline">SECURE FLEET CONSOLE</div>
     </div>
 
-    {% block content %}{% endblock %}
+    <!-- Bottom Sheet -->
+    <div class="lp-sheet" style="flex:1 0 auto;">
+      <div class="lp-sheet-handle"></div>
+      {% block content %}{% endblock %}
+    </div>
+
   </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
+    /* Auto-dismiss toasts */
     (function() {
-      var img = new Image();
-      img.onload = function() { document.body.classList.add('bg-loaded'); };
-      img.src = "{{ url_for('static', filename='images/login-bg.jpg') }}";
+      var wrap = document.getElementById('lpToastWrap');
+      if (!wrap) return;
+      var toasts = wrap.querySelectorAll('.lp-toast');
+      toasts.forEach(function(t) {
+        setTimeout(function() {
+          t.style.transition = 'opacity 0.4s, transform 0.4s';
+          t.style.opacity = '0';
+          t.style.transform = 'translateY(-10px)';
+          setTimeout(function() { if (t.parentNode) t.remove(); }, 400);
+        }, 4000);
+      });
     })();
   </script>
 </body>

@@ -1,81 +1,116 @@
 {% extends "login_base.html" %}
 
-{% block title %}Login{% endblock %}
+{% block title %}Sign In — Fleet Manager{% endblock %}
 
 {% block content %}
-<div class="container d-flex align-items-center justify-content-center py-5">
-  <div class="col-md-5 col-lg-4 mx-auto">
-    <div class="card border-0 rounded-4 shadow-lg"
-         style="background: rgba(15,23,42,0.85); backdrop-filter: blur(10px); color: #e5e7eb;">
-      <div class="card-header text-center border-0 bg-transparent pt-4">
-        <h5 class="mb-1 fw-bold text-white">
-          <i class="bi bi-shield-lock-fill me-2"></i>Fleet Manager
-        </h5>
-        <small class="text-secondary">Secure access to your fleet console</small>
-      </div>
-      <div class="card-body px-4 pb-4 pt-3">
-        <form method="POST" novalidate autocomplete="off">
-          {{ form.hidden_tag() }}
+<div class="lp-section-title">Welcome back</div>
+<div class="lp-section-sub">Sign in to your Fleet Manager account</div>
 
-          <div class="mb-3">
-            {{ form.username.label(class="form-label fw-semibold small") }}
-            {{ form.username(class="form-control form-control-sm " + ("is-invalid" if form.username.errors else ""), placeholder="User ID or CNIC", id="login_username", autocomplete="off") }}
-            {% for error in form.username.errors %}
-            <div class="invalid-feedback d-block">{{ error }}</div>
-            {% endfor %}
-          </div>
+<form method="POST" novalidate autocomplete="off" id="loginForm">
+  {{ form.hidden_tag() }}
 
-          <div class="mb-3">
-            {{ form.password.label(class="form-label fw-semibold small") }}
-            {{ form.password(class="form-control form-control-sm " + ("is-invalid" if form.password.errors else ""), placeholder="Password", id="login_password") }}
-            {% for error in form.password.errors %}
-            <div class="invalid-feedback d-block">{{ error }}</div>
-            {% endfor %}
-          </div>
-
-          <div class="mb-3 form-check">
-            {{ form.remember_me(class="form-check-input") }}
-            {{ form.remember_me.label(class="form-check-label small") }}
-            <small class="d-block text-muted mt-0">Stay logged in for 7 days</small>
-          </div>
-
-          <div class="d-grid mt-3">
-            <button type="submit" id="loginSubmitBtn" class="btn btn-danger fw-bold">
-              <i class="bi bi-box-arrow-in-right me-1"></i>Sign in
-            </button>
-          </div>
-
-          <!-- Biometric Login Button (shown only on native if enabled) -->
-          <div id="bioLoginWrap" style="display:none;margin-top:16px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-              <hr style="flex:1;border-color:rgba(255,255,255,0.12);">
-              <span style="font-size:0.72rem;color:#94a3b8;font-weight:600;letter-spacing:0.05em;">OR</span>
-              <hr style="flex:1;border-color:rgba(255,255,255,0.12);">
-            </div>
-            <button type="button" id="bioLoginBtn"
-              style="width:100%;background:rgba(59,130,246,0.12);border:1.5px solid rgba(59,130,246,0.35);border-radius:14px;color:#93c5fd;padding:13px;font-weight:700;font-size:0.9rem;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;transition:all 0.18s;">
-              <svg style="width:24px;height:24px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
-              </svg>
-              Sign in with Biometrics
-            </button>
-            <p style="text-align:center;margin-top:8px;font-size:0.72rem;color:#64748b;">Touch ID / Face ID</p>
-          </div>
-        </form>
-      </div>
-    </div>
+  <!-- Username Field -->
+  <div class="lp-field">
+    {{ form.username(
+        id="login_username",
+        placeholder=" ",
+        autocomplete="off",
+        class="lp-input" + (" is-invalid" if form.username.errors else ""),
+        style="font-size:16px;"
+    ) }}
+    <label for="login_username">User ID or CNIC</label>
+    <i class="bi bi-person field-icon" id="userIcon"></i>
+    {% for error in form.username.errors %}
+    <div class="invalid-msg">{{ error }}</div>
+    {% endfor %}
   </div>
-</div>
+
+  <!-- Password Field -->
+  <div class="lp-field">
+    {{ form.password(
+        id="login_password",
+        placeholder=" ",
+        class="lp-input" + (" is-invalid" if form.password.errors else ""),
+        style="font-size:16px;"
+    ) }}
+    <label for="login_password">Password</label>
+    <i class="bi bi-eye field-icon" id="pwdToggle" title="Show/hide password" style="cursor:pointer;"></i>
+    {% for error in form.password.errors %}
+    <div class="invalid-msg">{{ error }}</div>
+    {% endfor %}
+  </div>
+
+  <!-- Remember Me -->
+  <div class="lp-remember">
+    <div>
+      <div class="lp-remember-label">Stay signed in</div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:1px;">Keep me logged in for 7 days</div>
+    </div>
+    <label class="lp-toggle">
+      {{ form.remember_me(id="rememberToggle") }}
+      <span class="lp-toggle-track"></span>
+    </label>
+  </div>
+
+  <!-- Sign In Button -->
+  <button type="submit" class="lp-btn-signin" id="loginSubmitBtn">
+    <span class="lp-spinner"></span>
+    <span class="lp-btn-text">Sign In</span>
+    <i class="bi bi-arrow-right-circle-fill lp-btn-text" style="font-size:1.1rem;"></i>
+  </button>
+
+  <!-- Biometric Login (native only) -->
+  <div id="bioLoginWrap" style="display:none;">
+    <div class="lp-bio-divider"><span>OR</span></div>
+    <button type="button" id="bioLoginBtn" class="lp-btn-bio">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+      </svg>
+      Sign in with Biometrics
+    </button>
+    <p class="lp-bio-hint">Touch ID &nbsp;/&nbsp; Face ID</p>
+  </div>
+
+</form>
+
 <script>
+/* ── Password show/hide ── */
 (function() {
-  var input = document.getElementById('login_username');
-  if (!input) return;
-  input.addEventListener('keydown', function(e) {
+  var pwd  = document.getElementById('login_password');
+  var icon = document.getElementById('pwdToggle');
+  if (!pwd || !icon) return;
+  icon.addEventListener('click', function() {
+    var show = pwd.type === 'password';
+    pwd.type  = show ? 'text' : 'password';
+    icon.className = show ? 'bi bi-eye-slash field-icon' : 'bi bi-eye field-icon';
+  });
+})();
+
+/* ── Username → Password on Enter ── */
+(function() {
+  var u = document.getElementById('login_username');
+  if (!u) return;
+  u.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      var pwd = document.getElementById('login_password');
-      if (pwd) pwd.focus();
+      var p = document.getElementById('login_password');
+      if (p) p.focus();
     }
+  });
+})();
+
+/* ── Submit: spinner + disable ── */
+(function() {
+  var form = document.getElementById('loginForm');
+  var btn  = document.getElementById('loginSubmitBtn');
+  if (!form || !btn) return;
+  form.addEventListener('submit', function() {
+    btn.classList.add('loading');
+    btn.disabled = true;
+    setTimeout(function() {
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }, 8000);
   });
 })();
 
