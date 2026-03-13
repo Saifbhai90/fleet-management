@@ -1,64 +1,202 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#1e40af"/>
-      <stop offset="100%" stop-color="#0f172a"/>
+    <!-- ── Deep rich background ── -->
+    <radialGradient id="bg" cx="42%" cy="38%" r="70%">
+      <stop offset="0%"   stop-color="#1a3a72"/>
+      <stop offset="55%"  stop-color="#0d1f4a"/>
+      <stop offset="100%" stop-color="#080d1c"/>
+    </radialGradient>
+    <!-- Van body gradient (top-lit white) -->
+    <linearGradient id="vbg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#c8d9ee"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#3b82f6"/>
-      <stop offset="100%" stop-color="#60a5fa"/>
+    <!-- Windshield gradient -->
+    <linearGradient id="wsg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#0d2060"/>
+      <stop offset="100%" stop-color="#1e3a8a"/>
     </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
+    <!-- Blue wheel gradient -->
+    <radialGradient id="whlg" cx="38%" cy="32%" r="70%">
+      <stop offset="0%"   stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </radialGradient>
+    <!-- Atmospheric center glow -->
+    <radialGradient id="atm" cx="50%" cy="62%" r="42%">
+      <stop offset="0%"   stop-color="#2563eb" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#2563eb" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <!-- Background -->
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <!-- Subtle grid overlay -->
-  <rect width="512" height="512" rx="112" fill="url(#accent)" opacity="0.04"/>
 
-  <!-- ── Van Body (main rectangle) ── -->
-  <rect x="56" y="228" width="272" height="148" rx="20" fill="white" opacity="0.96"/>
+  <!-- ══════════════════════════════════ BACKGROUND -->
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="108" fill="url(#atm)"/>
 
-  <!-- ── Cab Section ── -->
-  <path d="M316 168 L420 168 Q456 168 456 204 L456 376 L316 376 Z" rx="20" fill="white" opacity="0.96"/>
+  <!-- Subtle dot matrix (premium tech feel) -->
+  <g fill="white" opacity="0.055">
+    <circle cx="85"  cy="85"  r="2"/><circle cx="170" cy="85"  r="2"/><circle cx="255" cy="85"  r="2"/>
+    <circle cx="340" cy="85"  r="2"/><circle cx="425" cy="85"  r="2"/>
+    <circle cx="85"  cy="170" r="2"/><circle cx="170" cy="170" r="2"/><circle cx="340" cy="170" r="2"/>
+    <circle cx="425" cy="170" r="2"/><circle cx="85"  cy="255" r="2"/><circle cx="425" cy="255" r="2"/>
+    <circle cx="85"  cy="425" r="2"/><circle cx="170" cy="425" r="2"/><circle cx="340" cy="425" r="2"/>
+    <circle cx="425" cy="425" r="2"/>
+  </g>
+
+  <!-- ══════════════════════════════════ GPS ROUTE NETWORK -->
+  <!-- Glow rings around route nodes -->
+  <circle cx="96"  cy="142" r="20" fill="#3b82f6" opacity="0.12"/>
+  <circle cx="256" cy="112" r="16" fill="#60a5fa" opacity="0.10"/>
+  <circle cx="424" cy="150" r="20" fill="#3b82f6" opacity="0.12"/>
+  <!-- Route nodes -->
+  <circle cx="96"  cy="142" r="8"  fill="#3b82f6" opacity="0.85"/>
+  <circle cx="256" cy="112" r="6"  fill="#60a5fa" opacity="0.80"/>
+  <circle cx="424" cy="150" r="8"  fill="#3b82f6" opacity="0.85"/>
+  <!-- Dashed route polyline -->
+  <polyline points="96,142 176,118 256,112 336,130 424,150"
+    fill="none" stroke="#60a5fa" stroke-width="2.5"
+    stroke-dasharray="7,5" opacity="0.45"/>
+
+  <!-- ══════════════════════════════════ GPS LOCATION PIN (centered above van) -->
+  <!-- Outer pulse rings (simulated glow with layers) -->
+  <circle cx="256" cy="174" r="44" fill="#2563eb" opacity="0.07"/>
+  <circle cx="256" cy="174" r="32" fill="#2563eb" opacity="0.12"/>
+  <circle cx="256" cy="174" r="22" fill="#2563eb" opacity="0.18"/>
+  <!-- Pin teardrop body -->
+  <path d="M256 210 C232 196 224 178 224 164 C224 147 238 134 256 134 C274 134 288 147 288 164 C288 178 280 196 256 210 Z"
+    fill="#2563eb"/>
+  <!-- Pin highlight (shimmer top-left) -->
+  <path d="M238 148 C242 138 250 134 256 134" stroke="white" stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0.45"/>
+  <!-- Pin inner white dot -->
+  <circle cx="256" cy="162" r="11" fill="white" opacity="0.95"/>
+  <circle cx="256" cy="162" r="5"  fill="#2563eb" opacity="0.6"/>
+  <!-- Pin bottom spike drop shadow -->
+  <circle cx="256" cy="212" r="4"  fill="#2563eb" opacity="0.20"/>
+
+  <!-- ══════════════════════════════════ VAN / CARGO TRUCK -->
+  <!-- Ground shadow under van -->
+  <ellipse cx="262" cy="404" rx="188" ry="12" fill="#000000" opacity="0.40"/>
+
+  <!-- ── Rear tail light strip ── -->
+  <rect x="82" y="274" width="10" height="32" rx="4" fill="#ef4444" opacity="0.90"/>
+
+  <!-- ── Van cargo body ── -->
+  <rect x="90"  y="264" width="222" height="128" rx="12" fill="url(#vbg)"/>
+
+  <!-- Cargo body roof highlight -->
+  <rect x="92"  y="264" width="218" height="10" rx="6" fill="white" opacity="0.25"/>
+
+  <!-- Cargo body door lines (rear + mid) -->
+  <line x1="200" y1="264" x2="200" y2="392" stroke="#94a3b8" stroke-width="2"   opacity="0.55"/>
+  <line x1="290" y1="264" x2="290" y2="392" stroke="#94a3b8" stroke-width="2"   opacity="0.55"/>
+
+  <!-- Cargo door handles -->
+  <rect x="238" y="330" width="20" height="6" rx="3" fill="#64748b"/>
+  <rect x="140" y="330" width="15" height="6" rx="3" fill="#64748b"/>
+
+  <!-- ── Cab / Driver section (elevated roofline) ── -->
+  <path d="M298 228 L412 228 Q428 228 428 244 L428 392 L298 392 Z" fill="url(#vbg)"/>
+
+  <!-- Cab roof highlight -->
+  <rect x="300" y="228" width="124" height="9" rx="4" fill="white" opacity="0.22"/>
 
   <!-- ── Windshield ── -->
-  <rect x="328" y="182" width="112" height="96" rx="10" fill="url(#accent)" opacity="0.45"/>
+  <path d="M306 237 L420 237 Q426 237 426 243 L426 295 L306 295 Z" fill="url(#wsg)"/>
+  <!-- Windshield top reflection streak -->
+  <rect x="310" y="240" width="72" height="7" rx="3" fill="white" opacity="0.09"/>
+  <!-- Windshield wiper line -->
+  <line x1="313" y1="292" x2="390" y2="275" stroke="#c8d9ee" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
 
-  <!-- ── Cab detail line (door separation) ── -->
-  <line x1="316" y1="248" x2="456" y2="248" stroke="#e2e8f0" stroke-width="6" opacity="0.5"/>
+  <!-- ── Cab door line ── -->
+  <line x1="298" y1="302" x2="428" y2="302" stroke="#c8d9ee" stroke-width="2" opacity="0.40"/>
+  <!-- Cab door handle -->
+  <rect x="340" y="346" width="22" height="6" rx="3" fill="#64748b"/>
 
-  <!-- ── Body cargo door line ── -->
-  <line x1="192" y1="228" x2="192" y2="376" stroke="#dbeafe" stroke-width="5" opacity="0.6"/>
+  <!-- ── Front bumper ── -->
+  <rect x="418" y="354" width="18" height="38" rx="5" fill="#94a3b8" opacity="0.85"/>
 
-  <!-- ── Headlight ── -->
-  <rect x="444" y="226" width="24" height="36" rx="8" fill="#fbbf24" opacity="0.9"/>
-  <rect x="444" y="226" width="24" height="36" rx="8" fill="#fbbf24" filter="url(#glow)" opacity="0.3"/>
+  <!-- ── Headlight (amber glow — layered for glow effect) ── -->
+  <rect x="420" y="255" width="24" height="40" rx="8" fill="#fde68a" opacity="0.30"/>
+  <rect x="422" y="257" width="22" height="38" rx="7" fill="#fbbf24" opacity="0.80"/>
+  <rect x="422" y="257" width="22" height="38" rx="7" fill="#fef3c7" opacity="0.50"/>
 
   <!-- ── Wheels ── -->
-  <!-- Rear wheel -->
-  <circle cx="148" cy="376" r="52" fill="#0f172a"/>
-  <circle cx="148" cy="376" r="34" fill="#1e3a8a"/>
-  <circle cx="148" cy="376" r="20" fill="url(#accent)"/>
-  <circle cx="148" cy="376" r="8"  fill="white" opacity="0.9"/>
+  <!-- Rear wheel: 4-layer depth -->
+  <circle cx="162" cy="393" r="50" fill="#080d1c"/>
+  <circle cx="162" cy="393" r="36" fill="#1e2d4a"/>
+  <circle cx="162" cy="393" r="23" fill="url(#whlg)"/>
+  <circle cx="162" cy="393" r="10" fill="#f1f5f9"/>
+  <!-- Rear wheel 5-bolt pattern -->
+  <circle cx="162" cy="370" r="4"  fill="#475569"/>
+  <circle cx="183" cy="382" r="4"  fill="#475569"/>
+  <circle cx="175" cy="406" r="4"  fill="#475569"/>
+  <circle cx="149" cy="406" r="4"  fill="#475569"/>
+  <circle cx="141" cy="382" r="4"  fill="#475569"/>
 
   <!-- Front wheel -->
-  <circle cx="376" cy="376" r="52" fill="#0f172a"/>
-  <circle cx="376" cy="376" r="34" fill="#1e3a8a"/>
-  <circle cx="376" cy="376" r="20" fill="url(#accent)"/>
-  <circle cx="376" cy="376" r="8"  fill="white" opacity="0.9"/>
+  <circle cx="374" cy="393" r="50" fill="#080d1c"/>
+  <circle cx="374" cy="393" r="36" fill="#1e2d4a"/>
+  <circle cx="374" cy="393" r="23" fill="url(#whlg)"/>
+  <circle cx="374" cy="393" r="10" fill="#f1f5f9"/>
+  <!-- Front wheel 5-bolt pattern -->
+  <circle cx="374" cy="370" r="4"  fill="#475569"/>
+  <circle cx="395" cy="382" r="4"  fill="#475569"/>
+  <circle cx="387" cy="406" r="4"  fill="#475569"/>
+  <circle cx="361" cy="406" r="4"  fill="#475569"/>
+  <circle cx="353" cy="382" r="4"  fill="#475569"/>
 
-  <!-- ── Speed Lines (left side) ── -->
-  <rect x="20"  y="268" width="44" height="12" rx="6" fill="white" opacity="0.50"/>
-  <rect x="28"  y="292" width="30" height="10" rx="5" fill="white" opacity="0.32"/>
-  <rect x="36"  y="314" width="18" height="8"  rx="4" fill="white" opacity="0.18"/>
+  <!-- ══════════════════════════════════ SPEED LINES (motion blur left) -->
+  <rect x="22" y="290" width="70" height="8"   rx="4"   fill="#60a5fa" opacity="0.55"/>
+  <rect x="14" y="312" width="76" height="6.5" rx="3.25" fill="#60a5fa" opacity="0.38"/>
+  <rect x="26" y="332" width="58" height="5"   rx="2.5" fill="#60a5fa" opacity="0.24"/>
+  <rect x="36" y="350" width="40" height="4"   rx="2"   fill="#60a5fa" opacity="0.13"/>
 
-  <!-- ── Road ground line ── -->
-  <rect x="56" y="424" width="400" height="8" rx="4" fill="white" opacity="0.08"/>
-  <rect x="56"  y="432" width="80"  height="4" rx="2" fill="url(#accent)" opacity="0.5"/>
-  <rect x="172" y="432" width="80"  height="4" rx="2" fill="url(#accent)" opacity="0.5"/>
-  <rect x="288" y="432" width="80"  height="4" rx="2" fill="url(#accent)" opacity="0.5"/>
-  <rect x="404" y="432" width="52"  height="4" rx="2" fill="url(#accent)" opacity="0.5"/>
+  <!-- ══════════════════════════════════ FLOATING FUNCTION BADGES -->
+
+  <!-- ① ATTENDANCE BADGE (green checkmark — top right) -->
+  <!-- Glow rings -->
+  <circle cx="434" cy="182" r="46" fill="#059669" opacity="0.08"/>
+  <circle cx="434" cy="182" r="36" fill="#059669" opacity="0.14"/>
+  <!-- Badge circle -->
+  <circle cx="434" cy="182" r="28" fill="#059669"/>
+  <circle cx="434" cy="182" r="28" fill="white"   opacity="0.08"/>
+  <!-- Checkmark -->
+  <path d="M422 182 L430 192 L448 170"
+    fill="none" stroke="white" stroke-width="5"
+    stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- ② FUEL EXPENSE BADGE (amber flame — left floating) -->
+  <!-- Glow rings -->
+  <circle cx="62" cy="308" r="38" fill="#d97706" opacity="0.10"/>
+  <circle cx="62" cy="308" r="28" fill="#d97706" opacity="0.15"/>
+  <!-- Badge circle -->
+  <circle cx="62" cy="308" r="22" fill="#d97706"/>
+  <circle cx="62" cy="308" r="22" fill="white"   opacity="0.08"/>
+  <!-- Fuel drop / flame shape -->
+  <path d="M62 296 C54 302 52 310 56 316 C58 320 66 320 68 316 C72 310 70 302 62 296 Z"
+    fill="white" opacity="0.92"/>
+  <path d="M62 306 C59 309 59 314 62 316 C65 314 65 309 62 306 Z"
+    fill="#d97706" opacity="0.70"/>
+
+  <!-- ③ TASK / REPORT BADGE (purple clipboard — bottom right) -->
+  <!-- Glow rings -->
+  <circle cx="452" cy="326" r="38" fill="#7c3aed" opacity="0.10"/>
+  <circle cx="452" cy="326" r="28" fill="#7c3aed" opacity="0.15"/>
+  <!-- Badge circle -->
+  <circle cx="452" cy="326" r="22" fill="#7c3aed"/>
+  <circle cx="452" cy="326" r="22" fill="white"   opacity="0.08"/>
+  <!-- Clipboard shape -->
+  <rect x="443" y="316" width="18" height="22" rx="3" fill="white" opacity="0.90"/>
+  <rect x="447" y="313" width="10" height="6"  rx="3" fill="#7c3aed" opacity="0.75"/>
+  <!-- Clipboard lines -->
+  <line x1="446" y1="323" x2="458" y2="323" stroke="#7c3aed" stroke-width="1.5" opacity="0.65"/>
+  <line x1="446" y1="328" x2="458" y2="328" stroke="#7c3aed" stroke-width="1.5" opacity="0.65"/>
+  <line x1="446" y1="333" x2="454" y2="333" stroke="#7c3aed" stroke-width="1.5" opacity="0.65"/>
+
+  <!-- ══════════════════════════════════ ROAD + DASHES (ground) -->
+  <rect x="46" y="444" width="422" height="5"  rx="2.5" fill="white"   opacity="0.05"/>
+  <rect x="60"  y="446" width="52" height="3"  rx="1.5" fill="#3b82f6" opacity="0.38"/>
+  <rect x="148" y="446" width="52" height="3"  rx="1.5" fill="#3b82f6" opacity="0.38"/>
+  <rect x="236" y="446" width="52" height="3"  rx="1.5" fill="#3b82f6" opacity="0.38"/>
+  <rect x="324" y="446" width="52" height="3"  rx="1.5" fill="#3b82f6" opacity="0.38"/>
+  <rect x="412" y="446" width="40" height="3"  rx="1.5" fill="#3b82f6" opacity="0.38"/>
 </svg>
