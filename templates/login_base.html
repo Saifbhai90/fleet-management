@@ -78,6 +78,32 @@
       min-height: 38vh;
       padding-top: env(safe-area-inset-top, 20px);
     }
+
+    /* ── Desktop: centered card layout ── */
+    @media (min-width: 768px) {
+      .lp-page-wrap {
+        display: flex; align-items: center; justify-content: center;
+        min-height: 100vh; padding: 40px 16px;
+      }
+      .lp-center-col {
+        width: 100%; max-width: 420px;
+        display: flex; flex-direction: column; gap: 0;
+      }
+      .lp-brand {
+        min-height: auto; padding: 0 0 24px;
+        padding-top: 0;
+      }
+      .lp-logo-ring { width: 68px; height: 68px; margin-bottom: 14px; }
+      .lp-app-name  { font-size: 1.4rem; }
+      .lp-sheet {
+        border-radius: 20px !important;
+        padding: 32px 32px 32px !important;
+        padding-bottom: 32px !important;
+        box-shadow: 0 24px 64px rgba(0,0,0,0.45) !important;
+        flex: none !important;
+      }
+      .lp-sheet-handle { display: none; }
+    }
     .lp-logo-ring {
       width: 80px; height: 80px;
       background: linear-gradient(135deg, rgba(37,99,235,0.25), rgba(59,130,246,0.12));
@@ -143,7 +169,7 @@
       color: var(--text-dark);
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
-      -webkit-appearance: none;
+      -webkit-appearance: none; appearance: none;
     }
     .lp-field input:focus {
       border-color: var(--accent);
@@ -318,7 +344,8 @@
   </div>
 
   <!-- Page layout: brand top + sheet bottom -->
-  <div style="display:flex;flex-direction:column;min-height:100vh;position:relative;z-index:1;">
+  <div class="lp-page-wrap" style="position:relative;z-index:1;">
+  <div class="lp-center-col" style="display:flex;flex-direction:column;min-height:100vh;width:100%;">
 
     <!-- Brand Header -->
     <div class="lp-brand">
@@ -348,6 +375,7 @@
       {% block content %}{% endblock %}
     </div>
 
+  </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
