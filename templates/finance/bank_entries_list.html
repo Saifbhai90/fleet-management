@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Bank Entries{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="section-heading bg-info">
+        <i class="bi bi-bank2 me-2"></i>Bank Entries
+    </div>
+
+    <div class="card shadow-sm border-0 mt-3">
+        <div class="card-header bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">All Bank Transfers</h6>
+                <a href="{{ url_for('accounts_bank_entry') }}" class="btn btn-info btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i>New Transfer
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="data-table-wrapper">
+                <table class="table table-hover compact-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Entry No</th>
+                            <th>Date</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for be in entries %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ be.entry_number }}</td>
+                            <td>{{ be.entry_date|ddmmyyyy }}</td>
+                            <td>{{ be.from_account.name }}</td>
+                            <td>{{ be.to_account.name }}</td>
+                            <td class="text-end">{{ "{:,.2f}".format(be.amount) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="text-center py-4">No bank entries found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

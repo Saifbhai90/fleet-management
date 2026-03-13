@@ -237,6 +237,7 @@ if _run_startup_tasks:
 
 # Import routes after app & db are ready
 from routes import *  # noqa: E402,F401
+from routes_finance import *  # noqa: E402,F401
 
 # Register Mobile API Blueprint
 from api import api_bp  # noqa: E402

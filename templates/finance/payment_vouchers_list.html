@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Payment Vouchers{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="section-heading bg-success">
+        <i class="bi bi-cash-stack me-2"></i>Payment Vouchers
+    </div>
+
+    <div class="card shadow-sm border-0 mt-3">
+        <div class="card-header bg-light">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h6 class="mb-0">Filter & Search</h6>
+                {% if can_see_page('accounts_quick_payment') %}
+                <a href="{{ url_for('accounts_quick_payment') }}" class="btn btn-success btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i>New Payment
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="GET" class="row g-2 mb-3">
+                <div class="col-md-3">
+                    <input type="date" name="from_date" class="form-control form-control-sm" value="{{ from_date }}" placeholder="From Date">
+                </div>
+                <div class="col-md-3">
+                    <input type="date" name="to_date" class="form-control form-control-sm" value="{{ to_date }}" placeholder="To Date">
+                </div>
+                <div class="col-md-2">
+                    <select name="district_id" class="form-select form-select-sm">
+                        <option value="0">All Districts</option>
+                        {% for d in districts %}
+                        <option value="{{ d.id }}" {% if d.id == district_id %}selected{% endif %}>{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="project_id" class="form-select form-select-sm">
+                        <option value="0">All Projects</option>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if p.id == project_id %}selected{% endif %}>{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary btn-sm w-100">Apply</button>
+                </div>
+            </form>
+
+            <div class="data-table-wrapper">
+                <table class="table table-hover compact-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Voucher No</th>
+                            <th>Date</th>
+                            <th>From Account</th>
+                            <th>To Account</th>
+                            <th>Amount</th>
+                            <th>Mode</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pv in vouchers %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ pv.voucher_number }}</td>
+                            <td>{{ pv.payment_date|ddmmyyyy }}</td>
+                            <td>{{ pv.from_account.name }}</td>
+                            <td>{{ pv.to_account.name }}</td>
+                            <td class="text-end">{{ "{:,.2f}".format(pv.amount) }}</td>
+                            <td><span class="badge bg-info">{{ pv.payment_mode }}</span></td>
+                            <td>
+                                <a href="{{ url_for('payment_voucher_edit', pk=pv.id) }}" class="btn btn-sm btn-edit-compact" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form action="{{ url_for('payment_voucher_delete', pk=pv.id) }}" method="POST" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-delete-compact" title="Delete" onclick="return confirm('Delete this payment voucher?')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="8" class="text-center py-4">No payment vouchers found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

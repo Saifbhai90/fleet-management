@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="section-heading bg-warning">
+        <i class="bi bi-wallet2 me-2"></i>{{ title }}
+    </div>
+
+    <div class="card shadow-sm border-0 mt-3">
+        <div class="card-body p-4">
+            <form method="POST" enctype="multipart/form-data">
+                {{ form.hidden_tag() }}
+                
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        {{ form.expense_date.label(class="form-label fw-bold") }}
+                        {{ form.expense_date(class="form-control") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        {{ form.expense_category.label(class="form-label fw-bold") }}
+                        {{ form.expense_category(class="form-select") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        {{ form.employee_id.label(class="form-label fw-bold") }}
+                        {{ form.employee_id(class="form-select") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        {{ form.amount.label(class="form-label fw-bold") }}
+                        {{ form.amount(class="form-control", inputmode="decimal") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        {{ form.district_id.label(class="form-label fw-bold") }}
+                        {{ form.district_id(class="form-select") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        {{ form.project_id.label(class="form-label fw-bold") }}
+                        {{ form.project_id(class="form-select") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        {{ form.payment_mode.label(class="form-label fw-bold") }}
+                        {{ form.payment_mode(class="form-select") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        {{ form.receipt.label(class="form-label fw-bold") }}
+                        {{ form.receipt(class="form-control") }}
+                    </div>
+                    
+                    <div class="col-12">
+                        {{ form.description.label(class="form-label fw-bold") }}
+                        {{ form.description(class="form-control") }}
+                    </div>
+                </div>
+                
+                <div class="mt-4 d-flex gap-2">
+                    {{ form.submit(class="btn btn-warning px-4") }}
+                    <a href="{{ url_for('employee_expense_list') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Receipt Vouchers{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="section-heading bg-primary">
+        <i class="bi bi-cash-coin me-2"></i>Receipt Vouchers
+    </div>
+
+    <div class="card shadow-sm border-0 mt-3">
+        <div class="card-header bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">All Receipts</h6>
+                <a href="{{ url_for('accounts_quick_receipt') }}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i>New Receipt
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="data-table-wrapper">
+                <table class="table table-hover compact-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Voucher No</th>
+                            <th>Date</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Amount</th>
+                            <th>Mode</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rv in vouchers %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ rv.voucher_number }}</td>
+                            <td>{{ rv.receipt_date|ddmmyyyy }}</td>
+                            <td>{{ rv.from_account.name }}</td>
+                            <td>{{ rv.to_account.name }}</td>
+                            <td class="text-end">{{ "{:,.2f}".format(rv.amount) }}</td>
+                            <td><span class="badge bg-info">{{ rv.receipt_mode }}</span></td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="7" class="text-center py-4">No receipt vouchers found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

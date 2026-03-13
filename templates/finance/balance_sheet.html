@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="section-heading bg-info">
+        <i class="bi bi-file-earmark-bar-graph me-2"></i>{{ title }}
+    </div>
+
+    <div class="card shadow-sm border-0 mt-3">
+        <div class="card-body p-4">
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        {{ form.as_of_date.label(class="form-label fw-bold") }}
+                        {{ form.as_of_date(class="form-control") }}
+                    </div>
+                    
+                    <div class="col-md-6 d-flex align-items-end">
+                        {{ form.submit(class="btn btn-info px-4") }}
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if balance_sheet_data %}
+    <div class="row mt-3">
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Assets</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        {% for acc, bal in balance_sheet_data.assets %}
+                        <tr>
+                            <td>{{ acc.code }} - {{ acc.name }}</td>
+                            <td class="text-end">{{ "{:,.2f}".format(bal) }}</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-active fw-bold">
+                            <td>Total Assets</td>
+                            <td class="text-end">{{ "{:,.2f}".format(balance_sheet_data.total_assets) }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">Liabilities</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        {% for acc, bal in balance_sheet_data.liabilities %}
+                        <tr>
+                            <td>{{ acc.code }} - {{ acc.name }}</td>
+                            <td class="text-end">{{ "{:,.2f}".format(bal) }}</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-active fw-bold">
+                            <td>Total Liabilities</td>
+                            <td class="text-end">{{ "{:,.2f}".format(balance_sheet_data.total_liabilities) }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Equity</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        {% for acc, bal in balance_sheet_data.equity %}
+                        <tr>
+                            <td>{{ acc.code }} - {{ acc.name }}</td>
+                            <td class="text-end">{{ "{:,.2f}".format(bal) }}</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-active fw-bold">
+                            <td>Total Equity</td>
+                            <td class="text-end">{{ "{:,.2f}".format(balance_sheet_data.total_equity) }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert {% if balance_sheet_data.balanced %}alert-success{% else %}alert-danger{% endif %} mt-3">
+        <h5 class="fw-bold">Balance Check</h5>
+        <p class="mb-0">
+            Assets: {{ "{:,.2f}".format(balance_sheet_data.total_assets) }} | 
+            Liabilities + Equity: {{ "{:,.2f}".format(balance_sheet_data.total_liabilities + balance_sheet_data.total_equity) }}
+            {% if balance_sheet_data.balanced %}
+            <span class="badge bg-success ms-2">✓ Balanced</span>
+            {% else %}
+            <span class="badge bg-danger ms-2">✗ Not Balanced</span>
+            {% endif %}
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

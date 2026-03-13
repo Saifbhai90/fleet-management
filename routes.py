@@ -9790,6 +9790,20 @@ def fuel_expense_add():
             km_out_task=km_out_task, km_in_task=km_in_task, meter_reading_matched=meter_reading_matched
         )
         db.session.add(rec)
+        db.session.flush()
+        
+        # Create journal entry for fuel expense
+        try:
+            from finance_utils import create_expense_journal
+            from models import Account
+            fuel_account = Account.query.filter_by(code='5110').first()
+            if fuel_pump_id and fuel_account:
+                party_account = Account.query.filter_by(party_id=fuel_pump_id, account_type='Liability').first()
+                if party_account:
+                    je = create_expense_journal('FuelExpense', rec, '5110', party_account.id)
+        except Exception as e:
+            print(f"Journal entry creation failed for fuel expense: {e}")
+        
         db.session.commit()
         flash('Fuel expense saved.', 'success')
         return redirect(url_for('fuel_expense_list'))

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Employee Expenses{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="section-heading bg-warning">
+        <i class="bi bi-wallet2 me-2"></i>Employee Expenses
+    </div>
+
+    <div class="card shadow-sm border-0 mt-3">
+        <div class="card-header bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">All Employee Expenses</h6>
+                <a href="{{ url_for('employee_expense_form') }}" class="btn btn-warning btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i>New Expense
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="data-table-wrapper">
+                <table class="table table-hover compact-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Date</th>
+                            <th>Category</th>
+                            <th>Description</th>
+                            <th>Amount</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for exp in expenses %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ exp.expense_date|ddmmyyyy }}</td>
+                            <td><span class="badge bg-secondary">{{ exp.expense_category }}</span></td>
+                            <td>{{ exp.description[:50] }}...</td>
+                            <td class="text-end">{{ "{:,.2f}".format(exp.amount) }}</td>
+                            <td>
+                                <a href="{{ url_for('employee_expense_form', pk=exp.id) }}" class="btn btn-sm btn-edit-compact">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form action="{{ url_for('employee_expense_delete', pk=exp.id) }}" method="POST" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-delete-compact" onclick="return confirm('Delete?')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="text-center py-4">No expenses found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
