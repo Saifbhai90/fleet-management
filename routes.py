@@ -9541,6 +9541,10 @@ def fuel_expense_list():
             q = q.filter(Vehicle.district_id == district_id)
         vehicles = q.order_by(Vehicle.vehicle_no).all()
         form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicles]
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    per_page = per_page if per_page in (25, 50, 100, 200) else 50
+
     query = FuelExpense.query.filter(
         FuelExpense.fueling_date >= from_d,
         FuelExpense.fueling_date <= to_d
@@ -9551,20 +9555,29 @@ def fuel_expense_list():
         query = query.filter(FuelExpense.project_id == project_id)
     if vehicle_id:
         query = query.filter(FuelExpense.vehicle_id == vehicle_id)
-    rows = query.order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).all()
+    query = query.order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc())
+
+    # Aggregate totals from all matching rows (before pagination)
+    all_rows = query.all()
     totals = {}
-    if rows:
-        total_km = sum(float(r.km or 0) for r in rows)
-        total_liters = sum(float(r.liters or 0) for r in rows)
-        total_amount = sum(float(r.amount or 0) for r in rows)
-        first_prev = rows[-1].previous_reading
-        last_curr = rows[0].current_reading
+    if all_rows:
+        total_km = sum(float(r.km or 0) for r in all_rows)
+        total_liters = sum(float(r.liters or 0) for r in all_rows)
+        total_amount = sum(float(r.amount or 0) for r in all_rows)
+        first_prev = all_rows[-1].previous_reading
+        last_curr = all_rows[0].current_reading
         avg_mpg = round(total_km / total_liters, 2) if total_liters else None
         totals = {'total_km': total_km, 'total_liters': total_liters, 'total_amount': total_amount,
                   'first_previous_reading': float(first_prev) if first_prev else None,
                   'last_current_reading': float(last_curr) if last_curr else None,
                   'avg_mpg': avg_mpg}
-    return render_template('fuel_expense_list.html', form=form, rows=rows, from_date=from_d, to_date=to_d, totals=totals)
+
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    rows = pagination.items
+    return render_template('fuel_expense_list.html', form=form, rows=rows,
+                           from_date=from_d, to_date=to_d, totals=totals,
+                           pagination=pagination, page=page, per_page=per_page,
+                           district_id=district_id, project_id=project_id, vehicle_id=vehicle_id)
 
 
 @app.route('/expenses/fuel/add', methods=['GET', 'POST'])
