@@ -1,27 +1,64 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0f172a"/>
-  <rect x="40" y="40" width="432" height="432" rx="72" fill="#1e293b"/>
-  <!-- Truck body -->
-  <rect x="80" y="220" width="240" height="120" rx="16" fill="#3b82f6"/>
-  <rect x="280" y="250" width="120" height="90" rx="12" fill="#2563eb"/>
-  <!-- Cab window -->
-  <rect x="292" y="262" width="96" height="52" rx="8" fill="#93c5fd"/>
-  <!-- Truck front -->
-  <rect x="370" y="290" width="50" height="50" rx="8" fill="#1d4ed8"/>
-  <!-- Wheels -->
-  <circle cx="150" cy="350" r="36" fill="#0f172a"/>
-  <circle cx="150" cy="350" r="22" fill="#64748b"/>
-  <circle cx="150" cy="350" r="10" fill="#94a3b8"/>
-  <circle cx="310" cy="350" r="36" fill="#0f172a"/>
-  <circle cx="310" cy="350" r="22" fill="#64748b"/>
-  <circle cx="310" cy="350" r="10" fill="#94a3b8"/>
-  <!-- Person icon -->
-  <circle cx="390" cy="148" r="44" fill="#10b981"/>
-  <circle cx="390" cy="132" r="18" fill="#fff"/>
-  <path d="M358 185 Q390 168 422 185 L422 192 Q390 176 358 192 Z" fill="#fff"/>
-  <!-- Road lines -->
-  <rect x="80" y="400" width="60" height="12" rx="6" fill="#475569"/>
-  <rect x="180" y="400" width="60" height="12" rx="6" fill="#475569"/>
-  <rect x="280" y="400" width="60" height="12" rx="6" fill="#475569"/>
-  <rect x="380" y="400" width="60" height="12" rx="6" fill="#475569"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e40af"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- Subtle grid overlay -->
+  <rect width="512" height="512" rx="112" fill="url(#accent)" opacity="0.04"/>
+
+  <!-- ── Van Body (main rectangle) ── -->
+  <rect x="56" y="228" width="272" height="148" rx="20" fill="white" opacity="0.96"/>
+
+  <!-- ── Cab Section ── -->
+  <path d="M316 168 L420 168 Q456 168 456 204 L456 376 L316 376 Z" rx="20" fill="white" opacity="0.96"/>
+
+  <!-- ── Windshield ── -->
+  <rect x="328" y="182" width="112" height="96" rx="10" fill="url(#accent)" opacity="0.45"/>
+
+  <!-- ── Cab detail line (door separation) ── -->
+  <line x1="316" y1="248" x2="456" y2="248" stroke="#e2e8f0" stroke-width="6" opacity="0.5"/>
+
+  <!-- ── Body cargo door line ── -->
+  <line x1="192" y1="228" x2="192" y2="376" stroke="#dbeafe" stroke-width="5" opacity="0.6"/>
+
+  <!-- ── Headlight ── -->
+  <rect x="444" y="226" width="24" height="36" rx="8" fill="#fbbf24" opacity="0.9"/>
+  <rect x="444" y="226" width="24" height="36" rx="8" fill="#fbbf24" filter="url(#glow)" opacity="0.3"/>
+
+  <!-- ── Wheels ── -->
+  <!-- Rear wheel -->
+  <circle cx="148" cy="376" r="52" fill="#0f172a"/>
+  <circle cx="148" cy="376" r="34" fill="#1e3a8a"/>
+  <circle cx="148" cy="376" r="20" fill="url(#accent)"/>
+  <circle cx="148" cy="376" r="8"  fill="white" opacity="0.9"/>
+
+  <!-- Front wheel -->
+  <circle cx="376" cy="376" r="52" fill="#0f172a"/>
+  <circle cx="376" cy="376" r="34" fill="#1e3a8a"/>
+  <circle cx="376" cy="376" r="20" fill="url(#accent)"/>
+  <circle cx="376" cy="376" r="8"  fill="white" opacity="0.9"/>
+
+  <!-- ── Speed Lines (left side) ── -->
+  <rect x="20"  y="268" width="44" height="12" rx="6" fill="white" opacity="0.50"/>
+  <rect x="28"  y="292" width="30" height="10" rx="5" fill="white" opacity="0.32"/>
+  <rect x="36"  y="314" width="18" height="8"  rx="4" fill="white" opacity="0.18"/>
+
+  <!-- ── Road ground line ── -->
+  <rect x="56" y="424" width="400" height="8" rx="4" fill="white" opacity="0.08"/>
+  <rect x="56"  y="432" width="80"  height="4" rx="2" fill="url(#accent)" opacity="0.5"/>
+  <rect x="172" y="432" width="80"  height="4" rx="2" fill="url(#accent)" opacity="0.5"/>
+  <rect x="288" y="432" width="80"  height="4" rx="2" fill="url(#accent)" opacity="0.5"/>
+  <rect x="404" y="432" width="52"  height="4" rx="2" fill="url(#accent)" opacity="0.5"/>
 </svg>

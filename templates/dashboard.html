@@ -1,37 +1,228 @@
 {% extends "base.html" %}
-{% block title %}Fleet Manager - Dashboard{% endblock %}
+{% block title %}Dashboard — Fleet Manager{% endblock %}
 
 {% block extra_head %}
 <style>
-.bento-kpi {
-    border: none;
-    border-radius: 18px;
-    padding: 1.4rem 1.6rem;
-    color: #fff;
-    min-height: 130px;
+/* ═══════════════════════════════════════════════
+   BENTO GRID — Premium Dashboard Layout
+═══════════════════════════════════════════════ */
+.bento-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: minmax(130px, auto);
+    gap: 16px;
+}
+
+/* ── Card base ── */
+.bc {
+    border-radius: 22px;
+    padding: 22px 24px;
+    text-decoration: none;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    transition: transform 0.25s, box-shadow 0.25s;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.09);
+    transition: transform 0.22s cubic-bezier(.34,1.56,.64,1),
+                box-shadow 0.22s ease !important;
+}
+.bc:hover {
+    transform: translateY(-4px) scale(1.01) !important;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.16) !important;
     text-decoration: none;
 }
-.bento-kpi:hover { transform: translateY(-5px); box-shadow: 0 12px 32px rgba(0,0,0,0.2); }
-.bento-kpi .kpi-icon { font-size: 2rem; opacity: 0.85; }
-.bento-kpi .kpi-value { font-size: 2.4rem; font-weight: 800; line-height: 1; }
-.bento-kpi .kpi-label { font-size: 0.8rem; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.05em; }
-.bento-kpi .kpi-sub { font-size: 0.78rem; opacity: 0.75; }
-.kpi-blue   { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
-.kpi-green  { background: linear-gradient(135deg, #059669, #047857); }
-.kpi-orange { background: linear-gradient(135deg, #d97706, #b45309); }
-.kpi-teal   { background: linear-gradient(135deg, #0891b2, #0e7490); }
-.bento-secondary {
-    border: none; border-radius: 16px; transition: 0.2s;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+.bc:active { transform: scale(0.98) !important; }
+
+/* ── Sizes ── */
+.bc-hero   { grid-column: span 2; grid-row: span 2; padding: 28px 32px; }
+.bc-tall   { grid-column: span 1; grid-row: span 2; }
+.bc-wide   { grid-column: span 2; grid-row: span 1; }
+.bc-sm     { grid-column: span 1; grid-row: span 1; }
+
+/* ── Color themes ── */
+.bc-blue {
+    background: linear-gradient(145deg, #1d4ed8 0%, #1e40af 50%, #1e3a8a 100%);
+    color: #fff;
 }
-.bento-secondary:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.12); }
-.skeleton { background: linear-gradient(90deg,#e2e8f0 25%,#f1f5f9 50%,#e2e8f0 75%); background-size:200% 100%; animation: shimmer 1.4s infinite; border-radius:10px; }
-@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+.bc-blue::before {
+    content: '';
+    position: absolute; top: -40px; right: -40px;
+    width: 160px; height: 160px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 50%;
+}
+.bc-blue::after {
+    content: '';
+    position: absolute; bottom: -60px; right: -20px;
+    width: 200px; height: 200px;
+    background: rgba(96,165,250,0.12);
+    border-radius: 50%;
+}
+.bc-green {
+    background: linear-gradient(145deg, #059669 0%, #047857 60%, #065f46 100%);
+    color: #fff;
+}
+.bc-green::before {
+    content: '';
+    position: absolute; top: -30px; left: -30px;
+    width: 120px; height: 120px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 50%;
+}
+.bc-orange {
+    background: linear-gradient(145deg, #ea580c 0%, #c2410c 100%);
+    color: #fff;
+}
+.bc-violet {
+    background: linear-gradient(145deg, #7c3aed 0%, #6d28d9 100%);
+    color: #fff;
+}
+.bc-light {
+    background: #ffffff;
+    color: #0f172a;
+    border: 1px solid #f1f5f9;
+}
+.bc-light:hover {
+    background: #f8faff;
+    border-color: #dbeafe;
+}
+
+/* ── Typography inside cards ── */
+.bc-tag {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.75;
+    margin-bottom: 4px;
+}
+.bc-num {
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.03em;
+}
+.bc-num-xl { font-size: clamp(3.2rem, 6vw, 5rem); }
+.bc-num-lg { font-size: clamp(2.4rem, 4vw, 3.2rem); }
+.bc-num-md { font-size: clamp(1.8rem, 3vw, 2.4rem); }
+.bc-sub {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    font-weight: 500;
+    margin-top: 4px;
+}
+.bc-icon-bg {
+    position: relative; z-index: 1;
+    width: 48px; height: 48px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+}
+
+/* ── Progress bar ── */
+.bc-progress-wrap {
+    margin-top: 14px;
+    position: relative; z-index: 1;
+}
+.bc-progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    opacity: 0.7;
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+.bc-progress-bar {
+    height: 5px;
+    background: rgba(255,255,255,0.18);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.bc-progress-fill {
+    height: 100%;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.7);
+    transition: width 1s cubic-bezier(.25,.46,.45,.94);
+}
+
+/* ── Decorative SVG icon (large background) ── */
+.bc-deco-icon {
+    position: absolute;
+    bottom: -8px; right: -4px;
+    opacity: 0.07;
+    pointer-events: none;
+    z-index: 0;
+}
+.bc-deco-icon svg { width: 110px; height: 110px; }
+.bc-hero .bc-deco-icon svg { width: 180px; height: 180px; }
+
+/* ── Secondary card inner icon chip ── */
+.chip-icon {
+    width: 52px; height: 52px;
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+/* ── Stagger entrance animation ── */
+.bc { opacity: 0; transform: translateY(20px); }
+.bc.entered { opacity: 1; transform: translateY(0); }
+@keyframes bentoIn {
+    from { opacity:0; transform:translateY(22px) scale(0.97); }
+    to   { opacity:1; transform:translateY(0)    scale(1); }
+}
+
+/* ── Responsive ── */
+@media (max-width: 991px) {
+    .bento-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .bc-hero { grid-column: span 2; grid-row: span 1; padding: 20px 22px; }
+    .bc-tall { grid-column: span 1; grid-row: span 1; }
+    .bc-wide { grid-column: span 2; }
+    .bc-num-xl { font-size: 2.8rem; }
+}
+@media (max-width: 575px) {
+    .bento-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .bc { border-radius: 18px; padding: 16px 18px; }
+    .bc-hero { grid-column: span 2; padding: 18px 20px; }
+    .bc-num-xl { font-size: 2.2rem; }
+    .bc-num-lg { font-size: 1.9rem; }
+    .bc-num-md { font-size: 1.5rem; }
+    .bc-deco-icon svg { width: 70px; height: 70px; }
+}
+
+/* ── Skeleton loader (shown briefly on load) ── */
+.bento-skeleton {
+    border-radius: 22px;
+    background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
+    background-size: 300% 100%;
+    animation: skelShimmer2 1.5s infinite;
+}
+@keyframes skelShimmer2 {
+    0%   { background-position: 300% 0; }
+    100% { background-position: -100% 0; }
+}
+
+/* ── Quick Action bar ── */
+.quick-actions {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px;
+}
+.qa-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 18px;
+    border-radius: 14px;
+    font-size: 0.83rem; font-weight: 600;
+    text-decoration: none;
+    border: 1.5px solid transparent;
+    transition: all 0.18s ease !important;
+}
+.qa-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); text-decoration: none; }
+.qa-primary   { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+.qa-primary:hover { background: #1e40af; color: #fff; }
+.qa-secondary { background: #fff; color: #334155; border-color: #e2e8f0; }
+.qa-secondary:hover { border-color: #3b82f6; color: #1d4ed8; background: #eff6ff; }
 </style>
 {% endblock %}
 
@@ -42,108 +233,187 @@ document.addEventListener('DOMContentLoaded', function() {
         {% if from_login %}window.logActivity('Login');{% endif %}
         window.logActivity('Page View: Dashboard');
     }
+    /* Stagger-animate Bento cards */
+    var cards = document.querySelectorAll('.bc');
+    cards.forEach(function(card, i) {
+        setTimeout(function() {
+            card.style.animation = 'bentoIn 0.45s cubic-bezier(.34,1.2,.64,1) both';
+            card.classList.add('entered');
+        }, 60 + i * 55);
+    });
 });
 </script>
 
-<!-- Header -->
+{% set driver_pct = ((active_drivers / total_drivers * 100) | round(1)) if total_drivers > 0 else 0 %}
+{% set fleet_pct  = ((assigned_vehicles / total_vehicles * 100) | round(1)) if total_vehicles > 0 else 0 %}
+
+<!-- ── Page Header ── -->
 <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-4">
     <div>
-        <h2 class="fw-bold mb-0">Dashboard</h2>
-        <small class="text-muted">Fleet overview — real-time snapshot</small>
+        <h2 class="fw-bold mb-0" style="font-size:1.6rem;letter-spacing:-0.02em;color:#0f172a;">Dashboard</h2>
+        <span class="text-muted" style="font-size:0.85rem;">Real-time fleet snapshot</span>
     </div>
     <div class="d-flex flex-wrap gap-2">
-        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-clockwise"></i> Refresh</a>
-        <a href="{{ url_for('driver_form') }}" class="btn btn-primary btn-sm"><i class="bi bi-person-plus"></i> Add Driver</a>
-        <a href="{{ url_for('reports_index') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-bar-chart-line"></i> Reports</a>
-    </div>
-</div>
-
-<!-- ── ROW 1: Big KPI Bento Cards ── -->
-<div class="row g-3 mb-3">
-    <div class="col-6 col-md-3">
-        <a href="{{ url_for('drivers_list') }}" class="bento-kpi kpi-blue d-block">
-            <div class="d-flex justify-content-between align-items-start">
-                <span class="kpi-label">Active Drivers</span>
-                <i class="bi bi-person-badge-fill kpi-icon"></i>
-            </div>
-            <div class="kpi-value">{{ active_drivers }}</div>
-            <div class="kpi-sub">{{ total_drivers }} total registered</div>
+        <a href="{{ url_for('dashboard') }}" class="qa-btn qa-secondary">
+            <i data-lucide="refresh-cw" style="width:15px;height:15px;"></i> Refresh
         </a>
-    </div>
-    <div class="col-6 col-md-3">
-        <a href="{{ url_for('vehicles_list') }}" class="bento-kpi kpi-green d-block">
-            <div class="d-flex justify-content-between align-items-start">
-                <span class="kpi-label">Fleet Deployed</span>
-                <i class="bi bi-truck-front-fill kpi-icon"></i>
-            </div>
-            <div class="kpi-value">{{ assigned_vehicles }}</div>
-            <div class="kpi-sub">{{ total_vehicles }} total vehicles</div>
+        <a href="{{ url_for('driver_form') }}" class="qa-btn qa-primary">
+            <i data-lucide="user-plus" style="width:15px;height:15px;"></i> Add Driver
         </a>
-    </div>
-    <div class="col-6 col-md-3">
-        <a href="{{ url_for('driver_attendance_list') }}" class="bento-kpi kpi-orange d-block">
-            <div class="d-flex justify-content-between align-items-start">
-                <span class="kpi-label">Today's Attendance</span>
-                <i class="bi bi-calendar-check-fill kpi-icon"></i>
-            </div>
-            <div class="kpi-value">{{ today_attendance }}</div>
-            <div class="kpi-sub">check-ins recorded today</div>
-        </a>
-    </div>
-    <div class="col-6 col-md-3">
-        <a href="{{ url_for('driver_transfers') }}" class="bento-kpi kpi-teal d-block">
-            <div class="d-flex justify-content-between align-items-start">
-                <span class="kpi-label">Today's Transfers</span>
-                <i class="bi bi-arrow-left-right kpi-icon"></i>
-            </div>
-            <div class="kpi-value">{{ today_transfers }}</div>
-            <div class="kpi-sub">driver transfers today</div>
+        <a href="{{ url_for('reports_index') }}" class="qa-btn qa-secondary">
+            <i data-lucide="bar-chart-2" style="width:15px;height:15px;"></i> Reports
         </a>
     </div>
 </div>
 
-<!-- ── ROW 2: Secondary Cards ── -->
-<div class="row g-3 mb-3">
-    <div class="col-12">
-        <div class="row g-3">
-            <div class="col-6 col-sm-3">
-                <a href="{{ url_for('projects_list') }}" class="card bento-secondary text-decoration-none p-3 d-flex flex-row align-items-center gap-3">
-                    <div class="rounded-3 p-2" style="background:#dbeafe"><i class="bi bi-briefcase-fill text-primary fs-4"></i></div>
-                    <div>
-                        <div class="fw-bold fs-5">{{ total_projects }}</div>
-                        <small class="text-muted">Projects</small>
-                    </div>
-                </a>
+<!-- ═══════════════════════════════
+     BENTO GRID
+═══════════════════════════════ -->
+<div class="bento-grid">
+
+    <!-- ① HERO: Active Drivers (2×2 — dominant card) -->
+    <a href="{{ url_for('drivers_list') }}" class="bc bc-blue bc-hero">
+        <div style="position:relative;z-index:1;">
+            <div class="bc-tag">Active Drivers</div>
+            <div class="bc-num bc-num-xl">{{ active_drivers }}</div>
+            <div class="bc-sub">of {{ total_drivers }} total registered</div>
+        </div>
+        <div class="bc-progress-wrap" style="position:relative;z-index:1;">
+            <div class="bc-progress-label">
+                <span>Utilization</span>
+                <span>{{ driver_pct }}%</span>
             </div>
-            <div class="col-6 col-sm-3">
-                <a href="{{ url_for('districts_list') }}" class="card bento-secondary text-decoration-none p-3 d-flex flex-row align-items-center gap-3">
-                    <div class="rounded-3 p-2" style="background:#dcfce7"><i class="bi bi-geo-alt-fill text-success fs-4"></i></div>
-                    <div>
-                        <div class="fw-bold fs-5">{{ total_districts }}</div>
-                        <small class="text-muted">Districts</small>
-                    </div>
-                </a>
-            </div>
-            <div class="col-6 col-sm-3">
-                <a href="{{ url_for('parking_list') }}" class="card bento-secondary text-decoration-none p-3 d-flex flex-row align-items-center gap-3">
-                    <div class="rounded-3 p-2" style="background:#fce7f3"><i class="bi bi-p-square-fill text-danger fs-4"></i></div>
-                    <div>
-                        <div class="fw-bold fs-5">{{ total_parking }}</div>
-                        <small class="text-muted">Parking Stations</small>
-                    </div>
-                </a>
-            </div>
-            <div class="col-6 col-sm-3">
-                <a href="{{ url_for('companies') }}" class="card bento-secondary text-decoration-none p-3 d-flex flex-row align-items-center gap-3">
-                    <div class="rounded-3 p-2" style="background:#f3e8ff"><i class="bi bi-building-fill text-purple fs-4" style="color:#7c3aed"></i></div>
-                    <div>
-                        <div class="fw-bold fs-5">{{ total_companies }}</div>
-                        <small class="text-muted">Companies</small>
-                    </div>
-                </a>
+            <div class="bc-progress-bar">
+                <div class="bc-progress-fill" style="width:{{ driver_pct }}%;"></div>
             </div>
         </div>
-    </div>
+        <div class="bc-deco-icon">
+            <svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4z"/>
+            </svg>
+        </div>
+    </a>
+
+    <!-- ② TALL: Fleet Deployed (1×2) -->
+    <a href="{{ url_for('vehicles_list') }}" class="bc bc-green bc-tall">
+        <div style="position:relative;z-index:1;">
+            <div class="bc-tag">Fleet Deployed</div>
+            <div class="bc-num bc-num-lg">{{ assigned_vehicles }}</div>
+            <div class="bc-sub">{{ total_vehicles }} total vehicles</div>
+        </div>
+        <div class="bc-progress-wrap" style="position:relative;z-index:1;">
+            <div class="bc-progress-label">
+                <span>On road</span>
+                <span>{{ fleet_pct }}%</span>
+            </div>
+            <div class="bc-progress-bar">
+                <div class="bc-progress-fill" style="width:{{ fleet_pct }}%;"></div>
+            </div>
+        </div>
+        <div class="bc-deco-icon">
+            <svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 3h15v13H1zM16 8h4l3 3v5h-7V8zM5.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM18.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
+            </svg>
+        </div>
+    </a>
+
+    <!-- ③ Today's Attendance (1×1) -->
+    <a href="{{ url_for('driver_attendance_list') }}" class="bc bc-orange bc-sm">
+        <div>
+            <div class="bc-tag">Today's Attendance</div>
+            <div class="bc-num bc-num-md">{{ today_attendance }}</div>
+            <div class="bc-sub">check-ins today</div>
+        </div>
+        <div class="bc-deco-icon">
+            <svg viewBox="0 0 24 24" fill="white"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+    </a>
+
+    <!-- ④ Today's Transfers (1×1) -->
+    <a href="{{ url_for('driver_transfers') }}" class="bc bc-violet bc-sm">
+        <div>
+            <div class="bc-tag">Today's Transfers</div>
+            <div class="bc-num bc-num-md">{{ today_transfers }}</div>
+            <div class="bc-sub">driver moves today</div>
+        </div>
+        <div class="bc-deco-icon">
+            <svg viewBox="0 0 24 24" fill="white"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+        </div>
+    </a>
+
+    <!-- ⑤ Projects (1×1 light) -->
+    <a href="{{ url_for('projects_list') }}" class="bc bc-light bc-sm">
+        <div class="chip-icon" style="background:#dbeafe;color:#1d4ed8;">
+            <i data-lucide="briefcase" style="width:22px;height:22px;"></i>
+        </div>
+        <div>
+            <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_projects }}</div>
+            <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Projects</div>
+        </div>
+    </a>
+
+    <!-- ⑥ Districts (1×1 light) -->
+    <a href="{{ url_for('districts_list') }}" class="bc bc-light bc-sm">
+        <div class="chip-icon" style="background:#dcfce7;color:#15803d;">
+            <i data-lucide="map-pin" style="width:22px;height:22px;"></i>
+        </div>
+        <div>
+            <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_districts }}</div>
+            <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Districts</div>
+        </div>
+    </a>
+
+    <!-- ⑦ Parking Stations (1×1 light) -->
+    <a href="{{ url_for('parking_list') }}" class="bc bc-light bc-sm">
+        <div class="chip-icon" style="background:#fce7f3;color:#be185d;">
+            <i data-lucide="parking-circle" style="width:22px;height:22px;"></i>
+        </div>
+        <div>
+            <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_parking }}</div>
+            <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Parking</div>
+        </div>
+    </a>
+
+    <!-- ⑧ Companies (1×1 light) -->
+    <a href="{{ url_for('companies') }}" class="bc bc-light bc-sm">
+        <div class="chip-icon" style="background:#f3e8ff;color:#7c3aed;">
+            <i data-lucide="building-2" style="width:22px;height:22px;"></i>
+        </div>
+        <div>
+            <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_companies }}</div>
+            <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Companies</div>
+        </div>
+    </a>
+
+</div>
+
+<!-- ── Quick Actions ── -->
+<div class="quick-actions mt-4">
+    {% if can_see_page('driver_form') %}
+    <a href="{{ url_for('driver_form') }}" class="qa-btn qa-primary">
+        <i data-lucide="user-plus" style="width:15px;height:15px;"></i> Add Driver
+    </a>
+    {% endif %}
+    {% if can_see_page('vehicles') %}
+    <a href="{{ url_for('vehicle_form') }}" class="qa-btn qa-secondary">
+        <i data-lucide="truck" style="width:15px;height:15px;"></i> Add Vehicle
+    </a>
+    {% endif %}
+    {% if can_see_page('driver_attendance_checkin') %}
+    <a href="{{ url_for('driver_attendance_checkin') }}" class="qa-btn qa-secondary">
+        <i data-lucide="calendar-check" style="width:15px;height:15px;"></i> Mark Attendance
+    </a>
+    {% endif %}
+    {% if can_see_page('assign_driver_to_vehicle') %}
+    <a href="{{ url_for('assign_driver_to_vehicle_new') }}" class="qa-btn qa-secondary">
+        <i data-lucide="link" style="width:15px;height:15px;"></i> Assign Driver
+    </a>
+    {% endif %}
+    {% if can_see_page('fuel_expense_add') %}
+    <a href="{{ url_for('fuel_expense_add') }}" class="qa-btn qa-secondary">
+        <i data-lucide="fuel" style="width:15px;height:15px;"></i> Add Fuel
+    </a>
+    {% endif %}
 </div>
 
 {% endblock %}
