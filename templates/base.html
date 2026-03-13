@@ -2750,8 +2750,10 @@
         }
 
         /* ── Listen for app foreground ── */
+        var _firstActivation = true; // Skip initial load; only lock on RESUME
         AppPlugin.addListener('appStateChange', function(state) {
             if (state && state.isActive) {
+                if (_firstActivation) { _firstActivation = false; return; }
                 var hasBio = localStorage.getItem(BIO_KEY) === '1' && localStorage.getItem(TOKEN_KEY);
                 if (hasBio) {
                     triggerBioLock();

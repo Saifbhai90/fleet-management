@@ -622,20 +622,82 @@ def biometric_login():
     user = User.query.filter_by(username=username, is_active=True).first()
     if not user:
         return jsonify({'ok': False, 'error': 'User not found'}), 401
-    session['user_id']     = user.id
-    session['user']        = user.username
-    session['permissions'] = user.permission_codes()
-    session.permanent      = True
+    _do_login_session(user, request)
+    return jsonify({'ok': True, 'redirect': url_for('dashboard')})
+
+def _do_login_session(user, req):
+    """Populate Flask session for a successfully authenticated user (shared by password + trusted-device flows)."""
+    role_name = (user.role.name if user.role else '').strip()
+    is_master  = role_name == 'Master'
+    is_admin   = role_name == 'Admin'
+    session['user_id']   = user.id
+    session['user']      = user.full_name or user.username
+    session['is_master'] = is_master
+    session['is_admin']  = is_admin
+    if is_master:
+        perms = [p.code for p in Permission.query.all()]
+    else:
+        perms = user.permission_codes()
     try:
-        log = LoginLog(user_id=user.id, ip_address=request.remote_addr,
-                       user_agent=request.headers.get('User-Agent', '')[:500])
+        from permissions_config import expand_login_permissions
+        perms = expand_login_permissions(perms)
+    except Exception:
+        pass
+    session['permissions'] = perms
+    session.permanent = True
+    # ── Scope: projects / districts / vehicles / shifts ──────────────────
+    allowed_projects  = set()
+    allowed_districts = set()
+    allowed_vehicles  = set()
+    allowed_shifts    = set()
+    if not (is_master or is_admin):
+        uname = (user.username or '').strip()
+        cnic_variants = [uname, uname.replace('-', '')]
+        try:
+            emp = None
+            for c in cnic_variants:
+                emp = Employee.query.filter(func.lower(Employee.cnic_no) == c.lower()).first()
+                if emp:
+                    break
+            if emp:
+                for p in (emp.projects or []):
+                    if p and p.id:
+                        allowed_projects.add(p.id)
+                for d in (emp.districts or []):
+                    if d and d.id:
+                        allowed_districts.add(d.id)
+        except Exception:
+            pass
+        try:
+            drv = None
+            for c in cnic_variants:
+                drv = Driver.query.filter(func.lower(Driver.cnic_no) == c.lower()).first()
+                if drv:
+                    break
+            if drv:
+                if getattr(drv, 'project_id', None):
+                    allowed_projects.add(drv.project_id)
+                if getattr(drv, 'vehicle_id', None):
+                    allowed_vehicles.add(drv.vehicle_id)
+                if getattr(drv, 'district_id', None):
+                    allowed_districts.add(drv.district_id)
+                if (drv.shift or '').strip():
+                    allowed_shifts.add((drv.shift or '').strip())
+        except Exception:
+            pass
+    session['allowed_projects']  = list(allowed_projects)
+    session['allowed_districts'] = list(allowed_districts)
+    session['allowed_vehicles']  = list(allowed_vehicles)
+    session['allowed_shifts']    = list(allowed_shifts)
+    try:
+        log = LoginLog(user_id=user.id,
+                       ip_address=(req.remote_addr or '')[:64],
+                       user_agent=(req.headers.get('User-Agent') or '')[:500])
         db.session.add(log)
         db.session.commit()
         session['login_log_id'] = log.id
     except Exception:
         db.session.rollback()
-    return jsonify({'ok': True, 'redirect': url_for('dashboard')})
-
 
 @app.route('/account/change-password', methods=['GET', 'POST'])
 def account_change_password():
