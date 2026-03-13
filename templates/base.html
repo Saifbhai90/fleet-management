@@ -1330,6 +1330,12 @@
             </a>
             {% endif %}
         </div>
+        <!-- Logout (sidebar bottom) -->
+        <div class="mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,0.1);">
+            <a href="{{ url_for('logout') }}" style="color:#f87171;">
+                <i class="bi bi-box-arrow-right" style="color:#f87171;"></i><span>Logout</span>
+            </a>
+        </div>
     </div>
 </div>
 
@@ -1390,14 +1396,15 @@
         <i data-lucide="clipboard-list"></i>
         <span>Tasks</span>
     </a>
-    <a href="{{ url_for('account_change_password') }}"
-       class="mobile-nav-item {% if request.endpoint and request.endpoint in ['account_change_password','user_list','user_form','role_list','role_form'] %}active{% endif %}">
+    <a href="{{ url_for('account_profile') }}"
+       class="mobile-nav-item {% if request.endpoint in ['account_profile','account_change_password','user_list','user_form','role_list','role_form'] %}active{% endif %}">
         <i data-lucide="user-circle-2"></i>
         <span>Profile</span>
     </a>
 </nav>
 
 <!-- FAB Backdrop -->
+{% if request.endpoint == 'dashboard' %}
 <div class="fab-backdrop" id="fabBackdrop"></div>
 
 <!-- FAB Speed-Dial -->
@@ -1448,6 +1455,7 @@
         <i data-lucide="plus"></i>
     </button>
 </div>
+{% endif %}
 
 <!-- Guide Chatbot: App guide (Forms & Reports) -->
 <div id="guideChatbotWrap" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
@@ -2989,11 +2997,11 @@
 
     /* ── Main converter ── */
     function buildAllCards() {
-        // Target: tables with compact-table class OR tables inside data-table-wrapper
+        // Broad selector: any table inside a table-responsive OR explicit compact-table
         var tables = Array.from(document.querySelectorAll(
-            'table.compact-table, .data-table-wrapper table, table.table.table-hover'
+            '.data-table-wrapper table, .table-responsive table, table.compact-table'
         ));
-        // Deduplicate
+        // Deduplicate (a table may match multiple selectors)
         var seen = new Set();
         tables = tables.filter(function(t) {
             if (seen.has(t)) return false;
@@ -3005,14 +3013,14 @@
             if (tbl.dataset.mpBuilt) return;
             tbl.dataset.mpBuilt = '1';
 
-            // Read headers
+            // Skip tiny utility tables (< 2 columns or 0 header rows)
             var headers = [];
             tbl.querySelectorAll('thead th, thead td').forEach(function(th) {
                 headers.push(th.textContent.trim());
             });
-            if (headers.length === 0) return;
+            if (headers.length < 2) return;
 
-            // Detect theme from surrounding container
+            // Detect theme
             var pageContainer = document.querySelector('.container-fluid') || document.body;
             var theme = detectTheme(pageContainer);
 
@@ -3027,34 +3035,41 @@
                 empty.textContent = 'No records found.';
                 cardList.appendChild(empty);
             }
-
             rows.forEach(function(row) {
                 var card = buildCard(row, headers, theme);
                 if (card) cardList.appendChild(card);
             });
 
-            // Find the wrapper to hide on mobile
-            var wrapper = tbl.closest('.data-table-wrapper') ||
-                          tbl.closest('.table-responsive') ||
-                          tbl.parentNode;
+            // ── Find the BROADEST wrapper to hide on mobile ──────────────
+            // Priority: .data-table-wrapper > .card (data card) > .table-responsive
+            var wrapper = tbl.closest('.data-table-wrapper') || null;
+            if (!wrapper) {
+                // Check if table is in a .card that serves as a data container
+                var parentCard = tbl.closest('.card');
+                if (parentCard) {
+                    // Only treat as data card if it has a card-header or section-heading
+                    var hasHeader = parentCard.querySelector('.card-header, .section-heading');
+                    if (hasHeader) wrapper = parentCard;
+                }
+            }
+            if (!wrapper) {
+                wrapper = tbl.closest('.table-responsive') || tbl.parentNode;
+            }
 
-            // Insert card list right after the wrapper
+            // Insert cards right AFTER the hidden wrapper
             wrapper.parentNode.insertBefore(cardList, wrapper.nextSibling);
-
-            // Hide the original wrapper on mobile
             wrapper.classList.add('mp-hide-mobile');
 
-            // Also hide table-footer if present (clone count into mobile footer)
-            var footer = wrapper.nextSibling && wrapper.nextSibling.classList &&
-                         wrapper.nextSibling.classList.contains('mp-card-list')
-                         ? null
-                         : wrapper.parentNode.querySelector('.table-footer');
-            if (footer) {
-                footer.classList.add('mp-hide-mobile');
-                var mobileFooter = document.createElement('div');
-                mobileFooter.className = 'mp-table-footer-mobile';
-                mobileFooter.innerHTML = footer.innerHTML;
-                cardList.after(mobileFooter);
+            // Hide .table-footer sibling (record count bar)
+            var sib = wrapper.nextSibling;
+            // skip the cardList we just inserted
+            if (sib === cardList) sib = cardList.nextSibling;
+            if (sib && sib.classList && sib.classList.contains('table-footer')) {
+                sib.classList.add('mp-hide-mobile');
+                var mf = document.createElement('div');
+                mf.className = 'mp-table-footer-mobile';
+                mf.innerHTML = sib.innerHTML;
+                cardList.after(mf);
             }
         });
     }
