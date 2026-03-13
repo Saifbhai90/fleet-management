@@ -10,21 +10,36 @@ from forms import (PaymentVoucherForm, ReceiptVoucherForm, BankEntryForm, Journa
 from finance_utils import (generate_entry_number, create_journal_entry, create_payment_voucher_journal,
                            create_receipt_voucher_journal, create_bank_entry_journal, 
                            get_account_ledger, get_dto_wallet_summary, get_account_balance)
-from auth_utils import login_required, permission_required
+from permissions_config import can_see_page
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 import os
 from werkzeug.utils import secure_filename
 
 
+# Helper function for authentication and permission checks
+def check_auth(permission_code=None):
+    """Check if user is logged in and has permission"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    if permission_code:
+        perms = session.get('permissions', [])
+        if not session.get('is_master') and not can_see_page(perms, permission_code):
+            flash('You do not have permission to access this page.', 'danger')
+            return redirect(url_for('dashboard'))
+    return None
+
+
 # ════════════════════════════════════════════════════════════════════════════════
 # PAYMENT VOUCHER
 # ════════════════════════════════════════════════════════════════════════════════
 
-@login_required
-@permission_required('accounts_quick_payment')
 def accounts_quick_payment():
     """Create Payment Voucher"""
+    auth_check = check_auth('accounts_quick_payment')
+    if auth_check:
+        return auth_check
+    
     form = PaymentVoucherForm()
     
     # Populate account choices
@@ -75,9 +90,10 @@ def accounts_quick_payment():
     return render_template('finance/payment_voucher_form.html', form=form, title='Payment Voucher')
 
 
-@login_required
-@permission_required('accounts_quick_payment')
 def payment_vouchers_list():
+    auth_check = check_auth('accounts_quick_payment')
+    if auth_check:
+        return auth_check
     """List all Payment Vouchers"""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -140,9 +156,10 @@ def payment_vouchers_list():
                          page=page, per_page=per_page)
 
 
-@login_required
-@permission_required('accounts_quick_payment')
 def payment_voucher_edit(pk):
+    auth_check = check_auth('accounts_quick_payment')
+    if auth_check:
+        return auth_check
     """Edit Payment Voucher"""
     pv = PaymentVoucher.query.get_or_404(pk)
     form = PaymentVoucherForm(obj=pv)
@@ -190,9 +207,10 @@ def payment_voucher_edit(pk):
     return render_template('finance/payment_voucher_form.html', form=form, title='Edit Payment Voucher', pv=pv)
 
 
-@login_required
-@permission_required('accounts_quick_payment')
 def payment_voucher_delete(pk):
+    auth_check = check_auth('accounts_quick_payment')
+    if auth_check:
+        return auth_check
     """Delete Payment Voucher"""
     pv = PaymentVoucher.query.get_or_404(pk)
     
@@ -217,9 +235,10 @@ def payment_voucher_delete(pk):
 # RECEIPT VOUCHER
 # ════════════════════════════════════════════════════════════════════════════════
 
-@login_required
-@permission_required('accounts_quick_receipt')
 def accounts_quick_receipt():
+    auth_check = check_auth('accounts_quick_receipt')
+    if auth_check:
+        return auth_check
     """Create Receipt Voucher"""
     form = ReceiptVoucherForm()
     
@@ -259,9 +278,10 @@ def accounts_quick_receipt():
     return render_template('finance/receipt_voucher_form.html', form=form, title='Receipt Voucher')
 
 
-@login_required
-@permission_required('accounts_quick_receipt')
 def receipt_vouchers_list():
+    auth_check = check_auth('accounts_quick_receipt')
+    if auth_check:
+        return auth_check
     """List all Receipt Vouchers"""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -311,9 +331,10 @@ def receipt_vouchers_list():
 # BANK ENTRY
 # ════════════════════════════════════════════════════════════════════════════════
 
-@login_required
-@permission_required('accounts_bank_entry')
 def accounts_bank_entry():
+    auth_check = check_auth('accounts_bank_entry')
+    if auth_check:
+        return auth_check
     """Create Bank Entry"""
     form = BankEntryForm()
     
@@ -352,9 +373,10 @@ def accounts_bank_entry():
     return render_template('finance/bank_entry_form.html', form=form, title='Bank Entry')
 
 
-@login_required
-@permission_required('accounts_bank_entry')
 def bank_entries_list():
+    auth_check = check_auth('accounts_bank_entry')
+    if auth_check:
+        return auth_check
     """List all Bank Entries"""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -392,9 +414,10 @@ def bank_entries_list():
 # ACCOUNT LEDGER (KEY VIEW FOR DTOs)
 # ════════════════════════════════════════════════════════════════════════════════
 
-@login_required
-@permission_required('accounts_account_ledger')
 def accounts_account_ledger():
+    auth_check = check_auth('accounts_account_ledger')
+    if auth_check:
+        return auth_check
     """Account Ledger View - Shows transactions and running balance"""
     form = AccountLedgerFilterForm()
     
@@ -434,9 +457,10 @@ def accounts_account_ledger():
 # BALANCE SHEET
 # ════════════════════════════════════════════════════════════════════════════════
 
-@login_required
-@permission_required('accounts_balance_sheet')
 def accounts_balance_sheet():
+    auth_check = check_auth('accounts_balance_sheet')
+    if auth_check:
+        return auth_check
     """Balance Sheet Report"""
     form = BalanceSheetFilterForm()
     
@@ -476,9 +500,10 @@ def accounts_balance_sheet():
 # EMPLOYEE EXPENSE
 # ════════════════════════════════════════════════════════════════════════════════
 
-@login_required
-@permission_required('employee_expense_form')
 def employee_expense_form(pk=None):
+    auth_check = check_auth('employee_expense_form')
+    if auth_check:
+        return auth_check
     """Add/Edit Employee Expense"""
     expense = None
     if pk:
@@ -560,9 +585,10 @@ def employee_expense_form(pk=None):
                          title='Add Employee Expense' if not pk else 'Edit Employee Expense')
 
 
-@login_required
-@permission_required('employee_expense_list')
 def employee_expense_list():
+    auth_check = check_auth('employee_expense_list')
+    if auth_check:
+        return auth_check
     """List all Employee Expenses"""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -618,9 +644,10 @@ def employee_expense_list():
                          page=page, per_page=per_page)
 
 
-@login_required
-@permission_required('employee_expense_form')
 def employee_expense_delete(pk):
+    auth_check = check_auth('employee_expense_form')
+    if auth_check:
+        return auth_check
     """Delete Employee Expense"""
     expense = EmployeeExpense.query.get_or_404(pk)
     
