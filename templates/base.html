@@ -2921,7 +2921,14 @@
             if (isAction) {
                 actionsDiv = document.createElement('div');
                 actionsDiv.className = 'mp-card-actions';
-                actionsDiv.innerHTML = cellHTML;
+                // Clone TD children individually so we can fix form display:inline
+                Array.from(td.childNodes).forEach(function(node) {
+                    var clone = node.cloneNode(true);
+                    if (clone.nodeType === 1 && clone.tagName === 'FORM') {
+                        clone.style.removeProperty('display');
+                    }
+                    actionsDiv.appendChild(clone);
+                });
                 return;
             }
 
