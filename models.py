@@ -1005,3 +1005,253 @@ class AttendanceTimeControl(db.Model):
 
     def __repr__(self):
         return f'<AttendanceTimeControl Morning {self.morning_start}-{self.morning_end} Night {self.night_start}-{self.night_end}>'
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# FINANCE & ACCOUNTING SYSTEM (Double-Entry Bookkeeping)
+# ════════════════════════════════════════════════════════════════════════════════
+
+# ────────────────────────────────────────────────────
+# Account (Chart of Accounts - COA)
+# ────────────────────────────────────────────────────
+class Account(db.Model):
+    """Chart of Accounts: Assets, Liabilities, Equity, Revenue, Expenses"""
+    __tablename__ = 'account'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=False)
+    account_type = db.Column(db.String(20), nullable=False)  # Asset, Liability, Equity, Revenue, Expense
+    parent_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    opening_balance = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    current_balance = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    
+    # Optional: link to specific entities for auto-created accounts
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    party_id = db.Column(db.Integer, db.ForeignKey('party.id'), nullable=True)
+    
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    parent = db.relationship('Account', remote_side=[id], backref='sub_accounts')
+    district = db.relationship('District', backref='accounts', lazy='select')
+    project = db.relationship('Project', backref='accounts', lazy='select')
+    party = db.relationship('Party', backref='accounts', lazy='select')
+    
+    def __repr__(self):
+        return f'<Account {self.code} {self.name}>'
+
+
+# ────────────────────────────────────────────────────
+# Journal Entry (Transaction Header)
+# ────────────────────────────────────────────────────
+class JournalEntry(db.Model):
+    """Journal Entry: header for double-entry transactions"""
+    __tablename__ = 'journal_entry'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    entry_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    entry_date = db.Column(db.Date, nullable=False, index=True)
+    entry_type = db.Column(db.String(20), nullable=False)  # Payment, Receipt, Bank, Journal, Expense
+    description = db.Column(db.Text, nullable=True)
+    
+    # Reference to source transaction (if auto-generated from expense)
+    reference_type = db.Column(db.String(50), nullable=True)  # FuelExpense, OilExpense, MaintenanceExpense, EmployeeExpense, Manual
+    reference_id = db.Column(db.Integer, nullable=True)
+    
+    # Tracking
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    
+    # Posting status
+    is_posted = db.Column(db.Boolean, default=True, nullable=False)
+    posted_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    created_by = db.relationship('User', backref='journal_entries', lazy='select')
+    district = db.relationship('District', backref='journal_entries', lazy='select')
+    project = db.relationship('Project', backref='journal_entries', lazy='select')
+    lines = db.relationship('JournalEntryLine', backref='journal_entry', lazy='dynamic', cascade='all, delete-orphan', order_by='JournalEntryLine.sort_order')
+    
+    def __repr__(self):
+        return f'<JournalEntry {self.entry_number} {self.entry_date}>'
+    
+    def total_debit(self):
+        return sum(line.debit or 0 for line in self.lines)
+    
+    def total_credit(self):
+        return sum(line.credit or 0 for line in self.lines)
+    
+    def is_balanced(self):
+        return abs(self.total_debit() - self.total_credit()) < 0.01
+
+
+# ────────────────────────────────────────────────────
+# Journal Entry Line (Transaction Details)
+# ────────────────────────────────────────────────────
+class JournalEntryLine(db.Model):
+    """Journal Entry Line: individual debit/credit entries"""
+    __tablename__ = 'journal_entry_line'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=False, index=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False, index=True)
+    debit = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    credit = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    sort_order = db.Column(db.Integer, default=0, nullable=False)
+    
+    # Relationships
+    account = db.relationship('Account', backref='journal_lines', lazy='select')
+    
+    def __repr__(self):
+        return f'<JournalEntryLine JE#{self.journal_entry_id} Acc#{self.account_id} Dr:{self.debit} Cr:{self.credit}>'
+
+
+# ────────────────────────────────────────────────────
+# Payment Voucher
+# ────────────────────────────────────────────────────
+class PaymentVoucher(db.Model):
+    """Payment Voucher: money going out (Accounts → DTO, DTO → Party/Driver)"""
+    __tablename__ = 'payment_voucher'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    voucher_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    payment_date = db.Column(db.Date, nullable=False, index=True)
+    
+    from_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
+    to_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
+    amount = db.Column(db.Numeric(15, 2), nullable=False)
+    
+    payment_mode = db.Column(db.String(20), nullable=False, default='Cash')  # Cash, Cheque, Bank Transfer, Online
+    cheque_number = db.Column(db.String(50), nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    
+    # Auto-created journal entry
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
+    
+    # Tracking
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    from_account = db.relationship('Account', foreign_keys=[from_account_id], backref='payments_from', lazy='select')
+    to_account = db.relationship('Account', foreign_keys=[to_account_id], backref='payments_to', lazy='select')
+    journal_entry = db.relationship('JournalEntry', backref='payment_voucher', lazy='select')
+    created_by = db.relationship('User', backref='payment_vouchers', lazy='select')
+    district = db.relationship('District', backref='payment_vouchers', lazy='select')
+    project = db.relationship('Project', backref='payment_vouchers', lazy='select')
+    
+    def __repr__(self):
+        return f'<PaymentVoucher {self.voucher_number} {self.amount}>'
+
+
+# ────────────────────────────────────────────────────
+# Receipt Voucher
+# ────────────────────────────────────────────────────
+class ReceiptVoucher(db.Model):
+    """Receipt Voucher: money coming in (refunds, income)"""
+    __tablename__ = 'receipt_voucher'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    voucher_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    receipt_date = db.Column(db.Date, nullable=False, index=True)
+    
+    from_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
+    to_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
+    amount = db.Column(db.Numeric(15, 2), nullable=False)
+    
+    receipt_mode = db.Column(db.String(20), nullable=False, default='Cash')
+    description = db.Column(db.Text, nullable=True)
+    
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
+    
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    from_account = db.relationship('Account', foreign_keys=[from_account_id], backref='receipts_from', lazy='select')
+    to_account = db.relationship('Account', foreign_keys=[to_account_id], backref='receipts_to', lazy='select')
+    journal_entry = db.relationship('JournalEntry', backref='receipt_voucher', lazy='select')
+    created_by = db.relationship('User', backref='receipt_vouchers', lazy='select')
+    
+    def __repr__(self):
+        return f'<ReceiptVoucher {self.voucher_number} {self.amount}>'
+
+
+# ────────────────────────────────────────────────────
+# Bank Entry
+# ────────────────────────────────────────────────────
+class BankEntry(db.Model):
+    """Bank Entry: transfers between bank accounts or cash"""
+    __tablename__ = 'bank_entry'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    entry_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    entry_date = db.Column(db.Date, nullable=False, index=True)
+    
+    from_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
+    to_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
+    amount = db.Column(db.Numeric(15, 2), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
+    
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    from_account = db.relationship('Account', foreign_keys=[from_account_id], backref='bank_entries_from', lazy='select')
+    to_account = db.relationship('Account', foreign_keys=[to_account_id], backref='bank_entries_to', lazy='select')
+    journal_entry = db.relationship('JournalEntry', backref='bank_entry', lazy='select')
+    created_by = db.relationship('User', backref='bank_entries', lazy='select')
+    
+    def __repr__(self):
+        return f'<BankEntry {self.entry_number} {self.amount}>'
+
+
+# ────────────────────────────────────────────────────
+# Employee Expense (Non-Vehicle Expenses)
+# ────────────────────────────────────────────────────
+class EmployeeExpense(db.Model):
+    """Employee Expense: travel, office, communication, etc."""
+    __tablename__ = 'employee_expense'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    expense_date = db.Column(db.Date, nullable=False, index=True)
+    
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # If expense by system user
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    
+    expense_category = db.Column(db.String(50), nullable=False)  # Travel, Office, Communication, Other
+    description = db.Column(db.Text, nullable=False)
+    amount = db.Column(db.Numeric(15, 2), nullable=False)
+    
+    payment_mode = db.Column(db.String(20), nullable=False, default='Cash')  # Cash, Reimbursement, Advance
+    receipt_path = db.Column(db.String(500), nullable=True)  # Uploaded receipt image
+    
+    # Auto-created journal entry
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
+    
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    employee = db.relationship('Employee', backref='expenses', lazy='select')
+    user = db.relationship('User', foreign_keys=[user_id], backref='user_expenses', lazy='select')
+    district = db.relationship('District', backref='employee_expenses', lazy='select')
+    project = db.relationship('Project', backref='employee_expenses', lazy='select')
+    journal_entry = db.relationship('JournalEntry', backref='employee_expense', lazy='select')
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id], backref='created_employee_expenses', lazy='select')
+    
+    def __repr__(self):
+        return f'<EmployeeExpense {self.expense_date} {self.expense_category} {self.amount}>'
