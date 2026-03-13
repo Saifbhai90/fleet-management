@@ -283,17 +283,31 @@
   }
   .mp-card-actions form button {
     flex: 0 0 auto !important;
-    max-width: 120px;
-    min-width: 64px;
+    width: auto !important;
+    max-width: 44px !important;  /* icon-only buttons stay compact */
+    min-width: 44px !important;
     white-space: nowrap;
     font-size: 0.76rem !important;
-    padding: 7px 10px !important;
+    padding: 8px !important;
     border-radius: 8px !important;
     min-height: 34px !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     gap: 3px;
+  }
+  /* Icon-only action buttons (Profile, Edit, Delete) */
+  .mp-card-actions a.btn-sm,
+  .mp-card-actions button.btn-sm,
+  .mp-card-actions .btn-compact,
+  .mp-card-actions .btn-info-compact,
+  .mp-card-actions .btn-edit-compact,
+  .mp-card-actions .btn-delete-compact {
+    width: 44px !important;
+    max-width: 44px !important;
+    min-width: 44px !important;
+    padding: 8px !important;
+    flex-shrink: 0 !important;
   }
   /* Empty state */
   .mp-card-empty {
