@@ -186,6 +186,17 @@
             <i class="bi bi-building-gear me-2 text-info"></i><span>Fleet Manager</span>
         </a>
     </div>
+    <!-- Global Search Bar (hidden on xs, shown md+) -->
+    <div class="flex-grow-1 mx-2 mx-md-4 d-none d-md-block position-relative" style="max-width:360px;" id="globalSearchWrap">
+        <input type="text" id="globalSearchInput" class="form-control form-control-sm bg-dark border-secondary text-white"
+               placeholder="Search driver or vehicle…" autocomplete="off"
+               style="border-radius:8px; padding-left:2rem;">
+        <i class="bi bi-search position-absolute text-secondary" style="left:0.6rem;top:50%;transform:translateY(-50%);font-size:0.85rem;pointer-events:none;"></i>
+        <div id="globalSearchDropdown" class="position-absolute w-100 bg-white border rounded-3 shadow mt-1"
+             style="z-index:2100;display:none;max-height:380px;overflow-y:auto;top:100%;left:0;">
+        </div>
+    </div>
+
     <div class="ms-auto d-flex align-items-center text-white flex-shrink-0">
         <div class="me-2 me-md-4 d-none d-md-block" id="liveDateTime" style="font-size: 0.9rem; color: #cbd5e1;"></div>
 
@@ -1230,6 +1241,84 @@
             if (inputEl) inputEl.value = t;
             send();
         });
+    })();
+
+    // ── Global Search Bar ────────────────────────────────────────────────
+    (function() {
+        var input = document.getElementById('globalSearchInput');
+        var dropdown = document.getElementById('globalSearchDropdown');
+        if (!input || !dropdown) return;
+
+        var timer = null;
+
+        input.addEventListener('input', function() {
+            clearTimeout(timer);
+            var q = input.value.trim();
+            if (q.length < 2) { dropdown.style.display = 'none'; return; }
+            timer = setTimeout(function() { doSearch(q); }, 280);
+        });
+
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') { dropdown.style.display = 'none'; input.value = ''; }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!document.getElementById('globalSearchWrap').contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        function doSearch(q) {
+            fetch('/api/global-search?q=' + encodeURIComponent(q))
+                .then(function(r) { return r.json(); })
+                .then(function(data) { renderDropdown(data, q); })
+                .catch(function() { dropdown.style.display = 'none'; });
+        }
+
+        function renderDropdown(data, q) {
+            var html = '';
+            var drivers = data.drivers || [];
+            var vehicles = data.vehicles || [];
+
+            if (drivers.length === 0 && vehicles.length === 0) {
+                html = '<div class="px-3 py-2 text-muted small">No results found</div>';
+            } else {
+                if (drivers.length > 0) {
+                    html += '<div class="px-3 pt-2 pb-1" style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;font-weight:600;">Drivers</div>';
+                    drivers.forEach(function(d) {
+                        var badge = d.status === 'Active'
+                            ? '<span class="badge bg-success ms-1" style="font-size:0.65rem;">Active</span>'
+                            : '<span class="badge bg-secondary ms-1" style="font-size:0.65rem;">' + (d.status || '') + '</span>';
+                        html += '<a href="/driver/edit/' + d.id + '" class="d-flex align-items-center px-3 py-2 text-decoration-none search-result-item">'
+                            + '<i class="bi bi-person-badge text-primary me-2"></i>'
+                            + '<div class="flex-grow-1"><div class="fw-semibold" style="font-size:0.88rem;">' + escHtml(d.name) + badge + '</div>'
+                            + '<div class="text-muted" style="font-size:0.75rem;">' + escHtml(d.driver_id || '') + ' · ' + escHtml(d.cnic || '') + '</div></div></a>';
+                    });
+                }
+                if (vehicles.length > 0) {
+                    html += '<div class="px-3 pt-2 pb-1 ' + (drivers.length ? 'border-top' : '') + '" style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;font-weight:600;">Vehicles</div>';
+                    vehicles.forEach(function(v) {
+                        html += '<a href="/vehicle/edit/' + v.id + '" class="d-flex align-items-center px-3 py-2 text-decoration-none search-result-item">'
+                            + '<i class="bi bi-truck-front text-warning me-2"></i>'
+                            + '<div><div class="fw-semibold" style="font-size:0.88rem;">' + escHtml(v.vehicle_no) + '</div>'
+                            + '<div class="text-muted" style="font-size:0.75rem;">' + escHtml(v.model || '') + ' · ' + escHtml(v.vehicle_type || '') + '</div></div></a>';
+                    });
+                }
+            }
+
+            dropdown.innerHTML = html;
+            dropdown.style.display = 'block';
+
+            dropdown.querySelectorAll('.search-result-item').forEach(function(a) {
+                a.addEventListener('mouseenter', function() { this.style.background = '#f1f5f9'; });
+                a.addEventListener('mouseleave', function() { this.style.background = ''; });
+                a.addEventListener('click', function() { dropdown.style.display = 'none'; input.value = ''; });
+            });
+        }
+
+        function escHtml(s) {
+            return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
     })();
 </script>
 

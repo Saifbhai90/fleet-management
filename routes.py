@@ -213,6 +213,31 @@ def _cnic_digits(cnic):
         return ''
     return re.sub(r'[-\s]', '', str(cnic).strip())
 
+@app.route('/api/global-search')
+def api_global_search():
+    """Global search: returns matching Drivers and Vehicles as JSON. Used by navbar search bar."""
+    q = request.args.get('q', '').strip()
+    if not q or len(q) < 2:
+        return jsonify({'drivers': [], 'vehicles': []})
+    like = f'%{q}%'
+    drivers = Driver.query.filter(
+        Driver.name.ilike(like) |
+        Driver.driver_id.ilike(like) |
+        Driver.cnic_no.ilike(like) |
+        Driver.phone1.ilike(like)
+    ).order_by(Driver.name).limit(8).all()
+    vehicles = Vehicle.query.filter(
+        Vehicle.vehicle_no.ilike(like) |
+        Vehicle.model.ilike(like) |
+        Vehicle.engine_no.ilike(like)
+    ).order_by(Vehicle.vehicle_no).limit(6).all()
+    return jsonify({
+        'drivers': [{'id': d.id, 'name': d.name, 'driver_id': d.driver_id,
+                     'status': d.status, 'cnic': d.cnic_no} for d in drivers],
+        'vehicles': [{'id': v.id, 'vehicle_no': v.vehicle_no, 'model': v.model,
+                      'vehicle_type': v.vehicle_type} for v in vehicles],
+    })
+
 @app.route('/api/check-cnic')
 def api_check_cnic():
     """Returns { exists: bool, message: str }. Call with ?cnic=xxx&exclude_driver_id=1 (optional, for edit)."""
@@ -285,6 +310,39 @@ def dashboard():
     total_parking = ParkingStation.query.count()
     total_districts = District.query.count()
 
+    # ── Bento KPI cards ──────────────────────────────────────────────────
+    active_drivers = Driver.query.filter_by(status='Active').count()
+    assigned_vehicles = Vehicle.query.filter(Vehicle.district_id.isnot(None)).count()
+    today_dt = date.today()
+    today_attendance = DriverAttendance.query.filter_by(attendance_date=today_dt).count()
+
+    # Monthly fuel cost (current calendar month)
+    try:
+        from sqlalchemy import extract
+        monthly_fuel = db.session.query(func.sum(FuelExpense.amount)).filter(
+            extract('month', FuelExpense.fueling_date) == today_dt.month,
+            extract('year', FuelExpense.fueling_date) == today_dt.year
+        ).scalar() or 0
+        monthly_fuel = float(monthly_fuel)
+    except Exception:
+        monthly_fuel = 0.0
+
+    # ── 7-day fuel chart data (for Chart.js) ─────────────────────────────
+    try:
+        from datetime import timedelta
+        fuel_chart_labels = []
+        fuel_chart_values = []
+        for i in range(6, -1, -1):
+            d = today_dt - timedelta(days=i)
+            day_total = db.session.query(func.sum(FuelExpense.amount)).filter(
+                FuelExpense.fueling_date == d
+            ).scalar() or 0
+            fuel_chart_labels.append(d.strftime('%d %b'))
+            fuel_chart_values.append(round(float(day_total), 2))
+    except Exception:
+        fuel_chart_labels = []
+        fuel_chart_values = []
+
     user_id = session.get('user_id')
     notifications = _unread_notifications_for_user(user_id, 20) if user_id else []
 
@@ -309,13 +367,12 @@ def dashboard():
             db.session.commit()
             notifications = _unread_notifications_for_user(user_id, 20)
 
-    if not notifications and total_drivers and user_id:
         from datetime import timedelta
-        today = date.today()
-        start = today - timedelta(days=7)
-        active_drivers = Driver.query.filter(Driver.status == 'Active').all()
+        _today2 = date.today()
+        start = _today2 - timedelta(days=7)
+        _active_list = Driver.query.filter(Driver.status == 'Active').all()
         missing_count = 0
-        for d in active_drivers:
+        for d in _active_list:
             has_recent = DriverAttendance.query.filter(
                 DriverAttendance.driver_id == d.id,
                 DriverAttendance.attendance_date >= start
@@ -342,6 +399,12 @@ def dashboard():
                            total_drivers=total_drivers,
                            total_parking=total_parking,
                            total_districts=total_districts,
+                           active_drivers=active_drivers,
+                           assigned_vehicles=assigned_vehicles,
+                           today_attendance=today_attendance,
+                           monthly_fuel=monthly_fuel,
+                           fuel_chart_labels=fuel_chart_labels,
+                           fuel_chart_values=fuel_chart_values,
                            notifications=notifications,
                            from_login=request.args.get('from_login') == '1')
 

@@ -236,6 +236,10 @@ if _run_startup_tasks:
 # Import routes after app & db are ready
 from routes import *  # noqa: E402,F401
 
+# Register Mobile API Blueprint
+from api import api_bp  # noqa: E402
+app.register_blueprint(api_bp)
+
 # Start backup scheduler if enabled
 _backup_scheduler = None
 if _run_startup_tasks and app.config.get('BACKUP_SCHEDULE_ENABLED'):
