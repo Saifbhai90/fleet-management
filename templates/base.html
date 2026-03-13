@@ -705,6 +705,59 @@
     </div>
 </div>
 
+<!-- ── Biometric Lock Overlay (mobile app resume) ── -->
+<div id="bioLockOverlay" style="display:none;position:fixed;inset:0;z-index:19999;background:#070e1a;flex-direction:column;align-items:center;justify-content:center;gap:0;">
+    <div style="text-align:center;padding:0 32px;">
+        <div style="width:88px;height:88px;background:linear-gradient(135deg,rgba(37,99,235,0.2),rgba(59,130,246,0.1));border:1.5px solid rgba(59,130,246,0.3);border-radius:26px;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;box-shadow:0 0 0 12px rgba(37,99,235,0.07);">
+            <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+            </svg>
+        </div>
+        <div style="font-size:1.45rem;font-weight:800;color:#f8fafc;letter-spacing:-0.02em;margin-bottom:8px;">Fleet Manager</div>
+        <div style="font-size:0.88rem;color:#64748b;margin-bottom:40px;">Verify your identity to continue</div>
+        <button id="bioLockBtn" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:18px;padding:16px 48px;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 6px 24px rgba(37,99,235,0.4);letter-spacing:0.01em;display:flex;align-items:center;gap:10px;margin:0 auto;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/></svg>
+            Use Biometrics
+        </button>
+        <button id="bioLockUsePIN" style="background:transparent;border:none;color:#64748b;font-size:0.82rem;font-weight:600;margin-top:18px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;">Use PIN instead</button>
+    </div>
+</div>
+
+<!-- ── PIN Lock Overlay (fallback when biometric unavailable) ── -->
+<div id="pinLockOverlay" style="display:none;position:fixed;inset:0;z-index:20000;background:#070e1a;flex-direction:column;align-items:center;justify-content:center;">
+    <div style="text-align:center;width:100%;max-width:340px;padding:0 24px;">
+        <div style="font-size:1.3rem;font-weight:800;color:#f8fafc;margin-bottom:4px;" id="pinLockTitle">Enter PIN</div>
+        <div style="font-size:0.82rem;color:#64748b;margin-bottom:28px;" id="pinLockSub">Enter your 4-digit PIN to unlock</div>
+        <!-- Dot indicators -->
+        <div style="display:flex;justify-content:center;gap:16px;margin-bottom:36px;" id="pinDots">
+            <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+        </div>
+        <!-- Numpad -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:280px;margin:0 auto;" id="pinNumpad">
+            <button class="pin-key" data-v="1">1</button><button class="pin-key" data-v="2">2</button><button class="pin-key" data-v="3">3</button>
+            <button class="pin-key" data-v="4">4</button><button class="pin-key" data-v="5">5</button><button class="pin-key" data-v="6">6</button>
+            <button class="pin-key" data-v="7">7</button><button class="pin-key" data-v="8">8</button><button class="pin-key" data-v="9">9</button>
+            <button class="pin-key pin-key-bio" id="pinKeyBio" data-v="">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/></svg>
+            </button>
+            <button class="pin-key" data-v="0">0</button>
+            <button class="pin-key pin-key-del" id="pinKeyDel">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="13" y2="14"/><line x1="13" y1="9" x2="18" y2="14"/></svg>
+            </button>
+        </div>
+        <div style="margin-top:20px;font-size:0.78rem;color:#ef4444;font-weight:600;min-height:20px;" id="pinErrMsg"></div>
+    </div>
+</div>
+
+<style>
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid #334155;background:transparent;transition:background 0.15s,border-color 0.15s;}
+.pin-dot.filled{background:#3b82f6;border-color:#3b82f6;}
+.pin-key{height:68px;background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,255,255,0.08);border-radius:18px;color:#f1f5f9;font-size:1.4rem;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.12s,transform 0.1s;-webkit-tap-highlight-color:transparent;}
+.pin-key:active{background:rgba(59,130,246,0.25);transform:scale(0.95);}
+.pin-key-bio{color:#60a5fa;}
+.pin-key-del{color:#94a3b8;}
+</style>
+
 <!-- NAVBAR -->
 <nav class="navbar navbar-dark bg-dark fixed-top px-3 shadow">
     <div class="d-flex align-items-center">
@@ -2332,6 +2385,13 @@
         }
 
         function tryCloseOverlay() {
+            // Lock overlays: MUST NOT be dismissed by back button
+            var bioLock = document.getElementById('bioLockOverlay');
+            var pinLock = document.getElementById('pinLockOverlay');
+            if ((bioLock && bioLock.style.display === 'flex') ||
+                (pinLock && pinLock.style.display === 'flex')) {
+                return true; // swallow back press — user must authenticate
+            }
             // Bootstrap modals
             var modals = document.querySelectorAll('.modal.show');
             if (modals.length) {
@@ -2437,6 +2497,301 @@
                 document.querySelectorAll('.btn-loading').forEach(function(b) {
                     b.classList.remove('btn-loading');
                 });
+            }
+        });
+    })();
+
+    // ── 5a. WEB: 30-min Inactivity Auto-Logout ────────────────────────────
+    (function() {
+        if (window.Capacitor && window.Capacitor.isNativePlatform()) return; // mobile handles its own lock
+        var TIMEOUT_MS   = 30 * 60 * 1000; // 30 min
+        var WARN_MS      = 28 * 60 * 1000; // warn 2 min before
+        var warned       = false;
+        var warnTimer    = null;
+        var logoutTimer  = null;
+
+        function resetTimer() {
+            clearTimeout(warnTimer);
+            clearTimeout(logoutTimer);
+            warned = false;
+            var existingWarn = document.getElementById('inactivityWarnBanner');
+            if (existingWarn) existingWarn.remove();
+
+            warnTimer = setTimeout(function() {
+                if (warned) return;
+                warned = true;
+                // Show 2-min warning banner
+                var b = document.createElement('div');
+                b.id = 'inactivityWarnBanner';
+                b.innerHTML = '<i class="bi bi-clock" style="font-size:1rem;"></i> Aap 2 minute mein automatically logout ho jaenge. Koi bhi button dabayein.';
+                b.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#f59e0b;color:#1c1917;padding:10px 20px;border-radius:12px;font-size:0.8rem;font-weight:700;z-index:8888;box-shadow:0 4px 16px rgba(0,0,0,0.2);white-space:nowrap;pointer-events:none;';
+                document.body.appendChild(b);
+            }, WARN_MS);
+
+            logoutTimer = setTimeout(function() {
+                window.location.href = '/logout?inactivity=1';
+            }, TIMEOUT_MS);
+        }
+
+        ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(function(ev) {
+            document.addEventListener(ev, resetTimer, { passive: true });
+        });
+        resetTimer();
+    })();
+
+    // ── 5b. MOBILE: Biometric / PIN Lock on App Resume ────────────────────
+    (function() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+
+        var AppPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+        var bioPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
+        if (!AppPlugin) return;
+
+        var BIO_KEY   = 'fleet_bio_enabled';
+        var TOKEN_KEY = 'fleet_bio_token';
+        var USER_KEY  = 'fleet_bio_user';
+        var PIN_KEY   = 'fleet_pin_hash';
+        var PIN_SET_KEY = 'fleet_pin_set';
+
+        var bioOverlay = document.getElementById('bioLockOverlay');
+        var pinOverlay = document.getElementById('pinLockOverlay');
+        var bioLockBtn = document.getElementById('bioLockBtn');
+        var bioUsePIN  = document.getElementById('bioLockUsePIN');
+        var isLocked   = false;
+
+        /* ── SHA-256 (tiny pure-JS, no external dep needed) ── */
+        function sha256hex(str) {
+            /* Use SubtleCrypto when available (all modern browsers/Capacitor) */
+            var enc = new TextEncoder();
+            return crypto.subtle.digest('SHA-256', enc.encode(str)).then(function(buf) {
+                return Array.from(new Uint8Array(buf)).map(function(b) {
+                    return b.toString(16).padStart(2, '0');
+                }).join('');
+            });
+        }
+
+        /* ── PIN UI ── */
+        var pinBuffer = '';
+        var pinMode   = 'verify'; // 'set' or 'verify'
+        var pinFirst  = '';
+
+        function updateDots() {
+            var dots = document.querySelectorAll('#pinDots .pin-dot');
+            dots.forEach(function(d, i) { d.classList.toggle('filled', i < pinBuffer.length); });
+        }
+
+        function shakeOverlay() {
+            var o = document.getElementById('pinDots');
+            if (!o) return;
+            o.style.animation = 'none';
+            setTimeout(function() { o.style.animation = 'pinShake 0.4s ease'; }, 10);
+        }
+
+        function pinDigit(v) {
+            if (pinBuffer.length >= 4) return;
+            pinBuffer += v;
+            updateDots();
+            if (pinBuffer.length === 4) {
+                setTimeout(function() { submitPIN(); }, 80);
+            }
+        }
+
+        function pinDel() {
+            pinBuffer = pinBuffer.slice(0, -1);
+            updateDots();
+        }
+
+        function submitPIN() {
+            var entered = pinBuffer;
+            pinBuffer = '';
+            updateDots();
+            sha256hex(entered).then(function(hash) {
+                if (pinMode === 'set') {
+                    if (!pinFirst) {
+                        pinFirst = hash;
+                        var title = document.getElementById('pinLockTitle');
+                        var sub   = document.getElementById('pinLockSub');
+                        if (title) title.textContent = 'Confirm PIN';
+                        if (sub)   sub.textContent   = 'Enter the same PIN again';
+                    } else {
+                        if (hash === pinFirst) {
+                            localStorage.setItem(PIN_KEY, hash);
+                            localStorage.setItem(PIN_SET_KEY, '1');
+                            hidePINOverlay();
+                            hideBioOverlay();
+                        } else {
+                            pinFirst = '';
+                            var errEl = document.getElementById('pinErrMsg');
+                            if (errEl) errEl.textContent = 'PINs did not match. Try again.';
+                            shakeOverlay();
+                            setTimeout(function() { if (errEl) errEl.textContent = ''; }, 2000);
+                            var title2 = document.getElementById('pinLockTitle');
+                            var sub2   = document.getElementById('pinLockSub');
+                            if (title2) title2.textContent = 'Set a 4-digit PIN';
+                            if (sub2)   sub2.textContent   = 'Enter a new PIN to unlock the app';
+                        }
+                    }
+                } else {
+                    var stored = localStorage.getItem(PIN_KEY);
+                    if (stored && hash === stored) {
+                        hidePINOverlay();
+                        hideBioOverlay();
+                    } else {
+                        var errEl2 = document.getElementById('pinErrMsg');
+                        if (errEl2) errEl2.textContent = 'Incorrect PIN. Try again.';
+                        shakeOverlay();
+                        setTimeout(function() { if (errEl2) errEl2.textContent = ''; }, 2000);
+                    }
+                }
+            }).catch(function() {});
+        }
+
+        /* Wire numpad */
+        var numpad = document.getElementById('pinNumpad');
+        if (numpad) {
+            numpad.addEventListener('click', function(e) {
+                var key = e.target.closest('.pin-key');
+                if (!key) return;
+                if (key.id === 'pinKeyDel') { pinDel(); return; }
+                if (key.id === 'pinKeyBio') { hidePINOverlay(); triggerBioLock(); return; }
+                var v = key.getAttribute('data-v');
+                if (v !== null && v !== '') pinDigit(v);
+            });
+        }
+
+        /* ── Show/Hide helpers ── */
+        function showBioOverlay() {
+            isLocked = true;
+            if (bioOverlay) bioOverlay.style.display = 'flex';
+        }
+        function hideBioOverlay() {
+            isLocked = false;
+            if (bioOverlay) bioOverlay.style.display = 'none';
+        }
+        function showPINOverlay(mode) {
+            pinMode   = mode || 'verify';
+            pinBuffer = '';
+            pinFirst  = '';
+            updateDots();
+            var title = document.getElementById('pinLockTitle');
+            var sub   = document.getElementById('pinLockSub');
+            var err   = document.getElementById('pinErrMsg');
+            if (err) err.textContent = '';
+            if (mode === 'set') {
+                if (title) title.textContent = 'Set a 4-digit PIN';
+                if (sub)   sub.textContent   = 'Choose a PIN to unlock the app';
+                var biobtn = document.getElementById('pinKeyBio');
+                if (biobtn) biobtn.style.display = 'none';
+            } else {
+                if (title) title.textContent = 'Enter PIN';
+                if (sub)   sub.textContent   = 'Enter your 4-digit PIN to unlock';
+            }
+            if (pinOverlay) pinOverlay.style.display = 'flex';
+        }
+        function hidePINOverlay() {
+            if (pinOverlay) pinOverlay.style.display = 'none';
+        }
+
+        /* ── Core: trigger biometric auth ── */
+        function triggerBioLock() {
+            if (!bioPlugin) { fallbackToPin(); return; }
+            bioPlugin.checkBiometry().then(function(info) {
+                var avail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
+                if (!avail) { fallbackToPin(); return; }
+                showBioOverlay();
+                bioPlugin.authenticate({
+                    reason: 'Verify your identity to open Fleet Manager',
+                    cancelTitle: 'Use PIN',
+                    allowDeviceCredential: false,
+                    iosFallbackTitle: 'Use PIN'
+                }).then(function() {
+                    hideBioOverlay();
+                }).catch(function(err) {
+                    if (err && (err.code === 'biometricCanceled' || err.code === 10)) {
+                        /* User tapped "Use PIN" */
+                        fallbackToPin();
+                    } else {
+                        fallbackToPin();
+                    }
+                });
+            }).catch(function() { fallbackToPin(); });
+        }
+
+        function fallbackToPin() {
+            var pinSet = localStorage.getItem(PIN_SET_KEY) === '1';
+            if (pinSet) {
+                showPINOverlay('verify');
+            } else {
+                showPINOverlay('set');
+            }
+        }
+
+        /* "Use PIN instead" link on bio overlay */
+        if (bioUsePIN) {
+            bioUsePIN.addEventListener('click', function() {
+                hideBioOverlay();
+                fallbackToPin();
+            });
+        }
+
+        /* Bio lock button: retry biometric */
+        if (bioLockBtn) {
+            bioLockBtn.addEventListener('click', function() {
+                if (!bioPlugin) { fallbackToPin(); return; }
+                bioPlugin.authenticate({
+                    reason: 'Verify your identity to open Fleet Manager',
+                    cancelTitle: 'Use PIN',
+                    allowDeviceCredential: false,
+                    iosFallbackTitle: 'Use PIN'
+                }).then(function() {
+                    hideBioOverlay();
+                }).catch(function() { fallbackToPin(); });
+            });
+        }
+
+        /* ── Listen for app foreground ── */
+        AppPlugin.addListener('appStateChange', function(state) {
+            if (state && state.isActive) {
+                var hasBio = localStorage.getItem(BIO_KEY) === '1' && localStorage.getItem(TOKEN_KEY);
+                if (hasBio) {
+                    triggerBioLock();
+                } else {
+                    var pinSet = localStorage.getItem(PIN_SET_KEY) === '1';
+                    if (pinSet) { isLocked = true; fallbackToPin(); }
+                }
+            }
+        });
+
+        /* Shake CSS */
+        var style = document.createElement('style');
+        style.textContent = '@keyframes pinShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}';
+        document.head.appendChild(style);
+    })();
+
+    // ── 5c. MOBILE: Back Button must NOT dismiss lock overlays ────────────
+    // (This guard is injected AFTER section 2's AppPlugin listener; the
+    //  tryCloseOverlay() fn above is patched to return true for lock overlays)
+    (function() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+        var _orig = window._tryCloseOverlay || null;
+        /* Override: if lock overlay visible → swallow back press */
+        var bioO = document.getElementById('bioLockOverlay');
+        var pinO = document.getElementById('pinLockOverlay');
+        document.addEventListener('__backButton__', function() {}, false);
+        // Patch the existing tryCloseOverlay by hooking into it via a sentinel DOM check
+        // The back button handler in section 2 calls tryCloseOverlay().
+        // We add a check at the START of tryCloseOverlay by injecting a <meta> flag.
+        // Simpler approach: add the lock overlay check via the existing section-2 tryCloseOverlay.
+        // Since we can't easily monkey-patch it, we rely on the overlay z-index > 9999
+        // and the handler below that runs FIRST by being added to the same event stream.
+        var AppPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+        if (!AppPlugin) return;
+        AppPlugin.addListener('backButton', function(ev) {
+            var bioVisible = bioO && bioO.style.display === 'flex';
+            var pinVisible = pinO && pinO.style.display === 'flex';
+            if (bioVisible || pinVisible) {
+                /* Swallow — user MUST authenticate, cannot back out of the lock */
+                return;
             }
         });
     })();

@@ -37,8 +37,10 @@ if not _secret_key:
         "and add it to your .env file or deployment environment."
     )
 app.config['SECRET_KEY'] = _secret_key
-# When "Remember me" is checked, session lasts this long (default 7 days)
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=int(os.environ.get('SESSION_DAYS', '7')))
+# Session lifetime: 30 days rolling. Web inactivity timer (JS) handles forced logout at 30 min.
+# Mobile: biometric lock overlay re-authenticates on every app foreground event.
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=int(os.environ.get('SESSION_DAYS', '30')))
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # Roll the session cookie on every request
 
 # Database URL: Render (and some hosts) give postgres:// but SQLAlchemy 1.4+ requires postgresql://
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///company_management.db')

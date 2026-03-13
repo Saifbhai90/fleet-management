@@ -428,3 +428,37 @@ def seed_auth_tables(app):
 def check_password(user, password):
     """Return True if password matches user's password_hash."""
     return check_password_hash(user.password_hash, password)
+
+
+# ── Trusted Device cookie (web 30-day auto-login) ──────────────────────────
+TRUSTED_DEVICE_COOKIE = 'fleet_trusted_device'
+TRUSTED_DEVICE_DAYS   = 30
+
+def make_trusted_device_token(username, secret_key):
+    """Return a signed token: base64(username).HMAC-SHA256 for trusted-device cookie."""
+    import hmac as _hmac, hashlib, base64
+    sig = _hmac.new(
+        secret_key.encode('utf-8'),
+        f"{username}:trusted-device-v1".encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    user_b64 = base64.urlsafe_b64encode(username.encode('utf-8')).decode('ascii')
+    return f"{user_b64}.{sig}"
+
+
+def verify_trusted_device_token(token, secret_key):
+    """Return username if token is valid, else None."""
+    import hmac as _hmac, hashlib, base64
+    try:
+        user_b64, sig = token.rsplit('.', 1)
+        username = base64.urlsafe_b64decode(user_b64.encode('ascii')).decode('utf-8')
+        expected = _hmac.new(
+            secret_key.encode('utf-8'),
+            f"{username}:trusted-device-v1".encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        if _hmac.compare_digest(sig, expected):
+            return username
+    except Exception:
+        pass
+    return None

@@ -828,7 +828,6 @@ class EmployeeDocumentForm(FlaskForm):
 class LoginForm(FlaskForm):
     username = StringField('User ID', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
-    remember_me = BooleanField('Remember me', default=False, validators=[Optional()])
     submit = SubmitField('Login')
 
 

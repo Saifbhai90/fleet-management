@@ -2481,13 +2481,26 @@ def employees_print():
         )
     employees = query.order_by(Employee.id.asc()).all()
     return render_template('employees_print.html', employees=employees, search=search)
-
-
 # ────────────────────────────────────────────────
 # Login (User model + permissions in session)
 # ────────────────────────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    from auth_utils import (
+        make_trusted_device_token, verify_trusted_device_token,
+        TRUSTED_DEVICE_COOKIE, TRUSTED_DEVICE_DAYS
+    )
+    # ── Trusted Device: auto-login on GET if valid cookie present ──
+    if request.method == 'GET' and not session.get('user_id'):
+        td_token = request.cookies.get(TRUSTED_DEVICE_COOKIE, '')
+        if td_token:
+            td_username = verify_trusted_device_token(td_token, app.config['SECRET_KEY'])
+            if td_username:
+                td_user = User.query.filter_by(username=td_username, is_active=True).first()
+                if td_user:
+                    _do_login_session(td_user, request)
+                    return redirect(url_for('dashboard'))
+
     form = LoginForm()
     # Show "no access" message at most once when redirected due to permission failure
     if session.pop('show_no_access', None):
@@ -2575,7 +2588,7 @@ def login():
                 except Exception:
                     pass
                 session['permissions'] = perms
-                session.permanent = form.remember_me.data
+                session.permanent = True  # Always persistent (30 days); inactivity timer handles web security
 
                 # ── User scope: projects/districts/vehicles/shifts ───────────────────────────────
                 allowed_projects = set()
@@ -2653,38 +2666,26 @@ def login():
                 else:
                     target_endpoint = 'dashboard'
                 flash(f'Welcome, {session["user"]}!', 'success')
-                if target_endpoint == 'dashboard':
-                    return redirect(url_for('dashboard', from_login=1))
-                return redirect(url_for(target_endpoint))
+                # ── Set trusted device cookie (30 days, HttpOnly) ──
+                td_token = make_trusted_device_token(user.username, app.config['SECRET_KEY'])
+                from datetime import timedelta as _td
+                resp_target = url_for('dashboard', from_login=1) if target_endpoint == 'dashboard' else url_for(target_endpoint)
+                response = redirect(resp_target)
+                response.set_cookie(
+                    TRUSTED_DEVICE_COOKIE, td_token,
+                    max_age=int(_td(days=TRUSTED_DEVICE_DAYS).total_seconds()),
+                    httponly=True, secure=app.config.get('SESSION_COOKIE_SECURE', True),
+                    samesite='Lax'
+                )
+                return response
         flash('Invalid user ID or password.', 'danger')
     return render_template('login.html', form=form)
 
 
-@app.route('/set-new-password', methods=['GET', 'POST'])
-def set_new_password():
-    """First-time password set: user logged in with 123, must set new password. Then redirect to login."""
-    user_id = session.get('must_set_password_user_id')
-    if not user_id:
-        flash('Invalid or expired. Please login with your CNIC and password 123.', 'info')
-        return redirect(url_for('login'))
-    user = User.query.get(user_id)
-    if not user or not getattr(user, 'force_password_change', None):
-        session.pop('must_set_password_user_id', None)
-        flash('Please login with your CNIC and your password.', 'info')
-        return redirect(url_for('login'))
-    form = SetNewPasswordForm()
-    if form.validate_on_submit():
-        user.password_hash = generate_password_hash(form.new_password.data)
-        user.force_password_change = False
-        db.session.commit()
-        session.pop('must_set_password_user_id', None)
-        flash('Password set successfully. Ab apna CNIC aur naya password daal kar login karein.', 'success')
-        return redirect(url_for('login'))
-    return render_template('set_new_password.html', form=form, username=user.username)
-
-
 @app.route('/logout')
 def logout():
+    from auth_utils import TRUSTED_DEVICE_COOKIE
+    inactivity = request.args.get('inactivity') == '1'
     # Mark logout time for current session's login log if any
     try:
         log_id = session.get('login_log_id')
@@ -2693,14 +2694,14 @@ def logout():
             db.session.commit()
     except Exception:
         db.session.rollback()
-    session.clear()  # Destroy ALL session data: is_master, is_admin, permissions, allowed_*, last_activity, etc.
-    flash('You have been logged out.', 'info')
-    return redirect(url_for('login'))
-
-
-# ────────────────────────────────────────────────
-# API: Client activity log (device ID + geolocation)
-# ────────────────────────────────────────────────
+    session.clear()  # Destroy ALL session data
+    msg = 'Session expired due to inactivity.' if inactivity else 'You have been logged out.'
+    flash(msg, 'info' if inactivity else 'info')
+    response = redirect(url_for('login'))
+    if not inactivity:
+        # Explicit logout: clear trusted device so user must re-enter password
+        response.delete_cookie(TRUSTED_DEVICE_COOKIE)
+    return response
 @app.route('/api/log-activity', methods=['POST'])
 def api_log_activity():
     """Accept client-side activity log: action, device_id, latitude, longitude, accuracy. User from session."""
