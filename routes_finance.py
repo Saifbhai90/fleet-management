@@ -2,7 +2,7 @@
 Finance & Accounting Routes
 All routes for vouchers, journal entries, ledgers, and financial reports
 """
-from flask import render_template, request, redirect, url_for, flash, jsonify, session, current_app as app
+from flask import render_template, request, redirect, url_for, flash, jsonify, session
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, 
                     BankEntry, EmployeeExpense, District, Project, Party, Employee, User)
 from forms import (PaymentVoucherForm, ReceiptVoucherForm, BankEntryForm, JournalVoucherForm,
@@ -15,9 +15,6 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal
 import os
 from werkzeug.utils import secure_filename
-
-# Get app instance for route decorators
-from app import app
 
 
 # Helper function for authentication and permission checks
@@ -37,7 +34,6 @@ def check_auth(permission_code=None):
 # PAYMENT VOUCHER
 # ════════════════════════════════════════════════════════════════════════════════
 
-@app.route('/accounts/payment-voucher', methods=['GET', 'POST'])
 def accounts_quick_payment():
     """Create Payment Voucher"""
     auth_check = check_auth('accounts_quick_payment')
@@ -94,7 +90,6 @@ def accounts_quick_payment():
     return render_template('finance/payment_voucher_form.html', form=form, title='Payment Voucher')
 
 
-@app.route('/accounts/payment-vouchers')
 def payment_vouchers_list():
     auth_check = check_auth('accounts_quick_payment')
     if auth_check:
@@ -161,7 +156,6 @@ def payment_vouchers_list():
                          page=page, per_page=per_page)
 
 
-@app.route('/accounts/payment-voucher/<int:pk>/edit', methods=['GET', 'POST'])
 def payment_voucher_edit(pk):
     auth_check = check_auth('accounts_quick_payment')
     if auth_check:
@@ -213,7 +207,6 @@ def payment_voucher_edit(pk):
     return render_template('finance/payment_voucher_form.html', form=form, title='Edit Payment Voucher', pv=pv)
 
 
-@app.route('/accounts/payment-voucher/<int:pk>/delete', methods=['POST'])
 def payment_voucher_delete(pk):
     auth_check = check_auth('accounts_quick_payment')
     if auth_check:
@@ -242,7 +235,6 @@ def payment_voucher_delete(pk):
 # RECEIPT VOUCHER
 # ════════════════════════════════════════════════════════════════════════════════
 
-@app.route('/accounts/receipt-voucher', methods=['GET', 'POST'])
 def accounts_quick_receipt():
     auth_check = check_auth('accounts_quick_receipt')
     if auth_check:
@@ -286,7 +278,6 @@ def accounts_quick_receipt():
     return render_template('finance/receipt_voucher_form.html', form=form, title='Receipt Voucher')
 
 
-@app.route('/accounts/receipt-vouchers')
 def receipt_vouchers_list():
     auth_check = check_auth('accounts_quick_receipt')
     if auth_check:
@@ -340,7 +331,6 @@ def receipt_vouchers_list():
 # BANK ENTRY
 # ════════════════════════════════════════════════════════════════════════════════
 
-@app.route('/accounts/bank-entry', methods=['GET', 'POST'])
 def accounts_bank_entry():
     auth_check = check_auth('accounts_bank_entry')
     if auth_check:
@@ -383,7 +373,6 @@ def accounts_bank_entry():
     return render_template('finance/bank_entry_form.html', form=form, title='Bank Entry')
 
 
-@app.route('/accounts/bank-entries')
 def bank_entries_list():
     auth_check = check_auth('accounts_bank_entry')
     if auth_check:
@@ -425,7 +414,6 @@ def bank_entries_list():
 # ACCOUNT LEDGER (KEY VIEW FOR DTOs)
 # ════════════════════════════════════════════════════════════════════════════════
 
-@app.route('/accounts/ledger', methods=['GET', 'POST'])
 def accounts_account_ledger():
     auth_check = check_auth('accounts_account_ledger')
     if auth_check:
@@ -469,7 +457,6 @@ def accounts_account_ledger():
 # BALANCE SHEET
 # ════════════════════════════════════════════════════════════════════════════════
 
-@app.route('/accounts/balance-sheet', methods=['GET', 'POST'])
 def accounts_balance_sheet():
     auth_check = check_auth('accounts_balance_sheet')
     if auth_check:
@@ -513,8 +500,6 @@ def accounts_balance_sheet():
 # EMPLOYEE EXPENSE
 # ════════════════════════════════════════════════════════════════════════════════
 
-@app.route('/accounts/employee-expense/add', methods=['GET', 'POST'])
-@app.route('/accounts/employee-expense/<int:pk>/edit', methods=['GET', 'POST'])
 def employee_expense_form(pk=None):
     auth_check = check_auth('employee_expense_form')
     if auth_check:
@@ -600,7 +585,6 @@ def employee_expense_form(pk=None):
                          title='Add Employee Expense' if not pk else 'Edit Employee Expense')
 
 
-@app.route('/accounts/employee-expenses')
 def employee_expense_list():
     auth_check = check_auth('employee_expense_list')
     if auth_check:
@@ -660,7 +644,6 @@ def employee_expense_list():
                          page=page, per_page=per_page)
 
 
-@app.route('/accounts/employee-expense/<int:pk>/delete', methods=['POST'])
 def employee_expense_delete(pk):
     auth_check = check_auth('employee_expense_form')
     if auth_check:

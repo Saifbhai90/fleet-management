@@ -237,7 +237,35 @@ if _run_startup_tasks:
 
 # Import routes after app & db are ready
 from routes import *  # noqa: E402,F401
-from routes_finance import *  # noqa: E402,F401
+
+# Import and register finance routes
+from routes_finance import (
+    accounts_quick_payment, payment_vouchers_list, payment_voucher_edit, payment_voucher_delete,
+    accounts_quick_receipt, receipt_vouchers_list,
+    accounts_bank_entry, bank_entries_list,
+    accounts_account_ledger, accounts_balance_sheet,
+    employee_expense_form, employee_expense_list, employee_expense_delete
+)  # noqa: E402
+
+# Register finance routes
+app.add_url_rule('/accounts/payment-voucher', 'accounts_quick_payment', accounts_quick_payment, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/payment-vouchers', 'payment_vouchers_list', payment_vouchers_list)
+app.add_url_rule('/accounts/payment-voucher/<int:pk>/edit', 'payment_voucher_edit', payment_voucher_edit, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/payment-voucher/<int:pk>/delete', 'payment_voucher_delete', payment_voucher_delete, methods=['POST'])
+
+app.add_url_rule('/accounts/receipt-voucher', 'accounts_quick_receipt', accounts_quick_receipt, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/receipt-vouchers', 'receipt_vouchers_list', receipt_vouchers_list)
+
+app.add_url_rule('/accounts/bank-entry', 'accounts_bank_entry', accounts_bank_entry, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/bank-entries', 'bank_entries_list', bank_entries_list)
+
+app.add_url_rule('/accounts/ledger', 'accounts_account_ledger', accounts_account_ledger, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/balance-sheet', 'accounts_balance_sheet', accounts_balance_sheet, methods=['GET', 'POST'])
+
+app.add_url_rule('/accounts/employee-expense/add', 'employee_expense_form', employee_expense_form, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/employee-expense/<int:pk>/edit', 'employee_expense_form_edit', employee_expense_form, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/employee-expenses', 'employee_expense_list', employee_expense_list)
+app.add_url_rule('/accounts/employee-expense/<int:pk>/delete', 'employee_expense_delete', employee_expense_delete, methods=['POST'])
 
 # Register Mobile API Blueprint
 from api import api_bp  # noqa: E402
