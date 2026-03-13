@@ -232,6 +232,12 @@
             transition: transform 0.3s;
             z-index: 9999;
         }
+
+        /* ─── Capacitor Native App Overrides ─── */
+        .capacitor-native .navbar { padding-top: env(safe-area-inset-top, 0); height: auto; }
+        .capacitor-native .main-content { padding-top: calc(env(safe-area-inset-top, 0px) + 60px) !important; }
+        .capacitor-native #guideChatbotWrap { display: none !important; }
+        .capacitor-native .sidebar { top: calc(env(safe-area-inset-top, 0px) + 60px); height: calc(100vh - env(safe-area-inset-top, 0px) - 60px); }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -1370,6 +1376,101 @@
             if (dist >= threshold) { setTimeout(function() { window.location.reload(); }, 200); }
         }, { passive: true });
     })();
+
+    // ── Capacitor Native Bridge ────────────────────────────────────────────
+    // Detects if running inside Capacitor (native Android/iOS app) and exposes
+    // FleetBridge.getGPS() / FleetBridge.takeSelfie() / FleetBridge.requestPushPermission()
+    window.FleetBridge = (function() {
+        var _isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+        if (_isNative) {
+            document.documentElement.classList.add('capacitor-native');
+            document.body.classList.add('capacitor-native');
+        }
+
+        function getGPS() {
+            return new Promise(function(resolve, reject) {
+                if (_isNative && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation) {
+                    window.Capacitor.Plugins.Geolocation.getCurrentPosition({
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                    }).then(function(pos) {
+                        resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
+                    }).catch(reject);
+                } else if ('geolocation' in navigator) {
+                    navigator.geolocation.getCurrentPosition(
+                        function(pos) { resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }); },
+                        reject,
+                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                    );
+                } else {
+                    reject(new Error('Geolocation not supported'));
+                }
+            });
+        }
+
+        function takeSelfie() {
+            return new Promise(function(resolve, reject) {
+                if (_isNative && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera) {
+                    window.Capacitor.Plugins.Camera.getPhoto({
+                        quality: 70,
+                        allowEditing: false,
+                        resultType: 'base64',
+                        source: 'CAMERA',
+                        direction: 'FRONT',
+                        saveToGallery: false,
+                    }).then(function(photo) {
+                        resolve('data:image/jpeg;base64,' + photo.base64String);
+                    }).catch(reject);
+                } else {
+                    // Web fallback: open file picker
+                    var input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.capture = 'user';
+                    input.onchange = function() {
+                        var file = input.files && input.files[0];
+                        if (!file) { reject(new Error('No file selected')); return; }
+                        var reader = new FileReader();
+                        reader.onload = function(e) { resolve(e.target.result); };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    };
+                    input.click();
+                }
+            });
+        }
+
+        function requestPushPermission() {
+            return new Promise(function(resolve) {
+                if (_isNative && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications) {
+                    window.Capacitor.Plugins.PushNotifications.requestPermissions().then(function(result) {
+                        if (result.receive === 'granted') {
+                            window.Capacitor.Plugins.PushNotifications.register();
+                        }
+                        resolve(result.receive === 'granted');
+                    }).catch(function() { resolve(false); });
+                } else {
+                    if ('Notification' in window) {
+                        Notification.requestPermission().then(function(p) { resolve(p === 'granted'); });
+                    } else {
+                        resolve(false);
+                    }
+                }
+            });
+        }
+
+        return { isNative: _isNative, getGPS: getGPS, takeSelfie: takeSelfie, requestPushPermission: requestPushPermission };
+    })();
+
+    // ── Mobile Layout Lockdown (Capacitor context) ────────────────────────
+    // Hide web-only elements when running as native app
+    if (window.FleetBridge && window.FleetBridge.isNative) {
+        document.addEventListener('DOMContentLoaded', function() {
+            var guideWrap = document.getElementById('guideChatbotWrap');
+            if (guideWrap) guideWrap.style.display = 'none';
+        });
+    }
 
     // ── Service Worker Registration (PWA) ─────────────────────────────────
     if ('serviceWorker' in navigator) {

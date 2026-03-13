@@ -167,6 +167,32 @@ def mobile_dashboard_stats():
     })
 
 
+def _save_base64_photo(b64_string: str, folder: str = 'attendance') -> str:
+    """Decode base64 image, upload to R2 (or save locally as fallback). Returns URL/path."""
+    import base64
+    import re
+    # Strip data-URL prefix if present: data:image/jpeg;base64,<data>
+    match = re.match(r'data:image/[^;]+;base64,(.+)', b64_string, re.DOTALL)
+    raw_b64 = match.group(1) if match else b64_string
+    try:
+        image_bytes = base64.b64decode(raw_b64)
+    except Exception:
+        return ''
+    try:
+        from r2_storage import upload_image_bytes
+        return upload_image_bytes(image_bytes, folder=folder)
+    except Exception:
+        # Fallback: save locally under uploads/
+        import uuid, os
+        upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads', folder)
+        os.makedirs(upload_dir, exist_ok=True)
+        fname = uuid.uuid4().hex + '.jpg'
+        fpath = os.path.join(upload_dir, fname)
+        with open(fpath, 'wb') as f:
+            f.write(image_bytes)
+        return f'/uploads/{folder}/{fname}'
+
+
 # ── POST /api/v1/attendance/checkin ──────────────────────────────────────────
 @api_bp.route('/attendance/checkin', methods=['POST'])
 @jwt_required
@@ -182,6 +208,7 @@ def mobile_checkin():
     driver_id = body.get('driver_id')
     lat = body.get('latitude')
     lng = body.get('longitude')
+    photo_b64 = body.get('photo_base64', '')
 
     if not driver_id:
         return _err('driver_id is required.')
@@ -196,22 +223,27 @@ def mobile_checkin():
     existing = DriverAttendance.query.filter_by(
         driver_id=driver.id, attendance_date=today
     ).first()
-    if existing and existing.check_in_time:
+    if existing and existing.check_in:
         return _err('Already checked in today.')
+
+    photo_url = _save_base64_photo(photo_b64, 'attendance') if photo_b64 else None
 
     try:
         if existing:
-            existing.check_in_time = now_utc.time()
-            existing.check_in_lat = lat
-            existing.check_in_lng = lng
+            existing.check_in = now_utc.time()
+            existing.check_in_latitude = lat
+            existing.check_in_longitude = lng
+            if photo_url:
+                existing.check_in_photo_path = photo_url
             record = existing
         else:
             record = DriverAttendance(
                 driver_id=driver.id,
                 attendance_date=today,
-                check_in_time=now_utc.time(),
-                check_in_lat=lat,
-                check_in_lng=lng,
+                check_in=now_utc.time(),
+                check_in_latitude=lat,
+                check_in_longitude=lng,
+                check_in_photo_path=photo_url,
                 status='Present',
             )
             db.session.add(record)
@@ -227,7 +259,7 @@ def mobile_checkin():
 @jwt_required
 def mobile_checkout():
     """
-    Body: { "driver_id": 5, "latitude": 31.5, "longitude": 74.3 }
+    Body: { "driver_id": 5, "latitude": 31.5, "longitude": 74.3, "photo_base64": "..." }
     """
     from models import Driver, DriverAttendance
     from app import db
@@ -237,6 +269,7 @@ def mobile_checkout():
     driver_id = body.get('driver_id')
     lat = body.get('latitude')
     lng = body.get('longitude')
+    photo_b64 = body.get('photo_base64', '')
 
     if not driver_id:
         return _err('driver_id is required.')
@@ -251,20 +284,102 @@ def mobile_checkout():
     record = DriverAttendance.query.filter_by(
         driver_id=driver.id, attendance_date=today
     ).first()
-    if not record or not record.check_in_time:
+    if not record or not record.check_in:
         return _err('No check-in found for today. Please check in first.')
-    if record.check_out_time:
+    if record.check_out:
         return _err('Already checked out today.')
 
+    photo_url = _save_base64_photo(photo_b64, 'attendance') if photo_b64 else None
+
     try:
-        record.check_out_time = now_utc.time()
-        record.check_out_lat = lat
-        record.check_out_lng = lng
+        record.check_out = now_utc.time()
+        record.check_out_latitude = lat
+        record.check_out_longitude = lng
+        if photo_url:
+            record.check_out_photo_path = photo_url
         db.session.commit()
         return _ok({'message': f'Check-out recorded for {driver.name}', 'time': str(now_utc.time())[:5]})
     except Exception as e:
         db.session.rollback()
         return _err(f'Error: {str(e)}')
+
+
+# ── GET /api/v1/driver/profile ───────────────────────────────────────────────
+@api_bp.route('/driver/profile', methods=['GET'])
+@jwt_required
+def mobile_driver_profile():
+    """Full driver profile for current user or ?driver_id=X for admins."""
+    from models import User, Driver, DriverAttendance
+    import datetime as dt
+
+    uid = request.jwt_payload.get('user_id')
+    user = User.query.get(uid)
+    if not user:
+        return _err('User not found.', 404)
+
+    driver_id_param = request.args.get('driver_id', type=int)
+    is_master = request.jwt_payload.get('is_master', False)
+
+    if driver_id_param and is_master:
+        driver = Driver.query.get(driver_id_param)
+    else:
+        driver = Driver.query.filter_by(cnic_no=user.username).first()
+
+    if not driver:
+        return _err('Driver profile not found for this user.', 404)
+
+    today = dt.date.today()
+    attendance_today = DriverAttendance.query.filter_by(
+        driver_id=driver.id, attendance_date=today
+    ).first()
+
+    return _ok({
+        'driver_id': driver.driver_id,
+        'name': driver.name,
+        'father_name': driver.father_name,
+        'cnic_no': driver.cnic_no,
+        'phone1': driver.phone1,
+        'phone2': driver.phone2,
+        'status': driver.status,
+        'shift': driver.shift,
+        'license_no': driver.license_no,
+        'license_type': driver.license_type,
+        'license_expiry': driver.license_expiry_date.isoformat() if driver.license_expiry_date else None,
+        'cnic_expiry': driver.cnic_expiry_date.isoformat() if driver.cnic_expiry_date else None,
+        'district': driver.driver_district,
+        'vehicle_id': driver.vehicle_id,
+        'photo_url': driver.photo_url if hasattr(driver, 'photo_url') else None,
+        'today_attendance': {
+            'checked_in': bool(attendance_today and attendance_today.check_in),
+            'checked_out': bool(attendance_today and attendance_today.check_out),
+            'check_in_time': str(attendance_today.check_in)[:5] if attendance_today and attendance_today.check_in else None,
+            'check_out_time': str(attendance_today.check_out)[:5] if attendance_today and attendance_today.check_out else None,
+            'status': attendance_today.status if attendance_today else None,
+        } if attendance_today else None,
+    })
+
+
+# ── GET /api/v1/notifications ─────────────────────────────────────────────────
+@api_bp.route('/notifications', methods=['GET'])
+@jwt_required
+def mobile_notifications():
+    """Returns unread notifications for the current user."""
+    from models import Notification, NotificationRead
+    from app import db
+
+    uid = request.jwt_payload.get('user_id')
+    read_ids = {r.notification_id for r in NotificationRead.query.filter_by(user_id=uid).all()}
+    notifications = Notification.query.order_by(Notification.created_at.desc()).limit(50).all()
+
+    return _ok([{
+        'id': n.id,
+        'title': n.title,
+        'message': n.message,
+        'type': n.notification_type,
+        'link': n.link,
+        'is_read': n.id in read_ids,
+        'created_at': n.created_at.isoformat() if n.created_at else None,
+    } for n in notifications])
 
 
 # ── GET /api/v1/drivers ───────────────────────────────────────────────────────
