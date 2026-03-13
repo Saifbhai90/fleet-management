@@ -673,6 +673,8 @@
             }
         }
     </style>
+    <!-- Mobile-Perfect responsive overrides (zero desktop impact) -->
+    <link rel="stylesheet" href="/static/css/mobile_perfect.css">
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -2826,6 +2828,249 @@
             });
         });
     })();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MOBILE PERFECT: Table → Cards + inputmode auto-setter
+     Zero desktop impact. Runs on every page automatically.
+     ═══════════════════════════════════════════════════════════ -->
+<script>
+(function() {
+    'use strict';
+
+    /* ── inputmode auto-setter for touch keyboards ── */
+    function setInputModes() {
+        var numPatterns = /salary|amount|mileage|reading|odometer|km|distance|price|cost|rate|qty|quantity|balance|fine|penalty|fuel|liter|litre|hour|day|year/i;
+        var telPatterns = /phone|mobile|cell|contact|cnic|whatsapp|emergency/i;
+        var emailPatterns = /email/i;
+
+        document.querySelectorAll('input[type="text"], input[type="number"]').forEach(function(inp) {
+            if (inp.getAttribute('inputmode')) return; // already set
+            var name = (inp.name || inp.id || '').toLowerCase();
+            if (emailPatterns.test(name)) {
+                inp.setAttribute('inputmode', 'email');
+                inp.setAttribute('autocomplete', inp.getAttribute('autocomplete') || 'email');
+            } else if (telPatterns.test(name)) {
+                inp.setAttribute('inputmode', 'tel');
+            } else if (numPatterns.test(name) || inp.type === 'number') {
+                inp.setAttribute('inputmode', 'decimal');
+            }
+        });
+    }
+
+    /* ── Detect action column ── */
+    function isActionCol(header, td, colIndex, totalCols) {
+        var h = (header || '').toLowerCase().trim();
+        if (h === 'action' || h === 'actions' || h === '#' || h === '') return false; // '#' is usually row number
+        // Last column containing only buttons/links
+        if (colIndex === totalCols - 1) {
+            var clone = td.cloneNode(true);
+            var text = clone.textContent.trim();
+            var hasBtn = clone.querySelector('a.btn, button, a[href], form');
+            // If almost all content is buttons and minimal text, treat as actions
+            if (hasBtn && text.length < 60) return true;
+        }
+        return false;
+    }
+
+    /* ── Build card for one table row ── */
+    function buildCard(row, headers, themeClass) {
+        var tds = row.querySelectorAll('td');
+        if (!tds.length) return null;
+
+        // Single-cell empty/no-data row
+        if (tds.length === 1 && (parseInt(tds[0].getAttribute('colspan') || '1') > 1)) {
+            var empty = document.createElement('div');
+            empty.className = 'mp-card-empty';
+            empty.innerHTML = tds[0].innerHTML;
+            return empty;
+        }
+
+        var card = document.createElement('div');
+        card.className = 'mp-card' + (themeClass ? ' ' + themeClass : '');
+
+        var body = document.createElement('div');
+        body.className = 'mp-card-body';
+
+        var actionsDiv = null;
+        var titleText = '';
+        var titleBadgeHTML = '';
+        var firstDataIndex = -1;
+
+        tds.forEach(function(td, i) {
+            var header = headers[i] || '';
+            var headerLow = header.toLowerCase().trim();
+            var cellHTML = td.innerHTML.trim();
+            var cellText = td.textContent.trim();
+
+            // Skip pure serial number columns
+            if ((headerLow === '#' || headerLow === 'sr.' || headerLow === 'sr.no' || headerLow === 'no.') && /^\d+$/.test(cellText)) {
+                return;
+            }
+
+            // Detect action column (last col with buttons)
+            var isAction = isActionCol(header, td, i, tds.length);
+            if (isAction) {
+                actionsDiv = document.createElement('div');
+                actionsDiv.className = 'mp-card-actions';
+                actionsDiv.innerHTML = cellHTML;
+                return;
+            }
+
+            // First meaningful column → use as card title
+            if (firstDataIndex === -1 && cellText) {
+                firstDataIndex = i;
+                titleText = cellText;
+                // Check for badge in second column
+                if (headers[i + 1]) {
+                    var nextTD = tds[i + 1];
+                    if (nextTD) {
+                        var badge = nextTD.querySelector('.badge, .badge-sm');
+                        if (badge) {
+                            titleBadgeHTML = badge.outerHTML;
+                        }
+                    }
+                }
+                return; // Title row is shown in card header, skip adding as body row
+            }
+
+            // Skip column if its value was used as badge in title
+            if (titleBadgeHTML && tds[i - 1] === tds[firstDataIndex] ) return;
+
+            var rowDiv = document.createElement('div');
+            rowDiv.className = 'mp-card-row';
+
+            var lbl = document.createElement('span');
+            lbl.className = 'mp-card-label';
+            lbl.textContent = header;
+
+            var val = document.createElement('span');
+            val.className = 'mp-card-val';
+            val.innerHTML = cellHTML;
+
+            rowDiv.appendChild(lbl);
+            rowDiv.appendChild(val);
+            body.appendChild(rowDiv);
+        });
+
+        // Card title header
+        var titleDiv = document.createElement('div');
+        titleDiv.className = 'mp-card-title';
+        titleDiv.innerHTML = '<span>' + escapeHTML(titleText || 'Record') + '</span>' +
+            (titleBadgeHTML ? '<span class="mp-card-title-badge">' + titleBadgeHTML + '</span>' : '');
+
+        card.appendChild(titleDiv);
+        card.appendChild(body);
+        if (actionsDiv) card.appendChild(actionsDiv);
+
+        return card;
+    }
+
+    function escapeHTML(str) {
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    /* ── Detect theme from section-heading background ── */
+    function detectTheme(container) {
+        var heading = container.querySelector('.section-heading');
+        if (!heading) return '';
+        var bg = window.getComputedStyle(heading).backgroundColor;
+        if (!bg) return '';
+        // Green
+        if (bg.indexOf('76, 175, 80') !== -1 || bg.indexOf('34, 197, 94') !== -1) return 'mp-theme-green';
+        // Purple
+        if (bg.indexOf('147, 51, 234') !== -1 || bg.indexOf('139, 92, 246') !== -1) return 'mp-theme-purple';
+        // Red/orange
+        if (bg.indexOf('220, 53, 69') !== -1 || bg.indexOf('239, 68, 68') !== -1) return 'mp-theme-red';
+        // Teal
+        if (bg.indexOf('20, 184, 166') !== -1 || bg.indexOf('15, 118, 110') !== -1) return 'mp-theme-teal';
+        return 'mp-theme-blue';
+    }
+
+    /* ── Main converter ── */
+    function buildAllCards() {
+        // Target: tables with compact-table class OR tables inside data-table-wrapper
+        var tables = Array.from(document.querySelectorAll(
+            'table.compact-table, .data-table-wrapper table, table.table.table-hover'
+        ));
+        // Deduplicate
+        var seen = new Set();
+        tables = tables.filter(function(t) {
+            if (seen.has(t)) return false;
+            seen.add(t);
+            return true;
+        });
+
+        tables.forEach(function(tbl) {
+            if (tbl.dataset.mpBuilt) return;
+            tbl.dataset.mpBuilt = '1';
+
+            // Read headers
+            var headers = [];
+            tbl.querySelectorAll('thead th, thead td').forEach(function(th) {
+                headers.push(th.textContent.trim());
+            });
+            if (headers.length === 0) return;
+
+            // Detect theme from surrounding container
+            var pageContainer = document.querySelector('.container-fluid') || document.body;
+            var theme = detectTheme(pageContainer);
+
+            // Build card list
+            var cardList = document.createElement('div');
+            cardList.className = 'mp-card-list';
+
+            var rows = tbl.querySelectorAll('tbody tr');
+            if (rows.length === 0) {
+                var empty = document.createElement('div');
+                empty.className = 'mp-card-empty';
+                empty.textContent = 'No records found.';
+                cardList.appendChild(empty);
+            }
+
+            rows.forEach(function(row) {
+                var card = buildCard(row, headers, theme);
+                if (card) cardList.appendChild(card);
+            });
+
+            // Find the wrapper to hide on mobile
+            var wrapper = tbl.closest('.data-table-wrapper') ||
+                          tbl.closest('.table-responsive') ||
+                          tbl.parentNode;
+
+            // Insert card list right after the wrapper
+            wrapper.parentNode.insertBefore(cardList, wrapper.nextSibling);
+
+            // Hide the original wrapper on mobile
+            wrapper.classList.add('mp-hide-mobile');
+
+            // Also hide table-footer if present (clone count into mobile footer)
+            var footer = wrapper.nextSibling && wrapper.nextSibling.classList &&
+                         wrapper.nextSibling.classList.contains('mp-card-list')
+                         ? null
+                         : wrapper.parentNode.querySelector('.table-footer');
+            if (footer) {
+                footer.classList.add('mp-hide-mobile');
+                var mobileFooter = document.createElement('div');
+                mobileFooter.className = 'mp-table-footer-mobile';
+                mobileFooter.innerHTML = footer.innerHTML;
+                cardList.after(mobileFooter);
+            }
+        });
+    }
+
+    /* ── Run on DOM ready ── */
+    function init() {
+        setInputModes();
+        buildAllCards();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
 </script>
 
 </body>
