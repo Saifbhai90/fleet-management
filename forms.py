@@ -987,3 +987,120 @@ class AttendanceTimeControlForm(FlaskForm):
     night_start   = StringField('Night shift: Start time',   validators=[Optional()], render_kw={"type": "time", "class": "form-control"})
     night_end     = StringField('Night shift: End time',     validators=[Optional()], render_kw={"type": "time", "class": "form-control"})
     submit        = SubmitField('Save')
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# FINANCE & ACCOUNTING FORMS
+# ════════════════════════════════════════════════════════════════════════════════
+
+class PaymentVoucherForm(FlaskForm):
+    """Payment Voucher: Money going out (Accounts → DTO, DTO → Party)"""
+    payment_date = DateField('Payment Date', format='%d-%m-%Y', validators=[DataRequired()], 
+                             render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
+    from_account_id = SelectField('From Account (Source)', coerce=int, validators=[DataRequired()], choices=[])
+    to_account_id = SelectField('To Account (Destination)', coerce=int, validators=[DataRequired()], choices=[])
+    amount = DecimalField('Amount', validators=[DataRequired(), NumberRange(min=0.01)], 
+                         render_kw={"class": "form-control", "placeholder": "0.00", "step": "0.01"})
+    payment_mode = SelectField('Payment Mode', choices=[
+        ('Cash', 'Cash'),
+        ('Cheque', 'Cheque'),
+        ('Bank Transfer', 'Bank Transfer'),
+        ('Online', 'Online Payment')
+    ], validators=[DataRequired()])
+    cheque_number = StringField('Cheque Number', validators=[Optional(), Length(max=50)],
+                               render_kw={"class": "form-control", "placeholder": "If payment mode is Cheque"})
+    description = TextAreaField('Description', validators=[Optional()], 
+                               render_kw={"class": "form-control", "rows": 3, "placeholder": "Payment details..."})
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[])
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[])
+    submit = SubmitField('Save Payment Voucher')
+
+
+class ReceiptVoucherForm(FlaskForm):
+    """Receipt Voucher: Money coming in (refunds, income)"""
+    receipt_date = DateField('Receipt Date', format='%d-%m-%Y', validators=[DataRequired()],
+                            render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
+    from_account_id = SelectField('From Account (Source)', coerce=int, validators=[DataRequired()], choices=[])
+    to_account_id = SelectField('To Account (Our Account)', coerce=int, validators=[DataRequired()], choices=[])
+    amount = DecimalField('Amount', validators=[DataRequired(), NumberRange(min=0.01)],
+                         render_kw={"class": "form-control", "placeholder": "0.00", "step": "0.01"})
+    receipt_mode = SelectField('Receipt Mode', choices=[
+        ('Cash', 'Cash'),
+        ('Cheque', 'Cheque'),
+        ('Bank Transfer', 'Bank Transfer'),
+        ('Online', 'Online Payment')
+    ], validators=[DataRequired()])
+    description = TextAreaField('Description', validators=[Optional()],
+                               render_kw={"class": "form-control", "rows": 3, "placeholder": "Receipt details..."})
+    submit = SubmitField('Save Receipt Voucher')
+
+
+class BankEntryForm(FlaskForm):
+    """Bank Entry: Transfer between bank accounts or cash"""
+    entry_date = DateField('Entry Date', format='%d-%m-%Y', validators=[DataRequired()],
+                          render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
+    from_account_id = SelectField('From Account', coerce=int, validators=[DataRequired()], choices=[])
+    to_account_id = SelectField('To Account', coerce=int, validators=[DataRequired()], choices=[])
+    amount = DecimalField('Amount', validators=[DataRequired(), NumberRange(min=0.01)],
+                         render_kw={"class": "form-control", "placeholder": "0.00", "step": "0.01"})
+    description = TextAreaField('Description', validators=[Optional()],
+                               render_kw={"class": "form-control", "rows": 3, "placeholder": "Transfer details..."})
+    submit = SubmitField('Save Bank Entry')
+
+
+class JournalVoucherForm(FlaskForm):
+    """Manual Journal Voucher: For manual accounting entries"""
+    entry_date = DateField('Entry Date', format='%d-%m-%Y', validators=[DataRequired()],
+                          render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
+    description = TextAreaField('Description', validators=[DataRequired()],
+                               render_kw={"class": "form-control", "rows": 3, "placeholder": "Journal entry description..."})
+    district_id = SelectField('District (Optional)', coerce=int, validators=[Optional()], choices=[])
+    project_id = SelectField('Project (Optional)', coerce=int, validators=[Optional()], choices=[])
+    submit = SubmitField('Save Journal Voucher')
+    # Note: Journal lines will be added dynamically via JavaScript
+
+
+class EmployeeExpenseForm(FlaskForm):
+    """Employee Expense: Non-vehicle expenses (Travel, Office, Communication, etc.)"""
+    expense_date = DateField('Expense Date', format='%d-%m-%Y', validators=[DataRequired()],
+                            render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
+    employee_id = SelectField('Employee (Optional)', coerce=int, validators=[Optional()], choices=[])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[])
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[])
+    expense_category = SelectField('Expense Category', choices=[
+        ('Travel', 'Travel Expense'),
+        ('Office', 'Office Expense'),
+        ('Communication', 'Communication Expense'),
+        ('Other', 'Other Expense')
+    ], validators=[DataRequired()])
+    description = TextAreaField('Description', validators=[DataRequired()],
+                               render_kw={"class": "form-control", "rows": 3, "placeholder": "Expense details..."})
+    amount = DecimalField('Amount', validators=[DataRequired(), NumberRange(min=0.01)],
+                         render_kw={"class": "form-control", "placeholder": "0.00", "step": "0.01"})
+    payment_mode = SelectField('Payment Mode', choices=[
+        ('Cash', 'Cash'),
+        ('Reimbursement', 'Reimbursement'),
+        ('Advance', 'Advance')
+    ], validators=[DataRequired()])
+    receipt = FileField('Receipt/Bill (Optional)', validators=[Optional(),
+        FileAllowed(['pdf', 'jpg', 'jpeg', 'png'], 'PDF or images only')])
+    submit = SubmitField('Save Employee Expense')
+
+
+class AccountLedgerFilterForm(FlaskForm):
+    """Filter form for Account Ledger view"""
+    account_id = SelectField('Select Account', coerce=int, validators=[Optional()], choices=[])
+    from_date = DateField('From Date', format='%d-%m-%Y', validators=[Optional()],
+                         render_kw={"class": "form-control datepicker", "placeholder": "Start date"})
+    to_date = DateField('To Date', format='%d-%m-%Y', validators=[Optional()],
+                       render_kw={"class": "form-control datepicker", "placeholder": "End date"})
+    district_id = SelectField('District (Optional)', coerce=int, validators=[Optional()], choices=[])
+    project_id = SelectField('Project (Optional)', coerce=int, validators=[Optional()], choices=[])
+    submit = SubmitField('View Ledger')
+
+
+class BalanceSheetFilterForm(FlaskForm):
+    """Filter form for Balance Sheet report"""
+    as_of_date = DateField('As of Date', format='%d-%m-%Y', validators=[Optional()],
+                          render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
+    submit = SubmitField('Generate Balance Sheet')
