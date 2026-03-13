@@ -1,9 +1,9 @@
 {
   "appId": "com.fleetmanager.app",
   "appName": "Fleet Manager",
-  "webDir": ".",
+  "webDir": "www",
   "server": {
-    "url": "https://YOUR-RENDER-APP-URL.onrender.com",
+    "url": "https://fleet-management-xdvj.onrender.com",
     "cleartext": false,
     "androidScheme": "https"
   },

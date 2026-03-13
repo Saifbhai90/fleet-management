@@ -234,10 +234,164 @@
         }
 
         /* ─── Capacitor Native App Overrides ─── */
-        .capacitor-native .navbar { padding-top: env(safe-area-inset-top, 0); height: auto; }
-        .capacitor-native .main-content { padding-top: calc(env(safe-area-inset-top, 0px) + 60px) !important; }
-        .capacitor-native #guideChatbotWrap { display: none !important; }
-        .capacitor-native .sidebar { top: calc(env(safe-area-inset-top, 0px) + 60px); height: calc(100vh - env(safe-area-inset-top, 0px) - 60px); }
+        .capacitor-native {
+            --safe-top: env(safe-area-inset-top, 28px);
+            --nav-h: 56px;
+        }
+
+        /* ── Status bar safe area ── */
+        .capacitor-native .navbar {
+            padding-top: var(--safe-top) !important;
+            height: calc(var(--safe-top) + var(--nav-h)) !important;
+            background: linear-gradient(135deg, #0f172a, #1e293b) !important;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.4) !important;
+            transition: transform 0.3s ease;
+        }
+        .capacitor-native .navbar.nav-hidden {
+            transform: translateY(-100%) !important;
+        }
+
+        /* Hide desktop-only navbar items */
+        .capacitor-native #sidebarToggleMobile,
+        .capacitor-native button.d-none.d-lg-inline-block,
+        .capacitor-native #liveDateTime { display: none !important; }
+
+        /* Compact profile dropdown in navbar */
+        .capacitor-native .navbar .dropdown-toggle span.fw-semibold { display: none !important; }
+        .capacitor-native .navbar .dropdown-toggle small { display: none !important; }
+        .capacitor-native .navbar-brand span { font-size: 1rem !important; }
+
+        /* ── Sidebar: hidden by default, swipe-open via More button ── */
+        .capacitor-native .sidebar {
+            top: calc(var(--safe-top) + var(--nav-h)) !important;
+            height: calc(100vh - var(--safe-top) - var(--nav-h)) !important;
+            transform: translateX(-100%);
+            width: min(280px, 82vw) !important;
+            z-index: 2000 !important;
+        }
+        .capacitor-native .sidebar.mobile-open {
+            transform: translateX(0) !important;
+        }
+
+        /* ── Main content: full-width, no left margin ── */
+        .capacitor-native .main-content {
+            margin-left: 0 !important;
+            margin-top: calc(var(--safe-top) + var(--nav-h)) !important;
+            padding: 16px 14px calc(80px + env(safe-area-inset-bottom, 0px)) !important;
+            background: #f1f5f9 !important;
+        }
+
+        /* ── Cards: native app style ── */
+        .capacitor-native .card {
+            border: none !important;
+            border-radius: 16px !important;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08) !important;
+            margin-bottom: 16px !important;
+        }
+        .capacitor-native .card-header {
+            border-radius: 16px 16px 0 0 !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.01em;
+        }
+        .capacitor-native .card-body { padding: 18px !important; }
+
+        /* ── Stat cards: bigger, full-width on mobile ── */
+        .capacitor-native .stat-card {
+            border-radius: 18px !important;
+            min-height: 110px !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important;
+        }
+        .capacitor-native .stat-card h3,
+        .capacitor-native .stat-card .display-4 { font-size: 2rem !important; }
+
+        /* ── Buttons: large touch targets ── */
+        .capacitor-native .btn {
+            min-height: 48px !important;
+            border-radius: 12px !important;
+            font-weight: 500 !important;
+        }
+        .capacitor-native .btn-sm {
+            min-height: 40px !important;
+            border-radius: 10px !important;
+        }
+
+        /* ── Forms: native input feel ── */
+        .capacitor-native .form-control,
+        .capacitor-native .form-select {
+            min-height: 52px !important;
+            border-radius: 12px !important;
+            font-size: 16px !important;
+            border: 1.5px solid #e2e8f0 !important;
+            background: #fff !important;
+            box-shadow: none !important;
+        }
+        .capacitor-native .form-control:focus,
+        .capacitor-native .form-select:focus {
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important;
+        }
+        .capacitor-native label { font-weight: 600; font-size: 0.85rem; color: #475569; }
+
+        /* ── Tables: card-like rows ── */
+        .capacitor-native .table-responsive {
+            border-radius: 16px !important;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.07) !important;
+            background: #fff;
+            overflow: hidden;
+        }
+        .capacitor-native .table thead th {
+            background: #1e293b !important;
+            color: #e2e8f0 !important;
+            font-size: 0.78rem !important;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 14px 12px !important;
+            border: none !important;
+        }
+        .capacitor-native .table tbody tr {
+            border-bottom: 1px solid #f1f5f9 !important;
+        }
+        .capacitor-native .table tbody tr:last-child { border-bottom: none !important; }
+        .capacitor-native .table tbody td {
+            padding: 14px 12px !important;
+            font-size: 0.88rem !important;
+            vertical-align: middle !important;
+        }
+        .capacitor-native .table tbody tr:active { background: #eff6ff !important; }
+
+        /* ── Page titles ── */
+        .capacitor-native h2, .capacitor-native h3,
+        .capacitor-native .page-title {
+            font-size: 1.3rem !important;
+            font-weight: 700 !important;
+            color: #0f172a !important;
+        }
+
+        /* ── Hide web-only elements ── */
+        .capacitor-native #guideChatbotWrap,
+        .capacitor-native .d-none-native { display: none !important; }
+
+        /* ── Flash messages: full-width on native ── */
+        .capacitor-native .flash-message {
+            left: 12px !important;
+            right: 12px !important;
+            top: calc(var(--safe-top) + var(--nav-h) + 8px) !important;
+            border-radius: 14px !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+        }
+
+        /* ── Breadcrumbs: hide on native ── */
+        .capacitor-native nav[aria-label="breadcrumb"] { display: none !important; }
+
+        /* ── Badge pills: bigger ── */
+        .capacitor-native .badge { font-size: 0.8rem !important; padding: 6px 10px !important; border-radius: 8px !important; }
+
+        /* ── Select2: native feel ── */
+        .capacitor-native .select2-container--bootstrap-5 .select2-selection {
+            min-height: 52px !important;
+            border-radius: 12px !important;
+            border: 1.5px solid #e2e8f0 !important;
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -1463,12 +1617,62 @@
         return { isNative: _isNative, getGPS: getGPS, takeSelfie: takeSelfie, requestPushPermission: requestPushPermission };
     })();
 
-    // ── Mobile Layout Lockdown (Capacitor context) ────────────────────────
-    // Hide web-only elements when running as native app
+    // ── Native App UI Enhancements (Capacitor context) ────────────────────
     if (window.FleetBridge && window.FleetBridge.isNative) {
         document.addEventListener('DOMContentLoaded', function() {
+
+            // 1. Hide web-only elements
             var guideWrap = document.getElementById('guideChatbotWrap');
             if (guideWrap) guideWrap.style.display = 'none';
+
+            // 2. Auto-hide navbar on scroll down, show on scroll up (native feel)
+            var navbar = document.querySelector('.navbar');
+            var lastScroll = 0;
+            var scrollThreshold = 60;
+            window.addEventListener('scroll', function() {
+                var current = window.scrollY;
+                if (current > lastScroll && current > scrollThreshold) {
+                    if (navbar) navbar.classList.add('nav-hidden');
+                } else {
+                    if (navbar) navbar.classList.remove('nav-hidden');
+                }
+                lastScroll = current <= 0 ? 0 : current;
+            }, { passive: true });
+
+            // 3. Mark active bottom nav item based on current URL
+            var path = window.location.pathname;
+            document.querySelectorAll('.mobile-nav-item').forEach(function(el) {
+                var href = el.getAttribute('href') || '';
+                if (href && path.indexOf(href) === 0) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+
+            // 4. Native tap ripple feedback on cards and buttons
+            document.querySelectorAll('.card, .btn, .mobile-nav-item').forEach(function(el) {
+                el.addEventListener('touchstart', function() {
+                    this.style.transition = 'opacity 0.1s';
+                    this.style.opacity = '0.85';
+                }, { passive: true });
+                el.addEventListener('touchend', function() {
+                    this.style.opacity = '1';
+                }, { passive: true });
+            });
+
+            // 5. Prevent double-tap zoom on buttons/links (native feel)
+            var lastTap = 0;
+            document.addEventListener('touchend', function(e) {
+                var now = Date.now();
+                if (now - lastTap < 300) {
+                    if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.closest('.btn')) {
+                        e.preventDefault();
+                    }
+                }
+                lastTap = now;
+            });
+
         });
     }
 
