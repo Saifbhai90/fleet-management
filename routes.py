@@ -572,8 +572,71 @@ def reminder_toggle(pk):
 
 
 # ────────────────────────────────────────────────
-# Account (change password, session)
+# Account (profile, change password, biometric, session)
 # ────────────────────────────────────────────────
+
+@app.route('/account/profile')
+def account_profile():
+    user_id = session.get('user_id')
+    if not user_id:
+        return redirect(url_for('login'))
+    user = User.query.get_or_404(user_id)
+    login_count = LoginLog.query.filter_by(user_id=user.id).count()
+    return render_template('account_profile.html', user=user, login_count=login_count)
+
+
+@app.route('/auth/biometric-token')
+def biometric_token():
+    """Return HMAC token for the currently logged-in user (used to enable biometric login)."""
+    import hmac as _hmac, hashlib
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'ok': False}), 401
+    user = User.query.get(user_id)
+    if not user or not user.is_active:
+        return jsonify({'ok': False}), 401
+    token = _hmac.new(
+        app.config['SECRET_KEY'].encode('utf-8'),
+        f"{user.username}:biometric-v1".encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    return jsonify({'ok': True, 'token': token, 'username': user.username})
+
+
+@app.route('/auth/biometric-login', methods=['POST'])
+def biometric_login():
+    """Validate biometric token and create a new session (no password needed)."""
+    import hmac as _hmac, hashlib
+    data = request.get_json(silent=True) or {}
+    username = (data.get('username') or '').strip()
+    token    = (data.get('token') or '').strip()
+    if not username or not token:
+        return jsonify({'ok': False, 'error': 'Missing fields'}), 400
+    expected = _hmac.new(
+        app.config['SECRET_KEY'].encode('utf-8'),
+        f"{username}:biometric-v1".encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    if not _hmac.compare_digest(token, expected):
+        return jsonify({'ok': False, 'error': 'Invalid token'}), 401
+    user = User.query.filter_by(username=username, is_active=True).first()
+    if not user:
+        return jsonify({'ok': False, 'error': 'User not found'}), 401
+    session['user_id']     = user.id
+    session['user']        = user.username
+    session['permissions'] = user.permission_codes()
+    session.permanent      = True
+    try:
+        log = LoginLog(user_id=user.id, ip_address=request.remote_addr,
+                       user_agent=request.headers.get('User-Agent', '')[:500])
+        db.session.add(log)
+        db.session.commit()
+        session['login_log_id'] = log.id
+    except Exception:
+        db.session.rollback()
+    return jsonify({'ok': True, 'redirect': url_for('dashboard')})
+
+
 @app.route('/account/change-password', methods=['GET', 'POST'])
 def account_change_password():
     user_id = session.get('user_id')

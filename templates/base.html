@@ -783,6 +783,11 @@
                 </li>
                 <li><hr class="dropdown-divider"></li>
                 <li>
+                    <a class="dropdown-item" href="{{ url_for('account_profile') }}">
+                        <i class="bi bi-person-circle me-2"></i>My Profile
+                    </a>
+                </li>
+                <li>
                     <a class="dropdown-item" href="{{ url_for('account_change_password') }}">
                         <i class="bi bi-key me-2"></i>Change Password
                     </a>
@@ -2264,7 +2269,16 @@
             modal.style.display = 'flex';
 
             document.getElementById('bioEnableYes').addEventListener('click', function() {
-                localStorage.setItem('fleet_bio_enabled', '1');
+                /* Fetch HMAC token from server, store with username */
+                fetch('/auth/biometric-token', { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (d.ok) {
+                            localStorage.setItem('fleet_bio_enabled', '1');
+                            localStorage.setItem('fleet_bio_token', d.token);
+                            localStorage.setItem('fleet_bio_user', d.username);
+                        }
+                    }).catch(function() {});
                 modal.style.display = 'none';
             });
             document.getElementById('bioEnableNo').addEventListener('click', function() {

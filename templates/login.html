@@ -83,62 +83,79 @@
 (function() {
   if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
 
-  var bioWrap = document.getElementById('bioLoginWrap');
-  var bioBtn  = document.getElementById('bioLoginBtn');
-  var form    = document.querySelector('form');
+  var bioWrap   = document.getElementById('bioLoginWrap');
+  var bioBtn    = document.getElementById('bioLoginBtn');
+  var loginForm = document.querySelector('form');
 
-  var BIO_KEY  = 'fleet_bio_enabled';
-  var BIO_USER = 'fleet_bio_user';
+  var BIO_KEY   = 'fleet_bio_enabled';
+  var TOKEN_KEY = 'fleet_bio_token';
+  var USER_KEY  = 'fleet_bio_user';
 
-  /* Show fingerprint button if previously enabled */
   var isEnabled = localStorage.getItem(BIO_KEY) === '1';
+  var storedToken = localStorage.getItem(TOKEN_KEY);
+  var storedUser  = localStorage.getItem(USER_KEY);
   var bioPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
 
-  if (isEnabled && bioPlugin && bioWrap) {
-    /* Verify hardware actually supports it */
+  /* Show fingerprint button if token + user are stored and hardware is available */
+  if (isEnabled && storedToken && storedUser && bioPlugin && bioWrap) {
     bioPlugin.checkBiometry().then(function(info) {
-      if (info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable)) {
-        bioWrap.style.display = 'block';
-      }
+      var avail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
+      if (avail) bioWrap.style.display = 'block';
     }).catch(function() {
-      bioWrap.style.display = 'block'; /* show anyway */
+      bioWrap.style.display = 'block';
     });
   }
 
-  /* Handle biometric button tap */
+  /* Biometric button tap */
   if (bioBtn && bioPlugin) {
     bioBtn.addEventListener('click', function() {
       bioBtn.disabled = true;
       bioBtn.style.opacity = '0.7';
 
       bioPlugin.authenticate({
-        reason: 'Verify your identity to sign in',
+        reason: 'Verify your identity to sign in to Fleet Manager',
         cancelTitle: 'Use Password',
         allowDeviceCredential: false,
         iosFallbackTitle: 'Use Password'
       }).then(function() {
-        /* Biometric success — navigate to dashboard (session still valid via remember_me) */
-        window.location.href = '/dashboard';
+        /* Hardware verified — POST token to server to get a session */
+        return fetch('/auth/biometric-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: storedUser, token: storedToken })
+        });
+      }).then(function(r) {
+        return r.json();
+      }).then(function(data) {
+        if (data.ok) {
+          window.location.href = data.redirect || '/dashboard';
+        } else {
+          /* Token rejected — clear and fall back to password */
+          localStorage.removeItem(BIO_KEY);
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(USER_KEY);
+          if (bioWrap) bioWrap.style.display = 'none';
+          bioBtn.disabled = false;
+          bioBtn.style.opacity = '1';
+        }
       }).catch(function(err) {
         bioBtn.disabled = false;
         bioBtn.style.opacity = '1';
-        if (err && err.code !== 'biometricCanceled' && err.code !== 10) {
-          /* Biometric failed/locked — clear flag and hide button */
-          if (err.code === 'biometricLockout' || err.code === 'biometricPermanentLockout') {
-            localStorage.removeItem(BIO_KEY);
-            bioWrap.style.display = 'none';
-          }
+        /* Handle biometric cancel/lockout */
+        if (err && (err.code === 'biometricLockout' || err.code === 'biometricPermanentLockout')) {
+          localStorage.removeItem(BIO_KEY);
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(USER_KEY);
+          if (bioWrap) bioWrap.style.display = 'none';
         }
       });
     });
   }
 
-  /* On manual form submit — set pending flag so dashboard can prompt to enable */
-  if (form) {
-    form.addEventListener('submit', function() {
-      if (!isEnabled) {
-        sessionStorage.setItem('fleet_bio_prompt', '1');
-      }
+  /* On manual form submit — flag dashboard to show "Enable Biometric?" prompt */
+  if (loginForm) {
+    loginForm.addEventListener('submit', function() {
+      if (!isEnabled) sessionStorage.setItem('fleet_bio_prompt', '1');
     });
   }
 })();

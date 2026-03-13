@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row justify-content-center">
+    <div class="col-12 col-md-7 col-lg-5">
+
+      <!-- Profile Card -->
+      <div class="card border-0 shadow-sm mb-3" style="border-radius:20px;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);padding:32px 24px 20px;text-align:center;">
+          <div style="width:72px;height:72px;background:rgba(255,255,255,0.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+            <i class="bi bi-person-fill" style="font-size:2rem;color:#93c5fd;"></i>
+          </div>
+          <h5 class="mb-1 fw-bold text-white">{{ user.full_name or user.username }}</h5>
+          <span class="badge" style="background:rgba(96,165,250,0.2);color:#93c5fd;border:1px solid rgba(96,165,250,0.3);font-size:0.75rem;padding:4px 12px;border-radius:20px;">
+            {{ user.role.name if user.role else 'No Role' }}
+          </span>
+        </div>
+
+        <div class="card-body px-4 py-3">
+          <div class="row g-0">
+            <div class="col-12 py-2 border-bottom d-flex justify-content-between align-items-center">
+              <span class="text-muted small fw-semibold"><i class="bi bi-person me-2 text-primary"></i>Username</span>
+              <span class="fw-semibold">{{ user.username }}</span>
+            </div>
+            {% if user.full_name %}
+            <div class="col-12 py-2 border-bottom d-flex justify-content-between align-items-center">
+              <span class="text-muted small fw-semibold"><i class="bi bi-id-card me-2 text-primary"></i>Full Name</span>
+              <span class="fw-semibold">{{ user.full_name }}</span>
+            </div>
+            {% endif %}
+            <div class="col-12 py-2 border-bottom d-flex justify-content-between align-items-center">
+              <span class="text-muted small fw-semibold"><i class="bi bi-shield-check me-2 text-success"></i>Status</span>
+              <span class="badge {% if user.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                {{ 'Active' if user.is_active else 'Inactive' }}
+              </span>
+            </div>
+            {% if user.employee_post %}
+            <div class="col-12 py-2 border-bottom d-flex justify-content-between align-items-center">
+              <span class="text-muted small fw-semibold"><i class="bi bi-briefcase me-2 text-warning"></i>Post</span>
+              <span class="fw-semibold">{{ user.employee_post.name }}</span>
+            </div>
+            {% endif %}
+            <div class="col-12 py-2 d-flex justify-content-between align-items-center">
+              <span class="text-muted small fw-semibold"><i class="bi bi-box-arrow-in-right me-2 text-info"></i>Total Logins</span>
+              <span class="fw-semibold">{{ login_count }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions Card -->
+      <div class="card border-0 shadow-sm mb-3" style="border-radius:20px;">
+        <div class="card-body px-3 py-2">
+
+          <a href="{{ url_for('account_change_password') }}"
+             class="d-flex align-items-center gap-3 py-3 px-2 text-decoration-none border-bottom"
+             style="color:#0f172a;border-radius:12px;transition:background 0.15s;">
+            <div style="width:40px;height:40px;background:#eff6ff;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="bi bi-key-fill text-primary" style="font-size:1.1rem;"></i>
+            </div>
+            <div class="flex-grow-1">
+              <div class="fw-semibold" style="font-size:0.95rem;">Change Password</div>
+              <small class="text-muted">Update your login password</small>
+            </div>
+            <i class="bi bi-chevron-right text-muted"></i>
+          </a>
+
+          <!-- Biometric toggle (native only) -->
+          <div id="bioSettingRow" style="display:none;" class="d-flex align-items-center gap-3 py-3 px-2 border-bottom">
+            <div style="width:40px;height:40px;background:#f0fdf4;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+              </svg>
+            </div>
+            <div class="flex-grow-1">
+              <div class="fw-semibold" style="font-size:0.95rem;">Biometric Login</div>
+              <small id="bioStatusText" class="text-muted">Touch ID / Face ID</small>
+            </div>
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" id="bioToggle" style="width:44px;height:24px;cursor:pointer;">
+            </div>
+          </div>
+
+          <a href="{{ url_for('logout') }}"
+             class="d-flex align-items-center gap-3 py-3 px-2 text-decoration-none"
+             style="color:#ef4444;border-radius:12px;transition:background 0.15s;"
+             onclick="return confirm('Are you sure you want to logout?')">
+            <div style="width:40px;height:40px;background:#fef2f2;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="bi bi-box-arrow-right" style="font-size:1.1rem;color:#ef4444;"></i>
+            </div>
+            <div class="flex-grow-1">
+              <div class="fw-semibold" style="font-size:0.95rem;">Logout</div>
+              <small class="text-muted">Sign out of Fleet Manager</small>
+            </div>
+            <i class="bi bi-chevron-right" style="color:#ef4444;"></i>
+          </a>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+
+  var row     = document.getElementById('bioSettingRow');
+  var toggle  = document.getElementById('bioToggle');
+  var statTxt = document.getElementById('bioStatusText');
+  var BIO_KEY = 'fleet_bio_enabled';
+
+  if (!row || !toggle) return;
+
+  var bioPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
+  if (!bioPlugin) return;
+
+  bioPlugin.checkBiometry().then(function(info) {
+    var avail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
+    if (!avail) return;
+
+    row.style.display = 'flex';
+    var enabled = localStorage.getItem(BIO_KEY) === '1';
+    toggle.checked = enabled;
+    statTxt.textContent = enabled ? 'Enabled — tap to disable' : 'Tap to enable Touch ID / Face ID';
+
+    toggle.addEventListener('change', function() {
+      if (toggle.checked) {
+        /* Fetch server token then save */
+        fetch('/auth/biometric-token', { credentials: 'same-origin' })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d.ok) {
+              localStorage.setItem(BIO_KEY, '1');
+              localStorage.setItem('fleet_bio_token', d.token);
+              localStorage.setItem('fleet_bio_user', d.username);
+              statTxt.textContent = 'Enabled — tap to disable';
+            } else {
+              toggle.checked = false;
+              alert('Could not enable biometric login. Please try again.');
+            }
+          }).catch(function() {
+            toggle.checked = false;
+          });
+      } else {
+        localStorage.removeItem(BIO_KEY);
+        localStorage.removeItem('fleet_bio_token');
+        localStorage.removeItem('fleet_bio_user');
+        statTxt.textContent = 'Tap to enable Touch ID / Face ID';
+      }
+    });
+  }).catch(function() {});
+})();
+</script>
+{% endblock %}
