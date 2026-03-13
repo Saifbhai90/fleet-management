@@ -8,7 +8,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>{% block title %}Fleet Manager{% endblock %}</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/static/images/icon.svg">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="Fleet Mgr">
+    <meta name="apple-mobile-web-app-title" content="Fleet Mgr">
+
     <!-- External CSS & JS -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -164,9 +169,68 @@
         }
         /* Guide chatbot: smaller on mobile, avoid blocking content */
         @media (max-width: 576px) {
-            #guideChatbotWrap { padding: 8px !important; bottom: env(safe-area-inset-bottom, 8px); right: env(safe-area-inset-right, 8px); }
+            #guideChatbotWrap { padding: 8px !important; bottom: calc(env(safe-area-inset-bottom, 8px) + 64px); right: env(safe-area-inset-right, 8px); }
             #guideChatPanel { width: calc(100vw - 24px) !important; max-height: 60vh !important; }
             #guideChatToggle { width: 48px; height: 48px; font-size: 1.25rem; }
+        }
+
+        /* ─── Fixed Bottom Navigation (Mobile < 768px) ─── */
+        .mobile-bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(180deg, #1e293b, #0f172a);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            z-index: 1045;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+            box-shadow: 0 -4px 16px rgba(0,0,0,0.25);
+        }
+        @media (max-width: 767.98px) {
+            .mobile-bottom-nav { display: flex; align-items: stretch; }
+            .main-content {
+                padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+            }
+        }
+        .mobile-nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 0.62rem;
+            font-weight: 500;
+            gap: 3px;
+            min-height: 44px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            padding: 6px 2px;
+            letter-spacing: 0.02em;
+            transition: color 0.18s, background 0.18s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .mobile-nav-item i { font-size: 1.35rem; line-height: 1; }
+        .mobile-nav-item.active { color: #60a5fa; }
+        .mobile-nav-item.active i { color: #60a5fa; }
+        .mobile-nav-item:active { background: rgba(255,255,255,0.07); color: #fff; }
+
+        /* ─── Pull-to-Refresh indicator ─── */
+        #pullRefreshBar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #3b82f6;
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.3s;
+            z-index: 9999;
         }
     </style>
     {% block extra_head %}{% endblock %}
@@ -185,16 +249,6 @@
         <a class="navbar-brand ms-2 ms-lg-3 fw-bold text-truncate" href="{{ url_for('dashboard') }}">
             <i class="bi bi-building-gear me-2 text-info"></i><span>Fleet Manager</span>
         </a>
-    </div>
-    <!-- Global Search Bar (hidden on xs, shown md+) -->
-    <div class="flex-grow-1 mx-2 mx-md-4 d-none d-md-block position-relative" style="max-width:360px;" id="globalSearchWrap">
-        <input type="text" id="globalSearchInput" class="form-control form-control-sm bg-dark border-secondary text-white"
-               placeholder="Search driver or vehicle…" autocomplete="off"
-               style="border-radius:8px; padding-left:2rem;">
-        <i class="bi bi-search position-absolute text-secondary" style="left:0.6rem;top:50%;transform:translateY(-50%);font-size:0.85rem;pointer-events:none;"></i>
-        <div id="globalSearchDropdown" class="position-absolute w-100 bg-white border rounded-3 shadow mt-1"
-             style="z-index:2100;display:none;max-height:380px;overflow-y:auto;top:100%;left:0;">
-        </div>
     </div>
 
     <div class="ms-auto d-flex align-items-center text-white flex-shrink-0">
@@ -748,6 +802,37 @@
     {% block content %}{% endblock %}
 </div>
 
+<!-- Pull-to-Refresh indicator bar -->
+<div id="pullRefreshBar"></div>
+
+<!-- Fixed Bottom Navigation Bar (Mobile only, < 768px) -->
+<nav class="mobile-bottom-nav" aria-label="Mobile navigation" id="mobileBottomNav">
+    <a href="{{ url_for('dashboard') }}"
+       class="mobile-nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+        <i class="bi bi-speedometer2"></i>
+        <span>Home</span>
+    </a>
+    <a href="{{ url_for('driver_attendance_checkin') }}"
+       class="mobile-nav-item {% if request.endpoint and 'attendance' in request.endpoint %}active{% endif %}">
+        <i class="bi bi-calendar-check"></i>
+        <span>Attendance</span>
+    </a>
+    <a href="{{ url_for('assign_driver_to_vehicle_list') }}"
+       class="mobile-nav-item {% if request.endpoint and 'assign' in request.endpoint %}active{% endif %}">
+        <i class="bi bi-link-45deg"></i>
+        <span>Assign</span>
+    </a>
+    <a href="{{ url_for('fuel_expense_list') }}"
+       class="mobile-nav-item {% if request.endpoint and 'expense' in request.endpoint %}active{% endif %}">
+        <i class="bi bi-wallet2"></i>
+        <span>Expenses</span>
+    </a>
+    <button type="button" class="mobile-nav-item" id="mobileNavMore" aria-label="More options">
+        <i class="bi bi-grid-3x3-gap"></i>
+        <span>More</span>
+    </button>
+</nav>
+
 <!-- Guide Chatbot: App guide (Forms & Reports) -->
 <div id="guideChatbotWrap" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
     <div id="guideChatPanel" class="card shadow-lg border-0 d-none" style="width: 360px; max-width: 95vw; max-height: 70vh;">
@@ -893,6 +978,10 @@
                 credentials: 'same-origin'
             }).catch(function() {});
         };
+
+        window.__lastPosition = null;
+        window.__geoWatchId = null;
+        window.__positionLogged = false;
 
         document.addEventListener('DOMContentLoaded', function() {
             startGeolocationOnce();
@@ -1243,82 +1332,69 @@
         });
     })();
 
-    // ── Global Search Bar ────────────────────────────────────────────────
+    // ── Mobile Bottom Nav: "More" opens sidebar ───────────────────────────
     (function() {
-        var input = document.getElementById('globalSearchInput');
-        var dropdown = document.getElementById('globalSearchDropdown');
-        if (!input || !dropdown) return;
-
-        var timer = null;
-
-        input.addEventListener('input', function() {
-            clearTimeout(timer);
-            var q = input.value.trim();
-            if (q.length < 2) { dropdown.style.display = 'none'; return; }
-            timer = setTimeout(function() { doSearch(q); }, 280);
-        });
-
-        input.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') { dropdown.style.display = 'none'; input.value = ''; }
-        });
-
-        document.addEventListener('click', function(e) {
-            if (!document.getElementById('globalSearchWrap').contains(e.target)) {
-                dropdown.style.display = 'none';
-            }
-        });
-
-        function doSearch(q) {
-            fetch('/api/global-search?q=' + encodeURIComponent(q))
-                .then(function(r) { return r.json(); })
-                .then(function(data) { renderDropdown(data, q); })
-                .catch(function() { dropdown.style.display = 'none'; });
-        }
-
-        function renderDropdown(data, q) {
-            var html = '';
-            var drivers = data.drivers || [];
-            var vehicles = data.vehicles || [];
-
-            if (drivers.length === 0 && vehicles.length === 0) {
-                html = '<div class="px-3 py-2 text-muted small">No results found</div>';
-            } else {
-                if (drivers.length > 0) {
-                    html += '<div class="px-3 pt-2 pb-1" style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;font-weight:600;">Drivers</div>';
-                    drivers.forEach(function(d) {
-                        var badge = d.status === 'Active'
-                            ? '<span class="badge bg-success ms-1" style="font-size:0.65rem;">Active</span>'
-                            : '<span class="badge bg-secondary ms-1" style="font-size:0.65rem;">' + (d.status || '') + '</span>';
-                        html += '<a href="/driver/edit/' + d.id + '" class="d-flex align-items-center px-3 py-2 text-decoration-none search-result-item">'
-                            + '<i class="bi bi-person-badge text-primary me-2"></i>'
-                            + '<div class="flex-grow-1"><div class="fw-semibold" style="font-size:0.88rem;">' + escHtml(d.name) + badge + '</div>'
-                            + '<div class="text-muted" style="font-size:0.75rem;">' + escHtml(d.driver_id || '') + ' · ' + escHtml(d.cnic || '') + '</div></div></a>';
-                    });
-                }
-                if (vehicles.length > 0) {
-                    html += '<div class="px-3 pt-2 pb-1 ' + (drivers.length ? 'border-top' : '') + '" style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;font-weight:600;">Vehicles</div>';
-                    vehicles.forEach(function(v) {
-                        html += '<a href="/vehicle/edit/' + v.id + '" class="d-flex align-items-center px-3 py-2 text-decoration-none search-result-item">'
-                            + '<i class="bi bi-truck-front text-warning me-2"></i>'
-                            + '<div><div class="fw-semibold" style="font-size:0.88rem;">' + escHtml(v.vehicle_no) + '</div>'
-                            + '<div class="text-muted" style="font-size:0.75rem;">' + escHtml(v.model || '') + ' · ' + escHtml(v.vehicle_type || '') + '</div></div></a>';
-                    });
-                }
-            }
-
-            dropdown.innerHTML = html;
-            dropdown.style.display = 'block';
-
-            dropdown.querySelectorAll('.search-result-item').forEach(function(a) {
-                a.addEventListener('mouseenter', function() { this.style.background = '#f1f5f9'; });
-                a.addEventListener('mouseleave', function() { this.style.background = ''; });
-                a.addEventListener('click', function() { dropdown.style.display = 'none'; input.value = ''; });
+        var moreBtn = document.getElementById('mobileNavMore');
+        if (moreBtn) {
+            moreBtn.addEventListener('click', function() {
+                var sidebar = document.getElementById('sidebar');
+                var overlay = document.getElementById('sidebarOverlay');
+                if (sidebar) sidebar.classList.toggle('mobile-open');
+                if (overlay) overlay.classList.toggle('show');
             });
         }
+    })();
 
-        function escHtml(s) {
-            return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        }
+    // ── Pull-to-Refresh ───────────────────────────────────────────────────
+    (function() {
+        var bar = document.getElementById('pullRefreshBar');
+        if (!bar || !('ontouchstart' in window)) return;
+        var startY = 0, pulling = false, threshold = 65;
+        document.addEventListener('touchstart', function(e) {
+            if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; }
+        }, { passive: true });
+        document.addEventListener('touchmove', function(e) {
+            if (!pulling) return;
+            var dist = Math.min(e.touches[0].clientY - startY, threshold * 1.5);
+            if (dist > 0) {
+                bar.style.transform = 'scaleX(' + (dist / threshold) + ')';
+                bar.style.transition = 'none';
+            }
+        }, { passive: true });
+        document.addEventListener('touchend', function(e) {
+            if (!pulling) return;
+            pulling = false;
+            var dist = e.changedTouches[0].clientY - startY;
+            bar.style.transition = 'transform 0.3s';
+            bar.style.transform = 'scaleX(0)';
+            if (dist >= threshold) { setTimeout(function() { window.location.reload(); }, 200); }
+        }, { passive: true });
+    })();
+
+    // ── Service Worker Registration (PWA) ─────────────────────────────────
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function() {});
+        });
+    }
+
+    // ── Mobile Input Enhancements ─────────────────────────────────────────
+    (function() {
+        if (window.innerWidth > 768) return;
+        document.querySelectorAll('input[type="text"]').forEach(function(el) {
+            var name = (el.name || el.id || '').toLowerCase();
+            if (/phone|mobile|contact|cell/.test(name)) {
+                el.setAttribute('inputmode', 'tel');
+            } else if (/cnic|nic|id_no|id_number/.test(name)) {
+                el.setAttribute('inputmode', 'numeric');
+                el.setAttribute('pattern', '[0-9-]*');
+            } else if (/amount|price|cost|liters|km|quantity|fuel/.test(name)) {
+                el.setAttribute('inputmode', 'decimal');
+            }
+        });
+        document.querySelectorAll('input[type="number"]').forEach(function(el) {
+            el.setAttribute('inputmode', 'decimal');
+        });
     })();
 </script>
 

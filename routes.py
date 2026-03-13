@@ -88,7 +88,7 @@ def require_login():
     endpoint = request.endpoint or ''
     if endpoint.startswith('static'):
         return
-    if endpoint in ('login',):
+    if endpoint in ('login', 'pwa_manifest', 'service_worker'):
         return
     if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
         return  # First-time password set flow (no full login yet)
@@ -272,6 +272,17 @@ def api_check_license():
 # ────────────────────────────────────────────────
 # Serve uploaded files (vehicles/drivers documents and photos)
 # ────────────────────────────────────────────────
+@app.route('/manifest.json')
+def pwa_manifest():
+    return send_from_directory('static', 'manifest.json', mimetype='application/manifest+json')
+
+@app.route('/sw.js')
+def service_worker():
+    resp = send_from_directory('static', 'sw.js', mimetype='application/javascript')
+    resp.headers['Service-Worker-Allowed'] = '/'
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     """Serve files from UPLOAD_FOLDER. Path must be under uploads (no traversal)."""
@@ -315,6 +326,7 @@ def dashboard():
     assigned_vehicles = Vehicle.query.filter(Vehicle.district_id.isnot(None)).count()
     today_dt = date.today()
     today_attendance = DriverAttendance.query.filter_by(attendance_date=today_dt).count()
+    today_transfers = DriverTransfer.query.filter_by(transfer_date=today_dt).count()
 
     # Monthly fuel cost (current calendar month)
     try:
@@ -402,6 +414,7 @@ def dashboard():
                            active_drivers=active_drivers,
                            assigned_vehicles=assigned_vehicles,
                            today_attendance=today_attendance,
+                           today_transfers=today_transfers,
                            monthly_fuel=monthly_fuel,
                            fuel_chart_labels=fuel_chart_labels,
                            fuel_chart_values=fuel_chart_values,

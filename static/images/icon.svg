@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0f172a"/>
+  <rect x="40" y="40" width="432" height="432" rx="72" fill="#1e293b"/>
+  <!-- Truck body -->
+  <rect x="80" y="220" width="240" height="120" rx="16" fill="#3b82f6"/>
+  <rect x="280" y="250" width="120" height="90" rx="12" fill="#2563eb"/>
+  <!-- Cab window -->
+  <rect x="292" y="262" width="96" height="52" rx="8" fill="#93c5fd"/>
+  <!-- Truck front -->
+  <rect x="370" y="290" width="50" height="50" rx="8" fill="#1d4ed8"/>
+  <!-- Wheels -->
+  <circle cx="150" cy="350" r="36" fill="#0f172a"/>
+  <circle cx="150" cy="350" r="22" fill="#64748b"/>
+  <circle cx="150" cy="350" r="10" fill="#94a3b8"/>
+  <circle cx="310" cy="350" r="36" fill="#0f172a"/>
+  <circle cx="310" cy="350" r="22" fill="#64748b"/>
+  <circle cx="310" cy="350" r="10" fill="#94a3b8"/>
+  <!-- Person icon -->
+  <circle cx="390" cy="148" r="44" fill="#10b981"/>
+  <circle cx="390" cy="132" r="18" fill="#fff"/>
+  <path d="M358 185 Q390 168 422 185 L422 192 Q390 176 358 192 Z" fill="#fff"/>
+  <!-- Road lines -->
+  <rect x="80" y="400" width="60" height="12" rx="6" fill="#475569"/>
+  <rect x="180" y="400" width="60" height="12" rx="6" fill="#475569"/>
+  <rect x="280" y="400" width="60" height="12" rx="6" fill="#475569"/>
+  <rect x="380" y="400" width="60" height="12" rx="6" fill="#475569"/>
+</svg>
