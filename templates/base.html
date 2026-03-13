@@ -18,6 +18,7 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
@@ -214,9 +215,11 @@
             transition: color 0.18s, background 0.18s;
             -webkit-tap-highlight-color: transparent;
         }
-        .mobile-nav-item i { font-size: 1.35rem; line-height: 1; }
-        .mobile-nav-item.active { color: #60a5fa; }
-        .mobile-nav-item.active i { color: #60a5fa; }
+        .mobile-nav-item i { font-size: 1.25rem; line-height: 1; }
+        .mobile-nav-item svg { width: 22px; height: 22px; }
+        .mobile-nav-item.active { color: #60a5fa; position: relative; }
+        .mobile-nav-item.active::after { content: ''; position: absolute; top: 5px; left: 50%; transform: translateX(-50%); width: 22px; height: 3px; background: #60a5fa; border-radius: 3px; }
+        .mobile-nav-item.active i, .mobile-nav-item.active svg { filter: drop-shadow(0 0 5px rgba(96,165,250,0.75)); }
         .mobile-nav-item:active { background: rgba(255,255,255,0.07); color: #fff; }
 
         /* ─── Pull-to-Refresh indicator ─── */
@@ -392,6 +395,88 @@
             border-radius: 12px !important;
             border: 1.5px solid #e2e8f0 !important;
         }
+
+        /* ═══ NATIVE MOBILE: hide top navbar ═══ */
+        @media (max-width: 767.98px) {
+            .navbar { display: none !important; }
+            .main-content { margin-top: 0 !important; padding-top: max(env(safe-area-inset-top, 0px), 14px) !important; }
+        }
+
+        /* ── Floating Hamburger (sidebar access on mobile) ── */
+        .mobile-menu-btn {
+            display: none; position: fixed;
+            top: max(env(safe-area-inset-top, 10px), 10px); left: 14px;
+            width: 42px; height: 42px;
+            background: rgba(15,23,42,0.88); backdrop-filter: blur(10px);
+            border: none; border-radius: 12px; color: #e2e8f0;
+            align-items: center; justify-content: center;
+            z-index: 1055; box-shadow: 0 2px 12px rgba(0,0,0,0.3); cursor: pointer;
+        }
+        @media (max-width: 767.98px) { .mobile-menu-btn { display: flex; } }
+
+        /* ── FAB (Floating Action Button) ── */
+        .mobile-fab-wrap {
+            display: none; position: fixed; right: 18px;
+            bottom: calc(74px + env(safe-area-inset-bottom, 0px)); z-index: 1055;
+        }
+        @media (max-width: 767.98px) { .mobile-fab-wrap { display: block; } }
+        .fab-speed-dial {
+            display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
+            pointer-events: none; opacity: 0; transform: translateY(14px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .fab-speed-dial.open { pointer-events: all; opacity: 1; transform: translateY(0); }
+        .fab-dial-item { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+        .fab-dial-label { background: #1e293b; color: #fff; font-size: 0.78rem; font-weight: 500; padding: 5px 14px; border-radius: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.3); white-space: nowrap; }
+        .fab-dial-btn { width: 42px; height: 42px; background: #1e293b; color: #e2e8f0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px rgba(0,0,0,0.25); text-decoration: none; flex-shrink: 0; transition: background 0.15s; }
+        .fab-dial-btn:hover, .fab-dial-btn:active { background: #3b82f6; color: #fff; }
+        .fab-dial-btn svg { width: 18px; height: 18px; }
+        .mobile-fab {
+            width: 54px; height: 54px;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff;
+            border: none; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 20px rgba(59,130,246,0.5); cursor: pointer;
+            transition: transform 0.22s cubic-bezier(.34,1.56,.64,1), background 0.2s;
+        }
+        .mobile-fab:active { transform: scale(0.9); }
+        .mobile-fab.open { background: linear-gradient(135deg,#ef4444,#b91c1c); transform: rotate(45deg); box-shadow: 0 4px 20px rgba(239,68,68,0.5); }
+        .mobile-fab svg { width: 26px; height: 26px; }
+
+        /* ── Page Fade-In ── */
+        .main-content { animation: appFadeUp 0.25s ease both; }
+        @keyframes appFadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+        /* ── Top Loading Bar ── */
+        #topLoadBar { position:fixed; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#3b82f6,#8b5cf6,#3b82f6); background-size:200% 100%; z-index:9999; display:none; }
+        #topLoadBar.active { display:block; animation:loadBarMove 1.2s linear infinite; }
+        @keyframes loadBarMove { 0%{background-position:100% 0} 100%{background-position:-100% 0} }
+
+        /* ── Skeleton Loader ── */
+        .skeleton-card { background:#fff; border-radius:16px; padding:18px; margin-bottom:14px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+        .skeleton-line { border-radius:6px; height:14px; margin-bottom:10px; background:linear-gradient(90deg,#e2e8f0 25%,#f8fafc 50%,#e2e8f0 75%); background-size:200% 100%; animation:skelShimmer 1.4s infinite; display:block; }
+        .skeleton-line.h-sm{height:10px;} .skeleton-line.h-lg{height:22px;}
+        .skeleton-line.w-80{width:80%;} .skeleton-line.w-60{width:60%;} .skeleton-line.w-40{width:40%;}
+        @keyframes skelShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+        /* ── Mobile Data Cards (table replacement) ── */
+        .mobile-card-list { display: none; }
+        @media (max-width: 767.98px) {
+            .mobile-card-list { display: block; }
+            .table-to-hide { display: none !important; }
+        }
+        .mobile-data-card {
+            background: #fff; border-radius: 16px; padding: 16px 16px 12px; margin-bottom: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.07); border-left: 4px solid #3b82f6;
+        }
+        .mobile-data-card:active { background: #f8fafc; }
+        .mobile-card-row { display:flex; justify-content:space-between; align-items:flex-start; padding:6px 0; border-bottom:1px solid #f1f5f9; gap:8px; }
+        .mobile-card-row:last-of-type { border-bottom:none; }
+        .mobile-card-label { font-size:0.68rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; min-width:80px; flex-shrink:0; padding-top:2px; }
+        .mobile-card-value { font-size:0.87rem; color:#0f172a; font-weight:500; text-align:right; flex:1; word-break:break-word; }
+        .mobile-card-value .badge { font-size:0.72rem !important; }
+        .mobile-card-actions { display:flex; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid #f1f5f9; flex-wrap:wrap; }
+        .mobile-card-actions .btn { flex:1; min-width:80px; font-size:0.8rem !important; min-height:40px !important; border-radius:10px !important; }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -965,33 +1050,83 @@
 <!-- Pull-to-Refresh indicator bar -->
 <div id="pullRefreshBar"></div>
 
+<!-- Top Loading Bar -->
+<div id="topLoadBar"></div>
+
+<!-- Mobile Hamburger (fixed, sidebar access without navbar) -->
+<button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu">
+    <i data-lucide="menu"></i>
+</button>
+
 <!-- Fixed Bottom Navigation Bar (Mobile only, < 768px) -->
 <nav class="mobile-bottom-nav" aria-label="Mobile navigation" id="mobileBottomNav">
     <a href="{{ url_for('dashboard') }}"
        class="mobile-nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
-        <i class="bi bi-speedometer2"></i>
+        <i data-lucide="home"></i>
         <span>Home</span>
+    </a>
+    <a href="{{ url_for('drivers_list') }}"
+       class="mobile-nav-item {% if request.endpoint in ['drivers_list','vehicles_list','driver_form','vehicle_form','parking_list'] %}active{% endif %}">
+        <i data-lucide="truck"></i>
+        <span>Fleet</span>
     </a>
     <a href="{{ url_for('driver_attendance_checkin') }}"
        class="mobile-nav-item {% if request.endpoint and 'attendance' in request.endpoint %}active{% endif %}">
-        <i class="bi bi-calendar-check"></i>
+        <i data-lucide="calendar-check"></i>
         <span>Attendance</span>
     </a>
-    <a href="{{ url_for('assign_driver_to_vehicle_list') }}"
-       class="mobile-nav-item {% if request.endpoint and 'assign' in request.endpoint %}active{% endif %}">
-        <i class="bi bi-link-45deg"></i>
-        <span>Assign</span>
-    </a>
     <a href="{{ url_for('fuel_expense_list') }}"
-       class="mobile-nav-item {% if request.endpoint and 'expense' in request.endpoint %}active{% endif %}">
-        <i class="bi bi-wallet2"></i>
-        <span>Expenses</span>
+       class="mobile-nav-item {% if request.endpoint and ('expense' in request.endpoint or request.endpoint in ['accounts_quick_payment','accounts_quick_receipt','accounts_balance_sheet','accounts_account_ledger']) %}active{% endif %}">
+        <i data-lucide="wallet"></i>
+        <span>Accounts</span>
     </a>
-    <button type="button" class="mobile-nav-item" id="mobileNavMore" aria-label="More options">
-        <i class="bi bi-grid-3x3-gap"></i>
-        <span>More</span>
-    </button>
+    <a href="{{ url_for('account_change_password') }}"
+       class="mobile-nav-item {% if request.endpoint and request.endpoint in ['account_change_password','user_list','user_form','role_list','role_form'] %}active{% endif %}">
+        <i data-lucide="user-circle-2"></i>
+        <span>Profile</span>
+    </a>
 </nav>
+
+<!-- FAB Speed-Dial -->
+<div class="mobile-fab-wrap" id="mobileFabWrap">
+    <div class="fab-speed-dial" id="fabDialMenu">
+        {% if can_see_page('drivers') %}
+        <div class="fab-dial-item">
+            <span class="fab-dial-label">Add Driver</span>
+            <a href="{{ url_for('driver_form') }}" class="fab-dial-btn">
+                <i data-lucide="user-plus"></i>
+            </a>
+        </div>
+        {% endif %}
+        {% if can_see_page('vehicles') %}
+        <div class="fab-dial-item">
+            <span class="fab-dial-label">Add Vehicle</span>
+            <a href="{{ url_for('vehicle_form') }}" class="fab-dial-btn">
+                <i data-lucide="truck"></i>
+            </a>
+        </div>
+        {% endif %}
+        {% if can_see_page('driver_attendance_checkin') %}
+        <div class="fab-dial-item">
+            <span class="fab-dial-label">Check In</span>
+            <a href="{{ url_for('driver_attendance_checkin') }}" class="fab-dial-btn">
+                <i data-lucide="calendar-check-2"></i>
+            </a>
+        </div>
+        {% endif %}
+        {% if can_see_page('fuel_expense_add') %}
+        <div class="fab-dial-item">
+            <span class="fab-dial-label">Add Fuel</span>
+            <a href="{{ url_for('fuel_expense_add') }}" class="fab-dial-btn">
+                <i data-lucide="fuel"></i>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+    <button class="mobile-fab" id="mobileFabBtn" aria-label="Quick actions">
+        <i data-lucide="plus"></i>
+    </button>
+</div>
 
 <!-- Guide Chatbot: App guide (Forms & Reports) -->
 <div id="guideChatbotWrap" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
@@ -1699,6 +1834,109 @@
         });
         document.querySelectorAll('input[type="number"]').forEach(function(el) {
             el.setAttribute('inputmode', 'decimal');
+        });
+    })();
+
+    // ── Lucide Icons Init ──────────────────────────────────────────────────
+    if (window.lucide) { lucide.createIcons(); }
+
+    // ── Top Loading Bar (shows on internal navigation) ─────────────────────
+    (function() {
+        var bar = document.getElementById('topLoadBar');
+        if (!bar) return;
+        document.addEventListener('click', function(e) {
+            var a = e.target.closest('a[href]');
+            if (!a) return;
+            var href = a.getAttribute('href') || '';
+            if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey) return;
+            if (href.startsWith('#') || href.startsWith('javascript') || a.getAttribute('target') === '_blank') return;
+            bar.classList.add('active');
+        });
+        window.addEventListener('pageshow', function() { bar.classList.remove('active'); });
+    })();
+
+    // ── Table → Mobile Cards Converter ─────────────────────────────────────
+    // Automatically converts every .table-responsive table into tap-friendly
+    // cards on screens <= 767px. Tables are hidden; cards replace them.
+    (function() {
+        if (window.innerWidth > 767) return;
+        function isActionCol(label, td) {
+            var l = (label || '').toLowerCase().trim();
+            return (l === 'action' || l === 'actions' || l === '' || l === '#') ||
+                   !!(td && td.querySelector('a.btn, button.btn, .btn-group, .dropdown'));
+        }
+        document.querySelectorAll('.table-responsive').forEach(function(wrapper) {
+            if (wrapper.dataset.cardsConverted) return;
+            var table = wrapper.querySelector('table');
+            if (!table || !table.querySelector('tbody tr')) return;
+            var headers = [];
+            table.querySelectorAll('thead th').forEach(function(th) {
+                headers.push(th.textContent.trim());
+            });
+            var cardList = document.createElement('div');
+            cardList.className = 'mobile-card-list';
+            table.querySelectorAll('tbody tr').forEach(function(tr) {
+                var card = document.createElement('div');
+                card.className = 'mobile-data-card';
+                var rowsHtml = '';
+                var actionsHtml = '';
+                tr.querySelectorAll('td').forEach(function(td, idx) {
+                    var hdr = headers[idx] || '';
+                    if (isActionCol(hdr, td)) {
+                        actionsHtml = td.innerHTML;
+                    } else {
+                        var val = td.innerHTML.trim();
+                        if (idx === 0) {
+                            rowsHtml += '<div class="mobile-card-row" style="border-bottom:2px solid #e0eaff;padding-bottom:10px;margin-bottom:4px;">' +
+                                '<span class="mobile-card-value" style="font-size:0.97rem;font-weight:700;color:#0f172a;text-align:left;">' + val + '</span></div>';
+                        } else if (hdr) {
+                            rowsHtml += '<div class="mobile-card-row"><span class="mobile-card-label">' +
+                                hdr + '</span><span class="mobile-card-value">' + val + '</span></div>';
+                        }
+                    }
+                });
+                card.innerHTML = rowsHtml;
+                if (actionsHtml) {
+                    var actDiv = document.createElement('div');
+                    actDiv.className = 'mobile-card-actions';
+                    actDiv.innerHTML = actionsHtml;
+                    card.appendChild(actDiv);
+                }
+                cardList.appendChild(card);
+            });
+            wrapper.classList.add('table-to-hide');
+            wrapper.parentNode.insertBefore(cardList, wrapper.nextSibling);
+            wrapper.dataset.cardsConverted = '1';
+        });
+    })();
+
+    // ── FAB Speed-Dial Toggle ──────────────────────────────────────────────
+    (function() {
+        var fabBtn = document.getElementById('mobileFabBtn');
+        var dialMenu = document.getElementById('fabDialMenu');
+        if (!fabBtn || !dialMenu) return;
+        fabBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            dialMenu.classList.toggle('open');
+            fabBtn.classList.toggle('open');
+            if (window.lucide) lucide.createIcons();
+        });
+        document.addEventListener('click', function() {
+            if (dialMenu.classList.contains('open')) {
+                dialMenu.classList.remove('open');
+            }
+        });
+    })();
+
+    // ── Mobile Hamburger → Sidebar ─────────────────────────────────────────
+    (function() {
+        var btn = document.getElementById('mobileMenuBtn');
+        var sidebar = document.getElementById('sidebar');
+        var overlay = document.getElementById('sidebarOverlay');
+        if (!btn || !sidebar) return;
+        btn.addEventListener('click', function() {
+            sidebar.classList.toggle('mobile-open');
+            if (overlay) overlay.classList.toggle('show');
         });
     })();
 </script>
