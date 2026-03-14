@@ -192,16 +192,18 @@
                         </td>
                         <td>
                             <div class="d-flex gap-1">
-                                {% if v.drivers %}
-                                  <span class="badge-sm badge-secondary" title="Driver attached – Edit locked">
-                                      <i class="bi bi-lock-fill"></i>
-                                  </span>
-                                {% else %}
-                                  {% if can_see_page('assign_vehicle_to_parking_edit') %}
-                                  <a href="{{ url_for('assign_vehicle_to_parking_edit', vehicle_id=v.id) }}" class="btn btn-compact btn-edit-compact" title="Edit">
-                                      <i class="bi bi-pencil"></i>
-                                  </a>
+                                {% if can_see_page('assign_vehicle_to_parking_edit') %}
+                                  {% if v.drivers %}
+                                    <span class="badge-sm badge-secondary" title="Driver attached – Edit locked">
+                                        <i class="bi bi-lock-fill"></i>
+                                    </span>
+                                  {% else %}
+                                    <a href="{{ url_for('assign_vehicle_to_parking_edit', vehicle_id=v.id) }}" class="btn btn-compact btn-edit-compact" title="Edit">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
                                   {% endif %}
+                                {% endif %}
+                                {% if not v.drivers %}
                                   {% if can_see_page('assign_vehicle_to_parking_desassign') %}
                                   <form action="{{ url_for('desassign_vehicle_from_parking', vehicle_id=v.id) }}" method="POST" class="m-0">
                                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
