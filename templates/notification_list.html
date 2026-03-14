@@ -26,7 +26,7 @@
             <div class="small text-muted mt-1">{{ n.created_at.strftime('%d-%m-%Y %H:%M') if n.created_at else '' }}</div>
           </div>
           {% if n.id not in read_ids %}
-          <form action="{{ url_for('notification_mark_read', pk=n.id) }}" method="POST" class="ms-2">
+          <form action="{{ url_for('notification_read', pk=n.id) }}" method="POST" class="ms-2">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="next" value="{{ url_for('notification_list') }}">
             <button type="submit" class="btn btn-sm btn-outline-success" title="Mark as read"><i class="bi bi-check2"></i></button>

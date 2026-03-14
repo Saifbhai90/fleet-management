@@ -1625,32 +1625,91 @@
 
 <!-- Fixed Bottom Navigation Bar (Mobile only, < 768px) -->
 <nav class="mobile-bottom-nav" aria-label="Mobile navigation" id="mobileBottomNav">
+    <!-- Home: always visible -->
     <a href="{{ url_for('dashboard') }}"
        class="mobile-nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
         <i data-lucide="home"></i>
         <span>Home</span>
     </a>
+    <!-- Fleet: only if user can see drivers or vehicles -->
+    {% if can_see_page('drivers') or can_see_page('vehicles') %}
     <a href="{{ url_for('drivers_list') }}"
        class="mobile-nav-item {% if request.endpoint in ['drivers_list','vehicles_list','driver_form','vehicle_form','parking_list'] %}active{% endif %}">
         <i data-lucide="truck"></i>
         <span>Fleet</span>
     </a>
-    <!-- Search – opens command palette -->
+    {% endif %}
+    <!-- Search: only if global_search permission -->
+    {% if can_see_page('global_search') %}
     <button type="button" class="mobile-nav-item" onclick="openCmdPalette()" aria-label="Search">
         <i data-lucide="search"></i>
         <span>Search</span>
     </button>
-    <a href="{{ url_for('driver_attendance_checkin') }}"
-       class="mobile-nav-item {% if request.endpoint and 'attendance' in request.endpoint %}active{% endif %}">
+    {% endif %}
+    <!-- Attend: only if user can check-in or check-out; opens action sheet -->
+    {% if can_see_page('driver_attendance_checkin') or can_see_page('driver_attendance_checkout') %}
+    <button type="button"
+            class="mobile-nav-item {% if request.endpoint and 'attendance' in request.endpoint %}active{% endif %}"
+            id="attendNavBtn" onclick="openAttendSheet()" aria-label="Attendance">
         <i data-lucide="calendar-check"></i>
         <span>Attend</span>
-    </a>
+    </button>
+    {% endif %}
     <!-- More – opens bottom drawer -->
     <button type="button" class="mobile-nav-item" id="moreNavBtn" onclick="openMoreDrawer()" aria-label="More options">
         <i data-lucide="grid-2x2"></i>
         <span>More</span>
     </button>
 </nav>
+
+<!-- ── Attend Action Sheet (mini popup above bottom nav) ── -->
+{% if can_see_page('driver_attendance_checkin') or can_see_page('driver_attendance_checkout') %}
+<div id="attendSheetOverlay" class="more-drawer-overlay" onclick="closeAttendSheet()"></div>
+<div id="attendSheet" style="
+    position:fixed; bottom:68px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:#1e293b; border-radius:20px; z-index:1062; min-width:230px; max-width:90vw;
+    padding:12px; box-shadow:0 -4px 24px rgba(0,0,0,0.35);
+    border:1px solid rgba(255,255,255,0.1);
+    opacity:0; pointer-events:none;
+    transition:opacity 0.2s ease, transform 0.22s cubic-bezier(.34,1.56,.64,1);
+    will-change:transform,opacity;">
+    <div style="text-align:center; font-size:0.7rem; color:#64748b; font-weight:600; letter-spacing:0.05em; margin-bottom:10px; text-transform:uppercase;">Attendance</div>
+    <div style="display:flex; gap:10px;">
+        {% if can_see_page('driver_attendance_checkin') %}
+        <a href="{{ url_for('driver_attendance_checkin') }}"
+           onclick="closeAttendSheet()"
+           style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;
+                  padding:14px 8px; background:rgba(34,197,94,0.12); border-radius:14px;
+                  border:1px solid rgba(34,197,94,0.25); color:#4ade80;
+                  text-decoration:none; font-size:0.72rem; font-weight:700;
+                  transition:background 0.15s; -webkit-tap-highlight-color:transparent;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:26px;height:26px;">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                <polyline points="10 17 15 12 10 7"/>
+                <line x1="15" y1="12" x2="3" y2="12"/>
+            </svg>
+            Check In
+        </a>
+        {% endif %}
+        {% if can_see_page('driver_attendance_checkout') %}
+        <a href="{{ url_for('driver_attendance_checkout') }}"
+           onclick="closeAttendSheet()"
+           style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;
+                  padding:14px 8px; background:rgba(249,115,22,0.12); border-radius:14px;
+                  border:1px solid rgba(249,115,22,0.25); color:#fb923c;
+                  text-decoration:none; font-size:0.72rem; font-weight:700;
+                  transition:background 0.15s; -webkit-tap-highlight-color:transparent;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:26px;height:26px;">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Check Out
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 
 <!-- ── More Bottom Drawer (Mobile) ── -->
 <div id="moreDrawerOverlay" class="more-drawer-overlay" onclick="closeMoreDrawer()"></div>
@@ -3849,6 +3908,30 @@ document.addEventListener('DOMContentLoaded', function() {
         if (panel)   panel.classList.remove('open');
         document.body.style.overflow = '';
     };
+
+    /* ── Attend Action Sheet ── */
+    window.openAttendSheet = function() {
+        var sheet   = document.getElementById('attendSheet');
+        var overlay = document.getElementById('attendSheetOverlay');
+        if (!sheet) return;
+        if (overlay) overlay.classList.add('open');
+        sheet.style.opacity      = '1';
+        sheet.style.pointerEvents = 'auto';
+        sheet.style.transform    = 'translateX(-50%) translateY(0)';
+    };
+    window.closeAttendSheet = function() {
+        var sheet   = document.getElementById('attendSheet');
+        var overlay = document.getElementById('attendSheetOverlay');
+        if (!sheet) return;
+        if (overlay) overlay.classList.remove('open');
+        sheet.style.opacity      = '0';
+        sheet.style.pointerEvents = 'none';
+        sheet.style.transform    = 'translateX(-50%) translateY(20px)';
+    };
+    /* Close attend sheet when tapping outside (overlay click handled in HTML) */
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') { closeAttendSheet(); closeMoreDrawer(); }
+    });
 
     window.syncMoreLangLabel = function() {
         var icon = document.getElementById('moreDrawerLangIcon');
