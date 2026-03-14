@@ -404,6 +404,11 @@ def dashboard():
             db.session.commit()
             notifications = _unread_notifications_for_user(user_id, 20)
 
+    # Critical health alert from cache (master only, no extra API calls)
+    health_alert = None
+    if session.get('is_master') and _health_cache.get('data') and _health_cache['data'].get('any_critical'):
+        health_alert = _health_cache['data']
+
     return render_template('dashboard.html',
                            total_companies=total_companies,
                            total_projects=total_projects,
@@ -419,6 +424,7 @@ def dashboard():
                            fuel_chart_labels=fuel_chart_labels,
                            fuel_chart_values=fuel_chart_values,
                            notifications=notifications,
+                           health_alert=health_alert,
                            from_login=request.args.get('from_login') == '1')
 
 
@@ -10900,3 +10906,116 @@ def report_parking_utilization():
         occupied = Vehicle.query.filter_by(parking_station_id=s.id).count()
         data.append({'station': s, 'occupied': occupied, 'available': s.capacity - occupied})
     return render_template('report_parking_utilization.html', data=data)
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# SYSTEM HEALTH & CLOUD STATUS  (Master only)
+# ════════════════════════════════════════════════════════════════════════════════
+
+_health_cache = {'data': None, 'ts': None}
+_HEALTH_CACHE_TTL = 900  # 15 minutes
+
+
+def _build_health_data():
+    """Fetch live metrics from Render API, PostgreSQL, and Cloudflare R2."""
+    import json
+    import urllib.request
+    import time as _time
+
+    result = {
+        'service': None,
+        'last_deploy': None,
+        'db_size_mb': None,
+        'db_size_limit_mb': 1024,
+        'r2_size_mb': None,
+        'r2_total_objects': 0,
+        'r2_size_limit_mb': 10240,
+        'errors': [],
+        'fetched_at': datetime.utcnow().strftime('%d-%m-%Y %H:%M UTC'),
+    }
+
+    render_key = os.environ.get('RENDER_API_KEY', '').strip()
+    service_id = os.environ.get('RENDER_SERVICE_ID', '').strip()
+
+    # 1. Render Service Status + Last Deployment
+    if render_key and service_id:
+        try:
+            hdr = {'Authorization': f'Bearer {render_key}', 'Accept': 'application/json'}
+            req = urllib.request.Request(
+                f'https://api.render.com/v1/services/{service_id}', headers=hdr)
+            with urllib.request.urlopen(req, timeout=8) as r:
+                result['service'] = json.loads(r.read())
+            req2 = urllib.request.Request(
+                f'https://api.render.com/v1/services/{service_id}/deploys?limit=1', headers=hdr)
+            with urllib.request.urlopen(req2, timeout=8) as r2:
+                deploys = json.loads(r2.read())
+                if deploys:
+                    result['last_deploy'] = deploys[0].get('deploy', deploys[0])
+        except Exception as e:
+            result['errors'].append(f'Render API: {str(e)[:120]}')
+    else:
+        result['errors'].append('Render API: RENDER_API_KEY or RENDER_SERVICE_ID not set in environment.')
+
+    # 2. Database Size
+    try:
+        db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        if 'postgresql' in db_uri:
+            row = db.session.execute(text('SELECT pg_database_size(current_database()) AS sz')).fetchone()
+            if row:
+                result['db_size_mb'] = round(row.sz / (1024 * 1024), 1)
+        else:
+            db_path = db_uri.replace('sqlite:///', '')
+            if db_path and os.path.isfile(db_path):
+                result['db_size_mb'] = round(os.path.getsize(db_path) / (1024 * 1024), 1)
+                result['db_size_limit_mb'] = 512
+    except Exception as e:
+        result['errors'].append(f'DB size: {str(e)[:120]}')
+
+    # 3. Cloudflare R2 Bucket Size
+    try:
+        from r2_storage import _get_s3_client, R2_BUCKET_NAME
+        client = _get_s3_client()
+        paginator = client.get_paginator('list_objects_v2')
+        total_bytes, total_objs = 0, 0
+        for page in paginator.paginate(Bucket=R2_BUCKET_NAME):
+            for obj in page.get('Contents', []):
+                total_bytes += obj.get('Size', 0)
+                total_objs += 1
+        result['r2_size_mb'] = round(total_bytes / (1024 * 1024), 1)
+        result['r2_total_objects'] = total_objs
+    except Exception as e:
+        result['errors'].append(f'R2 storage: {str(e)[:120]}')
+
+    # Compute percentages and critical flags
+    result['db_pct'] = round(result['db_size_mb'] / result['db_size_limit_mb'] * 100, 1) if result['db_size_mb'] is not None else None
+    result['r2_pct'] = round(result['r2_size_mb'] / result['r2_size_limit_mb'] * 100, 1) if result['r2_size_mb'] is not None else None
+    result['db_critical'] = bool(result['db_pct'] is not None and result['db_pct'] >= 80)
+    result['r2_critical'] = bool(result['r2_pct'] is not None and result['r2_pct'] >= 80)
+    result['any_critical'] = result['db_critical'] or result['r2_critical']
+    return result
+
+
+def _fetch_system_health(force=False):
+    import time as _time
+    now = _time.time()
+    if (not force) and _health_cache['data'] and _health_cache['ts'] and (now - _health_cache['ts']) < _HEALTH_CACHE_TTL:
+        return _health_cache['data']
+    data = _build_health_data()
+    _health_cache['data'] = data
+    _health_cache['ts'] = now
+    return data
+
+
+@app.route('/admin/system-health')
+def system_health():
+    """System Health & Cloud Status page — Master only."""
+    if not session.get('is_master'):
+        abort(403)
+    force = request.args.get('refresh') == '1'
+    data = _fetch_system_health(force=force)
+    env_vars_set = {k: bool(os.environ.get(k, '').strip()) for k in [
+        'RENDER_API_KEY', 'RENDER_SERVICE_ID',
+        'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ENDPOINT_URL', 'R2_BUCKET_NAME',
+        'DATABASE_URL', 'SECRET_KEY',
+    ]}
+    return render_template('system_health.html', data=data, env_vars_set=env_vars_set)

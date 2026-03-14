@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+{% block title %}System Health — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+.sh-card {
+    border-radius: 18px;
+    padding: 22px 24px;
+    background: #fff;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    border: 1px solid #e2e8f0;
+    transition: transform 0.18s, box-shadow 0.18s;
+}
+.sh-card:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,0.11); }
+.sh-card-danger  { border-left: 5px solid #ef4444; }
+.sh-card-warning { border-left: 5px solid #f59e0b; }
+.sh-card-success { border-left: 5px solid #10b981; }
+.sh-card-info    { border-left: 5px solid #3b82f6; }
+.sh-card-neutral { border-left: 5px solid #94a3b8; }
+
+.metric-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: #64748b;
+    margin-bottom: 6px;
+}
+.metric-value {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.1;
+}
+.metric-sub { font-size: 0.78rem; color: #94a3b8; margin-top: 3px; }
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+.sb-live    { background:#dcfce7; color:#16a34a; }
+.sb-down    { background:#fee2e2; color:#dc2626; }
+.sb-unknown { background:#f1f5f9; color:#64748b; }
+.sb-building{ background:#fef9c3; color:#a16207; }
+
+.progress-track {
+    height: 10px;
+    border-radius: 6px;
+    background: #e2e8f0;
+    overflow: hidden;
+    margin-top: 10px;
+}
+.progress-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.6s cubic-bezier(.4,0,.2,1);
+}
+.pf-ok      { background: linear-gradient(90deg,#10b981,#34d399); }
+.pf-warn    { background: linear-gradient(90deg,#f59e0b,#fbbf24); }
+.pf-danger  { background: linear-gradient(90deg,#ef4444,#f87171); }
+
+.quick-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-radius: 14px;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 0.88rem;
+    transition: all 0.18s;
+    border: none;
+    color: #fff;
+}
+.quick-btn:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(0,0,0,0.18); color:#fff; text-decoration:none; }
+.qb-render     { background: linear-gradient(135deg,#6366f1,#4f46e5); }
+.qb-cloudflare { background: linear-gradient(135deg,#f97316,#ea580c); }
+.qb-github     { background: linear-gradient(135deg,#1f2937,#111827); }
+
+.env-row { display:flex; align-items:center; gap:6px; font-size:0.78rem; padding:4px 0; }
+.env-row .env-key { font-family:monospace; font-size:0.73rem; color:#475569; }
+
+.alert-critical-banner {
+    background: linear-gradient(135deg,#fef2f2,#fee2e2);
+    border: 2px solid #fca5a5;
+    border-radius: 16px;
+    padding: 16px 22px;
+}
+
+.commit-hash {
+    font-family: monospace;
+    font-size: 0.85rem;
+    background: #eff6ff;
+    color: #1d4ed8;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-block;
+}
+
+.err-item {
+    background: #fff7ed;
+    border-left: 3px solid #f97316;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.77rem;
+    color: #7c2d12;
+    margin-bottom: 6px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" style="max-width:1240px;">
+
+    {# ── Critical Alert Banner ── #}
+    {% if data.any_critical %}
+    <div class="alert-critical-banner mb-4 d-flex align-items-start gap-3">
+        <i class="bi bi-exclamation-triangle-fill text-danger fs-4 flex-shrink-0 mt-1"></i>
+        <div>
+            <div class="fw-bold text-danger" style="font-size:1rem;">⚠ Critical Storage Warning</div>
+            <div style="font-size:0.87rem;color:#b91c1c;margin-top:3px;">
+                {% if data.db_critical %}
+                    Database is at <strong>{{ data.db_pct }}%</strong> of its
+                    {{ data.db_size_limit_mb }} MB free limit ({{ data.db_size_mb }} MB used).&nbsp;
+                {% endif %}
+                {% if data.r2_critical %}
+                    R2 Bucket is at <strong>{{ data.r2_pct }}%</strong> of its
+                    {{ data.r2_size_limit_mb // 1024 }} GB free limit.&nbsp;
+                {% endif %}
+                Take action immediately to avoid service disruption.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Page Header ── #}
+    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+        <div>
+            <h2 class="fw-bold mb-0" style="font-size:1.6rem;letter-spacing:-0.02em;color:#0f172a;">
+                <i class="bi bi-activity text-primary me-2"></i>System Health &amp; Cloud Status
+            </h2>
+            <span class="text-muted" style="font-size:0.82rem;">
+                Last fetched: <strong>{{ data.fetched_at }}</strong>
+                <span style="font-size:0.72rem;color:#94a3b8;margin-left:6px;">(cached 15 min — use Force Refresh for live data)</span>
+            </span>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{{ url_for('system_health', refresh=1) }}" class="btn btn-sm btn-primary d-flex align-items-center gap-1">
+                <i class="bi bi-arrow-clockwise"></i> Force Refresh
+            </a>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1">
+                <i class="bi bi-house"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    {# ── Row 1: Four Metric Cards ── #}
+    <div class="row g-3 mb-3">
+
+        {# Render Service Status #}
+        <div class="col-sm-6 col-lg-3">
+            {% set svc = data.service %}
+            {% set svc_status = (svc.status | lower) if svc else '' %}
+            <div class="sh-card h-100
+                {% if svc and svc_status in ['running','live','active'] %}sh-card-success
+                {% elif svc and svc_status in ['suspended','failed','unavailable'] %}sh-card-danger
+                {% elif svc %}sh-card-warning
+                {% else %}sh-card-neutral{% endif %}">
+                <div class="metric-label"><i class="bi bi-cloud-check me-1"></i>Render Service</div>
+                {% if svc %}
+                    <div class="mt-2">
+                        <span class="status-badge
+                            {% if svc_status in ['running','live','active'] %}sb-live
+                            {% elif svc_status in ['suspended','failed','unavailable'] %}sb-down
+                            {% elif 'build' in svc_status %}sb-building
+                            {% else %}sb-unknown{% endif %}">
+                            <span style="width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block;"></span>
+                            {{ svc.status | replace('_',' ') | title }}
+                        </span>
+                    </div>
+                    <div class="metric-sub mt-2">
+                        <strong style="color:#0f172a;">{{ svc.name }}</strong><br>
+                        {% if svc.serviceDetails %}
+                            Plan: {{ svc.serviceDetails.plan | title }}&nbsp;&nbsp;
+                            Region: {{ svc.serviceDetails.region | replace('-',' ') | title }}<br>
+                        {% endif %}
+                        {% if svc.updatedAt %}
+                            Updated: {{ svc.updatedAt[:10] }}
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <div class="metric-sub mt-3" style="color:#f97316;">
+                        <i class="bi bi-key me-1"></i>
+                        RENDER_API_KEY or RENDER_SERVICE_ID not configured
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Last Deployment #}
+        <div class="col-sm-6 col-lg-3">
+            {% set dep = data.last_deploy %}
+            <div class="sh-card sh-card-info h-100">
+                <div class="metric-label"><i class="bi bi-rocket-takeoff me-1"></i>Last Deployment</div>
+                {% if dep %}
+                    {% set dep_status = (dep.status | lower) if dep.status else '' %}
+                    <div class="mt-2">
+                        <span class="status-badge
+                            {% if dep_status in ['live','active'] %}sb-live
+                            {% elif dep_status in ['failed','deactivated'] %}sb-down
+                            {% elif 'build' in dep_status or 'progress' in dep_status %}sb-building
+                            {% else %}sb-unknown{% endif %}">
+                            {{ dep.status | replace('_',' ') | title if dep.status else 'Unknown' }}
+                        </span>
+                    </div>
+                    {% if dep.commit %}
+                    <div class="metric-sub mt-2">
+                        <span class="commit-hash">{{ dep.commit.id[:8] if dep.commit.id else 'N/A' }}</span><br>
+                        <span class="mt-1 d-block" title="{{ dep.commit.message }}" style="color:#334155;">
+                            {{ (dep.commit.message or '')[:45] }}{% if (dep.commit.message or '') | length > 45 %}…{% endif %}
+                        </span>
+                        {% if dep.finishedAt %}
+                        <span style="color:#94a3b8;">{{ dep.finishedAt[:10] }} {{ dep.finishedAt[11:16] }} UTC</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                {% else %}
+                    <div class="metric-sub mt-3 text-muted">
+                        No deployment data available
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Database Storage #}
+        <div class="col-sm-6 col-lg-3">
+            <div class="sh-card h-100
+                {% if data.db_critical %}sh-card-danger
+                {% elif data.db_pct and data.db_pct >= 60 %}sh-card-warning
+                {% elif data.db_size_mb is not none %}sh-card-success
+                {% else %}sh-card-neutral{% endif %}">
+                <div class="metric-label"><i class="bi bi-database me-1"></i>Database Storage</div>
+                {% if data.db_size_mb is not none %}
+                    <div class="metric-value mt-1 {% if data.db_critical %}text-danger{% elif data.db_pct >= 60 %}text-warning{% endif %}">
+                        {{ data.db_size_mb }}<small style="font-size:1rem;font-weight:500;"> MB</small>
+                    </div>
+                    <div class="metric-sub">
+                        {{ data.db_pct }}% of {{ data.db_size_limit_mb }} MB limit
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill
+                            {% if data.db_critical %}pf-danger
+                            {% elif data.db_pct >= 60 %}pf-warn
+                            {% else %}pf-ok{% endif %}"
+                            style="width:{{ [data.db_pct, 100] | min }}%;"></div>
+                    </div>
+                    {% if data.db_critical %}
+                    <div class="mt-2 text-danger fw-bold" style="font-size:0.75rem;">
+                        ⚠ CRITICAL — Upgrade or clean up now!
+                    </div>
+                    {% endif %}
+                {% else %}
+                    <div class="metric-sub mt-3 text-muted">Could not fetch database size</div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Cloudflare R2 Bucket #}
+        <div class="col-sm-6 col-lg-3">
+            <div class="sh-card h-100
+                {% if data.r2_critical %}sh-card-danger
+                {% elif data.r2_pct and data.r2_pct >= 60 %}sh-card-warning
+                {% elif data.r2_size_mb is not none %}sh-card-success
+                {% else %}sh-card-neutral{% endif %}">
+                <div class="metric-label"><i class="bi bi-cloud-haze2 me-1"></i>Cloudflare R2 Bucket</div>
+                {% if data.r2_size_mb is not none %}
+                    {% if data.r2_size_mb >= 1024 %}
+                        <div class="metric-value mt-1 {% if data.r2_critical %}text-danger{% endif %}">
+                            {{ (data.r2_size_mb / 1024) | round(2) }}<small style="font-size:1rem;font-weight:500;"> GB</small>
+                        </div>
+                    {% else %}
+                        <div class="metric-value mt-1 {% if data.r2_critical %}text-danger{% endif %}">
+                            {{ data.r2_size_mb }}<small style="font-size:1rem;font-weight:500;"> MB</small>
+                        </div>
+                    {% endif %}
+                    <div class="metric-sub">
+                        {{ data.r2_total_objects }} objects &nbsp;·&nbsp;
+                        {{ data.r2_pct }}% of {{ data.r2_size_limit_mb // 1024 }} GB
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill
+                            {% if data.r2_critical %}pf-danger
+                            {% elif data.r2_pct >= 60 %}pf-warn
+                            {% else %}pf-ok{% endif %}"
+                            style="width:{{ [data.r2_pct, 100] | min }}%;"></div>
+                    </div>
+                    {% if data.r2_critical %}
+                    <div class="mt-2 text-danger fw-bold" style="font-size:0.75rem;">
+                        ⚠ CRITICAL — Bucket near capacity!
+                    </div>
+                    {% endif %}
+                {% else %}
+                    <div class="metric-sub mt-3 text-muted">
+                        {% if data.errors and 'R2' in (data.errors | join(' ')) %}
+                            R2 not configured or unreachable
+                        {% else %}
+                            Could not fetch R2 size
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ── Row 2: Quick Links + Env Vars + Errors ── #}
+    <div class="row g-3">
+
+        {# Quick Links #}
+        <div class="col-lg-5">
+            <div class="sh-card h-100">
+                <div class="metric-label mb-3"><i class="bi bi-lightning-charge me-1"></i>Quick Links</div>
+                <div class="d-flex flex-column gap-3">
+                    <a href="https://dashboard.render.com" target="_blank" rel="noopener noreferrer"
+                       class="quick-btn qb-render">
+                        <i class="bi bi-cloud-arrow-up-fill fs-5"></i>
+                        <div>
+                            <div>Open Render Dashboard</div>
+                            <div style="font-size:0.72rem;opacity:0.85;font-weight:500;">Manage services, DB, deploys</div>
+                        </div>
+                        <i class="bi bi-box-arrow-up-right ms-auto" style="opacity:0.7;"></i>
+                    </a>
+                    <a href="https://dash.cloudflare.com" target="_blank" rel="noopener noreferrer"
+                       class="quick-btn qb-cloudflare">
+                        <i class="bi bi-shield-fill-check fs-5"></i>
+                        <div>
+                            <div>Open Cloudflare Console</div>
+                            <div style="font-size:0.72rem;opacity:0.85;font-weight:500;">R2 buckets, CDN & DNS settings</div>
+                        </div>
+                        <i class="bi bi-box-arrow-up-right ms-auto" style="opacity:0.7;"></i>
+                    </a>
+                    <a href="https://github.com/Saifbhai90/fleet-management" target="_blank" rel="noopener noreferrer"
+                       class="quick-btn qb-github">
+                        <i class="bi bi-github fs-5"></i>
+                        <div>
+                            <div>GitHub Repository</div>
+                            <div style="font-size:0.72rem;opacity:0.85;font-weight:500;">View source code & commit history</div>
+                        </div>
+                        <i class="bi bi-box-arrow-up-right ms-auto" style="opacity:0.7;"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {# Environment Variables Status #}
+        <div class="col-lg-4">
+            <div class="sh-card h-100">
+                <div class="metric-label mb-2"><i class="bi bi-key me-1"></i>Environment Variables</div>
+                {% set env_checks = [
+                    ('RENDER_API_KEY',       'Render API Key'),
+                    ('RENDER_SERVICE_ID',    'Render Service ID'),
+                    ('R2_ACCESS_KEY_ID',     'R2 Access Key'),
+                    ('R2_SECRET_ACCESS_KEY', 'R2 Secret Key'),
+                    ('R2_ENDPOINT_URL',      'R2 Endpoint URL'),
+                    ('R2_BUCKET_NAME',       'R2 Bucket Name'),
+                    ('DATABASE_URL',         'Database URL'),
+                    ('SECRET_KEY',           'Flask Secret Key'),
+                ] %}
+                {% for env_key, label in env_checks %}
+                {% set is_set = env_vars_set.get(env_key, False) %}
+                <div class="env-row">
+                    <i class="bi {% if is_set %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"
+                       style="font-size:0.9rem;flex-shrink:0;"></i>
+                    <span style="color:#0f172a;font-weight:600;">{{ label }}</span>
+                    <span class="env-key ms-auto">{{ env_key }}</span>
+                </div>
+                {% endfor %}
+
+                <hr class="my-3">
+                <div class="metric-label mb-2"><i class="bi bi-info-circle me-1"></i>Free Tier Limits</div>
+                <table class="table table-sm table-borderless mb-0" style="font-size:0.8rem;">
+                    <tr><td class="text-muted ps-0">Render Database</td><td class="fw-bold">1 GB storage</td></tr>
+                    <tr><td class="text-muted ps-0">Render Web Service</td><td class="fw-bold">512 MB RAM</td></tr>
+                    <tr><td class="text-muted ps-0">Cloudflare R2</td><td class="fw-bold">10 GB / 10M req/mo</td></tr>
+                </table>
+            </div>
+        </div>
+
+        {# Fetch Log #}
+        <div class="col-lg-3">
+            <div class="sh-card h-100">
+                <div class="metric-label mb-2"><i class="bi bi-terminal me-1"></i>Fetch Log</div>
+                {% if data.errors %}
+                    {% for err in data.errors %}
+                    <div class="err-item">
+                        <i class="bi bi-exclamation-circle me-1 text-warning"></i>{{ err }}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="d-flex align-items-center gap-2 text-success" style="font-size:0.85rem;">
+                        <i class="bi bi-check-circle-fill fs-5"></i>
+                        All checks completed without errors
+                    </div>
+                {% endif %}
+
+                <hr class="my-3">
+                <div class="metric-label mb-1"><i class="bi bi-shield-lock me-1"></i>Access</div>
+                <div style="font-size:0.78rem;color:#64748b;">
+                    This page is visible to <strong class="text-dark">Master</strong> only.<br>
+                    Data is cached for <strong class="text-dark">15 minutes</strong> to avoid rate limits.
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

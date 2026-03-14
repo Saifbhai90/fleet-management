@@ -1313,6 +1313,11 @@
                     <i class="bi bi-sliders text-info"></i><span>Setting</span>
                 </a>
                 {% endif %}
+                {% if current_user_is_master %}
+                <a href="{{ url_for('system_health') }}" class="collapse-item {% if request.endpoint == 'system_health' %}active-link{% endif %}">
+                    <i class="bi bi-activity text-danger"></i><span>System Health</span>
+                </a>
+                {% endif %}
             </div>
         </div>
         {% endif %}
