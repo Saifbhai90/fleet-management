@@ -12144,10 +12144,10 @@ def report_parking_utilization():
     # Filter stations by user scope
     stations_query = ParkingStation.query
     if not is_master_or_admin:
-        if allowed_districts:
-            stations_query = stations_query.filter(ParkingStation.district_id.in_(list(allowed_districts)))
-    if district_id:
-        stations_query = stations_query.filter(ParkingStation.district_id == district_id)
+        if allowed_projects:
+            stations_query = stations_query.filter(ParkingStation.project_id.in_(list(allowed_projects)))
+    if project_id:
+        stations_query = stations_query.filter(ParkingStation.project_id == project_id)
     
     stations = stations_query.order_by(ParkingStation.name).all()
     data = [
