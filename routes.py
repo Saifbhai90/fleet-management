@@ -4648,6 +4648,20 @@ def assign_vehicle_to_district():
     district_id = request.args.get('district_id', type=int)
     sort_by = request.args.get('sort_by', 'assign_date')
     sort_order = request.args.get('sort_order', 'desc')
+    
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+    
     assigned = _assign_vehicle_to_district_data(search=search, project_id=project_id, district_id=district_id, sort_by=sort_by, sort_order=sort_order)
     
     # Apply user data scope to assigned vehicles
@@ -4680,6 +4694,8 @@ def assign_vehicle_to_district():
         sort_order=sort_order,
         project_choices=projects,
         district_choices=districts,
+        disable_project=disable_project,
+        disable_district=disable_district,
     )
 
 
@@ -4983,6 +4999,14 @@ def get_parking_by_district(district_id):
 
 @app.route('/assign_vehicle_to_parking')
 def assign_vehicle_to_parking_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     search = request.args.get('search', '').strip()
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
@@ -4990,11 +5014,34 @@ def assign_vehicle_to_parking_list():
     to_date_str = request.args.get('to_date', '').strip()
     sort_by = request.args.get('sort_by', 'assign_date')
     sort_order = request.args.get('sort_order', 'desc')
+    
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+    
     from_date = parse_date_dmy(from_date_str) if from_date_str else None
     to_date = parse_date_dmy(to_date_str) if to_date_str else None
     parked_vehicles = _assign_vehicle_to_parking_data(search=search, project_id=project_id, district_id=district_id, from_date=from_date, to_date=to_date, sort_by=sort_by, sort_order=sort_order)
-    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
-    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    
+    # Filter dropdown choices by user scope
+    project_q = Project.query.filter(Project.company_id.isnot(None))
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
     return render_template(
         'assign_vehicle_to_parking_list.html',
         parked_vehicles=parked_vehicles,
@@ -5007,6 +5054,8 @@ def assign_vehicle_to_parking_list():
         district_choices=districts,
         sort_by=sort_by,
         sort_order=sort_order,
+        disable_project=disable_project,
+        disable_district=disable_district,
     )
 
 
@@ -5365,6 +5414,19 @@ def assign_driver_to_vehicle_list():
         sort_by = request.args.get('sort_by', 'driver')
         sort_order = request.args.get('sort_order', 'asc')
         
+        # Auto-select if only 1 option available
+        disable_project = False
+        disable_district = False
+        if not is_master_or_admin:
+            if len(allowed_projects) == 1:
+                if not project_id:
+                    project_id = next(iter(allowed_projects))
+                disable_project = True
+            if len(allowed_districts) == 1:
+                if not district_id:
+                    district_id = next(iter(allowed_districts))
+                disable_district = True
+        
         print(f"DEBUG: Calling _assign_driver_to_vehicle_data...")
         assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id, sort_by=sort_by, sort_order=sort_order)
         print(f"DEBUG: Retrieved {len(assigned_drivers)} assigned drivers")
@@ -5406,6 +5468,8 @@ def assign_driver_to_vehicle_list():
         sort_order=sort_order,
         project_choices=projects,
         district_choices=districts,
+        disable_project=disable_project,
+        disable_district=disable_district,
     )
 
 
@@ -5794,6 +5858,19 @@ def vehicle_transfers():
     q = (request.args.get('q') or '').strip()
     sort_by = request.args.get('sort_by', 'transfer_date')
     sort_order = request.args.get('sort_order', 'desc')
+    
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
 
     query = VehicleTransfer.query
     
@@ -5844,8 +5921,17 @@ def vehicle_transfers():
 
     transfers = query.all()
 
-    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    # Filter dropdown choices by user scope
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+    
     return render_template(
         'vehicle_transfers.html',
         transfers=transfers,
@@ -5856,6 +5942,8 @@ def vehicle_transfers():
         sort_order=sort_order,
         project_choices=projects,
         district_choices=districts,
+        disable_project=disable_project,
+        disable_district=disable_district,
     )
 
 @app.route('/vehicle-transfer/new', methods=['GET', 'POST'])
@@ -6205,6 +6293,19 @@ def driver_transfers():
     q = (request.args.get('q') or '').strip()
     sort_by = request.args.get('sort_by', 'transfer_date')
     sort_order = request.args.get('sort_order', 'desc')
+    
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
 
     query = DriverTransfer.query
     
@@ -6258,8 +6359,17 @@ def driver_transfers():
 
     transfers = query.all()
 
-    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    # Filter dropdown choices by user scope
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+    
     return render_template(
         'driver_transfers.html',
         transfers=transfers,
@@ -6270,11 +6380,9 @@ def driver_transfers():
         q=q,
         project_choices=projects,
         district_choices=districts,
+        disable_project=disable_project,
+        disable_district=disable_district,
     )
-
-@app.route('/driver-transfer/new', methods=['GET', 'POST'])
-def driver_transfer_new():
-    from auth_utils import get_user_context
     user_id = session.get('user_id')
     user_context = get_user_context(user_id) if user_id else {}
     allowed_projects = user_context.get('allowed_projects', set())
