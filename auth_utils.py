@@ -558,12 +558,19 @@ def get_user_context(user_id):
         if emp:
             context['is_employee'] = True
             context['employee_record'] = emp
-            for p in (emp.projects or []):
-                if p and p.id:
-                    context['allowed_projects'].add(p.id)
-            for d in (emp.districts or []):
-                if d and d.id:
-                    context['allowed_districts'].add(d.id)
+            # Employee.projects and .districts are dynamic relationships - need .all()
+            try:
+                for p in emp.projects.all():
+                    if p and p.id:
+                        context['allowed_projects'].add(p.id)
+            except Exception:
+                pass
+            try:
+                for d in emp.districts.all():
+                    if d and d.id:
+                        context['allowed_districts'].add(d.id)
+            except Exception:
+                pass
         
         # Driver assignments (CURRENT active assignment from latest transfer or Driver model)
         drv = None
@@ -603,7 +610,10 @@ def get_user_context(user_id):
                 if getattr(drv, 'shift', None) and drv.shift.strip():
                     context['allowed_shifts'].add(drv.shift.strip())
     
-    except Exception:
-        pass
+    except Exception as e:
+        # Log the error for debugging
+        import traceback
+        print(f"ERROR in get_user_context for user_id={user_id}: {str(e)}")
+        print(traceback.format_exc())
     
     return context
