@@ -46,7 +46,7 @@
                 <h5 class="fw-bold mb-3 text-danger text-uppercase small tracking-wide">Current Location (From)</h5>
                 <div class="mb-3">
                     <label class="form-label fw-semibold small text-muted">Select Project <span class="text-danger">*</span></label>
-                    {{ form.from_project_id(class="form-select select2-enable " + ("is-invalid" if form.from_project_id.errors else ""), id="from_project", **{"data-placeholder": "Search project..."}) }}
+                    {{ form.from_project_id(class="form-select select2-enable " + ("is-invalid" if form.from_project_id.errors else ""), id="from_project", disabled=disable_from_project, **{"data-placeholder": "Search project..."}) }}
                     {% for error in form.from_project_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                 </div>
                 <div class="mb-3">
@@ -73,7 +73,7 @@
                 <div class="row g-2">
                     <div class="col-md-6 mb-3">
                         <label class="form-label fw-semibold small text-muted">New Project <span class="text-danger">*</span></label>
-                        {{ form.new_project_id(class="form-select select2-enable " + ("is-invalid" if form.new_project_id.errors else ""), id="new_project", **{"data-placeholder": "Search project..."}) }}
+                        {{ form.new_project_id(class="form-select select2-enable " + ("is-invalid" if form.new_project_id.errors else ""), id="new_project", disabled=disable_new_project, **{"data-placeholder": "Search project..."}) }}
                         {% for error in form.new_project_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                     </div>
                     <div class="col-md-6 mb-3">

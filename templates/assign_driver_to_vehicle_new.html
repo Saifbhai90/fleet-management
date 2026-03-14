@@ -40,7 +40,7 @@
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label fw-bold">1. Project</label>
-                        {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else ""), id="project_select") }}
+                        {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else ""), id="project_select", disabled=disable_project) }}
                         {% if form.project_id.errors %}<div class="invalid-feedback d-block">{% for e in form.project_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
                     </div>
                     <div class="col-md-4">

@@ -5197,13 +5197,28 @@ def get_unassigned_drivers():
     drivers = Driver.query.filter(Driver.vehicle_id == None).all()
     return jsonify([{"id": d.id, "name": f"{d.name} ({d.driver_id})"} for d in drivers])
 
-
 @app.route('/assign_driver_to_vehicle/new', methods=['GET', 'POST'])
 def assign_driver_to_vehicle_new():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     form = AssignDriverToVehicleForm()
-    form.project_id.choices = [(0, '-- Select Project --')] + [
-        (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
-    ]
+    proj_q = Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in proj_q.all()]
+    
+    # Auto-select if only 1 project allowed
+    disable_project = False
+    if not is_master_or_admin and len(allowed_projects) == 1:
+        single_proj = next(iter(allowed_projects))
+        if not form.project_id.data or form.project_id.data == 0:
+            form.project_id.data = single_proj
+        disable_project = True
 
     selected_project_id = None
     selected_district_id = None
@@ -5258,22 +5273,22 @@ def assign_driver_to_vehicle_new():
                 form.district_id.choices = [(0, '-- Select District --')]
             if not form.vehicle_id.choices:
                 form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
-            return render_template('assign_driver_to_vehicle_new.html', form=form)
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
 
         current_count = Driver.query.filter_by(vehicle_id=vehicle.id).count()
         if current_count >= (vehicle.driver_capacity or 1):
             flash(f"Vehicle capacity ({vehicle.driver_capacity or 1}) already reached!", "danger")
-            return render_template('assign_driver_to_vehicle_new.html', form=form)
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
 
         shift_taken = Driver.query.filter_by(vehicle_id=vehicle.id, shift=form.shift.data).first()
         if shift_taken:
             flash(f"{form.shift.data} shift already assigned to this vehicle!", "danger")
-            return render_template('assign_driver_to_vehicle_new.html', form=form)
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
 
         cap = vehicle.driver_capacity or 1
         if cap == 1 and form.shift.data != 'Morning':
             flash("Is vehicle ki capacity 1 hai — sirf Morning shift allowed.", "danger")
-            return render_template('assign_driver_to_vehicle_new.html', form=form)
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
 
         try:
             driver.vehicle_id = vehicle.id
@@ -5292,7 +5307,7 @@ def assign_driver_to_vehicle_new():
     if not form.district_id.choices: form.district_id.choices = [(0, '-- Select District --')]
     if not form.vehicle_id.choices: form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
 
-    return render_template('assign_driver_to_vehicle_new.html', form=form)
+    return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
 
 @app.route('/get_vehicle_capacity_info/<int:vehicle_id>')
 def get_vehicle_capacity_info(vehicle_id):
@@ -5845,10 +5860,32 @@ def vehicle_transfers():
 
 @app.route('/vehicle-transfer/new', methods=['GET', 'POST'])
 def vehicle_transfer_new():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     form = VehicleTransferForm()
-    all_projects = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    proj_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    all_projects = [(p.id, p.name) for p in proj_q.all()]
     form.from_project_id.choices = [(0, '-- Select From Project --')] + all_projects
     form.new_project_id.choices = [(0, '-- Select New Project --')] + all_projects
+    
+    # Auto-select if only 1 project/district allowed
+    disable_from_project = False
+    disable_new_project = False
+    if not is_master_or_admin and len(allowed_projects) == 1:
+        single_proj = next(iter(allowed_projects))
+        if not form.from_project_id.data or form.from_project_id.data == 0:
+            form.from_project_id.data = single_proj
+        if not form.new_project_id.data or form.new_project_id.data == 0:
+            form.new_project_id.data = single_proj
+        disable_from_project = True
+        disable_new_project = True
 
     if request.method == 'POST':
         form.from_district_id.choices = [(int(request.form.get('from_district_id') or 0), '')]
@@ -5919,7 +5956,7 @@ def vehicle_transfer_new():
     if not form.new_district_id.choices: form.new_district_id.choices = [(0, '-- Select District --')]
     if not form.new_parking_id.choices: form.new_parking_id.choices = [(0, '-- Select Parking --')]
 
-    return render_template('vehicle_transfer_new.html', form=form)
+    return render_template('vehicle_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
 
 @app.route('/vehicle-transfer/edit/<int:id>', methods=['GET', 'POST'])
 def vehicle_transfer_edit(id):
@@ -6237,12 +6274,33 @@ def driver_transfers():
 
 @app.route('/driver-transfer/new', methods=['GET', 'POST'])
 def driver_transfer_new():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     form = DriverTransferForm()
 
-    form.from_project_id.choices = [(0, '-- Select Project --')] + [
-        (p.id, p.name) for p in Project.query.order_by(Project.name).all()
-    ]
-    form.new_project_id.choices = form.from_project_id.choices[:] 
+    proj_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    all_projects = [(p.id, p.name) for p in proj_q.all()]
+    form.from_project_id.choices = [(0, '-- Select Project --')] + all_projects
+    form.new_project_id.choices = [(0, '-- Select Project --')] + all_projects
+    
+    # Auto-select if only 1 project allowed
+    disable_from_project = False
+    disable_new_project = False
+    if not is_master_or_admin and len(allowed_projects) == 1:
+        single_proj = next(iter(allowed_projects))
+        if not form.from_project_id.data or form.from_project_id.data == 0:
+            form.from_project_id.data = single_proj
+        if not form.new_project_id.data or form.new_project_id.data == 0:
+            form.new_project_id.data = single_proj
+        disable_from_project = True
+        disable_new_project = True 
 
     form.new_shift.choices = [
         ('', '-- Select Shift --'),
@@ -6340,14 +6398,14 @@ def driver_transfer_new():
 
             db.session.commit()
 
-            flash(f"Driver {driver.name} transferred successfully to {new_vehicle.vehicle_no} ({form.new_shift.data} shift).", "success")
+            flash(f"Driver '{driver.name}' successfully transferred to vehicle '{new_vehicle.vehicle_no}'.", "success")
             return redirect(url_for('driver_transfers'))
 
         except Exception as e:
             db.session.rollback()
-            flash(f"Error during transfer: {str(e)}", "danger")
+            flash(f"Error: {str(e)}", "danger")
 
-    return render_template('driver_transfer_new.html', form=form)
+    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
 
 @app.route('/driver-transfer/delete/<int:id>', methods=['POST'])
 def driver_transfer_delete(id):

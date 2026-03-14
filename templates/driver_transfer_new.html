@@ -146,7 +146,7 @@
                         
                         <div class="form-group-custom">
                             <label>Select Project</label>
-                            {{ form.from_project_id(class="form-select select2-enable", id="from_project") }}
+                            {{ form.from_project_id(class="form-select select2-enable", id="from_project", disabled=disable_from_project) }}
                         </div>
 
                         <div class="form-group-custom">
@@ -175,7 +175,7 @@
                             <div class="col-6">
                                 <div class="form-group-custom">
                                     <label>New Project</label>
-                                    {{ form.new_project_id(class="form-select select2-enable", id="new_project") }}
+                                    {{ form.new_project_id(class="form-select select2-enable", id="new_project", disabled=disable_new_project) }}
                                 </div>
                             </div>
                             <div class="col-6">
