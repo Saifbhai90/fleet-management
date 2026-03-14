@@ -12078,13 +12078,71 @@ def report_expiry():
 @app.route('/reports/parking-utilization')
 def report_parking_utilization():
     from sqlalchemy import func
-    # B-08: Replace N+1 loop with a single aggregate query
-    occupied_counts = dict(
-        db.session.query(Vehicle.parking_station_id, func.count(Vehicle.id))
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
+    # Get filter parameters
+    from_date_str = (request.args.get('from_date') or '').strip()
+    to_date_str = (request.args.get('to_date') or '').strip()
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+    
+    from_date = parse_date(from_date_str) if from_date_str else None
+    to_date = parse_date(to_date_str) if to_date_str else None
+    
+    # Base query for occupied counts
+    vehicle_query = db.session.query(Vehicle.parking_station_id, func.count(Vehicle.id))\
         .filter(Vehicle.parking_station_id.isnot(None))
-        .group_by(Vehicle.parking_station_id).all()
-    )
-    stations = ParkingStation.query.order_by(ParkingStation.name).all()
+    
+    # Apply user data scope
+    if not is_master_or_admin:
+        if allowed_projects:
+            vehicle_query = vehicle_query.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            vehicle_query = vehicle_query.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    
+    # Apply filters
+    if project_id:
+        vehicle_query = vehicle_query.filter(Vehicle.project_id == project_id)
+    if district_id:
+        vehicle_query = vehicle_query.filter(Vehicle.district_id == district_id)
+    if vehicle_id:
+        vehicle_query = vehicle_query.filter(Vehicle.id == vehicle_id)
+    if from_date:
+        vehicle_query = vehicle_query.filter(Vehicle.active_date >= from_date)
+    if to_date:
+        vehicle_query = vehicle_query.filter(Vehicle.active_date <= to_date)
+    
+    occupied_counts = dict(vehicle_query.group_by(Vehicle.parking_station_id).all())
+    
+    # Filter stations by user scope
+    stations_query = ParkingStation.query
+    if not is_master_or_admin:
+        if allowed_districts:
+            stations_query = stations_query.filter(ParkingStation.district_id.in_(list(allowed_districts)))
+    if district_id:
+        stations_query = stations_query.filter(ParkingStation.district_id == district_id)
+    
+    stations = stations_query.order_by(ParkingStation.name).all()
     data = [
         {
             'station': s,
@@ -12093,7 +12151,44 @@ def report_parking_utilization():
         }
         for s in stations
     ]
-    return render_template('report_parking_utilization.html', data=data)
+    
+    # Prepare dropdown choices
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+    
+    vehicle_q = Vehicle.query.filter(Vehicle.active_date.isnot(None))
+    if not is_master_or_admin:
+        if allowed_projects:
+            vehicle_q = vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    if project_id:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
+    if district_id:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
+    
+    return render_template(
+        'report_parking_utilization.html',
+        data=data,
+        from_date=from_date_str,
+        to_date=to_date_str,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        vehicle_choices=vehicle_choices,
+        disable_project=disable_project,
+        disable_district=disable_district,
+    )
 
 
 # ════════════════════════════════════════════════════════════════════════════════
