@@ -6133,6 +6133,15 @@ def get_available_shifts(vehicle_id):
 
 @app.route('/driver-transfers')
 def driver_transfers():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     # Optional filters: Project + District (destination side)
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
@@ -6141,6 +6150,12 @@ def driver_transfers():
     sort_order = request.args.get('sort_order', 'desc')
 
     query = DriverTransfer.query
+    
+    # Apply user data scope
+    if not is_master_or_admin:
+        if allowed_vehicles:
+            query = query.filter(DriverTransfer.new_vehicle_id.in_(list(allowed_vehicles)))
+    
     if project_id:
         query = query.filter(DriverTransfer.new_project_id == project_id)
     if district_id:
