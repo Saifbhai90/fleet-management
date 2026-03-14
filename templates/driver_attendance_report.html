@@ -23,7 +23,7 @@
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">Project</label>
-            <select name="project_id" id="reportProjectSelect" class="form-select">
+            <select name="project_id" id="reportProjectSelect" class="form-select" {% if disable_project %}disabled{% endif %}>
               {% for val, label in form.project_id.choices %}
                 <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -31,7 +31,7 @@
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">District</label>
-            <select name="district_id" id="reportDistrictSelect" class="form-select">
+            <select name="district_id" id="reportDistrictSelect" class="form-select" {% if disable_district %}disabled{% endif %}>
               {% for val, label in form.district_id.choices %}
                 <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}

@@ -7687,6 +7687,19 @@ def driver_attendance_mark():
     shift = (request.args.get('shift') or request.form.get('shift') or '').strip()
     driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
     search = (request.args.get('search') or request.form.get('search') or '').strip()
+    
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if scope_projects and len(scope_projects) == 1:
+        if not project_id or project_id == 0:
+            project_id = next(iter(scope_projects))
+        disable_project = True
+    if scope_districts and len(scope_districts) == 1:
+        if not district_id or district_id == 0:
+            district_id = next(iter(scope_districts))
+        disable_district = True
+    
     if project_id == 0:
         project_id = None
     if district_id == 0:
@@ -7878,7 +7891,7 @@ def driver_attendance_mark():
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
-    return render_template('driver_attendance_mark.html', form=form, view_date=view_date, drivers=drivers, existing=existing, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, status_choices=ATTENDANCE_STATUS_CHOICES, vehicles=vehicles, vehicle_drivers=vehicle_drivers, has_single_scope=has_single_scope)
+    return render_template('driver_attendance_mark.html', form=form, view_date=view_date, drivers=drivers, existing=existing, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, status_choices=ATTENDANCE_STATUS_CHOICES, vehicles=vehicles, vehicle_drivers=vehicle_drivers, has_single_scope=has_single_scope, disable_project=disable_project, disable_district=disable_district)
 
 
 @app.route('/driver-attendance/bulk-off', methods=['GET', 'POST'])
@@ -8851,10 +8864,22 @@ def driver_attendance_report():
     if has_single_scope and scope_vehicles:
         single_vehicle = Vehicle.query.get(scope_vehicles[0])
 
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if scope_projects and len(scope_projects) == 1:
+        disable_project = True
+    if scope_districts and len(scope_districts) == 1:
+        disable_district = True
+    
     project_query = Project.query.filter(Project.company_id.isnot(None))
     if scope_projects:
         project_query = project_query.filter(Project.id.in_(scope_projects))
     form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_query.order_by(Project.name).all()]
+    
+    # Auto-select project if only 1 available
+    if disable_project and request.method == 'GET':
+        form.project_id.data = scope_projects[0]
 
     # District choices: project ke hisaab se, warna scope/districts ke hisaab se
     if request.method == 'POST':
@@ -8980,7 +9005,7 @@ def driver_attendance_report():
                 'total_marked': len(rows),
                 'days_in_month': ndays,
             })
-    return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices)
+    return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices, disable_project=disable_project, disable_district=disable_district)
 
 
 # ─── Task Report ─────────────────────────────────
