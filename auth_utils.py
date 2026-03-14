@@ -497,3 +497,113 @@ def verify_trusted_device_token(token, secret_key):
     except Exception:
         pass
     return None
+
+
+# ── Data Context & Auto-Fill Policy ────────────────────────────────────────
+def get_user_context(user_id):
+    """
+    Fetch user's assigned Districts, Projects, Vehicles, Shifts based on Employee/Driver records.
+    Returns dict with:
+    - allowed_projects: set of project IDs
+    - allowed_districts: set of district IDs
+    - allowed_vehicles: set of vehicle IDs
+    - allowed_shifts: set of shift names
+    - allowed_parking: set of parking station IDs
+    - is_employee: bool
+    - is_driver: bool
+    - is_master_or_admin: bool
+    - employee_record: Employee object or None
+    - driver_record: Driver object or None
+    - latest_transfer: DriverTransfer or None (for drivers)
+    """
+    from models import User, Employee, Driver, DriverTransfer
+    from sqlalchemy import func
+    
+    context = {
+        'allowed_projects': set(),
+        'allowed_districts': set(),
+        'allowed_vehicles': set(),
+        'allowed_shifts': set(),
+        'allowed_parking': set(),
+        'is_employee': False,
+        'is_driver': False,
+        'is_master_or_admin': False,
+        'employee_record': None,
+        'driver_record': None,
+        'latest_transfer': None,
+    }
+    
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return context
+        
+        # Check if Master or Admin (no restrictions)
+        role_name = (user.role.name if user.role else '').strip()
+        if role_name in ['Master', 'Admin']:
+            context['is_master_or_admin'] = True
+            return context
+        
+        # CNIC variants for matching
+        username = (user.username or '').strip()
+        cnic_variants = [username, username.replace('-', '')]
+        
+        # Employee assignments (projects/districts)
+        emp = None
+        for c in cnic_variants:
+            emp = Employee.query.filter(func.lower(Employee.cnic_no) == c.lower()).first()
+            if emp:
+                break
+        
+        if emp:
+            context['is_employee'] = True
+            context['employee_record'] = emp
+            for p in (emp.projects or []):
+                if p and p.id:
+                    context['allowed_projects'].add(p.id)
+            for d in (emp.districts or []):
+                if d and d.id:
+                    context['allowed_districts'].add(d.id)
+        
+        # Driver assignments (CURRENT active assignment from latest transfer or Driver model)
+        drv = None
+        for c in cnic_variants:
+            drv = Driver.query.filter(func.lower(Driver.cnic_no) == c.lower()).first()
+            if drv:
+                break
+        
+        if drv:
+            context['is_driver'] = True
+            context['driver_record'] = drv
+            
+            # Get latest transfer record to determine current assignment
+            latest_transfer = DriverTransfer.query.filter_by(
+                driver_id=drv.id
+            ).order_by(DriverTransfer.transfer_date.desc()).first()
+            
+            if latest_transfer:
+                context['latest_transfer'] = latest_transfer
+                # Use new_ fields from latest transfer as current assignment
+                if latest_transfer.new_project_id:
+                    context['allowed_projects'].add(latest_transfer.new_project_id)
+                if latest_transfer.new_district_id:
+                    context['allowed_districts'].add(latest_transfer.new_district_id)
+                if latest_transfer.new_vehicle_id:
+                    context['allowed_vehicles'].add(latest_transfer.new_vehicle_id)
+                if latest_transfer.new_shift:
+                    context['allowed_shifts'].add(latest_transfer.new_shift)
+            else:
+                # No transfer history - use Driver model fields as current assignment
+                if getattr(drv, 'project_id', None):
+                    context['allowed_projects'].add(drv.project_id)
+                if getattr(drv, 'district_id', None):
+                    context['allowed_districts'].add(drv.district_id)
+                if getattr(drv, 'vehicle_id', None):
+                    context['allowed_vehicles'].add(drv.vehicle_id)
+                if getattr(drv, 'shift', None) and drv.shift.strip():
+                    context['allowed_shifts'].add(drv.shift.strip())
+    
+    except Exception:
+        pass
+    
+    return context
