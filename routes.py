@@ -7263,37 +7263,6 @@ def driver_rejoin_list():
         disable_project=disable_project,
         disable_district=disable_district,
     )
-    search = request.args.get('search', '').strip()
-    query = DriverStatusChange.query.filter_by(action_type='rejoin') \
-                         .join(Driver, DriverStatusChange.driver_id == Driver.id) \
-                         .outerjoin(Project, DriverStatusChange.new_project_id == Project.id) \
-                         .outerjoin(Vehicle, DriverStatusChange.new_vehicle_id == Vehicle.id)
-    if search:
-        like = f'%{search}%'
-        query = query.filter(
-            or_(
-                Driver.name.ilike(like),
-                Driver.driver_id.ilike(like),
-                Project.name.ilike(like),
-                Vehicle.vehicle_no.ilike(like)
-            )
-        )
-    records = query.order_by(DriverStatusChange.change_date.desc()).all()
-    headers = ['S.No', 'Rejoin Date', 'Driver Name', 'Driver ID', 'New Project', 'New Vehicle', 'Shift']
-    rows = []
-    for i, r in enumerate(records, 1):
-        rows.append([
-            i,
-            r.change_date.strftime('%Y-%m-%d') if r.change_date else '',
-            r.driver.name if r.driver else '',
-            r.driver.driver_id if r.driver else '',
-            r.new_project.name if r.new_project else 'N/A',
-            r.new_vehicle.vehicle_no if r.new_vehicle else 'N/A',
-            r.new_shift or ''
-        ])
-    filename = 'driver_rejoin_history.xlsx' if not search else f'driver_rejoin_{search[:30].replace("/", "-")}.xlsx'
-    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
-
 
 @app.route('/driver/rejoin/print')
 def driver_rejoin_print():
