@@ -4627,6 +4627,12 @@ def _assign_vehicle_to_district_data(search=None, project_id=None, district_id=N
     if sort_order == 'asc':
         query = query.order_by(order_col.asc())
     else:
+        query = query.order_by(order_col.desc())
+    
+    return query.all()
+
+
+@app.route('/assign_vehicle_to_district')
 def assign_vehicle_to_district():
     from auth_utils import get_user_context
     
@@ -5319,14 +5325,42 @@ def get_vehicle_parking(vehicle_id):
 
 @app.route('/assign_driver_to_vehicle')
 def assign_driver_to_vehicle_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     search = request.args.get('search', '').strip()
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
     sort_by = request.args.get('sort_by', 'driver')
     sort_order = request.args.get('sort_order', 'asc')
     assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id, sort_by=sort_by, sort_order=sort_order)
-    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
-    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    
+    # Apply user data scope to assigned drivers
+    if not is_master_or_admin:
+        if allowed_projects or allowed_districts or allowed_vehicles:
+            assigned_drivers = [
+                d for d in assigned_drivers
+                if (not allowed_projects or (d.project_id and d.project_id in allowed_projects)) and
+                   (not allowed_districts or (d.district_id and d.district_id in allowed_districts)) and
+                   (not allowed_vehicles or (d.vehicle_id and d.vehicle_id in allowed_vehicles))
+            ]
+    
+    # Filter dropdown choices by user scope
+    project_q = Project.query.filter(Project.company_id.isnot(None))
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
     return render_template(
         'assign_driver_to_vehicle_list.html',
         assigned_drivers=assigned_drivers,
