@@ -7115,6 +7115,7 @@ def driver_rejoin_view(id):
     
     # 2. Record ko 'driver_rejoin_view.html' template par bhej do
     return render_template('driver_rejoin_view.html', record=record)
+@app.route('/driver-attendance/')
 def driver_attendance_list():
     from auth_utils import get_user_context
     
