@@ -11994,27 +11994,37 @@ def report_expiry():
     driver_q = Driver.query.filter(
         Driver.status == 'Active',
         Driver.vehicle_id.isnot(None),
-    )
+    ).outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
     
     # Apply user data scope (non-Master/Admin users)
     if not is_master_or_admin:
         if allowed_projects:
-            driver_q = driver_q.filter(Driver.project_id.in_(list(allowed_projects)))
+            driver_q = driver_q.filter(
+                or_(Driver.project_id.in_(list(allowed_projects)),
+                    Vehicle.project_id.in_(list(allowed_projects)))
+            )
         if allowed_districts:
-            driver_q = driver_q.filter(Driver.district_id.in_(list(allowed_districts)))
+            driver_q = driver_q.filter(
+                or_(Driver.district_id.in_(list(allowed_districts)),
+                    Vehicle.district_id.in_(list(allowed_districts)))
+            )
         if allowed_vehicles:
             driver_q = driver_q.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
     
     if project_id:
-        driver_q = driver_q.filter(Driver.project_id == project_id)
+        driver_q = driver_q.filter(
+            or_(Driver.project_id == project_id, Vehicle.project_id == project_id)
+        )
     if district_id:
-        driver_q = driver_q.filter(Driver.district_id == district_id)
+        driver_q = driver_q.filter(
+            or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
+        )
     if vehicle_id:
         driver_q = driver_q.filter(Driver.vehicle_id == vehicle_id)
     if shift:
         driver_q = driver_q.filter(Driver.shift == shift)
 
-    drivers = driver_q.all()
+    drivers = driver_q.distinct().all()
     expiring = []
     for d in drivers:
         row = {'driver': d, 'license_expiry': d.license_expiry_date, 'cnic_expiry': d.cnic_expiry_date}
