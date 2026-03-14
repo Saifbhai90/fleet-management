@@ -238,6 +238,44 @@ def api_global_search():
                       'vehicle_type': v.vehicle_type} for v in vehicles],
     })
 
+@app.route('/api/fleet-map-pins')
+def api_fleet_map_pins():
+    """Return latest GPS check-in coordinates for active drivers. Used by Live Fleet Map on dashboard."""
+    from sqlalchemy import func
+    try:
+        latest_subq = db.session.query(
+            DriverAttendance.driver_id,
+            func.max(DriverAttendance.id).label('max_id')
+        ).filter(
+            DriverAttendance.check_in_latitude.isnot(None),
+            DriverAttendance.check_in_longitude.isnot(None)
+        ).group_by(DriverAttendance.driver_id).subquery()
+
+        rows = db.session.query(
+            DriverAttendance, Driver
+        ).join(
+            latest_subq, DriverAttendance.id == latest_subq.c.max_id
+        ).join(
+            Driver, Driver.id == DriverAttendance.driver_id
+        ).filter(Driver.status == 'Active').all()
+
+        pins = []
+        for att, drv in rows:
+            veh = Vehicle.query.get(drv.vehicle_id) if drv.vehicle_id else None
+            proj = Project.query.get(att.project_id) if att.project_id else None
+            pins.append({
+                'lat': float(att.check_in_latitude),
+                'lng': float(att.check_in_longitude),
+                'driver': drv.name,
+                'driver_id': drv.driver_id or '',
+                'vehicle': veh.vehicle_no if veh else '—',
+                'project': proj.name if proj else '—',
+                'date': att.attendance_date.strftime('%d %b %Y') if att.attendance_date else '',
+            })
+        return jsonify({'ok': True, 'pins': pins})
+    except Exception as e:
+        return jsonify({'ok': False, 'pins': [], 'error': str(e)})
+
 @app.route('/api/check-cnic')
 def api_check_cnic():
     """Returns { exists: bool, message: str }. Call with ?cnic=xxx&exclude_driver_id=1 (optional, for edit)."""
@@ -10826,14 +10864,34 @@ def report_project_summary():
 
 @app.route('/reports/district-summary')
 def report_district_summary():
+    from sqlalchemy import func
+    # B-07: Replace N+1 loop (3 queries × N districts) with 3 aggregate queries total
+    vehicle_counts = dict(
+        db.session.query(Vehicle.district_id, func.count(Vehicle.id))
+        .filter(Vehicle.district_id.isnot(None))
+        .group_by(Vehicle.district_id).all()
+    )
+    driver_counts = dict(
+        db.session.query(Driver.district_id, func.count(Driver.id))
+        .filter(Driver.district_id.isnot(None))
+        .group_by(Driver.district_id).all()
+    )
+    project_counts = dict(
+        db.session.query(
+            project_district.c.district_id,
+            func.count(project_district.c.project_id)
+        ).group_by(project_district.c.district_id).all()
+    )
     districts = District.query.order_by(District.name).all()
-    data = []
-    for d in districts:
-        vehicle_count = Vehicle.query.filter_by(district_id=d.id).count()
-        driver_count = Driver.query.filter_by(district_id=d.id).count()
-        project_ids = db.session.query(project_district.c.project_id).filter(project_district.c.district_id == d.id).distinct().all()
-        project_count = len(project_ids)
-        data.append({'district': d, 'vehicle_count': vehicle_count, 'driver_count': driver_count, 'project_count': project_count})
+    data = [
+        {
+            'district': d,
+            'vehicle_count': vehicle_counts.get(d.id, 0),
+            'driver_count': driver_counts.get(d.id, 0),
+            'project_count': project_counts.get(d.id, 0),
+        }
+        for d in districts
+    ]
     return render_template('report_district_summary.html', data=data)
 
 
@@ -10986,11 +11044,22 @@ def report_expiry():
 
 @app.route('/reports/parking-utilization')
 def report_parking_utilization():
+    from sqlalchemy import func
+    # B-08: Replace N+1 loop with a single aggregate query
+    occupied_counts = dict(
+        db.session.query(Vehicle.parking_station_id, func.count(Vehicle.id))
+        .filter(Vehicle.parking_station_id.isnot(None))
+        .group_by(Vehicle.parking_station_id).all()
+    )
     stations = ParkingStation.query.order_by(ParkingStation.name).all()
-    data = []
-    for s in stations:
-        occupied = Vehicle.query.filter_by(parking_station_id=s.id).count()
-        data.append({'station': s, 'occupied': occupied, 'available': s.capacity - occupied})
+    data = [
+        {
+            'station': s,
+            'occupied': occupied_counts.get(s.id, 0),
+            'available': s.capacity - occupied_counts.get(s.id, 0),
+        }
+        for s in stations
+    ]
     return render_template('report_parking_utilization.html', data=data)
 
 
