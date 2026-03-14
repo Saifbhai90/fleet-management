@@ -28,6 +28,7 @@
                 <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
+            {% if disable_project %}<input type="hidden" name="project_id" value="{{ form.project_id.data or 0 }}">{% endif %}
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">District</label>
@@ -36,6 +37,7 @@
                 <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
+            {% if disable_district %}<input type="hidden" name="district_id" value="{{ form.district_id.data or 0 }}">{% endif %}
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">Vehicle</label>

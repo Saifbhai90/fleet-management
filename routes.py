@@ -8853,9 +8853,11 @@ def driver_attendance_report():
         project_query = project_query.filter(Project.id.in_(scope_projects))
     form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_query.order_by(Project.name).all()]
     
-    # Auto-select project if only 1 available
-    if disable_project and request.method == 'GET':
+    # Auto-select if only 1 available (GET and POST both)
+    if disable_project:
         form.project_id.data = scope_projects[0]
+    if disable_district:
+        form.district_id.data = scope_districts[0]
 
     # District choices: project ke hisaab se, warna scope/districts ke hisaab se
     if request.method == 'POST':
@@ -8863,6 +8865,9 @@ def driver_attendance_report():
             pid = request.form.get('project_id', type=int) or 0
         except (TypeError, ValueError):
             pid = 0
+        # If project select was disabled, value not submitted - use scoped value
+        if not pid and disable_project and scope_projects:
+            pid = scope_projects[0]
         if pid and pid != 0:
             districts_query = District.query.join(project_district).filter(project_district.c.project_id == pid)
         else:
