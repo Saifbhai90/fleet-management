@@ -5326,20 +5326,38 @@ def get_vehicle_parking(vehicle_id):
 @app.route('/assign_driver_to_vehicle')
 def assign_driver_to_vehicle_list():
     from auth_utils import get_user_context
+    import traceback
     
-    user_id = session.get('user_id')
-    user_context = get_user_context(user_id) if user_id else {}
-    allowed_projects = user_context.get('allowed_projects', set())
-    allowed_districts = user_context.get('allowed_districts', set())
-    allowed_vehicles = user_context.get('allowed_vehicles', set())
-    is_master_or_admin = user_context.get('is_master_or_admin', False)
-    
-    search = request.args.get('search', '').strip()
-    project_id = request.args.get('project_id', type=int)
-    district_id = request.args.get('district_id', type=int)
-    sort_by = request.args.get('sort_by', 'driver')
-    sort_order = request.args.get('sort_order', 'asc')
-    assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id, sort_by=sort_by, sort_order=sort_order)
+    try:
+        print(f"DEBUG: assign_driver_to_vehicle_list called")
+        print(f"DEBUG: Session user_id: {session.get('user_id')}")
+        print(f"DEBUG: Session permissions: {session.get('permissions')}")
+        
+        user_id = session.get('user_id')
+        user_context = get_user_context(user_id) if user_id else {}
+        allowed_projects = user_context.get('allowed_projects', set())
+        allowed_districts = user_context.get('allowed_districts', set())
+        allowed_vehicles = user_context.get('allowed_vehicles', set())
+        is_master_or_admin = user_context.get('is_master_or_admin', False)
+        
+        print(f"DEBUG: User context retrieved - is_master_or_admin: {is_master_or_admin}")
+        print(f"DEBUG: Allowed projects: {allowed_projects}")
+        print(f"DEBUG: Allowed districts: {allowed_districts}")
+        
+        search = request.args.get('search', '').strip()
+        project_id = request.args.get('project_id', type=int)
+        district_id = request.args.get('district_id', type=int)
+        sort_by = request.args.get('sort_by', 'driver')
+        sort_order = request.args.get('sort_order', 'asc')
+        
+        print(f"DEBUG: Calling _assign_driver_to_vehicle_data...")
+        assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id, sort_by=sort_by, sort_order=sort_order)
+        print(f"DEBUG: Retrieved {len(assigned_drivers)} assigned drivers")
+    except Exception as e:
+        print(f"ERROR in assign_driver_to_vehicle_list: {str(e)}")
+        print(traceback.format_exc())
+        flash(f"Error loading page: {str(e)}", "danger")
+        return redirect(url_for('dashboard'))
     
     # Apply user data scope to assigned drivers
     if not is_master_or_admin:
