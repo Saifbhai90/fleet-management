@@ -6922,6 +6922,19 @@ def driver_job_left_list():
     q = (request.args.get('q') or '').strip()
     from_date_str = (request.args.get('from_date') or '').strip()
     to_date_str = (request.args.get('to_date') or '').strip()
+    
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
 
     from_date = None
     to_date = None
@@ -6963,8 +6976,16 @@ def driver_job_left_list():
 
     left_records = query.order_by(DriverStatusChange.change_date.desc()).all()
 
-    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    # Filter dropdown choices by user scope
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
 
     return render_template(
         'driver_job_left_list.html',
@@ -6977,6 +6998,8 @@ def driver_job_left_list():
         to_date=to_date_str,
         project_choices=projects,
         district_choices=districts,
+        disable_project=disable_project,
+        disable_district=disable_district,
     )
 
 @app.route('/driver-job-left/view/<int:id>')
@@ -7160,6 +7183,19 @@ def driver_rejoin_list():
     district_id = request.args.get('district_id', type=int) or 0
     from_date_str = (request.args.get('from_date') or '').strip()
     to_date_str = (request.args.get('to_date') or '').strip()
+    
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
 
     from_date = None
     to_date = None
@@ -7202,8 +7238,16 @@ def driver_rejoin_list():
 
     rejoin_records = query.order_by(DriverStatusChange.change_date.desc()).all()
 
-    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    # Filter dropdown choices by user scope
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
 
     return render_template(
         'driver_rejoin_list.html',
@@ -7216,11 +7260,9 @@ def driver_rejoin_list():
         to_date=to_date_str,
         project_choices=projects,
         district_choices=districts,
+        disable_project=disable_project,
+        disable_district=disable_district,
     )
-
-
-@app.route('/driver/rejoin/export')
-def driver_rejoin_export():
     search = request.args.get('search', '').strip()
     query = DriverStatusChange.query.filter_by(action_type='rejoin') \
                          .join(Driver, DriverStatusChange.driver_id == Driver.id) \
