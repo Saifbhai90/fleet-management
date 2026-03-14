@@ -11063,6 +11063,11 @@ def report_vehicle_profile(vehicle_id):
 @app.route('/reports/expiry')
 def report_expiry():
     from datetime import timedelta
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    
     today = date.today()
     # days=None or 0 → current (already expired) only; days>0 → expired + next N days
     days = request.args.get('days', type=int)
@@ -11075,12 +11080,29 @@ def report_expiry():
     shift = (request.args.get('shift') or '').strip()
     end = today + timedelta(days=days) if days > 0 else today
 
+    # ── Data Context Enforcement ──────────────────────────────────────────
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    allowed_shifts = user_context.get('allowed_shifts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
     # Base driver query with optional filters
     # Sirf woh drivers jinke sath koi vehicle assigned hai
     driver_q = Driver.query.filter(
         Driver.status == 'Active',
         Driver.vehicle_id.isnot(None),
     )
+    
+    # Apply user data scope (non-Master/Admin users)
+    if not is_master_or_admin:
+        if allowed_projects:
+            driver_q = driver_q.filter(Driver.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            driver_q = driver_q.filter(Driver.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            driver_q = driver_q.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+    
     if project_id:
         driver_q = driver_q.filter(Driver.project_id == project_id)
     if district_id:
@@ -11111,19 +11133,32 @@ def report_expiry():
 
         expiring.append(row)
 
-    # Dropdown choices
-    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    # Dropdown choices (scoped to user's assignments)
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+    
     vehicle_choices = [(0, '-- All Vehicles --')]
     base_vehicle_q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+    if not is_master_or_admin and allowed_vehicles:
+        base_vehicle_q = base_vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
     if project_id:
         base_vehicle_q = base_vehicle_q.filter(Vehicle.project_id == project_id)
     if district_id:
         base_vehicle_q = base_vehicle_q.filter(Vehicle.district_id == district_id)
     vehicle_choices += [(v.id, v.vehicle_no) for v in base_vehicle_q.order_by(Vehicle.vehicle_no).all()]
 
-    # Shift list from active drivers
-    shift_rows = db.session.query(Driver.shift).filter(Driver.shift.isnot(None), Driver.shift != '').distinct().order_by(Driver.shift).all()
+    # Shift list from active drivers (scoped)
+    shift_q = db.session.query(Driver.shift).filter(Driver.shift.isnot(None), Driver.shift != '')
+    if not is_master_or_admin and allowed_shifts:
+        shift_q = shift_q.filter(Driver.shift.in_(list(allowed_shifts)))
+    shift_rows = shift_q.distinct().order_by(Driver.shift).all()
     shift_choices = [('', '-- All Shifts --')] + [(s[0], s[0]) for s in shift_rows]
 
     return render_template(
@@ -11139,6 +11174,7 @@ def report_expiry():
         district_id=district_id,
         vehicle_id=vehicle_id,
         shift=shift,
+        user_context=user_context,
     )
 
 
