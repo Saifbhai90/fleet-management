@@ -889,6 +889,28 @@ def _do_login_session(user, req):
     except Exception:
         db.session.rollback()
 
+@app.route('/set-new-password', methods=['GET', 'POST'])
+def set_new_password():
+    """First-time password set (after login with 123). User not fully logged in yet."""
+    user_id = session.get('must_set_password_user_id')
+    if not user_id:
+        flash('Invalid session. Please login again.', 'danger')
+        return redirect(url_for('login'))
+    user = User.query.get_or_404(user_id)
+    form = SetNewPasswordForm()
+    if form.validate_on_submit():
+        if form.new_password.data != form.confirm_password.data:
+            flash('Passwords do not match.', 'danger')
+            return render_template('set_new_password.html', form=form)
+        user.password_hash = generate_password_hash(form.new_password.data)
+        user.force_password_change = False
+        db.session.commit()
+        session.pop('must_set_password_user_id', None)
+        flash('Password set successfully. Please login with your new password.', 'success')
+        return redirect(url_for('login'))
+    return render_template('set_new_password.html', form=form, username=user.username)
+
+
 @app.route('/account/change-password', methods=['GET', 'POST'])
 def account_change_password():
     user_id = session.get('user_id')
