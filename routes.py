@@ -3428,7 +3428,7 @@ def role_form():
             blocked = [i for i in perm_ids if i not in allowed_permission_ids]
             if blocked:
                 blocked_names = [p.name for p in Permission.query.filter(Permission.id.in_(blocked)).all()]
-                flash(f'Security: {len(blocked)} permission(s) blocked — you cannot grant access you do not have: {', '.join(blocked_names[:5])}.', 'warning')
+                flash(f'Security: {len(blocked)} permission(s) blocked — you cannot grant access you do not have: {", ".join(blocked_names[:5])}.', 'warning')
             perm_ids = [i for i in perm_ids if i in allowed_permission_ids]
         if perm_ids:
             from permissions_config import expand_permission_dependencies
@@ -3494,7 +3494,7 @@ def role_edit(pk):
             blocked_ids     = submitted_ids - allowed_ids
             if blocked_ids:
                 blocked_names = [p.name for p in Permission.query.filter(Permission.id.in_(blocked_ids)).all()]
-                flash(f'Security: {len(blocked_ids)} permission(s) blocked — you cannot grant access you do not have: {', '.join(blocked_names[:5])}.', 'warning')
+                flash(f'Security: {len(blocked_ids)} permission(s) blocked — you cannot grant access you do not have: {", ".join(blocked_names[:5])}.', 'warning')
             submitted_allowed = submitted_ids & allowed_ids
             codes = {p.code for p in Permission.query.filter(Permission.id.in_(submitted_allowed)).all()}
             expanded = expand_permission_dependencies(codes)
