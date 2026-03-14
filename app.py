@@ -155,6 +155,13 @@ def inject_all_districts():
         districts = []
     return dict(all_districts=districts)
 
+@app.errorhandler(Exception)
+def _debug_error_handler(e):
+    """Temporary: show full traceback so we can diagnose the 500. Remove after fix."""
+    import traceback
+    tb = traceback.format_exc()
+    return f'<pre style="white-space:pre-wrap;font-size:13px;">{tb}</pre>', 500
+
 # Create all tables if not exist (backward compatibility; new changes use migrations)
 _run_startup_tasks = (not app.debug) or (os.environ.get('WERKZEUG_RUN_MAIN') == 'true')
 if _run_startup_tasks:
