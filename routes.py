@@ -6706,6 +6706,14 @@ def driver_rejoin_new():
 
 @app.route('/driver/job-left/list')
 def driver_job_left_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     # Optional filters: Project + District + Date Range + Search
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
@@ -6936,6 +6944,14 @@ def driver_job_left_print():
 # routes.py mein ye function add karein
 @app.route('/driver/rejoin/list')
 def driver_rejoin_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     # Filters: date range, project, district, search
     search = (request.args.get('search') or '').strip()
     project_id = request.args.get('project_id', type=int) or 0
