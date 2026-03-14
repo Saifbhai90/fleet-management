@@ -368,20 +368,55 @@ def dashboard():
     except Exception:
         vehicle_util_data = [0, 0, 0]
 
-    # ── Top-6 projects by fuel spend this month (bar chart) ──────────────────
+    # ── Financial Health: Receipts vs Expenses per project this month ────
     try:
         from sqlalchemy import extract as _extr
-        _proj_rows = db.session.query(
+        from models import JournalEntry, JournalEntryLine
+        # Receipts per project
+        _rec_rows = db.session.query(
             Project.name,
-            func.sum(FuelExpense.amount).label('total')
-        ).join(FuelExpense, FuelExpense.project_id == Project.id).filter(
-            _extr('month', FuelExpense.fueling_date) == today_dt.month,
-            _extr('year',  FuelExpense.fueling_date) == today_dt.year
-        ).group_by(Project.name).order_by(func.sum(FuelExpense.amount).desc()).limit(6).all()
-        project_chart_labels = [r[0] for r in _proj_rows]
-        project_chart_values = [round(float(r[1]), 0) for r in _proj_rows]
+            func.sum(JournalEntryLine.credit).label('total_credit')
+        ).join(JournalEntry, JournalEntry.id == JournalEntryLine.journal_entry_id
+        ).join(Project, Project.id == JournalEntry.project_id).filter(
+            JournalEntry.entry_type == 'Receipt',
+            _extr('month', JournalEntry.entry_date) == today_dt.month,
+            _extr('year',  JournalEntry.entry_date) == today_dt.year,
+            JournalEntry.project_id.isnot(None)
+        ).group_by(Project.name).all()
+        # Expenses per project
+        _exp_rows = db.session.query(
+            Project.name,
+            func.sum(JournalEntryLine.debit).label('total_debit')
+        ).join(JournalEntry, JournalEntry.id == JournalEntryLine.journal_entry_id
+        ).join(Project, Project.id == JournalEntry.project_id).filter(
+            JournalEntry.entry_type.in_(['Payment', 'Expense']),
+            _extr('month', JournalEntry.entry_date) == today_dt.month,
+            _extr('year',  JournalEntry.entry_date) == today_dt.year,
+            JournalEntry.project_id.isnot(None)
+        ).group_by(Project.name).all()
+        _rec_map = {r[0]: round(float(r[1] or 0), 0) for r in _rec_rows}
+        _exp_map = {r[0]: round(float(r[1] or 0), 0) for r in _exp_rows}
+        _fin_projects = sorted(set(list(_rec_map.keys()) + list(_exp_map.keys())),
+                               key=lambda n: (_rec_map.get(n, 0) + _exp_map.get(n, 0)), reverse=True)[:6]
+        fin_chart_labels   = _fin_projects
+        fin_chart_receipts = [_rec_map.get(p, 0) for p in _fin_projects]
+        fin_chart_expenses = [_exp_map.get(p, 0) for p in _fin_projects]
+        # Fallback: if no JournalEntry data, use fuel spend per project
+        if not _fin_projects:
+            _proj_rows = db.session.query(
+                Project.name, func.sum(FuelExpense.amount).label('total')
+            ).join(FuelExpense, FuelExpense.project_id == Project.id).filter(
+                _extr('month', FuelExpense.fueling_date) == today_dt.month,
+                _extr('year',  FuelExpense.fueling_date) == today_dt.year
+            ).group_by(Project.name).order_by(func.sum(FuelExpense.amount).desc()).limit(6).all()
+            fin_chart_labels   = [r[0] for r in _proj_rows]
+            fin_chart_receipts = []
+            fin_chart_expenses = [round(float(r[1]), 0) for r in _proj_rows]
     except Exception:
-        project_chart_labels, project_chart_values = [], []
+        fin_chart_labels, fin_chart_receipts, fin_chart_expenses = [], [], []
+    # Keep legacy vars for template compatibility
+    project_chart_labels = fin_chart_labels
+    project_chart_values = fin_chart_expenses
 
     # ── Document Health: expiry in next 15 days / already expired ────────────
     try:
@@ -468,6 +503,9 @@ def dashboard():
                            vehicle_util_data=vehicle_util_data,
                            project_chart_labels=project_chart_labels,
                            project_chart_values=project_chart_values,
+                           fin_chart_labels=fin_chart_labels,
+                           fin_chart_receipts=fin_chart_receipts,
+                           fin_chart_expenses=fin_chart_expenses,
                            expiry_soon=expiry_soon,
                            expiry_already=expiry_already,
                            notifications=notifications,

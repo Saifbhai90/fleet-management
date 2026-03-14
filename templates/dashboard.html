@@ -466,21 +466,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
 
-            <!-- Top Projects by Fuel Spend -->
+            <!-- Top Projects by Financial Health -->
             <div class="col-12 col-sm-7 col-xl-7">
                 <div class="card border-0 shadow-sm h-100" style="border-radius:20px;">
                     <div class="card-body p-4">
                         <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">This Month</div>
-                        <div style="font-size:1rem;font-weight:700;color:#0f172a;margin-bottom:12px;">Top Projects · Fuel</div>
-                        {% if project_chart_labels %}
-                        <div style="position:relative;height:155px;">
+                        <div style="font-size:1rem;font-weight:700;color:#0f172a;margin-bottom:8px;">Financial Health</div>
+                        <div class="d-flex gap-3 mb-2">
+                            <span style="font-size:0.68rem;display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:2px;background:#10b981;flex-shrink:0;"></span>Receipts</span>
+                            <span style="font-size:0.68rem;display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:2px;background:#f43f5e;flex-shrink:0;"></span>Expenses</span>
+                        </div>
+                        {% if fin_chart_labels %}
+                        <div style="position:relative;height:145px;">
                             <div id="skelProj" class="skel skel-chart" style="position:absolute;inset:0;z-index:2;"></div>
                             <canvas id="projectFuelChart"></canvas>
                         </div>
                         {% else %}
-                        <div class="d-flex flex-column align-items-center justify-content-center" style="height:155px;color:#94a3b8;">
+                        <div class="d-flex flex-column align-items-center justify-content-center" style="height:145px;color:#94a3b8;">
                             <i data-lucide="bar-chart-2" style="width:36px;height:36px;opacity:0.3;"></i>
-                            <span style="font-size:0.78rem;margin-top:8px;">No fuel data this month</span>
+                            <span style="font-size:0.78rem;margin-top:8px;">No financial data this month</span>
                         </div>
                         {% endif %}
                     </div>
@@ -492,8 +496,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </div>
 
-<!-- Document Health Card -->
-{% if expiry_soon > 0 or expiry_already > 0 %}
+<!-- ═══════════════════════════════
+     DOCUMENT HEALTH CARD
+═══════════════════════════════ -->
 <div class="d-flex align-items-start gap-3 mt-3 px-3 py-3"
      style="background:linear-gradient(135deg,{% if expiry_already > 0 %}#fef2f2,#fee2e2{% else %}#fffbeb,#fef3c7{% endif %});border:2px solid {% if expiry_already > 0 %}#fca5a5{% else %}#fcd34d{% endif %};border-radius:18px;">
     <div style="width:44px;height:44px;border-radius:14px;background:{% if expiry_already > 0 %}#fee2e2{% else %}#fef3c7{% endif %};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
@@ -519,8 +524,9 @@ document.addEventListener('DOMContentLoaded', function() {
     var fuelLabels = {{ fuel_chart_labels | tojson }};
     var fuelValues = {{ fuel_chart_values | tojson }};
     var utilData   = {{ vehicle_util_data | tojson }};
-    var projLabels = {{ project_chart_labels | tojson }};
-    var projValues = {{ project_chart_values | tojson }};
+    var projLabels   = {{ fin_chart_labels   | tojson }};
+    var projReceipts = {{ fin_chart_receipts  | tojson }};
+    var projExpenses = {{ fin_chart_expenses  | tojson }};
 
     function hideSkel(id) {
         var el = document.getElementById(id);
@@ -588,33 +594,34 @@ document.addEventListener('DOMContentLoaded', function() {
         hideSkel('skelUtil');
     }
 
-    /* ── Project Fuel Bar ── */
+    /* ── Financial Health grouped bar ── */
     var projCtx = document.getElementById('projectFuelChart');
     if (projCtx && projLabels.length) {
+        var hasReceipts = projReceipts.length > 0 && projReceipts.some(function(v){ return v > 0; });
+        var datasets = [];
+        if (hasReceipts) {
+            datasets.push({
+                label: 'Receipts', data: projReceipts,
+                backgroundColor: 'rgba(16,185,129,0.75)', borderRadius: 4, borderSkipped: false
+            });
+        }
+        datasets.push({
+            label: 'Expenses', data: projExpenses,
+            backgroundColor: 'rgba(244,63,94,0.75)', borderRadius: 4, borderSkipped: false
+        });
         new Chart(projCtx, {
             type: 'bar',
-            data: {
-                labels: projLabels,
-                datasets: [{
-                    label: 'Fuel (Rs)',
-                    data: projValues,
-                    backgroundColor: [
-                        'rgba(59,130,246,0.75)','rgba(16,185,129,0.75)',
-                        'rgba(124,58,237,0.75)','rgba(234,88,12,0.75)',
-                        'rgba(220,38,38,0.75)','rgba(217,119,6,0.75)'
-                    ],
-                    borderRadius: 6, borderSkipped: false
-                }]
-            },
+            data: { labels: projLabels, datasets: datasets },
             options: {
                 indexAxis: 'y',
                 responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false }, tooltip: {
-                    callbacks: { label: function(c) { return ' Rs ' + c.raw.toLocaleString(); } }
-                }},
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function(c) { return ' ' + c.dataset.label + ': Rs ' + c.raw.toLocaleString(); } } }
+                },
                 scales: {
-                    x: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 9 },
-                         callback: function(v) { return v >= 1000 ? (v/1000).toFixed(0)+'k' : v; } } },
+                    x: { grid: { color: 'rgba(0,0,0,0.04)' }, stacked: false,
+                         ticks: { font: { size: 9 }, callback: function(v) { return v >= 1000 ? (v/1000).toFixed(0)+'k' : v; } } },
                     y: { grid: { display: false }, ticks: { font: { size: 9 } } }
                 }
             }
