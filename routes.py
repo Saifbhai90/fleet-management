@@ -10384,10 +10384,32 @@ def _apply_oil_expense_items_balance(items, reverse=False):
 
 @app.route('/oil-expenses')
 def oil_expense_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     form = OilExpenseFilterForm()
-    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
-    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in Vehicle.query.order_by(Vehicle.vehicle_no).all()]
+    
+    # Filter dropdown choices by user scope
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+    
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    
+    vehicle_q = Vehicle.query
+    if not is_master_or_admin and allowed_vehicles:
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
     from_date = request.args.get('from_date', '').strip()
     to_date = request.args.get('to_date', '').strip()
     district_id = request.args.get('district_id', type=int) or 0
@@ -10404,6 +10426,16 @@ def oil_expense_list():
             OilExpense.expense_date >= from_d,
             OilExpense.expense_date <= to_d
         )
+        
+        # Apply user data scope
+        if not is_master_or_admin:
+            if allowed_projects:
+                query = query.filter(OilExpense.project_id.in_(list(allowed_projects)))
+            if allowed_districts:
+                query = query.filter(OilExpense.district_id.in_(list(allowed_districts)))
+            if allowed_vehicles:
+                query = query.filter(OilExpense.vehicle_id.in_(list(allowed_vehicles)))
+        
         if district_id:
             query = query.filter(OilExpense.district_id == district_id)
         if project_id:
@@ -10641,10 +10673,32 @@ def api_maintenance_expense_products():
 
 @app.route('/maintenance-expenses')
 def maintenance_expense_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     form = MaintenanceExpenseFilterForm()
-    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
-    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in Vehicle.query.order_by(Vehicle.vehicle_no).all()]
+    
+    # Filter dropdown choices by user scope
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+    
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    
+    vehicle_q = Vehicle.query
+    if not is_master_or_admin and allowed_vehicles:
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
     from_date = request.args.get('from_date', '').strip()
     to_date = request.args.get('to_date', '').strip()
     district_id = request.args.get('district_id', type=int) or 0
@@ -10661,6 +10715,16 @@ def maintenance_expense_list():
             MaintenanceExpense.expense_date >= from_d,
             MaintenanceExpense.expense_date <= to_d
         )
+        
+        # Apply user data scope
+        if not is_master_or_admin:
+            if allowed_projects:
+                query = query.filter(MaintenanceExpense.project_id.in_(list(allowed_projects)))
+            if allowed_districts:
+                query = query.filter(MaintenanceExpense.district_id.in_(list(allowed_districts)))
+            if allowed_vehicles:
+                query = query.filter(MaintenanceExpense.vehicle_id.in_(list(allowed_vehicles)))
+        
         if district_id:
             query = query.filter(MaintenanceExpense.district_id == district_id)
         if project_id:
