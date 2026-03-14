@@ -353,6 +353,13 @@
         }
         .more-drawer-user strong { color: rgba(255,255,255,0.65); font-weight: 600; }
 
+        /* ─── overscroll: disable browser native pull-to-refresh everywhere ─── */
+        body { overscroll-behavior-y: none; }
+        /* Dashboard: PTR enabled via JS only (not browser native) */
+        body.page-dashboard { overscroll-behavior-y: contain; }
+        /* Sidebar scrolls independently without triggering page PTR */
+        .sidebar { overscroll-behavior-y: contain; }
+
         /* ─── Pull-to-Refresh indicator ─── */
         #pullRefreshBar {
             position: fixed;
@@ -896,7 +903,7 @@
     <link rel="stylesheet" href="/static/css/mobile_perfect.css">
     {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body{% if request.endpoint == 'dashboard' %} class="page-dashboard"{% endif %}>
 <script>if(localStorage.getItem('fleetDarkMode')==='on')document.body.classList.add('dark-mode');</script>
 <div id="topLoadBar"></div>
 
@@ -2360,14 +2367,24 @@
         }
     })();
 
-    // ── Pull-to-Refresh (with overlay spinner) ──────────────────────────
+    // ── Pull-to-Refresh (dashboard only) ──────────────────────────────────
     (function() {
         if (!('ontouchstart' in window)) return;
+        // Only enable PTR on dashboard page
+        var _path = window.location.pathname.replace(/\/$/, '') || '/';
+        var _isDash = (_path === '' || _path === '/' || _path === '/dashboard');
+        if (!_isDash) return;
         var bar = document.getElementById('pullRefreshBar');
         var overlay = document.getElementById('ptrOverlay');
         var ptrText = document.getElementById('ptrText');
         var startY = 0, pulling = false, threshold = 70, triggered = false;
+        var _blocked = ['#sidebar', '.more-drawer-panel', '#moreDrawerPanel', '#attendSheet', '.modal', '.offcanvas'];
         document.addEventListener('touchstart', function(e) {
+            // Ignore touches that start inside sidebar, drawers, modals
+            var t = e.target;
+            for (var i = 0; i < _blocked.length; i++) {
+                if (t.closest && t.closest(_blocked[i])) return;
+            }
             if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; triggered = false; }
         }, { passive: true });
         document.addEventListener('touchmove', function(e) {
