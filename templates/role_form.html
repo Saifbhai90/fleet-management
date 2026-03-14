@@ -1,5 +1,94 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Edit Role' if role else 'Add Role' }}{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Permission form ── */
+.perm-item .form-check-input {
+  width: 18px; height: 18px; cursor: pointer;
+  margin-top: 2px; flex-shrink: 0;
+  border: 1.5px solid #94a3b8;
+  border-radius: 4px;
+}
+.perm-item .form-check-input:checked { background-color: #2563eb; border-color: #2563eb; }
+.perm-item .form-check-input:indeterminate { background-color: #7c3aed; border-color: #7c3aed; }
+.perm-item .form-check-label {
+  cursor: pointer; font-size: 0.82rem; font-weight: 500;
+  padding-left: 2px; line-height: 1.4;
+  color: #334155;
+  user-select: none;
+}
+.perm-item .form-check-label:hover { color: #1d4ed8; }
+
+/* Full / parent checkbox gets bigger */
+.perm-full-cb .form-check-input {
+  width: 20px; height: 20px;
+}
+.perm-full-cb .form-check-label {
+  font-weight: 700 !important; color: #0f172a; font-size: 0.85rem;
+}
+
+/* Touch target: min 44px height */
+.perm-item {
+  display: flex; align-items: center;
+  min-height: 44px; padding: 4px 6px 4px 0;
+  border-radius: 8px;
+  transition: background 0.12s;
+}
+.perm-item:hover { background: rgba(37,99,235,0.06); }
+
+/* Page group container */
+.perm-page-group {
+  background: #f8fafc;
+  border: 1px solid #e8edf2;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  padding: 10px 14px;
+}
+.perm-page-group:hover { border-color: #dbeafe; }
+
+/* Section header badge + buttons row */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+/* Select All / None buttons */
+.btn-xs { padding: 3px 10px; font-size: 0.72rem; font-weight: 600; border-radius: 20px; }
+.btn-xs:focus { box-shadow: none; }
+
+/* Danger label */
+.label-danger { color: #dc2626 !important; font-weight: 700 !important; }
+
+/* Section count badge */
+.section-count { font-size: 0.68rem; color: #64748b; font-weight: 600; }
+
+/* Search highlight */
+.perm-highlight { background: #fef9c3 !important; border-color: #fde047 !important; }
+
+/* Selected count chip */
+#selectedCount {
+  background: #eff6ff; color: #1d4ed8;
+  border-radius: 20px; font-size: 0.75rem;
+  font-weight: 700; padding: 3px 10px;
+  transition: all 0.2s;
+}
+
+/* Mobile tweaks */
+@media (max-width: 767px) {
+  .perm-page-group { padding: 8px 10px; }
+  .perm-item { min-height: 48px; padding: 6px 4px; }
+  .perm-item .form-check-input { width: 22px; height: 22px; }
+  .perm-item .form-check-label { font-size: 0.85rem; }
+  .section-header { gap: 6px; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
@@ -37,7 +126,6 @@
               <small class="text-muted d-block mt-1">Short description taake baad mein samajhna asaan ho.</small>
             </div>
             {% else %}
-            <!-- Edit mode: Role details read-only (sirf dekhein, change na karein) -->
             <div class="mb-3">
               <label class="form-label fw-semibold">Role Name</label>
               <div class="form-control-plaintext fw-bold">{{ role.name }}</div>
@@ -54,42 +142,76 @@
       <!-- Right: permissions matrix -->
       <div class="col-lg-8">
       <div class="card shadow-sm border-0 rounded-3 mb-3">
+        <!-- Header: search + count -->
         <div class="card-body border-bottom pb-3">
-          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
             <div>
               <h6 class="text-uppercase text-muted fw-bold small mb-1">Permissions</h6>
               <p class="text-muted small mb-0">
                 Har section &rarr; page &rarr; action. Pehle <strong>List / View</strong> select karein, phir <strong>Add / Edit / Delete</strong>. Dependencies auto select ho jati hain.
               </p>
             </div>
-            <div class="ms-auto" style="max-width: 260px;">
-              <div class="input-group input-group-sm">
-                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                <input type="text" id="permissionSearch" class="form-control border-start-0 ps-0" placeholder="Search sections / pages / actions...">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <span id="selectedCount">0 selected</span>
+              <div style="min-width:230px;">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                  <input type="text" id="permissionSearch" class="form-control border-start-0 ps-0"
+                         placeholder="Search sections / pages / actions..." autocomplete="off">
+                  <button class="btn btn-outline-secondary btn-sm" type="button" id="permSearchClear" title="Clear search" style="display:none;">
+                    <i class="bi bi-x"></i>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="card-body">
+        <!-- Section tabs (quick-jump) -->
+        <div class="px-3 pt-2 pb-1 border-bottom d-flex flex-wrap gap-1" id="sectionTabs">
           {% for section_label, pages in permission_tree %}
-          <div class="mb-3 permission-section" data-section="{{ section_label }}">
-            <div class="d-flex align-items-center mb-2">
-              <div class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle rounded-pill px-3 py-2 me-2">
+          <button type="button" class="btn btn-outline-primary btn-sm rounded-pill section-tab-btn"
+                  style="font-size:0.72rem;padding:3px 10px;"
+                  onclick="scrollToSection('{{ section_label|replace("'","") }}')">
+            {{ section_label }}
+          </button>
+          {% endfor %}
+        </div>
+
+        <div class="card-body" id="permissionsBody">
+          {% for section_label, pages in permission_tree %}
+          <div class="mb-4 permission-section" data-section="{{ section_label }}" id="sec-{{ section_label|replace(' ','_')|replace('/','_') }}">
+
+            <!-- Section header row -->
+            <div class="section-header">
+              <div class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle rounded-pill px-3 py-2">
                 {{ section_label }}
               </div>
+              <div class="d-flex align-items-center gap-2">
+                <span class="section-count" id="cnt-{{ loop.index }}">0 / 0</span>
+                <button type="button" class="btn btn-outline-success btn-xs section-select-all"
+                        data-section="{{ section_label }}">
+                  <i class="bi bi-check-all"></i> All
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-xs section-clear-all"
+                        data-section="{{ section_label }}">
+                  <i class="bi bi-x-circle"></i> None
+                </button>
+              </div>
             </div>
-            <div class="ps-2 ps-md-3">
+
+            <div class="ps-1 ps-md-2">
               {% for page_label, rows in pages %}
-              <div class="mb-3 p-2 rounded-3 bg-light">
+              <div class="perm-page-group" data-page="{{ page_label }}" data-section="{{ section_label }}">
+                <!-- Page group label -->
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                  <div class="text-secondary small fw-semibold">
-                    {{ page_label }}
-                  </div>
+                  <span class="text-secondary small fw-semibold">{{ page_label }}</span>
                 </div>
-                <div class="d-flex flex-wrap gap-2 gap-md-3 ps-1">
+                <!-- Checkboxes -->
+                <div class="d-flex flex-wrap gap-1 gap-md-2">
                   {% for perm_id, perm_code, perm_name in rows %}
-                  <div class="form-check form-check-inline me-3 mb-1">
+                  <div class="form-check perm-item {% if '(full)' in perm_name %}perm-full-cb{% endif %}"
+                       style="margin:0;">
                     <input type="checkbox"
                            name="permission_ids"
                            value="{{ perm_id }}"
@@ -97,9 +219,10 @@
                            id="perm{{ perm_id }}"
                            data-code="{{ perm_code }}"
                            data-section="{{ section_label }}"
-                           {% if 'full' in page_label|lower %}data-full="1"{% endif %}
+                           data-page="{{ page_label }}"
+                           {% if '(full)' in perm_name %}data-full="1"{% endif %}
                            {% if role and role.permissions and perm_id in (role.permissions|map(attribute='id')|list) %}checked{% endif %}>
-                    <label class="form-check-label small" for="perm{{ perm_id }}">{{ perm_name }}</label>
+                    <label class="form-check-label" for="perm{{ perm_id }}">{{ perm_name }}</label>
                   </div>
                   {% endfor %}
                 </div>
@@ -112,7 +235,7 @@
           {% endfor %}
         </div>
 
-        <div class="card-footer bg-light border-0 d-flex justify-content-between align-items-center">
+        <div class="card-footer bg-light border-0 d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
           <div class="text-muted small">
             Dependencies automatically handle base permissions (List/View &rarr; Add/Edit/Delete).
           </div>
@@ -131,16 +254,18 @@
     </div>
   </form>
 </div>
+
 <script>
 (function() {
   var deps = {{ permission_dependencies | tojson | safe }};
-  var codeToId = {};
-  var sections = {};
-  var sectionFull = {};
+  var codeToId  = {};   // code -> checkbox element
+  var sections  = {};   // section_label -> [all cb in section]
+  var sectionFull = {}; // section_label -> full-cb element
+  var sectionCountEl = {}; // section_label -> counter span
 
-  // Index all checkboxes by code + section + mark destructive ones
+  /* ── Index all checkboxes ── */
   document.querySelectorAll('.perm-cb').forEach(function(cb) {
-    var code = cb.getAttribute('data-code');
+    var code    = cb.getAttribute('data-code');
     var section = cb.getAttribute('data-section') || '';
     codeToId[code] = cb;
     if (!sections[section]) sections[section] = [];
@@ -148,17 +273,22 @@
     if (cb.getAttribute('data-full') === '1') {
       sectionFull[section] = cb;
     }
-
-    // Mark delete-level permissions for styling & summary
+    /* Style delete-level */
     if (code && code.endsWith('_delete')) {
       cb.classList.add('perm-danger');
-      var label = cb.closest('.form-check')?.querySelector('label');
-      if (label) {
-        label.classList.add('text-danger', 'fw-semibold');
-      }
+      var lbl = cb.closest('.perm-item') && cb.closest('.perm-item').querySelector('label');
+      if (lbl) lbl.classList.add('label-danger');
     }
   });
 
+  /* ── Map section counter spans ── */
+  document.querySelectorAll('.permission-section').forEach(function(el) {
+    var sec  = el.getAttribute('data-section');
+    var cnt  = el.querySelector('.section-count');
+    if (sec && cnt) sectionCountEl[sec] = cnt;
+  });
+
+  /* ── Dependency helpers ── */
   function ensureDependencies(code) {
     var required = deps[code];
     if (!required || !required.length) return;
@@ -183,87 +313,91 @@
     });
   }
 
-  var form = document.getElementById('role-permission-form');
-  var suppressFullHandler = false;
-
-  // Initial normalisation:
-  // "full" checkbox ka state sirf children ke basis par set karo.
-  // Agar section ke saare children checked hain -> full = true, warna false.
-  Object.keys(sectionFull).forEach(function(section) {
+  /* ── Sync section "full" checkbox state + indeterminate ── */
+  function syncSectionFull(section) {
     var fullCb = sectionFull[section];
+    var list   = sections[section] || [];
     if (!fullCb) return;
-    var list = sections[section] || [];
-    var allChildrenChecked = true;
-    list.forEach(function(cb) {
-      if (cb === fullCb) return;
-      if (!cb.checked) {
-        allChildrenChecked = false;
-      }
-    });
-    fullCb.checked = allChildrenChecked;
-  });
 
-  if (!form) return;
+    var children = list.filter(function(cb) { return cb !== fullCb; });
+    if (!children.length) return;
 
-  var searchInput = document.getElementById('permissionSearch');
-  var dangerSummary = document.getElementById('dangerSummary');
-  var dangerSummaryText = document.getElementById('dangerSummaryText');
+    var checkedCount = children.filter(function(cb) { return cb.checked; }).length;
 
-  function updateDangerSummary() {
-    var count = 0;
-    Object.keys(codeToId).forEach(function(code) {
-      if (code && code.endsWith('_delete')) {
-        var cb = codeToId[code];
-        if (cb && cb.checked) count += 1;
-      }
-    });
-    if (!dangerSummary) return;
-    if (count > 0) {
-      dangerSummary.classList.remove('d-none');
-      if (dangerSummaryText) {
-        dangerSummaryText.textContent = count + ' Delete permissions selected in this role.';
-      }
+    if (checkedCount === 0) {
+      fullCb.checked       = false;
+      fullCb.indeterminate = false;
+    } else if (checkedCount === children.length) {
+      fullCb.checked       = true;
+      fullCb.indeterminate = false;
     } else {
-      dangerSummary.classList.add('d-none');
+      fullCb.checked       = false;
+      fullCb.indeterminate = true;   /* ← the "minus" state */
     }
   }
 
-  // Initial delete summary
-  updateDangerSummary();
-
-  // Filter permissions by search text
-  if (searchInput) {
-    searchInput.addEventListener('input', function() {
-      var q = (searchInput.value || '').toLowerCase().trim();
-      var sectionsEls = document.querySelectorAll('.permission-section');
-      sectionsEls.forEach(function(sec) {
-        if (!q) {
-          sec.classList.remove('d-none');
-          return;
-        }
-        var text = (sec.textContent || '').toLowerCase();
-        if (text.indexOf(q) !== -1) {
-          sec.classList.remove('d-none');
-        } else {
-          sec.classList.add('d-none');
-        }
-      });
-    });
+  /* ── Section counter ── */
+  function updateSectionCount(section) {
+    var list = sections[section] || [];
+    var total   = list.length;
+    var checked = list.filter(function(cb) { return cb.checked; }).length;
+    var el = sectionCountEl[section];
+    if (el) el.textContent = checked + ' / ' + total;
   }
 
+  /* ── Global selected counter ── */
+  function updateTotalCount() {
+    var total = 0;
+    document.querySelectorAll('.perm-cb:checked').forEach(function() { total++; });
+    var el = document.getElementById('selectedCount');
+    if (el) el.textContent = total + ' selected';
+  }
+
+  /* ── Danger summary ── */
+  function updateDangerSummary() {
+    var count = 0;
+    Object.keys(codeToId).forEach(function(code) {
+      if (code && code.endsWith('_delete') && codeToId[code].checked) count++;
+    });
+    var summary = document.getElementById('dangerSummary');
+    var text    = document.getElementById('dangerSummaryText');
+    if (!summary) return;
+    if (count > 0) {
+      summary.classList.remove('d-none');
+      if (text) text.textContent = count + ' Delete permissions selected in this role.';
+    } else {
+      summary.classList.add('d-none');
+    }
+  }
+
+  /* ── Run all sync functions for a section ── */
+  function syncSection(section) {
+    syncSectionFull(section);
+    updateSectionCount(section);
+    updateTotalCount();
+    updateDangerSummary();
+  }
+
+  /* ── Initialise on load ── */
+  Object.keys(sections).forEach(function(section) { syncSection(section); });
+
+  var form = document.getElementById('role-permission-form');
+  if (!form) return;
+
+  /* ── Main change handler ── */
   form.addEventListener('change', function(ev) {
     if (!ev.target.classList.contains('perm-cb')) return;
-    if (suppressFullHandler) return;
 
-    var cb = ev.target;
-    var code = cb.getAttribute('data-code');
+    var cb      = ev.target;
+    var code    = cb.getAttribute('data-code');
     var section = cb.getAttribute('data-section') || '';
-    var isFull = cb.getAttribute('data-full') === '1';
+    var isFull  = cb.getAttribute('data-full') === '1';
 
     if (isFull) {
-      // Clicking "Section (full)" – select/deselect all within this section
+      /* Full checkbox clicked: check/uncheck all siblings in section */
       var list = sections[section] || [];
       if (cb.checked) {
+        cb.indeterminate = false;
         list.forEach(function(other) {
           if (!other.checked) {
             other.checked = true;
@@ -271,7 +405,7 @@
           }
         });
       } else {
-        // Unchecking full manually: remove all children in this section
+        cb.indeterminate = false;
         list.forEach(function(other) {
           if (other !== cb && other.checked) {
             other.checked = false;
@@ -279,41 +413,145 @@
           }
         });
       }
+      updateSectionCount(section);
+      updateTotalCount();
+      updateDangerSummary();
       return;
     }
 
-    // Child permission toggled
+    /* Child permission toggled */
     if (cb.checked) {
       ensureDependencies(code);
     } else {
       uncheckDependents(code);
     }
 
-    // After any child change, recompute section "full" checkbox:
-    // - Agar saare children checked hain -> full ko auto check karo
-    // - Agar koi bhi child unchecked hai -> full ko uncheck rakho
-    var fullCb = sectionFull[section];
-    if (fullCb) {
-      var list = sections[section] || [];
-      var allChildrenChecked = true;
-      list.forEach(function(other) {
-        if (other === fullCb) return;
-        if (!other.checked) {
-          allChildrenChecked = false;
+    syncSection(section);
+  });
+
+  /* ── "Select All" / "None" buttons ── */
+  document.querySelectorAll('.section-select-all').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var sec  = btn.getAttribute('data-section');
+      var list = sections[sec] || [];
+      list.forEach(function(cb) {
+        if (!cb.checked) {
+          cb.checked = true;
+          ensureDependencies(cb.getAttribute('data-code'));
         }
       });
-      suppressFullHandler = true;
-      if (allChildrenChecked) {
-        fullCb.checked = true;
-      } else {
-        fullCb.checked = false;
-      }
-      suppressFullHandler = false;
-    }
-
-    // Update destructive permissions summary whenever any checkbox changes
-    updateDangerSummary();
+      syncSection(sec);
+    });
   });
+
+  document.querySelectorAll('.section-clear-all').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var sec  = btn.getAttribute('data-section');
+      var list = sections[sec] || [];
+      list.forEach(function(cb) {
+        if (cb.checked) {
+          cb.checked = false;
+          cb.indeterminate = false;
+          uncheckDependents(cb.getAttribute('data-code'));
+        }
+      });
+      syncSection(sec);
+    });
+  });
+
+  /* ── Search ── */
+  var searchInput = document.getElementById('permissionSearch');
+  var searchClear = document.getElementById('permSearchClear');
+  var searchTimer = null;
+
+  function runSearch(q) {
+    q = (q || '').toLowerCase().trim();
+    /* Remove previous highlights */
+    document.querySelectorAll('.perm-highlight').forEach(function(el) {
+      el.classList.remove('perm-highlight');
+    });
+    if (searchClear) searchClear.style.display = q ? '' : 'none';
+
+    document.querySelectorAll('.permission-section').forEach(function(secEl) {
+      if (!q) {
+        secEl.classList.remove('d-none');
+        secEl.querySelectorAll('.perm-page-group').forEach(function(pg) {
+          pg.classList.remove('d-none');
+        });
+        return;
+      }
+      var anyVisible = false;
+      secEl.querySelectorAll('.perm-page-group').forEach(function(pg) {
+        var text = (pg.textContent || '').toLowerCase();
+        if (text.indexOf(q) !== -1) {
+          pg.classList.remove('d-none');
+          pg.classList.add('perm-highlight');
+          anyVisible = true;
+        } else {
+          pg.classList.add('d-none');
+        }
+      });
+      if (anyVisible) {
+        secEl.classList.remove('d-none');
+      } else {
+        secEl.classList.add('d-none');
+      }
+    });
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(function() { runSearch(searchInput.value); }, 120);
+    });
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') { searchInput.value = ''; runSearch(''); searchInput.blur(); }
+    });
+  }
+  if (searchClear) {
+    searchClear.addEventListener('click', function() {
+      searchInput.value = ''; runSearch(''); searchInput.focus();
+    });
+  }
+
+  /* ── Scroll-to-section ── */
+  window.scrollToSection = function(label) {
+    var id = 'sec-' + label.replace(/ /g, '_').replace(/\//g, '_');
+    var el = document.getElementById(id);
+    if (!el) {
+      /* fallback: search by data-section */
+      el = document.querySelector('.permission-section[data-section="' + label + '"]');
+    }
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      /* brief highlight */
+      el.style.transition = 'background 0.3s';
+      el.style.background = 'rgba(37,99,235,0.06)';
+      setTimeout(function() { el.style.background = ''; }, 1000);
+    }
+  };
+
+  /* Highlight active tab on scroll */
+  var tabs = document.querySelectorAll('.section-tab-btn');
+  var secEls = document.querySelectorAll('.permission-section');
+  if (tabs.length && secEls.length && 'IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          var sec = entry.target.getAttribute('data-section');
+          tabs.forEach(function(t) {
+            if (t.textContent.trim() === sec) {
+              t.classList.add('active');
+            } else {
+              t.classList.remove('active');
+            }
+          });
+        }
+      });
+    }, { threshold: 0.3 });
+    secEls.forEach(function(el) { io.observe(el); });
+  }
+
 })();
 </script>
 {% endblock %}
