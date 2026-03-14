@@ -293,11 +293,11 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- ═══════════════════════════════
      BENTO GRID
 ═══════════════════════════════ -->
-{% if can_see_page('drivers') or can_see_page('vehicles') or can_see_page('driver_attendance') or can_see_page('driver_transfers') or can_see_page('projects') or can_see_page('districts') or can_see_page('parking') or can_see_page('companies') %}
+{% if can_see_page('dashboard_card_drivers') or can_see_page('dashboard_card_vehicles') or can_see_page('dashboard_card_attendance') or can_see_page('dashboard_card_transfers') or can_see_page('dashboard_card_projects') or can_see_page('dashboard_card_districts') or can_see_page('dashboard_card_parking') or can_see_page('dashboard_card_companies') %}
 <div class="bento-grid">
 
     <!-- ① HERO: Active Drivers (2×2 — dominant card) -->
-    {% if can_see_page('drivers') %}
+    {% if can_see_page('dashboard_card_drivers') %}
     <a href="{{ url_for('drivers_list') }}" class="bc bc-blue bc-hero">
         <div style="position:relative;z-index:1;">
             <div class="bc-tag">Active Drivers</div>
@@ -322,7 +322,7 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
 
     <!-- ② TALL: Fleet Deployed (1×2) -->
-    {% if can_see_page('vehicles') %}
+    {% if can_see_page('dashboard_card_vehicles') %}
     <a href="{{ url_for('vehicles_list') }}" class="bc bc-green bc-tall">
         <div style="position:relative;z-index:1;">
             <div class="bc-tag">Fleet Deployed</div>
@@ -347,7 +347,7 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
 
     <!-- ③ Today's Attendance (1×1) -->
-    {% if can_see_page('driver_attendance') %}
+    {% if can_see_page('dashboard_card_attendance') %}
     <a href="{{ url_for('driver_attendance_list') }}" class="bc bc-orange bc-sm">
         <div>
             <div class="bc-tag">Today's Attendance</div>
@@ -361,7 +361,7 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
 
     <!-- ④ Today's Transfers (1×1) -->
-    {% if can_see_page('driver_transfers') %}
+    {% if can_see_page('dashboard_card_transfers') %}
     <a href="{{ url_for('driver_transfers') }}" class="bc bc-violet bc-sm">
         <div>
             <div class="bc-tag">Today's Transfers</div>
@@ -375,7 +375,7 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
 
     <!-- ⑤ Projects (1×1 light) -->
-    {% if can_see_page('projects') %}
+    {% if can_see_page('dashboard_card_projects') %}
     <a href="{{ url_for('projects_list') }}" class="bc bc-light bc-sm">
         <div class="chip-icon" style="background:#dbeafe;color:#1d4ed8;">
             <i data-lucide="briefcase" style="width:22px;height:22px;"></i>
@@ -388,7 +388,7 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
 
     <!-- ⑥ Districts (1×1 light) -->
-    {% if can_see_page('districts') %}
+    {% if can_see_page('dashboard_card_districts') %}
     <a href="{{ url_for('districts_list') }}" class="bc bc-light bc-sm">
         <div class="chip-icon" style="background:#dcfce7;color:#15803d;">
             <i data-lucide="map-pin" style="width:22px;height:22px;"></i>
@@ -401,7 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
 
     <!-- ⑦ Parking Stations (1×1 light) -->
-    {% if can_see_page('parking') %}
+    {% if can_see_page('dashboard_card_parking') %}
     <a href="{{ url_for('parking_list') }}" class="bc bc-light bc-sm">
         <div class="chip-icon" style="background:#fce7f3;color:#be185d;">
             <i data-lucide="parking-circle" style="width:22px;height:22px;"></i>
@@ -414,7 +414,7 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
 
     <!-- ⑧ Companies (1×1 light) -->
-    {% if can_see_page('companies') %}
+    {% if can_see_page('dashboard_card_companies') %}
     <a href="{{ url_for('companies') }}" class="bc bc-light bc-sm">
         <div class="chip-icon" style="background:#f3e8ff;color:#7c3aed;">
             <i data-lucide="building-2" style="width:22px;height:22px;"></i>
@@ -432,11 +432,11 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- ═══════════════════════════════
      ANALYTICS ROW
 ═══════════════════════════════ -->
-{% if can_see_page('fuel_expense') or can_see_page('vehicles') or can_see_page('accounts_balance_sheet') %}
+{% if can_see_page('dashboard_card_fuel') or can_see_page('dashboard_card_utilization') or can_see_page('dashboard_card_finance') %}
 <div class="row g-3 mt-3" id="analyticsRow">
 
     <!-- ① 30-Day Fuel Trend -->
-    {% if can_see_page('fuel_expense') %}
+    {% if can_see_page('dashboard_card_fuel') %}
     <div class="col-12 col-xl-6">
         <div class="card border-0 shadow-sm h-100" style="border-radius:20px;">
             <div class="card-body p-4">
@@ -459,12 +459,12 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
 
     <!-- ② Vehicle Utilization doughnut + ③ Project bar stacked vertically -->
-    {% if can_see_page('vehicles') or can_see_page('accounts_balance_sheet') %}
+    {% if can_see_page('dashboard_card_utilization') or can_see_page('dashboard_card_finance') %}
     <div class="col-12 col-xl-6">
         <div class="row g-3 h-100">
 
             <!-- Vehicle Utilization -->
-            {% if can_see_page('vehicles') %}
+            {% if can_see_page('dashboard_card_utilization') %}
             <div class="col-12 col-sm-5 col-xl-5">
                 <div class="card border-0 shadow-sm h-100" style="border-radius:20px;">
                     <div class="card-body p-4">
@@ -497,7 +497,7 @@ document.addEventListener('DOMContentLoaded', function() {
             {% endif %}
 
             <!-- Top Projects by Financial Health -->
-            {% if can_see_page('accounts_balance_sheet') %}
+            {% if can_see_page('dashboard_card_finance') %}
             <div class="col-12 col-sm-7 col-xl-7">
                 <div class="card border-0 shadow-sm h-100" style="border-radius:20px;">
                     <div class="card-body p-4">
@@ -605,7 +605,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- ═══════════════════════════════
      DOCUMENT HEALTH CARD
 ═══════════════════════════════ -->
-{% if can_see_page('report_expiry') and (expiry_already > 0 or expiry_soon > 0) %}
+{% if can_see_page('dashboard_card_doc_health') and (expiry_already > 0 or expiry_soon > 0) %}
 <div class="d-flex align-items-start gap-3 mt-3 px-3 py-3"
      style="background:linear-gradient(135deg,{% if expiry_already > 0 %}#fef2f2,#fee2e2{% else %}#fffbeb,#fef3c7{% endif %});border:2px solid {% if expiry_already > 0 %}#fca5a5{% else %}#fcd34d{% endif %};border-radius:18px;">
     <div style="width:44px;height:44px;border-radius:14px;background:{% if expiry_already > 0 %}#fee2e2{% else %}#fef3c7{% endif %};display:flex;align-items:center;justify-content:center;flex-shrink:0;">

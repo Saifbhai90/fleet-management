@@ -15,6 +15,20 @@ PERMISSION_TREE = {
         ('dashboard', 'Dashboard (full)'),
         ('global_search', 'Global Search (Navbar)'),
         ('view_fleet_map', 'Fleet Map – Live GPS'),
+        # Dashboard KPI cards
+        ('dashboard_card_drivers',     'Dashboard – Active Drivers Card'),
+        ('dashboard_card_vehicles',    'Dashboard – Fleet Deployed Card'),
+        ('dashboard_card_attendance',  'Dashboard – Today\'s Attendance Card'),
+        ('dashboard_card_transfers',   'Dashboard – Today\'s Transfers Card'),
+        ('dashboard_card_projects',    'Dashboard – Projects Card'),
+        ('dashboard_card_districts',   'Dashboard – Districts Card'),
+        ('dashboard_card_parking',     'Dashboard – Parking Stations Card'),
+        ('dashboard_card_companies',   'Dashboard – Companies Card'),
+        # Dashboard charts & alerts
+        ('dashboard_card_fuel',        'Dashboard – Fuel Trend Chart'),
+        ('dashboard_card_utilization', 'Dashboard – Vehicle Utilization Chart'),
+        ('dashboard_card_finance',     'Dashboard – Financial Health Chart'),
+        ('dashboard_card_doc_health',  'Dashboard – Document Health Alert'),
     ],
     PERMISSION_MASTER: [
         ('master', 'Master Data (full)'),
@@ -419,6 +433,22 @@ SECTION_PAGE_GROUPS = {
         ('Dashboard Features', [
             ('global_search', 'Global Search (Navbar)'),
             ('view_fleet_map', 'Fleet Map – Live GPS'),
+        ]),
+        ('Dashboard Cards – KPI', [
+            ('dashboard_card_drivers',    'Active Drivers Card'),
+            ('dashboard_card_vehicles',   'Fleet Deployed Card'),
+            ('dashboard_card_attendance', "Today's Attendance Card"),
+            ('dashboard_card_transfers',  "Today's Transfers Card"),
+            ('dashboard_card_projects',   'Projects Card'),
+            ('dashboard_card_districts',  'Districts Card'),
+            ('dashboard_card_parking',    'Parking Stations Card'),
+            ('dashboard_card_companies',  'Companies Card'),
+        ]),
+        ('Dashboard Cards – Charts & Alerts', [
+            ('dashboard_card_fuel',        'Fuel Trend Chart'),
+            ('dashboard_card_utilization', 'Vehicle Utilization Chart'),
+            ('dashboard_card_finance',     'Financial Health Chart'),
+            ('dashboard_card_doc_health',  'Document Health Alert'),
         ]),
     ],
     PERMISSION_MASTER: [
@@ -836,6 +866,19 @@ PAGE_VISIBLE = {
     # Dashboard section-level guards
     'view_fleet_map': ['view_fleet_map'],
     'driver_attendance': ['attendance', 'driver_attendance', 'driver_attendance_list'],
+    # Dashboard card-specific permissions (new granular codes + existing module codes as fallback)
+    'dashboard_card_drivers':     ['dashboard', 'master', 'drivers_list', 'dashboard_card_drivers'],
+    'dashboard_card_vehicles':    ['dashboard', 'master', 'vehicles_list', 'dashboard_card_vehicles'],
+    'dashboard_card_attendance':  ['dashboard', 'attendance', 'driver_attendance_list', 'dashboard_card_attendance'],
+    'dashboard_card_transfers':   ['dashboard', 'transfer', 'driver_transfers', 'dashboard_card_transfers'],
+    'dashboard_card_projects':    ['dashboard', 'master', 'projects_list', 'dashboard_card_projects'],
+    'dashboard_card_districts':   ['dashboard', 'master', 'districts_list', 'dashboard_card_districts'],
+    'dashboard_card_parking':     ['dashboard', 'master', 'parking_list', 'dashboard_card_parking'],
+    'dashboard_card_companies':   ['dashboard', 'master', 'companies_list', 'dashboard_card_companies'],
+    'dashboard_card_fuel':        ['dashboard', 'expenses', 'fuel_expense', 'dashboard_card_fuel'],
+    'dashboard_card_utilization': ['dashboard', 'master', 'vehicles_list', 'dashboard_card_utilization'],
+    'dashboard_card_finance':     ['dashboard', 'accounts', 'accounts_balance_sheet', 'dashboard_card_finance'],
+    'dashboard_card_doc_health':  ['dashboard', 'reports', 'report_expiry', 'dashboard_card_doc_health'],
 }
 
 

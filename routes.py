@@ -366,21 +366,21 @@ def dashboard():
     today_dt = date.today()
 
     # ── Bento KPI cards (only query what the user can see) ────────────────
-    total_companies  = Company.query.count()       if _can('companies')            else 0
-    total_projects   = Project.query.count()       if _can('projects')             else 0
-    total_vehicles   = Vehicle.query.count()       if _can('vehicles')             else 0
-    total_drivers    = Driver.query.count()        if _can('drivers')              else 0
-    total_parking    = ParkingStation.query.count() if _can('parking')             else 0
-    total_districts  = District.query.count()      if _can('districts')            else 0
-    active_drivers   = Driver.query.filter_by(status='Active').count() if _can('drivers')   else 0
-    assigned_vehicles = Vehicle.query.filter(Vehicle.district_id.isnot(None)).count() if _can('vehicles') else 0
-    today_attendance = DriverAttendance.query.filter_by(attendance_date=today_dt).count() if _can('driver_attendance') else 0
-    today_transfers  = DriverTransfer.query.filter_by(transfer_date=today_dt).count()     if _can('driver_transfers')  else 0
+    total_companies  = Company.query.count()        if _can('dashboard_card_companies')   else 0
+    total_projects   = Project.query.count()        if _can('dashboard_card_projects')    else 0
+    total_vehicles   = Vehicle.query.count()        if _can('dashboard_card_vehicles') or _can('dashboard_card_utilization') else 0
+    total_drivers    = Driver.query.count()         if _can('dashboard_card_drivers')     else 0
+    total_parking    = ParkingStation.query.count() if _can('dashboard_card_parking')     else 0
+    total_districts  = District.query.count()       if _can('dashboard_card_districts')   else 0
+    active_drivers   = Driver.query.filter_by(status='Active').count()                                     if _can('dashboard_card_drivers')     else 0
+    assigned_vehicles = Vehicle.query.filter(Vehicle.district_id.isnot(None)).count()                      if _can('dashboard_card_vehicles')    else 0
+    today_attendance = DriverAttendance.query.filter_by(attendance_date=today_dt).count()                  if _can('dashboard_card_attendance')  else 0
+    today_transfers  = DriverTransfer.query.filter_by(transfer_date=today_dt).count()                      if _can('dashboard_card_transfers')   else 0
 
     # Monthly fuel cost + 30-day trend (only if user can see fuel expense)
     monthly_fuel = 0.0
     fuel_chart_labels, fuel_chart_values = [], []
-    if _can('fuel_expense'):
+    if _can('dashboard_card_fuel'):
         try:
             from sqlalchemy import extract
             monthly_fuel = db.session.query(func.sum(FuelExpense.amount)).filter(
@@ -410,7 +410,7 @@ def dashboard():
 
     # ── Vehicle utilization doughnut (only if user can see vehicles) ──────
     vehicle_util_data = [0, 0, 0]
-    if _can('vehicles'):
+    if _can('dashboard_card_utilization'):
         try:
             v_active   = Vehicle.query.filter(Vehicle.driver_id.isnot(None)).count()
             v_deployed = Vehicle.query.filter(Vehicle.project_id.isnot(None), Vehicle.driver_id.is_(None)).count()
@@ -421,7 +421,7 @@ def dashboard():
 
     # ── Financial Health chart (only if user can see accounts) ───────────
     fin_chart_labels, fin_chart_receipts, fin_chart_expenses = [], [], []
-    if _can('accounts_balance_sheet'):
+    if _can('dashboard_card_finance'):
         try:
             from sqlalchemy import extract as _extr
             from models import JournalEntry, JournalEntryLine
@@ -452,7 +452,7 @@ def dashboard():
             fin_chart_labels   = _fin_projects
             fin_chart_receipts = [_rec_map.get(p, 0) for p in _fin_projects]
             fin_chart_expenses = [_exp_map.get(p, 0) for p in _fin_projects]
-            if not _fin_projects and _can('fuel_expense'):
+            if not _fin_projects and _can('dashboard_card_fuel'):
                 _proj_rows = db.session.query(
                     Project.name, func.sum(FuelExpense.amount).label('total')
                 ).join(FuelExpense, FuelExpense.project_id == Project.id).filter(
@@ -470,7 +470,7 @@ def dashboard():
 
     # ── Document Health: expiry in next 15 days / already expired ────────
     expiry_soon, expiry_already = 0, 0
-    if _can('report_expiry'):
+    if _can('dashboard_card_doc_health'):
         try:
             from datetime import timedelta as _td
             _cutoff15 = today_dt + _td(days=15)
