@@ -254,11 +254,9 @@
             padding-bottom: env(safe-area-inset-bottom, 0);
             box-shadow: 0 -4px 16px rgba(0,0,0,0.25);
         }
-        @media (max-width: 767.98px) {
-            .mobile-bottom-nav { display: flex; align-items: stretch; }
-            .main-content {
-                padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
-            }
+        .capacitor-native .mobile-bottom-nav { display: flex; align-items: stretch; }
+        .capacitor-native .main-content {
+            padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
         }
         .mobile-nav-item {
             flex: 1;
@@ -582,12 +580,10 @@
         }
 
         /* ═══ NATIVE MOBILE: hide top navbar ═══ */
-        @media (max-width: 767.98px) {
-            .navbar { display: none !important; }
-            .main-content { margin-top: 0 !important; padding-top: max(env(safe-area-inset-top, 0px), 14px) !important; }
-        }
+        .capacitor-native .navbar { display: none !important; }
+        .capacitor-native .main-content { margin-top: 0 !important; padding-top: max(env(safe-area-inset-top, 0px), 14px) !important; }
 
-        /* ── Floating Hamburger (sidebar access on mobile) ── */
+        /* ── Floating Hamburger (sidebar access on mobile, native app only) ── */
         .mobile-menu-btn {
             display: none; position: fixed;
             top: max(env(safe-area-inset-top, 10px), 10px); left: 14px;
@@ -597,14 +593,14 @@
             align-items: center; justify-content: center;
             z-index: 1055; box-shadow: 0 2px 12px rgba(0,0,0,0.3); cursor: pointer;
         }
-        @media (max-width: 767.98px) { .mobile-menu-btn { display: flex; } }
+        .capacitor-native .mobile-menu-btn { display: flex; }
 
         /* ── FAB (Floating Action Button) ── */
         .mobile-fab-wrap {
             display: none; position: fixed; right: 18px;
             bottom: calc(74px + env(safe-area-inset-bottom, 0px)); z-index: 1055;
         }
-        @media (max-width: 767.98px) { .mobile-fab-wrap { display: block; } }
+        .capacitor-native .mobile-fab-wrap { display: block; }
         .fab-speed-dial {
             display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
             pointer-events: none; opacity: 0; transform: translateY(14px);
