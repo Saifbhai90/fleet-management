@@ -4202,10 +4202,21 @@ def _assign_project_to_company_data(search=None, sort_by='assign_date', sort_ord
 
 @app.route('/assign_project_to_company')
 def assign_project_to_company():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     search = request.args.get('search', '').strip()
     sort_by = request.args.get('sort_by', 'assign_date')
     sort_order = request.args.get('sort_order', 'desc')
     assigned_projects = _assign_project_to_company_data(search, sort_by, sort_order)
+    
+    # Apply user data scope
+    if not is_master_or_admin and allowed_projects:
+        assigned_projects = [p for p in assigned_projects if p.id in allowed_projects]
     # Project IDs that have at least one district linked (lock Edit/Deassign)
     project_ids_with_districts = set(
         r[0] for r in db.session.query(project_district.c.project_id).distinct().all()
@@ -6961,16 +6972,23 @@ def driver_rejoin_view(id):
     
     # 2. Record ko 'driver_rejoin_view.html' template par bhej do
     return render_template('driver_rejoin_view.html', record=record)
-
-
-# ────────────────────────────────────────────────
-# Driver Attendance
-# ────────────────────────────────────────────────
-@app.route('/driver-attendance/')
 def driver_attendance_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    allowed_shifts = user_context.get('allowed_shifts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     form = DriverAttendanceFilterForm()
     # Sirf assigned projects (company assign kiye gaye)
-    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    project_q = Project.query.filter(Project.company_id.isnot(None))
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
     # Default: aaj ki date; from/to support ke liye base date phir bhi chahiye
     view_date = date.today()
     def _int_arg(name):
@@ -7013,18 +7031,30 @@ def driver_attendance_list():
     form.attendance_date.data = view_date
     form.project_id.data = project_id if project_id else 0
     if project_id and project_id != 0:
-        districts = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name).all()
+        districts_q = District.query.join(project_district).filter(project_district.c.project_id == project_id)
+        if not is_master_or_admin and allowed_districts:
+            districts_q = districts_q.filter(District.id.in_(list(allowed_districts)))
+        districts = districts_q.order_by(District.name).all()
         form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
         if district_id:
-            vehicles = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
+            vehicles_q = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id)
         else:
-            vehicles = Vehicle.query.filter(Vehicle.project_id == project_id).order_by(Vehicle.vehicle_no).all()
+            vehicles_q = Vehicle.query.filter(Vehicle.project_id == project_id)
+        if not is_master_or_admin and allowed_vehicles:
+            vehicles_q = vehicles_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+        vehicles = vehicles_q.order_by(Vehicle.vehicle_no).all()
     else:
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+        districts_q = District.query
+        if not is_master_or_admin and allowed_districts:
+            districts_q = districts_q.filter(District.id.in_(list(allowed_districts)))
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts_q.order_by(District.name).all()]
         if district_id:
-            vehicles = Vehicle.query.filter(Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
+            vehicles_q = Vehicle.query.filter(Vehicle.district_id == district_id)
         else:
-            vehicles = Vehicle.query.filter(Vehicle.project_id.isnot(None)).order_by(Vehicle.vehicle_no).all()
+            vehicles_q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+        if not is_master_or_admin and allowed_vehicles:
+            vehicles_q = vehicles_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+        vehicles = vehicles_q.order_by(Vehicle.vehicle_no).all()
     form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicles]
     if vehicle_id and not any(v.id == vehicle_id for v in vehicles):
         v = Vehicle.query.get(vehicle_id)
@@ -7074,13 +7104,13 @@ def driver_attendance_list():
             ).filter(Driver.id.in_(driver_ids))
 
         # Current user ki scope apply karein (Master/Admin ke ilawa)
-        scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
-        if scope_projects:
-            drivers_query = drivers_query.filter(Driver.project_id.in_(scope_projects))
-        if scope_vehicles:
-            drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
-        if scope_shifts:
-            drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
+        if not is_master_or_admin:
+            if allowed_projects:
+                drivers_query = drivers_query.filter(Driver.project_id.in_(list(allowed_projects)))
+            if allowed_vehicles:
+                drivers_query = drivers_query.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+            if allowed_shifts:
+                drivers_query = drivers_query.filter(Driver.shift.in_(list(allowed_shifts)))
 
         if district_id:
             drivers_query = drivers_query.filter(
