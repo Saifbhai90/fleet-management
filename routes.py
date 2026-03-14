@@ -5360,13 +5360,14 @@ def assign_driver_to_vehicle_list():
         return redirect(url_for('dashboard'))
     
     # Apply user data scope to assigned drivers
+    # Note: assigned_drivers contains (Driver, Vehicle) tuples
     if not is_master_or_admin:
         if allowed_projects or allowed_districts or allowed_vehicles:
             assigned_drivers = [
-                d for d in assigned_drivers
-                if (not allowed_projects or (d.project_id and d.project_id in allowed_projects)) and
-                   (not allowed_districts or (d.district_id and d.district_id in allowed_districts)) and
-                   (not allowed_vehicles or (d.vehicle_id and d.vehicle_id in allowed_vehicles))
+                (driver, vehicle) for driver, vehicle in assigned_drivers
+                if (not allowed_projects or (driver.project_id and driver.project_id in allowed_projects)) and
+                   (not allowed_districts or (driver.district_id and driver.district_id in allowed_districts)) and
+                   (not allowed_vehicles or (driver.vehicle_id and driver.vehicle_id in allowed_vehicles))
             ]
     
     # Filter dropdown choices by user scope
