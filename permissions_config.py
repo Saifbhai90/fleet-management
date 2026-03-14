@@ -880,21 +880,24 @@ PAGE_VISIBLE = {
     'notification_add': ['notification_list', 'notification_add'],
     'whats_new': ['whats_new'],
     # Dashboard section-level guards
-    'view_fleet_map': ['view_fleet_map'],
+    # view_fleet_map: ONLY the specific permission (or 'dashboard' full which expands to it via expand_login_permissions)
+    'view_fleet_map': ['dashboard', 'view_fleet_map'],
     'driver_attendance': ['attendance', 'driver_attendance', 'driver_attendance_list'],
-    # Dashboard card-specific permissions (new granular codes + existing module codes as fallback)
-    'dashboard_card_drivers':     ['dashboard', 'master', 'drivers_list', 'dashboard_card_drivers'],
-    'dashboard_card_vehicles':    ['dashboard', 'master', 'vehicles_list', 'dashboard_card_vehicles'],
-    'dashboard_card_attendance':  ['dashboard', 'attendance', 'driver_attendance_list', 'dashboard_card_attendance'],
-    'dashboard_card_transfers':   ['dashboard', 'transfer', 'driver_transfers', 'dashboard_card_transfers'],
-    'dashboard_card_projects':    ['dashboard', 'master', 'projects_list', 'dashboard_card_projects'],
-    'dashboard_card_districts':   ['dashboard', 'master', 'districts_list', 'dashboard_card_districts'],
-    'dashboard_card_parking':     ['dashboard', 'master', 'parking_list', 'dashboard_card_parking'],
-    'dashboard_card_companies':   ['dashboard', 'master', 'companies_list', 'dashboard_card_companies'],
-    'dashboard_card_fuel':        ['dashboard', 'expenses', 'fuel_expense', 'dashboard_card_fuel'],
-    'dashboard_card_utilization': ['dashboard', 'master', 'vehicles_list', 'dashboard_card_utilization'],
-    'dashboard_card_finance':     ['dashboard', 'accounts', 'accounts_balance_sheet', 'dashboard_card_finance'],
-    'dashboard_card_doc_health':  ['dashboard', 'reports', 'report_expiry', 'dashboard_card_doc_health'],
+    # Dashboard card-specific permissions — STRICT: only 'dashboard' (full) OR the exact card code.
+    # DO NOT add module-level fallbacks (master, vehicles_list, attendance, etc.) here —
+    # that would let any user with Master Data permissions see all dashboard cards regardless of assignment.
+    'dashboard_card_drivers':     ['dashboard', 'dashboard_card_drivers'],
+    'dashboard_card_vehicles':    ['dashboard', 'dashboard_card_vehicles'],
+    'dashboard_card_attendance':  ['dashboard', 'dashboard_card_attendance'],
+    'dashboard_card_transfers':   ['dashboard', 'dashboard_card_transfers'],
+    'dashboard_card_projects':    ['dashboard', 'dashboard_card_projects'],
+    'dashboard_card_districts':   ['dashboard', 'dashboard_card_districts'],
+    'dashboard_card_parking':     ['dashboard', 'dashboard_card_parking'],
+    'dashboard_card_companies':   ['dashboard', 'dashboard_card_companies'],
+    'dashboard_card_fuel':        ['dashboard', 'dashboard_card_fuel'],
+    'dashboard_card_utilization': ['dashboard', 'dashboard_card_utilization'],
+    'dashboard_card_finance':     ['dashboard', 'dashboard_card_finance'],
+    'dashboard_card_doc_health':  ['dashboard', 'dashboard_card_doc_health'],
 }
 
 
