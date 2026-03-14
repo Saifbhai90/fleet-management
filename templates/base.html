@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -112,14 +112,18 @@
             .sidebar-overlay {
                 display: none;
                 position: fixed;
-                top: 60px;
+                top: 0;
                 left: 0;
                 right: 0;
                 bottom: 0;
-                background: rgba(0,0,0,0.4);
-                z-index: 1035;
+                background: rgba(0,0,0,0.55);
+                -webkit-backdrop-filter: blur(2px);
+                backdrop-filter: blur(2px);
+                z-index: 1038;
+                transition: opacity 0.25s ease;
+                opacity: 0;
             }
-            .sidebar-overlay.show { display: block; }
+            .sidebar-overlay.show { display: block; opacity: 1; }
             .main-content { margin-left: 0 !important; padding: 15px 12px !important; }
             .main-content.expanded { margin-left: 0 !important; }
             .navbar-brand { font-size: 1rem; }
@@ -2520,14 +2524,26 @@
             var navbar = document.querySelector('.navbar');
             var lastScroll = 0;
             var scrollThreshold = 60;
+            var navHideTimer = null;
             window.addEventListener('scroll', function() {
                 var current = window.scrollY;
+                // Always show at top
+                if (current <= 10) {
+                    if (navbar) navbar.classList.remove('nav-hidden');
+                    lastScroll = 0;
+                    return;
+                }
                 if (current > lastScroll && current > scrollThreshold) {
                     if (navbar) navbar.classList.add('nav-hidden');
-                } else {
+                } else if (current < lastScroll) {
                     if (navbar) navbar.classList.remove('nav-hidden');
                 }
-                lastScroll = current <= 0 ? 0 : current;
+                lastScroll = current;
+                // Auto-show after 2s idle (prevents stuck-hidden state)
+                clearTimeout(navHideTimer);
+                navHideTimer = setTimeout(function() {
+                    if (navbar) navbar.classList.remove('nav-hidden');
+                }, 2000);
             }, { passive: true });
 
             // 3. Mark active bottom nav item based on current URL
@@ -2544,13 +2560,34 @@
             // 4. Native tap ripple feedback on cards and buttons
             document.querySelectorAll('.card, .btn, .mobile-nav-item').forEach(function(el) {
                 el.addEventListener('touchstart', function() {
-                    this.style.transition = 'opacity 0.1s';
-                    this.style.opacity = '0.85';
+                    this.style.transition = 'opacity 0.1s, transform 0.1s';
+                    this.style.opacity = '0.82';
+                    this.style.transform = (this.style.transform || '') + ' scale(0.97)';
                 }, { passive: true });
                 el.addEventListener('touchend', function() {
                     this.style.opacity = '1';
+                    this.style.transform = this.style.transform.replace(' scale(0.97)', '').replace('scale(0.97)', '').trim();
+                }, { passive: true });
+                el.addEventListener('touchcancel', function() {
+                    this.style.opacity = '1';
+                    this.style.transform = this.style.transform.replace(' scale(0.97)', '').replace('scale(0.97)', '').trim();
                 }, { passive: true });
             });
+
+            // 5b. Haptic feedback on primary buttons and form submit
+            var _haptics = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics;
+            if (_haptics) {
+                document.addEventListener('click', function(e) {
+                    var t = e.target;
+                    var btn = t.closest('.btn-primary, .btn-success, .btn-danger, [type="submit"]');
+                    if (btn) {
+                        _haptics.impact({ style: 'LIGHT' }).catch(function() {});
+                    }
+                });
+                document.addEventListener('submit', function() {
+                    _haptics.impact({ style: 'MEDIUM' }).catch(function() {});
+                }, true);
+            }
 
             // 5. Prevent double-tap zoom on buttons/links (native feel)
             var lastTap = 0;
@@ -2712,9 +2749,25 @@
         var sidebar = document.getElementById('sidebar');
         var overlay = document.getElementById('sidebarOverlay');
         if (!btn || !sidebar) return;
+        function openSB() {
+            sidebar.classList.add('mobile-open');
+            if (overlay) { overlay.classList.add('show'); overlay.style.display = 'block'; }
+            document.body.style.overflow = 'hidden';
+        }
+        function closeSB() {
+            sidebar.classList.remove('mobile-open');
+            if (overlay) overlay.classList.remove('show');
+            document.body.style.overflow = '';
+        }
         btn.addEventListener('click', function() {
-            sidebar.classList.toggle('mobile-open');
-            if (overlay) overlay.classList.toggle('show');
+            if (sidebar.classList.contains('mobile-open')) closeSB(); else openSB();
+        });
+        if (overlay) overlay.addEventListener('click', closeSB);
+        // Close sidebar when any sidebar link is tapped on mobile
+        sidebar.querySelectorAll('a').forEach(function(a) {
+            a.addEventListener('click', function() {
+                if (window.innerWidth < 992) closeSB();
+            });
         });
     })();
 

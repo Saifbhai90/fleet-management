@@ -10,11 +10,17 @@
   "android": {
     "allowMixedContent": false,
     "captureInput": true,
-    "webContentsDebuggingEnabled": false
+    "webContentsDebuggingEnabled": false,
+    "overScrollMode": "never",
+    "backgroundColor": "#0f172a",
+    "initialFocus": false
   },
   "ios": {
     "contentInset": "always",
-    "scrollEnabled": true
+    "scrollEnabled": true,
+    "allowsLinkPreview": false,
+    "allowsBackForwardNavigationGestures": false,
+    "backgroundColor": "#0f172a"
   },
   "plugins": {
     "SplashScreen": {
