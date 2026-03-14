@@ -8923,31 +8923,33 @@ def driver_attendance_report():
             vehicle_id = None
         shift = (request.form.get('shift') or '').strip()
         search = (form.search.data or '').strip()
-        drivers_query = Driver.query.filter(Driver.status == 'Active').filter(Driver.vehicle_id.isnot(None))
-        # Scope enforce karein
+        drivers_query = Driver.query.filter(
+            Driver.status == 'Active',
+            Driver.vehicle_id.isnot(None),
+        ).outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+        # Scope enforce - use OR so NULL driver fields fall back to vehicle fields
         if scope_projects:
-            drivers_query = drivers_query.filter(Driver.project_id.in_(scope_projects))
+            drivers_query = drivers_query.filter(
+                db.or_(Driver.project_id.in_(scope_projects),
+                       Vehicle.project_id.in_(scope_projects))
+            )
         if scope_districts:
-            drivers_query = drivers_query.filter(Driver.district_id.in_(scope_districts))
+            drivers_query = drivers_query.filter(
+                db.or_(Driver.district_id.in_(scope_districts),
+                       Vehicle.district_id.in_(scope_districts))
+            )
         if scope_vehicles:
             drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
         if scope_shifts:
             drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
         if project_id:
-            drivers_query = drivers_query.filter(Driver.project_id == project_id)
-
-        # District filter ko Driver.district_id + Vehicle.district_id dono par apply karein
-        need_vehicle_join = bool(district_id or search)
-        if need_vehicle_join:
-            drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+            drivers_query = drivers_query.filter(
+                db.or_(Driver.project_id == project_id, Vehicle.project_id == project_id)
+            )
         if district_id:
             drivers_query = drivers_query.filter(
-                db.or_(
-                    Driver.district_id == district_id,
-                    Vehicle.district_id == district_id,
-                )
+                db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
             )
-
         if vehicle_id:
             drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
         if shift:
@@ -8961,7 +8963,7 @@ def driver_attendance_report():
                     Vehicle.vehicle_no.ilike(q),
                 )
             )
-        drivers = drivers_query.order_by(Driver.name).all()
+        drivers = drivers_query.distinct().order_by(Driver.name).all()
         from calendar import monthrange
         _, ndays = monthrange(year, month)
         start_d = date(year, month, 1)
