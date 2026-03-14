@@ -42,7 +42,7 @@
         <div class="row g-3 align-items-end">
           <div class="col-md-3 col-lg-2">
             <label class="form-label">Project</label>
-            <select id="projectSelect" class="form-select select2-enable" data-placeholder="Search project...">
+            <select id="projectSelect" class="form-select select2-enable" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
               <option value="0" {% if not project_id %}selected{% endif %}>All Projects</option>
               {% for p in form.project_id.choices if p[0] != 0 %}
                 <option value="{{ p[0] }}" {% if project_id == p[0] %}selected{% endif %}>{{ p[1] }}</option>
@@ -51,7 +51,7 @@
           </div>
           <div class="col-md-3 col-lg-2">
             <label class="form-label">District</label>
-            <select id="districtSelect" class="form-select select2-enable" data-placeholder="Search district...">
+            <select id="districtSelect" class="form-select select2-enable" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
               <option value="0" {% if not district_id %}selected{% endif %}>All Districts</option>
               {% for d in form.district_id.choices if d[0] != 0 %}
                 <option value="{{ d[0] }}" {% if district_id == d[0] %}selected{% endif %}>{{ d[1] }}</option>
@@ -60,7 +60,7 @@
           </div>
           <div class="col-md-3 col-lg-2">
             <label class="form-label">Vehicle</label>
-            <select id="vehicleSelect" class="form-select select2-enable" data-placeholder="Search vehicle...">
+            <select id="vehicleSelect" class="form-select select2-enable" data-placeholder="Search vehicle..." {% if disable_vehicle %}disabled{% endif %}>
               <option value="0" {% if not vehicle_id %}selected{% endif %}>All Vehicles</option>
               {% for v in form.vehicle_id.choices if v[0] != 0 %}
                 <option value="{{ v[0] }}" {% if vehicle_id == v[0] %}selected{% endif %}>{{ v[1] }}</option>
@@ -69,7 +69,7 @@
           </div>
           <div class="col-md-3 col-lg-2">
             <label class="form-label">Shift</label>
-            <select id="shiftSelect" class="form-select select2-enable" data-placeholder="Shift">
+            <select id="shiftSelect" class="form-select select2-enable" data-placeholder="Shift" {% if disable_shift %}disabled{% endif %}>
               <option value="" {% if not shift %}selected{% endif %}>All Shifts</option>
               {% for s in form.shift.choices if s[0] != '' %}
                 <option value="{{ s[0] }}" {% if shift == s[0] %}selected{% endif %}>{{ s[1] }}</option>

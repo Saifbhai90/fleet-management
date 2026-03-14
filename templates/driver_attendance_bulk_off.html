@@ -34,7 +34,7 @@
           </div>
           <div class="col-md-3">
             <label class="form-label">District</label>
-            <select id="districtSelect" class="form-select select2-enable" data-placeholder="Search district...">
+            <select id="districtSelect" class="form-select select2-enable" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
               <option value="">-- Select District --</option>
               {% for d in districts %}
               <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -43,7 +43,7 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">Project</label>
-            <select id="projectSelect" class="form-select select2-enable" data-placeholder="Search project...">
+            <select id="projectSelect" class="form-select select2-enable" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
               <option value="">-- Select Project --</option>
               {% for p in projects %}
               <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>

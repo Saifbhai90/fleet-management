@@ -7192,6 +7192,29 @@ def driver_attendance_list():
         from_date = to_date = view_date
         from_date_str = to_date_str = view_date.strftime('%d-%m-%Y')
 
+    # Auto-select & disable if only 1 option allowed
+    disable_project = False
+    disable_district = False
+    disable_vehicle = False
+    disable_shift = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if project_id is None:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if district_id is None:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+        if len(allowed_vehicles) == 1:
+            if vehicle_id is None:
+                vehicle_id = next(iter(allowed_vehicles))
+            disable_vehicle = True
+        if len(allowed_shifts) == 1:
+            if not shift:
+                shift = next(iter(allowed_shifts))
+            disable_shift = True
+
     form.attendance_date.data = view_date
     form.project_id.data = project_id if project_id else 0
     if project_id and project_id != 0:
@@ -7294,7 +7317,7 @@ def driver_attendance_list():
                 )
             )
         drivers = drivers_query.order_by(Driver.name).all()
-    return render_template('driver_attendance_list.html', form=form, view_date=view_date, drivers=drivers, by_driver=by_driver, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, search=search)
+    return render_template('driver_attendance_list.html', form=form, view_date=view_date, drivers=drivers, by_driver=by_driver, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, search=search, disable_project=disable_project, disable_district=disable_district, disable_vehicle=disable_vehicle, disable_shift=disable_shift)
 
 
 def _driver_attendance_marked_list(view_date, project_id=None, district_id=None, vehicle_id=None, shift=None, search=None):
@@ -7662,6 +7685,18 @@ def driver_attendance_bulk_off():
         district_id = None
     if project_id == 0:
         project_id = None
+    # Auto-select & disable if only 1 option allowed
+    disable_district = False
+    disable_project = False
+    if not is_master_or_admin:
+        if len(allowed_districts) == 1:
+            if district_id is None:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+        if len(allowed_projects) == 1:
+            if project_id is None:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
     projects = []
     if district_id:
         proj_q = Project.query.join(project_district).filter(project_district.c.district_id == district_id)
@@ -7749,6 +7784,8 @@ def driver_attendance_bulk_off():
         view_date=view_date,
         district_id=district_id,
         project_id=project_id,
+        disable_district=disable_district,
+        disable_project=disable_project,
     )
 
 
@@ -7760,6 +7797,8 @@ def driver_attendance_pending():
     user_context = get_user_context(user_id) if user_id else {}
     allowed_projects = user_context.get('allowed_projects', set())
     allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    allowed_shifts = user_context.get('allowed_shifts', set())
     is_master_or_admin = user_context.get('is_master_or_admin', False)
 
     form = DriverAttendanceFilterForm()
@@ -7780,6 +7819,28 @@ def driver_attendance_pending():
     if district_id == 0: district_id = None
     if vehicle_id == 0: vehicle_id = None
     if driver_id == 0: driver_id = None
+    # Auto-select & disable if only 1 option allowed
+    disable_project = False
+    disable_district = False
+    disable_vehicle = False
+    disable_shift = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if project_id is None:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if district_id is None:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+        if len(allowed_vehicles) == 1:
+            if vehicle_id is None:
+                vehicle_id = next(iter(allowed_vehicles))
+            disable_vehicle = True
+        if len(allowed_shifts) == 1:
+            if not shift:
+                shift = next(iter(allowed_shifts))
+            disable_shift = True
     form.attendance_date.data = view_date
     form.project_id.data = project_id if project_id else 0
     if project_id and project_id != 0:
@@ -7840,7 +7901,7 @@ def driver_attendance_pending():
     all_filtered_drivers = drivers_query.order_by(Driver.name).all()
     existing_ids = {a.driver_id for a in DriverAttendance.query.filter_by(attendance_date=view_date).all()}
     drivers = [d for d in all_filtered_drivers if d.id not in existing_ids]
-    return render_template('driver_attendance_pending.html', form=form, view_date=view_date, drivers=drivers, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, vehicles=vehicles, vehicle_drivers=vehicle_drivers)
+    return render_template('driver_attendance_pending.html', form=form, view_date=view_date, drivers=drivers, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, vehicles=vehicles, vehicle_drivers=vehicle_drivers, disable_project=disable_project, disable_district=disable_district, disable_vehicle=disable_vehicle, disable_shift=disable_shift)
 
 
 @app.route('/driver-attendance/missing-checkout', methods=['GET'])
@@ -7851,6 +7912,8 @@ def driver_attendance_missing_checkout():
     user_context = get_user_context(user_id) if user_id else {}
     allowed_projects = user_context.get('allowed_projects', set())
     allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    allowed_shifts = user_context.get('allowed_shifts', set())
     is_master_or_admin = user_context.get('is_master_or_admin', False)
 
     form = DriverAttendanceFilterForm()
@@ -7871,6 +7934,28 @@ def driver_attendance_missing_checkout():
     if district_id == 0: district_id = None
     if vehicle_id == 0: vehicle_id = None
     if driver_id == 0: driver_id = None
+    # Auto-select & disable if only 1 option allowed
+    disable_project = False
+    disable_district = False
+    disable_vehicle = False
+    disable_shift = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if project_id is None:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if district_id is None:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+        if len(allowed_vehicles) == 1:
+            if vehicle_id is None:
+                vehicle_id = next(iter(allowed_vehicles))
+            disable_vehicle = True
+        if len(allowed_shifts) == 1:
+            if not shift:
+                shift = next(iter(allowed_shifts))
+            disable_shift = True
     form.attendance_date.data = view_date
     form.project_id.data = project_id if project_id else 0
     if project_id and project_id != 0:
@@ -7971,14 +8056,11 @@ def driver_attendance_missing_checkout():
         search=search,
         vehicles=vehicles,
         vehicle_drivers=vehicle_drivers,
+        disable_project=disable_project,
+        disable_district=disable_district,
+        disable_vehicle=disable_vehicle,
+        disable_shift=disable_shift,
     )
-
-
-@app.route('/driver-attendance/manual-checkin', methods=['GET', 'POST'])
-def driver_attendance_manual_checkin():
-    """Manual check-in form: set check-in time, reason and optional photo for a driver who has not checked in."""
-    driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
-    date_str = request.args.get('date') or request.form.get('date')
     view_date = parse_date(date_str) if date_str else date.today()
     if view_date > date.today():
         flash('Manual check-in cannot be recorded for a future date.', 'danger')
