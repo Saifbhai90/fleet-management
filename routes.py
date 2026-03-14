@@ -4382,6 +4382,20 @@ def assign_project_to_district():
     search = request.args.get('search', '').strip()
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
+    
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+    
     assigned_structured = _assign_project_to_district_data(search=search, project_id=project_id, district_id=district_id)
     
     # Apply user data scope to assignments
@@ -4411,6 +4425,8 @@ def assign_project_to_district():
         district_id=district_id or 0,
         project_choices=projects,
         district_choices=districts,
+        disable_project=disable_project,
+        disable_district=disable_district,
     )
 
 
@@ -11808,6 +11824,19 @@ def report_vehicle_summary():
     district_id = request.args.get('district_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
 
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+
     from_date = parse_date(from_date_str) if from_date_str else None
     to_date = parse_date(to_date_str) if to_date_str else None
 
@@ -11854,6 +11883,8 @@ def report_vehicle_summary():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+        disable_project=disable_project,
+        disable_district=disable_district,
     )
 
 
@@ -11901,6 +11932,19 @@ def report_expiry():
     allowed_vehicles = user_context.get('allowed_vehicles', set())
     allowed_shifts = user_context.get('allowed_shifts', set())
     is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
 
     # Base driver query with optional filters
     # Sirf woh drivers jinke sath koi vehicle assigned hai
@@ -11985,6 +12029,8 @@ def report_expiry():
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
         shift_choices=shift_choices,
+        disable_project=disable_project,
+        disable_district=disable_district,
         project_id=project_id,
         district_id=district_id,
         vehicle_id=vehicle_id,
