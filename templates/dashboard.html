@@ -571,6 +571,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- ═══════════════════════════════
      DOCUMENT HEALTH CARD
 ═══════════════════════════════ -->
+{% if expiry_already > 0 or expiry_soon > 0 %}
 <div class="d-flex align-items-start gap-3 mt-3 px-3 py-3"
      style="background:linear-gradient(135deg,{% if expiry_already > 0 %}#fef2f2,#fee2e2{% else %}#fffbeb,#fef3c7{% endif %});border:2px solid {% if expiry_already > 0 %}#fca5a5{% else %}#fcd34d{% endif %};border-radius:18px;">
     <div style="width:44px;height:44px;border-radius:14px;background:{% if expiry_already > 0 %}#fee2e2{% else %}#fef3c7{% endif %};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
