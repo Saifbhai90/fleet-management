@@ -349,6 +349,27 @@ def _unread_notifications_for_user(user_id, limit=20):
     return out
 
 
+@app.route('/api/v1/me')
+def api_me():
+    """Mobile API: returns current user identity + full permission list.
+    Used by the mobile app to hide/show icons and actions based on strict role hierarchy."""
+    if not session.get('user_id'):
+        return jsonify({'error': 'Not authenticated', 'authenticated': False}), 401
+    is_master = session.get('is_master', False)
+    permissions = list(session.get('permissions') or [])
+    # Master gets a synthetic 'master' flag so mobile can render superuser UI
+    return jsonify({
+        'authenticated': True,
+        'user_id': session.get('user_id'),
+        'username': session.get('user', ''),
+        'full_name': session.get('full_name', ''),
+        'role': session.get('role', ''),
+        'is_master': is_master,
+        'permissions': permissions,
+        'permission_count': len(permissions),
+    })
+
+
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
@@ -3403,6 +3424,11 @@ def role_form():
                 db.session.commit()
         perm_ids = request.form.getlist('permission_ids', type=int)
         if perm_ids and allowed_permission_ids is not None:
+            # Delegation ceiling: block any IDs outside current user's own set
+            blocked = [i for i in perm_ids if i not in allowed_permission_ids]
+            if blocked:
+                blocked_names = [p.name for p in Permission.query.filter(Permission.id.in_(blocked)).all()]
+                flash(f'Security: {len(blocked)} permission(s) blocked — you cannot grant access you do not have: {', '.join(blocked_names[:5])}.', 'warning')
             perm_ids = [i for i in perm_ids if i in allowed_permission_ids]
         if perm_ids:
             from permissions_config import expand_permission_dependencies
@@ -3461,13 +3487,18 @@ def role_edit(pk):
             perm_ids = [permission_by_code[c].id for c in expanded if permission_by_code.get(c)]
             role.permissions = Permission.query.filter(Permission.id.in_(perm_ids)).all() if perm_ids else []
         else:
-            # Non-master (Admin, etc.): sirf wohi permissions assign ho sakti hain jo current user ke paas bhi hon.
-            # Iska matlab: admin kisi role ko apne aap se zyada access nahi de sakta,
-            # aur pehle se maujood "hidden" permissions bhi edit/save pe hata di jayengi.
-            submitted_allowed = set(perm_ids) & (allowed_permission_ids or set())
+            # Delegation ceiling: non-master can ONLY assign permissions they themselves hold.
+            # Any attempt to include an ID outside their own set is silently stripped + warned.
+            submitted_ids   = set(perm_ids)
+            allowed_ids     = allowed_permission_ids or set()
+            blocked_ids     = submitted_ids - allowed_ids
+            if blocked_ids:
+                blocked_names = [p.name for p in Permission.query.filter(Permission.id.in_(blocked_ids)).all()]
+                flash(f'Security: {len(blocked_ids)} permission(s) blocked — you cannot grant access you do not have: {', '.join(blocked_names[:5])}.', 'warning')
+            submitted_allowed = submitted_ids & allowed_ids
             codes = {p.code for p in Permission.query.filter(Permission.id.in_(submitted_allowed)).all()}
             expanded = expand_permission_dependencies(codes)
-            expanded_ids = {permission_by_code[c].id for c in expanded if permission_by_code.get(c) and permission_by_code[c].id in (allowed_permission_ids or set())}
+            expanded_ids = {permission_by_code[c].id for c in expanded if permission_by_code.get(c) and permission_by_code[c].id in allowed_ids}
             role.permissions = Permission.query.filter(Permission.id.in_(expanded_ids)).all() if expanded_ids else []
         db.session.commit()
         flash('Role updated successfully.', 'success')

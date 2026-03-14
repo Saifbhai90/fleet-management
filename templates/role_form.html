@@ -30,12 +30,18 @@
 
 /* Touch target: min 44px height */
 .perm-item {
-  display: flex; align-items: center;
-  min-height: 44px; padding: 4px 6px 4px 0;
+  display: flex; align-items: flex-start;
+  min-height: 44px; padding: 6px 8px;
   border-radius: 8px;
-  transition: background 0.12s;
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+  background: #fff;
 }
-.perm-item:hover { background: rgba(37,99,235,0.06); }
+.perm-item:hover { background: #eff6ff; border-color: #bfdbfe; }
+.perm-item:has(.form-check-input:checked) {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
 
 /* Page group container */
 .perm-page-group {
@@ -45,7 +51,23 @@
   margin-bottom: 8px;
   padding: 10px 14px;
 }
-.perm-page-group:hover { border-color: #dbeafe; }
+.perm-page-group:hover { border-color: #bfdbfe; background: #f0f7ff; }
+
+/* Permission grid: ensures labels NEVER overlap */
+.perm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+/* Full/parent checkbox always spans the entire row */
+.perm-grid .perm-full-cb {
+  grid-column: 1 / -1;
+  background: #f0f7ff;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
 
 /* Section header badge + buttons row */
 .section-header {
@@ -81,10 +103,12 @@
 /* Mobile tweaks */
 @media (max-width: 767px) {
   .perm-page-group { padding: 8px 10px; }
-  .perm-item { min-height: 48px; padding: 6px 4px; }
+  .perm-item { min-height: 48px; padding: 6px 6px; }
   .perm-item .form-check-input { width: 22px; height: 22px; }
   .perm-item .form-check-label { font-size: 0.85rem; }
   .section-header { gap: 6px; }
+  /* 2 columns on mobile */
+  .perm-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 5px; }
 }
 </style>
 {% endblock %}
@@ -208,7 +232,7 @@
                   <span class="text-secondary small fw-semibold">{{ page_label }}</span>
                 </div>
                 <!-- Checkboxes -->
-                <div class="d-flex flex-wrap gap-1 gap-md-2">
+                <div class="perm-grid">
                   {% for perm_id, perm_code, perm_name in rows %}
                   <div class="form-check perm-item {% if '(full)' in perm_name %}perm-full-cb{% endif %}"
                        style="margin:0;">
