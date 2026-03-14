@@ -16,6 +16,8 @@ Endpoints:
 import os
 import jwt
 import datetime
+import threading
+from collections import defaultdict
 from functools import wraps
 
 from flask import Blueprint, request, jsonify, current_app
@@ -26,6 +28,35 @@ api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRY_HOURS = 24
 
+# ── Rate limiting: max 5 failed login attempts per IP per 10 minutes ─────────
+_login_attempts: dict = defaultdict(list)
+_login_lock = threading.Lock()
+_RATE_LIMIT_WINDOW = 600   # seconds
+_RATE_LIMIT_MAX_FAILS = 5
+
+
+def _get_client_ip() -> str:
+    """Real client IP, respecting X-Forwarded-For behind a reverse proxy."""
+    xff = request.headers.get('X-Forwarded-For', '')
+    if xff:
+        return xff.split(',')[0].strip()
+    return request.remote_addr or '0.0.0.0'
+
+
+def _is_rate_limited(ip: str) -> bool:
+    """True if this IP has exceeded the failed-login threshold."""
+    now = datetime.datetime.now(datetime.timezone.utc).timestamp()
+    with _login_lock:
+        _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _RATE_LIMIT_WINDOW]
+        return len(_login_attempts[ip]) >= _RATE_LIMIT_MAX_FAILS
+
+
+def _record_failed_attempt(ip: str):
+    """Record a failed login timestamp for this IP."""
+    now = datetime.datetime.now(datetime.timezone.utc).timestamp()
+    with _login_lock:
+        _login_attempts[ip].append(now)
+
 
 def _jwt_secret():
     return current_app.config.get('SECRET_KEY', 'changeme')
@@ -33,8 +64,9 @@ def _jwt_secret():
 
 def _make_token(payload: dict) -> str:
     payload = dict(payload)
-    payload['exp'] = datetime.datetime.utcnow() + datetime.timedelta(hours=JWT_EXPIRY_HOURS)
-    payload['iat'] = datetime.datetime.utcnow()
+    _now = datetime.datetime.now(datetime.timezone.utc)
+    payload['exp'] = _now + datetime.timedelta(hours=JWT_EXPIRY_HOURS)
+    payload['iat'] = _now
     return jwt.encode(payload, _jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
@@ -65,6 +97,28 @@ def _err(msg, code=400):
     return jsonify({'success': False, 'error': msg}), code
 
 
+def _mobile_has_permission(perm_code: str) -> bool:
+    """Return True if the JWT-authenticated user has the given permission code.
+    Master users (is_master flag in token) are always allowed.
+    Other users are checked against their role's Permission records in DB.
+    """
+    from models import User
+    from auth_utils import user_can_access
+    payload = getattr(request, 'jwt_payload', {})
+    if payload.get('is_master'):
+        return True
+    uid = payload.get('user_id')
+    if not uid:
+        return False
+    user = User.query.get(uid)
+    if not user:
+        return False
+    if user.role and user.role.name == 'Master':
+        return True
+    perms = [p.code for p in user.role.permissions] if (user.role and user.role.permissions) else []
+    return user_can_access(perms, perm_code)
+
+
 def _ok(data=None, **kwargs):
     payload = {'success': True}
     if data is not None:
@@ -88,20 +142,26 @@ def mobile_login():
     if not username or not password:
         return _err('username and password are required.')
 
+    client_ip = _get_client_ip()
+    if _is_rate_limited(client_ip):
+        return _err('Too many failed attempts. Please try again in 10 minutes.', 429)
+
     user = User.query.filter_by(username=username, is_active=True).first()
     if not user or not check_password_hash(user.password_hash, password):
+        _record_failed_attempt(client_ip)
         return _err('Invalid credentials.', 401)
 
+    is_master = bool(user.role and user.role.name == 'Master')
     token = _make_token({
         'user_id': user.id,
         'username': user.username,
-        'name': user.name or user.username,
-        'is_master': user.is_master if hasattr(user, 'is_master') else False,
+        'name': user.full_name or user.username,
+        'is_master': is_master,
     })
     return _ok({
         'token': token,
         'user_id': user.id,
-        'name': user.name or user.username,
+        'name': user.full_name or user.username,
         'expires_in_hours': JWT_EXPIRY_HOURS,
     })
 
@@ -120,7 +180,7 @@ def mobile_me():
     return _ok({
         'user_id': user.id,
         'username': user.username,
-        'name': user.name or user.username,
+        'name': user.full_name or user.username,
         'driver': {
             'id': driver.id,
             'driver_id': driver.driver_id,
@@ -137,6 +197,8 @@ def mobile_me():
 @jwt_required
 def mobile_dashboard_stats():
     """Returns KPI summary for mobile dashboard."""
+    if not _mobile_has_permission('dashboard'):
+        return _err('Permission denied. Requires: dashboard.', 403)
     from models import Driver, Vehicle, DriverAttendance, FuelExpense
     from sqlalchemy import func
     from app import db
@@ -193,32 +255,59 @@ def _save_base64_photo(b64_string: str, folder: str = 'attendance') -> str:
         return f'/uploads/{folder}/{fname}'
 
 
+def _resolve_driver_for_jwt(body: dict, jwt_payload: dict):
+    """Resolve and ownership-check the driver for the requesting JWT user.
+    Master / Admin users may act on any driver_id from the request body.
+    Regular users may only act on their own driver record (cnic_no == username).
+    Returns (driver, error_response) — exactly one will be None.
+    """
+    from models import User, Driver
+    uid = jwt_payload.get('user_id')
+    user = User.query.get(uid)
+    if not user:
+        return None, _err('Authenticated user not found.', 401)
+
+    is_privileged = jwt_payload.get('is_master', False) or (
+        user.role and user.role.name in ('Master', 'Admin')
+    )
+    requested_id = body.get('driver_id')
+
+    if is_privileged and requested_id:
+        driver = Driver.query.get(requested_id)
+    else:
+        driver = Driver.query.filter_by(cnic_no=user.username).first()
+        if requested_id and driver and driver.id != int(requested_id):
+            return None, _err('You can only manage your own attendance.', 403)
+
+    if not driver:
+        return None, _err('Driver profile not found for this user.', 404)
+    return driver, None
+
+
 # ── POST /api/v1/attendance/checkin ──────────────────────────────────────────
 @api_bp.route('/attendance/checkin', methods=['POST'])
 @jwt_required
 def mobile_checkin():
     """
     Body: { "driver_id": 5, "latitude": 31.5, "longitude": 74.3, "photo_base64": "..." }
+    Privileged users (Master/Admin) may specify any driver_id.
+    Regular users are restricted to their own driver record.
     """
-    from models import Driver, DriverAttendance
+    from models import DriverAttendance
     from app import db
     import datetime as dt
 
     body = request.get_json(silent=True) or {}
-    driver_id = body.get('driver_id')
     lat = body.get('latitude')
     lng = body.get('longitude')
     photo_b64 = body.get('photo_base64', '')
 
-    if not driver_id:
-        return _err('driver_id is required.')
-
-    driver = Driver.query.get(driver_id)
-    if not driver:
-        return _err('Driver not found.', 404)
+    driver, err = _resolve_driver_for_jwt(body, request.jwt_payload)
+    if err:
+        return err
 
     today = dt.date.today()
-    now_utc = dt.datetime.utcnow()
+    now_utc = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
 
     existing = DriverAttendance.query.filter_by(
         driver_id=driver.id, attendance_date=today
@@ -260,26 +349,24 @@ def mobile_checkin():
 def mobile_checkout():
     """
     Body: { "driver_id": 5, "latitude": 31.5, "longitude": 74.3, "photo_base64": "..." }
+    Privileged users (Master/Admin) may specify any driver_id.
+    Regular users are restricted to their own driver record.
     """
-    from models import Driver, DriverAttendance
+    from models import DriverAttendance
     from app import db
     import datetime as dt
 
     body = request.get_json(silent=True) or {}
-    driver_id = body.get('driver_id')
     lat = body.get('latitude')
     lng = body.get('longitude')
     photo_b64 = body.get('photo_base64', '')
 
-    if not driver_id:
-        return _err('driver_id is required.')
-
-    driver = Driver.query.get(driver_id)
-    if not driver:
-        return _err('Driver not found.', 404)
+    driver, err = _resolve_driver_for_jwt(body, request.jwt_payload)
+    if err:
+        return err
 
     today = dt.date.today()
-    now_utc = dt.datetime.utcnow()
+    now_utc = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
 
     record = DriverAttendance.query.filter_by(
         driver_id=driver.id, attendance_date=today
@@ -364,6 +451,8 @@ def mobile_driver_profile():
 @jwt_required
 def mobile_notifications():
     """Returns unread notifications for the current user."""
+    if not _mobile_has_permission('notification_list'):
+        return _err('Permission denied. Requires: notification_list.', 403)
     from models import Notification, NotificationRead
     from app import db
 
@@ -387,6 +476,8 @@ def mobile_notifications():
 @jwt_required
 def mobile_drivers():
     """Paginated driver list. Query params: ?page=1&per_page=20&search=name"""
+    if not _mobile_has_permission('drivers_list'):
+        return _err('Permission denied. Requires: drivers_list.', 403)
     from models import Driver
 
     page = request.args.get('page', 1, type=int)
@@ -417,6 +508,8 @@ def mobile_drivers():
 @jwt_required
 def mobile_driver_detail(driver_id):
     """Single driver detail."""
+    if not _mobile_has_permission('drivers_list'):
+        return _err('Permission denied. Requires: drivers_list.', 403)
     from models import Driver
     d = Driver.query.get_or_404(driver_id)
     return _ok({
@@ -441,6 +534,8 @@ def mobile_driver_detail(driver_id):
 @jwt_required
 def mobile_vehicles():
     """Paginated vehicle list. Query params: ?page=1&per_page=20&search=vehicle_no"""
+    if not _mobile_has_permission('vehicles_list'):
+        return _err('Permission denied. Requires: vehicles_list.', 403)
     from models import Vehicle
 
     page = request.args.get('page', 1, type=int)

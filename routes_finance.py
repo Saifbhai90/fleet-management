@@ -471,23 +471,44 @@ def accounts_balance_sheet():
         as_of_date = form.as_of_date.data or date.today()
         
         # Get all accounts grouped by type
-        assets = Account.query.filter_by(account_type='Asset', is_active=True).order_by(Account.code).all()
+        assets      = Account.query.filter_by(account_type='Asset',     is_active=True).order_by(Account.code).all()
         liabilities = Account.query.filter_by(account_type='Liability', is_active=True).order_by(Account.code).all()
-        equity = Account.query.filter_by(account_type='Equity', is_active=True).order_by(Account.code).all()
-        
-        # Calculate balances
-        total_assets = sum(get_account_balance(a.id, as_of_date) for a in assets)
-        total_liabilities = sum(get_account_balance(a.id, as_of_date) for a in liabilities)
-        total_equity = sum(get_account_balance(a.id, as_of_date) for a in equity)
-        
+        equity      = Account.query.filter_by(account_type='Equity',    is_active=True).order_by(Account.code).all()
+
+        # B-09: Replace N+1 get_account_balance() calls with ONE bulk aggregate query
+        from sqlalchemy import func as _func
+        all_ids = [a.id for a in assets + liabilities + equity]
+        _bal_rows = db.session.query(
+            JournalEntryLine.account_id,
+            _func.sum(JournalEntryLine.debit).label('td'),
+            _func.sum(JournalEntryLine.credit).label('tc'),
+        ).join(JournalEntry).filter(
+            JournalEntryLine.account_id.in_(all_ids),
+            JournalEntry.entry_date <= as_of_date,
+            JournalEntry.is_posted == True,
+        ).group_by(JournalEntryLine.account_id).all()
+
+        _jnl = {r.account_id: (Decimal(str(r.td or 0)), Decimal(str(r.tc or 0))) for r in _bal_rows}
+
+        def _bal(account):
+            opening = Decimal(str(account.opening_balance or 0))
+            debit, credit = _jnl.get(account.id, (Decimal('0'), Decimal('0')))
+            if account.account_type in ('Asset', 'Expense'):
+                return opening + debit - credit
+            return opening + credit - debit
+
+        total_assets      = sum(_bal(a) for a in assets)
+        total_liabilities = sum(_bal(a) for a in liabilities)
+        total_equity      = sum(_bal(a) for a in equity)
+
         balance_sheet_data = {
-            'assets': [(a, get_account_balance(a.id, as_of_date)) for a in assets],
-            'liabilities': [(a, get_account_balance(a.id, as_of_date)) for a in liabilities],
-            'equity': [(a, get_account_balance(a.id, as_of_date)) for a in equity],
+            'assets':      [(a, _bal(a)) for a in assets],
+            'liabilities': [(a, _bal(a)) for a in liabilities],
+            'equity':      [(a, _bal(a)) for a in equity],
             'total_assets': total_assets,
             'total_liabilities': total_liabilities,
             'total_equity': total_equity,
-            'balanced': abs(total_assets - (total_liabilities + total_equity)) < Decimal('0.01')
+            'balanced': abs(total_assets - (total_liabilities + total_equity)) < Decimal('0.01'),
         }
     
     return render_template('finance/balance_sheet.html',
@@ -501,7 +522,7 @@ def accounts_balance_sheet():
 # ════════════════════════════════════════════════════════════════════════════════
 
 def employee_expense_form(pk=None):
-    auth_check = check_auth('employee_expense_form')
+    auth_check = check_auth('employee_expense_add' if not pk else 'employee_expense_edit')
     if auth_check:
         return auth_check
     """Add/Edit Employee Expense"""
@@ -645,7 +666,7 @@ def employee_expense_list():
 
 
 def employee_expense_delete(pk):
-    auth_check = check_auth('employee_expense_form')
+    auth_check = check_auth('employee_expense_delete')
     if auth_check:
         return auth_check
     """Delete Employee Expense"""

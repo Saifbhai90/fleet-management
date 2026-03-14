@@ -13,6 +13,8 @@ from auth_utils import (
 PERMISSION_TREE = {
     PERMISSION_DASHBOARD: [
         ('dashboard', 'Dashboard (full)'),
+        ('global_search', 'Global Search (Navbar)'),
+        ('view_fleet_map', 'Fleet Map – Live GPS'),
     ],
     PERMISSION_MASTER: [
         ('master', 'Master Data (full)'),
@@ -52,6 +54,7 @@ PERMISSION_TREE = {
         ('party_import', 'Parties – Import'),
         ('product_import', 'Products – Import'),
         ('employees_delete', 'Employees – Delete'),
+        ('view_documents', 'Documents – View Uploaded Files'),
         ('driver_post_list', 'Designations – List / View'),
         ('driver_post_add', 'Designations – Add New'),
         ('driver_post_edit', 'Designations – Edit'),
@@ -126,6 +129,7 @@ PERMISSION_TREE = {
         ('penalty_record', 'Penalties – List / View'),
         ('penalty_record_add', 'Penalties – Add New'),
         ('penalty_record_edit', 'Penalties – Edit'),
+        ('penalty_record_delete', 'Penalties – Delete'),
     ],
     PERMISSION_ATTENDANCE: [
         ('driver_attendance', 'Attendance – All'),
@@ -204,6 +208,7 @@ PERMISSION_TREE = {
     ],
     PERMISSION_BACKUP: [
         ('backup', 'Backup'),
+        ('system_backup', 'Backup – Download / Email / Save'),
     ],
     PERMISSION_USERS_MANAGE: [
         ('users_manage', 'User & Role Management (full)'),
@@ -399,12 +404,22 @@ PERMISSION_DEPENDENCIES = {
     'role_edit': ['role_list'],
     'role_delete': ['role_list'],
     'notification_add': ['notification_list'],
+    # Security lockdown additions
+    'system_backup': ['backup'],
+    'view_documents': [],
+    'global_search': ['dashboard'],
+    'view_fleet_map': ['dashboard'],
+    'penalty_record_delete': ['penalty_record'],
 }
 
 # Section -> list of (page_label, list of (code, display_name)) for hierarchical UI (Section → Page → Buttons)
 SECTION_PAGE_GROUPS = {
     PERMISSION_DASHBOARD: [
         ('Dashboard', [('dashboard', 'Dashboard (full)')]),
+        ('Dashboard Features', [
+            ('global_search', 'Global Search (Navbar)'),
+            ('view_fleet_map', 'Fleet Map – Live GPS'),
+        ]),
     ],
     PERMISSION_MASTER: [
         ('Master Data (full)', [('master', 'Master Data (full)')]),
@@ -475,6 +490,9 @@ SECTION_PAGE_GROUPS = {
             ('product_edit', 'Edit'),
             ('product_delete', 'Delete'),
             ('product_import', 'Import'),
+        ]),
+        ('System', [
+            ('view_documents', 'Documents – View Uploaded Files'),
         ]),
     ],
     PERMISSION_ASSIGNMENT: [
@@ -548,6 +566,7 @@ SECTION_PAGE_GROUPS = {
             ('penalty_record', 'List / View'),
             ('penalty_record_add', 'Add New'),
             ('penalty_record_edit', 'Edit'),
+            ('penalty_record_delete', 'Delete'),
         ]),
     ],
     PERMISSION_ATTENDANCE: [
@@ -650,7 +669,10 @@ SECTION_PAGE_GROUPS = {
         ('Activity Logs Geo', [('activity_logs_geo_report', 'Activity Logs Geo')]),
     ],
     PERMISSION_BACKUP: [
-        ('Backup', [('backup', 'Backup')]),
+        ('Backup', [
+            ('backup', 'Backup'),
+            ('system_backup', 'Download / Email / Save'),
+        ]),
     ],
     PERMISSION_USERS_MANAGE: [
         ('User & Role Management (full)', [('users_manage', 'User & Role Management (full)')]),

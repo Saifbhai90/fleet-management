@@ -471,53 +471,62 @@ def dashboard():
         expiry_soon, expiry_already = 0, 0
 
     user_id = session.get('user_id')
-    notifications = _unread_notifications_for_user(user_id, 20) if user_id else []
+    try:
+        notifications = _unread_notifications_for_user(user_id, 20) if user_id else []
+    except Exception:
+        notifications = []
 
     # Optional: seed expiry/attendance notifications only when no unread (and we have drivers)
     # Do not add any "Parking full" notification (user requested: parking full ki notification na ho).
-    if not notifications and total_drivers and user_id:
-        today = date.today()
-        expiring_count = 0
-        for d in Driver.query.filter(Driver.status == 'Active').all():
-            if (d.license_expiry_date and d.license_expiry_date < today) or (d.cnic_expiry_date and d.cnic_expiry_date < today):
-                expiring_count += 1
-        if expiring_count > 0:
-            n = Notification(
-                title='Document expiry',
-                message=f'{expiring_count} driver(s) have license or CNIC already expired (current expiry).',
-                link=url_for('report_expiry', days=0),
-                link_text='View expiry report',
-                notification_type='warning',
-                created_by_user_id=None
-            )
-            db.session.add(n)
-            db.session.commit()
-            notifications = _unread_notifications_for_user(user_id, 20)
+    try:
+        if not notifications and total_drivers and user_id:
+            today = date.today()
+            expiring_count = 0
+            for d in Driver.query.filter(Driver.status == 'Active').all():
+                if (d.license_expiry_date and d.license_expiry_date < today) or (d.cnic_expiry_date and d.cnic_expiry_date < today):
+                    expiring_count += 1
+            if expiring_count > 0:
+                n = Notification(
+                    title='Document expiry',
+                    message=f'{expiring_count} driver(s) have license or CNIC already expired (current expiry).',
+                    link=url_for('report_expiry', days=0),
+                    link_text='View expiry report',
+                    notification_type='warning',
+                    created_by_user_id=None
+                )
+                db.session.add(n)
+                db.session.commit()
+                notifications = _unread_notifications_for_user(user_id, 20)
 
-        from datetime import timedelta
-        _today2 = date.today()
-        start = _today2 - timedelta(days=7)
-        _active_list = Driver.query.filter(Driver.status == 'Active').all()
-        missing_count = 0
-        for d in _active_list:
-            has_recent = DriverAttendance.query.filter(
-                DriverAttendance.driver_id == d.id,
-                DriverAttendance.attendance_date >= start
-            ).first()
-            if not has_recent:
-                missing_count += 1
-        if missing_count > 0:
-            n3 = Notification(
-                title='Attendance missing',
-                message=f'{missing_count} active driver(s) have no attendance in the last 7 days.',
-                link=url_for('driver_attendance_list'),
-                link_text='View attendance',
-                notification_type='info',
-                created_by_user_id=None
-            )
-            db.session.add(n3)
-            db.session.commit()
-            notifications = _unread_notifications_for_user(user_id, 20)
+            from datetime import timedelta
+            _today2 = date.today()
+            start = _today2 - timedelta(days=7)
+            _active_list = Driver.query.filter(Driver.status == 'Active').all()
+            missing_count = 0
+            for d in _active_list:
+                has_recent = DriverAttendance.query.filter(
+                    DriverAttendance.driver_id == d.id,
+                    DriverAttendance.attendance_date >= start
+                ).first()
+                if not has_recent:
+                    missing_count += 1
+            if missing_count > 0:
+                n3 = Notification(
+                    title='Attendance missing',
+                    message=f'{missing_count} active driver(s) have no attendance in the last 7 days.',
+                    link=url_for('driver_attendance_list'),
+                    link_text='View attendance',
+                    notification_type='info',
+                    created_by_user_id=None
+                )
+                db.session.add(n3)
+                db.session.commit()
+                notifications = _unread_notifications_for_user(user_id, 20)
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
     # Critical health alert from cache (master only, no extra API calls)
     health_alert = None

@@ -267,6 +267,41 @@ ENDPOINT_PERMISSION_MAP = [
     ('api_attendance_filtered_drivers', 'driver_attendance_list'),
     ('api_attendance_time_window', 'driver_attendance_checkin'),
     ('api_attendance_has_gps_checkin', 'driver_attendance_checkout'),
+    # ── Security Lockdown: previously unprotected routes ─────────────────
+    # Backup sub-routes (same section as /backup index; require system_backup)
+    ('backup_download', 'system_backup'),
+    ('backup_email', 'system_backup'),
+    ('backup_save', 'system_backup'),
+    # Uploaded documents / photos (require view_documents)
+    ('uploaded_file', 'view_documents'),
+    # Global search and fleet map APIs
+    ('api_global_search', 'global_search'),
+    ('api_fleet_map_pins', 'view_fleet_map'),
+    # Import download templates (require same permission as the import action)
+    ('vehicles_import_template', 'vehicles_import'),
+    ('drivers_import_template', 'drivers_import'),
+    ('parking_import_template', 'parking_import'),
+    # Notification mark-as-read (require notification_list)
+    ('notification_read', 'notification_list'),
+    # Finance sub-routes (voucher list / edit / delete)
+    ('payment_vouchers_list', 'accounts_quick_payment'),
+    ('payment_voucher_edit', 'accounts_quick_payment'),
+    ('payment_voucher_delete', 'accounts_quick_payment'),
+    ('receipt_vouchers_list', 'accounts_quick_receipt'),
+    ('bank_entries_list', 'accounts_bank_entry'),
+    # Employee expense (correct granular codes replacing phantom employee_expense_form)
+    ('employee_expense_form', 'employee_expense_add'),
+    ('employee_expense_form_edit', 'employee_expense_edit'),
+    ('employee_expense_delete', 'employee_expense_delete'),
+    # Transfer Print / Export routes
+    ('vehicle_transfers_print', 'vehicle_transfers'),
+    ('vehicle_transfers_export', 'vehicle_transfers'),
+    ('driver_transfers_print', 'driver_transfers'),
+    ('driver_transfers_export', 'driver_transfers'),
+    ('project_transfers_print', 'project_transfers'),
+    ('project_transfers_export', 'project_transfers'),
+    # Penalty Delete
+    ('penalty_record_delete', 'penalty_record_delete'),
 ]
 
 

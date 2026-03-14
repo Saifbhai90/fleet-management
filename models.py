@@ -1255,3 +1255,27 @@ class EmployeeExpense(db.Model):
     
     def __repr__(self):
         return f'<EmployeeExpense {self.expense_date} {self.expense_category} {self.amount}>'
+
+
+# ────────────────────────────────────────────────────
+# Voucher Sequence Counter (atomic sequence generation)
+# ────────────────────────────────────────────────────
+class VoucherSequence(db.Model):
+    """Atomic per-prefix/per-month sequence counter.
+    SELECT FOR UPDATE on this row prevents concurrent requests from
+    generating the same voucher/entry number (B-04 race condition fix).
+    """
+    __tablename__ = 'voucher_sequence'
+
+    id = db.Column(db.Integer, primary_key=True)
+    prefix = db.Column(db.String(10), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.Integer, nullable=False)
+    last_seq = db.Column(db.Integer, default=0, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('prefix', 'year', 'month', name='uq_voucher_seq_prefix_ym'),
+    )
+
+    def __repr__(self):
+        return f'<VoucherSequence {self.prefix}-{self.year:04d}-{self.month:02d} seq={self.last_seq}>'

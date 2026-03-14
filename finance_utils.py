@@ -2,59 +2,61 @@
 Finance & Accounting Utility Functions
 Helper functions for voucher number generation, journal entry creation, and balance updates
 """
-from models import db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry
-from datetime import datetime, date
+from models import db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence
+from datetime import datetime, date, timedelta
 from decimal import Decimal
+from sqlalchemy.exc import IntegrityError
 
 
 def generate_entry_number(prefix='JE', entry_date=None):
     """
-    Generate unique entry number: JE-2026-03-001, PV-2026-03-001, etc.
-    
+    Generate a unique, collision-free entry number: JE-2026-03-001, PV-2026-03-001, etc.
+
+    Uses a dedicated VoucherSequence table with SELECT FOR UPDATE so that concurrent
+    requests increment the counter atomically (B-04 race condition fix).
+    A savepoint guards the first-insert path against the concurrent-insert edge case.
+
     Args:
         prefix: Entry type prefix (JE, PV, RV, BE)
         entry_date: Date for the entry (default: today)
-    
+
     Returns:
         str: Unique entry number
     """
     if entry_date is None:
         entry_date = date.today()
-    
+
     year = entry_date.year
     month = entry_date.month
-    
-    # Find last entry number for this prefix, year, and month
-    pattern = f"{prefix}-{year:04d}-{month:02d}-%"
-    
-    if prefix == 'JE':
-        last = JournalEntry.query.filter(JournalEntry.entry_number.like(pattern)).order_by(JournalEntry.entry_number.desc()).first()
-    elif prefix == 'PV':
-        last = PaymentVoucher.query.filter(PaymentVoucher.voucher_number.like(pattern)).order_by(PaymentVoucher.voucher_number.desc()).first()
-    elif prefix == 'RV':
-        last = ReceiptVoucher.query.filter(ReceiptVoucher.voucher_number.like(pattern)).order_by(ReceiptVoucher.voucher_number.desc()).first()
-    elif prefix == 'BE':
-        last = BankEntry.query.filter(BankEntry.entry_number.like(pattern)).order_by(BankEntry.entry_number.desc()).first()
-    else:
-        last = None
-    
-    if last:
-        # Extract sequence number from last entry
-        if prefix == 'JE':
-            last_num = last.entry_number
-        elif prefix in ['PV', 'RV']:
-            last_num = last.voucher_number
-        else:
-            last_num = last.entry_number
-        
-        parts = last_num.split('-')
-        if len(parts) == 4:
-            seq = int(parts[3]) + 1
-        else:
+
+    # Try to lock an existing sequence row for this prefix+year+month
+    seq_row = db.session.query(VoucherSequence).filter_by(
+        prefix=prefix, year=year, month=month
+    ).with_for_update().first()
+
+    if seq_row is None:
+        # No row yet — insert with seq=1 inside a savepoint so that a concurrent
+        # insert (IntegrityError on the unique constraint) doesn't abort the outer
+        # transaction; we simply fall back to re-reading the now-existing row.
+        try:
+            with db.session.begin_nested():
+                seq_row = VoucherSequence(prefix=prefix, year=year, month=month, last_seq=1)
+                db.session.add(seq_row)
+                db.session.flush()
             seq = 1
+        except IntegrityError:
+            # Another concurrent request beat us to the insert; re-read with lock
+            seq_row = db.session.query(VoucherSequence).filter_by(
+                prefix=prefix, year=year, month=month
+            ).with_for_update().first()
+            seq_row.last_seq += 1
+            seq = seq_row.last_seq
+            db.session.flush()
     else:
-        seq = 1
-    
+        seq_row.last_seq += 1
+        seq = seq_row.last_seq
+        db.session.flush()
+
     return f"{prefix}-{year:04d}-{month:02d}-{seq:03d}"
 
 
@@ -145,9 +147,10 @@ def update_account_balances(journal_entry_id):
         journal_entry_id: ID of the journal entry
     """
     lines = JournalEntryLine.query.filter_by(journal_entry_id=journal_entry_id).all()
-    
+
     for line in lines:
-        account = Account.query.get(line.account_id)
+        # SELECT FOR UPDATE: row-level lock prevents concurrent balance corruption (B-05)
+        account = db.session.query(Account).with_for_update().filter_by(id=line.account_id).first()
         if not account:
             continue
         
@@ -229,7 +232,7 @@ def get_account_ledger(account_id, from_date=None, to_date=None):
     
     # Calculate opening balance
     if from_date:
-        opening_balance = get_account_balance(account_id, from_date - datetime.timedelta(days=1))
+        opening_balance = get_account_balance(account_id, from_date - timedelta(days=1))
     else:
         opening_balance = Decimal(str(account.opening_balance or 0))
     

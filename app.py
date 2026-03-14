@@ -160,7 +160,17 @@ _run_startup_tasks = (not app.debug) or (os.environ.get('WERKZEUG_RUN_MAIN') == 
 if _run_startup_tasks:
     with app.app_context():
         print("Creating tables if needed...")
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as _e:
+            print(f"db.create_all() warning (non-fatal): {_e}")
+        # Auto-run pending Alembic migrations so Render PostgreSQL stays in sync
+        try:
+            from flask_migrate import upgrade as _migrate_upgrade
+            _migrate_upgrade()
+            print("Migrations applied (flask db upgrade).")
+        except Exception as _e:
+            print(f"Migration upgrade skip: {_e}")
         # Ensure notification.created_by_user_id and related tables exist (SQLite fallback if migration not run)
         try:
             uri = (app.config.get('SQLALCHEMY_DATABASE_URI') or '').strip()
@@ -220,6 +230,16 @@ if _run_startup_tasks:
                         "CREATE INDEX IF NOT EXISTS ix_parking_create_date ON parking_station (create_date)",
                         "CREATE INDEX IF NOT EXISTS ix_district_province ON district (province)",
                         "CREATE INDEX IF NOT EXISTS ix_district_created_at ON district (created_at)",
+                        # Performance-critical indexes identified in audit (B-07/08/09 + report queries)
+                        "CREATE INDEX IF NOT EXISTS ix_driver_status ON driver (status)",
+                        "CREATE INDEX IF NOT EXISTS ix_fuel_expense_fueling_date ON fuel_expense (fueling_date)",
+                        "CREATE INDEX IF NOT EXISTS ix_fuel_expense_vehicle_id ON fuel_expense (vehicle_id)",
+                        "CREATE INDEX IF NOT EXISTS ix_journal_entry_project_id ON journal_entry (project_id)",
+                        "CREATE INDEX IF NOT EXISTS ix_journal_entry_entry_type ON journal_entry (entry_type)",
+                        "CREATE INDEX IF NOT EXISTS ix_driver_attendance_date ON driver_attendance (attendance_date)",
+                        "CREATE INDEX IF NOT EXISTS ix_driver_attendance_driver_id ON driver_attendance (driver_id)",
+                        "CREATE INDEX IF NOT EXISTS ix_account_account_type ON account (account_type)",
+                        "CREATE INDEX IF NOT EXISTS ix_activity_log_created_at ON activity_log (created_at)",
                     ]
                     for idx_sql in indexes:
                         conn.execute(db.text(idx_sql))
