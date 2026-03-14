@@ -5556,11 +5556,22 @@ def assign_driver_to_vehicle_edit(driver_id):
 # Transfer Section - Project
 @app.route('/project-transfers')
 def project_transfers():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     search = request.args.get('search', '').strip()
     sort_by = request.args.get('sort_by', 'transfer_date')
     sort_order = request.args.get('sort_order', 'desc')
     
     query = ProjectTransfer.query
+    
+    # Apply user data scope
+    if not is_master_or_admin and allowed_projects:
+        query = query.filter(ProjectTransfer.project_id.in_(list(allowed_projects)))
     
     if search:
         query = query.join(Project).join(Company, ProjectTransfer.new_company_id == Company.id).filter(
@@ -5733,6 +5744,15 @@ def project_transfers_print():
 
 @app.route('/vehicle-transfers')
 def vehicle_transfers():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     # Optional filters (destination side): Project + District
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
@@ -5741,6 +5761,16 @@ def vehicle_transfers():
     sort_order = request.args.get('sort_order', 'desc')
 
     query = VehicleTransfer.query
+    
+    # Apply user data scope
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(VehicleTransfer.new_project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(VehicleTransfer.new_district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(VehicleTransfer.vehicle_id.in_(list(allowed_vehicles)))
+    
     if project_id:
         query = query.filter(VehicleTransfer.new_project_id == project_id)
     if district_id:
