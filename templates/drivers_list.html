@@ -39,6 +39,21 @@
   .sortable-header:hover { background: rgba(63, 81, 181, 0.1); }
   .sort-icon { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; opacity: 0.5; }
   .sortable-header.active .sort-icon { opacity: 1; }
+  
+  /* Mobile: ensure action buttons don't overlap */
+  @media (max-width: 767px) {
+    .compact-table tbody td:last-child {
+      white-space: nowrap;
+      min-width: 140px;
+    }
+    .btn-compact {
+      padding: 0.35rem 0.5rem;
+      font-size: 0.75rem;
+    }
+    .btn-info-compact, .btn-edit-compact, .btn-delete-compact {
+      margin-bottom: 0.25rem;
+    }
+  }
 </style>
 <script src="https://unpkg.com/lucide@latest"></script>
 <div class="container-fluid py-4 px-4">

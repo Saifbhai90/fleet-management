@@ -168,10 +168,11 @@
       var total = data.total || 0;
       syncDetail.textContent = created + ' user(s) created out of ' + total + ' candidate(s).';
       syncDoneFooter.classList.remove('d-none');
-      syncDoneText.textContent = 'Done! ' + created + ' user(s) create kiye gaye. User list update ho chuki hai.';
+      syncDoneText.textContent = 'Done! ' + created + ' user(s) create kiye gaye. Refreshing...';
       syncDoneText.classList.remove('text-danger');
       syncDoneText.classList.add('text-success');
-      syncCloseBtn.onclick = function() { hideModal(); window.location.reload(); };
+      // Auto-reload after 1 second to show updated user list
+      setTimeout(function() { window.location.reload(); }, 1000);
     }).catch(function(err) {
       syncStatus.textContent = 'Error';
       progressBar.classList.remove('progress-bar-animated');
