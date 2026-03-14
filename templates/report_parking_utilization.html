@@ -4,23 +4,14 @@
 <div class="container-fluid">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="mb-0"><i class="bi bi-p-square me-2 text-secondary"></i>Parking Utilization Report</h2>
+    <span class="text-muted small">Total: {{ vehicles|length }} vehicle(s)</span>
   </div>
-  
+
   <!-- Filter Form -->
   <div class="card shadow-sm border-0 mb-3">
     <div class="card-body">
       <form method="GET" action="{{ url_for('report_parking_utilization') }}">
         <div class="row g-2 align-items-end">
-          <div class="col-md-2">
-            <label class="form-label small mb-1">From Active Date</label>
-            <input type="text" name="from_date" class="form-control form-control-sm datepicker" 
-                   placeholder="dd-mm-yyyy" value="{{ from_date or '' }}" autocomplete="off">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label small mb-1">To Active Date</label>
-            <input type="text" name="to_date" class="form-control form-control-sm datepicker" 
-                   placeholder="dd-mm-yyyy" value="{{ to_date or '' }}" autocomplete="off">
-          </div>
           <div class="col-md-2">
             <label class="form-label small mb-1">Project</label>
             <select name="project_id" class="form-select form-select-sm" {% if disable_project %}disabled{% endif %}>
@@ -28,6 +19,7 @@
               <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
+            {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
           </div>
           <div class="col-md-2">
             <label class="form-label small mb-1">District</label>
@@ -36,8 +28,9 @@
               <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
+            {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
           </div>
-          <div class="col-md-2">
+          <div class="col-md-3">
             <label class="form-label small mb-1">Vehicle</label>
             <select name="vehicle_id" class="form-select form-select-sm">
               {% for val, label in vehicle_choices %}
@@ -45,54 +38,80 @@
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-2">
-            <button type="submit" class="btn btn-success btn-sm w-100">
+          <div class="col-md-3">
+            <label class="form-label small mb-1">Parking Station</label>
+            <select name="parking_station_id" class="form-select form-select-sm">
+              {% for val, label in parking_station_choices %}
+              <option value="{{ val }}" {% if parking_station_id == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2 d-flex gap-1">
+            <button type="submit" class="btn btn-success btn-sm flex-fill">
               <i class="bi bi-funnel me-1"></i>Show
             </button>
+            {% if project_id or district_id or vehicle_id or parking_station_id %}
+            <a href="{{ url_for('report_parking_utilization') }}" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-x-lg"></i>
+            </a>
+            {% endif %}
           </div>
         </div>
       </form>
     </div>
   </div>
-  
+
   <div class="card shadow border-0">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table class="table table-hover align-middle mb-0" style="font-size:0.875rem;">
         <thead class="table-light">
           <tr>
-            <th class="ps-4">#</th>
-            <th>Parking Station</th>
-            <th>District</th>
-            <th>Project</th>
-            <th class="text-center">Occupied</th>
-            <th class="text-center">Capacity</th>
-            <th class="text-center">Available</th>
-            <th>Utilization</th>
+            <th class="ps-3" width="4%">#</th>
+            <th width="18%">Project</th>
+            <th width="15%">District</th>
+            <th width="13%">Vehicle No</th>
+            <th width="18%">Parking Station</th>
+            <th width="13%">Vehicle Type</th>
+            <th width="11%">Model</th>
+            <th width="8%">Parking Date</th>
           </tr>
         </thead>
         <tbody>
-          {% for row in data %}
+          {% for v in vehicles %}
           <tr>
-            <td class="ps-4">{{ loop.index }}</td>
-            <td class="fw-medium">{{ row.station.name }}</td>
-            <td>{{ row.station.district or '-' }}</td>
-            <td>{{ row.station.project.name if row.station.project else '-' }}</td>
-            <td class="text-center">{{ row.occupied }}</td>
-            <td class="text-center">{{ row.station.capacity }}</td>
-            <td class="text-center">{{ row.available }}</td>
+            <td class="ps-3 text-muted">{{ loop.index }}</td>
+            <td>{{ v.project.name if v.project else '-' }}</td>
+            <td>{{ v.district.name if v.district else '-' }}</td>
+            <td><span class="fw-semibold text-primary">{{ v.vehicle_no }}</span></td>
             <td>
-              {% set pct = (row.occupied / row.station.capacity * 100) if row.station.capacity else 0 %}
-              <div class="progress" style="height: 20px; min-width: 80px;">
-                <div class="progress-bar {% if pct >= 100 %}bg-danger{% elif pct >= 80 %}bg-warning{% else %}bg-success{% endif %}" style="width: {{ [pct, 100]|min }}%"></div>
-              </div>
+              {% if v.parking_station %}
+              <i class="bi bi-geo-alt-fill text-success me-1"></i>{{ v.parking_station.name }}
+              {% else %}-{% endif %}
+            </td>
+            <td>{{ v.vehicle_type or '-' }}</td>
+            <td>{{ v.model or '-' }}</td>
+            <td>
+              {% if v.parking_assign_date %}
+              {{ v.parking_assign_date.strftime('%d-%m-%Y') }}
+              {% else %}-{% endif %}
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="8" class="text-center py-4 text-muted">No parking stations.</td></tr>
+          <tr>
+            <td colspan="8" class="text-center py-5 text-muted">
+              <i class="bi bi-p-square fs-3 d-block mb-2"></i>
+              No vehicles with parking station assigned.
+            </td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    {% if vehicles %}
+    <div class="card-footer text-muted small py-2 px-3">
+      Showing {{ vehicles|length }} vehicle(s) with parking assigned
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
