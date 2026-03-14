@@ -391,6 +391,15 @@ def api_me():
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
+    from auth_utils import get_user_context
+    
+    # Get user data context for scoping
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     # Determine what sections this user can see (skip expensive queries for hidden cards)
     _perms = set(session.get('permissions') or [])
     _is_master = session.get('is_master', False)
@@ -405,15 +414,59 @@ def dashboard():
     today_dt = date.today()
 
     # ── Bento KPI cards (only query what the user can see) ────────────────
+    # Apply data scoping to all queries
     total_companies  = Company.query.count()        if _can('dashboard_card_companies')   else 0
-    total_projects   = Project.query.count()        if _can('dashboard_card_projects')    else 0
-    total_vehicles   = Vehicle.query.count()        if _can('dashboard_card_vehicles') or _can('dashboard_card_utilization') else 0
-    total_drivers    = Driver.query.count()         if _can('dashboard_card_drivers')     else 0
+    
+    # Projects: filter by user scope
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    total_projects = project_q.count() if _can('dashboard_card_projects') else 0
+    
+    # Vehicles: filter by user scope
+    vehicle_q = Vehicle.query
+    if not is_master_or_admin:
+        if allowed_projects:
+            vehicle_q = vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    total_vehicles = vehicle_q.count() if (_can('dashboard_card_vehicles') or _can('dashboard_card_utilization')) else 0
+    
+    # Drivers: filter by user scope
+    driver_q = Driver.query
+    if not is_master_or_admin:
+        if allowed_projects:
+            driver_q = driver_q.filter(Driver.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            driver_q = driver_q.filter(Driver.district_id.in_(list(allowed_districts)))
+    total_drivers = driver_q.count() if _can('dashboard_card_drivers') else 0
     total_parking    = ParkingStation.query.count() if _can('dashboard_card_parking')     else 0
     total_districts  = District.query.count()       if _can('dashboard_card_districts')   else 0
-    active_drivers   = Driver.query.filter_by(status='Active').count()                                     if _can('dashboard_card_drivers')     else 0
-    assigned_vehicles = Vehicle.query.filter(Vehicle.district_id.isnot(None)).count()                      if _can('dashboard_card_vehicles')    else 0
-    today_attendance = DriverAttendance.query.filter_by(attendance_date=today_dt).count()                  if _can('dashboard_card_attendance')  else 0
+    
+    # Active drivers: filter by user scope
+    active_driver_q = Driver.query.filter_by(status='Active')
+    if not is_master_or_admin:
+        if allowed_projects:
+            active_driver_q = active_driver_q.filter(Driver.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            active_driver_q = active_driver_q.filter(Driver.district_id.in_(list(allowed_districts)))
+    active_drivers = active_driver_q.count() if _can('dashboard_card_drivers') else 0
+    
+    # Assigned vehicles: filter by user scope
+    assigned_vehicle_q = Vehicle.query.filter(Vehicle.district_id.isnot(None))
+    if not is_master_or_admin:
+        if allowed_projects:
+            assigned_vehicle_q = assigned_vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            assigned_vehicle_q = assigned_vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    assigned_vehicles = assigned_vehicle_q.count() if _can('dashboard_card_vehicles') else 0
+    
+    # Today attendance: filter by user scope
+    attendance_q = DriverAttendance.query.filter_by(attendance_date=today_dt)
+    if not is_master_or_admin and allowed_projects:
+        attendance_q = attendance_q.filter(DriverAttendance.project_id.in_(list(allowed_projects)))
+    today_attendance = attendance_q.count() if _can('dashboard_card_attendance') else 0
+    
     today_transfers  = DriverTransfer.query.filter_by(transfer_date=today_dt).count()                      if _can('dashboard_card_transfers')   else 0
 
     # Monthly fuel cost + 30-day trend (only if user can see fuel expense)
@@ -422,23 +475,37 @@ def dashboard():
     if _can('dashboard_card_fuel'):
         try:
             from sqlalchemy import extract
-            monthly_fuel = db.session.query(func.sum(FuelExpense.amount)).filter(
+            fuel_q = db.session.query(func.sum(FuelExpense.amount)).filter(
                 extract('month', FuelExpense.fueling_date) == today_dt.month,
                 extract('year', FuelExpense.fueling_date) == today_dt.year
-            ).scalar() or 0
+            )
+            # Apply user data scope to fuel expenses
+            if not is_master_or_admin:
+                if allowed_projects:
+                    fuel_q = fuel_q.filter(FuelExpense.project_id.in_(list(allowed_projects)))
+                if allowed_districts:
+                    fuel_q = fuel_q.filter(FuelExpense.district_id.in_(list(allowed_districts)))
+            monthly_fuel = fuel_q.scalar() or 0
             monthly_fuel = float(monthly_fuel)
         except Exception:
             monthly_fuel = 0.0
         try:
             from datetime import timedelta
             _start30 = today_dt - timedelta(days=29)
-            _daily_rows = db.session.query(
+            _daily_q = db.session.query(
                 FuelExpense.fueling_date,
                 func.sum(FuelExpense.amount)
             ).filter(
                 FuelExpense.fueling_date >= _start30,
                 FuelExpense.fueling_date <= today_dt
-            ).group_by(FuelExpense.fueling_date).all()
+            )
+            # Apply user data scope
+            if not is_master_or_admin:
+                if allowed_projects:
+                    _daily_q = _daily_q.filter(FuelExpense.project_id.in_(list(allowed_projects)))
+                if allowed_districts:
+                    _daily_q = _daily_q.filter(FuelExpense.district_id.in_(list(allowed_districts)))
+            _daily_rows = _daily_q.group_by(FuelExpense.fueling_date).all()
             _daily_map = {str(r[0]): float(r[1] or 0) for r in _daily_rows}
             for i in range(29, -1, -1):
                 _d = today_dt - timedelta(days=i)
@@ -451,9 +518,22 @@ def dashboard():
     vehicle_util_data = [0, 0, 0]
     if _can('dashboard_card_utilization'):
         try:
-            v_active   = Vehicle.query.filter(Vehicle.driver_id.isnot(None)).count()
-            v_deployed = Vehicle.query.filter(Vehicle.project_id.isnot(None), Vehicle.driver_id.is_(None)).count()
-            v_idle     = Vehicle.query.filter(Vehicle.project_id.is_(None),  Vehicle.driver_id.is_(None)).count()
+            # Apply user data scope to vehicle utilization queries
+            v_active_q = Vehicle.query.filter(Vehicle.driver_id.isnot(None))
+            v_deployed_q = Vehicle.query.filter(Vehicle.project_id.isnot(None), Vehicle.driver_id.is_(None))
+            v_idle_q = Vehicle.query.filter(Vehicle.project_id.is_(None), Vehicle.driver_id.is_(None))
+            
+            if not is_master_or_admin:
+                if allowed_projects:
+                    v_active_q = v_active_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+                    v_deployed_q = v_deployed_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+                if allowed_districts:
+                    v_active_q = v_active_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+                    v_deployed_q = v_deployed_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+            
+            v_active = v_active_q.count()
+            v_deployed = v_deployed_q.count()
+            v_idle = v_idle_q.count()
             vehicle_util_data = [v_active, v_deployed, v_idle]
         except Exception:
             vehicle_util_data = [0, 0, 0]
@@ -998,11 +1078,23 @@ def companies_print():
 # ────────────────────────────────────────────────
 @app.route('/projects/')
 def projects_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     search = request.args.get('search', '').strip()
     sort_by = request.args.get('sort_by', 'name')
     sort_order = request.args.get('sort_order', 'asc')
     
     query = Project.query
+    
+    # Apply user data scope
+    if not is_master_or_admin and allowed_projects:
+        query = query.filter(Project.id.in_(list(allowed_projects)))
+    
     if search:
         query = query.filter(Project.name.ilike(f'%{search}%'))
     
@@ -1146,6 +1238,14 @@ def toggle_project_status(id):
 # ────────────────────────────────────────────────
 @app.route('/vehicles/')
 def vehicles_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     search = request.args.get('search', '').strip()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -1153,6 +1253,14 @@ def vehicles_list():
     sort_order = request.args.get('sort_order', 'asc')
 
     query = Vehicle.query
+    
+    # Apply user data scope
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    
     if search:
         like = f'%{search}%'
         query = query.filter(
@@ -1707,6 +1815,15 @@ def delete_vehicle(id):
 # ────────────────────────────────────────────────
 @app.route('/drivers')
 def drivers_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     search = request.args.get('search', '').strip()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -1714,6 +1831,16 @@ def drivers_list():
     sort_order = request.args.get('sort_order', 'asc')
 
     query = Driver.query
+    
+    # Apply user data scope
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(Driver.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(Driver.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+    
     if search:
         like = f"%{search}%"
         query = query.filter(
@@ -2103,13 +2230,18 @@ def driver_form(id=None):
             db.session.rollback()
             flash(f"Error saving driver: {str(e)}", 'danger')
     return render_template('driver_form.html', form=form, title=title, driver=driver)
-
-
-# ────────────────────────────────────────────────
 # Employees (non-driver staff)
 # ────────────────────────────────────────────────
 @app.route('/employees')
 def employees_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     search = request.args.get('search', '').strip()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -2117,6 +2249,20 @@ def employees_list():
     sort_order = request.args.get('sort_order', 'asc')
 
     query = Employee.query
+    
+    # Apply user data scope - employees assigned to user's projects/districts
+    if not is_master_or_admin:
+        if allowed_projects or allowed_districts:
+            # Filter employees who have at least one matching project or district
+            from sqlalchemy import or_
+            filters = []
+            if allowed_projects:
+                filters.append(Employee.projects.any(Project.id.in_(list(allowed_projects))))
+            if allowed_districts:
+                filters.append(Employee.districts.any(District.id.in_(list(allowed_districts))))
+            if filters:
+                query = query.filter(or_(*filters))
+    
     if search:
         like = f"%{search}%"
         query = query.filter(
@@ -3595,6 +3741,13 @@ def delete_driver(id):
 # ────────────────────────────────────────────────
 @app.route('/parking/')
 def parking_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     search = request.args.get('search', '')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -3602,6 +3755,11 @@ def parking_list():
     sort_order = request.args.get('sort_order', 'asc')
 
     query = ParkingStation.query
+    
+    # Apply user data scope - parking stations assigned to user's projects
+    if not is_master_or_admin and allowed_projects:
+        query = query.filter(ParkingStation.project_id.in_(list(allowed_projects)))
+    
     if search:
         query = query.filter(
             ParkingStation.name.ilike(f'%{search}%') |
@@ -8104,9 +8262,23 @@ def driver_attendance_checkout():
 
 @app.route('/driver-attendance/report', methods=['GET', 'POST'])
 def driver_attendance_report():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    allowed_shifts = user_context.get('allowed_shifts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
+    # Convert sets to lists for compatibility
+    scope_projects = list(allowed_projects) if allowed_projects else []
+    scope_districts = list(allowed_districts) if allowed_districts else []
+    scope_vehicles = list(allowed_vehicles) if allowed_vehicles else []
+    scope_shifts = list(allowed_shifts) if allowed_shifts else []
+    
     form = DriverAttendanceReportForm()
-    # User scope apply karein (Master/Admin ke ilawa)
-    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
     has_single_scope = bool(
         scope_projects and len(scope_projects) == 1 and
         scope_districts and len(scope_districts) == 1 and
@@ -9857,8 +10029,23 @@ def api_fuel_expense_price_hint():
 
 @app.route('/expenses/fuel')
 def fuel_expense_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     form = FuelExpenseFilterForm()
-    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    
+    # Filter district choices by user scope
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+    
     form.project_id.choices = [(0, '-- Select Project --')]
     form.vehicle_id.choices = [(0, '-- All Vehicles --')]
     today = date.today()
@@ -9900,6 +10087,16 @@ def fuel_expense_list():
         FuelExpense.fueling_date >= from_d,
         FuelExpense.fueling_date <= to_d
     )
+    
+    # Apply user data scope
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(FuelExpense.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(FuelExpense.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(FuelExpense.vehicle_id.in_(list(allowed_vehicles)))
+    
     if district_id:
         query = query.filter(FuelExpense.district_id == district_id)
     if project_id:
