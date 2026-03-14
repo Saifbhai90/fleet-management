@@ -421,8 +421,24 @@ PERMISSION_DEPENDENCIES = {
     # Security lockdown additions
     'system_backup': ['backup'],
     'view_documents': [],
-    'global_search': ['dashboard'],
-    'view_fleet_map': ['dashboard'],
+    # Dashboard features: standalone – no cross-module dependencies
+    # (Route guard handles dashboard access; expand_login_permissions handles 'dashboard' full expansion)
+    'global_search': [],
+    'view_fleet_map': [],
+    # Dashboard KPI cards: standalone visibility permissions – granting a card does NOT
+    # auto-grant 'dashboard' (which would expand to ALL dashboard features via SECTION_FULL_TO_GROUP)
+    'dashboard_card_drivers':     [],
+    'dashboard_card_vehicles':    [],
+    'dashboard_card_attendance':  [],
+    'dashboard_card_transfers':   [],
+    'dashboard_card_projects':    [],
+    'dashboard_card_districts':   [],
+    'dashboard_card_parking':     [],
+    'dashboard_card_companies':   [],
+    'dashboard_card_fuel':        [],
+    'dashboard_card_utilization': [],
+    'dashboard_card_finance':     [],
+    'dashboard_card_doc_health':  [],
     'penalty_record_delete': ['penalty_record'],
 }
 

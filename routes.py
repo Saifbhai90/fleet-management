@@ -151,6 +151,24 @@ def require_login():
             required = 'product_edit'
     if required:
         perms = session.get('permissions') or []
+
+        # ── Smart Dashboard Route Guard ───────────────────────────────────────
+        # Having 'dashboard' (full) OR any individual card/feature permission is
+        # sufficient to reach the dashboard page. The template then shows only
+        # the elements the user's specific permissions allow.
+        if required == 'dashboard':
+            perms_set = set(perms)
+            has_dashboard_access = (
+                'dashboard' in perms_set
+                or any(p.startswith('dashboard_card_') for p in perms_set)
+                or 'view_fleet_map' in perms_set
+                or 'global_search' in perms_set
+            )
+            if has_dashboard_access:
+                return  # allow
+            session['show_no_access'] = True
+            return redirect(url_for('login'))
+
         # Explicit: assignment (full) grants all assignment sub-pages (Vehicle to Parking, etc.)
         if not user_can_access(perms, required):
             if required and required.startswith('assign_') and ('assignment' in perms):
