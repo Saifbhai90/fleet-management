@@ -424,6 +424,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
                 <div style="position:relative;height:200px;">
+                    <div id="skelFuel" class="skel skel-chart" style="position:absolute;inset:0;z-index:2;"></div>
                     <canvas id="fuelTrendChart"></canvas>
                 </div>
             </div>
@@ -441,6 +442,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Fleet Status</div>
                         <div style="font-size:1rem;font-weight:700;color:#0f172a;margin-bottom:12px;">Utilization</div>
                         <div style="position:relative;height:130px;">
+                            <div id="skelUtil" class="skel skel-chart" style="position:absolute;inset:0;z-index:2;"></div>
                             <canvas id="vehicleUtilChart"></canvas>
                         </div>
                         <div class="d-flex flex-column gap-1 mt-2">
@@ -472,6 +474,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div style="font-size:1rem;font-weight:700;color:#0f172a;margin-bottom:12px;">Top Projects · Fuel</div>
                         {% if project_chart_labels %}
                         <div style="position:relative;height:155px;">
+                            <div id="skelProj" class="skel skel-chart" style="position:absolute;inset:0;z-index:2;"></div>
                             <canvas id="projectFuelChart"></canvas>
                         </div>
                         {% else %}
@@ -519,6 +522,11 @@ document.addEventListener('DOMContentLoaded', function() {
     var projLabels = {{ project_chart_labels | tojson }};
     var projValues = {{ project_chart_values | tojson }};
 
+    function hideSkel(id) {
+        var el = document.getElementById(id);
+        if (el) { el.style.transition='opacity 0.3s'; el.style.opacity='0'; setTimeout(function(){ el.remove(); },350); }
+    }
+
     /* ── Fuel Trend (line) ── */
     var fuelCtx = document.getElementById('fuelTrendChart');
     if (fuelCtx) {
@@ -551,6 +559,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         });
+        hideSkel('skelFuel');
     }
 
     /* ── Vehicle Utilization (doughnut) ── */
@@ -576,6 +585,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         });
+        hideSkel('skelUtil');
     }
 
     /* ── Project Fuel Bar ── */
@@ -609,6 +619,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         });
+        hideSkel('skelProj');
     }
 });
 </script>

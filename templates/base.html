@@ -756,6 +756,46 @@
 
     /* Dark mode toggle button */
     #darkModeToggle { transition: color 0.2s, background 0.2s; }
+
+    /* ═══════════════════════════════════════════════
+       TOP LOADING PROGRESS BAR (page navigation)
+    ═══════════════════════════════════════════════ */
+    #topLoadBar {
+        position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+        background: linear-gradient(90deg, #3b82f6, #06b6d4, #3b82f6);
+        background-size: 200% 100%;
+        z-index: 99999; border-radius: 0 3px 3px 0;
+        transition: width 0.25s ease, opacity 0.4s ease;
+        animation: topBarShimmer 1.2s linear infinite;
+        opacity: 0; pointer-events: none;
+        box-shadow: 0 0 10px rgba(59,130,246,0.6);
+    }
+    #topLoadBar.loading { opacity: 1; }
+    #topLoadBar.done    { width: 100% !important; opacity: 0; transition: width 0.15s ease, opacity 0.5s ease 0.1s; }
+    @keyframes topBarShimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -100% 0; }
+    }
+
+    /* ─── Skeleton shimmer utility ─── */
+    .skel {
+        border-radius: 8px;
+        background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
+        background-size: 300% 100%;
+        animation: skelShimmer 1.4s infinite;
+        display: block;
+    }
+    body.dark-mode .skel {
+        background: linear-gradient(90deg, #1e293b 25%, #273449 50%, #1e293b 75%);
+        background-size: 300% 100%;
+    }
+    @keyframes skelShimmer {
+        0%   { background-position: 300% 0; }
+        100% { background-position: -100% 0; }
+    }
+    .skel-text  { height: 14px; margin-bottom: 8px; }
+    .skel-title { height: 22px; width: 55%; margin-bottom: 12px; }
+    .skel-chart { border-radius: 14px; }
     </style>
     <!-- Mobile-Perfect responsive overrides (zero desktop impact) -->
     <link rel="stylesheet" href="/static/css/mobile_perfect.css">
@@ -763,6 +803,7 @@
 </head>
 <body>
 <script>if(localStorage.getItem('fleetDarkMode')==='on')document.body.classList.add('dark-mode');</script>
+<div id="topLoadBar"></div>
 
 <!-- ── No Internet Connection Banner ── -->
 <div id="no-internet-banner" role="alert" aria-live="assertive">
@@ -3196,6 +3237,68 @@
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
+    }
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════
+     TOP LOADING BAR — fires on every page navigation
+══════════════════════════════════════════════════════════ -->
+<script>
+(function() {
+    var bar = document.getElementById('topLoadBar');
+    if (!bar) return;
+    var growTimer, pct = 0;
+
+    function start() {
+        pct = 0;
+        bar.style.width = '0%';
+        bar.classList.remove('done');
+        bar.classList.add('loading');
+        grow();
+    }
+    function grow() {
+        clearTimeout(growTimer);
+        var inc = pct < 20 ? 8 : pct < 50 ? 5 : pct < 80 ? 2 : 0.5;
+        pct = Math.min(pct + inc, 90);
+        bar.style.width = pct + '%';
+        if (pct < 90) growTimer = setTimeout(grow, 200);
+    }
+    function finish() {
+        clearTimeout(growTimer);
+        pct = 100;
+        bar.classList.add('done');
+        bar.style.width = '100%';
+        setTimeout(function() { bar.classList.remove('loading', 'done'); bar.style.width = '0%'; }, 600);
+    }
+
+    /* Show bar on any internal link click */
+    document.addEventListener('click', function(e) {
+        var a = e.target.closest('a[href]');
+        if (!a) return;
+        var href = a.getAttribute('href') || '';
+        /* Skip: external, hash-only, download, target=_blank, javascript: */
+        if (!href || href.startsWith('#') || href.startsWith('javascript') ||
+            href.startsWith('http') || a.target === '_blank' ||
+            a.hasAttribute('download') || a.dataset.bsToggle) return;
+        /* Skip command palette / modal triggers */
+        if (a.closest('#cmdPalette') || a.dataset.bsToggle) return;
+        start();
+    }, true);
+
+    /* Show bar on form submit */
+    document.addEventListener('submit', function(e) {
+        var form = e.target;
+        if (form && form.method && form.method.toLowerCase() !== 'get') {
+            start();
+        }
+    }, true);
+
+    /* Finish immediately when this page's DOM loaded */
+    if (document.readyState !== 'loading') {
+        finish();
+    } else {
+        document.addEventListener('DOMContentLoaded', finish);
     }
 })();
 </script>
