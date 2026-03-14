@@ -1164,6 +1164,7 @@ def backup_download():
         filename = os.path.basename(zip_path)
         # Use a friendly download name
         friendly = f'fleet_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip'
+        _last_backup_ts['ts'] = datetime.utcnow()
         return send_file(zip_path, as_attachment=True, download_name=friendly)
     finally:
         try:
@@ -10912,32 +10913,101 @@ def report_parking_utilization():
 # SYSTEM HEALTH & CLOUD STATUS  (Master only)
 # ════════════════════════════════════════════════════════════════════════════════
 
-_health_cache = {'data': None, 'ts': None}
-_HEALTH_CACHE_TTL = 900  # 15 minutes
+import collections as _sh_coll
+
+_health_cache      = {'data': None, 'ts': None}
+_HEALTH_CACHE_TTL  = 900                            # 15 minutes
+_api_latency_ms    = _sh_coll.deque(maxlen=100)     # rolling /api/* response times (ms)
+_last_backup_ts    = {'ts': None}                   # set on each successful backup_download
+_health_alert_sent = {'db': False, 'r2': False}     # prevent duplicate in-app alerts
+
+
+@app.before_request
+def _sh_before_request():
+    import time as _t
+    from flask import g
+    g._sh_t0 = _t.time()
+
+
+@app.after_request
+def _sh_after_request(response):
+    import time as _t
+    from flask import g
+    if request.path.startswith('/api/') and hasattr(g, '_sh_t0'):
+        _api_latency_ms.append(round((_t.time() - g._sh_t0) * 1000, 1))
+    return response
+
+
+def _maybe_send_health_alert(data):
+    """Create in-app notification when storage is critical (once per server restart)."""
+    try:
+        if data.get('db_critical') and not _health_alert_sent['db']:
+            _health_alert_sent['db'] = True
+            n = Notification(
+                title='Database Storage Critical',
+                message=(
+                    f"Database is at {data['db_pct']}% "
+                    f"({data['db_size_mb']} MB / {data['db_size_limit_mb']} MB). "
+                    "Upgrade plan or clean up data immediately."
+                ),
+                notification_type='danger',
+                created_by_user_id=None,
+            )
+            db.session.add(n)
+            db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        if data.get('r2_critical') and not _health_alert_sent['r2']:
+            _health_alert_sent['r2'] = True
+            n2 = Notification(
+                title='R2 Bucket Storage Critical',
+                message=(
+                    f"Cloudflare R2 is at {data['r2_pct']}% of its 10 GB free limit. "
+                    "Delete unused files or upgrade your R2 plan."
+                ),
+                notification_type='danger',
+                created_by_user_id=None,
+            )
+            db.session.add(n2)
+            db.session.commit()
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
 
 def _build_health_data():
-    """Fetch live metrics from Render API, PostgreSQL, and Cloudflare R2."""
+    """Fetch live infrastructure metrics from Render API, PostgreSQL, R2, and internal sources."""
     import json
     import urllib.request
-    import time as _time
 
     result = {
-        'service': None,
-        'last_deploy': None,
-        'db_size_mb': None,
+        'service':          None,
+        'last_deploy':      None,
+        'db_size_mb':       None,
         'db_size_limit_mb': 1024,
-        'r2_size_mb': None,
+        'r2_size_mb':       None,
         'r2_total_objects': 0,
         'r2_size_limit_mb': 10240,
-        'errors': [],
-        'fetched_at': datetime.utcnow().strftime('%d-%m-%Y %H:%M UTC'),
+        'active_sessions':  None,
+        'api_avg_ms':       None,
+        'api_p95_ms':       None,
+        'api_sample_count': 0,
+        'last_backup_ts':   _last_backup_ts.get('ts'),
+        'checks':           {},
+        'errors':           [],
+        'fetched_at':       datetime.utcnow().strftime('%d-%m-%Y %H:%M UTC'),
     }
 
     render_key = os.environ.get('RENDER_API_KEY', '').strip()
     service_id = os.environ.get('RENDER_SERVICE_ID', '').strip()
 
-    # 1. Render Service Status + Last Deployment
+    # 1. Render Service + Last Deploy
     if render_key and service_id:
         try:
             hdr = {'Authorization': f'Bearer {render_key}', 'Accept': 'application/json'}
@@ -10951,10 +11021,17 @@ def _build_health_data():
                 deploys = json.loads(r2.read())
                 if deploys:
                     result['last_deploy'] = deploys[0].get('deploy', deploys[0])
+            svc_name   = (result['service'] or {}).get('name', service_id)
+            svc_status = (result['service'] or {}).get('status', '?')
+            result['checks']['render_api'] = {'status': 'ok', 'msg': f'{svc_name} is {svc_status}'}
         except Exception as e:
-            result['errors'].append(f'Render API: {str(e)[:120]}')
+            msg = str(e)[:120]
+            result['checks']['render_api'] = {'status': 'error', 'msg': msg}
+            result['errors'].append(f'Render API: {msg}')
     else:
-        result['errors'].append('Render API: RENDER_API_KEY or RENDER_SERVICE_ID not set in environment.')
+        result['checks']['render_api'] = {
+            'status': 'skip', 'msg': 'RENDER_API_KEY or RENDER_SERVICE_ID not configured'}
+        result['errors'].append('Render API: env vars not set.')
 
     # 2. Database Size
     try:
@@ -10968,10 +11045,13 @@ def _build_health_data():
             if db_path and os.path.isfile(db_path):
                 result['db_size_mb'] = round(os.path.getsize(db_path) / (1024 * 1024), 1)
                 result['db_size_limit_mb'] = 512
+        result['checks']['db_size'] = {'status': 'ok', 'msg': f'{result["db_size_mb"]} MB used'}
     except Exception as e:
-        result['errors'].append(f'DB size: {str(e)[:120]}')
+        msg = str(e)[:120]
+        result['checks']['db_size'] = {'status': 'error', 'msg': msg}
+        result['errors'].append(f'DB size: {msg}')
 
-    # 3. Cloudflare R2 Bucket Size
+    # 3. Cloudflare R2 Bucket
     try:
         from r2_storage import _get_s3_client, R2_BUCKET_NAME
         client = _get_s3_client()
@@ -10981,28 +11061,60 @@ def _build_health_data():
             for obj in page.get('Contents', []):
                 total_bytes += obj.get('Size', 0)
                 total_objs += 1
-        result['r2_size_mb'] = round(total_bytes / (1024 * 1024), 1)
+        result['r2_size_mb']       = round(total_bytes / (1024 * 1024), 1)
         result['r2_total_objects'] = total_objs
+        result['checks']['r2_storage'] = {
+            'status': 'ok', 'msg': f'{result["r2_size_mb"]} MB, {total_objs} objects'}
     except Exception as e:
-        result['errors'].append(f'R2 storage: {str(e)[:120]}')
+        msg = str(e)[:120]
+        result['checks']['r2_storage'] = {'status': 'error', 'msg': msg}
+        result['errors'].append(f'R2 storage: {msg}')
 
-    # Compute percentages and critical flags
-    result['db_pct'] = round(result['db_size_mb'] / result['db_size_limit_mb'] * 100, 1) if result['db_size_mb'] is not None else None
-    result['r2_pct'] = round(result['r2_size_mb'] / result['r2_size_limit_mb'] * 100, 1) if result['r2_size_mb'] is not None else None
-    result['db_critical'] = bool(result['db_pct'] is not None and result['db_pct'] >= 80)
-    result['r2_critical'] = bool(result['r2_pct'] is not None and result['r2_pct'] >= 80)
+    # 4. Active Sessions (distinct users in last 30 min)
+    try:
+        cutoff = datetime.utcnow() - timedelta(minutes=30)
+        active = db.session.query(ActivityLog.user_id).filter(
+            ActivityLog.created_at >= cutoff).distinct().count()
+        result['active_sessions'] = active
+        result['checks']['sessions'] = {'status': 'ok', 'msg': f'{active} user(s) active in last 30 min'}
+    except Exception as e:
+        result['checks']['sessions'] = {'status': 'error', 'msg': str(e)[:80]}
+
+    # 5. API Latency (in-memory rolling window)
+    if _api_latency_ms:
+        samples = list(_api_latency_ms)
+        result['api_avg_ms']       = round(sum(samples) / len(samples), 1)
+        result['api_sample_count'] = len(samples)
+        p95_idx                    = max(0, int(len(samples) * 0.95) - 1)
+        result['api_p95_ms']       = sorted(samples)[p95_idx]
+        result['checks']['api_latency'] = {
+            'status': 'ok',
+            'msg': f'avg {result["api_avg_ms"]}ms, p95 {result["api_p95_ms"]}ms ({len(samples)} samples)'}
+    else:
+        result['checks']['api_latency'] = {
+            'status': 'na', 'msg': 'No /api/* calls recorded yet in this session'}
+
+    # Percentages & Critical Flags
+    result['db_pct']       = round(result['db_size_mb'] / result['db_size_limit_mb'] * 100, 1) if result['db_size_mb'] is not None else None
+    result['r2_pct']       = round(result['r2_size_mb'] / result['r2_size_limit_mb'] * 100, 1) if result['r2_size_mb'] is not None else None
+    result['db_critical']  = bool(result['db_pct'] is not None and result['db_pct'] >= 80)
+    result['r2_critical']  = bool(result['r2_pct'] is not None and result['r2_pct'] >= 80)
     result['any_critical'] = result['db_critical'] or result['r2_critical']
+
+    # Smart Alert (in-app notification)
+    _maybe_send_health_alert(result)
+
     return result
 
 
 def _fetch_system_health(force=False):
-    import time as _time
-    now = _time.time()
+    import time as _t
+    now = _t.time()
     if (not force) and _health_cache['data'] and _health_cache['ts'] and (now - _health_cache['ts']) < _HEALTH_CACHE_TTL:
         return _health_cache['data']
     data = _build_health_data()
     _health_cache['data'] = data
-    _health_cache['ts'] = now
+    _health_cache['ts']   = now
     return data
 
 
@@ -11012,7 +11124,7 @@ def system_health():
     if not session.get('is_master'):
         abort(403)
     force = request.args.get('refresh') == '1'
-    data = _fetch_system_health(force=force)
+    data  = _fetch_system_health(force=force)
     env_vars_set = {k: bool(os.environ.get(k, '').strip()) for k in [
         'RENDER_API_KEY', 'RENDER_SERVICE_ID',
         'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ENDPOINT_URL', 'R2_BUCKET_NAME',

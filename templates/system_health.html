@@ -1,421 +1,424 @@
 {% extends "base.html" %}
 {% block title %}System Health — Fleet Manager{% endblock %}
+{# ═══════════════════════════════════════════════════════════════════════════
+   COMPLETE REPLACEMENT — tighter grid, 6 KPI cards, backup, sessions, latency
+   ═══════════════════════════════════════════════════════════════════════════ #}
 
 {% block extra_head %}
 <style>
+/* ── base card ── */
 .sh-card {
-    border-radius: 18px;
-    padding: 22px 24px;
+    border-radius: 16px;
+    padding: 18px 20px;
     background: #fff;
-    box-shadow: 0 2px 16px rgba(0,0,0,0.07);
-    border: 1px solid #e2e8f0;
-    transition: transform 0.18s, box-shadow 0.18s;
+    box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+    border: 1px solid #e8edf3;
+    transition: transform 0.16s, box-shadow 0.16s;
+    height: 100%;
 }
-.sh-card:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,0.11); }
-.sh-card-danger  { border-left: 5px solid #ef4444; }
-.sh-card-warning { border-left: 5px solid #f59e0b; }
-.sh-card-success { border-left: 5px solid #10b981; }
-.sh-card-info    { border-left: 5px solid #3b82f6; }
-.sh-card-neutral { border-left: 5px solid #94a3b8; }
+.sh-card:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,0.10); }
+.sh-card-danger  { border-left: 4px solid #ef4444; }
+.sh-card-warning { border-left: 4px solid #f59e0b; }
+.sh-card-success { border-left: 4px solid #10b981; }
+.sh-card-info    { border-left: 4px solid #3b82f6; }
+.sh-card-violet  { border-left: 4px solid #8b5cf6; }
+.sh-card-neutral { border-left: 4px solid #cbd5e1; }
 
-.metric-label {
-    font-size: 0.72rem;
+.lbl {
+    font-size: 0.68rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.09em;
+    letter-spacing: 0.08em;
     color: #64748b;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
-.metric-value {
-    font-size: 2rem;
-    font-weight: 800;
-    color: #0f172a;
-    line-height: 1.1;
-}
-.metric-sub { font-size: 0.78rem; color: #94a3b8; margin-top: 3px; }
+.val-lg { font-size: 1.9rem; font-weight: 800; color: #0f172a; line-height: 1.1; }
+.val-md { font-size: 1.4rem; font-weight: 800; color: #0f172a; line-height: 1.15; }
+.sub    { font-size: 0.74rem; color: #94a3b8; margin-top: 2px; }
 
-.status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
-    border-radius: 999px;
-    font-size: 0.78rem;
-    font-weight: 700;
+.sbadge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 999px; font-size: 0.73rem; font-weight: 700;
 }
-.sb-live    { background:#dcfce7; color:#16a34a; }
-.sb-down    { background:#fee2e2; color:#dc2626; }
-.sb-unknown { background:#f1f5f9; color:#64748b; }
-.sb-building{ background:#fef9c3; color:#a16207; }
+.sb-ok   { background:#dcfce7; color:#16a34a; }
+.sb-down { background:#fee2e2; color:#dc2626; }
+.sb-bld  { background:#fef9c3; color:#a16207; }
+.sb-unk  { background:#f1f5f9; color:#64748b; }
+.sb-na   { background:#f8fafc; color:#94a3b8; }
 
-.progress-track {
-    height: 10px;
-    border-radius: 6px;
-    background: #e2e8f0;
-    overflow: hidden;
-    margin-top: 10px;
-}
-.progress-fill {
-    height: 100%;
-    border-radius: 6px;
-    transition: width 0.6s cubic-bezier(.4,0,.2,1);
-}
-.pf-ok      { background: linear-gradient(90deg,#10b981,#34d399); }
-.pf-warn    { background: linear-gradient(90deg,#f59e0b,#fbbf24); }
-.pf-danger  { background: linear-gradient(90deg,#ef4444,#f87171); }
+.pt { height: 7px; border-radius: 4px; background:#e8edf3; overflow:hidden; margin-top:8px; }
+.pf { height:100%; border-radius:4px; transition:width .6s; }
+.pf-ok   { background: linear-gradient(90deg,#10b981,#34d399); }
+.pf-warn { background: linear-gradient(90deg,#f59e0b,#fbbf24); }
+.pf-bad  { background: linear-gradient(90deg,#ef4444,#f87171); }
 
-.quick-btn {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 14px 18px;
-    border-radius: 14px;
-    text-decoration: none;
-    font-weight: 700;
-    font-size: 0.88rem;
-    transition: all 0.18s;
-    border: none;
-    color: #fff;
+.qbtn {
+    display:flex; align-items:center; gap:10px; padding:11px 14px;
+    border-radius:12px; text-decoration:none; font-weight:700;
+    font-size:0.82rem; color:#fff; transition:all .16s;
 }
-.quick-btn:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(0,0,0,0.18); color:#fff; text-decoration:none; }
-.qb-render     { background: linear-gradient(135deg,#6366f1,#4f46e5); }
-.qb-cloudflare { background: linear-gradient(135deg,#f97316,#ea580c); }
-.qb-github     { background: linear-gradient(135deg,#1f2937,#111827); }
+.qbtn:hover { transform:translateY(-2px); box-shadow:0 8px 22px rgba(0,0,0,0.18); color:#fff; text-decoration:none; }
+.qb-render     { background:linear-gradient(135deg,#6366f1,#4f46e5); }
+.qb-cloudflare { background:linear-gradient(135deg,#f97316,#ea580c); }
+.qb-github     { background:linear-gradient(135deg,#1f2937,#111827); }
+.qb-backup     { background:linear-gradient(135deg,#0ea5e9,#0284c7); }
 
-.env-row { display:flex; align-items:center; gap:6px; font-size:0.78rem; padding:4px 0; }
-.env-row .env-key { font-family:monospace; font-size:0.73rem; color:#475569; }
+.env-row { display:flex; align-items:center; gap:6px; font-size:0.75rem; padding:3px 0; }
+.env-key { font-family:monospace; font-size:0.7rem; color:#94a3b8; }
 
-.alert-critical-banner {
-    background: linear-gradient(135deg,#fef2f2,#fee2e2);
-    border: 2px solid #fca5a5;
-    border-radius: 16px;
-    padding: 16px 22px;
+.chk-row { display:flex; align-items:flex-start; gap:8px; padding:6px 0; border-bottom:1px solid #f1f5f9; }
+.chk-row:last-child { border-bottom:none; }
+.chk-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.chk-ok   { background:#10b981; }
+.chk-err  { background:#ef4444; }
+.chk-skip { background:#94a3b8; }
+.chk-na   { background:#e2e8f0; }
+.chk-label { font-size:0.73rem; font-weight:700; color:#334155; }
+.chk-msg   { font-size:0.7rem;  color:#64748b; }
+
+.chip {
+    display:inline-flex; align-items:center; gap:3px;
+    padding:2px 8px; border-radius:6px; font-size:0.68rem; font-weight:700;
 }
+.chip-ok   { background:#dcfce7; color:#15803d; }
+.chip-err  { background:#fee2e2; color:#dc2626; }
+.chip-skip { background:#f1f5f9; color:#64748b; }
+.chip-na   { background:#f8fafc; color:#94a3b8; }
 
 .commit-hash {
-    font-family: monospace;
-    font-size: 0.85rem;
-    background: #eff6ff;
-    color: #1d4ed8;
-    padding: 3px 8px;
-    border-radius: 6px;
-    display: inline-block;
+    font-family:monospace; font-size:0.8rem;
+    background:#eff6ff; color:#1d4ed8; padding:2px 7px; border-radius:5px; display:inline-block;
 }
-
-.err-item {
-    background: #fff7ed;
-    border-left: 3px solid #f97316;
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 0.77rem;
-    color: #7c2d12;
-    margin-bottom: 6px;
+.setup-step {
+    background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;
+    padding:10px 14px; margin-bottom:8px; font-size:0.8rem;
 }
+.setup-step code { background:#eff6ff; color:#1d4ed8; padding:2px 6px; border-radius:4px; font-size:0.78rem; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4" style="max-width:1240px;">
+<div class="container-fluid py-4" style="max-width:1300px;">
 
-    {# ── Critical Alert Banner ── #}
-    {% if data.any_critical %}
-    <div class="alert-critical-banner mb-4 d-flex align-items-start gap-3">
-        <i class="bi bi-exclamation-triangle-fill text-danger fs-4 flex-shrink-0 mt-1"></i>
-        <div>
-            <div class="fw-bold text-danger" style="font-size:1rem;">⚠ Critical Storage Warning</div>
-            <div style="font-size:0.87rem;color:#b91c1c;margin-top:3px;">
-                {% if data.db_critical %}
-                    Database is at <strong>{{ data.db_pct }}%</strong> of its
-                    {{ data.db_size_limit_mb }} MB free limit ({{ data.db_size_mb }} MB used).&nbsp;
-                {% endif %}
-                {% if data.r2_critical %}
-                    R2 Bucket is at <strong>{{ data.r2_pct }}%</strong> of its
-                    {{ data.r2_size_limit_mb // 1024 }} GB free limit.&nbsp;
-                {% endif %}
-                Take action immediately to avoid service disruption.
-            </div>
+{% set svc     = data.service %}
+{% set dep     = data.last_deploy %}
+{% set svc_st  = (svc.status | lower) if svc else '' %}
+{% set dep_st  = (dep.status | lower) if dep else '' %}
+
+{# ── Critical Banner ── #}
+{% if data.any_critical %}
+<div class="d-flex align-items-start gap-3 mb-3 px-4 py-3"
+     style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:2px solid #fca5a5;border-radius:14px;">
+    <i class="bi bi-exclamation-triangle-fill text-danger fs-5 flex-shrink-0 mt-1"></i>
+    <div class="flex-grow-1">
+        <strong class="text-danger">Critical Storage Alert</strong>
+        <span class="ms-2 text-danger" style="font-size:0.85rem;">
+            {% if data.db_critical %}Database at <strong>{{ data.db_pct }}%</strong> ({{ data.db_size_mb }} MB / {{ data.db_size_limit_mb }} MB).{% endif %}
+            {% if data.r2_critical %}R2 Bucket at <strong>{{ data.r2_pct }}%</strong> of 10 GB.{% endif %}
+            An in-app notification has been sent to all users.
+        </span>
+    </div>
+</div>
+{% endif %}
+
+{# ── Header ── #}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-3">
+    <div>
+        <h2 class="fw-bold mb-0" style="font-size:1.5rem;letter-spacing:-0.02em;color:#0f172a;">
+            <i class="bi bi-activity text-primary me-2"></i>System Health &amp; Cloud Status
+        </h2>
+        <span class="text-muted" style="font-size:0.78rem;">
+            Fetched: <strong>{{ data.fetched_at }}</strong>
+            <span style="color:#cbd5e1;margin:0 5px;">·</span>
+            <span style="color:#94a3b8;">cached 15 min</span>
+        </span>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('system_health', refresh=1) }}" class="btn btn-sm btn-primary d-flex align-items-center gap-1" style="font-size:0.8rem;">
+            <i class="bi bi-arrow-clockwise"></i> Force Refresh
+        </a>
+        <a href="{{ url_for('backup_download') }}" class="btn btn-sm btn-outline-info d-flex align-items-center gap-1" style="font-size:0.8rem;">
+            <i class="bi bi-download"></i> Backup Now
+        </a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" style="font-size:0.8rem;">
+            <i class="bi bi-house"></i> Dashboard
+        </a>
+    </div>
+</div>
+
+{# ════════════════════════════════════════════════════════
+   ROW 1 — 6 tight KPI cards
+════════════════════════════════════════════════════════ #}
+<div class="row g-2 mb-2">
+
+    {# 1. Render Service #}
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="sh-card {% if svc and svc_st in ['running','live','active'] %}sh-card-success{% elif svc and svc_st in ['suspended','failed'] %}sh-card-danger{% elif svc %}sh-card-warning{% else %}sh-card-neutral{% endif %}">
+            <div class="lbl"><i class="bi bi-cloud-check me-1"></i>Service</div>
+            {% if svc %}
+                <div class="mt-1">
+                    <span class="sbadge {% if svc_st in ['running','live','active'] %}sb-ok{% elif svc_st in ['suspended','failed'] %}sb-down{% elif 'build' in svc_st %}sb-bld{% else %}sb-unk{% endif %}">
+                        <span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span>
+                        {{ svc.status | replace('_',' ') | title }}
+                    </span>
+                </div>
+                <div class="sub mt-1" style="font-size:0.68rem;">
+                    <strong style="color:#334155;">{{ svc.name }}</strong><br>
+                    {% if svc.serviceDetails %}{{ svc.serviceDetails.plan | title }}{% endif %}
+                </div>
+            {% else %}
+                <div class="sub mt-2" style="color:#f97316;font-size:0.68rem;">API key not set</div>
+            {% endif %}
         </div>
     </div>
-    {% endif %}
 
-    {# ── Page Header ── #}
-    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
-        <div>
-            <h2 class="fw-bold mb-0" style="font-size:1.6rem;letter-spacing:-0.02em;color:#0f172a;">
-                <i class="bi bi-activity text-primary me-2"></i>System Health &amp; Cloud Status
-            </h2>
-            <span class="text-muted" style="font-size:0.82rem;">
-                Last fetched: <strong>{{ data.fetched_at }}</strong>
-                <span style="font-size:0.72rem;color:#94a3b8;margin-left:6px;">(cached 15 min — use Force Refresh for live data)</span>
-            </span>
-        </div>
-        <div class="d-flex gap-2 flex-wrap">
-            <a href="{{ url_for('system_health', refresh=1) }}" class="btn btn-sm btn-primary d-flex align-items-center gap-1">
-                <i class="bi bi-arrow-clockwise"></i> Force Refresh
-            </a>
-            <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1">
-                <i class="bi bi-house"></i> Dashboard
-            </a>
+    {# 2. Last Deployment #}
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="sh-card sh-card-info">
+            <div class="lbl"><i class="bi bi-rocket-takeoff me-1"></i>Deploy</div>
+            {% if dep %}
+                <div class="mt-1">
+                    <span class="sbadge {% if dep_st in ['live','active'] %}sb-ok{% elif dep_st in ['failed','deactivated'] %}sb-down{% elif 'build' in dep_st or 'progress' in dep_st %}sb-bld{% else %}sb-unk{% endif %}">
+                        {{ dep.status | replace('_',' ') | title if dep.status else '?' }}
+                    </span>
+                </div>
+                {% if dep.commit %}
+                <div class="sub mt-1">
+                    <span class="commit-hash">{{ dep.commit.id[:7] if dep.commit.id else '?' }}</span><br>
+                    <span style="font-size:0.67rem;color:#64748b;" title="{{ dep.commit.message }}">
+                        {{ (dep.commit.message or '')[:30] }}{% if (dep.commit.message or '') | length > 30 %}…{% endif %}
+                    </span>
+                </div>
+                {% endif %}
+                {% if dep.finishedAt %}
+                <div class="sub" style="font-size:0.67rem;">{{ dep.finishedAt[:10] }}</div>
+                {% endif %}
+            {% else %}
+                <div class="sub mt-2" style="color:#94a3b8;font-size:0.72rem;">No data — add API key</div>
+            {% endif %}
         </div>
     </div>
 
-    {# ── Row 1: Four Metric Cards ── #}
-    <div class="row g-3 mb-3">
-
-        {# Render Service Status #}
-        <div class="col-sm-6 col-lg-3">
-            {% set svc = data.service %}
-            {% set svc_status = (svc.status | lower) if svc else '' %}
-            <div class="sh-card h-100
-                {% if svc and svc_status in ['running','live','active'] %}sh-card-success
-                {% elif svc and svc_status in ['suspended','failed','unavailable'] %}sh-card-danger
-                {% elif svc %}sh-card-warning
-                {% else %}sh-card-neutral{% endif %}">
-                <div class="metric-label"><i class="bi bi-cloud-check me-1"></i>Render Service</div>
-                {% if svc %}
-                    <div class="mt-2">
-                        <span class="status-badge
-                            {% if svc_status in ['running','live','active'] %}sb-live
-                            {% elif svc_status in ['suspended','failed','unavailable'] %}sb-down
-                            {% elif 'build' in svc_status %}sb-building
-                            {% else %}sb-unknown{% endif %}">
-                            <span style="width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block;"></span>
-                            {{ svc.status | replace('_',' ') | title }}
-                        </span>
-                    </div>
-                    <div class="metric-sub mt-2">
-                        <strong style="color:#0f172a;">{{ svc.name }}</strong><br>
-                        {% if svc.serviceDetails %}
-                            Plan: {{ svc.serviceDetails.plan | title }}&nbsp;&nbsp;
-                            Region: {{ svc.serviceDetails.region | replace('-',' ') | title }}<br>
-                        {% endif %}
-                        {% if svc.updatedAt %}
-                            Updated: {{ svc.updatedAt[:10] }}
-                        {% endif %}
-                    </div>
-                {% else %}
-                    <div class="metric-sub mt-3" style="color:#f97316;">
-                        <i class="bi bi-key me-1"></i>
-                        RENDER_API_KEY or RENDER_SERVICE_ID not configured
-                    </div>
-                {% endif %}
-            </div>
+    {# 3. Database Storage #}
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="sh-card {% if data.db_critical %}sh-card-danger{% elif data.db_pct and data.db_pct >= 60 %}sh-card-warning{% elif data.db_size_mb is not none %}sh-card-success{% else %}sh-card-neutral{% endif %}">
+            <div class="lbl"><i class="bi bi-database me-1"></i>Database</div>
+            {% if data.db_size_mb is not none %}
+                <div class="val-md mt-1 {% if data.db_critical %}text-danger{% elif data.db_pct >= 60 %}text-warning{% endif %}">
+                    {{ data.db_size_mb }}<small style="font-size:0.85rem;font-weight:500;"> MB</small>
+                </div>
+                <div class="sub">{{ data.db_pct }}% of {{ data.db_size_limit_mb }} MB</div>
+                <div class="pt"><div class="pf {% if data.db_critical %}pf-bad{% elif data.db_pct >= 60 %}pf-warn{% else %}pf-ok{% endif %}" style="width:{{ [data.db_pct, 100] | min }}%;"></div></div>
+                {% if data.db_critical %}<div class="mt-1 text-danger fw-bold" style="font-size:0.65rem;">CRITICAL</div>{% endif %}
+            {% else %}
+                <div class="sub mt-2">Unavailable</div>
+            {% endif %}
         </div>
+    </div>
 
-        {# Last Deployment #}
-        <div class="col-sm-6 col-lg-3">
-            {% set dep = data.last_deploy %}
-            <div class="sh-card sh-card-info h-100">
-                <div class="metric-label"><i class="bi bi-rocket-takeoff me-1"></i>Last Deployment</div>
-                {% if dep %}
-                    {% set dep_status = (dep.status | lower) if dep.status else '' %}
-                    <div class="mt-2">
-                        <span class="status-badge
-                            {% if dep_status in ['live','active'] %}sb-live
-                            {% elif dep_status in ['failed','deactivated'] %}sb-down
-                            {% elif 'build' in dep_status or 'progress' in dep_status %}sb-building
-                            {% else %}sb-unknown{% endif %}">
-                            {{ dep.status | replace('_',' ') | title if dep.status else 'Unknown' }}
-                        </span>
-                    </div>
-                    {% if dep.commit %}
-                    <div class="metric-sub mt-2">
-                        <span class="commit-hash">{{ dep.commit.id[:8] if dep.commit.id else 'N/A' }}</span><br>
-                        <span class="mt-1 d-block" title="{{ dep.commit.message }}" style="color:#334155;">
-                            {{ (dep.commit.message or '')[:45] }}{% if (dep.commit.message or '') | length > 45 %}…{% endif %}
-                        </span>
-                        {% if dep.finishedAt %}
-                        <span style="color:#94a3b8;">{{ dep.finishedAt[:10] }} {{ dep.finishedAt[11:16] }} UTC</span>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-                {% else %}
-                    <div class="metric-sub mt-3 text-muted">
-                        No deployment data available
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-
-        {# Database Storage #}
-        <div class="col-sm-6 col-lg-3">
-            <div class="sh-card h-100
-                {% if data.db_critical %}sh-card-danger
-                {% elif data.db_pct and data.db_pct >= 60 %}sh-card-warning
-                {% elif data.db_size_mb is not none %}sh-card-success
-                {% else %}sh-card-neutral{% endif %}">
-                <div class="metric-label"><i class="bi bi-database me-1"></i>Database Storage</div>
-                {% if data.db_size_mb is not none %}
-                    <div class="metric-value mt-1 {% if data.db_critical %}text-danger{% elif data.db_pct >= 60 %}text-warning{% endif %}">
-                        {{ data.db_size_mb }}<small style="font-size:1rem;font-weight:500;"> MB</small>
-                    </div>
-                    <div class="metric-sub">
-                        {{ data.db_pct }}% of {{ data.db_size_limit_mb }} MB limit
-                    </div>
-                    <div class="progress-track">
-                        <div class="progress-fill
-                            {% if data.db_critical %}pf-danger
-                            {% elif data.db_pct >= 60 %}pf-warn
-                            {% else %}pf-ok{% endif %}"
-                            style="width:{{ [data.db_pct, 100] | min }}%;"></div>
-                    </div>
-                    {% if data.db_critical %}
-                    <div class="mt-2 text-danger fw-bold" style="font-size:0.75rem;">
-                        ⚠ CRITICAL — Upgrade or clean up now!
-                    </div>
-                    {% endif %}
-                {% else %}
-                    <div class="metric-sub mt-3 text-muted">Could not fetch database size</div>
-                {% endif %}
-            </div>
-        </div>
-
-        {# Cloudflare R2 Bucket #}
-        <div class="col-sm-6 col-lg-3">
-            <div class="sh-card h-100
-                {% if data.r2_critical %}sh-card-danger
-                {% elif data.r2_pct and data.r2_pct >= 60 %}sh-card-warning
-                {% elif data.r2_size_mb is not none %}sh-card-success
-                {% else %}sh-card-neutral{% endif %}">
-                <div class="metric-label"><i class="bi bi-cloud-haze2 me-1"></i>Cloudflare R2 Bucket</div>
-                {% if data.r2_size_mb is not none %}
+    {# 4. Cloudflare R2 #}
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="sh-card {% if data.r2_critical %}sh-card-danger{% elif data.r2_pct and data.r2_pct >= 60 %}sh-card-warning{% elif data.r2_size_mb is not none %}sh-card-success{% else %}sh-card-neutral{% endif %}">
+            <div class="lbl"><i class="bi bi-cloud-haze2 me-1"></i>R2 Bucket</div>
+            {% if data.r2_size_mb is not none %}
+                <div class="val-md mt-1 {% if data.r2_critical %}text-danger{% endif %}">
                     {% if data.r2_size_mb >= 1024 %}
-                        <div class="metric-value mt-1 {% if data.r2_critical %}text-danger{% endif %}">
-                            {{ (data.r2_size_mb / 1024) | round(2) }}<small style="font-size:1rem;font-weight:500;"> GB</small>
-                        </div>
+                        {{ (data.r2_size_mb / 1024) | round(2) }}<small style="font-size:0.85rem;font-weight:500;"> GB</small>
                     {% else %}
-                        <div class="metric-value mt-1 {% if data.r2_critical %}text-danger{% endif %}">
-                            {{ data.r2_size_mb }}<small style="font-size:1rem;font-weight:500;"> MB</small>
-                        </div>
+                        {{ data.r2_size_mb }}<small style="font-size:0.85rem;font-weight:500;"> MB</small>
                     {% endif %}
-                    <div class="metric-sub">
-                        {{ data.r2_total_objects }} objects &nbsp;·&nbsp;
-                        {{ data.r2_pct }}% of {{ data.r2_size_limit_mb // 1024 }} GB
-                    </div>
-                    <div class="progress-track">
-                        <div class="progress-fill
-                            {% if data.r2_critical %}pf-danger
-                            {% elif data.r2_pct >= 60 %}pf-warn
-                            {% else %}pf-ok{% endif %}"
-                            style="width:{{ [data.r2_pct, 100] | min }}%;"></div>
-                    </div>
-                    {% if data.r2_critical %}
-                    <div class="mt-2 text-danger fw-bold" style="font-size:0.75rem;">
-                        ⚠ CRITICAL — Bucket near capacity!
-                    </div>
-                    {% endif %}
-                {% else %}
-                    <div class="metric-sub mt-3 text-muted">
-                        {% if data.errors and 'R2' in (data.errors | join(' ')) %}
-                            R2 not configured or unreachable
-                        {% else %}
-                            Could not fetch R2 size
-                        {% endif %}
-                    </div>
-                {% endif %}
+                </div>
+                <div class="sub">{{ data.r2_pct }}% · {{ data.r2_total_objects }} files</div>
+                <div class="pt"><div class="pf {% if data.r2_critical %}pf-bad{% elif data.r2_pct >= 60 %}pf-warn{% else %}pf-ok{% endif %}" style="width:{{ [data.r2_pct, 100] | min }}%;"></div></div>
+                {% if data.r2_critical %}<div class="mt-1 text-danger fw-bold" style="font-size:0.65rem;">CRITICAL</div>{% endif %}
+            {% else %}
+                <div class="sub mt-2">Unavailable</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# 5. Active Sessions #}
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="sh-card sh-card-violet">
+            <div class="lbl"><i class="bi bi-people me-1"></i>Live Sessions</div>
+            {% if data.active_sessions is not none %}
+                <div class="val-lg mt-1" style="color:#7c3aed;">{{ data.active_sessions }}</div>
+                <div class="sub">users in last 30 min</div>
+            {% else %}
+                <div class="sub mt-2">Unavailable</div>
+            {% endif %}
+            <div class="pt">
+                <div class="pf" style="background:#8b5cf6;width:{% if data.active_sessions %}{{ [data.active_sessions * 20, 100] | min }}{% else %}0{% endif %}%;"></div>
             </div>
         </div>
     </div>
 
-    {# ── Row 2: Quick Links + Env Vars + Errors ── #}
+    {# 6. API Latency #}
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="sh-card {% if data.api_avg_ms and data.api_avg_ms > 500 %}sh-card-warning{% elif data.api_avg_ms %}sh-card-success{% else %}sh-card-neutral{% endif %}">
+            <div class="lbl"><i class="bi bi-speedometer2 me-1"></i>API Latency</div>
+            {% if data.api_avg_ms is not none %}
+                <div class="val-md mt-1 {% if data.api_avg_ms > 500 %}text-warning{% elif data.api_avg_ms > 1000 %}text-danger{% endif %}">
+                    {{ data.api_avg_ms }}<small style="font-size:0.8rem;font-weight:500;"> ms</small>
+                </div>
+                <div class="sub">avg · p95: {{ data.api_p95_ms }}ms</div>
+                <div class="sub">{{ data.api_sample_count }} samples</div>
+            {% else %}
+                <div class="sub mt-2" style="font-size:0.7rem;">No /api/* calls yet</div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+
+{# ════════════════════════════════════════════════════════
+   ROW 2 — Quick Actions | Env Vars | Fetch Log
+════════════════════════════════════════════════════════ #}
+<div class="row g-2 mb-2">
+
+    {# Quick Links + Backup #}
+    <div class="col-lg-4">
+        <div class="sh-card">
+            <div class="lbl mb-2"><i class="bi bi-lightning-charge me-1"></i>Quick Links</div>
+            <div class="d-flex flex-column gap-2">
+                <a href="https://dashboard.render.com" target="_blank" rel="noopener" class="qbtn qb-render">
+                    <i class="bi bi-cloud-arrow-up-fill"></i>
+                    <div><div>Render Dashboard</div><div style="font-size:0.67rem;opacity:0.8;">Services · DB · Deploys</div></div>
+                    <i class="bi bi-box-arrow-up-right ms-auto" style="opacity:0.6;font-size:0.75rem;"></i>
+                </a>
+                <a href="https://dash.cloudflare.com" target="_blank" rel="noopener" class="qbtn qb-cloudflare">
+                    <i class="bi bi-shield-fill-check"></i>
+                    <div><div>Cloudflare Console</div><div style="font-size:0.67rem;opacity:0.8;">R2 · CDN · DNS</div></div>
+                    <i class="bi bi-box-arrow-up-right ms-auto" style="opacity:0.6;font-size:0.75rem;"></i>
+                </a>
+                <a href="https://github.com/Saifbhai90/fleet-management" target="_blank" rel="noopener" class="qbtn qb-github">
+                    <i class="bi bi-github"></i>
+                    <div><div>GitHub Repository</div><div style="font-size:0.67rem;opacity:0.8;">Code · Commits · Issues</div></div>
+                    <i class="bi bi-box-arrow-up-right ms-auto" style="opacity:0.6;font-size:0.75rem;"></i>
+                </a>
+                <a href="{{ url_for('backup_download') }}" class="qbtn qb-backup">
+                    <i class="bi bi-download"></i>
+                    <div>
+                        <div>Download Backup</div>
+                        <div style="font-size:0.67rem;opacity:0.8;">
+                            {% if data.last_backup_ts %}
+                                Last: {{ data.last_backup_ts.strftime('%d-%m-%Y %H:%M') }} UTC
+                            {% else %}
+                                No backup yet this session
+                            {% endif %}
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {# Environment Variables #}
+    <div class="col-lg-4">
+        <div class="sh-card">
+            <div class="lbl mb-2"><i class="bi bi-key me-1"></i>Environment Variables</div>
+            {% set env_checks = [
+                ('RENDER_API_KEY',       'Render API Key'),
+                ('RENDER_SERVICE_ID',    'Render Service ID'),
+                ('R2_ACCESS_KEY_ID',     'R2 Access Key'),
+                ('R2_SECRET_ACCESS_KEY', 'R2 Secret Key'),
+                ('R2_ENDPOINT_URL',      'R2 Endpoint URL'),
+                ('R2_BUCKET_NAME',       'R2 Bucket Name'),
+                ('DATABASE_URL',         'Database URL'),
+                ('SECRET_KEY',           'Flask Secret Key'),
+            ] %}
+            {% for env_key, label in env_checks %}
+            {% set is_set = env_vars_set.get(env_key, False) %}
+            <div class="env-row">
+                <i class="bi {% if is_set %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}" style="font-size:0.85rem;flex-shrink:0;"></i>
+                <span style="color:#334155;font-weight:600;font-size:0.75rem;">{{ label }}</span>
+                <span class="env-key ms-auto">{{ env_key }}</span>
+            </div>
+            {% endfor %}
+            <hr class="my-2">
+            <div class="lbl mb-1">Free Tier Limits</div>
+            <div style="font-size:0.72rem;color:#64748b;line-height:1.7;">
+                Render DB: <strong class="text-dark">1 GB</strong> &nbsp;·&nbsp;
+                Render RAM: <strong class="text-dark">512 MB</strong><br>
+                Cloudflare R2: <strong class="text-dark">10 GB / 10M req/mo</strong>
+            </div>
+        </div>
+    </div>
+
+    {# Fetch Log — per-service #}
+    <div class="col-lg-4">
+        <div class="sh-card">
+            <div class="lbl mb-2"><i class="bi bi-terminal me-1"></i>Sync Log — Last Fetch</div>
+            {% set check_meta = [
+                ('render_api',   'bi-cloud-check',    'Render API'),
+                ('db_size',      'bi-database',       'Database Size'),
+                ('r2_storage',   'bi-cloud-haze2',    'R2 Storage'),
+                ('sessions',     'bi-people',         'Active Sessions'),
+                ('api_latency',  'bi-speedometer2',   'API Latency'),
+            ] %}
+            {% for key, icon, label in check_meta %}
+            {% set chk = data.checks.get(key, {}) %}
+            {% set st  = chk.get('status', 'na') %}
+            <div class="chk-row">
+                <div class="chk-dot {% if st == 'ok' %}chk-ok{% elif st == 'error' %}chk-err{% elif st == 'skip' %}chk-skip{% else %}chk-na{% endif %}"></div>
+                <div class="flex-grow-1">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="chk-label"><i class="bi {{ icon }} me-1"></i>{{ label }}</span>
+                        <span class="chip {% if st == 'ok' %}chip-ok{% elif st == 'error' %}chip-err{% elif st == 'skip' %}chip-skip{% else %}chip-na{% endif %} ms-auto">
+                            {% if st == 'ok' %}✓ OK{% elif st == 'error' %}✗ Error{% elif st == 'skip' %}— Skip{% else %}N/A{% endif %}
+                        </span>
+                    </div>
+                    <div class="chk-msg">{{ chk.get('msg', 'Not run') }}</div>
+                </div>
+            </div>
+            {% endfor %}
+            <hr class="my-2">
+            <div style="font-size:0.7rem;color:#94a3b8;">
+                <i class="bi bi-shield-lock me-1"></i>Master only &nbsp;·&nbsp;
+                <i class="bi bi-clock me-1"></i>15-min cache &nbsp;·&nbsp;
+                <i class="bi bi-bell me-1"></i>Auto-alerts on critical
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{# ════════════════════════════════════════════════════════
+   ROW 3 — Setup Guide (shown only when RENDER_API_KEY is missing)
+════════════════════════════════════════════════════════ #}
+{% if not env_vars_set.get('RENDER_API_KEY') or not env_vars_set.get('RENDER_SERVICE_ID') %}
+<div class="sh-card sh-card-warning mt-2">
+    <div class="lbl mb-2"><i class="bi bi-info-circle me-1"></i>Setup Guide — Enable Render Integration</div>
     <div class="row g-3">
-
-        {# Quick Links #}
-        <div class="col-lg-5">
-            <div class="sh-card h-100">
-                <div class="metric-label mb-3"><i class="bi bi-lightning-charge me-1"></i>Quick Links</div>
-                <div class="d-flex flex-column gap-3">
-                    <a href="https://dashboard.render.com" target="_blank" rel="noopener noreferrer"
-                       class="quick-btn qb-render">
-                        <i class="bi bi-cloud-arrow-up-fill fs-5"></i>
-                        <div>
-                            <div>Open Render Dashboard</div>
-                            <div style="font-size:0.72rem;opacity:0.85;font-weight:500;">Manage services, DB, deploys</div>
-                        </div>
-                        <i class="bi bi-box-arrow-up-right ms-auto" style="opacity:0.7;"></i>
-                    </a>
-                    <a href="https://dash.cloudflare.com" target="_blank" rel="noopener noreferrer"
-                       class="quick-btn qb-cloudflare">
-                        <i class="bi bi-shield-fill-check fs-5"></i>
-                        <div>
-                            <div>Open Cloudflare Console</div>
-                            <div style="font-size:0.72rem;opacity:0.85;font-weight:500;">R2 buckets, CDN & DNS settings</div>
-                        </div>
-                        <i class="bi bi-box-arrow-up-right ms-auto" style="opacity:0.7;"></i>
-                    </a>
-                    <a href="https://github.com/Saifbhai90/fleet-management" target="_blank" rel="noopener noreferrer"
-                       class="quick-btn qb-github">
-                        <i class="bi bi-github fs-5"></i>
-                        <div>
-                            <div>GitHub Repository</div>
-                            <div style="font-size:0.72rem;opacity:0.85;font-weight:500;">View source code & commit history</div>
-                        </div>
-                        <i class="bi bi-box-arrow-up-right ms-auto" style="opacity:0.7;"></i>
-                    </a>
-                </div>
+        <div class="col-md-6">
+            <div class="setup-step">
+                <strong>Step 1 — Get your API Key</strong><br>
+                Go to <a href="https://dashboard.render.com/u/settings" target="_blank" rel="noopener">Render → Settings → API Keys</a> → <em>Create API Key</em>.
+                Copy the key.
+            </div>
+            <div class="setup-step">
+                <strong>Step 2 — Get your Service ID</strong><br>
+                Open your web service on Render. The URL will be:<br>
+                <code>https://dashboard.render.com/web/srv-XXXXXXXX</code><br>
+                Copy the <code>srv-XXXXXXXX</code> part.
             </div>
         </div>
-
-        {# Environment Variables Status #}
-        <div class="col-lg-4">
-            <div class="sh-card h-100">
-                <div class="metric-label mb-2"><i class="bi bi-key me-1"></i>Environment Variables</div>
-                {% set env_checks = [
-                    ('RENDER_API_KEY',       'Render API Key'),
-                    ('RENDER_SERVICE_ID',    'Render Service ID'),
-                    ('R2_ACCESS_KEY_ID',     'R2 Access Key'),
-                    ('R2_SECRET_ACCESS_KEY', 'R2 Secret Key'),
-                    ('R2_ENDPOINT_URL',      'R2 Endpoint URL'),
-                    ('R2_BUCKET_NAME',       'R2 Bucket Name'),
-                    ('DATABASE_URL',         'Database URL'),
-                    ('SECRET_KEY',           'Flask Secret Key'),
-                ] %}
-                {% for env_key, label in env_checks %}
-                {% set is_set = env_vars_set.get(env_key, False) %}
-                <div class="env-row">
-                    <i class="bi {% if is_set %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"
-                       style="font-size:0.9rem;flex-shrink:0;"></i>
-                    <span style="color:#0f172a;font-weight:600;">{{ label }}</span>
-                    <span class="env-key ms-auto">{{ env_key }}</span>
-                </div>
-                {% endfor %}
-
-                <hr class="my-3">
-                <div class="metric-label mb-2"><i class="bi bi-info-circle me-1"></i>Free Tier Limits</div>
-                <table class="table table-sm table-borderless mb-0" style="font-size:0.8rem;">
-                    <tr><td class="text-muted ps-0">Render Database</td><td class="fw-bold">1 GB storage</td></tr>
-                    <tr><td class="text-muted ps-0">Render Web Service</td><td class="fw-bold">512 MB RAM</td></tr>
-                    <tr><td class="text-muted ps-0">Cloudflare R2</td><td class="fw-bold">10 GB / 10M req/mo</td></tr>
-                </table>
+        <div class="col-md-6">
+            <div class="setup-step">
+                <strong>Step 3 — Add Environment Variables on Render</strong><br>
+                Go to your <strong>Web Service → Environment</strong> and add:<br>
+                <code>RENDER_API_KEY</code> = your API key<br>
+                <code>RENDER_SERVICE_ID</code> = <code>srv-XXXXXXXX</code>
             </div>
-        </div>
-
-        {# Fetch Log #}
-        <div class="col-lg-3">
-            <div class="sh-card h-100">
-                <div class="metric-label mb-2"><i class="bi bi-terminal me-1"></i>Fetch Log</div>
-                {% if data.errors %}
-                    {% for err in data.errors %}
-                    <div class="err-item">
-                        <i class="bi bi-exclamation-circle me-1 text-warning"></i>{{ err }}
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="d-flex align-items-center gap-2 text-success" style="font-size:0.85rem;">
-                        <i class="bi bi-check-circle-fill fs-5"></i>
-                        All checks completed without errors
-                    </div>
-                {% endif %}
-
-                <hr class="my-3">
-                <div class="metric-label mb-1"><i class="bi bi-shield-lock me-1"></i>Access</div>
-                <div style="font-size:0.78rem;color:#64748b;">
-                    This page is visible to <strong class="text-dark">Master</strong> only.<br>
-                    Data is cached for <strong class="text-dark">15 minutes</strong> to avoid rate limits.
-                </div>
+            <div class="setup-step">
+                <strong>Step 4 — Redeploy</strong><br>
+                Click <em>Manual Deploy → Deploy latest commit</em>. Then
+                come back here and click <strong>Force Refresh</strong>.
             </div>
         </div>
     </div>
+</div>
+{% endif %}
 
 </div>
 {% endblock %}
