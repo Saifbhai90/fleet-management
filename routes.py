@@ -8267,6 +8267,13 @@ def driver_attendance_missing_checkout():
         disable_vehicle=disable_vehicle,
         disable_shift=disable_shift,
     )
+
+
+@app.route('/driver-attendance/manual-checkin', methods=['GET', 'POST'])
+def driver_attendance_manual_checkin():
+    """Manual check-in form: set check-in time for a driver who has not checked in."""
+    driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
+    date_str = request.args.get('date') or request.form.get('date')
     view_date = parse_date(date_str) if date_str else date.today()
     if view_date > date.today():
         flash('Manual check-in cannot be recorded for a future date.', 'danger')
