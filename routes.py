@@ -2887,12 +2887,19 @@ def login():
                 except Exception:
                     db.session.rollback()
                 # Login ke baad default landing page:
-                # 1) Agar dashboard ki access hai to hamesha pehle Dashboard pe le jao.
+                # 1) Agar dashboard ki access hai (full ya koi bhi card/feature) to Dashboard pe le jao.
                 # 2) Agar dashboard nahi hai lekin Attendance hai to Attendance pages pe.
                 # 3) Warna bhi fallback Dashboard hi hai (permission check before_request mein ho jayega).
                 target_endpoint = None
-                codes = perms or []
-                if 'dashboard' in codes:
+                codes = set(perms or [])
+                # Smart dashboard access check (same as route guard logic)
+                has_dashboard_access = (
+                    'dashboard' in codes
+                    or any(p.startswith('dashboard_card_') for p in codes)
+                    or 'view_fleet_map' in codes
+                    or 'global_search' in codes
+                )
+                if has_dashboard_access:
                     target_endpoint = 'dashboard'
                 elif 'driver_attendance' in codes:
                     target_endpoint = 'driver_attendance_list'

@@ -274,8 +274,8 @@ document.addEventListener('DOMContentLoaded', function() {
         <span class="text-muted" style="font-size:0.85rem;">Real-time fleet snapshot</span>
     </div>
     <div class="d-flex flex-wrap gap-2">
-        <a href="{{ url_for('dashboard') }}" class="qa-btn qa-secondary">
-            <i data-lucide="refresh-cw" style="width:15px;height:15px;"></i> Refresh
+        <a href="{{ url_for('dashboard') }}" class="qa-btn qa-primary">
+            <i data-lucide="refresh-cw" style="width:16px;height:16px;"></i> Refresh
         </a>
         {% if can_see_page('drivers_add') %}
         <a href="{{ url_for('driver_form') }}" class="qa-btn qa-primary">
