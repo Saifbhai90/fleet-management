@@ -3326,13 +3326,6 @@
 /* ═══════════════════════════════════════════
    DARK MODE
 ═══════════════════════════════════════════ */
-(function() {
-    var stored = localStorage.getItem('fleetDarkMode');
-    if (stored === 'on') {
-        document.body.classList.add('dark-mode');
-    }
-})();
-
 function toggleDarkMode() {
     var isDark = document.body.classList.toggle('dark-mode');
     localStorage.setItem('fleetDarkMode', isDark ? 'on' : 'off');
