@@ -7764,20 +7764,28 @@ def driver_attendance_mark():
         if scope_districts:
             vq = vq.filter(Vehicle.district_id.in_(scope_districts))
         vehicles = vq.order_by(Vehicle.vehicle_no).all()
-    drivers_query = Driver.query.filter(Driver.status == 'Active').filter(Driver.vehicle_id.isnot(None))
+    drivers_query = Driver.query.filter(
+        Driver.status == 'Active',
+        Driver.vehicle_id.isnot(None),
+    ).outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
     if scope_projects:
-        drivers_query = drivers_query.filter(Driver.project_id.in_(scope_projects))
+        drivers_query = drivers_query.filter(
+            db.or_(Driver.project_id.in_(scope_projects),
+                   Vehicle.project_id.in_(scope_projects))
+        )
     if scope_districts:
-        drivers_query = drivers_query.filter(Driver.district_id.in_(scope_districts))
+        drivers_query = drivers_query.filter(
+            db.or_(Driver.district_id.in_(scope_districts),
+                   Vehicle.district_id.in_(scope_districts))
+        )
     if scope_vehicles:
         drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
     if scope_shifts:
         drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
     if project_id:
-        drivers_query = drivers_query.filter(Driver.project_id == project_id)
-    need_vehicle_join = bool(district_id or search)
-    if need_vehicle_join:
-        drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+        drivers_query = drivers_query.filter(
+            db.or_(Driver.project_id == project_id, Vehicle.project_id == project_id)
+        )
     if district_id:
         drivers_query = drivers_query.filter(
             db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
@@ -7795,7 +7803,7 @@ def driver_attendance_mark():
                 Vehicle.vehicle_no.ilike(q),
             )
         )
-    vehicle_drivers = drivers_query.order_by(Driver.name).all()
+    vehicle_drivers = drivers_query.distinct().order_by(Driver.name).all()
     if driver_id:
         drivers_query = drivers_query.filter(Driver.id == driver_id)
     drivers = drivers_query.order_by(Driver.name).all()
