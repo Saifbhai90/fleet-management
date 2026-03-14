@@ -8628,9 +8628,27 @@ def get_vehicles_by_project_district():
 
 @app.route('/task-report')
 def task_report_list():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     form = TaskReportFilterForm()
-    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
-    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    
+    # Filter dropdown choices by user scope
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+    
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    
     today = date.today()
     from_date = today
     to_date = today
@@ -11348,6 +11366,13 @@ def _render_ai_report_table(headers, rows):
 
 @app.route('/reports/project-summary')
 def report_project_summary():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     from_date_str = (request.args.get('from_date') or '').strip()
     to_date_str = (request.args.get('to_date') or '').strip()
     project_id = request.args.get('project_id', type=int) or 0
@@ -11355,7 +11380,13 @@ def report_project_summary():
     from_date = parse_date(from_date_str) if from_date_str else None
     to_date = parse_date(to_date_str) if to_date_str else None
 
-    projects_q = Project.query.order_by(Project.name)
+    projects_q = Project.query
+    
+    # Apply user data scope
+    if not is_master_or_admin and allowed_projects:
+        projects_q = projects_q.filter(Project.id.in_(list(allowed_projects)))
+    
+    projects_q = projects_q.order_by(Project.name)
     if project_id:
         projects_q = projects_q.filter(Project.id == project_id)
 
@@ -11431,6 +11462,15 @@ def report_district_summary():
 
 @app.route('/reports/vehicle-summary')
 def report_vehicle_summary():
+    from auth_utils import get_user_context
+    
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    
     from_date_str = (request.args.get('from_date') or '').strip()
     to_date_str = (request.args.get('to_date') or '').strip()
     project_id = request.args.get('project_id', type=int) or 0
@@ -11442,6 +11482,16 @@ def report_vehicle_summary():
 
     # Base query: sirf active date non-null vehicles
     query = Vehicle.query.filter(Vehicle.active_date.isnot(None))
+    
+    # Apply user data scope
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(Vehicle.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    
     if project_id:
         query = query.filter(Vehicle.project_id == project_id)
     if district_id:
