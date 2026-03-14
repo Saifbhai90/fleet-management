@@ -12,15 +12,15 @@
     "captureInput": true,
     "webContentsDebuggingEnabled": false,
     "overScrollMode": "never",
-    "backgroundColor": "#0f172a",
+    "backgroundColor": "#ffffff",
     "initialFocus": false
   },
   "ios": {
     "contentInset": "always",
-    "scrollEnabled": true,
+    "scrollEnabled": false,
     "allowsLinkPreview": false,
     "allowsBackForwardNavigationGestures": false,
-    "backgroundColor": "#0f172a"
+    "backgroundColor": "#ffffff"
   },
   "plugins": {
     "SplashScreen": {

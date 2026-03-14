@@ -108,6 +108,17 @@
             .sidebar a {
                 min-height: 48px;
                 padding: 14px 20px;
+                display: flex;
+                align-items: center;
+            }
+            /* Sub-menu items: even taller touch target */
+            .sidebar .collapse-item {
+                min-height: 52px !important;
+                padding: 14px 16px 14px 52px !important;
+            }
+            /* Dropdown parent row: add caret arrow area */
+            .sidebar .dropdown-toggle {
+                min-height: 52px !important;
             }
             .sidebar-overlay {
                 display: none;
@@ -364,6 +375,30 @@
         /* Sidebar scrolls independently without triggering page PTR */
         .sidebar { overscroll-behavior-y: contain; }
 
+        /* ─── Top Page Loading Progress Bar ─── */
+        #topLoadBar {
+            position: fixed;
+            top: 0; left: 0;
+            height: 3px;
+            width: 0%;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6, #06b6d4);
+            z-index: 99999;
+            opacity: 0;
+            border-radius: 0 2px 2px 0;
+            box-shadow: 0 0 10px rgba(59,130,246,0.7);
+            pointer-events: none;
+        }
+        #topLoadBar.tlb-loading {
+            opacity: 1;
+            transition: width 8s cubic-bezier(0.05, 0.7, 0.1, 1.0);
+            width: 82%;
+        }
+        #topLoadBar.tlb-done {
+            width: 100% !important;
+            opacity: 0;
+            transition: width 0.2s ease, opacity 0.4s ease 0.2s;
+        }
+
         /* ─── Pull-to-Refresh indicator ─── */
         #pullRefreshBar {
             position: fixed;
@@ -418,12 +453,20 @@
             transform: translateX(0) !important;
         }
 
-        /* ── Main content: full-width, no left margin ── */
+        /* ── Main content: FIXED scroll container (native momentum scroll) ── */
         .capacitor-native .main-content {
-            margin-left: 0 !important;
-            margin-top: calc(var(--safe-top) + var(--nav-h)) !important;
-            padding: 16px 14px calc(80px + env(safe-area-inset-bottom, 0px)) !important;
+            position: fixed !important;
+            top: calc(var(--safe-top) + var(--nav-h)) !important;
+            left: 0 !important; right: 0 !important;
+            bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+            margin: 0 !important;
+            padding: 16px 14px 24px !important;
             background: #f1f5f9 !important;
+            /* Momentum scroll — feels 100% native */
+            overflow-y: scroll !important;
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-y: contain !important;
+            height: auto !important;
         }
 
         /* ── Cards: native app style ── */
@@ -1626,9 +1669,6 @@
     <span id="ptrText">Pull down to refresh</span>
 </div>
 
-<!-- Top Loading Bar -->
-<div id="topLoadBar"></div>
-
 <!-- Mobile Hamburger (fixed, sidebar access without navbar) -->
 <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu">
     <i data-lucide="menu"></i>
@@ -2038,6 +2078,48 @@
             document.body.appendChild(dl);
         }
     });
+
+    // ── Top Progress Bar (page navigation indicator) ─────────────────────
+    (function() {
+        var bar = document.getElementById('topLoadBar');
+        if (!bar) return;
+
+        function tlbStart() {
+            bar.classList.remove('tlb-done');
+            bar.style.transition = 'none';
+            bar.style.width = '0%';
+            void bar.offsetWidth; // force reflow
+            bar.classList.add('tlb-loading');
+        }
+        function tlbFinish() {
+            bar.classList.remove('tlb-loading');
+            bar.classList.add('tlb-done');
+            setTimeout(function() {
+                bar.classList.remove('tlb-done');
+                bar.style.width = '0%';
+            }, 650);
+        }
+
+        // Start immediately (page is arriving)
+        tlbStart();
+        // Finish when DOM is ready
+        document.addEventListener('DOMContentLoaded', tlbFinish);
+
+        // Re-start on any navigating link click
+        document.addEventListener('click', function(e) {
+            var a = e.target.closest('a[href]');
+            if (!a) return;
+            var href = a.getAttribute('href') || '';
+            // Skip: hash-only, javascript:, new-tab, BS toggles, API
+            if (!href || href === '#' || href.charAt(0) === '#' ||
+                href.indexOf('javascript') === 0 || a.target === '_blank' ||
+                a.getAttribute('data-bs-toggle') || href.indexOf('/api/') === 0) return;
+            tlbStart();
+        }, true);
+
+        // Catch form submissions
+        document.addEventListener('submit', tlbStart, true);
+    })();
 
     // Sidebar Toggle
     function toggleSidebar() {
@@ -2521,13 +2603,14 @@
             if (guideWrap) guideWrap.style.display = 'none';
 
             // 2. Auto-hide navbar on scroll down, show on scroll up (native feel)
+            //    In Capacitor: body is fixed, so we listen on #mainContent (the scroll container)
             var navbar = document.querySelector('.navbar');
             var lastScroll = 0;
             var scrollThreshold = 60;
             var navHideTimer = null;
-            window.addEventListener('scroll', function() {
-                var current = window.scrollY;
-                // Always show at top
+            var scrollEl = document.getElementById('mainContent') || window;
+            function onNativeScroll() {
+                var current = scrollEl === window ? window.scrollY : scrollEl.scrollTop;
                 if (current <= 10) {
                     if (navbar) navbar.classList.remove('nav-hidden');
                     lastScroll = 0;
@@ -2539,12 +2622,12 @@
                     if (navbar) navbar.classList.remove('nav-hidden');
                 }
                 lastScroll = current;
-                // Auto-show after 2s idle (prevents stuck-hidden state)
                 clearTimeout(navHideTimer);
                 navHideTimer = setTimeout(function() {
                     if (navbar) navbar.classList.remove('nav-hidden');
                 }, 2000);
-            }, { passive: true });
+            }
+            scrollEl.addEventListener('scroll', onNativeScroll, { passive: true });
 
             // 3. Mark active bottom nav item based on current URL
             var path = window.location.pathname;
@@ -2749,6 +2832,7 @@
         var sidebar = document.getElementById('sidebar');
         var overlay = document.getElementById('sidebarOverlay');
         if (!btn || !sidebar) return;
+
         function openSB() {
             sidebar.classList.add('mobile-open');
             if (overlay) { overlay.classList.add('show'); overlay.style.display = 'block'; }
@@ -2756,18 +2840,36 @@
         }
         function closeSB() {
             sidebar.classList.remove('mobile-open');
-            if (overlay) overlay.classList.remove('show');
+            if (overlay) { overlay.classList.remove('show'); }
             document.body.style.overflow = '';
         }
+
         btn.addEventListener('click', function() {
             if (sidebar.classList.contains('mobile-open')) closeSB(); else openSB();
         });
+
+        // Tap overlay → close sidebar
         if (overlay) overlay.addEventListener('click', closeSB);
-        // Close sidebar when any sidebar link is tapped on mobile
+
+        // Sidebar link click logic:
+        // • Dropdown-toggle (parent section) → ONLY toggle sub-menu, NEVER close or navigate
+        // • Real page link (.collapse-item or direct) → navigate AND close sidebar on mobile
         sidebar.querySelectorAll('a').forEach(function(a) {
-            a.addEventListener('click', function() {
+            a.addEventListener('click', function(e) {
+                var isToggle = a.getAttribute('data-bs-toggle') === 'collapse';
+                if (isToggle) {
+                    // Let Bootstrap handle the collapse toggle; stop any href navigation
+                    e.preventDefault();
+                    return; // do NOT close the sidebar
+                }
+                // Real page link: close sidebar on mobile
                 if (window.innerWidth < 992) closeSB();
             });
+        });
+
+        // Close on resize to desktop
+        window.addEventListener('resize', function() {
+            if (window.innerWidth >= 992) closeSB();
         });
     })();
 
