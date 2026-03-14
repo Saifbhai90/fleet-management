@@ -10406,12 +10406,8 @@ def maintenance_expense_delete(pk):
 
 
 # ────────────────────────────────────────────────
-# Employee Expense (placeholder list)
+# Employee Expense - routes now in routes_finance.py
 # ────────────────────────────────────────────────
-@app.route('/employee-expenses')
-def employee_expense_list():
-    """Employee expense list - placeholder; add form/list later."""
-    return render_template('employee_expense_list.html', rows=[])
 
 
 # ────────────────────────────────────────────────
