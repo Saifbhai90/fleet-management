@@ -339,21 +339,63 @@ def dashboard():
     except Exception:
         monthly_fuel = 0.0
 
-    # ── 7-day fuel chart data (for Chart.js) ─────────────────────────────
+    # ── 30-day fuel trend (single query) ───────────────────────────────────
     try:
         from datetime import timedelta
-        fuel_chart_labels = []
-        fuel_chart_values = []
-        for i in range(6, -1, -1):
-            d = today_dt - timedelta(days=i)
-            day_total = db.session.query(func.sum(FuelExpense.amount)).filter(
-                FuelExpense.fueling_date == d
-            ).scalar() or 0
-            fuel_chart_labels.append(d.strftime('%d %b'))
-            fuel_chart_values.append(round(float(day_total), 2))
+        _start30 = today_dt - timedelta(days=29)
+        _daily_rows = db.session.query(
+            FuelExpense.fueling_date,
+            func.sum(FuelExpense.amount)
+        ).filter(
+            FuelExpense.fueling_date >= _start30,
+            FuelExpense.fueling_date <= today_dt
+        ).group_by(FuelExpense.fueling_date).all()
+        _daily_map = {str(r[0]): float(r[1] or 0) for r in _daily_rows}
+        fuel_chart_labels, fuel_chart_values = [], []
+        for i in range(29, -1, -1):
+            _d = today_dt - timedelta(days=i)
+            fuel_chart_labels.append(_d.strftime('%d %b'))
+            fuel_chart_values.append(_daily_map.get(str(_d), 0))
     except Exception:
-        fuel_chart_labels = []
-        fuel_chart_values = []
+        fuel_chart_labels, fuel_chart_values = [], []
+
+    # ── Vehicle utilization doughnut data ────────────────────────────────────
+    try:
+        v_active   = Vehicle.query.filter(Vehicle.driver_id.isnot(None)).count()
+        v_deployed = Vehicle.query.filter(Vehicle.project_id.isnot(None), Vehicle.driver_id.is_(None)).count()
+        v_idle     = Vehicle.query.filter(Vehicle.project_id.is_(None),  Vehicle.driver_id.is_(None)).count()
+        vehicle_util_data = [v_active, v_deployed, v_idle]
+    except Exception:
+        vehicle_util_data = [0, 0, 0]
+
+    # ── Top-6 projects by fuel spend this month (bar chart) ──────────────────
+    try:
+        from sqlalchemy import extract as _extr
+        _proj_rows = db.session.query(
+            Project.name,
+            func.sum(FuelExpense.amount).label('total')
+        ).join(FuelExpense, FuelExpense.project_id == Project.id).filter(
+            _extr('month', FuelExpense.fueling_date) == today_dt.month,
+            _extr('year',  FuelExpense.fueling_date) == today_dt.year
+        ).group_by(Project.name).order_by(func.sum(FuelExpense.amount).desc()).limit(6).all()
+        project_chart_labels = [r[0] for r in _proj_rows]
+        project_chart_values = [round(float(r[1]), 0) for r in _proj_rows]
+    except Exception:
+        project_chart_labels, project_chart_values = [], []
+
+    # ── Document Health: expiry in next 15 days / already expired ────────────
+    try:
+        from datetime import timedelta as _td
+        _cutoff15 = today_dt + _td(days=15)
+        expiry_soon, expiry_already = 0, 0
+        for _drv in Driver.query.filter(Driver.status == 'Active').all():
+            _lic, _cn = _drv.license_expiry_date, _drv.cnic_expiry_date
+            if (_lic and today_dt <= _lic <= _cutoff15) or (_cn and today_dt <= _cn <= _cutoff15):
+                expiry_soon += 1
+            elif (_lic and _lic < today_dt) or (_cn and _cn < today_dt):
+                expiry_already += 1
+    except Exception:
+        expiry_soon, expiry_already = 0, 0
 
     user_id = session.get('user_id')
     notifications = _unread_notifications_for_user(user_id, 20) if user_id else []
@@ -423,13 +465,18 @@ def dashboard():
                            monthly_fuel=monthly_fuel,
                            fuel_chart_labels=fuel_chart_labels,
                            fuel_chart_values=fuel_chart_values,
+                           vehicle_util_data=vehicle_util_data,
+                           project_chart_labels=project_chart_labels,
+                           project_chart_values=project_chart_values,
+                           expiry_soon=expiry_soon,
+                           expiry_already=expiry_already,
                            notifications=notifications,
                            health_alert=health_alert,
                            from_login=request.args.get('from_login') == '1')
 
 
 @app.route('/notification/<int:pk>/read', methods=['POST'])
-def notification_mark_read(pk):
+def notification_read(pk):
     n = Notification.query.get_or_404(pk)
     user_id = session.get('user_id')
     if user_id:

@@ -2,6 +2,7 @@
 {% block title %}Dashboard — Fleet Manager{% endblock %}
 
 {% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 <style>
 /* ═══════════════════════════════════════════════
    BENTO GRID — Premium Dashboard Layout
@@ -403,6 +404,214 @@ document.addEventListener('DOMContentLoaded', function() {
     </a>
 
 </div>
+
+<!-- ═══════════════════════════════
+     ANALYTICS ROW
+═══════════════════════════════ -->
+<div class="row g-3 mt-3" id="analyticsRow">
+
+    <!-- ① 30-Day Fuel Trend -->
+    <div class="col-12 col-xl-6">
+        <div class="card border-0 shadow-sm h-100" style="border-radius:20px;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Fuel Consumption</div>
+                        <div style="font-size:1rem;font-weight:700;color:#0f172a;">30-Day Trend</div>
+                    </div>
+                    <div style="background:#eff6ff;color:#1d4ed8;border-radius:12px;padding:8px 12px;font-size:0.78rem;font-weight:600;">
+                        Rs&nbsp;{{ '{:,.0f}'.format(monthly_fuel) }}&nbsp;this month
+                    </div>
+                </div>
+                <div style="position:relative;height:200px;">
+                    <canvas id="fuelTrendChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ② Vehicle Utilization doughnut + ③ Project bar stacked vertically -->
+    <div class="col-12 col-xl-6">
+        <div class="row g-3 h-100">
+
+            <!-- Vehicle Utilization -->
+            <div class="col-12 col-sm-5 col-xl-5">
+                <div class="card border-0 shadow-sm h-100" style="border-radius:20px;">
+                    <div class="card-body p-4">
+                        <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Fleet Status</div>
+                        <div style="font-size:1rem;font-weight:700;color:#0f172a;margin-bottom:12px;">Utilization</div>
+                        <div style="position:relative;height:130px;">
+                            <canvas id="vehicleUtilChart"></canvas>
+                        </div>
+                        <div class="d-flex flex-column gap-1 mt-2">
+                            <div class="d-flex align-items-center gap-2" style="font-size:0.72rem;">
+                                <span style="width:10px;height:10px;border-radius:50%;background:#059669;flex-shrink:0;"></span>
+                                <span class="text-muted">With Driver</span>
+                                <span class="ms-auto fw-bold">{{ vehicle_util_data[0] }}</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2" style="font-size:0.72rem;">
+                                <span style="width:10px;height:10px;border-radius:50%;background:#3b82f6;flex-shrink:0;"></span>
+                                <span class="text-muted">Deployed</span>
+                                <span class="ms-auto fw-bold">{{ vehicle_util_data[1] }}</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2" style="font-size:0.72rem;">
+                                <span style="width:10px;height:10px;border-radius:50%;background:#e2e8f0;flex-shrink:0;"></span>
+                                <span class="text-muted">Idle</span>
+                                <span class="ms-auto fw-bold">{{ vehicle_util_data[2] }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Projects by Fuel Spend -->
+            <div class="col-12 col-sm-7 col-xl-7">
+                <div class="card border-0 shadow-sm h-100" style="border-radius:20px;">
+                    <div class="card-body p-4">
+                        <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">This Month</div>
+                        <div style="font-size:1rem;font-weight:700;color:#0f172a;margin-bottom:12px;">Top Projects · Fuel</div>
+                        {% if project_chart_labels %}
+                        <div style="position:relative;height:155px;">
+                            <canvas id="projectFuelChart"></canvas>
+                        </div>
+                        {% else %}
+                        <div class="d-flex flex-column align-items-center justify-content-center" style="height:155px;color:#94a3b8;">
+                            <i data-lucide="bar-chart-2" style="width:36px;height:36px;opacity:0.3;"></i>
+                            <span style="font-size:0.78rem;margin-top:8px;">No fuel data this month</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<!-- Document Health Card -->
+{% if expiry_soon > 0 or expiry_already > 0 %}
+<div class="d-flex align-items-start gap-3 mt-3 px-3 py-3"
+     style="background:linear-gradient(135deg,{% if expiry_already > 0 %}#fef2f2,#fee2e2{% else %}#fffbeb,#fef3c7{% endif %});border:2px solid {% if expiry_already > 0 %}#fca5a5{% else %}#fcd34d{% endif %};border-radius:18px;">
+    <div style="width:44px;height:44px;border-radius:14px;background:{% if expiry_already > 0 %}#fee2e2{% else %}#fef3c7{% endif %};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i data-lucide="calendar-x" style="width:22px;height:22px;color:{% if expiry_already > 0 %}#dc2626{% else %}#d97706{% endif %};"></i>
+    </div>
+    <div class="flex-grow-1">
+        <strong style="font-size:0.88rem;color:{% if expiry_already > 0 %}#991b1b{% else %}#92400e{% endif %};">Document Health Alert</strong>
+        <div style="font-size:0.8rem;color:{% if expiry_already > 0 %}#b91c1c{% else %}#a16207{% endif %};margin-top:2px;">
+            {% if expiry_already > 0 %}<span><strong>{{ expiry_already }}</strong> driver(s) with expired documents.</span> {% endif %}
+            {% if expiry_soon > 0 %}<span><strong>{{ expiry_soon }}</strong> driver(s) expiring within 15 days.</span>{% endif %}
+        </div>
+    </div>
+    <a href="{{ url_for('report_expiry', days=15) }}" class="btn btn-sm flex-shrink-0"
+       style="background:{% if expiry_already > 0 %}#dc2626{% else %}#d97706{% endif %};color:#fff;border-radius:10px;font-size:0.78rem;font-weight:600;border:none;">
+        View Report
+    </a>
+</div>
+{% endif %}
+
+<!-- Chart.js init -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var fuelLabels = {{ fuel_chart_labels | tojson }};
+    var fuelValues = {{ fuel_chart_values | tojson }};
+    var utilData   = {{ vehicle_util_data | tojson }};
+    var projLabels = {{ project_chart_labels | tojson }};
+    var projValues = {{ project_chart_values | tojson }};
+
+    /* ── Fuel Trend (line) ── */
+    var fuelCtx = document.getElementById('fuelTrendChart');
+    if (fuelCtx) {
+        new Chart(fuelCtx, {
+            type: 'line',
+            data: {
+                labels: fuelLabels,
+                datasets: [{
+                    label: 'Fuel Cost (Rs)',
+                    data: fuelValues,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59,130,246,0.08)',
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    pointHoverBackgroundColor: '#3b82f6',
+                    tension: 0.4,
+                    fill: true,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: {
+                    callbacks: { label: function(c) { return ' Rs ' + c.raw.toLocaleString(); } }
+                }},
+                scales: {
+                    x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 8, maxRotation: 0 } },
+                    y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 9 },
+                         callback: function(v) { return v >= 1000 ? (v/1000).toFixed(0)+'k' : v; } } }
+                }
+            }
+        });
+    }
+
+    /* ── Vehicle Utilization (doughnut) ── */
+    var utilCtx = document.getElementById('vehicleUtilChart');
+    if (utilCtx) {
+        new Chart(utilCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['With Driver', 'Deployed', 'Idle'],
+                datasets: [{
+                    data: utilData,
+                    backgroundColor: ['#059669','#3b82f6','#e2e8f0'],
+                    borderWidth: 0,
+                    hoverOffset: 6
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                cutout: '68%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function(c) { return ' ' + c.label + ': ' + c.raw; } } }
+                }
+            }
+        });
+    }
+
+    /* ── Project Fuel Bar ── */
+    var projCtx = document.getElementById('projectFuelChart');
+    if (projCtx && projLabels.length) {
+        new Chart(projCtx, {
+            type: 'bar',
+            data: {
+                labels: projLabels,
+                datasets: [{
+                    label: 'Fuel (Rs)',
+                    data: projValues,
+                    backgroundColor: [
+                        'rgba(59,130,246,0.75)','rgba(16,185,129,0.75)',
+                        'rgba(124,58,237,0.75)','rgba(234,88,12,0.75)',
+                        'rgba(220,38,38,0.75)','rgba(217,119,6,0.75)'
+                    ],
+                    borderRadius: 6, borderSkipped: false
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: {
+                    callbacks: { label: function(c) { return ' Rs ' + c.raw.toLocaleString(); } }
+                }},
+                scales: {
+                    x: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 9 },
+                         callback: function(v) { return v >= 1000 ? (v/1000).toFixed(0)+'k' : v; } } },
+                    y: { grid: { display: false }, ticks: { font: { size: 9 } } }
+                }
+            }
+        });
+    }
+});
+</script>
 
 <!-- ── Quick Actions ── -->
 <div class="quick-actions mt-4">
