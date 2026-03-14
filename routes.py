@@ -352,123 +352,136 @@ def _unread_notifications_for_user(user_id, limit=20):
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
-    total_companies = Company.query.count()
-    total_projects = Project.query.count()
-    total_vehicles = Vehicle.query.count()
-    total_drivers = Driver.query.count()
-    total_parking = ParkingStation.query.count()
-    total_districts = District.query.count()
+    # Determine what sections this user can see (skip expensive queries for hidden cards)
+    _perms = set(session.get('permissions') or [])
+    _is_master = session.get('is_master', False)
+    try:
+        from permissions_config import can_see_page as _csp
+        def _can(key):
+            return True if _is_master else _csp(_perms, key)
+    except Exception:
+        def _can(key):
+            return True
 
-    # ── Bento KPI cards ──────────────────────────────────────────────────
-    active_drivers = Driver.query.filter_by(status='Active').count()
-    assigned_vehicles = Vehicle.query.filter(Vehicle.district_id.isnot(None)).count()
     today_dt = date.today()
-    today_attendance = DriverAttendance.query.filter_by(attendance_date=today_dt).count()
-    today_transfers = DriverTransfer.query.filter_by(transfer_date=today_dt).count()
 
-    # Monthly fuel cost (current calendar month)
-    try:
-        from sqlalchemy import extract
-        monthly_fuel = db.session.query(func.sum(FuelExpense.amount)).filter(
-            extract('month', FuelExpense.fueling_date) == today_dt.month,
-            extract('year', FuelExpense.fueling_date) == today_dt.year
-        ).scalar() or 0
-        monthly_fuel = float(monthly_fuel)
-    except Exception:
-        monthly_fuel = 0.0
+    # ── Bento KPI cards (only query what the user can see) ────────────────
+    total_companies  = Company.query.count()       if _can('companies')            else 0
+    total_projects   = Project.query.count()       if _can('projects')             else 0
+    total_vehicles   = Vehicle.query.count()       if _can('vehicles')             else 0
+    total_drivers    = Driver.query.count()        if _can('drivers')              else 0
+    total_parking    = ParkingStation.query.count() if _can('parking')             else 0
+    total_districts  = District.query.count()      if _can('districts')            else 0
+    active_drivers   = Driver.query.filter_by(status='Active').count() if _can('drivers')   else 0
+    assigned_vehicles = Vehicle.query.filter(Vehicle.district_id.isnot(None)).count() if _can('vehicles') else 0
+    today_attendance = DriverAttendance.query.filter_by(attendance_date=today_dt).count() if _can('driver_attendance') else 0
+    today_transfers  = DriverTransfer.query.filter_by(transfer_date=today_dt).count()     if _can('driver_transfers')  else 0
 
-    # ── 30-day fuel trend (single query) ───────────────────────────────────
-    try:
-        from datetime import timedelta
-        _start30 = today_dt - timedelta(days=29)
-        _daily_rows = db.session.query(
-            FuelExpense.fueling_date,
-            func.sum(FuelExpense.amount)
-        ).filter(
-            FuelExpense.fueling_date >= _start30,
-            FuelExpense.fueling_date <= today_dt
-        ).group_by(FuelExpense.fueling_date).all()
-        _daily_map = {str(r[0]): float(r[1] or 0) for r in _daily_rows}
-        fuel_chart_labels, fuel_chart_values = [], []
-        for i in range(29, -1, -1):
-            _d = today_dt - timedelta(days=i)
-            fuel_chart_labels.append(_d.strftime('%d %b'))
-            fuel_chart_values.append(_daily_map.get(str(_d), 0))
-    except Exception:
-        fuel_chart_labels, fuel_chart_values = [], []
+    # Monthly fuel cost + 30-day trend (only if user can see fuel expense)
+    monthly_fuel = 0.0
+    fuel_chart_labels, fuel_chart_values = [], []
+    if _can('fuel_expense'):
+        try:
+            from sqlalchemy import extract
+            monthly_fuel = db.session.query(func.sum(FuelExpense.amount)).filter(
+                extract('month', FuelExpense.fueling_date) == today_dt.month,
+                extract('year', FuelExpense.fueling_date) == today_dt.year
+            ).scalar() or 0
+            monthly_fuel = float(monthly_fuel)
+        except Exception:
+            monthly_fuel = 0.0
+        try:
+            from datetime import timedelta
+            _start30 = today_dt - timedelta(days=29)
+            _daily_rows = db.session.query(
+                FuelExpense.fueling_date,
+                func.sum(FuelExpense.amount)
+            ).filter(
+                FuelExpense.fueling_date >= _start30,
+                FuelExpense.fueling_date <= today_dt
+            ).group_by(FuelExpense.fueling_date).all()
+            _daily_map = {str(r[0]): float(r[1] or 0) for r in _daily_rows}
+            for i in range(29, -1, -1):
+                _d = today_dt - timedelta(days=i)
+                fuel_chart_labels.append(_d.strftime('%d %b'))
+                fuel_chart_values.append(_daily_map.get(str(_d), 0))
+        except Exception:
+            fuel_chart_labels, fuel_chart_values = [], []
 
-    # ── Vehicle utilization doughnut data ────────────────────────────────────
-    try:
-        v_active   = Vehicle.query.filter(Vehicle.driver_id.isnot(None)).count()
-        v_deployed = Vehicle.query.filter(Vehicle.project_id.isnot(None), Vehicle.driver_id.is_(None)).count()
-        v_idle     = Vehicle.query.filter(Vehicle.project_id.is_(None),  Vehicle.driver_id.is_(None)).count()
-        vehicle_util_data = [v_active, v_deployed, v_idle]
-    except Exception:
-        vehicle_util_data = [0, 0, 0]
+    # ── Vehicle utilization doughnut (only if user can see vehicles) ──────
+    vehicle_util_data = [0, 0, 0]
+    if _can('vehicles'):
+        try:
+            v_active   = Vehicle.query.filter(Vehicle.driver_id.isnot(None)).count()
+            v_deployed = Vehicle.query.filter(Vehicle.project_id.isnot(None), Vehicle.driver_id.is_(None)).count()
+            v_idle     = Vehicle.query.filter(Vehicle.project_id.is_(None),  Vehicle.driver_id.is_(None)).count()
+            vehicle_util_data = [v_active, v_deployed, v_idle]
+        except Exception:
+            vehicle_util_data = [0, 0, 0]
 
-    # ── Financial Health: Receipts vs Expenses per project this month ────
-    try:
-        from sqlalchemy import extract as _extr
-        from models import JournalEntry, JournalEntryLine
-        # Receipts per project
-        _rec_rows = db.session.query(
-            Project.name,
-            func.sum(JournalEntryLine.credit).label('total_credit')
-        ).join(JournalEntry, JournalEntry.id == JournalEntryLine.journal_entry_id
-        ).join(Project, Project.id == JournalEntry.project_id).filter(
-            JournalEntry.entry_type == 'Receipt',
-            _extr('month', JournalEntry.entry_date) == today_dt.month,
-            _extr('year',  JournalEntry.entry_date) == today_dt.year,
-            JournalEntry.project_id.isnot(None)
-        ).group_by(Project.name).all()
-        # Expenses per project
-        _exp_rows = db.session.query(
-            Project.name,
-            func.sum(JournalEntryLine.debit).label('total_debit')
-        ).join(JournalEntry, JournalEntry.id == JournalEntryLine.journal_entry_id
-        ).join(Project, Project.id == JournalEntry.project_id).filter(
-            JournalEntry.entry_type.in_(['Payment', 'Expense']),
-            _extr('month', JournalEntry.entry_date) == today_dt.month,
-            _extr('year',  JournalEntry.entry_date) == today_dt.year,
-            JournalEntry.project_id.isnot(None)
-        ).group_by(Project.name).all()
-        _rec_map = {r[0]: round(float(r[1] or 0), 0) for r in _rec_rows}
-        _exp_map = {r[0]: round(float(r[1] or 0), 0) for r in _exp_rows}
-        _fin_projects = sorted(set(list(_rec_map.keys()) + list(_exp_map.keys())),
-                               key=lambda n: (_rec_map.get(n, 0) + _exp_map.get(n, 0)), reverse=True)[:6]
-        fin_chart_labels   = _fin_projects
-        fin_chart_receipts = [_rec_map.get(p, 0) for p in _fin_projects]
-        fin_chart_expenses = [_exp_map.get(p, 0) for p in _fin_projects]
-        # Fallback: if no JournalEntry data, use fuel spend per project
-        if not _fin_projects:
-            _proj_rows = db.session.query(
-                Project.name, func.sum(FuelExpense.amount).label('total')
-            ).join(FuelExpense, FuelExpense.project_id == Project.id).filter(
-                _extr('month', FuelExpense.fueling_date) == today_dt.month,
-                _extr('year',  FuelExpense.fueling_date) == today_dt.year
-            ).group_by(Project.name).order_by(func.sum(FuelExpense.amount).desc()).limit(6).all()
-            fin_chart_labels   = [r[0] for r in _proj_rows]
-            fin_chart_receipts = []
-            fin_chart_expenses = [round(float(r[1]), 0) for r in _proj_rows]
-    except Exception:
-        fin_chart_labels, fin_chart_receipts, fin_chart_expenses = [], [], []
+    # ── Financial Health chart (only if user can see accounts) ───────────
+    fin_chart_labels, fin_chart_receipts, fin_chart_expenses = [], [], []
+    if _can('accounts_balance_sheet'):
+        try:
+            from sqlalchemy import extract as _extr
+            from models import JournalEntry, JournalEntryLine
+            _rec_rows = db.session.query(
+                Project.name,
+                func.sum(JournalEntryLine.credit).label('total_credit')
+            ).join(JournalEntry, JournalEntry.id == JournalEntryLine.journal_entry_id
+            ).join(Project, Project.id == JournalEntry.project_id).filter(
+                JournalEntry.entry_type == 'Receipt',
+                _extr('month', JournalEntry.entry_date) == today_dt.month,
+                _extr('year',  JournalEntry.entry_date) == today_dt.year,
+                JournalEntry.project_id.isnot(None)
+            ).group_by(Project.name).all()
+            _exp_rows = db.session.query(
+                Project.name,
+                func.sum(JournalEntryLine.debit).label('total_debit')
+            ).join(JournalEntry, JournalEntry.id == JournalEntryLine.journal_entry_id
+            ).join(Project, Project.id == JournalEntry.project_id).filter(
+                JournalEntry.entry_type.in_(['Payment', 'Expense']),
+                _extr('month', JournalEntry.entry_date) == today_dt.month,
+                _extr('year',  JournalEntry.entry_date) == today_dt.year,
+                JournalEntry.project_id.isnot(None)
+            ).group_by(Project.name).all()
+            _rec_map = {r[0]: round(float(r[1] or 0), 0) for r in _rec_rows}
+            _exp_map = {r[0]: round(float(r[1] or 0), 0) for r in _exp_rows}
+            _fin_projects = sorted(set(list(_rec_map.keys()) + list(_exp_map.keys())),
+                                   key=lambda n: (_rec_map.get(n, 0) + _exp_map.get(n, 0)), reverse=True)[:6]
+            fin_chart_labels   = _fin_projects
+            fin_chart_receipts = [_rec_map.get(p, 0) for p in _fin_projects]
+            fin_chart_expenses = [_exp_map.get(p, 0) for p in _fin_projects]
+            if not _fin_projects and _can('fuel_expense'):
+                _proj_rows = db.session.query(
+                    Project.name, func.sum(FuelExpense.amount).label('total')
+                ).join(FuelExpense, FuelExpense.project_id == Project.id).filter(
+                    _extr('month', FuelExpense.fueling_date) == today_dt.month,
+                    _extr('year',  FuelExpense.fueling_date) == today_dt.year
+                ).group_by(Project.name).order_by(func.sum(FuelExpense.amount).desc()).limit(6).all()
+                fin_chart_labels   = [r[0] for r in _proj_rows]
+                fin_chart_receipts = []
+                fin_chart_expenses = [round(float(r[1]), 0) for r in _proj_rows]
+        except Exception:
+            fin_chart_labels, fin_chart_receipts, fin_chart_expenses = [], [], []
     # Keep legacy vars for template compatibility
     project_chart_labels = fin_chart_labels
     project_chart_values = fin_chart_expenses
 
-    # ── Document Health: expiry in next 15 days / already expired ────────────
-    try:
-        from datetime import timedelta as _td
-        _cutoff15 = today_dt + _td(days=15)
-        expiry_soon, expiry_already = 0, 0
-        for _drv in Driver.query.filter(Driver.status == 'Active').all():
-            _lic, _cn = _drv.license_expiry_date, _drv.cnic_expiry_date
-            if (_lic and today_dt <= _lic <= _cutoff15) or (_cn and today_dt <= _cn <= _cutoff15):
-                expiry_soon += 1
-            elif (_lic and _lic < today_dt) or (_cn and _cn < today_dt):
-                expiry_already += 1
-    except Exception:
-        expiry_soon, expiry_already = 0, 0
+    # ── Document Health: expiry in next 15 days / already expired ────────
+    expiry_soon, expiry_already = 0, 0
+    if _can('report_expiry'):
+        try:
+            from datetime import timedelta as _td
+            _cutoff15 = today_dt + _td(days=15)
+            for _drv in Driver.query.filter(Driver.status == 'Active').all():
+                _lic, _cn = _drv.license_expiry_date, _drv.cnic_expiry_date
+                if (_lic and today_dt <= _lic <= _cutoff15) or (_cn and today_dt <= _cn <= _cutoff15):
+                    expiry_soon += 1
+                elif (_lic and _lic < today_dt) or (_cn and _cn < today_dt):
+                    expiry_already += 1
+        except Exception:
+            expiry_soon, expiry_already = 0, 0
 
     user_id = session.get('user_id')
     try:

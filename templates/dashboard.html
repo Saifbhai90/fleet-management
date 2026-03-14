@@ -277,21 +277,27 @@ document.addEventListener('DOMContentLoaded', function() {
         <a href="{{ url_for('dashboard') }}" class="qa-btn qa-secondary">
             <i data-lucide="refresh-cw" style="width:15px;height:15px;"></i> Refresh
         </a>
+        {% if can_see_page('drivers_add') %}
         <a href="{{ url_for('driver_form') }}" class="qa-btn qa-primary">
             <i data-lucide="user-plus" style="width:15px;height:15px;"></i> Add Driver
         </a>
+        {% endif %}
+        {% if can_see_page('reports_index') %}
         <a href="{{ url_for('reports_index') }}" class="qa-btn qa-secondary">
             <i data-lucide="bar-chart-2" style="width:15px;height:15px;"></i> Reports
         </a>
+        {% endif %}
     </div>
 </div>
 
 <!-- ═══════════════════════════════
      BENTO GRID
 ═══════════════════════════════ -->
+{% if can_see_page('drivers') or can_see_page('vehicles') or can_see_page('driver_attendance') or can_see_page('driver_transfers') or can_see_page('projects') or can_see_page('districts') or can_see_page('parking') or can_see_page('companies') %}
 <div class="bento-grid">
 
     <!-- ① HERO: Active Drivers (2×2 — dominant card) -->
+    {% if can_see_page('drivers') %}
     <a href="{{ url_for('drivers_list') }}" class="bc bc-blue bc-hero">
         <div style="position:relative;z-index:1;">
             <div class="bc-tag">Active Drivers</div>
@@ -313,8 +319,10 @@ document.addEventListener('DOMContentLoaded', function() {
             </svg>
         </div>
     </a>
+    {% endif %}
 
     <!-- ② TALL: Fleet Deployed (1×2) -->
+    {% if can_see_page('vehicles') %}
     <a href="{{ url_for('vehicles_list') }}" class="bc bc-green bc-tall">
         <div style="position:relative;z-index:1;">
             <div class="bc-tag">Fleet Deployed</div>
@@ -336,8 +344,10 @@ document.addEventListener('DOMContentLoaded', function() {
             </svg>
         </div>
     </a>
+    {% endif %}
 
     <!-- ③ Today's Attendance (1×1) -->
+    {% if can_see_page('driver_attendance') %}
     <a href="{{ url_for('driver_attendance_list') }}" class="bc bc-orange bc-sm">
         <div>
             <div class="bc-tag">Today's Attendance</div>
@@ -348,8 +358,10 @@ document.addEventListener('DOMContentLoaded', function() {
             <svg viewBox="0 0 24 24" fill="white"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         </div>
     </a>
+    {% endif %}
 
     <!-- ④ Today's Transfers (1×1) -->
+    {% if can_see_page('driver_transfers') %}
     <a href="{{ url_for('driver_transfers') }}" class="bc bc-violet bc-sm">
         <div>
             <div class="bc-tag">Today's Transfers</div>
@@ -360,8 +372,10 @@ document.addEventListener('DOMContentLoaded', function() {
             <svg viewBox="0 0 24 24" fill="white"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
         </div>
     </a>
+    {% endif %}
 
     <!-- ⑤ Projects (1×1 light) -->
+    {% if can_see_page('projects') %}
     <a href="{{ url_for('projects_list') }}" class="bc bc-light bc-sm">
         <div class="chip-icon" style="background:#dbeafe;color:#1d4ed8;">
             <i data-lucide="briefcase" style="width:22px;height:22px;"></i>
@@ -371,8 +385,10 @@ document.addEventListener('DOMContentLoaded', function() {
             <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Projects</div>
         </div>
     </a>
+    {% endif %}
 
     <!-- ⑥ Districts (1×1 light) -->
+    {% if can_see_page('districts') %}
     <a href="{{ url_for('districts_list') }}" class="bc bc-light bc-sm">
         <div class="chip-icon" style="background:#dcfce7;color:#15803d;">
             <i data-lucide="map-pin" style="width:22px;height:22px;"></i>
@@ -382,8 +398,10 @@ document.addEventListener('DOMContentLoaded', function() {
             <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Districts</div>
         </div>
     </a>
+    {% endif %}
 
     <!-- ⑦ Parking Stations (1×1 light) -->
+    {% if can_see_page('parking') %}
     <a href="{{ url_for('parking_list') }}" class="bc bc-light bc-sm">
         <div class="chip-icon" style="background:#fce7f3;color:#be185d;">
             <i data-lucide="parking-circle" style="width:22px;height:22px;"></i>
@@ -393,8 +411,10 @@ document.addEventListener('DOMContentLoaded', function() {
             <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Parking</div>
         </div>
     </a>
+    {% endif %}
 
     <!-- ⑧ Companies (1×1 light) -->
+    {% if can_see_page('companies') %}
     <a href="{{ url_for('companies') }}" class="bc bc-light bc-sm">
         <div class="chip-icon" style="background:#f3e8ff;color:#7c3aed;">
             <i data-lucide="building-2" style="width:22px;height:22px;"></i>
@@ -404,15 +424,19 @@ document.addEventListener('DOMContentLoaded', function() {
             <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Companies</div>
         </div>
     </a>
+    {% endif %}
 
 </div>
+{% endif %}
 
 <!-- ═══════════════════════════════
      ANALYTICS ROW
 ═══════════════════════════════ -->
+{% if can_see_page('fuel_expense') or can_see_page('vehicles') or can_see_page('accounts_balance_sheet') %}
 <div class="row g-3 mt-3" id="analyticsRow">
 
     <!-- ① 30-Day Fuel Trend -->
+    {% if can_see_page('fuel_expense') %}
     <div class="col-12 col-xl-6">
         <div class="card border-0 shadow-sm h-100" style="border-radius:20px;">
             <div class="card-body p-4">
@@ -432,12 +456,15 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- ② Vehicle Utilization doughnut + ③ Project bar stacked vertically -->
+    {% if can_see_page('vehicles') or can_see_page('accounts_balance_sheet') %}
     <div class="col-12 col-xl-6">
         <div class="row g-3 h-100">
 
             <!-- Vehicle Utilization -->
+            {% if can_see_page('vehicles') %}
             <div class="col-12 col-sm-5 col-xl-5">
                 <div class="card border-0 shadow-sm h-100" style="border-radius:20px;">
                     <div class="card-body p-4">
@@ -467,8 +494,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
             </div>
+            {% endif %}
 
             <!-- Top Projects by Financial Health -->
+            {% if can_see_page('accounts_balance_sheet') %}
             <div class="col-12 col-sm-7 col-xl-7">
                 <div class="card border-0 shadow-sm h-100" style="border-radius:20px;">
                     <div class="card-body p-4">
@@ -492,15 +521,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
             </div>
+            {% endif %}
 
         </div>
     </div>
+    {% endif %}
 
 </div>
+{% endif %}
 
 <!-- ═══════════════════════════════
      LIVE FLEET MAP
 ═══════════════════════════════ -->
+{% if can_see_page('view_fleet_map') %}
 <div class="card border-0 shadow-sm mt-3" style="border-radius:20px;overflow:hidden;">
     <div class="card-body p-0">
         <div class="d-flex justify-content-between align-items-center px-4 py-3" style="background:#fff;border-bottom:1px solid #f1f5f9;">
@@ -567,11 +600,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 });
 </script>
+{% endif %}
 
 <!-- ═══════════════════════════════
      DOCUMENT HEALTH CARD
 ═══════════════════════════════ -->
-{% if expiry_already > 0 or expiry_soon > 0 %}
+{% if can_see_page('report_expiry') and (expiry_already > 0 or expiry_soon > 0) %}
 <div class="d-flex align-items-start gap-3 mt-3 px-3 py-3"
      style="background:linear-gradient(135deg,{% if expiry_already > 0 %}#fef2f2,#fee2e2{% else %}#fffbeb,#fef3c7{% endif %});border:2px solid {% if expiry_already > 0 %}#fca5a5{% else %}#fcd34d{% endif %};border-radius:18px;">
     <div style="width:44px;height:44px;border-radius:14px;background:{% if expiry_already > 0 %}#fee2e2{% else %}#fef3c7{% endif %};display:flex;align-items:center;justify-content:center;flex-shrink:0;">

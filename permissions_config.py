@@ -833,6 +833,9 @@ PAGE_VISIBLE = {
     'notification_list': ['notification_list', 'notification_add'],
     'notification_add': ['notification_list', 'notification_add'],
     'whats_new': ['whats_new'],
+    # Dashboard section-level guards
+    'view_fleet_map': ['view_fleet_map'],
+    'driver_attendance': ['attendance', 'driver_attendance', 'driver_attendance_list'],
 }
 
 
