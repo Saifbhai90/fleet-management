@@ -740,12 +740,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- ── Quick Actions ── -->
 <div class="quick-actions mt-4">
-    {% if can_see_page('driver_form') %}
+    {% if can_see_page('drivers_add') %}
     <a href="{{ url_for('driver_form') }}" class="qa-btn qa-primary">
         <i data-lucide="user-plus" style="width:15px;height:15px;"></i> Add Driver
     </a>
     {% endif %}
-    {% if can_see_page('vehicles') %}
+    {% if can_see_page('vehicles_add') %}
     <a href="{{ url_for('vehicle_form') }}" class="qa-btn qa-secondary">
         <i data-lucide="truck" style="width:15px;height:15px;"></i> Add Vehicle
     </a>
@@ -755,7 +755,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <i data-lucide="calendar-check" style="width:15px;height:15px;"></i> Mark Attendance
     </a>
     {% endif %}
-    {% if can_see_page('assign_driver_to_vehicle') %}
+    {% if can_see_page('assign_driver_to_vehicle_add') %}
     <a href="{{ url_for('assign_driver_to_vehicle_new') }}" class="qa-btn qa-secondary">
         <i data-lucide="link" style="width:15px;height:15px;"></i> Assign Driver
     </a>

@@ -5361,12 +5361,13 @@ def assign_driver_to_vehicle_list():
     
     # Apply user data scope to assigned drivers
     # Note: assigned_drivers contains (Driver, Vehicle) tuples
+    # District is stored on Vehicle (vehicle.district_id), not Driver
     if not is_master_or_admin:
         if allowed_projects or allowed_districts or allowed_vehicles:
             assigned_drivers = [
                 (driver, vehicle) for driver, vehicle in assigned_drivers
                 if (not allowed_projects or (driver.project_id and driver.project_id in allowed_projects)) and
-                   (not allowed_districts or (driver.district_id and driver.district_id in allowed_districts)) and
+                   (not allowed_districts or (vehicle.district_id and vehicle.district_id in allowed_districts)) and
                    (not allowed_vehicles or (driver.vehicle_id and driver.vehicle_id in allowed_vehicles))
             ]
     
@@ -7629,14 +7630,25 @@ def driver_attendance_mark():
             return redirect(url_for('driver_attendance_list', date=view_date.strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', search=search))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error saving status: {str(e)}', 'danger')
+            flash(f'Error: {str(e)}', 'danger')
     return render_template('driver_attendance_mark.html', form=form, view_date=view_date, drivers=drivers, existing=existing, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, status_choices=ATTENDANCE_STATUS_CHOICES, vehicles=vehicles, vehicle_drivers=vehicle_drivers, has_single_scope=has_single_scope)
 
 
 @app.route('/driver-attendance/bulk-off', methods=['GET', 'POST'])
 def driver_attendance_bulk_off():
     """Bulk Off: Select District + Project + Date, mark all drivers of that project (in that district) as Off for the date."""
-    districts = District.query.join(project_district, District.id == project_district.c.district_id).distinct().order_by(District.name).all()
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    districts_q = District.query.join(project_district, District.id == project_district.c.district_id).distinct()
+    if not is_master_or_admin and allowed_districts:
+        districts_q = districts_q.filter(District.id.in_(list(allowed_districts)))
+    districts = districts_q.order_by(District.name).all()
+
     view_date = date.today()
     district_id = request.args.get('district_id', type=int) or request.form.get('district_id', type=int)
     project_id = request.args.get('project_id', type=int) or request.form.get('project_id', type=int)
@@ -7652,12 +7664,15 @@ def driver_attendance_bulk_off():
         project_id = None
     projects = []
     if district_id:
-        projects = Project.query.join(project_district).filter(
-            project_district.c.district_id == district_id
-        ).order_by(Project.name).all()
+        proj_q = Project.query.join(project_district).filter(project_district.c.district_id == district_id)
+        if not is_master_or_admin and allowed_projects:
+            proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+        projects = proj_q.order_by(Project.name).all()
     else:
-        # Agar district select nahi hai to sab projects dikhao (better UX)
-        projects = Project.query.order_by(Project.name).all()
+        proj_q = Project.query
+        if not is_master_or_admin and allowed_projects:
+            proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+        projects = proj_q.order_by(Project.name).all()
 
     # Drivers list: agar project/district select nahi bhi kiye, to bhi date ke liye complete list dikhao
     drivers_query = Driver.query.filter(
@@ -7666,12 +7681,18 @@ def driver_attendance_bulk_off():
     )
     if project_id:
         drivers_query = drivers_query.filter(Driver.project_id == project_id)
+    elif not is_master_or_admin and allowed_projects:
+        drivers_query = drivers_query.filter(Driver.project_id.in_(list(allowed_projects)))
     if district_id:
         drivers_query = drivers_query.filter(
             db.or_(
                 Driver.district_id == district_id,
                 Driver.district_id.is_(None),
             )
+        )
+    elif not is_master_or_admin and allowed_districts:
+        drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+            db.or_(Driver.district_id.in_(list(allowed_districts)), Vehicle.district_id.in_(list(allowed_districts)))
         )
     drivers = drivers_query.order_by(Driver.name).all()
 
@@ -7734,11 +7755,20 @@ def driver_attendance_bulk_off():
 @app.route('/driver-attendance/pending', methods=['GET'])
 def driver_attendance_pending():
     """Report: same filters as Mark Attendance, but list only drivers who have NOT marked attendance for the selected date."""
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
     form = DriverAttendanceFilterForm()
-    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    proj_q = Project.query.filter(Project.company_id.isnot(None))
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_q.order_by(Project.name).all()]
     view_date = date.today()
     if request.args.get('date'):
-        # Report kisi bhi date ke liye dekh sakte hain (including future)
         view_date = parse_date(request.args.get('date')) or view_date
     project_id = request.args.get('project_id', type=int) or None
     district_id = request.args.get('district_id', type=int) or None
@@ -7746,21 +7776,22 @@ def driver_attendance_pending():
     shift = (request.args.get('shift') or '').strip()
     driver_id = request.args.get('driver_id', type=int) or None
     search = (request.args.get('search') or '').strip()
-    if project_id == 0:
-        project_id = None
-    if district_id == 0:
-        district_id = None
-    if vehicle_id == 0:
-        vehicle_id = None
-    if driver_id == 0:
-        driver_id = None
+    if project_id == 0: project_id = None
+    if district_id == 0: district_id = None
+    if vehicle_id == 0: vehicle_id = None
+    if driver_id == 0: driver_id = None
     form.attendance_date.data = view_date
     form.project_id.data = project_id if project_id else 0
     if project_id and project_id != 0:
-        districts = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name).all()
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
+        dist_q = District.query.join(project_district).filter(project_district.c.project_id == project_id)
+        if not is_master_or_admin and allowed_districts:
+            dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.order_by(District.name).all()]
     else:
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+        dist_q = District.query
+        if not is_master_or_admin and allowed_districts:
+            dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.order_by(District.name).all()]
     form.district_id.data = district_id if district_id else 0
     vehicles = []
     if project_id and district_id:
@@ -7770,16 +7801,25 @@ def driver_attendance_pending():
     elif district_id:
         vehicles = Vehicle.query.filter(Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
     else:
-        vehicles = Vehicle.query.filter(Vehicle.project_id.isnot(None)).order_by(Vehicle.vehicle_no).all()
+        veh_q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+        if not is_master_or_admin and allowed_projects:
+            veh_q = veh_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        vehicles = veh_q.order_by(Vehicle.vehicle_no).all()
     drivers_query = Driver.query.filter(Driver.status == 'Active').filter(Driver.vehicle_id.isnot(None))
     if project_id:
         drivers_query = drivers_query.filter(Driver.project_id == project_id)
-    need_vehicle_join_pending = bool(district_id or search)
+    elif not is_master_or_admin and allowed_projects:
+        drivers_query = drivers_query.filter(Driver.project_id.in_(list(allowed_projects)))
+    need_vehicle_join_pending = bool(district_id or search or (not is_master_or_admin and allowed_districts))
     if need_vehicle_join_pending:
         drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
     if district_id:
         drivers_query = drivers_query.filter(
             db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
+        )
+    elif not is_master_or_admin and allowed_districts:
+        drivers_query = drivers_query.filter(
+            db.or_(Driver.district_id.in_(list(allowed_districts)), Vehicle.district_id.in_(list(allowed_districts)))
         )
     if vehicle_id:
         drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
@@ -7806,11 +7846,20 @@ def driver_attendance_pending():
 @app.route('/driver-attendance/missing-checkout', methods=['GET'])
 def driver_attendance_missing_checkout():
     """Report: drivers who have check-in for the selected date but no check-out (same filters as Pending Attendance)."""
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
     form = DriverAttendanceFilterForm()
-    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()]
+    proj_q = Project.query.filter(Project.company_id.isnot(None))
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_q.order_by(Project.name).all()]
     view_date = date.today()
     if request.args.get('date'):
-        # Report kisi bhi date ke liye dekh sakte hain (including future)
         view_date = parse_date(request.args.get('date')) or view_date
     project_id = request.args.get('project_id', type=int) or None
     district_id = request.args.get('district_id', type=int) or None
@@ -7818,21 +7867,22 @@ def driver_attendance_missing_checkout():
     shift = (request.args.get('shift') or '').strip()
     driver_id = request.args.get('driver_id', type=int) or None
     search = (request.args.get('search') or '').strip()
-    if project_id == 0:
-        project_id = None
-    if district_id == 0:
-        district_id = None
-    if vehicle_id == 0:
-        vehicle_id = None
-    if driver_id == 0:
-        driver_id = None
+    if project_id == 0: project_id = None
+    if district_id == 0: district_id = None
+    if vehicle_id == 0: vehicle_id = None
+    if driver_id == 0: driver_id = None
     form.attendance_date.data = view_date
     form.project_id.data = project_id if project_id else 0
     if project_id and project_id != 0:
-        districts = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name).all()
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
+        dist_q = District.query.join(project_district).filter(project_district.c.project_id == project_id)
+        if not is_master_or_admin and allowed_districts:
+            dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.order_by(District.name).all()]
     else:
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+        dist_q = District.query
+        if not is_master_or_admin and allowed_districts:
+            dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.order_by(District.name).all()]
     form.district_id.data = district_id if district_id else 0
     vehicles = []
     if project_id and district_id:
@@ -7842,16 +7892,25 @@ def driver_attendance_missing_checkout():
     elif district_id:
         vehicles = Vehicle.query.filter(Vehicle.district_id == district_id).order_by(Vehicle.vehicle_no).all()
     else:
-        vehicles = Vehicle.query.filter(Vehicle.project_id.isnot(None)).order_by(Vehicle.vehicle_no).all()
+        veh_q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+        if not is_master_or_admin and allowed_projects:
+            veh_q = veh_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        vehicles = veh_q.order_by(Vehicle.vehicle_no).all()
     vehicle_drivers_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
     if project_id:
         vehicle_drivers_q = vehicle_drivers_q.filter(Driver.project_id == project_id)
-    need_vehicle_for_drivers = bool(district_id or search)
+    elif not is_master_or_admin and allowed_projects:
+        vehicle_drivers_q = vehicle_drivers_q.filter(Driver.project_id.in_(list(allowed_projects)))
+    need_vehicle_for_drivers = bool(district_id or search or (not is_master_or_admin and allowed_districts))
     if need_vehicle_for_drivers:
         vehicle_drivers_q = vehicle_drivers_q.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
     if district_id:
         vehicle_drivers_q = vehicle_drivers_q.filter(
             db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
+        )
+    elif not is_master_or_admin and allowed_districts:
+        vehicle_drivers_q = vehicle_drivers_q.filter(
+            db.or_(Driver.district_id.in_(list(allowed_districts)), Vehicle.district_id.in_(list(allowed_districts)))
         )
     if vehicle_id:
         vehicle_drivers_q = vehicle_drivers_q.filter(Driver.vehicle_id == vehicle_id)
@@ -7867,18 +7926,22 @@ def driver_attendance_missing_checkout():
             )
         )
     vehicle_drivers = vehicle_drivers_q.order_by(Driver.name).all()
+    need_vehicle_join = bool(district_id or search or (not is_master_or_admin and allowed_districts))
     query = DriverAttendance.query.filter(
         DriverAttendance.attendance_date == view_date,
         DriverAttendance.check_in.isnot(None),
         DriverAttendance.check_out.is_(None),
     ).join(Driver, DriverAttendance.driver_id == Driver.id).options(db.joinedload(DriverAttendance.driver))
-    need_vehicle_join = bool(district_id or search)
     if need_vehicle_join:
         query = query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
     if project_id:
         query = query.filter(Driver.project_id == project_id)
+    elif not is_master_or_admin and allowed_projects:
+        query = query.filter(Driver.project_id.in_(list(allowed_projects)))
     if district_id:
         query = query.filter(db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id))
+    elif not is_master_or_admin and allowed_districts:
+        query = query.filter(db.or_(Driver.district_id.in_(list(allowed_districts)), Vehicle.district_id.in_(list(allowed_districts))))
     if vehicle_id:
         query = query.filter(Driver.vehicle_id == vehicle_id)
     if shift:
