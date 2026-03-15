@@ -212,6 +212,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('report_expiry', 'report_expiry'),
     ('report_ai', 'report_ai'),
     ('driver_attendance_report', 'driver_attendance_report'),
+    ('active_drivers_report', 'active_drivers_report'),
     ('activity_log_report', 'activity_log_report'),
     ('activity_logs_geo_report', 'activity_logs_geo_report'),
     ('backup', PERMISSION_BACKUP),

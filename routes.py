@@ -6429,12 +6429,16 @@ def driver_transfers():
         disable_project=disable_project,
         disable_district=disable_district,
     )
+
+@app.route('/driver-transfer/new', methods=['GET', 'POST'])
+def driver_transfer_new():
+    from auth_utils import get_user_context
     user_id = session.get('user_id')
     user_context = get_user_context(user_id) if user_id else {}
     allowed_projects = user_context.get('allowed_projects', set())
     allowed_districts = user_context.get('allowed_districts', set())
     is_master_or_admin = user_context.get('is_master_or_admin', False)
-    
+
     form = DriverTransferForm()
 
     proj_q = Project.query.order_by(Project.name)
@@ -6443,7 +6447,7 @@ def driver_transfers():
     all_projects = [(p.id, p.name) for p in proj_q.all()]
     form.from_project_id.choices = [(0, '-- Select Project --')] + all_projects
     form.new_project_id.choices = [(0, '-- Select Project --')] + all_projects
-    
+
     # Auto-select if only 1 project allowed
     disable_from_project = False
     disable_new_project = False
@@ -6454,7 +6458,7 @@ def driver_transfers():
         if not form.new_project_id.data or form.new_project_id.data == 0:
             form.new_project_id.data = single_proj
         disable_from_project = True
-        disable_new_project = True 
+        disable_new_project = True
 
     form.new_shift.choices = [
         ('', '-- Select Shift --'),
@@ -6530,11 +6534,11 @@ def driver_transfers():
                 old_project_id=driver.project_id,
                 old_vehicle_id=driver.vehicle_id,
                 old_shift=driver.shift,
-                old_district_id=driver.district_id,                    # ← Yeh zaroori hai revert ke liye
+                old_district_id=driver.district_id,
                 new_project_id=form.new_project_id.data,
                 new_vehicle_id=new_vehicle.id,
                 new_shift=form.new_shift.data,
-                new_district_id=form.new_district_id.data,             # ← Yeh bhi zaroori
+                new_district_id=form.new_district_id.data,
                 transfer_date=form.transfer_date.data,
                 remarks=form.remarks.data
             )
@@ -6545,10 +6549,6 @@ def driver_transfers():
             driver.district_id = form.new_district_id.data
             driver.vehicle_id = new_vehicle.id
             driver.shift = form.new_shift.data
-
-            # Optional: agar driver_district string field bhi update karna chahte ho
-            # new_dist = District.query.get(form.new_district_id.data)
-            # driver.driver_district = new_dist.name if new_dist else driver.driver_district
 
             db.session.commit()
 
