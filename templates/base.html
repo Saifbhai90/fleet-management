@@ -480,6 +480,7 @@
             left: 0 !important; right: 0 !important; bottom: 0 !important;
             display: flex !important;
             flex-direction: column !important;
+            align-items: stretch !important;   /* children always fill full width */
             overflow: hidden !important;
             z-index: 1;
         }
@@ -503,6 +504,8 @@
             flex: 1 1 auto !important;
             min-height: 0 !important;
             height: auto !important;
+            width: 100% !important;             /* guarantee full width — prevents right-side dead zones */
+            box-sizing: border-box !important;   /* padding doesn't add to width */
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch !important;
             overscroll-behavior-y: contain !important;
@@ -667,7 +670,16 @@
         .mobile-fab-wrap {
             display: none; position: fixed; right: 18px;
             bottom: calc(74px + env(safe-area-inset-bottom, 0px)); z-index: 1055;
+            /* CRITICAL: container must not intercept scroll gestures on the right side.
+               The browser cannot find #mainContent as scroll target from here because
+               .mobile-fab-wrap is a sibling of #appNativeShell (not a descendant).     */
+            pointer-events: none;
         }
+        /* Re-enable pointer events only on the actual interactive children */
+        .mobile-fab { pointer-events: auto; }
+        .fab-speed-dial.open { pointer-events: auto; }
+        .fab-backdrop { pointer-events: none; }
+        .fab-backdrop.show { pointer-events: auto; }
         .capacitor-native .mobile-fab-wrap { display: block; }
         .fab-speed-dial {
             display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
