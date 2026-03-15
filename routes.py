@@ -450,7 +450,7 @@ def dashboard():
             active_driver_q = active_driver_q.filter(Driver.project_id.in_(list(allowed_projects)))
         if allowed_districts:
             active_driver_q = active_driver_q.filter(Driver.district_id.in_(list(allowed_districts)))
-    active_drivers = active_driver_q.count() if _can('dashboard_card_drivers') else 0
+    active_drivers = active_driver_q.count() if (_can('dashboard_card_drivers') or _can('active_drivers_report')) else 0
     
     # Assigned vehicles: filter by user scope
     assigned_vehicle_q = Vehicle.query.filter(Vehicle.district_id.isnot(None))
