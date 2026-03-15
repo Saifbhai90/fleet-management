@@ -325,6 +325,45 @@ def api_check_license():
         return jsonify({'exists': True, 'message': f'License number already registered for driver: {other.name} ({other.driver_id})'})
     return jsonify({'exists': False, 'message': ''})
 
+@app.route('/api/filter/districts-by-project')
+def api_filter_districts_by_project():
+    """Return districts assigned to a project, scoped to user's allowed_districts."""
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    project_id = request.args.get('project_id', type=int) or 0
+    if not project_id:
+        return jsonify([])
+    q = District.query.join(project_district).filter(project_district.c.project_id == project_id)
+    if not is_master_or_admin and allowed_districts:
+        q = q.filter(District.id.in_(list(allowed_districts)))
+    districts = q.order_by(District.name).all()
+    return jsonify([{'id': d.id, 'name': d.name} for d in districts])
+
+@app.route('/api/filter/vehicles-by-project-district')
+def api_filter_vehicles_by_project_district():
+    """Return active-driver vehicles for project+district, scoped to user's allowed_vehicles."""
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = db.session.query(Vehicle).join(Driver, Vehicle.id == Driver.vehicle_id).filter(
+        Driver.vehicle_id.isnot(None), Driver.status != 'Left'
+    ).distinct()
+    if project_id:
+        q = q.filter(or_(Vehicle.project_id == project_id, Driver.project_id == project_id))
+    if district_id:
+        q = q.filter(Vehicle.district_id == district_id)
+    if not is_master_or_admin and allowed_vehicles:
+        q = q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    vehicles = q.order_by(Vehicle.vehicle_no).all()
+    return jsonify([{'id': v.id, 'vehicle_no': v.vehicle_no} for v in vehicles])
+
 # ────────────────────────────────────────────────
 # Serve uploaded files (vehicles/drivers documents and photos)
 # ────────────────────────────────────────────────
@@ -6812,17 +6851,20 @@ def active_drivers_report():
     from auth_utils import get_user_context
     user_id = session.get('user_id')
     user_context = get_user_context(user_id) if user_id else {}
-    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_projects  = user_context.get('allowed_projects', set())
     allowed_districts = user_context.get('allowed_districts', set())
     allowed_vehicles  = user_context.get('allowed_vehicles', set())
+    allowed_shifts    = user_context.get('allowed_shifts', set())
     is_master_or_admin = user_context.get('is_master_or_admin', False)
 
     project_id, district_id, vehicle_id, shift, \
         from_date_str, to_date_str, from_date_val, to_date_val = _parse_active_driver_filters()
 
-    # Auto-select if user has only 1 project or 1 district assigned
-    disable_project = False
+    # Auto-select if user has exactly 1 option for each field
+    disable_project  = False
     disable_district = False
+    disable_vehicle  = False
+    disable_shift    = False
     if not is_master_or_admin:
         if len(allowed_projects) == 1:
             if not project_id:
@@ -6832,6 +6874,14 @@ def active_drivers_report():
             if not district_id:
                 district_id = next(iter(allowed_districts))
             disable_district = True
+        if len(allowed_vehicles) == 1:
+            if not vehicle_id:
+                vehicle_id = next(iter(allowed_vehicles))
+            disable_vehicle = True
+        if len(allowed_shifts) == 1:
+            if not shift:
+                shift = next(iter(allowed_shifts))
+            disable_shift = True
 
     results = _active_drivers_data(
         project_id=project_id, district_id=district_id, vehicle_id=vehicle_id,
@@ -6869,6 +6919,8 @@ def active_drivers_report():
         total=len(results),
         disable_project=disable_project,
         disable_district=disable_district,
+        disable_vehicle=disable_vehicle,
+        disable_shift=disable_shift,
     )
 
 

@@ -99,7 +99,7 @@
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Project</label>
-                    <select name="project_id" class="form-select filter-input" {% if disable_project %}disabled{% endif %}>
+                    <select name="project_id" id="projectSelect" class="form-select filter-input" {% if disable_project %}disabled{% endif %}>
                         {% for val, label in project_choices %}
                         <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -108,7 +108,7 @@
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">District</label>
-                    <select name="district_id" class="form-select filter-input" {% if disable_district %}disabled{% endif %}>
+                    <select name="district_id" id="districtSelect" class="form-select filter-input" {% if disable_district %}disabled{% endif %}>
                         {% for val, label in district_choices %}
                         <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -117,19 +117,21 @@
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Vehicle</label>
-                    <select name="vehicle_id" class="form-select filter-input">
+                    <select name="vehicle_id" id="vehicleSelect" class="form-select filter-input" {% if disable_vehicle %}disabled{% endif %}>
                         {% for val, label in vehicle_choices %}
                         <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
+                    {% if disable_vehicle %}<input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">{% endif %}
                 </div>
                 <div class="col-6 col-md-1">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Shift</label>
-                    <select name="shift" class="form-select filter-input">
+                    <select name="shift" id="shiftSelect" class="form-select filter-input" {% if disable_shift %}disabled{% endif %}>
                         <option value="" {% if not shift %}selected{% endif %}>All</option>
                         <option value="Morning" {% if shift == 'Morning' %}selected{% endif %}>Morning</option>
                         <option value="Night" {% if shift == 'Night' %}selected{% endif %}>Night</option>
                     </select>
+                    {% if disable_shift %}<input type="hidden" name="shift" value="{{ shift }}">{% endif %}
                 </div>
                 <div class="col-12 col-md-1 d-flex gap-1">
                     <button type="submit" class="btn btn-filter w-100">
@@ -224,12 +226,6 @@
                             {% endif %}
                         </td>
                     </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="8" class="text-center text-muted py-4">
-                            <i class="bi bi-inbox fs-2 d-block mb-2"></i>No active drivers found.
-                        </td>
-                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -252,6 +248,7 @@ $(document).ready(function () {
             info: 'Showing _START_ to _END_ of _TOTAL_ records',
             infoEmpty: 'No records to show',
             infoFiltered: '(filtered from _MAX_ total)',
+            emptyTable: '<div class="py-4 text-center text-muted"><i class="bi bi-inbox" style="font-size:2rem;"></i><div class="mt-2">No active drivers found.</div></div>',
             paginate: { first: '«', last: '»', next: '›', previous: '‹' }
         },
         drawCallback: function () {
@@ -279,5 +276,50 @@ $(document).ready(function () {
     $('#dtSearchInput').on('focus', function () { $(this).css('border-color', '#1565c0'); });
     $('#dtSearchInput').on('blur',  function () { $(this).css('border-color', '#ddd'); });
 });
+
+/* ── Cascading filter dropdowns ────────────────────────── */
+(function () {
+    var $proj     = $('#projectSelect');
+    var $dist     = $('#districtSelect');
+    var $veh      = $('#vehicleSelect');
+    var curProjId = {{ project_id|int }};
+    var curDistId = {{ district_id|int }};
+    var curVehId  = {{ vehicle_id|int }};
+
+    /* Reload district dropdown when project changes */
+    $proj.on('change', function () {
+        var pid = parseInt($(this).val()) || 0;
+        if ($dist.prop('disabled') || $veh.prop('disabled')) return; /* auto-locked */
+        /* Reset dependent dropdowns */
+        $dist.html('<option value="0">-- All Districts --</option>');
+        $veh.html('<option value="0">-- All Vehicles --</option>');
+        if (!pid) return;
+        $.getJSON('/api/filter/districts-by-project', { project_id: pid }, function (data) {
+            $.each(data, function (_, d) {
+                $dist.append($('<option>').val(d.id).text(d.name));
+            });
+        });
+        /* also reload vehicles (no district selected yet — all for this project) */
+        $.getJSON('/api/filter/vehicles-by-project-district', { project_id: pid, district_id: 0 }, function (data) {
+            $.each(data, function (_, v) {
+                $veh.append($('<option>').val(v.id).text(v.vehicle_no));
+            });
+        });
+    });
+
+    /* Reload vehicle dropdown when district changes */
+    $dist.on('change', function () {
+        var did = parseInt($(this).val()) || 0;
+        var pid = parseInt($proj.val()) || 0;
+        if ($veh.prop('disabled')) return; /* auto-locked */
+        $veh.html('<option value="0">-- All Vehicles --</option>');
+        $.getJSON('/api/filter/vehicles-by-project-district', { project_id: pid, district_id: did }, function (data) {
+            $.each(data, function (_, v) {
+                $veh.append($('<option>').val(v.id).text(v.vehicle_no)
+                    .prop('selected', v.id === curVehId));
+            });
+        });
+    });
+})();
 </script>
 {% endblock %}
