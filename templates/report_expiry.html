@@ -76,6 +76,7 @@
         </div>
         <div class="col-md-2 col-lg-2">
           <label class="form-label small text-muted mb-1">Project</label>
+          {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
           <select id="exProjectSelect" name="project_id" class="form-select form-select-sm" {% if disable_project %}disabled{% endif %}>
             {% for val, label in project_choices %}
               <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
@@ -84,6 +85,7 @@
         </div>
         <div class="col-md-2 col-lg-2">
           <label class="form-label small text-muted mb-1">District</label>
+          {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
           <select id="exDistrictSelect" name="district_id" class="form-select form-select-sm" {% if disable_district %}disabled{% endif %}>
             {% for val, label in district_choices %}
               <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
@@ -296,6 +298,33 @@
 
   projSel.addEventListener('change', function() { loadDistricts(this.value); });
   distSel.addEventListener('change', function() { loadVehicles(projSel ? projSel.value : '0', this.value); });
+
+  // Auto-select + auto-submit for single-scope users
+  var scope = {
+    projects: {{ (session.get('allowed_projects') or []) | tojson }},
+    districts: {{ (session.get('allowed_districts') or []) | tojson }},
+    vehicles: {{ (session.get('allowed_vehicles') or []) | tojson }},
+    shifts: {{ (session.get('allowed_shifts') or []) | tojson }}
+  };
+  var hasSingle = scope.projects.length === 1 && scope.districts.length === 1 && scope.vehicles.length === 1 && scope.shifts.length === 1;
+  if (hasSingle) {
+    var urlParams = new URLSearchParams(window.location.search);
+    var alreadyFiltered = urlParams.has('project_id') && urlParams.get('project_id') !== '0';
+    if (!alreadyFiltered) {
+      if (vehSel && scope.vehicles.length === 1) vehSel.value = String(scope.vehicles[0]);
+      var shiftSel = document.querySelector('select[name="shift"]');
+      if (shiftSel && scope.shifts.length === 1) shiftSel.value = String(scope.shifts[0]);
+      setTimeout(function() {
+        var form = projSel.closest('form');
+        if (form) form.submit();
+      }, 300);
+    } else {
+      if (vehSel && scope.vehicles.length === 1 && !vehSel.value) vehSel.value = String(scope.vehicles[0]);
+      if (vehSel && scope.vehicles.length === 1) vehSel.disabled = true;
+      var shiftSel2 = document.querySelector('select[name="shift"]');
+      if (shiftSel2 && scope.shifts.length === 1) { shiftSel2.value = String(scope.shifts[0]); shiftSel2.disabled = true; }
+    }
+  }
 })();
 </script>
 

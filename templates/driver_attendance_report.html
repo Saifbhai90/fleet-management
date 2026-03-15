@@ -231,7 +231,7 @@
 
   var driverSelect = document.getElementById('reportDriverSelect');
 
-  function refreshDriverDropdown() {
+  function refreshDriverDropdown(onDone) {
     var pid = projectSelect.value || '0';
     var did = districtSelect.value || '0';
     var vid = vehicleSelect.value || '0';
@@ -239,7 +239,7 @@
     fetch('/api/attendance/filtered-drivers?project_id=' + pid + '&district_id=' + did + '&vehicle_id=' + vid + '&shift=' + encodeURIComponent(sh))
       .then(function(r) { return r.json(); })
       .then(function(arr) {
-        if (!driverSelect) return;
+        if (!driverSelect) { if (typeof onDone === 'function') onDone(); return; }
         var cur = driverSelect.value;
         driverSelect.innerHTML = '<option value="0">-- All Drivers --</option>';
         arr.forEach(function(d) {
@@ -249,7 +249,12 @@
           if (String(d.id) === String(cur)) opt.selected = true;
           driverSelect.appendChild(opt);
         });
-      }).catch(function() {});
+        if (hasSingle && arr.length >= 1) {
+          driverSelect.value = String(arr[0].id);
+          driverSelect.disabled = true;
+        }
+        if (typeof onDone === 'function') onDone();
+      }).catch(function() { if (typeof onDone === 'function') onDone(); });
   }
 
   projectSelect.addEventListener('change', function() {
@@ -290,11 +295,10 @@
   }
 
   {% if request.method == 'GET' and not report %}
-  // Sirf pehli GET load par auto-submit
   if (hasSingle) {
-    setTimeout(function() {
+    refreshDriverDropdown(function() {
       document.getElementById('reportForm').submit();
-    }, 200);
+    });
   }
   {% endif %}
 })();
