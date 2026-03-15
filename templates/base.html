@@ -316,12 +316,16 @@
             padding: 8px 16px calc(20px + env(safe-area-inset-bottom, 0px));
             transform: translateY(100%);
             transition: transform 0.3s cubic-bezier(.34,1.06,.64,1);
-            will-change: transform;
+            /* NO will-change: transform — it causes Android WebView ghost rendering */
+            visibility: hidden;   /* fully invisible + no hit-testing when closed */
             max-height: 82vh; overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             border-top: 1px solid rgba(255,255,255,0.08);
         }
-        .more-drawer-panel.open { transform: translateY(0); }
+        .more-drawer-panel.open {
+            transform: translateY(0);
+            visibility: visible;
+        }
         .more-drawer-handle {
             width: 40px; height: 4px;
             background: rgba(255,255,255,0.2); border-radius: 2px;
@@ -2663,6 +2667,19 @@
                 shell.appendChild(nav);
             })();
 
+            // 0b. Safety: force-close drawer on every page load
+            //     (prevents ghost state from WebView layer cache)
+            (function() {
+                var o = document.getElementById('moreDrawerOverlay');
+                var p = document.getElementById('moreDrawerPanel');
+                if (o) o.classList.remove('open');
+                if (p) p.classList.remove('open');
+                // Block touchmove on overlay so content behind can't scroll
+                if (o) o.addEventListener('touchmove', function(e) {
+                    e.preventDefault();
+                }, { passive: false });
+            })();
+
             // 1. Hide web-only elements
             var guideWrap = document.getElementById('guideChatbotWrap');
             if (guideWrap) guideWrap.style.display = 'none';
@@ -4139,6 +4156,9 @@ document.addEventListener('DOMContentLoaded', function() {
         overlay.classList.add('open');
         panel.classList.add('open');
         document.body.style.overflow = 'hidden';
+        /* Lock the app-shell scroll container so content behind can't scroll */
+        var _mc = document.getElementById('mainContent');
+        if (_mc) _mc.style.overflowY = 'hidden';
         if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 2 } });
     };
 
@@ -4148,6 +4168,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (overlay) overlay.classList.remove('open');
         if (panel)   panel.classList.remove('open');
         document.body.style.overflow = '';
+        /* Restore app-shell scroll container */
+        var _mc = document.getElementById('mainContent');
+        if (_mc) _mc.style.overflowY = '';
     };
 
     /* ── Attend Action Sheet ── */
