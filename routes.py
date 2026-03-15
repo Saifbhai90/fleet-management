@@ -9003,20 +9003,30 @@ def driver_attendance_checkin():
             auto_project_id = pre_projects[0].id
     pre_vehicles_data = []
     auto_vehicle_id = None
-    if auto_project_id:
-        vq = Vehicle.query.filter(Vehicle.project_id == auto_project_id, Vehicle.district_id == auto_district_id)
+    def _build_vehicle_dict(v):
+        ps = v.parking_station
+        return {
+            'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or '',
+            'parking_station_id': v.parking_station_id,
+            'parking_name': ps.name if ps else '',
+            'latitude': float(ps.latitude) if ps and ps.latitude is not None else None,
+            'longitude': float(ps.longitude) if ps and ps.longitude is not None else None,
+            'driver_id': v.driver_id,
+        }
+    if scope_vehicles and len(scope_vehicles) == 1:
+        # Single assigned vehicle – fetch directly by ID (vehicle.district_id may be NULL)
+        sv = Vehicle.query.get(scope_vehicles[0])
+        if sv:
+            pre_vehicles_data = [_build_vehicle_dict(sv)]
+            auto_vehicle_id = sv.id
+    elif auto_project_id:
+        vq = Vehicle.query.filter(Vehicle.project_id == auto_project_id)
+        if auto_district_id:
+            vq = vq.filter(Vehicle.district_id == auto_district_id)
         if scope_vehicles:
             vq = vq.filter(Vehicle.id.in_(scope_vehicles))
         for v in vq.order_by(Vehicle.vehicle_no).all():
-            ps = v.parking_station
-            pre_vehicles_data.append({
-                'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or '',
-                'parking_station_id': v.parking_station_id,
-                'parking_name': ps.name if ps else '',
-                'latitude': float(ps.latitude) if ps and ps.latitude is not None else None,
-                'longitude': float(ps.longitude) if ps and ps.longitude is not None else None,
-                'driver_id': v.driver_id,
-            })
+            pre_vehicles_data.append(_build_vehicle_dict(v))
         if len(pre_vehicles_data) == 1:
             auto_vehicle_id = pre_vehicles_data[0]['id']
     scope_shifts_list = sorted(scope_shifts) if scope_shifts else []
@@ -9151,20 +9161,30 @@ def driver_attendance_checkout():
             auto_project_id = pre_projects[0].id
     pre_vehicles_data = []
     auto_vehicle_id = None
-    if auto_project_id:
-        vq = Vehicle.query.filter(Vehicle.project_id == auto_project_id, Vehicle.district_id == auto_district_id)
+    def _build_vehicle_dict(v):
+        ps = v.parking_station
+        return {
+            'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or '',
+            'parking_station_id': v.parking_station_id,
+            'parking_name': ps.name if ps else '',
+            'latitude': float(ps.latitude) if ps and ps.latitude is not None else None,
+            'longitude': float(ps.longitude) if ps and ps.longitude is not None else None,
+            'driver_id': v.driver_id,
+        }
+    if scope_vehicles and len(scope_vehicles) == 1:
+        # Single assigned vehicle – fetch directly by ID (vehicle.district_id may be NULL)
+        sv = Vehicle.query.get(scope_vehicles[0])
+        if sv:
+            pre_vehicles_data = [_build_vehicle_dict(sv)]
+            auto_vehicle_id = sv.id
+    elif auto_project_id:
+        vq = Vehicle.query.filter(Vehicle.project_id == auto_project_id)
+        if auto_district_id:
+            vq = vq.filter(Vehicle.district_id == auto_district_id)
         if scope_vehicles:
             vq = vq.filter(Vehicle.id.in_(scope_vehicles))
         for v in vq.order_by(Vehicle.vehicle_no).all():
-            ps = v.parking_station
-            pre_vehicles_data.append({
-                'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or '',
-                'parking_station_id': v.parking_station_id,
-                'parking_name': ps.name if ps else '',
-                'latitude': float(ps.latitude) if ps and ps.latitude is not None else None,
-                'longitude': float(ps.longitude) if ps and ps.longitude is not None else None,
-                'driver_id': v.driver_id,
-            })
+            pre_vehicles_data.append(_build_vehicle_dict(v))
         if len(pre_vehicles_data) == 1:
             auto_vehicle_id = pre_vehicles_data[0]['id']
     scope_shifts_list = sorted(scope_shifts) if scope_shifts else []
