@@ -434,6 +434,12 @@
             --safe-top: env(safe-area-inset-top, 28px);
             --nav-h: 56px;
         }
+        /* Prevent the html/body from scrolling — only .main-content (fixed scroll container) should scroll */
+        html.capacitor-native,
+        html.capacitor-native body {
+            overflow: hidden !important;
+            height: 100% !important;
+        }
 
         /* ── Status bar safe area ── */
         .capacitor-native .navbar {
@@ -3395,6 +3401,9 @@
             content.querySelectorAll('form').forEach(function(form) {
                 // Skip nav/fab forms
                 if (form.closest('.mobile-bottom-nav, .mobile-fab-wrap, .navbar, #sidebar')) return;
+                // Skip inline delete/action forms inside table rows (e.g. delete buttons in list views)
+                if (form.closest('tr, td, thead, tbody, table')) return;
+                if (form.style.display === 'inline') return;
                 // Find last .d-grid that contains a submit button
                 var grids = form.querySelectorAll('.d-grid');
                 var target = null;
