@@ -6723,7 +6723,8 @@ def driver_transfers_print():
 # ── Active Driver Summary Report ─────────────────────────────────────────
 def _active_drivers_data(project_id=0, district_id=0, vehicle_id=0, shift='',
                          from_date_val=None, to_date_val=None,
-                         allowed_vehicles=None, is_master_or_admin=True):
+                         allowed_vehicles=None, allowed_projects=None,
+                         allowed_districts=None, is_master_or_admin=True):
     """Shared query for active (vehicle-assigned) drivers with optional scope/filters."""
     rejoin_sub = db.session.query(
         DriverStatusChange.driver_id,
@@ -6747,12 +6748,30 @@ def _active_drivers_data(project_id=0, district_id=0, vehicle_id=0, shift='',
         Driver.status != 'Left'
     )
 
-    if not is_master_or_admin and allowed_vehicles:
-        query = query.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+    # User scope enforcement (non-master/admin)
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(
+                or_(Driver.project_id.in_(list(allowed_projects)),
+                    Vehicle.project_id.in_(list(allowed_projects)))
+            )
+        if allowed_districts:
+            query = query.filter(
+                or_(Driver.district_id.in_(list(allowed_districts)),
+                    Vehicle.district_id.in_(list(allowed_districts)))
+            )
+        if allowed_vehicles:
+            query = query.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+
+    # Filter params (district is on Vehicle, use OR for both driver and vehicle columns)
     if project_id:
-        query = query.filter(Driver.project_id == project_id)
+        query = query.filter(
+            or_(Driver.project_id == project_id, Vehicle.project_id == project_id)
+        )
     if district_id:
-        query = query.filter(Driver.district_id == district_id)
+        query = query.filter(
+            or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
+        )
     if vehicle_id:
         query = query.filter(Driver.vehicle_id == vehicle_id)
     if shift:
@@ -6801,10 +6820,24 @@ def active_drivers_report():
     project_id, district_id, vehicle_id, shift, \
         from_date_str, to_date_str, from_date_val, to_date_val = _parse_active_driver_filters()
 
+    # Auto-select if user has only 1 project or 1 district assigned
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+
     results = _active_drivers_data(
         project_id=project_id, district_id=district_id, vehicle_id=vehicle_id,
         shift=shift, from_date_val=from_date_val, to_date_val=to_date_val,
-        allowed_vehicles=allowed_vehicles, is_master_or_admin=is_master_or_admin
+        allowed_vehicles=allowed_vehicles, allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts, is_master_or_admin=is_master_or_admin
     )
 
     proj_q = Project.query.order_by(Project.name)
@@ -6834,17 +6867,28 @@ def active_drivers_report():
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
         total=len(results),
+        disable_project=disable_project,
+        disable_district=disable_district,
     )
 
 
 @app.route('/active-drivers-report/export')
 def active_drivers_report_export():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles  = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
     project_id, district_id, vehicle_id, shift, \
         from_date_str, to_date_str, from_date_val, to_date_val = _parse_active_driver_filters()
 
     results = _active_drivers_data(
         project_id=project_id, district_id=district_id, vehicle_id=vehicle_id,
         shift=shift, from_date_val=from_date_val, to_date_val=to_date_val,
+        allowed_vehicles=allowed_vehicles, allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts, is_master_or_admin=is_master_or_admin,
     )
 
     headers = ['Sr No', 'Project', 'District', 'Vehicle No (Model) (Type)', 'Driver Name (ID)', 'Shift', 'Assign Date', 'Rejoin Date']
@@ -6873,12 +6917,21 @@ def active_drivers_report_export():
 
 @app.route('/active-drivers-report/print')
 def active_drivers_report_print():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles  = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
     project_id, district_id, vehicle_id, shift, \
         from_date_str, to_date_str, from_date_val, to_date_val = _parse_active_driver_filters()
 
     results = _active_drivers_data(
         project_id=project_id, district_id=district_id, vehicle_id=vehicle_id,
         shift=shift, from_date_val=from_date_val, to_date_val=to_date_val,
+        allowed_vehicles=allowed_vehicles, allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts, is_master_or_admin=is_master_or_admin,
     )
     return render_template(
         'active_driver_summary_print.html',
