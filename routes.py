@@ -6898,6 +6898,8 @@ def active_drivers_report():
     dist_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
+    if project_id:
+        dist_q = dist_q.join(project_district).filter(project_district.c.project_id == project_id)
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.all()]
 
     veh_q = db.session.query(Vehicle).join(Driver, Vehicle.id == Driver.vehicle_id).filter(
@@ -6905,6 +6907,10 @@ def active_drivers_report():
     ).distinct().order_by(Vehicle.vehicle_no)
     if not is_master_or_admin and allowed_vehicles:
         veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    if project_id:
+        veh_q = veh_q.filter(or_(Vehicle.project_id == project_id, Driver.project_id == project_id))
+    if district_id:
+        veh_q = veh_q.filter(Vehicle.district_id == district_id)
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in veh_q.all()]
 
     return render_template(
