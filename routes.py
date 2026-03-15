@@ -8947,44 +8947,6 @@ def api_attendance_drivers():
     return jsonify([{'id': d.id, 'name': d.name, 'driver_id': d.driver_id, 'shift': d.shift or ''} for d in drivers])
 
 
-@app.route('/api/attendance/filtered_drivers')
-def api_attendance_filtered_drivers():
-    """Drivers filtered by project_id, district_id, vehicle_id, shift - for Missing Check-in / Missing Check-outs dropdown auto-update."""
-    project_id = request.args.get('project_id', type=int) or None
-    district_id = request.args.get('district_id', type=int) or None
-    vehicle_id = request.args.get('vehicle_id', type=int) or None
-    shift = (request.args.get('shift') or '').strip() or None
-    if project_id == 0:
-        project_id = None
-    if district_id == 0:
-        district_id = None
-    if vehicle_id == 0:
-        vehicle_id = None
-    q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
-    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
-    if scope_projects:
-        q = q.filter(Driver.project_id.in_(scope_projects))
-    if scope_districts:
-        q = q.filter(Driver.district_id.in_(scope_districts))
-    if scope_vehicles:
-        q = q.filter(Driver.vehicle_id.in_(scope_vehicles))
-    if scope_shifts:
-        q = q.filter(Driver.shift.in_(scope_shifts))
-    if project_id:
-        q = q.filter(Driver.project_id == project_id)
-    need_vehicle = bool(district_id)
-    if need_vehicle:
-        q = q.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
-    if district_id:
-        q = q.filter(db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id))
-    if vehicle_id:
-        q = q.filter(Driver.vehicle_id == vehicle_id)
-    if shift:
-        q = q.filter(Driver.shift == shift)
-    drivers = q.order_by(Driver.name).all()
-    return jsonify([{'id': d.id, 'name': d.name, 'driver_id': d.driver_id or '', 'shift': d.shift or ''} for d in drivers])
-
-
 @app.route('/api/attendance-time-window')
 def api_attendance_time_window():
     """Return configured attendance time window for Morning/Night (for frontend check)."""
