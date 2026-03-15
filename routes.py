@@ -1075,6 +1075,19 @@ def _do_login_session(user, req):
                     allowed_districts.add(drv.district_id)
                 if (drv.shift or '').strip():
                     allowed_shifts.add((drv.shift or '').strip())
+                # Derive project from vehicle if not set on driver
+                if not allowed_projects and allowed_vehicles:
+                    for _vid in list(allowed_vehicles):
+                        _veh = Vehicle.query.get(_vid)
+                        if _veh and _veh.project_id:
+                            allowed_projects.add(_veh.project_id)
+                # Derive district from project via project_district table
+                if not allowed_districts and allowed_projects:
+                    _pd_rows = db.session.query(project_district.c.district_id).filter(
+                        project_district.c.project_id.in_(list(allowed_projects))
+                    ).all()
+                    for _r in _pd_rows:
+                        allowed_districts.add(_r[0])
         except Exception:
             pass
     session['allowed_projects']  = list(allowed_projects)
@@ -8978,16 +8991,22 @@ def api_attendance_has_gps_checkin():
     has_remarks = 'GPS' in rem or 'Ye GPS' in rem or 'Camera' in rem or 'GPS+Cam' in rem
     return jsonify({'has_gps_checkin': bool(has_photo or has_remarks)})
 
-
 @app.route('/driver-attendance/checkin', methods=['GET', 'POST'])
 def driver_attendance_checkin():
     """Geofenced check-in: District → Project → Vehicle → Parking (auto) → Shift → Driver. Then location + selfie."""
     scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    # Effective scope: enrich project/district from vehicle when driver has no direct assignment
+    _eff_projects = list(scope_projects) if scope_projects else []
+    _eff_districts = list(scope_districts) if scope_districts else []
+    if scope_vehicles and not _eff_projects and not _eff_districts:
+        for _v in Vehicle.query.filter(Vehicle.id.in_(scope_vehicles)).all():
+            if _v.project_id and _v.project_id not in _eff_projects:
+                _eff_projects.append(_v.project_id)
     districts_query = District.query.join(project_district, District.id == project_district.c.district_id)
-    if scope_districts:
-        districts_query = districts_query.filter(District.id.in_(scope_districts))
-    elif scope_projects:
-        districts_query = districts_query.filter(project_district.c.project_id.in_(scope_projects))
+    if _eff_districts:
+        districts_query = districts_query.filter(District.id.in_(_eff_districts))
+    elif _eff_projects:
+        districts_query = districts_query.filter(project_district.c.project_id.in_(_eff_projects))
     districts = districts_query.distinct().order_by(District.name).all()
 
     # ── Server-side auto-selection for single-scope users ─────────────────────
@@ -8996,8 +9015,8 @@ def driver_attendance_checkin():
     auto_project_id = None
     if auto_district_id:
         pq = Project.query.join(project_district).filter(project_district.c.district_id == auto_district_id)
-        if scope_projects:
-            pq = pq.filter(Project.id.in_(scope_projects))
+        if _eff_projects:
+            pq = pq.filter(Project.id.in_(_eff_projects))
         pre_projects = pq.distinct().order_by(Project.name).all()
         if len(pre_projects) == 1:
             auto_project_id = pre_projects[0].id
@@ -9141,11 +9160,18 @@ def driver_attendance_checkin():
 def driver_attendance_checkout():
     """Geofenced check-out: same flow as check-in (District → Project → Vehicle → Parking → Shift → Driver). Location + selfie, then save check_out time and coords."""
     scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    # Effective scope: enrich project/district from vehicle when driver has no direct assignment
+    _eff_projects = list(scope_projects) if scope_projects else []
+    _eff_districts = list(scope_districts) if scope_districts else []
+    if scope_vehicles and not _eff_projects and not _eff_districts:
+        for _v in Vehicle.query.filter(Vehicle.id.in_(scope_vehicles)).all():
+            if _v.project_id and _v.project_id not in _eff_projects:
+                _eff_projects.append(_v.project_id)
     districts_q = District.query.join(project_district, District.id == project_district.c.district_id)
-    if scope_districts:
-        districts_q = districts_q.filter(District.id.in_(scope_districts))
-    elif scope_projects:
-        districts_q = districts_q.filter(project_district.c.project_id.in_(scope_projects))
+    if _eff_districts:
+        districts_q = districts_q.filter(District.id.in_(_eff_districts))
+    elif _eff_projects:
+        districts_q = districts_q.filter(project_district.c.project_id.in_(_eff_projects))
     districts = districts_q.distinct().order_by(District.name).all()
 
     # ── Server-side auto-selection for single-scope users ─────────────────────
@@ -9154,8 +9180,8 @@ def driver_attendance_checkout():
     auto_project_id = None
     if auto_district_id:
         pq = Project.query.join(project_district).filter(project_district.c.district_id == auto_district_id)
-        if scope_projects:
-            pq = pq.filter(Project.id.in_(scope_projects))
+        if _eff_projects:
+            pq = pq.filter(Project.id.in_(_eff_projects))
         pre_projects = pq.distinct().order_by(Project.name).all()
         if len(pre_projects) == 1:
             auto_project_id = pre_projects[0].id
