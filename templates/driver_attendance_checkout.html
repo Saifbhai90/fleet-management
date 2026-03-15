@@ -361,7 +361,15 @@
       var id = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
       setTimeout(function() { projectSelect.value = id; onProjectChange(); }, 0);
     });
-    if (vehicleSelect.value) { setTimeout(function() { onVehicleChange(); }, 0); }
+    setTimeout(function() {
+      if (typeof $ !== 'undefined' && $.fn.select2) {
+        if (districtSelect.value) { $(districtSelect).trigger('change.select2'); }
+        if (projectSelect.value) { $(projectSelect).trigger('change.select2'); }
+        if (vehicleSelect.value) { $(vehicleSelect).trigger('change.select2'); }
+        if (shiftSelect.value) { $(shiftSelect).trigger('change.select2'); }
+      }
+      if (vehicleSelect.value) { onVehicleChange(); }
+    }, 0);
   }
   if (typeof $ !== 'undefined' && $.fn.select2) {
     $(document).ready(attachDistrictProjectHandlers);
