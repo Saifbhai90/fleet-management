@@ -450,6 +450,13 @@ def dashboard():
             active_driver_q = active_driver_q.filter(Driver.project_id.in_(list(allowed_projects)))
         if allowed_districts:
             active_driver_q = active_driver_q.filter(Driver.district_id.in_(list(allowed_districts)))
+    
+    # Debug: Log the actual query and counts
+    if not is_master_or_admin and (_can('dashboard_card_drivers') or _can('active_drivers_report')):
+        print(f"DEBUG: User projects: {allowed_projects}, districts: {allowed_districts}")
+        print(f"DEBUG: Total active drivers: {Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None)).count()}")
+        print(f"DEBUG: Filtered query count: {active_driver_q.count()}")
+    
     active_drivers = active_driver_q.count() if (_can('dashboard_card_drivers') or _can('active_drivers_report')) else 0
     
     # Assigned vehicles: filter by user scope
