@@ -483,6 +483,18 @@
             overflow: hidden !important;
             z-index: 1;
         }
+        /* More drawer: absolute inside shell so it can never float free.           Shell overflow:hidden clips the panel when closed (translateY 100%). */
+        #appNativeShell > .more-drawer-overlay {
+            position: absolute !important;
+            inset: 0 !important;
+            z-index: 50 !important;
+        }
+        #appNativeShell > .more-drawer-panel {
+            position: absolute !important;
+            bottom: 0 !important;
+            left: 0 !important; right: 0 !important;
+            z-index: 51 !important;
+        }
         /* Inside the shell: main-content fills all space and scrolls */
         #appNativeShell .main-content {
             position: static !important;
@@ -2653,31 +2665,44 @@
         document.addEventListener('DOMContentLoaded', function() {
 
             // 0. Build Native App Shell ─────────────────────────────────────
-            //    Move #mainContent + #mobileBottomNav into a flex-column shell.
-            //    The shell is the ONLY position:fixed element; the bottom nav
-            //    is a plain flex child and can NEVER scroll with the content.
+            //    DOM structure after this IIFE:
+            //      #appNativeShell (position:fixed, overflow:hidden)
+            //        ├── #moreDrawerOverlay  (position:absolute, z-index:50)
+            //        ├── #moreDrawerPanel    (position:absolute, z-index:51)
+            //        │     closed = translateY(100%) → clipped by shell overflow:hidden
+            //        │     open   = translateY(0)    → visible above nav
+            //        ├── #mainContent        (flex:1, overflow-y:auto)
+            //        └── #mobileBottomNav    (flex:0 0 auto)
+            //
+            //    Result: NOTHING in the shell uses position:fixed, so WebView
+            //    fixed-position quirks CANNOT affect any of these elements.
             (function() {
-                var mc   = document.getElementById('mainContent');
-                var nav  = document.getElementById('mobileBottomNav');
+                var mc      = document.getElementById('mainContent');
+                var nav     = document.getElementById('mobileBottomNav');
+                var mOverlay = document.getElementById('moreDrawerOverlay');
+                var mPanel   = document.getElementById('moreDrawerPanel');
                 if (!mc || !nav) return;
+
                 var shell = document.createElement('div');
                 shell.id  = 'appNativeShell';
                 mc.parentNode.insertBefore(shell, mc);
-                shell.appendChild(mc);
-                shell.appendChild(nav);
-            })();
 
-            // 0b. Safety: force-close drawer on every page load
-            //     (prevents ghost state from WebView layer cache)
-            (function() {
-                var o = document.getElementById('moreDrawerOverlay');
-                var p = document.getElementById('moreDrawerPanel');
-                if (o) o.classList.remove('open');
-                if (p) p.classList.remove('open');
-                // Block touchmove on overlay so content behind can't scroll
-                if (o) o.addEventListener('touchmove', function(e) {
-                    e.preventDefault();
-                }, { passive: false });
+                // Drawer goes in first (absolute, above content via z-index)
+                if (mOverlay) shell.appendChild(mOverlay);
+                if (mPanel)   shell.appendChild(mPanel);
+                // Scrollable content area
+                shell.appendChild(mc);
+                // Bottom nav — always last flex child, never scrolls
+                shell.appendChild(nav);
+
+                // Force-closed on load + block touchmove scroll-through
+                if (mOverlay) {
+                    mOverlay.classList.remove('open');
+                    mOverlay.addEventListener('touchmove', function(e) {
+                        e.preventDefault();
+                    }, { passive: false });
+                }
+                if (mPanel) mPanel.classList.remove('open');
             })();
 
             // 1. Hide web-only elements
