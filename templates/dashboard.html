@@ -293,11 +293,11 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- ═══════════════════════════════
      BENTO GRID
 ═══════════════════════════════ -->
-{% if can_see_page('dashboard_card_drivers') or can_see_page('dashboard_card_vehicles') or can_see_page('dashboard_card_attendance') or can_see_page('dashboard_card_transfers') or can_see_page('dashboard_card_projects') or can_see_page('dashboard_card_districts') or can_see_page('dashboard_card_parking') or can_see_page('dashboard_card_companies') %}
+{% if can_see_page('dashboard_card_drivers') or can_see_page('active_drivers_report') or can_see_page('dashboard_card_vehicles') or can_see_page('dashboard_card_attendance') or can_see_page('dashboard_card_transfers') or can_see_page('dashboard_card_projects') or can_see_page('dashboard_card_districts') or can_see_page('dashboard_card_parking') or can_see_page('dashboard_card_companies') %}
 <div class="bento-grid">
 
     <!-- ① HERO: Active Drivers (2×2 — dominant card) -->
-    {% if can_see_page('dashboard_card_drivers') %}
+    {% if can_see_page('dashboard_card_drivers') or can_see_page('active_drivers_report') %}
     <a href="{{ url_for('active_drivers_report') }}" class="bc bc-blue bc-hero">
         <div style="position:relative;z-index:1;">
             <div class="bc-tag">Active Drivers</div>

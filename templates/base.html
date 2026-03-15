@@ -1877,12 +1877,14 @@
         {% endif %}
 
         <!-- Tasks -->
+        {% if can_see_page('task_report_list') %}
         <a href="{{ url_for('task_report_list') }}" class="more-drawer-item {% if request.endpoint and 'task_report' in request.endpoint %}active{% endif %}" onclick="closeMoreDrawer()">
             <div class="more-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             </div>
             <span>Tasks</span>
         </a>
+        {% endif %}
 
         <!-- Reminders -->
         <a href="{{ url_for('reminder_list') }}" class="more-drawer-item {% if request.endpoint == 'reminder_list' %}active{% endif %}" onclick="closeMoreDrawer()">
@@ -1933,23 +1935,9 @@
 <!-- FAB Speed-Dial -->
 <div class="mobile-fab-wrap" id="mobileFabWrap">
     <div class="fab-speed-dial" id="fabDialMenu">
-        {% if can_see_page('drivers_add') %}
-        <div class="fab-dial-item">
-            <span class="fab-dial-label">Add Driver</span>
-            <a href="{{ url_for('driver_form') }}" class="fab-dial-btn">
-                <i data-lucide="user-plus"></i>
-            </a>
-        </div>
-        {% endif %}
-        {% if can_see_page('vehicles_add') %}
-        <div class="fab-dial-item">
-            <span class="fab-dial-label">Add Vehicle</span>
-            <a href="{{ url_for('vehicle_form') }}" class="fab-dial-btn">
-                <i data-lucide="truck"></i>
-            </a>
-        </div>
-        {% endif %}
-        {% if can_see_page('driver_attendance_checkin') %}
+        {% set ns = namespace(count=0) %}
+        {% if ns.count < 4 and can_see_page('driver_attendance_checkin') %}
+        {% set ns.count = ns.count + 1 %}
         <div class="fab-dial-item">
             <span class="fab-dial-label">Check In</span>
             <a href="{{ url_for('driver_attendance_checkin') }}" class="fab-dial-btn">
@@ -1957,19 +1945,66 @@
             </a>
         </div>
         {% endif %}
-        {% if can_see_page('assign_driver_to_vehicle') %}
+        {% if ns.count < 4 and can_see_page('driver_attendance_checkout') %}
+        {% set ns.count = ns.count + 1 %}
+        <div class="fab-dial-item">
+            <span class="fab-dial-label">Check Out</span>
+            <a href="{{ url_for('driver_attendance_checkout') }}" class="fab-dial-btn" style="background:linear-gradient(135deg,#f97316,#ea580c);">
+                <i data-lucide="calendar-x"></i>
+            </a>
+        </div>
+        {% endif %}
+        {% if ns.count < 4 and can_see_page('task_report_upload') %}
+        {% set ns.count = ns.count + 1 %}
+        <div class="fab-dial-item">
+            <span class="fab-dial-label">Upload Task</span>
+            <a href="{{ url_for('task_report_new') }}" class="fab-dial-btn" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+                <i data-lucide="clipboard-list"></i>
+            </a>
+        </div>
+        {% endif %}
+        {% if ns.count < 4 and can_see_page('fuel_expense_add') %}
+        {% set ns.count = ns.count + 1 %}
+        <div class="fab-dial-item">
+            <span class="fab-dial-label">Add Fuel</span>
+            <a href="{{ url_for('fuel_expense_add') }}" class="fab-dial-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706);">
+                <i data-lucide="fuel"></i>
+            </a>
+        </div>
+        {% endif %}
+        {% if ns.count < 4 and can_see_page('drivers_add') %}
+        {% set ns.count = ns.count + 1 %}
+        <div class="fab-dial-item">
+            <span class="fab-dial-label">Add Driver</span>
+            <a href="{{ url_for('driver_form') }}" class="fab-dial-btn">
+                <i data-lucide="user-plus"></i>
+            </a>
+        </div>
+        {% endif %}
+        {% if ns.count < 4 and can_see_page('vehicles_add') %}
+        {% set ns.count = ns.count + 1 %}
+        <div class="fab-dial-item">
+            <span class="fab-dial-label">Add Vehicle</span>
+            <a href="{{ url_for('vehicle_form') }}" class="fab-dial-btn" style="background:linear-gradient(135deg,#10b981,#059669);">
+                <i data-lucide="truck"></i>
+            </a>
+        </div>
+        {% endif %}
+        {% if ns.count < 4 and can_see_page('assign_driver_to_vehicle_add') %}
+        {% set ns.count = ns.count + 1 %}
         <div class="fab-dial-item">
             <span class="fab-dial-label">New Assignment</span>
-            <a href="{{ url_for('assign_driver_to_vehicle_new') }}" class="fab-dial-btn">
+            <a href="{{ url_for('assign_driver_to_vehicle_new') }}" class="fab-dial-btn" style="background:linear-gradient(135deg,#06b6d4,#0891b2);">
                 <i data-lucide="link"></i>
             </a>
         </div>
         {% endif %}
-        {% if can_see_page('fuel_expense_add') %}
+        {% if ns.count < 4 and can_see_page('driver_transfers_add') %}
+        {% set ns.count = ns.count + 1 %}
         <div class="fab-dial-item">
-            <span class="fab-dial-label">Add Fuel</span>
-            <a href="{{ url_for('fuel_expense_add') }}" class="fab-dial-btn">
-                <i data-lucide="fuel"></i>
+            <span class="fab-dial-label">Driver Transfer</span>
+            <a href="{{ url_for('driver_transfer_new') }}" class="fab-dial-btn" style="background:linear-gradient(135deg,#ec4899,#db2777);">
+                <i data-lucide="repeat"></i>
             </a>
         </div>
         {% endif %}

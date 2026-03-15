@@ -398,6 +398,7 @@ def dashboard():
     user_context = get_user_context(user_id) if user_id else {}
     allowed_projects = user_context.get('allowed_projects', set())
     allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     
     # Determine what sections this user can see (skip expensive queries for hidden cards)
@@ -432,31 +433,21 @@ def dashboard():
             vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
     total_vehicles = vehicle_q.count() if (_can('dashboard_card_vehicles') or _can('dashboard_card_utilization')) else 0
     
-    # Drivers: filter by user scope
+    # Drivers: filter by project scope only (district is on Vehicle, not Driver)
     driver_q = Driver.query
-    if not is_master_or_admin:
-        if allowed_projects:
-            driver_q = driver_q.filter(Driver.project_id.in_(list(allowed_projects)))
-        if allowed_districts:
-            driver_q = driver_q.filter(Driver.district_id.in_(list(allowed_districts)))
-    total_drivers = driver_q.count() if _can('dashboard_card_drivers') else 0
+    if not is_master_or_admin and allowed_projects:
+        driver_q = driver_q.filter(Driver.project_id.in_(list(allowed_projects)))
+    total_drivers = driver_q.count() if (_can('dashboard_card_drivers') or _can('active_drivers_report')) else 0
     total_parking    = ParkingStation.query.count() if _can('dashboard_card_parking')     else 0
     total_districts  = District.query.count()       if _can('dashboard_card_districts')   else 0
     
-    # Active drivers: filter by user scope
+    # Active drivers: use vehicle-based scope (district is on Vehicle, not Driver — matches active_drivers_report)
     active_driver_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
     if not is_master_or_admin:
-        if allowed_projects:
+        if allowed_vehicles:
+            active_driver_q = active_driver_q.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+        elif allowed_projects:
             active_driver_q = active_driver_q.filter(Driver.project_id.in_(list(allowed_projects)))
-        if allowed_districts:
-            active_driver_q = active_driver_q.filter(Driver.district_id.in_(list(allowed_districts)))
-    
-    # Debug: Log the actual query and counts
-    if not is_master_or_admin and (_can('dashboard_card_drivers') or _can('active_drivers_report')):
-        print(f"DEBUG: User projects: {allowed_projects}, districts: {allowed_districts}")
-        print(f"DEBUG: Total active drivers: {Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None)).count()}")
-        print(f"DEBUG: Filtered query count: {active_driver_q.count()}")
-    
     active_drivers = active_driver_q.count() if (_can('dashboard_card_drivers') or _can('active_drivers_report')) else 0
     
     # Assigned vehicles: filter by user scope
