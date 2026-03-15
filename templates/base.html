@@ -366,6 +366,19 @@
         }
         .more-drawer-user strong { color: rgba(255,255,255,0.65); font-weight: 600; }
 
+        /* ─── Hide mobile-only drawers on desktop (non-mobile screens) ─── */
+        @media (min-width: 992px) {
+            #moreDrawerPanel, #moreDrawerOverlay,
+            #attendSheet, #attendSheetOverlay {
+                display: none !important;
+            }
+        }
+
+        /* ─── Capacitor: More drawer opens ABOVE bottom nav, not behind it ─── */
+        .capacitor-native #moreDrawerPanel {
+            bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+        }
+
         /* ─── overscroll: disable browser native pull-to-refresh everywhere ─── */
         body { overscroll-behavior-y: none; }
         /* Dashboard: PTR enabled via JS only (not browser native) */
@@ -4059,6 +4072,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     /* ── More Drawer (Mobile) ── */
     window.openMoreDrawer = function() {
+        if (window.innerWidth >= 992) return;
         var overlay = document.getElementById('moreDrawerOverlay');
         var panel   = document.getElementById('moreDrawerPanel');
         if (!overlay || !panel) return;
