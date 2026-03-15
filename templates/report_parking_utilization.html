@@ -17,7 +17,7 @@
         <div class="row g-2 align-items-end">
           <div class="col-md-2">
             <label class="form-label small mb-1">Project</label>
-            <select name="project_id" class="form-select form-select-sm" {% if disable_project %}disabled{% endif %}>
+            <select id="puProjectSelect" name="project_id" class="form-select form-select-sm" {% if disable_project %}disabled{% endif %}>
               {% for val, label in project_choices %}
               <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -26,7 +26,7 @@
           </div>
           <div class="col-md-2">
             <label class="form-label small mb-1">District</label>
-            <select name="district_id" class="form-select form-select-sm" {% if disable_district %}disabled{% endif %}>
+            <select id="puDistrictSelect" name="district_id" class="form-select form-select-sm" {% if disable_district %}disabled{% endif %}>
               {% for val, label in district_choices %}
               <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -35,7 +35,7 @@
           </div>
           <div class="col-md-3">
             <label class="form-label small mb-1">Vehicle</label>
-            <select name="vehicle_id" class="form-select form-select-sm">
+            <select id="puVehicleSelect" name="vehicle_id" class="form-select form-select-sm">
               {% for val, label in vehicle_choices %}
               <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -43,7 +43,7 @@
           </div>
           <div class="col-md-3">
             <label class="form-label small mb-1">Parking Station</label>
-            <select name="parking_station_id" class="form-select form-select-sm">
+            <select id="puParkingSelect" name="parking_station_id" class="form-select form-select-sm">
               {% for val, label in parking_station_choices %}
               <option value="{{ val }}" {% if parking_station_id == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -173,6 +173,71 @@
     $('#parkingSearchInput').on('keyup input', function () { table.search(this.value).draw(); });
     $('#parkingLenSelect').on('change', function () { table.page.len(parseInt(this.value)).draw(); });
   });
+</script>
+
+<script>
+(function() {
+  var projSel    = document.getElementById('puProjectSelect');
+  var distSel    = document.getElementById('puDistrictSelect');
+  var vehSel     = document.getElementById('puVehicleSelect');
+  var parkingSel = document.getElementById('puParkingSelect');
+  if (!projSel) return;
+
+  function rebuildSelect(sel, items, valueKey, labelKey, allLabel) {
+    if (!sel) return;
+    sel.innerHTML = '<option value="0">' + allLabel + '</option>';
+    (items || []).forEach(function(item) {
+      var opt = document.createElement('option');
+      opt.value = item[valueKey];
+      opt.textContent = item[labelKey];
+      sel.appendChild(opt);
+    });
+  }
+
+  function loadParkingStations(pid, did, vid) {
+    if (!parkingSel) return;
+    fetch('/api/filter/parking-stations?project_id=' + (pid||'0') + '&district_id=' + (did||'0') + '&vehicle_id=' + (vid||'0'))
+      .then(function(r) { return r.json(); })
+      .then(function(data) { rebuildSelect(parkingSel, data, 'id', 'name', '-- All Parking Stations --'); })
+      .catch(function() {});
+  }
+
+  function loadVehicles(pid, did) {
+    if (!vehSel) return;
+    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + (pid||'0') + '&district_id=' + (did||'0'))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        rebuildSelect(vehSel, data, 'id', 'vehicle_no', '-- All Vehicles --');
+        loadParkingStations(pid, did, '0');
+      }).catch(function() {});
+  }
+
+  function loadDistricts(pid) {
+    if (!distSel) return;
+    if (!pid || pid === '0') {
+      rebuildSelect(distSel, [], 'id', 'name', '-- All Districts --');
+      loadVehicles('0', '0');
+      return;
+    }
+    fetch('/api/filter/districts-by-project?project_id=' + pid)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        rebuildSelect(distSel, data, 'id', 'name', '-- All Districts --');
+        loadVehicles(pid, '0');
+      }).catch(function() {});
+  }
+
+  projSel.addEventListener('change', function() { loadDistricts(this.value); });
+  if (distSel) distSel.addEventListener('change', function() {
+    var pid = projSel ? projSel.value : '0';
+    loadVehicles(pid, this.value);
+  });
+  if (vehSel) vehSel.addEventListener('change', function() {
+    var pid = projSel ? projSel.value : '0';
+    var did = distSel ? distSel.value : '0';
+    loadParkingStations(pid, did, this.value);
+  });
+})();
 </script>
 
 {% endblock %}

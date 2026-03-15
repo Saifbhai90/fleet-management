@@ -69,6 +69,15 @@
               {% endif %}
             </select>
           </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Driver</label>
+            <select name="driver_id" id="reportDriverSelect" class="form-select">
+              <option value="0">-- All Drivers --</option>
+              {% for d in vehicle_drivers %}
+              <option value="{{ d.id }}" {% if selected_driver_id == d.id %}selected{% endif %}>{{ d.name }} ({{ d.driver_id or '-' }}) - {{ d.shift or '-' }}</option>
+              {% endfor %}
+            </select>
+          </div>
           <div class="col-md-4 col-lg-2">
             <label class="form-label">Search</label>
             <div class="input-group input-group-sm">
@@ -181,12 +190,13 @@
   var hasSingle = scope.projects.length === 1 && scope.districts.length === 1 && scope.vehicles.length === 1 && scope.shifts.length === 1;
 
   function loadDistricts(projectId) {
-    if (hasSingle) return;  // single-scope users ke liye options already server se filtered hain
+    if (hasSingle) return;
     districtSelect.innerHTML = '<option value="0">-- All Districts --</option>';
     if (!projectId || projectId === '0') {
+      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
       return;
     }
-    fetch('/get_districts_by_project/' + projectId)
+    fetch('/api/filter/districts-by-project?project_id=' + projectId)
       .then(function(r) { return r.json(); })
       .then(function(districts) {
         districts.forEach(function(d) {
@@ -195,6 +205,7 @@
           opt.textContent = d.name;
           districtSelect.appendChild(opt);
         });
+        loadVehicles();
       });
   }
 
@@ -202,10 +213,7 @@
     var pid = projectSelect.value || '0';
     var did = districtSelect.value || '0';
     vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
-    if (!pid && !did) {
-      return;
-    }
-    fetch('/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
+    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
       .then(function(r) { return r.json(); })
       .then(function(vehicles) {
         vehicles.forEach(function(v) {
@@ -214,7 +222,6 @@
           opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
           vehicleSelect.appendChild(opt);
         });
-        // Single-scope user ke liye yahin par vehicle ko lock karo
         if (hasSingle && scope.vehicles.length === 1) {
           vehicleSelect.value = String(scope.vehicles[0]);
           vehicleSelect.disabled = true;
@@ -222,13 +229,43 @@
       });
   }
 
+  var driverSelect = document.getElementById('reportDriverSelect');
+
+  function refreshDriverDropdown() {
+    var pid = projectSelect.value || '0';
+    var did = districtSelect.value || '0';
+    var vid = vehicleSelect.value || '0';
+    var sh = shiftSelect.value || '';
+    fetch('/api/attendance/filtered-drivers?project_id=' + pid + '&district_id=' + did + '&vehicle_id=' + vid + '&shift=' + encodeURIComponent(sh))
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        if (!driverSelect) return;
+        var cur = driverSelect.value;
+        driverSelect.innerHTML = '<option value="0">-- All Drivers --</option>';
+        arr.forEach(function(d) {
+          var opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = d.name + ' (' + (d.driver_id || '-') + ') - ' + (d.shift || '-');
+          if (String(d.id) === String(cur)) opt.selected = true;
+          driverSelect.appendChild(opt);
+        });
+      }).catch(function() {});
+  }
+
   projectSelect.addEventListener('change', function() {
     loadDistricts(this.value);
-    loadVehicles();
   });
 
   districtSelect.addEventListener('change', function() {
     loadVehicles();
+    refreshDriverDropdown();
+  });
+
+  if (vehicleSelect) vehicleSelect.addEventListener('change', function() {
+    refreshDriverDropdown();
+  });
+  if (shiftSelect) shiftSelect.addEventListener('change', function() {
+    refreshDriverDropdown();
   });
 
   // Multi-scope: options server se aa chuke hain (GET par "All", POST par selected). Load sirf user change par karo, taake POST ke baad District/Vehicle reset na hon.

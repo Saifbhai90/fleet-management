@@ -426,7 +426,7 @@
     initSelect2For(vehicleSelect, 'Search vehicle...');
     initSelect2For(driverSelect, 'Search driver...');
     if (pid && pid !== '0') {
-      fetch('/get_districts_by_project/' + pid)
+      fetch('/api/filter/districts-by-project?project_id=' + pid)
         .then(function(r) { return r.json(); })
         .then(function(districts) {
           districts.forEach(function(d) {
@@ -437,7 +437,7 @@
           });
           initSelect2For(districtSelect, 'Search district...');
         });
-      fetch('/get_vehicles_by_project_district?project_id=' + pid + '&district_id=0')
+      fetch('/api/filter/all-vehicles-by-project-district?project_id=' + pid + '&district_id=0')
         .then(function(r) { return r.json(); })
         .then(function(vehicles) {
           if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
@@ -453,7 +453,7 @@
           if (typeof refreshDriverDropdown === 'function') refreshDriverDropdown(false);
         });
     } else {
-      fetch('/get_vehicles_by_project_district')
+      fetch('/api/filter/all-vehicles-by-project-district')
         .then(function(r) { return r.json(); })
         .then(function(vehicles) {
           if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
@@ -484,7 +484,7 @@
     driverSelect.value = '0';
     initSelect2For(vehicleSelect, 'Search vehicle...');
     initSelect2For(driverSelect, 'Search driver...');
-    fetch('/get_vehicles_by_project_district?project_id=' + (pid || '0') + '&district_id=' + (did || '0'))
+    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + (pid || '0') + '&district_id=' + (did || '0'))
       .then(function(r) { return r.json(); })
       .then(function(vehicles) {
         if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');

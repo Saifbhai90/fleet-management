@@ -364,6 +364,91 @@ def api_filter_vehicles_by_project_district():
     vehicles = q.order_by(Vehicle.vehicle_no).all()
     return jsonify([{'id': v.id, 'vehicle_no': v.vehicle_no} for v in vehicles])
 
+@app.route('/api/filter/all-vehicles-by-project-district')
+def api_filter_all_vehicles_by_project_district():
+    """Return ALL project-assigned vehicles for project+district (not filtered by driver status), scoped to user's allowed_vehicles."""
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    allowed_projects = user_context.get('allowed_projects', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+    if project_id:
+        q = q.filter(Vehicle.project_id == project_id)
+    elif not is_master_or_admin and allowed_projects:
+        q = q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if district_id:
+        q = q.filter(Vehicle.district_id == district_id)
+    if not is_master_or_admin and allowed_vehicles:
+        q = q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    vehicles = q.order_by(Vehicle.vehicle_no).all()
+    return jsonify([{'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or ''} for v in vehicles])
+
+@app.route('/api/attendance/filtered-drivers')
+def api_attendance_filtered_drivers():
+    """Return active drivers scoped to user's allowed assignments, filtered by project/district/vehicle/shift."""
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    shift = (request.args.get('shift') or '').strip()
+    q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
+    need_veh_join = bool(district_id or (not is_master_or_admin and allowed_districts))
+    if need_veh_join:
+        q = q.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+    if not is_master_or_admin:
+        if allowed_projects:
+            q = q.filter(Driver.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            q = q.filter(or_(Driver.district_id.in_(list(allowed_districts)), Vehicle.district_id.in_(list(allowed_districts))))
+        if allowed_vehicles:
+            q = q.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+    if project_id:
+        q = q.filter(Driver.project_id == project_id)
+    if district_id:
+        q = q.filter(or_(Driver.district_id == district_id, Vehicle.district_id == district_id))
+    if vehicle_id:
+        q = q.filter(Driver.vehicle_id == vehicle_id)
+    if shift:
+        q = q.filter(Driver.shift == shift)
+    drivers = q.order_by(Driver.name).all()
+    return jsonify([{'id': d.id, 'name': d.name, 'driver_id': d.driver_id or '', 'shift': d.shift or ''} for d in drivers])
+
+@app.route('/api/filter/parking-stations')
+def api_filter_parking_stations():
+    """Return parking stations filtered by project/district/vehicle, scoped to user's allowed_projects."""
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    ps_vq = Vehicle.query.filter(Vehicle.parking_station_id.isnot(None))
+    if not is_master_or_admin and allowed_projects:
+        ps_vq = ps_vq.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if project_id:
+        ps_vq = ps_vq.filter(Vehicle.project_id == project_id)
+    if district_id:
+        ps_vq = ps_vq.filter(Vehicle.district_id == district_id)
+    if vehicle_id:
+        ps_vq = ps_vq.filter(Vehicle.id == vehicle_id)
+    assigned_ps_ids = [row.parking_station_id for row in ps_vq.with_entities(Vehicle.parking_station_id).distinct().all()]
+    if not assigned_ps_ids:
+        return jsonify([])
+    stations = ParkingStation.query.filter(ParkingStation.id.in_(assigned_ps_ids)).order_by(ParkingStation.name).all()
+    return jsonify([{'id': ps.id, 'name': ps.name} for ps in stations])
+
 # ────────────────────────────────────────────────
 # Serve uploaded files (vehicles/drivers documents and photos)
 # ────────────────────────────────────────────────
@@ -7668,6 +7753,7 @@ def driver_attendance_list():
     project_id = _int_arg('project_id')
     district_id = _int_arg('district_id')
     vehicle_id = _int_arg('vehicle_id')
+    driver_id = _int_arg('driver_id')
     shift = (request.args.get('shift') or '').strip()
     search = (request.args.get('search') or '').strip()
     # From / To date range (strings in dd-mm-yyyy)
@@ -7756,6 +7842,26 @@ def driver_attendance_list():
 
     # Sirf wo records jo Mark Attendance form se mark hue (DriverAttendance table mein hain)
     # Agar from/to diya ho to date range, warna single view_date
+    # Build vehicle_drivers list for driver dropdown
+    vd_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
+    if project_id:
+        vd_q = vd_q.filter(Driver.project_id == project_id)
+    elif not is_master_or_admin and allowed_projects:
+        vd_q = vd_q.filter(Driver.project_id.in_(list(allowed_projects)))
+    if district_id or (not is_master_or_admin and allowed_districts):
+        vd_q = vd_q.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+        if district_id:
+            vd_q = vd_q.filter(db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id))
+        elif not is_master_or_admin and allowed_districts:
+            vd_q = vd_q.filter(db.or_(Driver.district_id.in_(list(allowed_districts)), Vehicle.district_id.in_(list(allowed_districts))))
+    if vehicle_id:
+        vd_q = vd_q.filter(Driver.vehicle_id == vehicle_id)
+    if shift:
+        vd_q = vd_q.filter(Driver.shift == shift)
+    if not is_master_or_admin and allowed_vehicles:
+        vd_q = vd_q.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+    vehicle_drivers = vd_q.order_by(Driver.name).all()
+
     query = DriverAttendance.query
     if from_date and to_date:
         query = query.filter(DriverAttendance.attendance_date.between(from_date, to_date))
@@ -7765,6 +7871,8 @@ def driver_attendance_list():
         query = query.filter(DriverAttendance.attendance_date <= to_date)
     else:
         query = query.filter(DriverAttendance.attendance_date == view_date)
+    if driver_id:
+        query = query.filter(DriverAttendance.driver_id == driver_id)
     if project_id:
         query = query.outerjoin(Driver, DriverAttendance.driver_id == Driver.id).filter(
             db.or_(
@@ -7818,7 +7926,7 @@ def driver_attendance_list():
                 )
             )
         drivers = drivers_query.order_by(Driver.name).all()
-    return render_template('driver_attendance_list.html', form=form, view_date=view_date, drivers=drivers, by_driver=by_driver, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, search=search, disable_project=disable_project, disable_district=disable_district, disable_vehicle=disable_vehicle, disable_shift=disable_shift)
+    return render_template('driver_attendance_list.html', form=form, view_date=view_date, drivers=drivers, by_driver=by_driver, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, vehicle_drivers=vehicle_drivers, search=search, from_date=from_date_str, to_date=to_date_str, disable_project=disable_project, disable_district=disable_district, disable_vehicle=disable_vehicle, disable_shift=disable_shift)
 
 
 def _driver_attendance_marked_list(view_date, project_id=None, district_id=None, vehicle_id=None, shift=None, search=None):
@@ -9270,6 +9378,9 @@ def driver_attendance_report():
             drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
         if shift:
             drivers_query = drivers_query.filter(Driver.shift == shift)
+        driver_id_filter = request.form.get('driver_id', type=int) or 0
+        if driver_id_filter:
+            drivers_query = drivers_query.filter(Driver.id == driver_id_filter)
         if search:
             q = f'%{search}%'
             drivers_query = drivers_query.filter(
@@ -9304,7 +9415,15 @@ def driver_attendance_report():
                 'total_marked': len(rows),
                 'days_in_month': ndays,
             })
-    return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices, disable_project=disable_project, disable_district=disable_district)
+    # Driver dropdown choices (scoped, for cascade)
+    vd_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
+    if scope_projects:
+        vd_q = vd_q.filter(Driver.project_id.in_(scope_projects))
+    if scope_vehicles:
+        vd_q = vd_q.filter(Driver.vehicle_id.in_(scope_vehicles))
+    vehicle_drivers = vd_q.order_by(Driver.name).all()
+    selected_driver_id = (request.form.get('driver_id', type=int) or 0) if request.method == 'POST' else 0
+    return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices, disable_project=disable_project, disable_district=disable_district, vehicle_drivers=vehicle_drivers, selected_driver_id=selected_driver_id)
 
 
 # ─── Task Report ─────────────────────────────────
@@ -12233,10 +12352,31 @@ def report_vehicle_summary():
 
     vehicles = query.order_by(Vehicle.vehicle_no).all()
 
-    # Dropdown choices
-    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
-    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in Vehicle.query.filter(Vehicle.project_id.isnot(None)).order_by(Vehicle.vehicle_no).all()]
+    # Dropdown choices (scoped + cascaded)
+    pq = Project.query
+    if not is_master_or_admin and allowed_projects:
+        pq = pq.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in pq.order_by(Project.name).all()]
+
+    dq = District.query
+    if project_id:
+        dq = dq.join(project_district).filter(project_district.c.project_id == project_id)
+    if not is_master_or_admin and allowed_districts:
+        dq = dq.filter(District.id.in_(list(allowed_districts)))
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dq.order_by(District.name).all()]
+
+    vcq = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+    if project_id:
+        vcq = vcq.filter(Vehicle.project_id == project_id)
+    elif not is_master_or_admin and allowed_projects:
+        vcq = vcq.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if district_id:
+        vcq = vcq.filter(Vehicle.district_id == district_id)
+    elif not is_master_or_admin and allowed_districts:
+        vcq = vcq.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    if not is_master_or_admin and allowed_vehicles:
+        vcq = vcq.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vcq.order_by(Vehicle.vehicle_no).all()]
 
     return render_template(
         'report_vehicle_summary.html',
@@ -12375,6 +12515,8 @@ def report_expiry():
     project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
     
     district_q = District.query
+    if project_id:
+        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
@@ -12465,13 +12607,15 @@ def report_parking_utilization():
         pq = pq.filter(Project.id.in_(list(allowed_projects)))
     project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in pq.order_by(Project.name).all()]
 
-    # District choices
+    # District choices (cascaded by project)
     dq = District.query
+    if project_id:
+        dq = dq.join(project_district).filter(project_district.c.project_id == project_id)
     if not is_master_or_admin and allowed_districts:
         dq = dq.filter(District.id.in_(list(allowed_districts)))
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dq.order_by(District.name).all()]
 
-    # Vehicle choices (only parking-assigned vehicles, scoped)
+    # Vehicle choices (only parking-assigned vehicles, scoped + cascaded)
     vcq = Vehicle.query.filter(Vehicle.parking_station_id.isnot(None))
     if not is_master_or_admin:
         if allowed_projects:
@@ -12484,15 +12628,18 @@ def report_parking_utilization():
         vcq = vcq.filter(Vehicle.district_id == district_id)
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vcq.order_by(Vehicle.vehicle_no).all()]
 
-    # Parking station choices (only stations that have at least 1 vehicle assigned)
-    assigned_ps_ids = db.session.query(Vehicle.parking_station_id).filter(
-        Vehicle.parking_station_id.isnot(None)
-    ).distinct()
-    psq = ParkingStation.query.filter(ParkingStation.id.in_(assigned_ps_ids))
+    # Parking station choices (cascaded by project/district/vehicle)
+    ps_vq = Vehicle.query.filter(Vehicle.parking_station_id.isnot(None))
     if not is_master_or_admin and allowed_projects:
-        psq = psq.filter(ParkingStation.project_id.in_(list(allowed_projects)))
+        ps_vq = ps_vq.filter(Vehicle.project_id.in_(list(allowed_projects)))
     if project_id:
-        psq = psq.filter(ParkingStation.project_id == project_id)
+        ps_vq = ps_vq.filter(Vehicle.project_id == project_id)
+    if district_id:
+        ps_vq = ps_vq.filter(Vehicle.district_id == district_id)
+    if vehicle_id:
+        ps_vq = ps_vq.filter(Vehicle.id == vehicle_id)
+    assigned_ps_ids = db.session.query(ps_vq.subquery().c.parking_station_id).distinct()
+    psq = ParkingStation.query.filter(ParkingStation.id.in_(assigned_ps_ids))
     parking_station_choices = [(0, '-- All Parking Stations --')] + [
         (ps.id, ps.name) for ps in psq.order_by(ParkingStation.name).all()
     ]

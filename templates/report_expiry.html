@@ -76,7 +76,7 @@
         </div>
         <div class="col-md-2 col-lg-2">
           <label class="form-label small text-muted mb-1">Project</label>
-          <select name="project_id" class="form-select form-select-sm" {% if disable_project %}disabled{% endif %}>
+          <select id="exProjectSelect" name="project_id" class="form-select form-select-sm" {% if disable_project %}disabled{% endif %}>
             {% for val, label in project_choices %}
               <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -84,7 +84,7 @@
         </div>
         <div class="col-md-2 col-lg-2">
           <label class="form-label small text-muted mb-1">District</label>
-          <select name="district_id" class="form-select form-select-sm" {% if disable_district %}disabled{% endif %}>
+          <select id="exDistrictSelect" name="district_id" class="form-select form-select-sm" {% if disable_district %}disabled{% endif %}>
             {% for val, label in district_choices %}
               <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -92,7 +92,7 @@
         </div>
         <div class="col-md-2 col-lg-2">
           <label class="form-label small text-muted mb-1">Vehicle</label>
-          <select name="vehicle_id" class="form-select form-select-sm">
+          <select id="exVehicleSelect" name="vehicle_id" class="form-select form-select-sm">
             {% for val, label in vehicle_choices %}
               <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -253,6 +253,50 @@
 
     table.buttons().container().appendTo('#expiryExportButtons');
   });
+</script>
+
+<script>
+(function() {
+  var projSel = document.getElementById('exProjectSelect');
+  var distSel = document.getElementById('exDistrictSelect');
+  var vehSel  = document.getElementById('exVehicleSelect');
+  if (!projSel || !distSel) return;
+
+  function rebuildSelect(sel, items, valueKey, labelKey, allLabel) {
+    sel.innerHTML = '<option value="0">' + allLabel + '</option>';
+    (items || []).forEach(function(item) {
+      var opt = document.createElement('option');
+      opt.value = item[valueKey];
+      opt.textContent = item[labelKey];
+      sel.appendChild(opt);
+    });
+  }
+
+  function loadVehicles(pid, did) {
+    if (!vehSel) return;
+    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + (pid || '0') + '&district_id=' + (did || '0'))
+      .then(function(r) { return r.json(); })
+      .then(function(data) { rebuildSelect(vehSel, data, 'id', 'vehicle_no', '-- All Vehicles --'); })
+      .catch(function() {});
+  }
+
+  function loadDistricts(pid) {
+    if (!pid || pid === '0') {
+      rebuildSelect(distSel, [], 'id', 'name', '-- All Districts --');
+      loadVehicles('0', '0');
+      return;
+    }
+    fetch('/api/filter/districts-by-project?project_id=' + pid)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        rebuildSelect(distSel, data, 'id', 'name', '-- All Districts --');
+        loadVehicles(pid, '0');
+      }).catch(function() {});
+  }
+
+  projSel.addEventListener('change', function() { loadDistricts(this.value); });
+  distSel.addEventListener('change', function() { loadVehicles(projSel ? projSel.value : '0', this.value); });
+})();
 </script>
 
 {% endblock %}
