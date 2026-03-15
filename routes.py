@@ -1075,19 +1075,26 @@ def _do_login_session(user, req):
                     allowed_districts.add(drv.district_id)
                 if (drv.shift or '').strip():
                     allowed_shifts.add((drv.shift or '').strip())
-                # Derive project from vehicle if not set on driver
-                if not allowed_projects and allowed_vehicles:
-                    for _vid in list(allowed_vehicles):
-                        _veh = Vehicle.query.get(_vid)
-                        if _veh and _veh.project_id:
-                            allowed_projects.add(_veh.project_id)
-                # Derive district from project via project_district table
-                if not allowed_districts and allowed_projects:
-                    _pd_rows = db.session.query(project_district.c.district_id).filter(
-                        project_district.c.project_id.in_(list(allowed_projects))
-                    ).all()
-                    for _r in _pd_rows:
-                        allowed_districts.add(_r[0])
+                # Comprehensive enrichment from assigned vehicle
+                for _vid in list(allowed_vehicles):
+                    _veh = Vehicle.query.get(_vid)
+                    if not _veh:
+                        continue
+                    if _veh.district_id:
+                        allowed_districts.add(_veh.district_id)
+                    if not allowed_projects and _veh.project_id:
+                        allowed_projects.add(_veh.project_id)
+                    if not allowed_districts:
+                        _ps = _veh.parking_station
+                        if _ps:
+                            if not allowed_projects and _ps.project_id:
+                                allowed_projects.add(_ps.project_id)
+                            if not allowed_districts and (_ps.district or '').strip():
+                                _pd = District.query.filter(
+                                    func.lower(District.name) == _ps.district.strip().lower()
+                                ).first()
+                                if _pd:
+                                    allowed_districts.add(_pd.id)
         except Exception:
             pass
     session['allowed_projects']  = list(allowed_projects)
@@ -8998,10 +9005,23 @@ def driver_attendance_checkin():
     # Effective scope: enrich project/district from vehicle when driver has no direct assignment
     _eff_projects = list(scope_projects) if scope_projects else []
     _eff_districts = list(scope_districts) if scope_districts else []
-    if scope_vehicles and not _eff_projects and not _eff_districts:
+    if scope_vehicles:
         for _v in Vehicle.query.filter(Vehicle.id.in_(scope_vehicles)).all():
-            if _v.project_id and _v.project_id not in _eff_projects:
+            if _v.district_id and _v.district_id not in _eff_districts:
+                _eff_districts.append(_v.district_id)
+            if not _eff_projects and _v.project_id:
                 _eff_projects.append(_v.project_id)
+            if not _eff_districts:
+                _ps = _v.parking_station
+                if _ps:
+                    if not _eff_projects and _ps.project_id:
+                        _eff_projects.append(_ps.project_id)
+                    if not _eff_districts and (_ps.district or '').strip():
+                        _pd = District.query.filter(
+                            func.lower(District.name) == _ps.district.strip().lower()
+                        ).first()
+                        if _pd and _pd.id not in _eff_districts:
+                            _eff_districts.append(_pd.id)
     districts_query = District.query.join(project_district, District.id == project_district.c.district_id)
     if _eff_districts:
         districts_query = districts_query.filter(District.id.in_(_eff_districts))
@@ -9158,23 +9178,33 @@ def driver_attendance_checkin():
 
 @app.route('/driver-attendance/checkout', methods=['GET', 'POST'])
 def driver_attendance_checkout():
-    """Geofenced check-out: same flow as check-in (District → Project → Vehicle → Parking → Shift → Driver). Location + selfie, then save check_out time and coords."""
+    """Geofenced check-out: same flow as check-in. Location + selfie, then save check_out time and coords."""
     scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
-    # Effective scope: enrich project/district from vehicle when driver has no direct assignment
     _eff_projects = list(scope_projects) if scope_projects else []
     _eff_districts = list(scope_districts) if scope_districts else []
-    if scope_vehicles and not _eff_projects and not _eff_districts:
+    if scope_vehicles:
         for _v in Vehicle.query.filter(Vehicle.id.in_(scope_vehicles)).all():
-            if _v.project_id and _v.project_id not in _eff_projects:
+            if _v.district_id and _v.district_id not in _eff_districts:
+                _eff_districts.append(_v.district_id)
+            if not _eff_projects and _v.project_id:
                 _eff_projects.append(_v.project_id)
+            if not _eff_districts:
+                _ps = _v.parking_station
+                if _ps:
+                    if not _eff_projects and _ps.project_id:
+                        _eff_projects.append(_ps.project_id)
+                    if not _eff_districts and (_ps.district or '').strip():
+                        _pd = District.query.filter(
+                            func.lower(District.name) == _ps.district.strip().lower()
+                        ).first()
+                        if _pd and _pd.id not in _eff_districts:
+                            _eff_districts.append(_pd.id)
     districts_q = District.query.join(project_district, District.id == project_district.c.district_id)
     if _eff_districts:
         districts_q = districts_q.filter(District.id.in_(_eff_districts))
     elif _eff_projects:
         districts_q = districts_q.filter(project_district.c.project_id.in_(_eff_projects))
     districts = districts_q.distinct().order_by(District.name).all()
-
-    # ── Server-side auto-selection for single-scope users ─────────────────────
     auto_district_id = districts[0].id if len(districts) == 1 else None
     pre_projects = []
     auto_project_id = None
@@ -9198,7 +9228,6 @@ def driver_attendance_checkout():
             'driver_id': v.driver_id,
         }
     if scope_vehicles and len(scope_vehicles) == 1:
-        # Single assigned vehicle – fetch directly by ID (vehicle.district_id may be NULL)
         sv = Vehicle.query.get(scope_vehicles[0])
         if sv:
             pre_vehicles_data = [_build_vehicle_dict(sv)]
