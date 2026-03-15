@@ -173,8 +173,8 @@
                             <span class="badge-sm badge-primary">{{ loop.index }}</span>
                         </td>
                         <td>
-                            <div><i class="bi bi-person-badge me-1 text-info"></i><strong>{{ t.driver.name }}</strong></div>
-                            <small class="text-muted">ID: {{ t.driver.driver_id }}</small>
+                            <div><i class="bi bi-person-badge me-1 text-info"></i><strong>{{ t.driver.name if t.driver else '(Deleted)' }}</strong></div>
+                            <small class="text-muted">ID: {{ t.driver.driver_id if t.driver else '-' }}</small>
                         </td>
                         <td>
                             <div class="transfer-flow">

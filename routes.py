@@ -6304,11 +6304,25 @@ def driver_transfers():
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     
     # Optional filters: Project + District (destination side)
-    project_id = request.args.get('project_id', type=int) or 0
-    district_id = request.args.get('district_id', type=int) or 0
-    q = (request.args.get('q') or '').strip()
-    sort_by = request.args.get('sort_by', 'transfer_date')
-    sort_order = request.args.get('sort_order', 'desc')
+    project_id   = request.args.get('project_id', type=int) or 0
+    district_id  = request.args.get('district_id', type=int) or 0
+    q            = (request.args.get('q') or '').strip()
+    sort_by      = request.args.get('sort_by', 'transfer_date')
+    sort_order   = request.args.get('sort_order', 'desc')
+    from_date_str = (request.args.get('from_date') or '').strip()
+    to_date_str   = (request.args.get('to_date') or '').strip()
+    from_date_val = None
+    to_date_val   = None
+    try:
+        if from_date_str:
+            from_date_val = datetime.strptime(from_date_str, '%d-%m-%Y').date()
+    except ValueError:
+        from_date_str = ''
+    try:
+        if to_date_str:
+            to_date_val = datetime.strptime(to_date_str, '%d-%m-%Y').date()
+    except ValueError:
+        to_date_str = ''
     
     # Auto-select if only 1 option available
     disable_project = False
@@ -6324,22 +6338,34 @@ def driver_transfers():
             disable_district = True
 
     query = DriverTransfer.query
-    
+    joined_vehicle = False
+    joined_driver  = False
+
     # Apply user data scope
     if not is_master_or_admin:
         if allowed_vehicles:
             query = query.filter(DriverTransfer.new_vehicle_id.in_(list(allowed_vehicles)))
-    
+
     if project_id:
         query = query.filter(DriverTransfer.new_project_id == project_id)
     if district_id:
-        # new_vehicle_id ke zarye district filter (vehicle.district_id)
         query = query.join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id).filter(
             Vehicle.district_id == district_id
         )
+        joined_vehicle = True
+    if from_date_val:
+        query = query.filter(DriverTransfer.transfer_date >= from_date_val)
+    if to_date_val:
+        query = query.filter(DriverTransfer.transfer_date <= to_date_val)
     if q:
         like = f'%{q}%'
-        query = query.join(Driver).join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id).outerjoin(
+        if not joined_driver:
+            query = query.join(Driver)
+            joined_driver = True
+        if not joined_vehicle:
+            query = query.join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id)
+            joined_vehicle = True
+        query = query.outerjoin(
             Project, DriverTransfer.new_project_id == Project.id
         ).outerjoin(
             District, Vehicle.district_id == District.id
@@ -6353,12 +6379,14 @@ def driver_transfers():
             cast(DriverTransfer.transfer_date, SAString).ilike(like),
         ))
 
-    # Apply sorting
+    # Apply sorting (avoid duplicate joins)
     if sort_by == 'driver':
-        query = query.join(Driver)
+        if not joined_driver:
+            query = query.join(Driver)
         order_col = Driver.name
     elif sort_by == 'vehicle':
-        query = query.join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id)
+        if not joined_vehicle:
+            query = query.join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id)
         order_col = Vehicle.vehicle_no
     elif sort_by == 'project':
         query = query.join(Project, DriverTransfer.new_project_id == Project.id)
@@ -6394,6 +6422,8 @@ def driver_transfers():
         sort_by=sort_by,
         sort_order=sort_order,
         q=q,
+        from_date=from_date_str,
+        to_date=to_date_str,
         project_choices=projects,
         district_choices=districts,
         disable_project=disable_project,
