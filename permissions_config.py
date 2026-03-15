@@ -219,6 +219,7 @@ PERMISSION_TREE = {
         ('driver_attendance_report', 'Attendance Report'),
         ('activity_log_report', 'Activity Log'),
         ('activity_logs_geo_report', 'Activity Logs Geo'),
+        ('active_drivers_report', 'Active Driver Summary'),
     ],
     PERMISSION_BACKUP: [
         ('backup', 'Backup'),
@@ -711,6 +712,7 @@ SECTION_PAGE_GROUPS = {
         ('Driver Profile', [('report_driver_profile', 'Driver Profile')]),
         ('Create Report with AI', [('report_ai', 'Create Report with AI')]),
         ('Attendance Report', [('driver_attendance_report', 'Attendance Report')]),
+        ('Active Driver Summary', [('active_drivers_report', 'Active Driver Summary')]),
         ('Activity Log', [('activity_log_report', 'Activity Log')]),
         ('Activity Logs Geo', [('activity_logs_geo_report', 'Activity Logs Geo')]),
     ],
@@ -872,6 +874,7 @@ PAGE_VISIBLE = {
     'activity_logs_geo_report': ['reports', 'activity_logs_geo_report'],
     'report_vehicle_profile': ['reports', 'report_vehicle_profile'],
     'report_driver_profile': ['reports', 'report_driver_profile'],
+    'active_drivers_report': ['reports', 'active_drivers_report'],
     # Administration
     'user_list': ['users_manage', 'user_list', 'user_add', 'user_edit'],
     'role_list': ['users_manage', 'role_list', 'role_add', 'role_edit'],

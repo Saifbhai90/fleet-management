@@ -52,35 +52,46 @@
 
 <div class="container-fluid py-3 px-3 px-md-4">
 
-    <!-- Report Header -->
-    <div class="report-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div>
-            <h2><i class="bi bi-person-badge-fill me-2"></i>Active Driver Summary Report</h2>
-            <div class="subtitle">
-                <i class="bi bi-info-circle me-1"></i>
-                Currently assigned &amp; active drivers across all projects
-                {% if from_date or to_date %}
-                &nbsp;·&nbsp; Assign Date:
-                {% if from_date %}{{ from_date }}{% endif %}
-                {% if from_date and to_date %} – {% endif %}
-                {% if to_date %}{{ to_date }}{% endif %}
-                {% endif %}
+    <!-- Report Header (contains title, search, per-page, and action buttons all in one row) -->
+    <div class="report-header">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <!-- Title block -->
+            <div class="me-auto">
+                <h2 class="mb-0"><i class="bi bi-person-badge-fill me-2"></i>Active Driver Summary Report</h2>
+                <div class="subtitle mt-1">
+                    <i class="bi bi-info-circle me-1"></i>Currently assigned &amp; active drivers
+                    {% if from_date or to_date %}&nbsp;·&nbsp; Assign Date: {{ from_date or '' }}{% if from_date and to_date %} – {% endif %}{{ to_date or '' }}{% endif %}
+                </div>
             </div>
-        </div>
-        <div class="d-flex gap-2 flex-wrap">
+            <!-- Search input -->
+            <div style="min-width:180px;max-width:240px;">
+                <input type="text" id="dtSearchInput" class="form-control form-control-sm"
+                       placeholder="🔍 Search all columns..." autocomplete="off"
+                       style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);color:#fff;border-radius:6px;font-size:0.82rem;">
+            </div>
+            <!-- Per-page dropdown -->
+            <select id="dtLengthSelect" class="form-select form-select-sm"
+                    style="width:auto;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);color:#fff;border-radius:6px;font-size:0.82rem;">
+                <option value="10">10 / page</option>
+                <option value="25" selected>25 / page</option>
+                <option value="50">50 / page</option>
+                <option value="100">100 / page</option>
+                <option value="-1">All</option>
+            </select>
+            <!-- Action buttons -->
             {% if can_see_page('active_drivers_report') %}
             <a href="{{ url_for('active_drivers_report_export',
                         project_id=project_id, district_id=district_id,
                         vehicle_id=vehicle_id, shift=shift,
                         from_date=from_date or '', to_date=to_date or '') }}"
-               class="btn btn-export">
+               class="btn btn-export btn-sm">
                 <i class="bi bi-file-earmark-excel me-1"></i>Export
             </a>
             <a href="{{ url_for('active_drivers_report_print',
                         project_id=project_id, district_id=district_id,
                         vehicle_id=vehicle_id, shift=shift,
                         from_date=from_date or '', to_date=to_date or '') }}"
-               target="_blank" class="btn btn-print">
+               target="_blank" class="btn btn-print btn-sm">
                 <i class="bi bi-printer me-1"></i>Print
             </a>
             {% endif %}
@@ -235,24 +246,15 @@
 <script>
 $(document).ready(function () {
     var table = $('#activeDriverTable').DataTable({
-        dom:
-            "<'row mb-2'<'col-sm-12 col-md-6 d-flex align-items-center'f>" +
-            "<'col-sm-12 col-md-6 d-flex justify-content-end align-items-center'l>>" +
-            "<'row'<'col-sm-12'tr>>" +
-            "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>",
+        dom: "<'row'<'col-12'tr>><'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>",
         pageLength: 25,
         lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
         order: [],
-        columnDefs: [
-            { orderable: false, targets: 0 }
-        ],
+        columnDefs: [{ orderable: false, targets: 0 }],
         language: {
-            search: '',
-            searchPlaceholder: '\uD83D\uDD0D Search all columns...',
             info: 'Showing _START_ to _END_ of _TOTAL_ records',
             infoEmpty: 'No records to show',
             infoFiltered: '(filtered from _MAX_ total)',
-            lengthMenu: 'Show _MENU_',
             paginate: { first: '«', last: '»', next: '›', previous: '‹' }
         },
         drawCallback: function () {
@@ -266,10 +268,20 @@ $(document).ready(function () {
         }
     });
 
-    /* Remove the label text wrapper so the search input stands alone */
-    $('div.dataTables_filter label').contents().filter(function () {
-        return this.nodeType === 3;
-    }).remove();
+    /* Wire the custom search input in the header to DataTables */
+    $('#dtSearchInput').on('keyup input', function () {
+        table.search(this.value).draw();
+    });
+
+    /* Wire the custom per-page dropdown in the header to DataTables */
+    $('#dtLengthSelect').on('change', function () {
+        table.page.len(parseInt(this.value)).draw();
+    });
+
+    /* Placeholder colour fix for the search input */
+    $('#dtSearchInput').css({'color': '#fff'});
+    $('#dtSearchInput').on('focus', function () { $(this).css('background', 'rgba(255,255,255,0.22)'); });
+    $('#dtSearchInput').on('blur',  function () { $(this).css('background', 'rgba(255,255,255,0.15)'); });
 });
 </script>
 {% endblock %}

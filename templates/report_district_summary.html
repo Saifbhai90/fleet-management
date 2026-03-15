@@ -1,14 +1,35 @@
 {% extends "base.html" %}
 {% block title %}District Summary Report{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+
 <div class="container-fluid">
-  <div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h2 class="mb-0"><i class="bi bi-geo-alt me-2 text-warning"></i>District Summary Report</h2>
-    <a href="{{ url_for('reports_index') }}" class="btn btn-outline-secondary btn-sm">All Reports</a>
+    <div id="districtSummaryExportButtons" class="d-flex gap-2"></div>
   </div>
+
+  <!-- Search + Per-page toolbar -->
+  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+      <label class="small text-muted mb-0">Show</label>
+      <select id="distLenSelect" class="form-select form-select-sm" style="width:auto;">
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50" selected>50</option>
+        <option value="100">100</option>
+        <option value="-1">All</option>
+      </select>
+      <label class="small text-muted mb-0">entries</label>
+    </div>
+    <div style="min-width:200px;">
+      <input type="text" id="distSearchInput" class="form-control form-control-sm" placeholder="🔍 Search..." autocomplete="off">
+    </div>
+  </div>
+
   <div class="card shadow border-0">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table class="table table-hover align-middle mb-0" id="districtSummaryTable">
         <thead class="table-light">
           <tr>
             <th class="ps-4">#</th>
@@ -37,4 +58,43 @@
     </div>
   </div>
 </div>
+
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
+<script>
+  $(document).ready(function () {
+    var table = $('#districtSummaryTable').DataTable({
+      pageLength: 50,
+      searching: true,
+      order: [[1, 'asc']],
+      dom: 'rt<"d-flex justify-content-between align-items-center p-2"ip>',
+      buttons: [
+        {
+          extend: 'excelHtml5',
+          text: '<i class="bi bi-file-earmark-excel me-1"></i> Excel',
+          className: 'btn btn-success btn-sm'
+        },
+        {
+          extend: 'print',
+          text: '<i class="bi bi-printer me-1"></i> Print / Preview',
+          className: 'btn btn-secondary btn-sm',
+          autoPrint: false
+        }
+      ]
+    });
+
+    table.buttons().container().appendTo('#districtSummaryExportButtons');
+
+    $('#distSearchInput').on('keyup input', function () { table.search(this.value).draw(); });
+    $('#distLenSelect').on('change', function () { table.page.len(parseInt(this.value)).draw(); });
+  });
+</script>
+
 {% endblock %}

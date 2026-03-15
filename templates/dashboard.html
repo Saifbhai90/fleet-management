@@ -298,7 +298,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <!-- ① HERO: Active Drivers (2×2 — dominant card) -->
     {% if can_see_page('dashboard_card_drivers') %}
-    <a href="{{ url_for('drivers_list') }}" class="bc bc-blue bc-hero">
+    <a href="{{ url_for('active_drivers_report') }}" class="bc bc-blue bc-hero">
         <div style="position:relative;z-index:1;">
             <div class="bc-tag">Active Drivers</div>
             <div class="bc-num bc-num-xl">{{ active_drivers }}</div>
@@ -323,7 +323,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <!-- ② TALL: Fleet Deployed (1×2) -->
     {% if can_see_page('dashboard_card_vehicles') %}
-    <a href="{{ url_for('vehicles_list') }}" class="bc bc-green bc-tall">
+    <a href="{{ url_for('report_vehicle_summary') }}" class="bc bc-green bc-tall">
         <div style="position:relative;z-index:1;">
             <div class="bc-tag">Fleet Deployed</div>
             <div class="bc-num bc-num-lg">{{ assigned_vehicles }}</div>
@@ -376,7 +376,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <!-- ⑤ Projects (1×1 light) -->
     {% if can_see_page('dashboard_card_projects') %}
-    <a href="{{ url_for('projects_list') }}" class="bc bc-light bc-sm">
+    <a href="{{ url_for('report_project_summary') }}" class="bc bc-light bc-sm">
         <div class="chip-icon" style="background:#dbeafe;color:#1d4ed8;">
             <i data-lucide="briefcase" style="width:22px;height:22px;"></i>
         </div>
@@ -389,7 +389,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <!-- ⑥ Districts (1×1 light) -->
     {% if can_see_page('dashboard_card_districts') %}
-    <a href="{{ url_for('districts_list') }}" class="bc bc-light bc-sm">
+    <a href="{{ url_for('report_district_summary') }}" class="bc bc-light bc-sm">
         <div class="chip-icon" style="background:#dcfce7;color:#15803d;">
             <i data-lucide="map-pin" style="width:22px;height:22px;"></i>
         </div>
@@ -402,7 +402,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <!-- ⑦ Parking Stations (1×1 light) -->
     {% if can_see_page('dashboard_card_parking') %}
-    <a href="{{ url_for('parking_list') }}" class="bc bc-light bc-sm">
+    <a href="{{ url_for('report_parking_utilization') }}" class="bc bc-light bc-sm">
         <div class="chip-icon" style="background:#fce7f3;color:#be185d;">
             <i data-lucide="parking-circle" style="width:22px;height:22px;"></i>
         </div>

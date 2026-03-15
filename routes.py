@@ -444,7 +444,7 @@ def dashboard():
     total_districts  = District.query.count()       if _can('dashboard_card_districts')   else 0
     
     # Active drivers: filter by user scope
-    active_driver_q = Driver.query.filter_by(status='Active')
+    active_driver_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
     if not is_master_or_admin:
         if allowed_projects:
             active_driver_q = active_driver_q.filter(Driver.project_id.in_(list(allowed_projects)))
@@ -6741,7 +6741,7 @@ def _active_drivers_data(project_id=0, district_id=0, vehicle_id=0, shift='',
     ).outerjoin(
         Project, Driver.project_id == Project.id
     ).outerjoin(
-        District, Driver.district_id == District.id
+        District, Vehicle.district_id == District.id
     ).outerjoin(
         rejoin_sub, Driver.id == rejoin_sub.c.driver_id
     ).filter(
@@ -12097,8 +12097,8 @@ def report_vehicle_summary():
     from_date = parse_date(from_date_str) if from_date_str else None
     to_date = parse_date(to_date_str) if to_date_str else None
 
-    # Base query: sirf active date non-null vehicles
-    query = Vehicle.query.filter(Vehicle.active_date.isnot(None))
+    # Base query: only vehicles assigned to a project (deployed vehicles)
+    query = Vehicle.query.filter(Vehicle.project_id.isnot(None))
     
     # Apply user data scope
     if not is_master_or_admin:

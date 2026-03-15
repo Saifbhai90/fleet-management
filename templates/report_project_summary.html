@@ -35,6 +35,24 @@
     </div>
   </div>
 
+  <!-- Search + Per-page toolbar -->
+  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+      <label class="small text-muted mb-0">Show</label>
+      <select id="projLenSelect" class="form-select form-select-sm" style="width:auto;">
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50" selected>50</option>
+        <option value="100">100</option>
+        <option value="-1">All</option>
+      </select>
+      <label class="small text-muted mb-0">entries</label>
+    </div>
+    <div style="min-width:200px;">
+      <input type="text" id="projSearchInput" class="form-control form-control-sm" placeholder="🔍 Search..." autocomplete="off">
+    </div>
+  </div>
+
   <div class="card shadow border-0">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0" id="projectSummaryTable">
@@ -89,7 +107,7 @@
   $(document).ready(function () {
     var table = $('#projectSummaryTable').DataTable({
       pageLength: 50,
-      searching: false,
+      searching: true,
       order: [[1, 'asc']],
       dom: 'rt<"d-flex justify-content-between align-items-center p-2"ip>',
       buttons: [
@@ -108,6 +126,9 @@
     });
 
     table.buttons().container().appendTo('#projectSummaryExportButtons');
+
+    $('#projSearchInput').on('keyup input', function () { table.search(this.value).draw(); });
+    $('#projLenSelect').on('change', function () { table.page.len(parseInt(this.value)).draw(); });
   });
 </script>
 
