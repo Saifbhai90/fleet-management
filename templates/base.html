@@ -1246,7 +1246,7 @@
         {% set workforce_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
         {% set task_report_endpoints = ['task_report_upload', 'task_report_list', 'red_task_list', 'red_task_new', 'red_task_edit', 'without_task_list', 'without_task_new', 'without_task_edit', 'task_report_logbook_cover', 'task_report_logbook_view', 'task_report_logbook_view_all'] %}
         {% set expenses_endpoints = ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form', 'employee_expense_list', 'employee_expense_form'] %}
-        {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai'] %}
+        {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai', 'active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print'] %}
         {% set accounts_endpoints = ['accounts_quick_payment', 'accounts_quick_receipt', 'accounts_bank_entry', 'accounts_jv', 'accounts_future_entry', 'accounts_balance_sheet', 'accounts_account_ledger'] %}
         {% set master_open = (request.endpoint in master_endpoints and not (request.endpoint == 'companies' and request.args.get('mode') == 'report')) %}
         {% set assignment_open = request.endpoint in assignment_endpoints or (request.endpoint and 'assign_vehicle_to_parking' in request.endpoint) or (request.endpoint and 'assign_driver_to_vehicle' in request.endpoint) %}
@@ -1610,6 +1610,11 @@
                 {% if can_see_page('report_expiry') %}
                 <a href="{{ url_for('report_expiry') }}" class="collapse-item {% if request.endpoint == 'report_expiry' %}active-link{% endif %}">
                     <i class="bi bi-calendar-x text-warning"></i><span>Document Expiry</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('active_drivers_report') %}
+                <a href="{{ url_for('active_drivers_report') }}" class="collapse-item {% if request.endpoint in ['active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print'] %}active-link{% endif %}">
+                    <i class="bi bi-person-lines-fill text-primary"></i><span>Active Driver Summary</span>
                 </a>
                 {% endif %}
                 {% if can_see_page('report_vehicle_summary') %}

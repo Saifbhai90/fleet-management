@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+{% block title %}Active Driver Summary{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<style>
+    .report-header { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); color: #fff; border-radius: 10px; padding: 1.1rem 1.4rem; margin-bottom: 1rem; }
+    .report-header h2 { margin: 0; font-size: 1.35rem; font-weight: 700; letter-spacing: 0.3px; }
+    .report-header .subtitle { font-size: 0.85rem; opacity: 0.85; margin-top: 0.2rem; }
+    .filter-card { background: #fff; border-radius: 8px; padding: 0.9rem 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .filter-input { border: 1px solid #ddd; border-radius: 5px; padding: 0.38rem 0.7rem; font-size: 0.855rem; }
+    .filter-input:focus { border-color: #1565c0; box-shadow: 0 0 0 2px rgba(21,101,192,0.12); outline: none; }
+    .btn-filter { background: #1565c0; color: #fff; border: none; border-radius: 5px; padding: 0.4rem 1rem; font-size: 0.855rem; font-weight: 600; }
+    .btn-filter:hover { background: #0d47a1; color: #fff; }
+    .btn-export { background: #2e7d32; color: #fff; border: none; border-radius: 5px; padding: 0.4rem 0.85rem; font-size: 0.84rem; font-weight: 600; }
+    .btn-export:hover { background: #1b5e20; color: #fff; }
+    .btn-print { background: #e65100; color: #fff; border: none; border-radius: 5px; padding: 0.4rem 0.85rem; font-size: 0.84rem; font-weight: 600; }
+    .btn-print:hover { background: #bf360c; color: #fff; }
+    .table-wrap { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; padding: 1rem; }
+    #activeDriverTable { font-size: 0.855rem; }
+    #activeDriverTable thead th { background: #e3f2fd; color: #0d47a1; font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 2px solid #1565c0; white-space: nowrap; }
+    #activeDriverTable tbody tr:hover { background: #f0f7ff; }
+    #activeDriverTable td { vertical-align: middle; padding: 0.45rem 0.7rem; }
+    .badge-shift-m { background: #e3f2fd; color: #1565c0; padding: 0.18rem 0.55rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+    .badge-shift-n { background: #1a237e; color: #fff; padding: 0.18rem 0.55rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+    .badge-rejoin { background: #e8f5e9; color: #2e7d32; padding: 0.18rem 0.55rem; border-radius: 12px; font-size: 0.73rem; font-weight: 600; }
+    .sr-badge { background: #0d47a1; color: #fff; border-radius: 4px; padding: 0.12rem 0.45rem; font-size: 0.75rem; font-weight: 700; }
+    .driver-name { font-weight: 600; color: #1a237e; }
+    .driver-id { color: #607d8b; font-size: 0.78rem; }
+    .veh-no { font-weight: 700; color: #263238; }
+    .veh-meta { color: #78909c; font-size: 0.77rem; }
+    .total-badge { background: #e3f2fd; color: #0d47a1; font-size: 0.82rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 20px; }
+
+    /* DataTables custom tweaks */
+    div.dataTables_wrapper div.dataTables_filter input { border: 1px solid #ddd; border-radius: 5px; padding: 0.32rem 0.65rem; font-size: 0.84rem; margin-left: 6px; }
+    div.dataTables_wrapper div.dataTables_filter input:focus { border-color: #1565c0; box-shadow: 0 0 0 2px rgba(21,101,192,0.12); outline: none; }
+    div.dataTables_wrapper div.dataTables_filter label { font-size: 0.84rem; color: #455a64; }
+    div.dataTables_wrapper div.dataTables_length select { border: 1px solid #ddd; border-radius: 5px; padding: 0.28rem 0.5rem; font-size: 0.84rem; }
+    div.dataTables_wrapper div.dataTables_length label { font-size: 0.84rem; color: #455a64; }
+    div.dataTables_wrapper div.dataTables_info { font-size: 0.82rem; color: #607d8b; padding-top: 0.75rem; }
+    div.dataTables_wrapper div.dataTables_paginate { padding-top: 0.55rem; }
+    div.dataTables_wrapper div.dataTables_paginate .paginate_button { font-size: 0.82rem; padding: 0.28rem 0.6rem; }
+    div.dataTables_wrapper div.dataTables_paginate .paginate_button.current { background: #1565c0 !important; border-color: #1565c0 !important; color: #fff !important; border-radius: 4px; }
+    div.dataTables_wrapper div.dataTables_paginate .paginate_button:hover:not(.disabled):not(.current) { background: #e3f2fd !important; border-color: #90caf9 !important; color: #1565c0 !important; }
+    table.dataTable.no-footer { border-bottom: 1px solid #e0e0e0; }
+    table.dataTable thead th.sorting, table.dataTable thead th.sorting_asc, table.dataTable thead th.sorting_desc { cursor: pointer; }
+    @media (max-width: 767px) {
+        .filter-card .row > div { margin-bottom: 0.45rem; }
+        .report-header h2 { font-size: 1.1rem; }
+    }
+</style>
+
+<div class="container-fluid py-3 px-3 px-md-4">
+
+    <!-- Report Header -->
+    <div class="report-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <h2><i class="bi bi-person-badge-fill me-2"></i>Active Driver Summary Report</h2>
+            <div class="subtitle">
+                <i class="bi bi-info-circle me-1"></i>
+                Currently assigned &amp; active drivers across all projects
+                {% if from_date or to_date %}
+                &nbsp;·&nbsp; Assign Date:
+                {% if from_date %}{{ from_date }}{% endif %}
+                {% if from_date and to_date %} – {% endif %}
+                {% if to_date %}{{ to_date }}{% endif %}
+                {% endif %}
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            {% if can_see_page('active_drivers_report') %}
+            <a href="{{ url_for('active_drivers_report_export',
+                        project_id=project_id, district_id=district_id,
+                        vehicle_id=vehicle_id, shift=shift,
+                        from_date=from_date or '', to_date=to_date or '') }}"
+               class="btn btn-export">
+                <i class="bi bi-file-earmark-excel me-1"></i>Export
+            </a>
+            <a href="{{ url_for('active_drivers_report_print',
+                        project_id=project_id, district_id=district_id,
+                        vehicle_id=vehicle_id, shift=shift,
+                        from_date=from_date or '', to_date=to_date or '') }}"
+               target="_blank" class="btn btn-print">
+                <i class="bi bi-printer me-1"></i>Print
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-card">
+        <form method="GET" action="{{ url_for('active_drivers_report') }}">
+            <div class="row g-2 align-items-end">
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">From Date</label>
+                    <input type="text" name="from_date" class="form-control filter-input datepicker"
+                           placeholder="dd-mm-yyyy" value="{{ from_date or '' }}" autocomplete="off">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">To Date</label>
+                    <input type="text" name="to_date" class="form-control filter-input datepicker"
+                           placeholder="dd-mm-yyyy" value="{{ to_date or '' }}" autocomplete="off">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Project</label>
+                    <select name="project_id" class="form-select filter-input">
+                        {% for val, label in project_choices %}
+                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">District</label>
+                    <select name="district_id" class="form-select filter-input">
+                        {% for val, label in district_choices %}
+                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Vehicle</label>
+                    <select name="vehicle_id" class="form-select filter-input">
+                        {% for val, label in vehicle_choices %}
+                        <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-1">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Shift</label>
+                    <select name="shift" class="form-select filter-input">
+                        <option value="" {% if not shift %}selected{% endif %}>All</option>
+                        <option value="Morning" {% if shift == 'Morning' %}selected{% endif %}>Morning</option>
+                        <option value="Night" {% if shift == 'Night' %}selected{% endif %}>Night</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-1 d-flex gap-1">
+                    <button type="submit" class="btn btn-filter w-100">
+                        <i class="bi bi-funnel-fill"></i> Filter
+                    </button>
+                </div>
+            </div>
+            {% if project_id or district_id or vehicle_id or shift or from_date or to_date %}
+            <div class="mt-2">
+                <a href="{{ url_for('active_drivers_report') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x-circle me-1"></i>Clear Filters
+                </a>
+                <span class="total-badge ms-2">{{ total }} record{{ 's' if total != 1 else '' }} found</span>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <span class="fw-bold text-secondary" style="font-size:0.9rem;">
+                <i class="bi bi-table me-1"></i>Active Driver Summary
+            </span>
+            <span class="total-badge">Total: {{ total }}</span>
+        </div>
+        <div class="table-responsive">
+            <table id="activeDriverTable" class="table table-sm table-bordered table-hover align-middle w-100">
+                <thead>
+                    <tr>
+                        <th style="width:4%">Sr No</th>
+                        <th>Project</th>
+                        <th>District</th>
+                        <th>Vehicle No (Model) (Type)</th>
+                        <th>Driver Name (ID)</th>
+                        <th>Shift</th>
+                        <th>Assign Date</th>
+                        <th>Rejoin Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for driver, vehicle, project, district, rejoin_date in results %}
+                    <tr>
+                        <td class="text-center"><span class="sr-badge">{{ loop.index }}</span></td>
+                        <td>{{ project.name if project else '-' }}</td>
+                        <td>{{ district.name if district else '-' }}</td>
+                        <td>
+                            <div class="veh-no">{{ vehicle.vehicle_no if vehicle else '-' }}</div>
+                            {% if vehicle %}
+                            <div class="veh-meta">
+                                {% if vehicle.model %}{{ vehicle.model }}{% endif %}
+                                {% if vehicle.model and vehicle.vehicle_type %} · {% endif %}
+                                {% if vehicle.vehicle_type %}{{ vehicle.vehicle_type }}{% endif %}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="driver-name">{{ driver.name }}</div>
+                            <div class="driver-id">{{ driver.driver_id or '-' }}</div>
+                        </td>
+                        <td class="text-center">
+                            {% if driver.shift == 'Morning' %}
+                            <span class="badge-shift-m">Morning</span>
+                            {% elif driver.shift == 'Night' %}
+                            <span class="badge-shift-n">Night</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td data-order="{{ driver.assign_date.strftime('%Y%m%d') if driver.assign_date else '00000000' }}">
+                            {% if driver.assign_date %}
+                            <small><i class="bi bi-calendar-check text-primary me-1"></i>{{ driver.assign_date.strftime('%d %b %Y') }}</small>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td data-order="{{ rejoin_date.strftime('%Y%m%d') if rejoin_date else '00000000' }}">
+                            {% if rejoin_date %}
+                            <span class="badge-rejoin"><i class="bi bi-arrow-return-right me-1"></i>{{ rejoin_date.strftime('%d %b %Y') }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox fs-2 d-block mb-2"></i>No active drivers found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script>
+$(document).ready(function () {
+    var table = $('#activeDriverTable').DataTable({
+        dom:
+            "<'row mb-2'<'col-sm-12 col-md-6 d-flex align-items-center'f>" +
+            "<'col-sm-12 col-md-6 d-flex justify-content-end align-items-center'l>>" +
+            "<'row'<'col-sm-12'tr>>" +
+            "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>",
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+        order: [],
+        columnDefs: [
+            { orderable: false, targets: 0 }
+        ],
+        language: {
+            search: '',
+            searchPlaceholder: '\uD83D\uDD0D Search all columns...',
+            info: 'Showing _START_ to _END_ of _TOTAL_ records',
+            infoEmpty: 'No records to show',
+            infoFiltered: '(filtered from _MAX_ total)',
+            lengthMenu: 'Show _MENU_',
+            paginate: { first: '«', last: '»', next: '›', previous: '‹' }
+        },
+        drawCallback: function () {
+            var api = this.api();
+            var start = api.page.info().start;
+            api.rows({ page: 'current' }).every(function (rowIdx) {
+                $('td:first-child', this.node()).html(
+                    '<span class="sr-badge">' + (start + rowIdx + 1) + '</span>'
+                );
+            });
+        }
+    });
+
+    /* Remove the label text wrapper so the search input stands alone */
+    $('div.dataTables_filter label').contents().filter(function () {
+        return this.nodeType === 3;
+    }).remove();
+});
+</script>
+{% endblock %}
