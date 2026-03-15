@@ -21,7 +21,6 @@
   .gps-attendance-page .btn-mark:disabled { box-shadow: none; }
   .gps-attendance-page .step-num { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; font-size: 0.7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; }
   .gps-attendance-page .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.4rem; }
-.gps-attendance-page.auto-locking .field-row { opacity: 0; pointer-events: none; }
 </style>
 
 <div class="container-fluid gps-attendance-page">
@@ -315,6 +314,7 @@
       var id = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
       setTimeout(function() { projectSelect.value = id; onProjectChange(); }, 0);
     });
+    autoLockScopeIfSingle();
   }
   if (typeof $ !== 'undefined' && $.fn.select2) {
     $(document).ready(attachDistrictProjectHandlers);
@@ -322,72 +322,54 @@
     attachDistrictProjectHandlers();
   }
 
-  // Auto-select & lock sirf single-scope user (1 district, 1 project, 1 vehicle, 1 shift)
+  // Auto-select & lock: DOM-count based (1 real option = auto-select & disable)
   function autoLockScopeIfSingle() {
-    var page = document.querySelector('.gps-attendance-page');
-    var dIds = userScope.districts || [];
-    var pIds = userScope.projects || [];
-    var vIds = userScope.vehicles || [];
-    var sVals = userScope.shifts || [];
-    var hasSingle = dIds.length === 1 && pIds.length === 1 && vIds.length === 1 && sVals.length === 1;
-    if (!hasSingle) {
-      // Multi-scope users ke liye kabhi bhi auto-locking class active na rahe
-      if (page) page.classList.remove('auto-locking');
-      return;
+    function singleReal(sel) {
+      var real = [];
+      for (var i = 0; i < sel.options.length; i++) { if (sel.options[i].value) real.push(sel.options[i]); }
+      return real.length === 1 ? real[0] : null;
     }
-    if (page) page.classList.add('auto-locking');
-    // 1) District
-    var dId = String(dIds[0]);
-    districtSelect.value = dId;
+    var dOpt = singleReal(districtSelect);
+    if (!dOpt) return;
+    districtSelect.value = dOpt.value;
     districtSelect.disabled = true;
-    if (typeof $ !== 'undefined' && $.fn.select2) {
-      $(districtSelect).trigger('change.select2');
-    }
-    // 2) Project (load via API then select)
-    fetch('{{ url_for("api_attendance_projects") }}?district_id=' + encodeURIComponent(dId))
+    if (typeof $ !== 'undefined' && $.fn.select2) { $(districtSelect).val(dOpt.value).trigger('change.select2'); }
+    fetch('{{ url_for("api_attendance_projects") }}?district_id=' + encodeURIComponent(dOpt.value))
       .then(function(r) { return r.json(); })
       .then(function(projects) {
         projectSelect.innerHTML = '<option value="">-- Select Project --</option>';
-        projects.forEach(function(p) {
-          var o = document.createElement('option');
-          o.value = p.id;
-          o.textContent = p.name;
-          projectSelect.appendChild(o);
-        });
-        projectSelect.value = String(pIds[0] || '');
-        projectSelect.disabled = true;
+        projects.forEach(function(p) { var o = document.createElement('option'); o.value = p.id; o.textContent = p.name; projectSelect.appendChild(o); });
         initSelect2For(projectSelect, 'Search project...');
-        // 3) Vehicles
-        var projId = projectSelect.value;
-        return fetch('{{ url_for("api_attendance_vehicles") }}?project_id=' + encodeURIComponent(projId) + '&district_id=' + encodeURIComponent(dId));
+        var pOpt = singleReal(projectSelect);
+        if (!pOpt) return;
+        projectSelect.value = pOpt.value;
+        projectSelect.disabled = true;
+        if (typeof $ !== 'undefined' && $.fn.select2) { $(projectSelect).val(pOpt.value).trigger('change.select2'); }
+        return fetch('{{ url_for("api_attendance_vehicles") }}?project_id=' + encodeURIComponent(pOpt.value) + '&district_id=' + encodeURIComponent(dOpt.value));
       })
-      .then(function(r) { return r.json(); })
+      .then(function(r) { if (r && r.json) return r.json(); })
       .then(function(vehicles) {
+        if (!vehicles) return;
         vehiclesData = vehicles;
         vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
-        vehicles.forEach(function(v, idx) {
-          var o = document.createElement('option');
-          o.value = v.id;
-          o.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
-          o.dataset.index = String(idx);
-          vehicleSelect.appendChild(o);
-        });
-        vehicleSelect.value = String(vIds[0] || '');
-        vehicleSelect.disabled = true;
+        vehicles.forEach(function(v, idx) { var o = document.createElement('option'); o.value = v.id; o.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : ''); o.dataset.index = String(idx); vehicleSelect.appendChild(o); });
         initSelect2For(vehicleSelect, 'Search vehicle...');
-        // 4) Shift pehle set karein taa ke drivers load ho saken
-        shiftSelect.value = String(sVals[0] || '');
-        shiftSelect.disabled = true;
-        if (typeof $ !== 'undefined' && $.fn.select2) {
-          $(shiftSelect).trigger('change.select2');
+        var vOpt = singleReal(vehicleSelect);
+        if (!vOpt) return;
+        vehicleSelect.value = vOpt.value;
+        vehicleSelect.disabled = true;
+        if (typeof $ !== 'undefined' && $.fn.select2) { $(vehicleSelect).val(vOpt.value).trigger('change.select2'); }
+        shiftSelect.disabled = false;
+        initSelect2For(shiftSelect, 'Search shift...');
+        var sOpt = singleReal(shiftSelect);
+        if (sOpt) {
+          shiftSelect.value = sOpt.value;
+          shiftSelect.disabled = true;
+          if (typeof $ !== 'undefined' && $.fn.select2) { $(shiftSelect).val(sOpt.value).trigger('change.select2'); }
         }
-        // Ab vehicle change handler se parking + driver dono load honge
         onVehicleChange();
-        if (page) page.classList.remove('auto-locking');
       })
-      .catch(function() {
-        if (page) page.classList.remove('auto-locking');
-      });
+      .catch(function() {});
   }
 
   function onProjectChange() {
@@ -474,9 +456,8 @@
       if (!driverSelect.value && arr.length > 0) {
         driverSelect.value = String(arr[0].id);
       }
-      // Agar user ka scope single hai to driver dropdown ko bhi lock kar dein
-      var isSingleScope = (userScope.projects.length === 1 && userScope.districts.length === 1 && userScope.vehicles.length === 1 && userScope.shifts.length === 1);
-      if (isSingleScope) {
+      var isAutoLocked = districtSelect.disabled && projectSelect.disabled && vehicleSelect.disabled;
+      if (isAutoLocked) {
         driverSelect.disabled = true;
       }
       initSelect2For(driverSelect, 'Search driver...');
@@ -538,8 +519,6 @@
 
   btnRetryLocation.addEventListener('click', fetchLocation);
   fetch('{{ url_for("api_attendance_time_window") }}').then(function(r) { return r.json(); }).then(function(data) { timeWindow = data || {}; }).catch(function() { timeWindow = {}; });
-  // Initialize auto-lock after DOM setup
-  autoLockScopeIfSingle();
 
   function stopCamera() {
     if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
