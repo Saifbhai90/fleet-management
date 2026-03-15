@@ -257,9 +257,6 @@
         .capacitor-native .mobile-bottom-nav { display: flex; align-items: stretch; }
         /* On native: nav stays on top of drawers/overlays */
         .capacitor-native .mobile-bottom-nav { z-index: 1065 !important; }
-        /* Overlay must not cover the bottom nav on native */
-        .capacitor-native #moreDrawerOverlay,
-        .capacitor-native #attendSheetOverlay { bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important; }
         .capacitor-native .main-content {
             padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
         }
@@ -379,10 +376,7 @@
             }
         }
 
-        /* ─── Capacitor: More drawer opens ABOVE bottom nav, not behind it ─── */
-        .capacitor-native #moreDrawerPanel {
-            bottom: calc(60px + env(safe-area-inset-bottom, 0px));
-        }
+        /* ─── Capacitor: nav (z-index:1065) sits above the drawer overlay, drawer at bottom:0 ─── */
 
         /* ─── overscroll: disable browser native pull-to-refresh everywhere ─── */
         body { overscroll-behavior-y: none; }

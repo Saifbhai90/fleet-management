@@ -107,8 +107,8 @@
   .perm-item .form-check-input { width: 22px; height: 22px; }
   .perm-item .form-check-label { font-size: 0.85rem; }
   .section-header { gap: 6px; }
-  /* 2 columns on mobile */
-  .perm-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 5px; }
+  /* Single column on mobile for clean readable list */
+  .perm-grid { grid-template-columns: 1fr; gap: 4px; }
 }
 </style>
 {% endblock %}

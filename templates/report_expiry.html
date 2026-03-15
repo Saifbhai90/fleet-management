@@ -14,6 +14,43 @@
   .expiry-no-data-row td:not(:first-child) {
     border: none !important;
   }
+
+  /* ─── Mobile: card-style rows, no horizontal scroll ─── */
+  @media (max-width: 767.98px) {
+    .expiry-table-wrap { overflow-x: hidden !important; }
+    #expiryTable { display: block; width: 100% !important; }
+    #expiryTable thead { display: none; }
+    #expiryTable tbody { display: block; }
+    #expiryTable tbody tr {
+      display: block;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.09);
+      margin-bottom: 10px;
+      padding: 10px 14px;
+      border: 1px solid #e8edf2;
+    }
+    #expiryTable tbody td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border: none !important;
+      font-size: 0.82rem;
+      border-bottom: 1px solid #f1f5f9 !important;
+    }
+    #expiryTable tbody td:last-child { border-bottom: none !important; }
+    #expiryTable tbody td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      color: #64748b;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+      margin-right: 8px;
+    }
+  }
 </style>
 
 <div class="container-fluid">
@@ -83,7 +120,7 @@
   <p class="text-muted">Showing drivers with license or CNIC <strong>already expired</strong> or expiring in the next <strong>{{ days }}</strong> days.</p>
   {% endif %}
   <div class="card shadow border-0">
-    <div class="table-responsive">
+    <div class="table-responsive expiry-table-wrap">
       <table class="table table-hover align-middle mb-0" id="expiryTable">
         <thead class="table-light">
           <tr>
@@ -103,24 +140,24 @@
           {% for row in expiring %}
           {% set d = row.driver %}
           <tr>
-            <td class="ps-4">{{ loop.index }}</td>
-            <td>{{ d.project.name if d.project else '-' }}</td>
-            <td>{{ d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else '-') }}</td>
-            <td>
+            <td class="ps-4" data-label="#">{{ loop.index }}</td>
+            <td data-label="Project">{{ d.project.name if d.project else '-' }}</td>
+            <td data-label="District">{{ d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else '-') }}</td>
+            <td data-label="Vehicle">
               {% if d.vehicle %}
                 {{ d.vehicle.vehicle_no }}{% if d.vehicle.vehicle_type %} ({{ d.vehicle.vehicle_type }}){% endif %}
               {% else %}
                 <span class="text-muted">-</span>
               {% endif %}
             </td>
-            <td class="fw-medium">
+            <td data-label="Driver" class="fw-medium">
               {{ d.name }}
               <small class="text-muted">({{ d.driver_id }})</small>
             </td>
-            <td>{{ d.shift or '-' }}</td>
-            <td>{{ d.phone1|phone_fmt }}</td>
-            <td>{{ d.cnic_no|cnic_fmt }}</td>
-            <td>
+            <td data-label="Shift">{{ d.shift or '-' }}</td>
+            <td data-label="Phone">{{ d.phone1|phone_fmt }}</td>
+            <td data-label="CNIC">{{ d.cnic_no|cnic_fmt }}</td>
+            <td data-label="CNIC Expiry">
               {% if row.cnic_expired %}
                 <span class="badge bg-danger">{{ d.cnic_expiry_date|ddmmyyyy }} (Expired)</span>
               {% elif row.cnic_soon %}
@@ -129,7 +166,7 @@
                 {{ d.cnic_expiry_date|ddmmyyyy }}
               {% endif %}
             </td>
-            <td>
+            <td data-label="License Expiry">
               {% if row.license_expired %}
                 <span class="badge bg-danger">{{ d.license_expiry_date|ddmmyyyy }} (Expired)</span>
               {% elif row.license_soon %}
@@ -169,6 +206,8 @@
 
 <script>
   $(document).ready(function () {
+    // Skip DataTables on mobile — native card CSS handles the layout
+    if (window.innerWidth < 768) return;
     var table = $('#expiryTable').DataTable({
       pageLength: 50,
       searching: false,
