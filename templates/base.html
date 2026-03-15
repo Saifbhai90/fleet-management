@@ -469,7 +469,42 @@
             transform: translateX(0) !important;
         }
 
-        /* ── Main content: FIXED scroll container (native momentum scroll) ── */
+        /* ── Native App Shell: single fixed container; nav is a flex child — never scrolls ── */
+        #appNativeShell {
+            position: fixed !important;
+            top: calc(var(--safe-top, 28px) + var(--nav-h, 56px)) !important;
+            left: 0 !important; right: 0 !important; bottom: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+            z-index: 1;
+        }
+        /* Inside the shell: main-content fills all space and scrolls */
+        #appNativeShell .main-content {
+            position: static !important;
+            top: auto !important; left: auto !important;
+            right: auto !important; bottom: auto !important;
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            height: auto !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-y: contain !important;
+            padding: 16px 14px calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+            background: #f1f5f9 !important;
+            margin: 0 !important;
+        }
+        /* Inside the shell: bottom-nav is locked to the bottom as a flex sibling */
+        #appNativeShell .mobile-bottom-nav {
+            position: static !important;
+            bottom: auto !important;
+            flex: 0 0 auto !important;
+            z-index: auto !important;
+            display: flex !important;
+            align-items: stretch !important;
+        }
+
+        /* ── Fallback: FIXED scroll container for Capacitor before shell JS runs ── */
         .capacitor-native .main-content {
             position: fixed !important;
             top: calc(var(--safe-top) + var(--nav-h)) !important;
@@ -478,7 +513,6 @@
             margin: 0 !important;
             padding: 16px 14px 24px !important;
             background: #f1f5f9 !important;
-            /* Momentum scroll — feels 100% native */
             overflow-y: scroll !important;
             -webkit-overflow-scrolling: touch !important;
             overscroll-behavior-y: contain !important;
@@ -2485,7 +2519,9 @@
             for (var i = 0; i < _blocked.length; i++) {
                 if (t.closest && t.closest(_blocked[i])) return;
             }
-            if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; triggered = false; }
+            var _mc = document.getElementById('mainContent');
+            var _top = _mc ? _mc.scrollTop : window.scrollY;
+            if (_top === 0) { startY = e.touches[0].clientY; pulling = true; triggered = false; }
         }, { passive: true });
         document.addEventListener('touchmove', function(e) {
             if (!pulling) return;
@@ -2611,6 +2647,21 @@
     // ── Native App UI Enhancements (Capacitor context) ────────────────────
     if (window.FleetBridge && window.FleetBridge.isNative) {
         document.addEventListener('DOMContentLoaded', function() {
+
+            // 0. Build Native App Shell ─────────────────────────────────────
+            //    Move #mainContent + #mobileBottomNav into a flex-column shell.
+            //    The shell is the ONLY position:fixed element; the bottom nav
+            //    is a plain flex child and can NEVER scroll with the content.
+            (function() {
+                var mc   = document.getElementById('mainContent');
+                var nav  = document.getElementById('mobileBottomNav');
+                if (!mc || !nav) return;
+                var shell = document.createElement('div');
+                shell.id  = 'appNativeShell';
+                mc.parentNode.insertBefore(shell, mc);
+                shell.appendChild(mc);
+                shell.appendChild(nav);
+            })();
 
             // 1. Hide web-only elements
             var guideWrap = document.getElementById('guideChatbotWrap');
