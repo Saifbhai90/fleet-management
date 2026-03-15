@@ -39,23 +39,29 @@
           <div class="row g-2">
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">1</span>District</label>
-              <select id="districtSelect" class="form-select form-select-sm select2-enable" data-placeholder="Search district...">
+              <select id="districtSelect" class="form-select form-select-sm select2-enable" {% if auto_district_id %}disabled{% endif %} data-placeholder="Search district...">
                 <option value="">-- Select District --</option>
                 {% for d in districts %}
-                <option value="{{ d.id }}">{{ d.name }}</option>
+                <option value="{{ d.id }}" {% if d.id == auto_district_id %}selected{% endif %}>{{ d.name }}</option>
                 {% endfor %}
               </select>
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">2</span>Project</label>
-              <select id="projectSelect" class="form-select form-select-sm select2-enable" disabled data-placeholder="Search project...">
+              <select id="projectSelect" class="form-select form-select-sm select2-enable" {% if not auto_district_id %}disabled{% endif %} {% if auto_project_id %}disabled{% endif %} data-placeholder="Search project...">
                 <option value="">-- Select Project --</option>
+                {% for p in pre_projects %}
+                <option value="{{ p.id }}" {% if p.id == auto_project_id %}selected{% endif %}>{{ p.name }}</option>
+                {% endfor %}
               </select>
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">3</span>Vehicle</label>
-              <select id="vehicleSelect" class="form-select form-select-sm select2-enable" disabled data-placeholder="Search vehicle...">
+              <select id="vehicleSelect" class="form-select form-select-sm select2-enable" {% if not auto_project_id %}disabled{% endif %} {% if auto_vehicle_id %}disabled{% endif %} data-placeholder="Search vehicle...">
                 <option value="">-- Select Vehicle --</option>
+                {% for v in pre_vehicles_data %}
+                <option value="{{ v.id }}" {% if v.id == auto_vehicle_id %}selected{% endif %} data-index="{{ loop.index0 }}">{{ v.vehicle_no }}{% if v.vehicle_type %} ({{ v.vehicle_type }}){% endif %}</option>
+                {% endfor %}
               </select>
             </div>
             <div class="col-md-6 field-row">
@@ -70,16 +76,15 @@
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">5</span>Shift</label>
-              {% set allowed_shifts = session.get('allowed_shifts') or [] %}
-              <select id="shiftSelect" class="form-select form-select-sm select2-enable" disabled data-placeholder="Search shift...">
+              <select id="shiftSelect" class="form-select form-select-sm select2-enable" {% if not auto_vehicle_id %}disabled{% endif %} {% if auto_shift %}disabled{% endif %} data-placeholder="Search shift...">
                 <option value="">-- Select Shift --</option>
-                {% if not allowed_shifts %}
-                  <option value="Morning">Morning</option>
-                  <option value="Night">Night</option>
-                {% else %}
-                  {% for s in allowed_shifts %}
-                  <option value="{{ s }}">{{ s }}</option>
+                {% if scope_shifts_list %}
+                  {% for s in scope_shifts_list %}
+                  <option value="{{ s }}" {% if s == auto_shift %}selected{% endif %}>{{ s }}</option>
                   {% endfor %}
+                {% else %}
+                  <option value="Morning" {% if auto_shift == 'Morning' %}selected{% endif %}>Morning</option>
+                  <option value="Night" {% if auto_shift == 'Night' %}selected{% endif %}>Night</option>
                 {% endif %}
               </select>
             </div>
@@ -193,14 +198,9 @@
   var currentPosition = null;
   var parkingCoords = null;
   var stream = null;
-  var vehiclesData = [];
+  var vehiclesData = {{ pre_vehicles_data | tojson }};
+  var serverAutoShift = {{ auto_shift | tojson }};
   var timeWindow = {};
-  var userScope = {
-    projects: {{ (session.get('allowed_projects') or []) | tojson }},
-    districts: {{ (session.get('allowed_districts') or []) | tojson }},
-    vehicles: {{ (session.get('allowed_vehicles') or []) | tojson }},
-    shifts: {{ (session.get('allowed_shifts') or []) | tojson }}
-  };
 
   function initSelect2For(el, placeholder) {
     if (!el || typeof $ === 'undefined' || !$.fn.select2) return;
@@ -314,62 +314,12 @@
       var id = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
       setTimeout(function() { projectSelect.value = id; onProjectChange(); }, 0);
     });
-    autoLockScopeIfSingle();
+    if (vehicleSelect.value) { setTimeout(function() { onVehicleChange(); }, 0); }
   }
   if (typeof $ !== 'undefined' && $.fn.select2) {
     $(document).ready(attachDistrictProjectHandlers);
   } else {
     attachDistrictProjectHandlers();
-  }
-
-  // Auto-select & lock: DOM-count based (1 real option = auto-select & disable)
-  function autoLockScopeIfSingle() {
-    function singleReal(sel) {
-      var real = [];
-      for (var i = 0; i < sel.options.length; i++) { if (sel.options[i].value) real.push(sel.options[i]); }
-      return real.length === 1 ? real[0] : null;
-    }
-    var dOpt = singleReal(districtSelect);
-    if (!dOpt) return;
-    districtSelect.value = dOpt.value;
-    districtSelect.disabled = true;
-    if (typeof $ !== 'undefined' && $.fn.select2) { $(districtSelect).val(dOpt.value).trigger('change.select2'); }
-    fetch('{{ url_for("api_attendance_projects") }}?district_id=' + encodeURIComponent(dOpt.value))
-      .then(function(r) { return r.json(); })
-      .then(function(projects) {
-        projectSelect.innerHTML = '<option value="">-- Select Project --</option>';
-        projects.forEach(function(p) { var o = document.createElement('option'); o.value = p.id; o.textContent = p.name; projectSelect.appendChild(o); });
-        initSelect2For(projectSelect, 'Search project...');
-        var pOpt = singleReal(projectSelect);
-        if (!pOpt) return;
-        projectSelect.value = pOpt.value;
-        projectSelect.disabled = true;
-        if (typeof $ !== 'undefined' && $.fn.select2) { $(projectSelect).val(pOpt.value).trigger('change.select2'); }
-        return fetch('{{ url_for("api_attendance_vehicles") }}?project_id=' + encodeURIComponent(pOpt.value) + '&district_id=' + encodeURIComponent(dOpt.value));
-      })
-      .then(function(r) { if (r && r.json) return r.json(); })
-      .then(function(vehicles) {
-        if (!vehicles) return;
-        vehiclesData = vehicles;
-        vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
-        vehicles.forEach(function(v, idx) { var o = document.createElement('option'); o.value = v.id; o.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : ''); o.dataset.index = String(idx); vehicleSelect.appendChild(o); });
-        initSelect2For(vehicleSelect, 'Search vehicle...');
-        var vOpt = singleReal(vehicleSelect);
-        if (!vOpt) return;
-        vehicleSelect.value = vOpt.value;
-        vehicleSelect.disabled = true;
-        if (typeof $ !== 'undefined' && $.fn.select2) { $(vehicleSelect).val(vOpt.value).trigger('change.select2'); }
-        shiftSelect.disabled = false;
-        initSelect2For(shiftSelect, 'Search shift...');
-        var sOpt = singleReal(shiftSelect);
-        if (sOpt) {
-          shiftSelect.value = sOpt.value;
-          shiftSelect.disabled = true;
-          if (typeof $ !== 'undefined' && $.fn.select2) { $(shiftSelect).val(sOpt.value).trigger('change.select2'); }
-        }
-        onVehicleChange();
-      })
-      .catch(function() {});
   }
 
   function onProjectChange() {
@@ -419,6 +369,10 @@
       parkingLat.value = v.latitude; parkingLng.value = v.longitude;
       parkingCoords = { lat: v.latitude, lng: v.longitude };
     } else { parkingNotSetMessage.classList.remove('d-none'); }
+    if (!serverAutoShift) {
+      shiftSelect.disabled = false;
+      initSelect2For(shiftSelect, 'Search shift...');
+    }
     updateDistanceUI();
     loadDrivers();
   }

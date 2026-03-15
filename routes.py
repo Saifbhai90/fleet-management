@@ -8982,13 +8982,47 @@ def api_attendance_has_gps_checkin():
 @app.route('/driver-attendance/checkin', methods=['GET', 'POST'])
 def driver_attendance_checkin():
     """Geofenced check-in: District → Project → Vehicle → Parking (auto) → Shift → Driver. Then location + selfie."""
-    districts_query = District.query.join(project_district, District.id == project_district.c.district_id)
     scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    districts_query = District.query.join(project_district, District.id == project_district.c.district_id)
     if scope_districts:
         districts_query = districts_query.filter(District.id.in_(scope_districts))
     elif scope_projects:
         districts_query = districts_query.filter(project_district.c.project_id.in_(scope_projects))
     districts = districts_query.distinct().order_by(District.name).all()
+
+    # ── Server-side auto-selection for single-scope users ─────────────────────
+    auto_district_id = districts[0].id if len(districts) == 1 else None
+    pre_projects = []
+    auto_project_id = None
+    if auto_district_id:
+        pq = Project.query.join(project_district).filter(project_district.c.district_id == auto_district_id)
+        if scope_projects:
+            pq = pq.filter(Project.id.in_(scope_projects))
+        pre_projects = pq.distinct().order_by(Project.name).all()
+        if len(pre_projects) == 1:
+            auto_project_id = pre_projects[0].id
+    pre_vehicles_data = []
+    auto_vehicle_id = None
+    if auto_project_id:
+        vq = Vehicle.query.filter(Vehicle.project_id == auto_project_id, Vehicle.district_id == auto_district_id)
+        if scope_vehicles:
+            vq = vq.filter(Vehicle.id.in_(scope_vehicles))
+        for v in vq.order_by(Vehicle.vehicle_no).all():
+            ps = v.parking_station
+            pre_vehicles_data.append({
+                'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or '',
+                'parking_station_id': v.parking_station_id,
+                'parking_name': ps.name if ps else '',
+                'latitude': float(ps.latitude) if ps and ps.latitude is not None else None,
+                'longitude': float(ps.longitude) if ps and ps.longitude is not None else None,
+                'driver_id': v.driver_id,
+            })
+        if len(pre_vehicles_data) == 1:
+            auto_vehicle_id = pre_vehicles_data[0]['id']
+    scope_shifts_list = sorted(scope_shifts) if scope_shifts else []
+    auto_shift = scope_shifts_list[0] if len(scope_shifts_list) == 1 else None
+    # ─────────────────────────────────────────────────────────────────────────
+
     today = _attendance_local_date()
     if request.method == 'POST':
         driver_id = request.form.get('driver_id', type=int)
@@ -9085,13 +9119,58 @@ def driver_attendance_checkin():
         except Exception as e:
             db.session.rollback()
             flash(f'Error saving: {str(e)}', 'danger')
-    return render_template('driver_attendance_checkin.html', districts=districts, drivers=[], parking_stations=[])
+    return render_template('driver_attendance_checkin.html',
+        districts=districts, drivers=[], parking_stations=[],
+        pre_projects=pre_projects, pre_vehicles_data=pre_vehicles_data,
+        auto_district_id=auto_district_id, auto_project_id=auto_project_id,
+        auto_vehicle_id=auto_vehicle_id, auto_shift=auto_shift,
+        scope_shifts_list=scope_shifts_list)
 
 
 @app.route('/driver-attendance/checkout', methods=['GET', 'POST'])
 def driver_attendance_checkout():
     """Geofenced check-out: same flow as check-in (District → Project → Vehicle → Parking → Shift → Driver). Location + selfie, then save check_out time and coords."""
-    districts = District.query.join(project_district, District.id == project_district.c.district_id).distinct().order_by(District.name).all()
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    districts_q = District.query.join(project_district, District.id == project_district.c.district_id)
+    if scope_districts:
+        districts_q = districts_q.filter(District.id.in_(scope_districts))
+    elif scope_projects:
+        districts_q = districts_q.filter(project_district.c.project_id.in_(scope_projects))
+    districts = districts_q.distinct().order_by(District.name).all()
+
+    # ── Server-side auto-selection for single-scope users ─────────────────────
+    auto_district_id = districts[0].id if len(districts) == 1 else None
+    pre_projects = []
+    auto_project_id = None
+    if auto_district_id:
+        pq = Project.query.join(project_district).filter(project_district.c.district_id == auto_district_id)
+        if scope_projects:
+            pq = pq.filter(Project.id.in_(scope_projects))
+        pre_projects = pq.distinct().order_by(Project.name).all()
+        if len(pre_projects) == 1:
+            auto_project_id = pre_projects[0].id
+    pre_vehicles_data = []
+    auto_vehicle_id = None
+    if auto_project_id:
+        vq = Vehicle.query.filter(Vehicle.project_id == auto_project_id, Vehicle.district_id == auto_district_id)
+        if scope_vehicles:
+            vq = vq.filter(Vehicle.id.in_(scope_vehicles))
+        for v in vq.order_by(Vehicle.vehicle_no).all():
+            ps = v.parking_station
+            pre_vehicles_data.append({
+                'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or '',
+                'parking_station_id': v.parking_station_id,
+                'parking_name': ps.name if ps else '',
+                'latitude': float(ps.latitude) if ps and ps.latitude is not None else None,
+                'longitude': float(ps.longitude) if ps and ps.longitude is not None else None,
+                'driver_id': v.driver_id,
+            })
+        if len(pre_vehicles_data) == 1:
+            auto_vehicle_id = pre_vehicles_data[0]['id']
+    scope_shifts_list = sorted(scope_shifts) if scope_shifts else []
+    auto_shift = scope_shifts_list[0] if len(scope_shifts_list) == 1 else None
+    # ─────────────────────────────────────────────────────────────────────────
+
     today = _attendance_local_date()
     if request.method == 'POST':
         driver_id = request.form.get('driver_id', type=int)
@@ -9194,7 +9273,12 @@ def driver_attendance_checkout():
         except Exception as e:
             db.session.rollback()
             flash(f'Error saving: {str(e)}', 'danger')
-    return render_template('driver_attendance_checkout.html', districts=districts, drivers=[], parking_stations=[])
+    return render_template('driver_attendance_checkout.html',
+        districts=districts, drivers=[], parking_stations=[],
+        pre_projects=pre_projects, pre_vehicles_data=pre_vehicles_data,
+        auto_district_id=auto_district_id, auto_project_id=auto_project_id,
+        auto_vehicle_id=auto_vehicle_id, auto_shift=auto_shift,
+        scope_shifts_list=scope_shifts_list)
 
 
 @app.route('/driver-attendance/report', methods=['GET', 'POST'])
