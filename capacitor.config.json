@@ -13,7 +13,8 @@
     "webContentsDebuggingEnabled": false,
     "overScrollMode": "never",
     "backgroundColor": "#ffffff",
-    "initialFocus": false
+    "initialFocus": false,
+    "androidEdgeToEdge": true
   },
   "ios": {
     "contentInset": "always",

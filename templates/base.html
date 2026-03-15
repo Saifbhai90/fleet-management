@@ -247,14 +247,19 @@
             bottom: 0;
             left: 0;
             right: 0;
-            height: 60px;
+            height: calc(60px + env(safe-area-inset-bottom, 0px));
             background: linear-gradient(180deg, #1e293b, #0f172a);
             border-top: 1px solid rgba(255,255,255,0.1);
             z-index: 1045;
-            padding-bottom: env(safe-area-inset-bottom, 0);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
             box-shadow: 0 -4px 16px rgba(0,0,0,0.25);
         }
         .capacitor-native .mobile-bottom-nav { display: flex; align-items: stretch; }
+        /* On native: nav stays on top of drawers/overlays */
+        .capacitor-native .mobile-bottom-nav { z-index: 1065 !important; }
+        /* Overlay must not cover the bottom nav on native */
+        .capacitor-native #moreDrawerOverlay,
+        .capacitor-native #attendSheetOverlay { bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important; }
         .capacitor-native .main-content {
             padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
         }
@@ -1861,7 +1866,7 @@
 <!-- FAB Speed-Dial -->
 <div class="mobile-fab-wrap" id="mobileFabWrap">
     <div class="fab-speed-dial" id="fabDialMenu">
-        {% if can_see_page('drivers') %}
+        {% if can_see_page('drivers_add') %}
         <div class="fab-dial-item">
             <span class="fab-dial-label">Add Driver</span>
             <a href="{{ url_for('driver_form') }}" class="fab-dial-btn">
@@ -1869,7 +1874,7 @@
             </a>
         </div>
         {% endif %}
-        {% if can_see_page('vehicles') %}
+        {% if can_see_page('vehicles_add') %}
         <div class="fab-dial-item">
             <span class="fab-dial-label">Add Vehicle</span>
             <a href="{{ url_for('vehicle_form') }}" class="fab-dial-btn">
