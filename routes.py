@@ -992,7 +992,22 @@ def biometric_token():
         f"{user.username}:biometric-v1".encode('utf-8'),
         hashlib.sha256
     ).hexdigest()
-    return jsonify({'ok': True, 'token': token, 'username': user.username})
+    display_name = (user.full_name or user.username or '').strip()
+    return jsonify({'ok': True, 'token': token, 'username': user.username, 'display_name': display_name})
+
+
+@app.route('/auth/app-logout', methods=['POST'])
+def app_logout():
+    """Silent AJAX logout for mobile app auto-logout when app goes to background/closes."""
+    try:
+        log_id = session.get('login_log_id')
+        if log_id:
+            LoginLog.query.filter_by(id=log_id).update({'logout_at': datetime.utcnow()})
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+    session.clear()
+    return jsonify({'ok': True})
 
 
 @app.route('/auth/biometric-login', methods=['POST'])

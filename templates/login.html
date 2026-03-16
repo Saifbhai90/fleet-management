@@ -3,8 +3,31 @@
 {% block title %}Sign In — Fleet Manager{% endblock %}
 
 {% block content %}
-<div class="lp-section-title">Welcome back</div>
-<div class="lp-section-sub">Sign in to your Fleet Manager account</div>
+<!-- ── Banking-Style Biometric View (shown when biometric is enabled) ── -->
+<div id="bioLoginView" style="display:none;text-align:center;padding:4px 0;">
+  <div style="width:68px;height:68px;background:linear-gradient(135deg,rgba(37,99,235,0.1),rgba(59,130,246,0.05));border:1.5px solid rgba(37,99,235,0.18);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+    <i class="bi bi-person-fill" style="font-size:1.9rem;color:#2563eb;"></i>
+  </div>
+  <div style="font-size:1.1rem;font-weight:700;color:#0f172a;margin-bottom:3px;" id="bioDisplayName">User</div>
+  <div style="font-size:0.78rem;color:#94a3b8;margin-bottom:24px;">Touch the sensor to sign in</div>
+
+  <!-- Fingerprint button with pulse animation -->
+  <button type="button" id="bioThumbBtn"
+    style="width:90px;height:90px;border-radius:50%;border:2.5px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff,#dbeafe);display:flex;align-items:center;justify-content:center;margin:0 auto 22px;cursor:pointer;box-shadow:0 4px 20px rgba(37,99,235,0.22);transition:all 0.2s;"
+    class="bio-thumb-pulse">
+    <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+    </svg>
+  </button>
+
+  <div id="bioStatusMsg" style="font-size:0.8rem;color:#64748b;min-height:20px;margin-bottom:16px;">Waiting for fingerprint…</div>
+
+  <button type="button" id="bioUsePassword" style="background:none;border:none;color:#2563eb;font-size:0.88rem;font-weight:600;cursor:pointer;padding:6px 12px;text-decoration:underline;text-underline-offset:3px;display:block;margin:0 auto 8px;">Use password instead</button>
+  <button type="button" id="bioDiffAccount" style="background:none;border:none;color:#94a3b8;font-size:0.75rem;cursor:pointer;padding:4px 8px;">Sign in as different account</button>
+</div>
+
+<div class="lp-section-title" id="loginTitle">Welcome back</div>
+<div class="lp-section-sub" id="loginSubtitle">Sign in to your Fleet Manager account</div>
 
 <form method="POST" novalidate autocomplete="off" id="loginForm">
   {{ form.hidden_tag() }}
@@ -47,17 +70,6 @@
     <i class="bi bi-arrow-right-circle-fill lp-btn-text" style="font-size:1.1rem;"></i>
   </button>
 
-  <!-- Biometric Login (native only) -->
-  <div id="bioLoginWrap" style="display:none;">
-    <div class="lp-bio-divider"><span>OR</span></div>
-    <button type="button" id="bioLoginBtn" class="lp-btn-bio">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
-      </svg>
-      Sign in with Biometrics
-    </button>
-    <p class="lp-bio-hint">Touch ID &nbsp;/&nbsp; Face ID</p>
-  </div>
 
 </form>
 
@@ -102,99 +114,144 @@
   });
 })();
 
-/* ── Biometric Login ──────────────────────────────────────────────── */
+/* ── Banking-Style Biometric Login ───────────────────────────────── */
 (function() {
   if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
-
-  var bioWrap   = document.getElementById('bioLoginWrap');
-  var bioBtn    = document.getElementById('bioLoginBtn');
-  var loginForm = document.querySelector('form');
 
   var BIO_KEY   = 'fleet_bio_enabled';
   var TOKEN_KEY = 'fleet_bio_token';
   var USER_KEY  = 'fleet_bio_user';
+  var NAME_KEY  = 'fleet_bio_name';
 
-  var isEnabled = localStorage.getItem(BIO_KEY) === '1';
+  var isEnabled   = localStorage.getItem(BIO_KEY) === '1';
   var storedToken = localStorage.getItem(TOKEN_KEY);
   var storedUser  = localStorage.getItem(USER_KEY);
-  var bioPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
+  var storedName  = localStorage.getItem(NAME_KEY) || storedUser || 'User';
+  var bioPlugin   = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
 
-  /* Show fingerprint button if token + user are stored and hardware is available */
-  if (isEnabled && storedToken && storedUser && bioPlugin && bioWrap) {
-    bioPlugin.checkBiometry().then(function(info) {
-      var avail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
-      var code  = info && (info.code || info.strongCode || '');
-      if (avail) {
-        bioWrap.style.display = 'block';
-      } else if (code === 'biometryNotEnrolled' || String(code) === '11') {
-        /* Hardware exists but no fingerprints enrolled — inform the user */
-        if (window.FleetBridge && window.FleetBridge.showPermissionAlert) {
-          window.FleetBridge.showPermissionAlert('Biometrics Not Set Up',
-            'No fingerprints are enrolled on this device. Go to Settings \u2192 Security \u2192 Fingerprint to add one, then return to use biometric login.');
-        }
-      } else if (code === 'biometryNotPermitted' || String(code) === '12') {
-        /* Permission not granted yet — the authenticate() call will trigger the native dialog */
-        bioWrap.style.display = 'block';
-      }
-    }).catch(function() {
-      /* Graceful fallback: show button anyway and let authenticate() handle it */
-      bioWrap.style.display = 'block';
+  var bioView     = document.getElementById('bioLoginView');
+  var loginForm   = document.getElementById('loginForm');
+  var loginTitle  = document.getElementById('loginTitle');
+  var loginSub    = document.getElementById('loginSubtitle');
+  var bioName     = document.getElementById('bioDisplayName');
+  var bioThumbBtn = document.getElementById('bioThumbBtn');
+  var bioStatus   = document.getElementById('bioStatusMsg');
+  var bioUsePass  = document.getElementById('bioUsePassword');
+  var bioDiff     = document.getElementById('bioDiffAccount');
+
+  function showBioView() {
+    if (bioName)    bioName.textContent = storedName;
+    if (bioView)    bioView.style.display = 'block';
+    if (loginForm)  loginForm.style.display = 'none';
+    if (loginTitle) loginTitle.style.display = 'none';
+    if (loginSub)   loginSub.style.display = 'none';
+  }
+
+  function showPasswordForm() {
+    if (bioView)    bioView.style.display = 'none';
+    if (loginForm)  loginForm.style.display = 'block';
+    if (loginTitle) loginTitle.style.display = 'block';
+    if (loginSub)   loginSub.style.display = 'block';
+  }
+
+  /* ── Show biometric view on load if enabled ── */
+  if (isEnabled && storedToken && storedUser && bioPlugin) {
+    showBioView();
+    /* Auto-trigger after short delay */
+    setTimeout(function() { triggerBio(); }, 600);
+  }
+
+  /* ── Fingerprint button tap ── */
+  if (bioThumbBtn) {
+    bioThumbBtn.addEventListener('click', function() { triggerBio(); });
+  }
+
+  /* ── Use password instead ── */
+  if (bioUsePass) {
+    bioUsePass.addEventListener('click', function() { showPasswordForm(); });
+  }
+
+  /* ── Different account ── */
+  if (bioDiff) {
+    bioDiff.addEventListener('click', function() {
+      if (!confirm('This will remove saved biometric login. Continue?')) return;
+      localStorage.removeItem(BIO_KEY);
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem(NAME_KEY);
+      window.location.reload();
     });
   }
 
-  /* Biometric button tap */
-  if (bioBtn && bioPlugin) {
-    bioBtn.addEventListener('click', function() {
-      bioBtn.disabled = true;
-      bioBtn.style.opacity = '0.7';
+  function triggerBio() {
+    if (!bioPlugin) { showPasswordForm(); return; }
+    if (bioThumbBtn) bioThumbBtn.disabled = true;
+    if (bioStatus)   bioStatus.textContent = 'Authenticating…';
 
-      bioPlugin.authenticate({
-        reason: 'Verify your identity to sign in to Fleet Manager',
-        cancelTitle: 'Use Password',
-        allowDeviceCredential: false,
-        iosFallbackTitle: 'Use Password'
-      }).then(function() {
-        /* Hardware verified — POST token to server to get a session */
-        return fetch('/auth/biometric-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: storedUser, token: storedToken })
-        });
-      }).then(function(r) {
-        return r.json();
-      }).then(function(data) {
-        if (data.ok) {
-          window.location.href = data.redirect || '/dashboard';
-        } else {
-          /* Token rejected — clear and fall back to password */
-          localStorage.removeItem(BIO_KEY);
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(USER_KEY);
-          if (bioWrap) bioWrap.style.display = 'none';
-          bioBtn.disabled = false;
-          bioBtn.style.opacity = '1';
-        }
-      }).catch(function(err) {
-        bioBtn.disabled = false;
-        bioBtn.style.opacity = '1';
-        /* Handle biometric cancel/lockout */
-        if (err && (err.code === 'biometricLockout' || err.code === 'biometricPermanentLockout')) {
-          localStorage.removeItem(BIO_KEY);
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(USER_KEY);
-          if (bioWrap) bioWrap.style.display = 'none';
-        }
+    bioPlugin.authenticate({
+      reason: 'Verify your identity to sign in to Fleet Manager',
+      cancelTitle: 'Use Password',
+      allowDeviceCredential: false,
+      iosFallbackTitle: 'Use Password'
+    }).then(function() {
+      if (bioStatus) bioStatus.textContent = 'Verified! Signing in…';
+      return fetch('/auth/biometric-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: storedUser, token: storedToken })
       });
+    }).then(function(r) {
+      return r.json();
+    }).then(function(data) {
+      if (data.ok) {
+        window.location.href = data.redirect || '/dashboard';
+      } else {
+        localStorage.removeItem(BIO_KEY);
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        localStorage.removeItem(NAME_KEY);
+        showPasswordForm();
+        _lpToast('Biometric login failed. Please sign in with your password.', 'danger');
+      }
+    }).catch(function(err) {
+      if (bioThumbBtn) bioThumbBtn.disabled = false;
+      if (bioStatus)   bioStatus.textContent = 'Touch the sensor to sign in';
+      var code = (err && (err.code || err.message || ''));
+      if (code === 'biometricCanceled' || String(code) === '10') {
+        /* User tapped cancel — stay on bio view, show password option */
+        if (bioStatus) bioStatus.textContent = 'Cancelled. Tap again or use password.';
+      } else if (code === 'biometricLockout' || code === 'biometricPermanentLockout') {
+        localStorage.removeItem(BIO_KEY); localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY); localStorage.removeItem(NAME_KEY);
+        showPasswordForm();
+        _lpToast('Too many attempts. Please sign in with your password.', 'warning');
+      } else {
+        if (bioStatus) bioStatus.textContent = 'Biometric failed. Tap to retry.';
+      }
     });
   }
 
-  /* On manual form submit — flag dashboard to show "Enable Biometric?" prompt */
+  function _lpToast(msg, type) {
+    var wrap = document.getElementById('lpToastWrap');
+    if (!wrap) return;
+    var t = document.createElement('div');
+    t.className = 'lp-toast ' + (type || 'info');
+    var icon = type === 'danger' ? 'exclamation-circle-fill' : type === 'warning' ? 'exclamation-triangle-fill' : 'info-circle-fill';
+    t.innerHTML = '<i class="bi bi-' + icon + '" style="font-size:1rem;flex-shrink:0;"></i>' + msg;
+    wrap.appendChild(t);
+    setTimeout(function() {
+      t.style.transition = 'opacity 0.4s, transform 0.4s';
+      t.style.opacity = '0'; t.style.transform = 'translateY(-10px)';
+      setTimeout(function() { if (t.parentNode) t.remove(); }, 400);
+    }, 4500);
+  }
+
+  /* ── On manual form submit: flag base.html to show T&C + biometric setup ── */
   if (loginForm) {
     loginForm.addEventListener('submit', function() {
-      if (!isEnabled) sessionStorage.setItem('fleet_bio_prompt', '1');
+      if (!isEnabled) sessionStorage.setItem('fleet_bio_setup', '1');
     });
   }
 })();
 </script>
 {% endblock %}
-

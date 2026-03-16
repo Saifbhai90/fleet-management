@@ -66,7 +66,7 @@
             <i class="bi bi-chevron-right text-muted"></i>
           </a>
 
-          <!-- Biometric toggle (native only) -->
+          <!-- Biometric status (native only) -->
           <div id="bioSettingRow" style="display:none;" class="d-flex align-items-center gap-3 py-3 px-2 border-bottom">
             <div style="width:40px;height:40px;background:#f0fdf4;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -75,11 +75,9 @@
             </div>
             <div class="flex-grow-1">
               <div class="fw-semibold" style="font-size:0.95rem;">Biometric Login</div>
-              <small id="bioStatusText" class="text-muted">Touch ID / Face ID</small>
+              <small id="bioStatusText" class="text-muted">Checking&hellip;</small>
             </div>
-            <div class="form-check form-switch mb-0">
-              <input class="form-check-input" type="checkbox" id="bioToggle" style="width:44px;height:24px;cursor:pointer;">
-            </div>
+            <button id="bioDisableBtn" style="display:none;background:#fef2f2;color:#ef4444;border:1px solid #fecaca;border-radius:8px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">Disable</button>
           </div>
 
           <a href="{{ url_for('logout') }}"
@@ -107,51 +105,52 @@
 (function() {
   if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
 
-  var row     = document.getElementById('bioSettingRow');
-  var toggle  = document.getElementById('bioToggle');
-  var statTxt = document.getElementById('bioStatusText');
-  var BIO_KEY = 'fleet_bio_enabled';
+  var row        = document.getElementById('bioSettingRow');
+  var statTxt    = document.getElementById('bioStatusText');
+  var disableBtn = document.getElementById('bioDisableBtn');
+  var BIO_KEY    = 'fleet_bio_enabled';
+  var TOKEN_KEY  = 'fleet_bio_token';
+  var USER_KEY   = 'fleet_bio_user';
+  var NAME_KEY   = 'fleet_bio_name';
 
-  if (!row || !toggle) return;
+  if (!row) return;
 
   var bioPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
   if (!bioPlugin) return;
 
+  /* Show row if biometric hardware available */
   bioPlugin.checkBiometry().then(function(info) {
-    var avail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
-    if (!avail) return;
+    var hwAvail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
+    if (!hwAvail) return;
 
     row.style.display = 'flex';
     var enabled = localStorage.getItem(BIO_KEY) === '1';
-    toggle.checked = enabled;
-    statTxt.textContent = enabled ? 'Enabled — tap to disable' : 'Tap to enable Touch ID / Face ID';
 
-    toggle.addEventListener('change', function() {
-      if (toggle.checked) {
-        /* Fetch server token then save */
-        fetch('/auth/biometric-token', { credentials: 'same-origin' })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            if (d.ok) {
-              localStorage.setItem(BIO_KEY, '1');
-              localStorage.setItem('fleet_bio_token', d.token);
-              localStorage.setItem('fleet_bio_user', d.username);
-              statTxt.textContent = 'Enabled — tap to disable';
-            } else {
-              toggle.checked = false;
-              alert('Could not enable biometric login. Please try again.');
-            }
-          }).catch(function() {
-            toggle.checked = false;
-          });
-      } else {
-        localStorage.removeItem(BIO_KEY);
-        localStorage.removeItem('fleet_bio_token');
-        localStorage.removeItem('fleet_bio_user');
-        statTxt.textContent = 'Tap to enable Touch ID / Face ID';
-      }
+    if (enabled) {
+      var storedName = localStorage.getItem(NAME_KEY) || localStorage.getItem(USER_KEY) || '';
+      statTxt.textContent = storedName ? 'Enabled for ' + storedName : 'Enabled';
+      if (disableBtn) disableBtn.style.display = 'inline-block';
+    } else {
+      statTxt.textContent = 'Disabled — enable on Login screen';
+      if (disableBtn) disableBtn.style.display = 'none';
+    }
+  }).catch(function() {
+    row.style.display = 'flex';
+    statTxt.textContent = 'Biometric hardware unavailable';
+  });
+
+  /* Disable button */
+  if (disableBtn) {
+    disableBtn.addEventListener('click', function() {
+      if (!confirm('Disable biometric login? You will need to re-enable it from the Login screen.')) return;
+      localStorage.removeItem(BIO_KEY);
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem(NAME_KEY);
+      disableBtn.style.display = 'none';
+      if (statTxt) statTxt.textContent = 'Disabled — enable on Login screen';
     });
-  }).catch(function() {});
+  }
 })();
 </script>
 {% endblock %}

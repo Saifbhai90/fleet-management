@@ -314,6 +314,14 @@
     .lp-toast.warning { border-color: #f59e0b; color: #92400e; }
     .lp-toast.info    { border-color: #3b82f6; color: #1e40af; }
     .lp-toast.message { border-color: #f59e0b; color: #92400e; }
+
+    /* ── Fingerprint pulse animation ── */
+    @keyframes bioPulse {
+      0%,100% { box-shadow: 0 4px 20px rgba(37,99,235,0.22), 0 0 0 0 rgba(37,99,235,0.25); }
+      50%      { box-shadow: 0 4px 28px rgba(37,99,235,0.35), 0 0 0 12px rgba(37,99,235,0); }
+    }
+    .bio-thumb-pulse { animation: bioPulse 2s ease-in-out infinite; }
+    .bio-thumb-pulse:disabled { animation: none; opacity: 0.65; }
   </style>
 </head>
 <body>

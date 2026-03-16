@@ -1037,24 +1037,42 @@
     No internet connection — some features may not work
 </div>
 
-<!-- ── Biometric Enable Modal (first login prompt, native only) ── -->
-<div id="bioEnableModal" style="display:none;position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;">
-    <div style="background:#1e293b;border-radius:24px 24px 0 0;padding:28px 24px 36px;width:100%;max-width:480px;margin:0 auto;color:#f1f5f9;">
-        <div style="text-align:center;margin-bottom:20px;">
-            <div style="width:60px;height:60px;background:rgba(59,130,246,0.15);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
-                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<!-- ── Biometric T&C Setup Overlay (shown after first manual login on native) ── -->
+<div id="bioSetupOverlay" style="display:none;position:fixed;inset:0;z-index:19998;background:#070e1a;flex-direction:column;align-items:stretch;justify-content:flex-end;">
+    <div style="background:#0f172a;border-radius:28px 28px 0 0;padding:28px 20px 0;max-width:500px;width:100%;margin:0 auto;display:flex;flex-direction:column;max-height:92vh;">
+        <!-- Header -->
+        <div style="text-align:center;margin-bottom:18px;flex-shrink:0;">
+            <div style="width:56px;height:56px;background:linear-gradient(135deg,rgba(37,99,235,0.2),rgba(59,130,246,0.1));border:1.5px solid rgba(59,130,246,0.3);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
                 </svg>
             </div>
-            <h5 style="font-weight:700;font-size:1.1rem;margin-bottom:8px;color:#f8fafc;">Enable Biometric Login?</h5>
-            <p style="font-size:0.85rem;color:#94a3b8;line-height:1.5;">Sign in instantly next time using your fingerprint or Face ID — no password needed.</p>
+            <h5 style="font-weight:800;font-size:1.15rem;margin-bottom:6px;color:#f8fafc;">Enable Biometric Login</h5>
+            <p style="font-size:0.82rem;color:#64748b;line-height:1.4;margin:0;">Sign in instantly next time using your fingerprint</p>
         </div>
-        <button id="bioEnableYes" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:14px;padding:14px;font-size:1rem;font-weight:700;margin-bottom:10px;cursor:pointer;">
-            Enable Biometric Login
-        </button>
-        <button id="bioEnableNo" style="width:100%;background:rgba(255,255,255,0.07);color:#94a3b8;border:1.5px solid rgba(255,255,255,0.1);border-radius:14px;padding:12px;font-size:0.9rem;font-weight:600;cursor:pointer;">
-            Not now
-        </button>
+        <!-- T&C Scroll Area -->
+        <div style="flex:1;overflow-y:auto;border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;margin-bottom:16px;background:rgba(255,255,255,0.03);">
+            <div style="font-size:0.8rem;color:#94a3b8;line-height:1.7;">
+                <p style="font-weight:700;color:#e2e8f0;margin-bottom:10px;font-size:0.88rem;">Terms &amp; Conditions — Biometric Login</p>
+                <p><strong style="color:#cbd5e1;">1. Consent:</strong> By enabling biometric login, you consent to using your fingerprint (or Face ID on supported devices) to authenticate your identity within Fleet Manager.</p>
+                <p><strong style="color:#cbd5e1;">2. Security:</strong> Your biometric data is processed entirely on your device by the operating system. Fleet Manager never stores, transmits, or has access to your biometric data.</p>
+                <p><strong style="color:#cbd5e1;">3. Token:</strong> A secure cryptographic token is stored locally on your device to verify your identity with the server. This token does not contain any biometric data.</p>
+                <p><strong style="color:#cbd5e1;">4. Revocation:</strong> You may disable biometric login at any time from your Profile page. Clearing app data or changing your device fingerprints will automatically invalidate the token.</p>
+                <p><strong style="color:#cbd5e1;">5. Responsibility:</strong> Any person whose fingerprint is enrolled on this device may be able to authenticate as you. Ensure your device security is maintained.</p>
+                <p><strong style="color:#cbd5e1;">6. Fallback:</strong> Your password login remains active at all times as a fallback authentication method.</p>
+                <p style="margin-top:14px;font-size:0.75rem;color:#475569;">By tapping "Accept &amp; Enable", you confirm you have read and agree to these terms. Fleet Manager reserves the right to update these terms with prior notice.</p>
+            </div>
+        </div>
+        <!-- Buttons -->
+        <div style="flex-shrink:0;padding-bottom:max(20px,env(safe-area-inset-bottom,20px));display:flex;flex-direction:column;gap:10px;">
+            <button id="bioSetupAccept" style="width:100%;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:16px;padding:16px;font-size:1rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 20px rgba(37,99,235,0.4);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/></svg>
+                Accept &amp; Enable Biometric Login
+            </button>
+            <button id="bioSetupSkip" style="width:100%;background:transparent;color:#64748b;border:1.5px solid rgba(255,255,255,0.1);border-radius:16px;padding:14px;font-size:0.88rem;font-weight:600;cursor:pointer;">
+                Skip for now
+            </button>
+        </div>
     </div>
 </div>
 
@@ -3106,38 +3124,56 @@
     //  NATIVE MOBILE FEATURES  (all guarded by Capacitor.isNativePlatform)
     // ══════════════════════════════════════════════════════════════════════
 
-    // ── 0. Biometric Enable Prompt (after first manual login) ──────────────
+    // ── 0. Banking-Style Biometric T&C Setup (after first manual login) ────
     (function() {
         if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
-        if (sessionStorage.getItem('fleet_bio_prompt') !== '1') return;
-        sessionStorage.removeItem('fleet_bio_prompt');
+        if (sessionStorage.getItem('fleet_bio_setup') !== '1') return;
+        sessionStorage.removeItem('fleet_bio_setup');
 
         var bioPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
         if (!bioPlugin) return;
 
+        /* Only show T&C if biometrics are actually available on this device */
         bioPlugin.checkBiometry().then(function(info) {
             var avail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
             if (!avail) return;
 
-            var modal = document.getElementById('bioEnableModal');
-            if (!modal) return;
-            modal.style.display = 'flex';
+            var overlay = document.getElementById('bioSetupOverlay');
+            if (!overlay) return;
+            overlay.style.display = 'flex';
 
-            document.getElementById('bioEnableYes').addEventListener('click', function() {
-                /* Fetch HMAC token from server, store with username */
+            document.getElementById('bioSetupAccept').addEventListener('click', function() {
+                var btn = document.getElementById('bioSetupAccept');
+                if (btn) { btn.disabled = true; btn.textContent = 'Setting up…'; }
+
+                /* Step 1: Get HMAC token from server */
                 fetch('/auth/biometric-token', { credentials: 'same-origin' })
                     .then(function(r) { return r.json(); })
                     .then(function(d) {
-                        if (d.ok) {
+                        if (!d.ok) throw new Error('token_failed');
+                        /* Step 2: Verify fingerprint (triggers Android dialog) */
+                        return bioPlugin.authenticate({
+                            reason: 'Confirm your fingerprint to enable biometric login',
+                            cancelTitle: 'Cancel',
+                            allowDeviceCredential: false,
+                            iosFallbackTitle: 'Cancel'
+                        }).then(function() {
+                            /* Fingerprint confirmed — store all credentials */
                             localStorage.setItem('fleet_bio_enabled', '1');
-                            localStorage.setItem('fleet_bio_token', d.token);
-                            localStorage.setItem('fleet_bio_user', d.username);
-                        }
-                    }).catch(function() {});
-                modal.style.display = 'none';
+                            localStorage.setItem('fleet_bio_token',   d.token);
+                            localStorage.setItem('fleet_bio_user',    d.username);
+                            localStorage.setItem('fleet_bio_name',    d.display_name || d.username);
+                            overlay.style.display = 'none';
+                        });
+                    }).catch(function() {
+                        /* Fingerprint cancelled or failed — still hide overlay */
+                        overlay.style.display = 'none';
+                        if (btn) { btn.disabled = false; btn.textContent = 'Accept & Enable Biometric Login'; }
+                    });
             });
-            document.getElementById('bioEnableNo').addEventListener('click', function() {
-                modal.style.display = 'none';
+
+            document.getElementById('bioSetupSkip').addEventListener('click', function() {
+                overlay.style.display = 'none';
             });
         }).catch(function() {});
     })();
@@ -3551,18 +3587,45 @@
             });
         }
 
-        /* ── Listen for app foreground ── */
-        var _firstActivation = true; // Skip initial load; only lock on RESUME
+        /* ── Auto-logout + navigate to login on app background/foreground ── */
+        var _firstActivation = true;
+        var _bgTimer = null;
+        var _didAutoLogout = false;
+        var BG_TIMEOUT_MS = 30000; // 30 seconds in background → auto-logout
+
         AppPlugin.addListener('appStateChange', function(state) {
-            if (state && state.isActive) {
-                if (_firstActivation) { _firstActivation = false; return; }
-                var hasBio = localStorage.getItem(BIO_KEY) === '1' && localStorage.getItem(TOKEN_KEY);
-                if (hasBio) {
-                    triggerBioLock();
-                } else {
-                    var pinSet = localStorage.getItem(PIN_SET_KEY) === '1';
-                    if (pinSet) { isLocked = true; fallbackToPin(); }
-                }
+            if (state && !state.isActive) {
+                /* App went to background — start timer */
+                _bgTimer = setTimeout(function() {
+                    _didAutoLogout = true;
+                    fetch('/auth/app-logout', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' }
+                    }).catch(function() {});
+                }, BG_TIMEOUT_MS);
+                return;
+            }
+
+            /* App came to foreground */
+            if (_bgTimer) { clearTimeout(_bgTimer); _bgTimer = null; }
+
+            if (_firstActivation) { _firstActivation = false; return; }
+
+            if (_didAutoLogout) {
+                /* Session cleared — navigate to login (biometric auto-triggers there) */
+                _didAutoLogout = false;
+                window.location.href = '/login';
+                return;
+            }
+
+            /* Short background (< 30s) — show biometric/PIN lock overlay */
+            var hasBio = localStorage.getItem(BIO_KEY) === '1' && localStorage.getItem(TOKEN_KEY);
+            if (hasBio) {
+                triggerBioLock();
+            } else {
+                var pinSet = localStorage.getItem(PIN_SET_KEY) === '1';
+                if (pinSet) { isLocked = true; fallbackToPin(); }
             }
         });
 
