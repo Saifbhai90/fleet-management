@@ -45,6 +45,10 @@
     },
     "PushNotifications": {
       "presentationOptions": ["badge", "sound", "alert"]
+    },
+    "BiometricAuth": {
+      "androidBiometricStrength": "weak",
+      "allowDeviceCredential": false
     }
   }
 }

@@ -2637,12 +2637,48 @@
             document.body.classList.add('capacitor-native');
         }
 
+        /* ── Permission Alert (Toast or styled modal) ─────────────────── */
+        function _showPermissionAlert(permName, message) {
+            if (_isNative && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
+                window.Capacitor.Plugins.Toast.show({ text: message, duration: 'long', position: 'bottom' });
+                return;
+            }
+            var overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+            var box = document.createElement('div');
+            box.style.cssText = 'background:#fff;border-radius:14px;padding:24px 20px;max-width:340px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.25);font-family:system-ui,sans-serif;';
+            box.innerHTML =
+                '<div style="font-size:1.05rem;font-weight:700;color:#1e293b;margin-bottom:10px;">&#9888;&#65039; ' + permName + ' Permission Required</div>' +
+                '<div style="font-size:0.88rem;color:#475569;line-height:1.6;margin-bottom:20px;">' + message + '</div>' +
+                '<button style="width:100%;padding:13px;background:#0f172a;color:#fff;border:none;border-radius:9px;font-size:0.95rem;font-weight:600;cursor:pointer;letter-spacing:0.02em;">Understood</button>';
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+            box.querySelector('button').addEventListener('click', function() { document.body.removeChild(overlay); });
+        }
+
+        /* ── GPS with permission gate ────────────────────────────────────── */
         function getGPS() {
             return new Promise(function(resolve, reject) {
                 if (_isNative && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation) {
-                    window.Capacitor.Plugins.Geolocation.getCurrentPosition({
-                        enableHighAccuracy: true,
-                        timeout: 10000,
+                    var Geo = window.Capacitor.Plugins.Geolocation;
+                    Geo.checkPermissions().then(function(status) {
+                        var state = (status.location || status.coarseLocation || 'prompt');
+                        if (state === 'granted') {
+                            return Geo.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+                        } else if (state === 'denied') {
+                            _showPermissionAlert('Location', 'Location permission was denied. Please go to Settings → Apps → Fleet Manager → Permissions and enable Location to allow check-in.');
+                            throw { code: 'location_denied' };
+                        } else {
+                            return Geo.requestPermissions({ permissions: ['location', 'coarseLocation'] }).then(function(res) {
+                                var granted = (res.location === 'granted' || res.coarseLocation === 'granted');
+                                if (granted) {
+                                    return Geo.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+                                } else {
+                                    _showPermissionAlert('Location', 'GPS permission is required to verify your attendance location. Please grant Location access when prompted.');
+                                    throw { code: 'location_denied' };
+                                }
+                            });
+                        }
                     }).then(function(pos) {
                         resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
                     }).catch(reject);
@@ -2658,21 +2694,32 @@
             });
         }
 
+        /* ── Camera with permission gate ──────────────────────────────────── */
         function takeSelfie() {
             return new Promise(function(resolve, reject) {
                 if (_isNative && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera) {
-                    window.Capacitor.Plugins.Camera.getPhoto({
-                        quality: 70,
-                        allowEditing: false,
-                        resultType: 'base64',
-                        source: 'CAMERA',
-                        direction: 'FRONT',
-                        saveToGallery: false,
+                    var Cam = window.Capacitor.Plugins.Camera;
+                    Cam.checkPermissions().then(function(status) {
+                        var state = (status.camera || 'prompt');
+                        if (state === 'granted') {
+                            return Cam.getPhoto({ quality: 70, allowEditing: false, resultType: 'base64', source: 'CAMERA', direction: 'FRONT', saveToGallery: false });
+                        } else if (state === 'denied') {
+                            _showPermissionAlert('Camera', 'Camera permission was denied. Please go to Settings → Apps → Fleet Manager → Permissions and enable Camera to take attendance selfies.');
+                            throw { code: 'camera_denied' };
+                        } else {
+                            return Cam.requestPermissions({ permissions: ['camera'] }).then(function(res) {
+                                if (res.camera === 'granted') {
+                                    return Cam.getPhoto({ quality: 70, allowEditing: false, resultType: 'base64', source: 'CAMERA', direction: 'FRONT', saveToGallery: false });
+                                } else {
+                                    _showPermissionAlert('Camera', 'Camera permission is required to take an attendance selfie. Please grant Camera access when prompted.');
+                                    throw { code: 'camera_denied' };
+                                }
+                            });
+                        }
                     }).then(function(photo) {
                         resolve('data:image/jpeg;base64,' + photo.base64String);
                     }).catch(reject);
                 } else {
-                    // Web fallback: open file picker
                     var input = document.createElement('input');
                     input.type = 'file';
                     input.accept = 'image/*';
@@ -2688,6 +2735,29 @@
                     input.click();
                 }
             });
+        }
+
+        /* ── Proactive permission warm-up (call once on app init) ────────── */
+        function initPermissions() {
+            if (!_isNative || !window.Capacitor || !window.Capacitor.Plugins) return Promise.resolve();
+            var jobs = [];
+            var Geo = window.Capacitor.Plugins.Geolocation;
+            var Cam = window.Capacitor.Plugins.Camera;
+            if (Geo) {
+                jobs.push(Geo.checkPermissions().then(function(s) {
+                    if ((s.location || s.coarseLocation || 'prompt') === 'prompt') {
+                        return Geo.requestPermissions({ permissions: ['location', 'coarseLocation'] });
+                    }
+                }).catch(function() {}));
+            }
+            if (Cam) {
+                jobs.push(Cam.checkPermissions().then(function(s) {
+                    if ((s.camera || 'prompt') === 'prompt') {
+                        return Cam.requestPermissions({ permissions: ['camera'] });
+                    }
+                }).catch(function() {}));
+            }
+            return Promise.all(jobs);
         }
 
         function requestPushPermission() {
@@ -2709,7 +2779,7 @@
             });
         }
 
-        return { isNative: _isNative, getGPS: getGPS, takeSelfie: takeSelfie, requestPushPermission: requestPushPermission };
+        return { isNative: _isNative, getGPS: getGPS, takeSelfie: takeSelfie, requestPushPermission: requestPushPermission, initPermissions: initPermissions, showPermissionAlert: _showPermissionAlert };
     })();
 
     // ── Native App UI Enhancements (Capacitor context) ────────────────────

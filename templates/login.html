@@ -123,8 +123,21 @@
   if (isEnabled && storedToken && storedUser && bioPlugin && bioWrap) {
     bioPlugin.checkBiometry().then(function(info) {
       var avail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
-      if (avail) bioWrap.style.display = 'block';
+      var code  = info && (info.code || info.strongCode || '');
+      if (avail) {
+        bioWrap.style.display = 'block';
+      } else if (code === 'biometryNotEnrolled' || String(code) === '11') {
+        /* Hardware exists but no fingerprints enrolled — inform the user */
+        if (window.FleetBridge && window.FleetBridge.showPermissionAlert) {
+          window.FleetBridge.showPermissionAlert('Biometrics Not Set Up',
+            'No fingerprints are enrolled on this device. Go to Settings \u2192 Security \u2192 Fingerprint to add one, then return to use biometric login.');
+        }
+      } else if (code === 'biometryNotPermitted' || String(code) === '12') {
+        /* Permission not granted yet — the authenticate() call will trigger the native dialog */
+        bioWrap.style.display = 'block';
+      }
     }).catch(function() {
+      /* Graceful fallback: show button anyway and let authenticate() handle it */
       bioWrap.style.display = 'block';
     });
   }
