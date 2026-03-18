@@ -20,6 +20,105 @@
 {% endblock %}
 
 {% block content %}
+{% if not request.view_args.get('id') %}
+<!-- CNIC Pre-Check Overlay (Add Mode Only) -->
+<div id="cnicCheckOverlay" style="position:fixed;inset:0;z-index:10000;background:rgba(15,23,42,0.82);
+     display:flex;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:#fff;border-radius:14px;padding:2rem;max-width:440px;width:100%;
+              box-shadow:0 20px 60px rgba(0,0,0,0.35);">
+    <div style="text-align:center;margin-bottom:1.5rem;">
+      <div style="width:56px;height:56px;background:#e3f2fd;border-radius:50%;
+                  display:flex;align-items:center;justify-content:center;margin:0 auto 0.75rem;">
+        <i class="bi bi-person-vcard" style="font-size:1.6rem;color:#1565c0;"></i>
+      </div>
+      <h5 style="font-weight:700;color:#1e3a8a;margin:0 0 0.25rem;">CNIC Verification</h5>
+      <p style="font-size:0.85rem;color:#64748b;margin:0;">Driver add karnay say pehle CNIC check karein</p>
+    </div>
+
+    <div style="margin-bottom:1rem;">
+      <label style="font-size:0.85rem;font-weight:600;color:#475569;display:block;margin-bottom:0.4rem;">
+        CNIC Number <span style="color:#dc3545;">*</span>
+      </label>
+      <input type="text" id="cnicOverlayInput" maxlength="15" placeholder="32304-1111111-5"
+             style="width:100%;padding:0.6rem 0.85rem;border:1.5px solid #cbd5e1;border-radius:8px;
+                    font-size:1rem;letter-spacing:0.5px;outline:none;transition:border-color 0.2s;"
+             onfocus="this.style.borderColor='#1565c0'" onblur="this.style.borderColor='#cbd5e1'">
+      <div id="cnicOverlayMsg" style="margin-top:0.5rem;font-size:0.83rem;min-height:1.2em;"></div>
+    </div>
+
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+      <button type="button" id="cnicOverlayCheckBtn" onclick="doOverlayCnicCheck()"
+              style="flex:1;padding:0.6rem;background:#1565c0;color:#fff;border:none;
+                     border-radius:8px;font-weight:600;font-size:0.9rem;cursor:pointer;">
+        <i class="bi bi-search me-1"></i>Check & Proceed
+      </button>
+      <button type="button" onclick="closeCnicOverlay()"
+              style="padding:0.6rem 1rem;background:#f1f5f9;color:#475569;border:none;
+                     border-radius:8px;font-weight:600;font-size:0.85rem;cursor:pointer;">
+        Skip
+      </button>
+    </div>
+    <p style="text-align:center;font-size:0.78rem;color:#94a3b8;margin-top:0.85rem;margin-bottom:0;">
+      Skip karein agr CNIC available nahi
+    </p>
+  </div>
+</div>
+<script>
+(function() {
+  var inp = document.getElementById('cnicOverlayInput');
+  var msg = document.getElementById('cnicOverlayMsg');
+  inp.addEventListener('input', function(e) {
+    var val = e.target.value.replace(/\D/g, '').match(/(\d{0,5})(\d{0,7})(\d{0,1})/);
+    e.target.value = !val[2] ? val[1] : val[1] + '-' + val[2] + (val[3] ? '-' + val[3] : '');
+    msg.textContent = '';
+  });
+  inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') doOverlayCnicCheck(); });
+
+  window.doOverlayCnicCheck = function() {
+    var cnic = inp.value.trim();
+    if (cnic.length < 13) {
+      msg.innerHTML = '<span style="color:#e53935;">Please enter full CNIC (xxxxx-xxxxxxx-x)</span>';
+      return;
+    }
+    var btn = document.getElementById('cnicOverlayCheckBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking...';
+    fetch('/api/check-cnic?cnic=' + encodeURIComponent(cnic))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-search me-1"></i>Check & Proceed';
+        if (data.exists) {
+          msg.innerHTML = '<div style="background:#fff5f5;border:1px solid #fca5a5;border-radius:6px;padding:0.5rem 0.75rem;color:#dc2626;font-weight:600;">' +
+            '<i class="bi bi-exclamation-triangle-fill me-1"></i>' + data.message + '</div>';
+        } else {
+          msg.innerHTML = '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:0.5rem 0.75rem;color:#16a34a;font-weight:600;">' +
+            '<i class="bi bi-check-circle-fill me-1"></i>CNIC not found – new driver. Proceeding...</div>';
+          setTimeout(function() {
+            var mainCnic = document.getElementById('cnic_mask');
+            if (mainCnic) mainCnic.value = cnic;
+            closeCnicOverlay();
+          }, 900);
+        }
+      })
+      .catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-search me-1"></i>Check & Proceed';
+        closeCnicOverlay();
+      });
+  };
+
+  window.closeCnicOverlay = function() {
+    document.getElementById('cnicCheckOverlay').style.display = 'none';
+  };
+
+  document.getElementById('cnicCheckOverlay').addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeCnicOverlay();
+  });
+})();
+</script>
+{% endif %}
+
 <div class="container py-5">
   <div class="row justify-content-center">
     <div class="col-xl-11">

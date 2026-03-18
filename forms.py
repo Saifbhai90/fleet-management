@@ -98,10 +98,18 @@ class DriverForm(FlaskForm):
     emergency_no = StringField('Emergency No', validators=[DataRequired(), Regexp(r'^03[0-9]{2}-[0-9]{7}$', message='Format: 03xx-xxxxxxx')], render_kw={"placeholder": "03xx-xxxxxxx"})
     address = TextAreaField('Address', validators=[DataRequired()])
     education = SelectField('Education', choices=[
-        ('Middle', 'Middle'),
-        ('Matric', 'Matric'),
-        ('Intermediate', 'Intermediate'),
-        ('Graduate', 'Graduate')
+        ('', '-- Select Education --'),
+        ('Illiterate', 'Illiterate (An-Parha)'),
+        ('Primary', 'Primary (5th)'),
+        ('Middle', 'Middle (8th)'),
+        ('Matric', 'Matric (10th)'),
+        ('Intermediate', 'Intermediate (12th)'),
+        ('Graduate', 'Graduate (14th)'),
+        ('Master', 'Master (16th)'),
+        ('M.Phil', 'M.Phil (18th)'),
+        ('PhD', 'PhD'),
+        ('Hafiz-e-Quran', 'Hafiz-e-Quran'),
+        ('Other', 'Other'),
     ], validators=[DataRequired()])
     blood_group = SelectField('Blood Group', choices=[
         ('O+', 'O+'), ('A+', 'A+'), ('B+', 'B+'), ('AB+', 'AB+'),
@@ -129,9 +137,18 @@ class DriverForm(FlaskForm):
     bank_name = StringField('Bank Name')
     account_no = StringField('Account No')
     account_title = StringField('Account Title')
-    shirt_size = SelectField('Shirt Size', choices=[('S', 'S'), ('M', 'M'), ('L', 'L'), ('XL', 'XL'), ('XXL', 'XXL')])
-    trouser_size = SelectField('Trouser Size', choices=[('30', '30'), ('32', '32'), ('34', '34'), ('36', '36')])
-    jacket_size = SelectField('Jacket Size', choices=[('S', 'S'), ('M', 'M'), ('L', 'L'), ('XL', 'XL')])
+    shirt_size = SelectField('Shirt Size', choices=[
+        ('', '-- Size --'), ('2XS', '2XS'), ('XS', 'XS'), ('S', 'S'), ('M', 'M'),
+        ('L', 'L'), ('XL', 'XL'), ('XXL', 'XXL'), ('3XL', '3XL'), ('4XL', '4XL')
+    ])
+    trouser_size = SelectField('Trouser Size', choices=[
+        ('', '-- Size --'), ('26', '26'), ('28', '28'), ('30', '30'), ('32', '32'),
+        ('34', '34'), ('36', '36'), ('38', '38'), ('40', '40'), ('42', '42'), ('44', '44')
+    ])
+    jacket_size = SelectField('Jacket Size', choices=[
+        ('', '-- Size --'), ('2XS', '2XS'), ('XS', 'XS'), ('S', 'S'), ('M', 'M'),
+        ('L', 'L'), ('XL', 'XL'), ('XXL', 'XXL'), ('3XL', '3XL'), ('4XL', '4XL')
+    ])
 
     photo = FileField('Driver Photo', validators=[Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])

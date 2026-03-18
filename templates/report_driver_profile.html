@@ -236,7 +236,24 @@
     .profile-header h2 { font-size: 1.35rem; }
     .status-badge { position: static; margin-top: 0.75rem; display: inline-block; }
   }
+
+  @media print {
+    .action-bar, #photoLightbox { display: none !important; }
+    .profile-page { background: #fff; padding: 0.5rem; }
+    .profile-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .section-card { box-shadow: none; border: 1px solid #ddd; page-break-inside: avoid; }
+    .docs-photo-grid { grid-template-columns: repeat(3, 1fr); }
+    .doc-photo-thumb-wrap { height: auto; }
+    .doc-photo-thumb-wrap img { max-height: 120px; width: 100%; object-fit: cover; }
+    .doc-photo-missing { height: 80px; }
+    .doc-pdf-wrap { height: 80px; }
+    .stats-row { grid-template-columns: repeat(3, 1fr); }
+    .timeline-item { page-break-inside: avoid; }
+    a.btn { display: none !important; }
+    .photo-circle { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <div class="profile-page">
   <!-- Action Bar -->
@@ -251,6 +268,9 @@
       </a>
       <button onclick="window.print()" class="btn btn-outline-primary btn-action">
         <i class="bi bi-printer me-1"></i>Print
+      </button>
+      <button onclick="downloadPDF()" class="btn btn-outline-success btn-action" id="pdfBtn">
+        <i class="bi bi-file-earmark-pdf me-1"></i>PDF
       </button>
       {% if driver.document_path %}
       <a href="{{ driver.document_path | media_url }}" target="_blank" class="btn btn-outline-danger btn-action">
@@ -567,48 +587,52 @@
 
   <!-- Custom Lightbox Overlay -->
   <div id="photoLightbox"
-       style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.88);
-              align-items:center;justify-content:center;padding:1rem;"
+       style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.92);overflow-y:auto;"
        onclick="closeLightbox(event)">
-    <div style="position:relative;max-width:92vw;max-height:92vh;display:flex;flex-direction:column;">
-      <!-- Top bar -->
-      <div style="display:flex;justify-content:space-between;align-items:center;
-                  background:rgba(0,0,0,0.6);padding:0.45rem 0.75rem;
-                  border-radius:6px 6px 0 0;gap:0.75rem;">
-        <span id="lightboxTitle" style="color:#fff;font-size:0.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
-        <div style="display:flex;gap:0.5rem;flex-shrink:0;">
-          <a id="lightboxOpen" href="#" target="_blank"
-             style="color:#fff;text-decoration:none;font-size:0.78rem;
-                    background:rgba(255,255,255,0.18);padding:0.25rem 0.65rem;
-                    border-radius:4px;white-space:nowrap;">
-            <i class="bi bi-box-arrow-up-right me-1"></i>Open Full
-          </a>
-          <button onclick="closeLightboxBtn()"
-                  style="background:rgba(255,255,255,0.18);border:none;color:#fff;
-                         width:28px;height:28px;border-radius:4px;cursor:pointer;
-                         font-size:1rem;line-height:1;display:flex;align-items:center;justify-content:center;">
-            ✕
-          </button>
-        </div>
+    <!-- Fixed top bar -->
+    <div id="lightboxBar" style="position:fixed;top:0;left:0;right:0;z-index:10000;
+         background:rgba(0,0,0,0.75);display:flex;justify-content:space-between;
+         align-items:center;padding:0.5rem 1rem;gap:1rem;backdrop-filter:blur(4px);">
+      <span id="lightboxTitle" style="color:#fff;font-size:0.88rem;font-weight:600;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+      <div style="display:flex;gap:0.5rem;flex-shrink:0;">
+        <a id="lightboxOpen" href="#" target="_blank"
+           style="color:#fff;text-decoration:none;font-size:0.78rem;
+                  background:rgba(255,255,255,0.18);padding:0.3rem 0.7rem;
+                  border-radius:4px;white-space:nowrap;">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Open Full
+        </a>
+        <button onclick="closeLightboxBtn()"
+                style="background:rgba(255,255,255,0.18);border:none;color:#fff;
+                       width:32px;height:32px;border-radius:4px;cursor:pointer;
+                       font-size:1.1rem;display:flex;align-items:center;justify-content:center;">
+          ✕
+        </button>
       </div>
-      <!-- Image -->
-      <div style="background:#000;border-radius:0 0 6px 6px;overflow:auto;max-height:85vh;text-align:center;">
-        <img id="lightboxImg" src="" alt=""
-             style="max-width:100%;max-height:82vh;object-fit:contain;display:inline-block;vertical-align:middle;">
-      </div>
+    </div>
+    <!-- Image centred with padding so bar doesn't overlap -->
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;
+                padding:60px 1rem 1rem;box-sizing:border-box;">
+      <img id="lightboxImg" src="" alt=""
+           style="max-width:96vw;max-height:88vh;width:auto;height:auto;
+                  object-fit:contain;display:block;border-radius:4px;
+                  box-shadow:0 4px 32px rgba(0,0,0,0.6);">
     </div>
   </div>
   <script>
   function openDocModal(url, title) {
-    var lb = document.getElementById('photoLightbox');
     document.getElementById('lightboxImg').src = url;
     document.getElementById('lightboxTitle').textContent = title;
     document.getElementById('lightboxOpen').href = url;
-    lb.style.display = 'flex';
+    var lb = document.getElementById('photoLightbox');
+    lb.scrollTop = 0;
+    lb.style.display = 'block';
     document.body.style.overflow = 'hidden';
   }
   function closeLightbox(e) {
-    if (e.target === document.getElementById('photoLightbox')) closeLightboxBtn();
+    var img = document.getElementById('lightboxImg');
+    if (e.target !== img && e.target !== document.getElementById('lightboxBar'))
+      closeLightboxBtn();
   }
   function closeLightboxBtn() {
     document.getElementById('photoLightbox').style.display = 'none';
@@ -618,6 +642,23 @@
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeLightboxBtn();
   });
+  function downloadPDF() {
+    var btn = document.getElementById('pdfBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
+    var el = document.querySelector('.profile-page');
+    var opt = {
+      margin: [8, 8, 8, 8],
+      filename: '{{ driver.name | replace(" ","_") }}_Driver_Profile.pdf',
+      image: { type: 'jpeg', quality: 0.92 },
+      html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(el).save().then(function() {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
+    });
+  }
   </script>
 
   <!-- Job History Timeline -->
