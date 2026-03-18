@@ -176,9 +176,13 @@
   var loginTitle   = document.getElementById('loginTitle');
   var loginSub     = document.getElementById('loginSubtitle');
 
-  /* Helper: get biometric plugin - access inside function per instructions */
+  /* Helper: get biometric plugin
+     IMPORTANT: Plugin registers as 'BiometricAuthNative' (not 'BiometricAuth') on the Capacitor bridge.
+     Verified from: @CapacitorPlugin(name = "BiometricAuthNative") in BiometricAuthNative.java
+     The npm export is named BiometricAuth but bridge name is BiometricAuthNative. */
   function _bp() {
-    return Capacitor.Plugins && Capacitor.Plugins.BiometricAuth;
+    var plugins = Capacitor.Plugins || {};
+    return plugins.BiometricAuthNative || plugins.BiometricAuth || null;
   }
 
   /* Helper: timeout wrapper */
@@ -211,11 +215,18 @@
   /* ── INIT: Show HBL view if saved user exists ── */
   if (savedUser && savedName) {
     showHBLView();
-    
-    /* Auto-trigger biometric if toggle is ON */
-    if (bioToken && hblBioToggle && hblBioToggle.checked) {
-      setTimeout(function() { triggerBiometric(); }, 800);
-    }
+
+    /* Debug: log all loaded Capacitor plugins so we can diagnose bridge issues */
+    setTimeout(function() {
+      var loadedPlugins = Capacitor.Plugins ? Object.keys(Capacitor.Plugins) : [];
+      console.log('[Bio] Capacitor.Plugins loaded:', JSON.stringify(loadedPlugins));
+      console.log('[Bio] BiometricAuthNative available:', !!_bp());
+
+      /* Auto-trigger biometric login if token exists */
+      if (bioToken && hblBioToggle && hblBioToggle.checked) {
+        triggerBiometric();
+      }
+    }, 1000);
   }
 
   /* ── Password show/hide toggle ── */

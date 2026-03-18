@@ -135,12 +135,17 @@ function _enableBiometricNow() {
     return;
   }
 
-  /* Get plugin - use globally saved reference OR try fresh */
-  var BiometricAuth = _bioPlugin || (Capacitor.Plugins && Capacitor.Plugins.BiometricAuth);
-  console.log('[Bio Profile] Plugin found:', !!BiometricAuth, '| _bioPlugin ref:', !!_bioPlugin);
+  /* Get plugin - use globally saved reference OR try fresh
+     CRITICAL: Plugin bridge name is 'BiometricAuthNative' NOT 'BiometricAuth'
+     Verified from: @CapacitorPlugin(name = "BiometricAuthNative") in BiometricAuthNative.java */
+  var plugins = Capacitor.Plugins || {};
+  var BiometricAuth = _bioPlugin || plugins.BiometricAuthNative || plugins.BiometricAuth || null;
+  console.log('[Bio Profile] All plugins:', JSON.stringify(Object.keys(plugins)));
+  console.log('[Bio Profile] BiometricAuthNative:', !!plugins.BiometricAuthNative, '| _bioPlugin:', !!_bioPlugin);
 
   if (!BiometricAuth) {
-    alert('Error: Biometric plugin not found.\n\nPlease close and reopen the app, then try again.\nIf problem persists, reinstall the app.');
+    alert('Error: Biometric plugin not found.\n\nLoaded plugins: ' + JSON.stringify(Object.keys(plugins)) +
+          '\n\nPlease close and reopen the app, then try again.');
     return;
   }
 
@@ -218,9 +223,13 @@ function _enableBiometricNow() {
     return;
   }
 
-  /* Delay 800ms so Capacitor bridge is fully ready before checking plugin */
+  /* Delay 1000ms so Capacitor bridge is fully ready before checking plugin */
   setTimeout(function() {
-    var BiometricAuth = Capacitor.Plugins && Capacitor.Plugins.BiometricAuth;
+    var plugins = Capacitor.Plugins || {};
+    /* CRITICAL: plugin bridge name is 'BiometricAuthNative' not 'BiometricAuth' */
+    var BiometricAuth = plugins.BiometricAuthNative || plugins.BiometricAuth || null;
+    console.log('[Bio Profile Init] Capacitor.Plugins keys:', JSON.stringify(Object.keys(plugins)));
+    console.log('[Bio Profile Init] BiometricAuthNative found:', !!BiometricAuth);
     if (!BiometricAuth) {
       /* Plugin not found - hide SILENTLY, no error message */
       row.style.display = 'none';
