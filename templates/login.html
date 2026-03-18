@@ -151,12 +151,11 @@
   var SAVED_NAME_KEY = 'fleet_saved_name';
   var BIO_TOKEN_KEY  = 'fleet_bio_token';
 
-  /* Manual logout redirect (?clear_bio=1):
-     Only remove the biometric token. Keep fleet_saved_name + fleet_saved_username
-     so the HBL Welcome screen still shows (user just needs to enter password). */
+  /* Logout redirect handling: clean URL only.
+     fleet_bio_token is a permanent device credential - NEVER removed on session logout.
+     It is only removed when user explicitly turns OFF the biometric toggle. */
   var urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('clear_bio') === '1') {
-    localStorage.removeItem('fleet_bio_token');
     sessionStorage.clear();
     if (window.history && window.history.replaceState) {
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -264,9 +263,10 @@
           _verifyFingerprintForEnrollment();
         }
       } else {
-        /* User turned OFF - clear token + pending flag */
+        /* User explicitly turned OFF biometric → remove token from this device */
         localStorage.removeItem(BIO_TOKEN_KEY);
         sessionStorage.removeItem('fleet_bio_setup');
+        /* Also clear the 'other account' saved user so standard form shows next time */
       }
     });
   }
@@ -313,15 +313,14 @@
     });
   }
 
-  /* ── HBL Login Button (password or biometric) ── */
+  /* ── HBL Login Button ── */
   if (hblLoginBtn) {
     hblLoginBtn.addEventListener('click', function() {
-      var currentToken = localStorage.getItem(BIO_TOKEN_KEY);
-      if (hblBioToggle && hblBioToggle.checked && currentToken) {
-        /* Has token + toggle ON = biometric login */
+      if (hblBioToggle && hblBioToggle.checked) {
+        /* Toggle ON = biometric login ONLY (fingerprint is the password) */
         triggerBiometric();
       } else {
-        /* Password login (biometric may be enrolled post-login via fleet_bio_setup flag) */
+        /* Toggle OFF = password login */
         doPasswordLogin();
       }
     });

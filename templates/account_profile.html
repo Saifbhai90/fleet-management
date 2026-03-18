@@ -110,9 +110,10 @@
 /* ── Logout handler (clear ALL storage on manual logout) ── */
 function _fleetLogout(link, e) {
   e.preventDefault();
-  /* Manual logout: clear biometric token so user must re-verify on next open.
-     KEEP fleet_saved_name + fleet_saved_username so HBL Welcome screen still shows. */
-  localStorage.removeItem('fleet_bio_token');
+  /* Session logout ONLY - do NOT touch fleet_bio_token.
+     The bio token is a permanent device credential (like a saved password).
+     It persists across logouts so biometric auto-login works next open.
+     Token is only removed when user explicitly turns OFF the biometric toggle. */
   sessionStorage.clear();
   window.location.href = link.href;
   return false;
