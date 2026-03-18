@@ -231,11 +231,50 @@
   if (hblBioToggle) {
     hblBioToggle.addEventListener('change', function() {
       if (this.checked) {
-        /* User turned ON - trigger biometric immediately */
-        triggerBiometric();
+        var currentToken = localStorage.getItem(BIO_TOKEN_KEY);
+        if (currentToken) {
+          /* Has token = trigger biometric LOGIN */
+          triggerBiometric();
+        } else {
+          /* No token = verify fingerprint for ENROLLMENT (token fetched after password login) */
+          _verifyFingerprintForEnrollment();
+        }
       } else {
-        /* User turned OFF - clear token */
+        /* User turned OFF - clear token + pending flag */
         localStorage.removeItem(BIO_TOKEN_KEY);
+        sessionStorage.removeItem('fleet_bio_setup');
+      }
+    });
+  }
+
+  /* ── Fingerprint verification for enrollment (no active session yet) ── */
+  function _verifyFingerprintForEnrollment() {
+    var bp = _bp();
+    if (!bp) {
+      alert('Biometric Error: Plugin not found. Please reinstall or update the app.');
+      if (hblBioToggle) hblBioToggle.checked = false;
+      return;
+    }
+    console.log('[Bio] Verifying fingerprint for enrollment...');
+    bp.authenticate({
+      reason: 'Verify your fingerprint to enable biometric login',
+      cancelTitle: 'Cancel',
+      allowDeviceCredential: false
+    })
+    .then(function() {
+      console.log('[Bio] Fingerprint verified - pending enrollment after login');
+      /* Mark for token fetch after successful password login */
+      sessionStorage.setItem('fleet_bio_setup', '1');
+      /* Keep toggle ON so user knows it will be enabled */
+    })
+    .catch(function(err) {
+      var code = String(err && (err.code || err.message || ''));
+      console.log('[Bio] Enrollment verify failed:', code);
+      if (hblBioToggle) hblBioToggle.checked = false;
+      sessionStorage.removeItem('fleet_bio_setup');
+      if (code.indexOf('Cancel') === -1 && code.indexOf('cancel') === -1 && code !== '10') {
+        alert('Fingerprint not available: ' + (err.message || code || 'Unknown error') +
+              '\nPlease enroll a fingerprint in Settings > Security.');
       }
     });
   }
@@ -253,11 +292,12 @@
   /* ── HBL Login Button (password or biometric) ── */
   if (hblLoginBtn) {
     hblLoginBtn.addEventListener('click', function() {
-      if (hblBioToggle && hblBioToggle.checked && bioToken) {
-        /* Biometric login */
+      var currentToken = localStorage.getItem(BIO_TOKEN_KEY);
+      if (hblBioToggle && hblBioToggle.checked && currentToken) {
+        /* Has token + toggle ON = biometric login */
         triggerBiometric();
       } else {
-        /* Password login */
+        /* Password login (biometric may be enrolled post-login via fleet_bio_setup flag) */
         doPasswordLogin();
       }
     });
@@ -347,7 +387,12 @@
     if (usernameInput) usernameInput.value = savedUser;
     if (passwordInput) passwordInput.value = pwd;
 
-    /* CRITICAL: Make form visible before submit - hidden form submit can fail */
+    /* If biometric toggle is ON (fingerprint was verified), mark for token fetch after login */
+    if (hblBioToggle && hblBioToggle.checked) {
+      sessionStorage.setItem('fleet_bio_setup', '1');
+    }
+
+    /* CRITICAL: Make form visible before submit - hidden form can silently fail */
     if (loginForm) {
       loginForm.style.cssText = 'display:block !important; visibility:hidden; position:absolute;';
     }

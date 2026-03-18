@@ -4504,19 +4504,33 @@ document.addEventListener('DOMContentLoaded', function() {
 (function() {
   'use strict';
   if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
+
+  /* Always save display name for HBL login view */
   var displayName = {{ session.get('user', '') | tojson }};
   if (displayName) {
     localStorage.setItem('fleet_saved_name', displayName);
   }
-  /* Also save username from biometric-token endpoint (only if not already saved) */
-  if (!localStorage.getItem('fleet_saved_username')) {
+
+  /* Fetch biometric token - save username + conditionally save token */
+  var needsTokenFetch = !localStorage.getItem('fleet_saved_username');
+  var bioSetupPending = sessionStorage.getItem('fleet_bio_setup') === '1';
+
+  if (needsTokenFetch || bioSetupPending) {
     fetch('/auth/biometric-token', {
       headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.ok && data.username) {
+      if (!data.ok) return;
+      /* Always save username */
+      if (data.username) {
         localStorage.setItem('fleet_saved_username', data.username);
+      }
+      /* If bio setup was pending (fingerprint verified on login screen), save token NOW */
+      if (bioSetupPending && data.token) {
+        localStorage.setItem('fleet_bio_token', data.token);
+        sessionStorage.removeItem('fleet_bio_setup');
+        console.log('[Bio] Biometric token saved after login - biometric login enabled');
       }
     })
     .catch(function() { /* Ignore */ });
