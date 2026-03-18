@@ -95,10 +95,12 @@
           <i class="bi bi-upload me-1"></i>Import
         </a>
         {% endif %}
-        {% if can_see_page('parking_list') %}
+        {% if can_see_page('parking_export') %}
         <a href="{{ url_for('parking_export', search=search) }}" class="btn btn-outline-compact top-btn-compact">
           <i class="bi bi-download me-1"></i>Export
         </a>
+        {% endif %}
+        {% if can_see_page('parking_print') %}
         <a href="{{ url_for('parking_print', search=search) }}" target="_blank" class="btn btn-outline-compact top-btn-compact">
           <i class="bi bi-printer me-1"></i>Print
         </a>
