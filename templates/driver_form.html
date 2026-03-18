@@ -504,40 +504,38 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // 4. Auto License/CNIC Status on Expiry Change and on Load
+  function parseExpiryDate(str) {
+    if (!str) return null;
+    const parts = str.split('-');
+    if (parts.length !== 3) return null;
+    return new Date(parts[2], parts[1] - 1, parts[0]);
+  }
+  function applyExpiryStatus(expiryDate, targetDisplay, targetHidden) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (expiryDate && expiryDate > today) {
+      targetDisplay.value = "VALID";
+      targetDisplay.className = "form-control status-auto valid-bg";
+      targetHidden.value = "Valid";
+    } else {
+      targetDisplay.value = "EXPIRED";
+      targetDisplay.className = "form-control status-auto expired-bg";
+      targetHidden.value = "Expired";
+    }
+  }
   document.querySelectorAll('.expiry-trigger').forEach(el => {
     el.addEventListener('change', function() {
-      const expiryDate = new Date(this.value);
-      const today = new Date();
-      today.setHours(0,0,0,0);
+      const expiryDate = parseExpiryDate(this.value);
       const targetDisplay = document.getElementById(this.dataset.target);
       const targetHidden = document.getElementById(this.dataset.hidden);
-      if (expiryDate < today) {
-        targetDisplay.value = "EXPIRED";
-        targetDisplay.className = "form-control status-auto expired-bg";
-        targetHidden.value = "Expired";
-      } else {
-        targetDisplay.value = "VALID";
-        targetDisplay.className = "form-control status-auto valid-bg";
-        targetHidden.value = "Valid";
-      }
+      applyExpiryStatus(expiryDate, targetDisplay, targetHidden);
     });
 
-    // NEW: On load, status calculate karo for edit mode
     if (el.value) {
-      const expiryDate = new Date(el.value);
-      const today = new Date();
-      today.setHours(0,0,0,0);
+      const expiryDate = parseExpiryDate(el.value);
       const targetDisplay = document.getElementById(el.dataset.target);
       const targetHidden = document.getElementById(el.dataset.hidden);
-      if (expiryDate < today) {
-        targetDisplay.value = "EXPIRED";
-        targetDisplay.className = "form-control status-auto expired-bg";
-        targetHidden.value = "Expired";
-      } else {
-        targetDisplay.value = "VALID";
-        targetDisplay.className = "form-control status-auto valid-bg";
-        targetHidden.value = "Valid";
-      }
+      applyExpiryStatus(expiryDate, targetDisplay, targetHidden);
     }
   });
 

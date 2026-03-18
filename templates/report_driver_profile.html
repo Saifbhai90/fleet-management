@@ -435,11 +435,11 @@
           </div>
         </div>
         {% if driver.cnic_expiry_date %}
+        {% set cnic_valid = driver.cnic_expiry_date > today %}
         <div>
-          <span class="validity-badge {% if driver.cnic_status == 'Valid' %}badge-valid{% elif driver.cnic_status == 'Expired' %}badge-expired{% else %}badge-unknown{% endif %}">
-            {% if driver.cnic_status == 'Valid' %}✓ Valid (Expires on {{ driver.cnic_expiry_date|ddmmyyyy }})
-            {% elif driver.cnic_status == 'Expired' %}✗ Expired ({{ driver.cnic_expiry_date|ddmmyyyy }})
-            {% else %}— Unknown{% endif %}
+          <span class="validity-badge {{ 'badge-valid' if cnic_valid else 'badge-expired' }}">
+            {% if cnic_valid %}✓ Valid (Expires {{ driver.cnic_expiry_date|ddmmyyyy }})
+            {% else %}✗ Expired ({{ driver.cnic_expiry_date|ddmmyyyy }}){% endif %}
           </span>
         </div>
         {% endif %}
@@ -473,11 +473,11 @@
           </div>
         </div>
         {% if driver.license_expiry_date %}
+        {% set lic_valid = driver.license_expiry_date > today %}
         <div>
-          <span class="validity-badge {% if driver.license_status == 'Valid' %}badge-valid{% elif driver.license_status == 'Expired' %}badge-expired{% else %}badge-unknown{% endif %}">
-            {% if driver.license_status == 'Valid' %}✓ Valid (Expires on {{ driver.license_expiry_date|ddmmyyyy }})
-            {% elif driver.license_status == 'Expired' %}✗ Expired ({{ driver.license_expiry_date|ddmmyyyy }})
-            {% else %}— Unknown{% endif %}
+          <span class="validity-badge {{ 'badge-valid' if lic_valid else 'badge-expired' }}">
+            {% if lic_valid %}✓ Valid (Expires {{ driver.license_expiry_date|ddmmyyyy }})
+            {% else %}✗ Expired ({{ driver.license_expiry_date|ddmmyyyy }}){% endif %}
           </span>
         </div>
         {% endif %}

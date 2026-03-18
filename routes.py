@@ -12629,9 +12629,10 @@ def report_driver_profile(driver_id):
     total_actions = len(job_history)
     last_action = job_history[-1]['date'] if job_history else None
 
+    from datetime import date as _date
     return render_template('report_driver_profile.html', driver=driver,
                            job_history=job_history, total_actions=total_actions,
-                           last_action=last_action)
+                           last_action=last_action, today=_date.today())
 
 
 @app.route('/reports/vehicle-profile/<int:vehicle_id>')
