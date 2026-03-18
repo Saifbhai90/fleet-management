@@ -151,10 +151,12 @@
   var SAVED_NAME_KEY = 'fleet_saved_name';
   var BIO_TOKEN_KEY  = 'fleet_bio_token';
 
-  /* Check for manual logout - clear everything */
+  /* Manual logout redirect (?clear_bio=1):
+     Only remove the biometric token. Keep fleet_saved_name + fleet_saved_username
+     so the HBL Welcome screen still shows (user just needs to enter password). */
   var urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('clear_bio') === '1') {
-    localStorage.clear();
+    localStorage.removeItem('fleet_bio_token');
     sessionStorage.clear();
     if (window.history && window.history.replaceState) {
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -227,17 +229,17 @@
   if (savedUser && savedName) {
     showHBLView();
 
-    /* Debug: log all loaded Capacitor plugins so we can diagnose bridge issues */
-    setTimeout(function() {
-      var loadedPlugins = Capacitor.Plugins ? Object.keys(Capacitor.Plugins) : [];
-      console.log('[Bio] Capacitor.Plugins loaded:', JSON.stringify(loadedPlugins));
-      console.log('[Bio] BiometricAuthNative available:', !!_bp());
-
-      /* Auto-trigger biometric login if token exists */
-      if (bioToken && hblBioToggle && hblBioToggle.checked) {
+    /* Auto-trigger biometric at 500ms if token exists.
+       Toggle is already checked (showHBLView sets it from bioToken),
+       so if token exists, fingerprint prompt fires automatically. */
+    if (bioToken) {
+      setTimeout(function() {
+        var loadedPlugins = Capacitor.Plugins ? Object.keys(Capacitor.Plugins) : [];
+        console.log('[Bio] Capacitor.Plugins:', JSON.stringify(loadedPlugins));
+        console.log('[Bio] BiometricAuthNative available:', !!_bp());
         triggerBiometric();
-      }
-    }, 1000);
+      }, 500);
+    }
   }
 
   /* ── Password show/hide toggle ── */

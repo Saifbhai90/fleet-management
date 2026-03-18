@@ -3050,8 +3050,18 @@ def login():
         make_trusted_device_token, verify_trusted_device_token,
         TRUSTED_DEVICE_COOKIE, TRUSTED_DEVICE_DAYS
     )
-    # Trusted Device auto-login DISABLED - biometric handles mobile auth
-    # (Capacitor WebView UA does not contain 'Capacitor' so detection is unreliable)
+    # Always clear any existing session on GET /login.
+    # This ensures that after app-close logout, no stale session skips the biometric screen.
+    # Web users who navigate to /login while logged in will also get a clean state.
+    if request.method == 'GET' and session.get('user_id'):
+        try:
+            log_id = session.get('login_log_id')
+            if log_id:
+                LoginLog.query.filter_by(id=log_id).update({'logout_at': datetime.utcnow()})
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+        session.clear()
 
     form = LoginForm()
     # Show "no access" message at most once when redirected due to permission failure

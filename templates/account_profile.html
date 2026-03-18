@@ -110,10 +110,11 @@
 /* ── Logout handler (clear ALL storage on manual logout) ── */
 function _fleetLogout(link, e) {
   e.preventDefault();
-  /* Clear ALL storage to prevent auto-login bug */
-  localStorage.clear();
+  /* Manual logout: clear biometric token so user must re-verify on next open.
+     KEEP fleet_saved_name + fleet_saved_username so HBL Welcome screen still shows. */
+  localStorage.removeItem('fleet_bio_token');
   sessionStorage.clear();
-  window.location.href = link.href + '?clear_bio=1';
+  window.location.href = link.href;
   return false;
 }
 
