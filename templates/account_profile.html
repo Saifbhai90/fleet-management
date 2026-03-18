@@ -120,6 +120,17 @@ function _fleetLogout(link, e) {
 /* Global plugin reference - set once in init, reused in tap handler */
 var _bioPlugin = null;
 
+/* Robust auth caller: tries internalAuthenticate (raw bridge), then authenticate, then verifyIdentity.
+   @aparajita/capacitor-biometric-auth bridge exposes 'internalAuthenticate' NOT 'authenticate'.
+   Options: androidTitle, reason, cancelTitle */
+function _runAuth(bp, options) {
+  if (typeof bp.internalAuthenticate === 'function') return bp.internalAuthenticate(options);
+  if (typeof bp.authenticate         === 'function') return bp.authenticate(options);
+  if (typeof bp.verifyIdentity       === 'function') return bp.verifyIdentity(options);
+  return Promise.reject(new Error('No auth method found. Available: ' +
+    Object.keys(bp).filter(function(k){ return typeof bp[k]==='function'; }).join(', ')));
+}
+
 /* ── Enable biometric NOW (tap row to trigger fingerprint) ── */
 function _enableBiometricNow() {
   if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
@@ -163,10 +174,10 @@ function _enableBiometricNow() {
       }
       if (statTxt) statTxt.textContent = 'Place your finger...';
       console.log('[Bio Profile] Step 3: Prompting fingerprint...');
-      return BiometricAuth.authenticate({
+      return _runAuth(BiometricAuth, {
+        androidTitle: 'FleetManager',
         reason: 'Place your finger to enable biometric login',
-        cancelTitle: 'Cancel',
-        allowDeviceCredential: false
+        cancelTitle: 'Cancel'
       });
     })
     .then(function() {
@@ -194,16 +205,17 @@ function _enableBiometricNow() {
       }
     })
     .catch(function(err) {
-      if (err && err.__handled) return;
+      /* Always reset status text so row never stays stuck on 'Checking hardware...' */
       if (statTxt) { statTxt.textContent = 'Tap to enable'; statTxt.style.color = ''; }
+      if (err && err.__handled) return;
       var code = String(err && (err.code || err.message || ''));
       console.log('[Bio Profile] Error:', code, err);
       if (code === 'biometricCanceled' || code === '10' || code === 'userCanceled' ||
           (err && err.message && err.message.indexOf('cancel') !== -1)) {
         /* User cancelled - no message */
-      } else if (code === 'biometricNotEnrolled' || code === '6') {
+      } else if (code === 'biometricNotEnrolled' || code === '6' || code === '3') {
         alert('No fingerprint enrolled.\nGo to Settings \u2192 Security \u2192 Fingerprint.');
-      } else if (code === 'biometricNotAvailable' || code === '5') {
+      } else if (code === 'biometricNotAvailable' || code === '5' || code === '1') {
         alert('Fingerprint sensor not available on this device.');
       } else {
         alert('Biometric failed: ' + (err && err.message ? err.message : code || 'Unknown error'));

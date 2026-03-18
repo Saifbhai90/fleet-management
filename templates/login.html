@@ -192,6 +192,17 @@
     })]);
   }
 
+  /* Robust auth caller: tries internalAuthenticate (raw bridge), then authenticate, then verifyIdentity.
+     The @aparajita plugin bridge exposes 'internalAuthenticate' (not 'authenticate') directly.
+     Options: androidTitle, reason, cancelTitle */
+  function runAuth(bp, options) {
+    if (typeof bp.internalAuthenticate === 'function') return bp.internalAuthenticate(options);
+    if (typeof bp.authenticate         === 'function') return bp.authenticate(options);
+    if (typeof bp.verifyIdentity       === 'function') return bp.verifyIdentity(options);
+    return Promise.reject(new Error('No authentication method found on biometric plugin. Available: ' +
+      Object.keys(bp).filter(function(k){ return typeof bp[k]==='function'; }).join(', ')));
+  }
+
   /* Show HBL saved account view */
   function showHBLView() {
     if (hblName) hblName.textContent = savedName || savedUser || 'User';
@@ -267,10 +278,10 @@
       return;
     }
     console.log('[Bio] Verifying fingerprint for enrollment...');
-    bp.authenticate({
+    runAuth(bp, {
+      androidTitle: 'FleetManager',
       reason: 'Verify your fingerprint to enable biometric login',
-      cancelTitle: 'Cancel',
-      allowDeviceCredential: false
+      cancelTitle: 'Cancel'
     })
     .then(function() {
       console.log('[Bio] Fingerprint verified - pending enrollment after login');
@@ -328,10 +339,10 @@
       hblLoginBtn.disabled = true;
     }
 
-    _timed(bp.authenticate({
+    _timed(runAuth(bp, {
+      androidTitle: 'FleetManager',
       reason: 'Verify your identity to sign in',
-      cancelTitle: 'Cancel',
-      allowDeviceCredential: false
+      cancelTitle: 'Cancel'
     }), 30000)
     .then(function() {
       /* Biometric verified - login with token */
