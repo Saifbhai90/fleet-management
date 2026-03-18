@@ -1,5 +1,5 @@
 from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session, send_file, abort
-from app import app, db
+from app import app, db, csrf
 from models import (
     Company, Project, Vehicle, Driver, ParkingStation, District, EmployeePost, Employee, EmployeeDocument,
     project_district, employee_project, employee_district, vehicle_district, ProjectTransfer, VehicleTransfer, DriverTransfer, DriverStatusChange,
@@ -997,6 +997,7 @@ def biometric_token():
 
 
 @app.route('/auth/app-logout', methods=['POST'])
+@csrf.exempt
 def app_logout():
     """Silent AJAX logout for mobile app auto-logout when app goes to background/closes."""
     try:
@@ -1009,8 +1010,8 @@ def app_logout():
     session.clear()
     return jsonify({'ok': True})
 
-
 @app.route('/auth/biometric-login', methods=['POST'])
+@csrf.exempt
 def biometric_login():
     """Validate biometric token and create a new session (no password needed)."""
     import hmac as _hmac, hashlib

@@ -331,8 +331,19 @@
   function triggerBiometric() {
     var bp = _bp();
     if (!bp) {
-      /* Plugin not loaded - hide toggle silently */
       if (hblBioToggle) { hblBioToggle.checked = false; hblBioToggle.closest('div') && (hblBioToggle.closest('div').style.display = 'none'); }
+      return;
+    }
+
+    /* Read FRESH from localStorage at call time - closure vars may be stale */
+    var currentUser  = localStorage.getItem(SAVED_USER_KEY);
+    var currentToken = localStorage.getItem(BIO_TOKEN_KEY);
+
+    console.log('[Bio Login] currentUser:', currentUser, '| hasToken:', !!currentToken);
+
+    if (!currentUser || !currentToken) {
+      alert('Biometric login data missing.\nPlease enable biometric login again from Profile.');
+      if (hblBioToggle) hblBioToggle.checked = false;
       return;
     }
 
@@ -347,42 +358,57 @@
       cancelTitle: 'Cancel'
     }), 30000)
     .then(function() {
-      /* Biometric verified - login with token */
+      console.log('[Bio Login] Fingerprint OK — sending to server...');
       return fetch('/auth/biometric-login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: savedUser, token: bioToken })
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({ username: currentUser, token: currentToken })
       });
     })
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+      if (!r.ok && r.status !== 200) {
+        /* Non-2xx HTTP status - still try to parse error JSON */
+        return r.json().then(function(d) { d._httpStatus = r.status; return d; })
+                       .catch(function() { return { ok: false, error: 'HTTP ' + r.status, _httpStatus: r.status }; });
+      }
+      return r.json();
+    })
     .then(function(data) {
+      console.log('[Bio Login] Server response:', JSON.stringify(data));
       if (data.ok) {
         window.location.href = data.redirect || '/dashboard';
       } else {
-        /* Token invalid - clear and fallback */
-        localStorage.removeItem(BIO_TOKEN_KEY);
-        if (hblBioToggle) hblBioToggle.checked = false;
-        if (hblLoginBtn) {
-          hblLoginBtn.classList.remove('loading');
-          hblLoginBtn.disabled = false;
+        if (hblLoginBtn) { hblLoginBtn.classList.remove('loading'); hblLoginBtn.disabled = false; }
+        var errMsg = data.error || 'Unknown server error';
+        /* Only delete token if server says token is explicitly invalid */
+        if (errMsg === 'Invalid token') {
+          localStorage.removeItem(BIO_TOKEN_KEY);
+          if (hblBioToggle) hblBioToggle.checked = false;
+          alert('Biometric token is invalid. Please re-enable biometric from Profile.');
+        } else {
+          /* Other error (user not found, network, etc.) - keep token, show exact error */
+          alert('Biometric login failed: ' + errMsg +
+                '\n\nTry using password instead. (username: ' + currentUser + ')');
         }
-        alert('Biometric login failed. Please use your password.');
       }
     })
     .catch(function(err) {
-      if (hblLoginBtn) {
-        hblLoginBtn.classList.remove('loading');
-        hblLoginBtn.disabled = false;
-      }
-      var code = String(err && (err.code || ''));
-      if (code === 'biometricCanceled' || code === '10' || code === 'userCanceled') {
-        /* User cancelled - just reset toggle */
+      if (hblLoginBtn) { hblLoginBtn.classList.remove('loading'); hblLoginBtn.disabled = false; }
+      var code = String(err && (err.code || err.message || ''));
+      console.log('[Bio Login] catch error:', code, err);
+      if (code === 'biometricCanceled' || code === '10' || code === 'userCanceled' ||
+          (err && err.message && err.message.indexOf('cancel') !== -1)) {
         if (hblBioToggle) hblBioToggle.checked = false;
       } else if (code === 'biometricNotEnrolled' || code === '6') {
         if (hblBioToggle) hblBioToggle.checked = false;
         alert('No fingerprint enrolled on this device.');
-      } else {
+      } else if (code === 'timeout') {
         if (hblBioToggle) hblBioToggle.checked = false;
+        alert('Biometric timed out. Please try again.');
+      } else {
+        /* Network / fetch error - keep toggle ON so user can retry */
+        alert('Connection error: ' + (err && err.message ? err.message : code) +
+              '\nPlease check your connection and try again.');
       }
     });
   }
