@@ -144,8 +144,8 @@
 (function() {
   'use strict';
   
-  /* CRITICAL: Exit immediately if not native platform */
-  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+  /* CRITICAL: Exit immediately if not native (web) platform */
+  if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
 
   var SAVED_USER_KEY = 'fleet_saved_username';
   var SAVED_NAME_KEY = 'fleet_saved_name';
@@ -176,9 +176,9 @@
   var loginTitle   = document.getElementById('loginTitle');
   var loginSub     = document.getElementById('loginSubtitle');
 
-  /* Helper: get biometric plugin */
+  /* Helper: get biometric plugin - access inside function per instructions */
   function _bp() {
-    return window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
+    return Capacitor.Plugins && Capacitor.Plugins.BiometricAuth;
   }
 
   /* Helper: timeout wrapper */
@@ -266,8 +266,9 @@
   /* ── Trigger biometric authentication ── */
   function triggerBiometric() {
     var bp = _bp();
-    if (!bp || typeof bp.authenticate !== 'function') {
-      if (hblBioToggle) hblBioToggle.checked = false;
+    if (!bp) {
+      /* Plugin not loaded - hide toggle silently */
+      if (hblBioToggle) { hblBioToggle.checked = false; hblBioToggle.closest('div') && (hblBioToggle.closest('div').style.display = 'none'); }
       return;
     }
 

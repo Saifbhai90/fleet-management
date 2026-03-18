@@ -3051,7 +3051,9 @@ def login():
         TRUSTED_DEVICE_COOKIE, TRUSTED_DEVICE_DAYS
     )
     # ── Trusted Device: auto-login on GET if valid cookie present ──
-    if request.method == 'GET' and not session.get('user_id'):
+    # SKIP on Capacitor mobile app (causes auto-login bug after logout)
+    is_capacitor = request.headers.get('X-Capacitor-Platform') or request.user_agent.string.find('Capacitor') >= 0
+    if request.method == 'GET' and not session.get('user_id') and not is_capacitor:
         td_token = request.cookies.get(TRUSTED_DEVICE_COOKIE, '')
         if td_token:
             td_username = verify_trusted_device_token(td_token, app.config['SECRET_KEY'])
@@ -3266,9 +3268,10 @@ def logout():
     flash(msg, 'info' if inactivity else 'info')
     # Add clear_bio=1 parameter to signal login.html to clear biometric localStorage
     response = redirect(url_for('login', clear_bio=1))
-    if not inactivity:
-        # Explicit logout: clear trusted device so user must re-enter password
-        response.delete_cookie(TRUSTED_DEVICE_COOKIE)
+    # ALWAYS delete trusted device cookie on logout (mobile + web)
+    # Use path='/' to ensure browser properly removes it
+    response.delete_cookie(TRUSTED_DEVICE_COOKIE, path='/')
+    response.delete_cookie(TRUSTED_DEVICE_COOKIE, path='/', samesite='Lax')
     return response
 
 @app.route('/api/log-activity', methods=['POST'])

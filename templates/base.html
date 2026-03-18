@@ -4479,9 +4479,9 @@ document.addEventListener('DOMContentLoaded', function() {
    ═══════════════════════════════════════════════════════════════════ */
 (function() {
   'use strict';
-  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+  if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
   
-  var App = window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+  var App = Capacitor.Plugins && Capacitor.Plugins.App;
   if (!App) return;
 
   /* When app goes to background or closes → logout */
@@ -4503,7 +4503,7 @@ document.addEventListener('DOMContentLoaded', function() {
 {% if session.get('user_id') %}
 (function() {
   'use strict';
-  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+  if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
   var displayName = {{ session.get('user', '') | tojson }};
   if (displayName) {
     localStorage.setItem('fleet_saved_name', displayName);

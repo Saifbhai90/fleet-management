@@ -119,7 +119,8 @@ function _fleetLogout(link, e) {
 
 /* ── Enable biometric NOW (tap row to trigger fingerprint) ── */
 function _enableBiometricNow() {
-  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+  /* Use getPlatform() per user instructions */
+  if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
 
   var bioToken = localStorage.getItem('fleet_bio_token');
   var statTxt  = document.getElementById('bioStatusText');
@@ -134,16 +135,19 @@ function _enableBiometricNow() {
     return;
   }
 
-  var bp = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
-  if (!bp) {
-    alert('Biometric plugin not loaded. Please restart the app.');
+  /* Access plugin INSIDE function per user instructions */
+  var BiometricAuth = Capacitor.Plugins && Capacitor.Plugins.BiometricAuth;
+  if (!BiometricAuth) {
+    /* Plugin not loaded - hide row SILENTLY, no error alert */
+    var row = document.getElementById('bioSettingRow');
+    if (row) row.style.display = 'none';
     return;
   }
 
   if (statTxt) statTxt.textContent = 'Checking sensor...';
 
   /* Step 1: checkBiometry first to verify hardware is ready */
-  bp.checkBiometry()
+  BiometricAuth.checkBiometry()
     .then(function(info) {
       if (!info || !info.isAvailable) {
         if (statTxt) statTxt.textContent = 'Tap to enable';
@@ -153,7 +157,7 @@ function _enableBiometricNow() {
       }
       /* Step 2: Hardware ready - ask fingerprint */
       if (statTxt) statTxt.textContent = 'Place your finger...';
-      return bp.authenticate({
+      return BiometricAuth.authenticate({
         reason: 'Place your finger to enable biometric login',
         cancelTitle: 'Cancel',
         allowDeviceCredential: false
@@ -195,47 +199,49 @@ function _enableBiometricNow() {
     });
 }
 
-/* ── Init: Show row ONLY on native, check current status ── */
+/* ── Init: Show row ONLY on native, hide SILENTLY if plugin missing ── */
 (function() {
   'use strict';
   var row = document.getElementById('bioSettingRow');
   if (!row) return;
 
-  /* CRITICAL: Exit if not native platform */
-  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
+  /* Use getPlatform() per user instructions */
+  if (!window.Capacitor || Capacitor.getPlatform() === 'web') {
     row.style.display = 'none';
     return;
   }
 
-  /* Delay 600ms so Capacitor bridge is fully ready */
+  /* Delay 800ms so Capacitor bridge is fully ready before checking plugin */
   setTimeout(function() {
-    var bp = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
-    if (!bp) { row.style.display = 'none'; return; }
+    var BiometricAuth = Capacitor.Plugins && Capacitor.Plugins.BiometricAuth;
+    if (!BiometricAuth) {
+      /* Plugin not found - hide SILENTLY, no error message */
+      row.style.display = 'none';
+      return;
+    }
 
-    bp.checkBiometry()
+    BiometricAuth.checkBiometry()
       .then(function(info) {
-        /* Show row regardless - let user try and get meaningful error */
-        row.style.display = 'flex';
-
         var statTxt  = document.getElementById('bioStatusText');
         var bioToken = localStorage.getItem('fleet_bio_token');
         var savedName = localStorage.getItem('fleet_saved_name');
 
         if (bioToken && savedName) {
+          row.style.display = 'flex';
           if (statTxt) statTxt.textContent = 'Enabled for ' + savedName;
+        } else if (info && info.isAvailable) {
+          row.style.display = 'flex';
+          if (statTxt) statTxt.textContent = 'Tap to enable';
         } else {
-          if (statTxt) statTxt.textContent = info && info.isAvailable
-            ? 'Tap to enable'
-            : 'Not available (enroll fingerprint in Settings)';
+          /* Hardware not available - hide silently */
+          row.style.display = 'none';
         }
       })
       .catch(function() {
-        /* Show row anyway - checkBiometry errors shouldn't hide it */
-        row.style.display = 'flex';
-        var statTxt = document.getElementById('bioStatusText');
-        if (statTxt) statTxt.textContent = 'Tap to enable';
+        /* Error - hide silently, no alert */
+        row.style.display = 'none';
       });
-  }, 600);
+  }, 800);
 })();
 </script>
 {% endblock %}
