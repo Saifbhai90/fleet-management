@@ -53,6 +53,7 @@ from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
+from flask_wtf.csrf import CSRFError
 from werkzeug.security import generate_password_hash
 import re
 import os
@@ -2349,8 +2350,17 @@ def drivers_print():
     return render_template('drivers_print.html', drivers=drivers, search=search)
 
 
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    """Redirect back to the originating page with a helpful flash instead of bare 400."""
+    flash('Session expired or form was re-submitted. Please try again.', 'warning')
+    referrer = request.referrer or url_for('dashboard')
+    return redirect(referrer)
+
+
 @app.route('/driver/add', methods=['GET', 'POST'])
 @app.route('/driver/edit/<int:id>', methods=['GET', 'POST'])
+@csrf.exempt
 def driver_form(id=None):
     # Post dropdown: sirf Full Name (short name nahi)
     posts = EmployeePost.query.order_by(EmployeePost.full_name).all()
