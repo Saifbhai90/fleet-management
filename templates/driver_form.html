@@ -268,24 +268,94 @@
           <!-- Photo & Documents -->
           <div class="panel-section bg-light-subtle">
             <div class="section-title">Photo & Documents</div>
+
+            <!-- Row 1: Photo + CNIC Front + CNIC Back -->
+            <div class="row g-3 align-items-start mb-3">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold"><i class="bi bi-person-circle me-1 text-primary"></i>Driver Photo</label>
+                {{ form.photo(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp") }}
+                <div class="form-text">JPG / PNG / WebP</div>
+                {% if driver and driver.photo_path %}
+                <div class="mt-2 text-center">
+                  <img src="{{ driver.photo_path | media_url }}" alt="Driver photo"
+                       class="img-thumbnail rounded" style="max-height:110px; max-width:100%;"
+                       onerror="this.style.display='none'">
+                </div>
+                {% endif %}
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold"><i class="bi bi-credit-card me-1 text-success"></i>CNIC Front Photo</label>
+                {{ form.cnic_front(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp") }}
+                <div class="form-text">CNIC ka agla hissa</div>
+                {% if driver and driver.cnic_front_path %}
+                <div class="mt-2 text-center">
+                  <img src="{{ driver.cnic_front_path | media_url }}" alt="CNIC Front"
+                       class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
+                       onerror="this.style.display='none'">
+                  <div class="small text-success mt-1"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
+                </div>
+                {% endif %}
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold"><i class="bi bi-credit-card-2-back me-1 text-success"></i>CNIC Back Photo</label>
+                {{ form.cnic_back(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp") }}
+                <div class="form-text">CNIC ka pichla hissa</div>
+                {% if driver and driver.cnic_back_path %}
+                <div class="mt-2 text-center">
+                  <img src="{{ driver.cnic_back_path | media_url }}" alt="CNIC Back"
+                       class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
+                       onerror="this.style.display='none'">
+                  <div class="small text-success mt-1"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Row 2: License Front + License Back + Complete File PDF -->
             <div class="row g-3 align-items-start">
               <div class="col-md-4">
-                <label class="form-label">Driver Photo</label>
-                {{ form.photo(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp") }}
-                {% if driver and driver.photo_path %}
-                <p class="small text-muted mt-2 mb-1">Current photo:</p>
-                <img src="{{ url_for('uploaded_file', filename=driver.photo_path) }}" alt="Driver photo" class="img-thumbnail" style="max-height: 120px;">
+                <label class="form-label fw-semibold"><i class="bi bi-card-image me-1 text-warning"></i>License Front Photo</label>
+                {{ form.license_front(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp") }}
+                <div class="form-text">License ka agla hissa</div>
+                {% if driver and driver.license_front_path %}
+                <div class="mt-2 text-center">
+                  <img src="{{ driver.license_front_path | media_url }}" alt="License Front"
+                       class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
+                       onerror="this.style.display='none'">
+                  <div class="small text-success mt-1"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
+                </div>
                 {% endif %}
               </div>
               <div class="col-md-4">
-                <label class="form-label">Documents (PDF)</label>
-                {{ form.document(class="form-control", accept=".pdf") }}
-                {% if driver and driver.document_path %}
-                <p class="small text-muted mt-2 mb-0">
-                  <a href="{{ url_for('uploaded_file', filename=driver.document_path) }}" target="_blank" class="text-primary"><i class="bi bi-file-earmark-pdf me-1"></i>Current document</a>
-                </p>
+                <label class="form-label fw-semibold"><i class="bi bi-card-image me-1 text-warning"></i>License Back Photo</label>
+                {{ form.license_back(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp") }}
+                <div class="form-text">License ka pichla hissa</div>
+                {% if driver and driver.license_back_path %}
+                <div class="mt-2 text-center">
+                  <img src="{{ driver.license_back_path | media_url }}" alt="License Back"
+                       class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
+                       onerror="this.style.display='none'">
+                  <div class="small text-success mt-1"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
+                </div>
                 {% endif %}
               </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold"><i class="bi bi-file-earmark-pdf me-1 text-danger"></i>Complete Driver File (PDF)</label>
+                {{ form.document(class="form-control", accept=".pdf") }}
+                <div class="form-text">Mukammal file PDF mein</div>
+                {% if driver and driver.document_path %}
+                <div class="mt-2">
+                  <a href="{{ driver.document_path | media_url }}" target="_blank" class="btn btn-sm btn-outline-danger w-100">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>View Current PDF
+                  </a>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="alert alert-info mt-3 py-2 mb-0 small">
+              <i class="bi bi-cloud-arrow-up me-1"></i>
+              Tamam files automatically Cloudflare R2 Cloud par save hongi. Max file size: 16MB.
             </div>
           </div>
 

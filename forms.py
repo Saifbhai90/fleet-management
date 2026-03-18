@@ -134,8 +134,16 @@ class DriverForm(FlaskForm):
     jacket_size = SelectField('Jacket Size', choices=[('S', 'S'), ('M', 'M'), ('L', 'L'), ('XL', 'XL')])
 
     photo = FileField('Driver Photo', validators=[Optional(),
-        FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files (jpg, png, gif, webp) allowed')])
-    document = FileField('Documents (PDF)', validators=[Optional(),
+        FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])
+    cnic_front = FileField('CNIC Front Photo', validators=[Optional(),
+        FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])
+    cnic_back = FileField('CNIC Back Photo', validators=[Optional(),
+        FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])
+    license_front = FileField('License Front Photo', validators=[Optional(),
+        FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])
+    license_back = FileField('License Back Photo', validators=[Optional(),
+        FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])
+    document = FileField('Complete Driver File (PDF)', validators=[Optional(),
         FileAllowed(['pdf'], 'Only PDF allowed')])
 
     submit = SubmitField('Save Driver Data')

@@ -472,6 +472,15 @@ def uploaded_file(filename):
         return '', 404
     return send_from_directory(base, filename)
 
+@app.template_filter('media_url')
+def media_url_filter(path):
+    """Convert a stored file path (local relative or R2 full URL) to a usable URL."""
+    if not path:
+        return ''
+    if path.startswith('http://') or path.startswith('https://'):
+        return path
+    return url_for('uploaded_file', filename=path)
+
 # ────────────────────────────────────────────────
 # Dashboard / Home
 # ────────────────────────────────────────────────
@@ -2376,26 +2385,63 @@ def driver_form(id=None):
             if not id:
                 db.session.add(driver)
             db.session.commit()
-            subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'drivers', str(driver.id))
-            os.makedirs(subdir, exist_ok=True)
-            photo_file = request.files.get('photo')
-            if photo_file and photo_file.filename:
-                ext = os.path.splitext(secure_filename(photo_file.filename))[1] or '.jpg'
-                ext = ext.lower() if ext.lower() in ('.jpg', '.jpeg', '.png', '.gif', '.webp') else '.jpg'
-                fname = 'photo' + ext
-                filepath = os.path.join(subdir, fname)
-                photo_file.save(filepath)
-                driver.photo_path = os.path.join('drivers', str(driver.id), fname).replace('\\', '/')
-            doc_file = request.files.get('document')
-            if doc_file and doc_file.filename:
-                ext = (os.path.splitext(secure_filename(doc_file.filename))[1] or '.pdf').lower()
-                if ext != '.pdf':
-                    ext = '.pdf'
-                fname = secure_filename('document') + ext
-                filepath = os.path.join(subdir, fname)
-                doc_file.save(filepath)
-                driver.document_path = os.path.join('drivers', str(driver.id), fname).replace('\\', '/')
-            if photo_file and photo_file.filename or doc_file and doc_file.filename:
+            from r2_storage import upload_image_file as _r2_img, upload_pdf_file as _r2_pdf, R2_PUBLIC_URL as _r2_url
+            _use_r2 = bool(_r2_url)
+            _any_upload = False
+
+            def _save_image(file_storage, field_attr, r2_folder, local_fname):
+                nonlocal _any_upload
+                if not (file_storage and file_storage.filename):
+                    return
+                if _use_r2:
+                    try:
+                        url = _r2_img(file_storage, folder=r2_folder)
+                        if url:
+                            setattr(driver, field_attr, url)
+                            _any_upload = True
+                            return
+                    except Exception:
+                        pass
+                subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'drivers', str(driver.id))
+                os.makedirs(subdir, exist_ok=True)
+                ext = os.path.splitext(secure_filename(file_storage.filename))[1].lower() or '.jpg'
+                if ext not in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
+                    ext = '.jpg'
+                filepath = os.path.join(subdir, local_fname + ext)
+                file_storage.seek(0)
+                file_storage.save(filepath)
+                setattr(driver, field_attr, os.path.join('drivers', str(driver.id), local_fname + ext).replace('\\', '/'))
+                _any_upload = True
+
+            def _save_pdf(file_storage, field_attr, r2_folder, local_fname):
+                nonlocal _any_upload
+                if not (file_storage and file_storage.filename):
+                    return
+                if _use_r2:
+                    try:
+                        url = _r2_pdf(file_storage, folder=r2_folder)
+                        if url:
+                            setattr(driver, field_attr, url)
+                            _any_upload = True
+                            return
+                    except Exception:
+                        pass
+                subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'drivers', str(driver.id))
+                os.makedirs(subdir, exist_ok=True)
+                filepath = os.path.join(subdir, local_fname + '.pdf')
+                file_storage.seek(0)
+                file_storage.save(filepath)
+                setattr(driver, field_attr, os.path.join('drivers', str(driver.id), local_fname + '.pdf').replace('\\', '/'))
+                _any_upload = True
+
+            _save_image(request.files.get('photo'),         'photo_path',         'drivers/photos',   'photo')
+            _save_image(request.files.get('cnic_front'),    'cnic_front_path',    'drivers/cnic',     'cnic_front')
+            _save_image(request.files.get('cnic_back'),     'cnic_back_path',     'drivers/cnic',     'cnic_back')
+            _save_image(request.files.get('license_front'), 'license_front_path', 'drivers/license',  'license_front')
+            _save_image(request.files.get('license_back'),  'license_back_path',  'drivers/license',  'license_back')
+            _save_pdf(request.files.get('document'),        'document_path',      'drivers/documents','document')
+
+            if _any_upload:
                 db.session.commit()
             if not id and driver.cnic_no and (driver.cnic_no or '').strip() and driver.vehicle_id:
                 post_id, role_id = None, None

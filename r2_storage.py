@@ -104,3 +104,30 @@ def upload_image_file(file_storage, folder: str = "attendance") -> Optional[str]
         return None
     return upload_image_bytes(data, folder=folder)
 
+
+def upload_pdf_file(file_storage, folder: str = "drivers/documents", max_retries: int = 3) -> Optional[str]:
+    """
+    Upload a PDF FileStorage object to R2 and return the public URL.
+    """
+    if not file_storage:
+        return None
+    data = file_storage.read()
+    if not data:
+        return None
+    client = _get_s3_client()
+    uid = uuid.uuid4().hex
+    key = f"{folder.rstrip('/')}/{uid}.pdf"
+    last_exc: Exception | None = None
+    for _ in range(max_retries):
+        try:
+            client.put_object(
+                Bucket=R2_BUCKET_NAME,
+                Key=key,
+                Body=data,
+                ContentType="application/pdf",
+            )
+            return f"{R2_PUBLIC_URL}/{key}"
+        except Exception as e:
+            last_exc = e
+    raise last_exc or RuntimeError("Unknown error uploading PDF to R2")
+

@@ -216,9 +216,13 @@ class Driver(db.Model):
     status = db.Column(db.String(20), default='Active') # Active / Left
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Photo and documents (one picture, one PDF)
-    photo_path = db.Column(db.String(255), nullable=True)
-    document_path = db.Column(db.String(255), nullable=True)
+    # Photo and documents (stored as R2 public URL or local relative path)
+    photo_path = db.Column(db.String(500), nullable=True)
+    cnic_front_path = db.Column(db.String(500), nullable=True)
+    cnic_back_path = db.Column(db.String(500), nullable=True)
+    license_front_path = db.Column(db.String(500), nullable=True)
+    license_back_path = db.Column(db.String(500), nullable=True)
+    document_path = db.Column(db.String(500), nullable=True)
 
     # Links
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
