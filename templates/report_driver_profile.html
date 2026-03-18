@@ -238,42 +238,59 @@
   }
 
   @media print {
+    /* ── Hide ONLY navigation / chrome ── */
     nav, .navbar, .sidebar, #sidebar, aside,
     .top-header, .topbar, .page-header, .header-bar,
     .footer, footer, #footer, .pull-to-refresh, #pull-to-refresh,
     .action-bar, #profile-action-bar, #photoLightbox,
-    .toast, .modal-backdrop, button.btn, a.btn { display: none !important; }
+    .toast, .modal-backdrop, button.btn, a.btn,
+    .zoom-overlay, [style*="position:fixed"], [style*="position: fixed"] { display: none !important; }
 
+    /* ── Page/body reset ── */
     html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; font-size: 9pt !important; }
-    body > div, .main-content, .content-wrapper, .wrapper, main { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; margin-left: 0 !important; }
+    body > div, .main-content, .content-wrapper, .wrapper, main { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; margin-left: 0 !important; box-shadow: none !important; }
     .profile-page { background: #fff !important; padding: 0 !important; }
 
-    .profile-header { background: #1565c0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; padding: 0.6rem 0.9rem !important; margin-bottom: 0.4rem !important; border-radius: 6px !important; }
+    /* ── Profile content: full A4 width, always visible ── */
+    #profile-content { display: block !important; width: 100% !important; }
+
+    /* ── Header ── */
+    .profile-header { background: #1565c0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; padding: 0.6rem 0.9rem !important; margin-bottom: 0.4rem !important; border-radius: 6px !important; box-shadow: none !important; }
     .profile-header h2 { font-size: 1.1rem !important; }
     .status-badge { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     .photo-circle { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
-    .stats-row { grid-template-columns: repeat(3,1fr) !important; gap: 0.4rem !important; margin-bottom: 0.4rem !important; }
-    .stat-box { box-shadow: none !important; border: 1px solid #ccc !important; padding: 0.4rem !important; }
+    /* ── Stats ── */
+    .stats-row { display: grid !important; grid-template-columns: repeat(3,1fr) !important; gap: 0.4rem !important; margin-bottom: 0.4rem !important; }
+    .stat-box { display: block !important; box-shadow: none !important; background: #fff !important; border: 1px solid #ccc !important; padding: 0.4rem !important; }
     .stat-box .stat-value { font-size: 1rem !important; }
 
-    .section-card { box-shadow: none !important; border: 1px solid #ddd !important; border-radius: 4px !important; padding: 0.5rem 0.6rem !important; margin-bottom: 0.4rem !important; page-break-inside: avoid; }
+    /* ── Section cards: remove all shadows & backgrounds ── */
+    .section-card { display: block !important; box-shadow: none !important; background: #fff !important; border: 1px solid #ddd !important; border-radius: 4px !important; padding: 0.5rem 0.6rem !important; margin-bottom: 0.4rem !important; page-break-inside: avoid; }
     .section-title { margin-bottom: 0.4rem !important; font-size: 0.7rem !important; }
     .info-item .info-label { font-size: 0.62rem !important; }
     .info-item .info-value { font-size: 0.8rem !important; }
-    .info-grid { gap: 0.25rem 1.2rem !important; }
+    .info-grid { display: grid !important; gap: 0.25rem 1.2rem !important; }
 
-    .doc-grid { grid-template-columns: 1fr 1fr !important; gap: 0.5rem !important; }
-    .docs-photo-grid { grid-template-columns: repeat(3,1fr) !important; gap: 0.4rem !important; }
-    .doc-photo-thumb-wrap { height: 80px !important; }
-    .doc-photo-thumb-wrap img { height: 80px !important; width: 100% !important; object-fit: cover !important; }
-    .doc-photo-missing, .doc-pdf-wrap { height: 60px !important; font-size: 0.65rem !important; }
+    /* ── Doc cards side-by-side ── */
+    .doc-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0.5rem !important; }
 
+    /* ── Photos & Documents: EXPLICITLY VISIBLE ── */
+    .docs-photo-grid { display: grid !important; grid-template-columns: repeat(3,1fr) !important; gap: 0.4rem !important; }
+    .doc-photo-item { display: block !important; background: #fff !important; border: 1px solid #ddd !important; box-shadow: none !important; overflow: visible !important; }
+    .doc-photo-label { display: block !important; background: #f0f2f5 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .doc-photo-thumb-wrap { display: block !important; height: 90px !important; overflow: hidden !important; }
+    .doc-photo-thumb-wrap img { display: block !important; height: 90px !important; width: 100% !important; object-fit: cover !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .doc-photo-missing { display: flex !important; height: 60px !important; font-size: 0.65rem !important; }
+    .doc-pdf-wrap { display: flex !important; height: 60px !important; font-size: 0.65rem !important; }
+
+    /* ── Timeline compact ── */
     .timeline-item { margin-bottom: 0.5rem !important; page-break-inside: avoid; }
-    .timeline-body { padding: 0.3rem 0.5rem !important; font-size: 0.78rem !important; }
+    .timeline-body { padding: 0.3rem 0.5rem !important; font-size: 0.78rem !important; background: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-shadow: none !important; }
     .timeline-date, .timeline-type { font-size: 0.72rem !important; }
-    .uniform-box { padding: 0.3rem 0.6rem !important; font-size: 0.78rem !important; }
+    .uniform-box { padding: 0.3rem 0.6rem !important; font-size: 0.78rem !important; background: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
+    /* ── Watermark visible in print ── */
     #pdfWatermark { display: block !important; }
   }
 </style>
@@ -312,7 +329,7 @@
     <div class="d-flex align-items-center">
       {% if driver.photo_path %}
       <img src="{{ driver.photo_path | media_url }}" alt=""
-           class="photo-circle"
+           class="photo-circle" crossorigin="anonymous"
            onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
       <div class="photo-placeholder" style="display:none;"><i class="bi bi-person-fill"></i></div>
       {% else %}
@@ -526,7 +543,7 @@
         <div class="doc-photo-label"><i class="bi bi-person-fill me-1"></i>Driver Photo</div>
         {% if driver.photo_path %}
         <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.photo_path | media_url }}','Driver Photo')">
-          <img src="{{ driver.photo_path | media_url }}" alt="Driver Photo"
+          <img src="{{ driver.photo_path | media_url }}" alt="Driver Photo" crossorigin="anonymous"
                onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
           <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
         </div>
@@ -540,7 +557,7 @@
         <div class="doc-photo-label"><i class="bi bi-person-vcard me-1"></i>CNIC Front</div>
         {% if driver.cnic_front_path %}
         <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.cnic_front_path | media_url }}','CNIC Front')">
-          <img src="{{ driver.cnic_front_path | media_url }}" alt="CNIC Front"
+          <img src="{{ driver.cnic_front_path | media_url }}" alt="CNIC Front" crossorigin="anonymous"
                onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
           <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
         </div>
@@ -554,7 +571,7 @@
         <div class="doc-photo-label"><i class="bi bi-person-vcard-fill me-1"></i>CNIC Back</div>
         {% if driver.cnic_back_path %}
         <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.cnic_back_path | media_url }}','CNIC Back')">
-          <img src="{{ driver.cnic_back_path | media_url }}" alt="CNIC Back"
+          <img src="{{ driver.cnic_back_path | media_url }}" alt="CNIC Back" crossorigin="anonymous"
                onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
           <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
         </div>
@@ -568,7 +585,7 @@
         <div class="doc-photo-label"><i class="bi bi-card-checklist me-1"></i>License Front</div>
         {% if driver.license_front_path %}
         <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.license_front_path | media_url }}','License Front')">
-          <img src="{{ driver.license_front_path | media_url }}" alt="License Front"
+          <img src="{{ driver.license_front_path | media_url }}" alt="License Front" crossorigin="anonymous"
                onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
           <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
         </div>
@@ -582,7 +599,7 @@
         <div class="doc-photo-label"><i class="bi bi-card-checklist me-1"></i>License Back</div>
         {% if driver.license_back_path %}
         <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.license_back_path | media_url }}','License Back')">
-          <img src="{{ driver.license_back_path | media_url }}" alt="License Back"
+          <img src="{{ driver.license_back_path | media_url }}" alt="License Back" crossorigin="anonymous"
                onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
           <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
         </div>
@@ -612,48 +629,53 @@
     {% endif %}
   </div>
 
-  <!-- Custom Lightbox Overlay — responsive flex centering -->
+  <!-- Lightbox Overlay — scrollable column so tall scans are never clipped -->
   <div id="photoLightbox"
        onclick="closeLightbox(event)"
-       style="display:none;position:fixed;inset:0;z-index:9999;
-              background:rgba(0,0,0,0.92);
-              align-items:center;justify-content:center;">
-    <!-- Close button — large X, top-right -->
+       style="display:none;position:fixed;inset:0;z-index:10000;
+              background:rgba(0,0,0,0.9);
+              flex-direction:column;align-items:center;
+              overflow-y:auto;padding:50px 10px 20px;">
+    <!-- Fixed X close button — stays at top-right even when scrolling -->
     <button onclick="closeLightboxBtn()" title="Close (Esc)"
-            style="position:absolute;top:14px;right:16px;z-index:10001;
-                   background:rgba(255,255,255,0.14);
-                   border:2px solid rgba(255,255,255,0.35);
-                   color:#fff;font-size:1.4rem;font-weight:300;
-                   width:44px;height:44px;border-radius:50%;cursor:pointer;
+            style="position:fixed;top:12px;right:16px;z-index:10001;
+                   background:rgba(255,255,255,0.15);
+                   border:2px solid rgba(255,255,255,0.4);
+                   color:#fff;font-size:1.5rem;font-weight:400;
+                   width:46px;height:46px;border-radius:50%;cursor:pointer;
                    display:flex;align-items:center;justify-content:center;line-height:1;
                    transition:background 0.15s;"
-            onmouseover="this.style.background='rgba(255,255,255,0.28)'"
-            onmouseout="this.style.background='rgba(255,255,255,0.14)'">&#x2715;</button>
-    <!-- Title + open-full link — top-left -->
-    <div style="position:absolute;top:16px;left:16px;right:72px;z-index:10001;
-                display:flex;align-items:center;gap:0.75rem;pointer-events:none;">
+            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+            onmouseout="this.style.background='rgba(255,255,255,0.15)'">&#x2715;</button>
+    <!-- Fixed top bar — title + open-full -->
+    <div style="position:fixed;top:0;left:0;right:60px;height:46px;z-index:10000;
+                display:flex;align-items:center;gap:0.75rem;padding:0 1rem;
+                background:linear-gradient(to bottom,rgba(0,0,0,0.6),transparent);
+                pointer-events:none;">
       <span id="lightboxTitle"
-            style="color:#fff;font-size:0.88rem;font-weight:600;
-                   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;"></span>
+            style="color:#fff;font-size:0.9rem;font-weight:600;
+                   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
       <a id="lightboxOpen" href="#" target="_blank"
-         style="color:rgba(255,255,255,0.75);font-size:0.75rem;text-decoration:none;
-                white-space:nowrap;background:rgba(255,255,255,0.1);
-                padding:0.2rem 0.55rem;border-radius:3px;flex-shrink:0;pointer-events:auto;">
+         style="color:rgba(255,255,255,0.8);font-size:0.75rem;text-decoration:none;
+                white-space:nowrap;background:rgba(255,255,255,0.12);
+                padding:0.2rem 0.6rem;border-radius:3px;flex-shrink:0;pointer-events:auto;">
         <i class="bi bi-box-arrow-up-right me-1"></i>Open Full
       </a>
     </div>
-    <!-- Image — perfectly centered, never off-screen -->
+    <!-- Image — full width up to 95%, natural height, scroll for tall scans -->
     <img id="lightboxImg" src="" alt=""
-         style="max-width:95vw;max-height:90vh;width:auto;height:auto;
-                object-fit:contain;display:block;margin-top:44px;
-                border-radius:4px;box-shadow:0 8px 40px rgba(0,0,0,0.6);">
+         style="max-width:95%;height:auto;width:auto;
+                display:block;margin:auto;border-radius:8px;
+                box-shadow:0 8px 40px rgba(0,0,0,0.7);">
   </div>
   <script>
   function openDocModal(url, title) {
+    var lb = document.getElementById('photoLightbox');
     document.getElementById('lightboxImg').src = url;
     document.getElementById('lightboxTitle').textContent = title;
     document.getElementById('lightboxOpen').href = url;
-    document.getElementById('photoLightbox').style.display = 'flex';
+    lb.scrollTop = 0;
+    lb.style.display = 'flex';
     document.body.style.overflow = 'hidden';
   }
   function closeLightbox(e) {
@@ -672,33 +694,41 @@
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
     var wm = document.getElementById('pdfWatermark');
-    if (wm) {
-      var d = new Date();
-      var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
-               ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
-      document.getElementById('pdfDate').textContent = ds;
-      wm.style.display = 'block';
+    function resetBtn() {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
+      if (wm) wm.style.display = 'none';
     }
-    var el = document.getElementById('profile-content');
-    var imgs = Array.from(el.querySelectorAll('img'));
-    var waits = imgs.map(function(img) {
-      if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
-      return new Promise(function(res) { img.onload = res; img.onerror = res; });
-    });
-    Promise.all(waits).then(function() {
-      var opt = {
-        margin: [10, 10, 10, 10],
-        filename: 'Driver_Profile_{{ driver.driver_id }}.pdf',
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, letterRendering: true, allowTaint: true, logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-      html2pdf().set(opt).from(el).save().then(function() {
-        if (wm) wm.style.display = 'none';
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
+    try {
+      if (wm) {
+        var d = new Date();
+        var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
+                 ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+        document.getElementById('pdfDate').textContent = ds;
+        wm.style.display = 'block';
+      }
+      var el = document.getElementById('profile-content');
+      var imgs = Array.from(el.querySelectorAll('img'));
+      var waits = imgs.map(function(img) {
+        if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+        return new Promise(function(res) { img.onload = res; img.onerror = res; });
       });
-    });
+      Promise.all(waits).then(function() {
+        var opt = {
+          margin: [10, 10, 10, 10],
+          filename: 'Driver_Profile_{{ driver.driver_id }}.pdf',
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, allowTaint: false, letterRendering: true, logging: false },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        html2pdf().set(opt).from(el).save()
+          .then(function() { resetBtn(); })
+          .catch(function(err) { console.error('PDF error:', err); resetBtn(); });
+      }).catch(function(err) { console.error('Image load error:', err); resetBtn(); });
+    } catch(err) {
+      console.error('PDF exception:', err);
+      resetBtn();
+    }
   }
   </script>
 
