@@ -195,7 +195,10 @@
   <div class="profile-header">
     <div class="d-flex align-items-center">
       {% if driver.photo_path %}
-      <img src="{{ url_for('uploaded_file', filename=driver.photo_path) }}" alt="Photo" class="photo-circle">
+      <img src="{{ url_for('uploaded_file', filename=driver.photo_path) }}" alt=""
+           class="photo-circle"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+      <div class="photo-placeholder" style="display:none;"><i class="bi bi-person-fill"></i></div>
       {% else %}
       <div class="photo-placeholder"><i class="bi bi-person-fill"></i></div>
       {% endif %}
