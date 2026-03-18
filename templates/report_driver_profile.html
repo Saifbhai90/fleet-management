@@ -149,6 +149,75 @@
   .timeline-body strong { color: #2c3e50; }
   .timeline-body .remarks { font-style: italic; color: #777; margin-top: 0.3rem; font-size: 0.82rem; }
 
+  /* ── Photos & Documents grid ── */
+  .docs-photo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  .doc-photo-item {
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fafafa;
+  }
+  .doc-photo-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #555;
+    padding: 0.55rem 0.85rem;
+    background: #f0f2f5;
+    border-bottom: 1px solid #e8e8e8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .doc-photo-thumb-wrap {
+    display: block;
+    height: 130px;
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+    background: #e9ecef;
+  }
+  .doc-photo-thumb-wrap img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transition: transform 0.2s;
+  }
+  .doc-photo-thumb-wrap:hover img { transform: scale(1.04); }
+  .doc-photo-thumb-wrap .zoom-overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0);
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  .doc-photo-thumb-wrap:hover .zoom-overlay {
+    background: rgba(0,0,0,0.25);
+  }
+  .doc-photo-thumb-wrap .zoom-overlay i {
+    color: #fff; font-size: 1.6rem;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .doc-photo-thumb-wrap:hover .zoom-overlay i { opacity: 1; }
+  .doc-photo-missing {
+    height: 130px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 0.4rem; color: #bbb;
+    font-size: 0.78rem;
+  }
+  .doc-photo-missing i { font-size: 1.8rem; }
+  .doc-pdf-wrap {
+    height: 130px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 0.5rem;
+  }
+  .doc-pdf-wrap .pdf-icon { font-size: 2.5rem; color: #e53935; }
+  .doc-pdf-wrap a { font-size: 0.82rem; font-weight: 600; }
+  @media (max-width: 768px) { .docs-photo-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 480px) { .docs-photo-grid { grid-template-columns: 1fr; } }
+
   /* ── Current assignment badge ── */
   .current-tag {
     display: inline-block;
@@ -184,7 +253,7 @@
         <i class="bi bi-printer me-1"></i>Print
       </button>
       {% if driver.document_path %}
-      <a href="{{ url_for('uploaded_file', filename=driver.document_path) }}" target="_blank" class="btn btn-outline-danger btn-action">
+      <a href="{{ driver.document_path | media_url }}" target="_blank" class="btn btn-outline-danger btn-action">
         <i class="bi bi-file-earmark-pdf me-1"></i>Docs
       </a>
       {% endif %}
@@ -195,7 +264,7 @@
   <div class="profile-header">
     <div class="d-flex align-items-center">
       {% if driver.photo_path %}
-      <img src="{{ url_for('uploaded_file', filename=driver.photo_path) }}" alt=""
+      <img src="{{ driver.photo_path | media_url }}" alt=""
            class="photo-circle"
            onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
       <div class="photo-placeholder" style="display:none;"><i class="bi bi-person-fill"></i></div>
@@ -397,6 +466,130 @@
     </div>
     {% endif %}
   </div>
+
+  <!-- Photos & Documents -->
+  {% set _has_any_doc = driver.photo_path or driver.cnic_front_path or driver.cnic_back_path or driver.license_front_path or driver.license_back_path or driver.document_path %}
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-images me-1"></i>Photos &amp; Documents</div>
+    {% if _has_any_doc %}
+    <div class="docs-photo-grid">
+
+      <!-- Driver Photo -->
+      <div class="doc-photo-item">
+        <div class="doc-photo-label"><i class="bi bi-person-fill me-1"></i>Driver Photo</div>
+        {% if driver.photo_path %}
+        <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.photo_path | media_url }}','Driver Photo')">
+          <img src="{{ driver.photo_path | media_url }}" alt="Driver Photo"
+               onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+          <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+        </div>
+        {% else %}
+        <div class="doc-photo-missing"><i class="bi bi-person-bounding-box"></i><span>Not Uploaded</span></div>
+        {% endif %}
+      </div>
+
+      <!-- CNIC Front -->
+      <div class="doc-photo-item">
+        <div class="doc-photo-label"><i class="bi bi-person-vcard me-1"></i>CNIC Front</div>
+        {% if driver.cnic_front_path %}
+        <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.cnic_front_path | media_url }}','CNIC Front')">
+          <img src="{{ driver.cnic_front_path | media_url }}" alt="CNIC Front"
+               onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+          <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+        </div>
+        {% else %}
+        <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
+        {% endif %}
+      </div>
+
+      <!-- CNIC Back -->
+      <div class="doc-photo-item">
+        <div class="doc-photo-label"><i class="bi bi-person-vcard-fill me-1"></i>CNIC Back</div>
+        {% if driver.cnic_back_path %}
+        <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.cnic_back_path | media_url }}','CNIC Back')">
+          <img src="{{ driver.cnic_back_path | media_url }}" alt="CNIC Back"
+               onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+          <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+        </div>
+        {% else %}
+        <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
+        {% endif %}
+      </div>
+
+      <!-- License Front -->
+      <div class="doc-photo-item">
+        <div class="doc-photo-label"><i class="bi bi-card-checklist me-1"></i>License Front</div>
+        {% if driver.license_front_path %}
+        <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.license_front_path | media_url }}','License Front')">
+          <img src="{{ driver.license_front_path | media_url }}" alt="License Front"
+               onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+          <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+        </div>
+        {% else %}
+        <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
+        {% endif %}
+      </div>
+
+      <!-- License Back -->
+      <div class="doc-photo-item">
+        <div class="doc-photo-label"><i class="bi bi-card-checklist me-1"></i>License Back</div>
+        {% if driver.license_back_path %}
+        <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.license_back_path | media_url }}','License Back')">
+          <img src="{{ driver.license_back_path | media_url }}" alt="License Back"
+               onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+          <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+        </div>
+        {% else %}
+        <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
+        {% endif %}
+      </div>
+
+      <!-- Complete Driver File (PDF) -->
+      <div class="doc-photo-item">
+        <div class="doc-photo-label"><i class="bi bi-file-earmark-pdf me-1"></i>Complete Driver File</div>
+        {% if driver.document_path %}
+        <div class="doc-pdf-wrap">
+          <i class="bi bi-file-earmark-pdf pdf-icon"></i>
+          <a href="{{ driver.document_path | media_url }}" target="_blank" class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-eye me-1"></i>View / Download
+          </a>
+        </div>
+        {% else %}
+        <div class="doc-photo-missing"><i class="bi bi-file-earmark-x"></i><span>Not Uploaded</span></div>
+        {% endif %}
+      </div>
+
+    </div>
+    {% else %}
+    <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>No photos or documents uploaded yet. Use the Edit button to upload them.</p>
+    {% endif %}
+  </div>
+
+  <!-- Lightbox Modal -->
+  <div class="modal fade" id="docViewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content" style="background:#111;border:none;">
+        <div class="modal-header" style="border-bottom:1px solid #333;padding:0.6rem 1rem;">
+          <h6 class="modal-title text-white mb-0" id="docViewModalLabel"></h6>
+          <div class="d-flex gap-2 align-items-center">
+            <a id="docViewDownload" href="#" target="_blank" class="btn btn-sm btn-outline-light"><i class="bi bi-box-arrow-up-right me-1"></i>Open</a>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+        </div>
+        <div class="modal-body p-2 text-center">
+          <img id="docViewImg" src="" alt="" style="max-width:100%;max-height:75vh;object-fit:contain;">
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+  function openDocModal(url, title) {
+    document.getElementById('docViewModalLabel').textContent = title;
+    document.getElementById('docViewImg').src = url;
+    document.getElementById('docViewDownload').href = url;
+    new bootstrap.Modal(document.getElementById('docViewModal')).show();
+  }
+  </script>
 
   <!-- Job History Timeline -->
   <div class="section-card">
