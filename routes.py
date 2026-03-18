@@ -1,3 +1,4 @@
+# Force Rebuild — all syntax verified clean, pushing to unblock Render deploy queue
 from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session, send_file, abort
 from app import app, db, csrf
 from models import (
