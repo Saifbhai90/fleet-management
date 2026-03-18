@@ -365,10 +365,14 @@
       });
     })
     .then(function(r) {
-      if (!r.ok && r.status !== 200) {
-        /* Non-2xx HTTP status - still try to parse error JSON */
-        return r.json().then(function(d) { d._httpStatus = r.status; return d; })
-                       .catch(function() { return { ok: false, error: 'HTTP ' + r.status, _httpStatus: r.status }; });
+      var ct = r.headers.get('content-type') || '';
+      if (ct.indexOf('application/json') === -1) {
+        /* Server returned HTML (e.g. redirect to login page) instead of JSON.
+           This usually means before_request intercepted the call. */
+        return r.text().then(function(html) {
+          console.error('[Bio Login] Server returned HTML (HTTP ' + r.status + '):', html.substring(0, 200));
+          return { ok: false, error: 'Server config error (HTTP ' + r.status + '): got HTML not JSON. Check server logs.' };
+        });
       }
       return r.json();
     })

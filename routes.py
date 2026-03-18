@@ -88,7 +88,7 @@ def require_login():
     endpoint = request.endpoint or ''
     if endpoint.startswith('static'):
         return
-    if endpoint in ('login', 'pwa_manifest', 'service_worker'):
+    if endpoint in ('login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout'):
         return
     if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
         return  # First-time password set flow (no full login yet)
