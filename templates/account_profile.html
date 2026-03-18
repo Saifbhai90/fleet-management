@@ -67,7 +67,7 @@
           </a>
 
           <!-- Biometric status (native only) -->
-          <div id="bioSettingRow" style="display:none;" class="d-flex align-items-center gap-3 py-3 px-2 border-bottom">
+          <div id="bioSettingRow" style="display:none;cursor:pointer;" class="d-flex align-items-center gap-3 py-3 px-2 border-bottom" onclick="_toggleBioSetting()">
             <div style="width:40px;height:40px;background:#f0fdf4;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
@@ -125,6 +125,24 @@ function _fleetLogout(link, e) {
   return confirm('Are you sure you want to logout?');
 }
 
+/* ── Toggle biometric setting (tap entire row) ── */
+function _toggleBioSetting() {
+  var enabled = localStorage.getItem('fleet_bio_enabled') === '1';
+  if (enabled) {
+    if (!confirm('Disable biometric login?\nYou can re-enable it on your next login.')) return;
+    localStorage.removeItem('fleet_bio_enabled');
+    localStorage.removeItem('fleet_bio_token');
+    localStorage.removeItem('fleet_bio_user');
+    localStorage.removeItem('fleet_bio_name');
+    var statTxt = document.getElementById('bioStatusText');
+    var disableBtn = document.getElementById('bioDisableBtn');
+    if (disableBtn) disableBtn.style.display = 'none';
+    if (statTxt) statTxt.textContent = 'Not enabled \u2014 will prompt on next login';
+  } else {
+    alert('Biometric login is not enabled.\nYou can enable it on your next login.');
+  }
+}
+
 /* ── Biometric status row (fixed — no Checking... hang) ── */
 (function() {
   'use strict';
@@ -138,7 +156,11 @@ function _fleetLogout(link, e) {
   var disableBtn = document.getElementById('bioDisableBtn');
 
   if (!row) return;
-  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+  /* CRITICAL: Only show on native platforms, hide on web browsers */
+  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
+    row.style.display = 'none';
+    return;
+  }
 
   /* Clear the default "Checking..." text — row is hidden, so no flicker */
   if (statTxt) statTxt.textContent = '';
@@ -174,9 +196,10 @@ function _fleetLogout(link, e) {
     /* Timeout or hardware error — silently keep row hidden (no ugly error message) */
   });
 
-  /* Disable button */
+  /* Disable button (prevent event bubbling to row click) */
   if (disableBtn) {
-    disableBtn.addEventListener('click', function() {
+    disableBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
       if (!confirm('Disable biometric login?\nYou can re-enable it on your next login.')) return;
       localStorage.removeItem(BIO_KEY);
       localStorage.removeItem(TOKEN_KEY);

@@ -124,6 +124,20 @@
   var USER_KEY  = 'fleet_bio_user';
   var NAME_KEY  = 'fleet_bio_name';
 
+  /* Check if user manually logged out — clear biometric credentials */
+  var urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('clear_bio') === '1' || urlParams.get('logout') === '1') {
+    localStorage.removeItem(BIO_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(NAME_KEY);
+    /* Clean URL without reload */
+    if (window.history && window.history.replaceState) {
+      var cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+  }
+
   var isEnabled   = localStorage.getItem(BIO_KEY) === '1';
   var storedToken = localStorage.getItem(TOKEN_KEY);
   var storedUser  = localStorage.getItem(USER_KEY);

@@ -4545,6 +4545,39 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════
+   App Lifecycle: Auto-logout when app closes or goes to background
+   ═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+  
+  var App = window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+  if (!App) return;
+
+  /* When app goes to background or user closes it → auto-logout */
+  App.addListener('appStateChange', function(state) {
+    if (!state.isActive) {
+      /* App went to background or closed — silent logout */
+      fetch('/auth/app-logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true
+      }).catch(function() { /* Ignore network errors */ });
+    }
+  });
+
+  /* When app is about to be terminated (Android back button / swipe close) */
+  App.addListener('backButton', function() {
+    /* Let default behavior happen, but trigger logout */
+    fetch('/auth/app-logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true
+    }).catch(function() { /* Ignore */ });
+  });
+})();
+
+/* ═══════════════════════════════════════════════════════════════════
    Biometric Setup Logic  —  runs on every page load
    Triggered by sessionStorage flag set in login.html on form submit
    ═══════════════════════════════════════════════════════════════════ */

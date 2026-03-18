@@ -3264,11 +3264,13 @@ def logout():
     session.clear()  # Destroy ALL session data
     msg = 'Session expired due to inactivity.' if inactivity else 'You have been logged out.'
     flash(msg, 'info' if inactivity else 'info')
-    response = redirect(url_for('login'))
+    # Add clear_bio=1 parameter to signal login.html to clear biometric localStorage
+    response = redirect(url_for('login', clear_bio=1))
     if not inactivity:
         # Explicit logout: clear trusted device so user must re-enter password
         response.delete_cookie(TRUSTED_DEVICE_COOKIE)
     return response
+
 @app.route('/api/log-activity', methods=['POST'])
 def api_log_activity():
     """Accept client-side activity log: action, device_id, latitude, longitude, accuracy. User from session."""
