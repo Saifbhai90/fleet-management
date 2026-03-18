@@ -76,6 +76,11 @@ app.config['SESSION_COOKIE_SECURE'] = _cookie_secure_env not in ('0', 'false', '
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 # Avoid redirect/cookie issues behind HTTPS proxy (Render)
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# Render terminates SSL at proxy; disabling strict Referer check prevents CSRF token mismatch on HTTPS POST.
+# Token validation itself still works — only the Referer header comparison is skipped.
+app.config['WTF_CSRF_SSL_STRICT'] = False
+# Extend CSRF token lifetime to 8 hours so long-running sessions don't get 400 Bad Request errors.
+app.config['WTF_CSRF_TIME_LIMIT'] = 28800
 # Attendance time control: timezone for comparing current time with Morning/Night windows (e.g. Asia/Karachi)
 app.config['APP_TIMEZONE'] = os.environ.get('APP_TIMEZONE', 'Asia/Karachi').strip() or 'Asia/Karachi'
 csrf = CSRFProtect(app)
