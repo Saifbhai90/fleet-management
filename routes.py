@@ -1781,6 +1781,10 @@ def vehicles_import():
             from utils import parse_date
             import_errors = []
             vehicles_to_add = []
+            # Track values seen within this file to catch intra-file duplicates
+            seen_vnos    = set()
+            seen_engines = set()
+            seen_chassis = set()
 
             # Row-wise validation + duplicate checks
             for idx, row in df.iterrows():
@@ -1800,11 +1804,36 @@ def vehicles_import():
                     if pd.isna(val) or not str(val).strip():
                         row_issues.append(f'Field "{col}" is required.')
 
-                # Duplicate check (same as form validation)
+                eng_raw = row.get('engine_no')
+                eng_val = str(eng_raw).strip() if pd.notna(eng_raw) and str(eng_raw).strip() else ''
+
+                chs_raw = row.get('chassis_no')
+                chs_val = str(chs_raw).strip() if pd.notna(chs_raw) and str(chs_raw).strip() else ''
+
+                # Duplicate checks — DB (already saved) AND within this file
                 if vno:
-                    existing = Vehicle.query.filter(Vehicle.vehicle_no == vno).first()
-                    if existing:
+                    if Vehicle.query.filter(Vehicle.vehicle_no == vno).first():
                         row_issues.append(f'Vehicle No "{vno}" already exists in system.')
+                    elif vno in seen_vnos:
+                        row_issues.append(f'Vehicle No "{vno}" is duplicated within this file.')
+                    else:
+                        seen_vnos.add(vno)
+
+                if eng_val and eng_val.upper() != 'N/A':
+                    if Vehicle.query.filter(Vehicle.engine_no == eng_val).first():
+                        row_issues.append(f'Engine No "{eng_val}" already exists in system.')
+                    elif eng_val in seen_engines:
+                        row_issues.append(f'Engine No "{eng_val}" is duplicated within this file.')
+                    else:
+                        seen_engines.add(eng_val)
+
+                if chs_val and chs_val.upper() != 'N/A':
+                    if Vehicle.query.filter(Vehicle.chassis_no == chs_val).first():
+                        row_issues.append(f'Chassis No "{chs_val}" already exists in system.')
+                    elif chs_val in seen_chassis:
+                        row_issues.append(f'Chassis No "{chs_val}" is duplicated within this file.')
+                    else:
+                        seen_chassis.add(chs_val)
 
                 # driver_capacity numeric parse
                 cap_val = row.get('driver_capacity')
