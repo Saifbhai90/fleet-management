@@ -238,26 +238,50 @@
   }
 
   @media print {
-    .action-bar, #photoLightbox { display: none !important; }
-    .profile-page { background: #fff; padding: 0.5rem; }
-    .profile-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .section-card { box-shadow: none; border: 1px solid #ddd; page-break-inside: avoid; }
-    .docs-photo-grid { grid-template-columns: repeat(3, 1fr); }
-    .doc-photo-thumb-wrap { height: auto; }
-    .doc-photo-thumb-wrap img { max-height: 120px; width: 100%; object-fit: cover; }
-    .doc-photo-missing { height: 80px; }
-    .doc-pdf-wrap { height: 80px; }
-    .stats-row { grid-template-columns: repeat(3, 1fr); }
-    .timeline-item { page-break-inside: avoid; }
-    a.btn { display: none !important; }
-    .photo-circle { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav, .navbar, .sidebar, #sidebar, aside,
+    .top-header, .topbar, .page-header, .header-bar,
+    .footer, footer, #footer, .pull-to-refresh, #pull-to-refresh,
+    .action-bar, #profile-action-bar, #photoLightbox,
+    .toast, .modal-backdrop, button.btn, a.btn { display: none !important; }
+
+    html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; font-size: 9pt !important; }
+    body > div, .main-content, .content-wrapper, .wrapper, main { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; margin-left: 0 !important; }
+    .profile-page { background: #fff !important; padding: 0 !important; }
+
+    .profile-header { background: #1565c0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; padding: 0.6rem 0.9rem !important; margin-bottom: 0.4rem !important; border-radius: 6px !important; }
+    .profile-header h2 { font-size: 1.1rem !important; }
+    .status-badge { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .photo-circle { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+    .stats-row { grid-template-columns: repeat(3,1fr) !important; gap: 0.4rem !important; margin-bottom: 0.4rem !important; }
+    .stat-box { box-shadow: none !important; border: 1px solid #ccc !important; padding: 0.4rem !important; }
+    .stat-box .stat-value { font-size: 1rem !important; }
+
+    .section-card { box-shadow: none !important; border: 1px solid #ddd !important; border-radius: 4px !important; padding: 0.5rem 0.6rem !important; margin-bottom: 0.4rem !important; page-break-inside: avoid; }
+    .section-title { margin-bottom: 0.4rem !important; font-size: 0.7rem !important; }
+    .info-item .info-label { font-size: 0.62rem !important; }
+    .info-item .info-value { font-size: 0.8rem !important; }
+    .info-grid { gap: 0.25rem 1.2rem !important; }
+
+    .doc-grid { grid-template-columns: 1fr 1fr !important; gap: 0.5rem !important; }
+    .docs-photo-grid { grid-template-columns: repeat(3,1fr) !important; gap: 0.4rem !important; }
+    .doc-photo-thumb-wrap { height: 80px !important; }
+    .doc-photo-thumb-wrap img { height: 80px !important; width: 100% !important; object-fit: cover !important; }
+    .doc-photo-missing, .doc-pdf-wrap { height: 60px !important; font-size: 0.65rem !important; }
+
+    .timeline-item { margin-bottom: 0.5rem !important; page-break-inside: avoid; }
+    .timeline-body { padding: 0.3rem 0.5rem !important; font-size: 0.78rem !important; }
+    .timeline-date, .timeline-type { font-size: 0.72rem !important; }
+    .uniform-box { padding: 0.3rem 0.6rem !important; font-size: 0.78rem !important; }
+
+    #pdfWatermark { display: block !important; }
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <div class="profile-page">
-  <!-- Action Bar -->
-  <div class="action-bar">
+  <!-- Action Bar — excluded from PDF/Print capture -->
+  <div class="action-bar" id="profile-action-bar">
     <h4><i class="bi bi-person-badge me-2 text-primary"></i>Driver Profile</h4>
     <div class="d-flex gap-2">
       <a href="{{ url_for('drivers_list') }}" class="btn btn-outline-secondary btn-action">
@@ -279,6 +303,9 @@
       {% endif %}
     </div>
   </div>
+
+  <!-- Profile content — this div is captured for PDF/Print -->
+  <div id="profile-content">
 
   <!-- Header Card -->
   <div class="profile-header">
@@ -585,54 +612,52 @@
     {% endif %}
   </div>
 
-  <!-- Custom Lightbox Overlay -->
+  <!-- Custom Lightbox Overlay — responsive flex centering -->
   <div id="photoLightbox"
-       style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.92);overflow-y:auto;"
-       onclick="closeLightbox(event)">
-    <!-- Fixed top bar -->
-    <div id="lightboxBar" style="position:fixed;top:0;left:0;right:0;z-index:10000;
-         background:rgba(0,0,0,0.75);display:flex;justify-content:space-between;
-         align-items:center;padding:0.5rem 1rem;gap:1rem;backdrop-filter:blur(4px);">
-      <span id="lightboxTitle" style="color:#fff;font-size:0.88rem;font-weight:600;
-            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
-      <div style="display:flex;gap:0.5rem;flex-shrink:0;">
-        <a id="lightboxOpen" href="#" target="_blank"
-           style="color:#fff;text-decoration:none;font-size:0.78rem;
-                  background:rgba(255,255,255,0.18);padding:0.3rem 0.7rem;
-                  border-radius:4px;white-space:nowrap;">
-          <i class="bi bi-box-arrow-up-right me-1"></i>Open Full
-        </a>
-        <button onclick="closeLightboxBtn()"
-                style="background:rgba(255,255,255,0.18);border:none;color:#fff;
-                       width:32px;height:32px;border-radius:4px;cursor:pointer;
-                       font-size:1.1rem;display:flex;align-items:center;justify-content:center;">
-          ✕
-        </button>
-      </div>
+       onclick="closeLightbox(event)"
+       style="display:none;position:fixed;inset:0;z-index:9999;
+              background:rgba(0,0,0,0.92);
+              align-items:center;justify-content:center;">
+    <!-- Close button — large X, top-right -->
+    <button onclick="closeLightboxBtn()" title="Close (Esc)"
+            style="position:absolute;top:14px;right:16px;z-index:10001;
+                   background:rgba(255,255,255,0.14);
+                   border:2px solid rgba(255,255,255,0.35);
+                   color:#fff;font-size:1.4rem;font-weight:300;
+                   width:44px;height:44px;border-radius:50%;cursor:pointer;
+                   display:flex;align-items:center;justify-content:center;line-height:1;
+                   transition:background 0.15s;"
+            onmouseover="this.style.background='rgba(255,255,255,0.28)'"
+            onmouseout="this.style.background='rgba(255,255,255,0.14)'">&#x2715;</button>
+    <!-- Title + open-full link — top-left -->
+    <div style="position:absolute;top:16px;left:16px;right:72px;z-index:10001;
+                display:flex;align-items:center;gap:0.75rem;pointer-events:none;">
+      <span id="lightboxTitle"
+            style="color:#fff;font-size:0.88rem;font-weight:600;
+                   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;"></span>
+      <a id="lightboxOpen" href="#" target="_blank"
+         style="color:rgba(255,255,255,0.75);font-size:0.75rem;text-decoration:none;
+                white-space:nowrap;background:rgba(255,255,255,0.1);
+                padding:0.2rem 0.55rem;border-radius:3px;flex-shrink:0;pointer-events:auto;">
+        <i class="bi bi-box-arrow-up-right me-1"></i>Open Full
+      </a>
     </div>
-    <!-- Image centred with padding so bar doesn't overlap -->
-    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;
-                padding:60px 1rem 1rem;box-sizing:border-box;">
-      <img id="lightboxImg" src="" alt=""
-           style="max-width:96vw;max-height:88vh;width:auto;height:auto;
-                  object-fit:contain;display:block;border-radius:4px;
-                  box-shadow:0 4px 32px rgba(0,0,0,0.6);">
-    </div>
+    <!-- Image — perfectly centered, never off-screen -->
+    <img id="lightboxImg" src="" alt=""
+         style="max-width:95vw;max-height:90vh;width:auto;height:auto;
+                object-fit:contain;display:block;margin-top:44px;
+                border-radius:4px;box-shadow:0 8px 40px rgba(0,0,0,0.6);">
   </div>
   <script>
   function openDocModal(url, title) {
     document.getElementById('lightboxImg').src = url;
     document.getElementById('lightboxTitle').textContent = title;
     document.getElementById('lightboxOpen').href = url;
-    var lb = document.getElementById('photoLightbox');
-    lb.scrollTop = 0;
-    lb.style.display = 'block';
+    document.getElementById('photoLightbox').style.display = 'flex';
     document.body.style.overflow = 'hidden';
   }
   function closeLightbox(e) {
-    var img = document.getElementById('lightboxImg');
-    if (e.target !== img && e.target !== document.getElementById('lightboxBar'))
-      closeLightboxBtn();
+    if (e.target === document.getElementById('photoLightbox')) closeLightboxBtn();
   }
   function closeLightboxBtn() {
     document.getElementById('photoLightbox').style.display = 'none';
@@ -646,17 +671,33 @@
     var btn = document.getElementById('pdfBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
-    var el = document.querySelector('.profile-page');
-    var opt = {
-      margin: [8, 8, 8, 8],
-      filename: '{{ driver.name | replace(" ","_") }}_Driver_Profile.pdf',
-      image: { type: 'jpeg', quality: 0.92 },
-      html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    html2pdf().set(opt).from(el).save().then(function() {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
+    var wm = document.getElementById('pdfWatermark');
+    if (wm) {
+      var d = new Date();
+      var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
+               ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+      document.getElementById('pdfDate').textContent = ds;
+      wm.style.display = 'block';
+    }
+    var el = document.getElementById('profile-content');
+    var imgs = Array.from(el.querySelectorAll('img'));
+    var waits = imgs.map(function(img) {
+      if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+      return new Promise(function(res) { img.onload = res; img.onerror = res; });
+    });
+    Promise.all(waits).then(function() {
+      var opt = {
+        margin: [10, 10, 10, 10],
+        filename: 'Driver_Profile_{{ driver.driver_id }}.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true, allowTaint: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      html2pdf().set(opt).from(el).save().then(function() {
+        if (wm) wm.style.display = 'none';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
+      });
     });
   }
   </script>
@@ -725,6 +766,15 @@
     <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>No job history recorded yet.</p>
     {% endif %}
   </div>
+
+  <!-- PDF/Print watermark — hidden on screen, visible only in PDF/Print -->
+  <div id="pdfWatermark"
+       style="display:none;text-align:center;padding:0.5rem 1rem;margin-top:0.5rem;
+              font-size:0.68rem;color:#aaa;border-top:1px solid #e8e8e8;">
+    Generated by FleetManager &nbsp;&bull;&nbsp; {{ driver.name }} ({{ driver.driver_id }}) &nbsp;&bull;&nbsp; <span id="pdfDate"></span>
+  </div>
+
+  </div><!-- /profile-content -->
 
 </div>
 {% endblock %}
