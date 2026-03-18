@@ -4487,7 +4487,6 @@ document.addEventListener('DOMContentLoaded', function() {
   /* When app goes to background or closes → logout */
   App.addListener('appStateChange', function(state) {
     if (!state.isActive) {
-      /* Clear session and redirect to logout */
       fetch('/logout', {
         method: 'GET',
         keepalive: true
@@ -4495,6 +4494,35 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 })();
+
+/* ═══════════════════════════════════════════════════════════════════
+   Save logged-in user info to localStorage for HBL login view
+   Runs on every native page load when user is logged in.
+   This sets fleet_saved_name so the Welcome [Name] view shows.
+   ═══════════════════════════════════════════════════════════════════ */
+{% if session.get('user_id') %}
+(function() {
+  'use strict';
+  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+  var displayName = {{ session.get('user', '') | tojson }};
+  if (displayName) {
+    localStorage.setItem('fleet_saved_name', displayName);
+  }
+  /* Also save username from biometric-token endpoint (only if not already saved) */
+  if (!localStorage.getItem('fleet_saved_username')) {
+    fetch('/auth/biometric-token', {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok && data.username) {
+        localStorage.setItem('fleet_saved_username', data.username);
+      }
+    })
+    .catch(function() { /* Ignore */ });
+  }
+})();
+{% endif %}
 
 </script>
 

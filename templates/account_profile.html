@@ -120,35 +120,48 @@ function _fleetLogout(link, e) {
 /* ── Enable biometric NOW (tap row to trigger fingerprint) ── */
 function _enableBiometricNow() {
   if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
-  
+
   var bioToken = localStorage.getItem('fleet_bio_token');
-  
+  var statTxt  = document.getElementById('bioStatusText');
+
   if (bioToken) {
     /* Already enabled - offer to disable */
     if (confirm('Disable biometric login?')) {
       localStorage.removeItem('fleet_bio_token');
       localStorage.removeItem('fleet_saved_name');
-      var statTxt = document.getElementById('bioStatusText');
-      if (statTxt) statTxt.textContent = 'Disabled';
+      if (statTxt) statTxt.textContent = 'Tap to enable';
     }
-  } else {
-    /* Not enabled - trigger fingerprint NOW */
-    var bp = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
-    if (!bp || typeof bp.authenticate !== 'function') {
-      alert('Biometric authentication not available on this device.');
-      return;
-    }
-    
-    var statTxt = document.getElementById('bioStatusText');
-    if (statTxt) statTxt.textContent = 'Verifying...';
-    
-    bp.authenticate({
-      reason: 'Place your finger to enable biometric login',
-      cancelTitle: 'Cancel',
-      allowDeviceCredential: false
+    return;
+  }
+
+  var bp = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
+  if (!bp) {
+    alert('Biometric plugin not loaded. Please restart the app.');
+    return;
+  }
+
+  if (statTxt) statTxt.textContent = 'Checking sensor...';
+
+  /* Step 1: checkBiometry first to verify hardware is ready */
+  bp.checkBiometry()
+    .then(function(info) {
+      if (!info || !info.isAvailable) {
+        if (statTxt) statTxt.textContent = 'Tap to enable';
+        var reason = (info && info.reason) || 'No fingerprint enrolled.';
+        alert('Fingerprint not available: ' + reason + '\n\nPlease go to Settings > Security > Fingerprint and enroll a fingerprint.');
+        return Promise.reject({ __handled: true });
+      }
+      /* Step 2: Hardware ready - ask fingerprint */
+      if (statTxt) statTxt.textContent = 'Place your finger...';
+      return bp.authenticate({
+        reason: 'Place your finger to enable biometric login',
+        cancelTitle: 'Cancel',
+        allowDeviceCredential: false
+      });
     })
     .then(function() {
-      /* Biometric verified - fetch token from server */
+      /* Step 3: Verified - fetch HMAC token from server */
+      if (statTxt) statTxt.textContent = 'Saving...';
       return fetch('/auth/biometric-token', {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
       });
@@ -156,24 +169,30 @@ function _enableBiometricNow() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.ok) {
-        localStorage.setItem('fleet_bio_token', data.token);
+        localStorage.setItem('fleet_bio_token',      data.token);
         localStorage.setItem('fleet_saved_username', data.username);
-        localStorage.setItem('fleet_saved_name', data.display_name || data.username);
+        localStorage.setItem('fleet_saved_name',     data.display_name || data.username);
         if (statTxt) statTxt.textContent = 'Enabled for ' + (data.display_name || data.username);
-        alert('✓ Biometric login enabled!');
+        alert('\u2713 Biometric login enabled!');
       } else {
-        if (statTxt) statTxt.textContent = 'Disabled';
-        alert('Failed to enable biometric login.');
+        if (statTxt) statTxt.textContent = 'Tap to enable';
+        alert('Server error. Please try again.');
       }
     })
     .catch(function(err) {
-      if (statTxt) statTxt.textContent = 'Disabled';
-      var code = String(err && (err.code || ''));
-      if (code !== 'biometricCanceled' && code !== '10' && code !== 'userCanceled') {
-        alert('Biometric authentication failed.');
+      if (err && err.__handled) return;
+      if (statTxt) statTxt.textContent = 'Tap to enable';
+      var code = String(err && (err.code || err.message || ''));
+      if (code === 'biometricCanceled' || code === '10' || code === 'userCanceled') {
+        /* User cancelled - no message needed */
+      } else if (code === 'biometricNotEnrolled' || code === '6') {
+        alert('No fingerprint enrolled.\nGo to Settings > Security > Fingerprint.');
+      } else if (code === 'biometricNotAvailable' || code === '5') {
+        alert('Fingerprint sensor not available.');
+      } else {
+        alert('Failed: ' + (err.message || code || 'Unknown error'));
       }
     });
-  }
 }
 
 /* ── Init: Show row ONLY on native, check current status ── */
@@ -181,42 +200,42 @@ function _enableBiometricNow() {
   'use strict';
   var row = document.getElementById('bioSettingRow');
   if (!row) return;
-  
+
   /* CRITICAL: Exit if not native platform */
   if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
     row.style.display = 'none';
     return;
   }
-  
-  /* Check if biometric hardware available */
-  var bp = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
-  if (!bp || typeof bp.checkBiometry !== 'function') {
-    row.style.display = 'none';
-    return;
-  }
-  
-  bp.checkBiometry()
-    .then(function(info) {
-      if (info && (info.isAvailable || info.strongBiometryIsAvailable)) {
-        /* Hardware available - show row */
+
+  /* Delay 600ms so Capacitor bridge is fully ready */
+  setTimeout(function() {
+    var bp = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
+    if (!bp) { row.style.display = 'none'; return; }
+
+    bp.checkBiometry()
+      .then(function(info) {
+        /* Show row regardless - let user try and get meaningful error */
         row.style.display = 'flex';
-        
-        /* Update status text */
-        var statTxt = document.getElementById('bioStatusText');
+
+        var statTxt  = document.getElementById('bioStatusText');
         var bioToken = localStorage.getItem('fleet_bio_token');
         var savedName = localStorage.getItem('fleet_saved_name');
-        
+
         if (bioToken && savedName) {
           if (statTxt) statTxt.textContent = 'Enabled for ' + savedName;
         } else {
-          if (statTxt) statTxt.textContent = 'Tap to enable';
+          if (statTxt) statTxt.textContent = info && info.isAvailable
+            ? 'Tap to enable'
+            : 'Not available (enroll fingerprint in Settings)';
         }
-      }
-    })
-    .catch(function() {
-      /* Hardware error - keep row hidden */
-      row.style.display = 'none';
-    });
+      })
+      .catch(function() {
+        /* Show row anyway - checkBiometry errors shouldn't hide it */
+        row.style.display = 'flex';
+        var statTxt = document.getElementById('bioStatusText');
+        if (statTxt) statTxt.textContent = 'Tap to enable';
+      });
+  }, 600);
 })();
 </script>
 {% endblock %}
