@@ -3050,18 +3050,8 @@ def login():
         make_trusted_device_token, verify_trusted_device_token,
         TRUSTED_DEVICE_COOKIE, TRUSTED_DEVICE_DAYS
     )
-    # ── Trusted Device: auto-login on GET if valid cookie present ──
-    # SKIP on Capacitor mobile app (causes auto-login bug after logout)
-    is_capacitor = request.headers.get('X-Capacitor-Platform') or request.user_agent.string.find('Capacitor') >= 0
-    if request.method == 'GET' and not session.get('user_id') and not is_capacitor:
-        td_token = request.cookies.get(TRUSTED_DEVICE_COOKIE, '')
-        if td_token:
-            td_username = verify_trusted_device_token(td_token, app.config['SECRET_KEY'])
-            if td_username:
-                td_user = User.query.filter_by(username=td_username, is_active=True).first()
-                if td_user:
-                    _do_login_session(td_user, request)
-                    return redirect(url_for('dashboard'))
+    # Trusted Device auto-login DISABLED - biometric handles mobile auth
+    # (Capacitor WebView UA does not contain 'Capacitor' so detection is unreliable)
 
     form = LoginForm()
     # Show "no access" message at most once when redirected due to permission failure
@@ -3235,18 +3225,8 @@ def login():
                 else:
                     target_endpoint = 'dashboard'
                 flash(f'Welcome, {session["user"]}!', 'success')
-                # ── Set trusted device cookie (30 days, HttpOnly) ──
-                td_token = make_trusted_device_token(user.username, app.config['SECRET_KEY'])
-                from datetime import timedelta as _td
                 resp_target = url_for('dashboard', from_login=1) if target_endpoint == 'dashboard' else url_for(target_endpoint)
-                response = redirect(resp_target)
-                response.set_cookie(
-                    TRUSTED_DEVICE_COOKIE, td_token,
-                    max_age=int(_td(days=TRUSTED_DEVICE_DAYS).total_seconds()),
-                    httponly=True, secure=app.config.get('SESSION_COOKIE_SECURE', True),
-                    samesite='Lax'
-                )
-                return response
+                return redirect(resp_target)
         flash('Invalid user ID or password.', 'danger')
     return render_template('login.html', form=form)
 

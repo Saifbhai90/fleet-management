@@ -327,7 +327,12 @@
   function doPasswordLogin() {
     var pwd = hblPassword ? hblPassword.value.trim() : '';
     if (!pwd) {
-      alert('Please enter your password.');
+      if (hblPassword) hblPassword.focus();
+      return;
+    }
+    if (!savedUser) {
+      /* savedUser missing - fall back to standard form */
+      showStandardForm();
       return;
     }
 
@@ -336,15 +341,16 @@
       hblLoginBtn.disabled = true;
     }
 
-    /* Submit via standard form */
+    /* Fill standard form fields */
     var usernameInput = document.getElementById('login_username');
     var passwordInput = document.getElementById('login_password');
     if (usernameInput) usernameInput.value = savedUser;
     if (passwordInput) passwordInput.value = pwd;
-    
-    /* Flag to enable biometric setup after login */
-    sessionStorage.setItem('fleet_bio_setup', '1');
-    
+
+    /* CRITICAL: Make form visible before submit - hidden form submit can fail */
+    if (loginForm) {
+      loginForm.style.cssText = 'display:block !important; visibility:hidden; position:absolute;';
+    }
     if (loginForm) loginForm.submit();
   }
 

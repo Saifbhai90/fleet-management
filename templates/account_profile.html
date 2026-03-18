@@ -117,6 +117,9 @@ function _fleetLogout(link, e) {
   return false;
 }
 
+/* Global plugin reference - set once in init, reused in tap handler */
+var _bioPlugin = null;
+
 /* ── Enable biometric NOW (tap row to trigger fingerprint) ── */
 function _enableBiometricNow() {
   /* Use getPlatform() per user instructions */
@@ -135,8 +138,8 @@ function _enableBiometricNow() {
     return;
   }
 
-  /* Access plugin INSIDE function per user instructions */
-  var BiometricAuth = Capacitor.Plugins && Capacitor.Plugins.BiometricAuth;
+  /* Use globally saved reference, or try to get it again */
+  var BiometricAuth = _bioPlugin || (Capacitor.Plugins && Capacitor.Plugins.BiometricAuth);
   if (!BiometricAuth) {
     /* Plugin not loaded - hide row SILENTLY, no error alert */
     var row = document.getElementById('bioSettingRow');
@@ -219,6 +222,8 @@ function _enableBiometricNow() {
       row.style.display = 'none';
       return;
     }
+    /* Save globally so _enableBiometricNow can reuse it on tap */
+    _bioPlugin = BiometricAuth;
 
     BiometricAuth.checkBiometry()
       .then(function(info) {
