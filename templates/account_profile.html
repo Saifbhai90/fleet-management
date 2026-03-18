@@ -83,7 +83,7 @@
           <a href="{{ url_for('logout') }}"
              class="d-flex align-items-center gap-3 py-3 px-2 text-decoration-none"
              style="color:#ef4444;border-radius:12px;transition:background 0.15s;"
-             onclick="return confirm('Are you sure you want to logout?')">
+             onclick="return _fleetLogout(this, event)">
             <div style="width:40px;height:40px;background:#fef2f2;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
               <i class="bi bi-box-arrow-right" style="font-size:1.1rem;color:#ef4444;"></i>
             </div>
@@ -102,53 +102,88 @@
 </div>
 
 <script>
+/* ── Biometric-aware logout ── */
+function _fleetLogout(link, e) {
+  var BIO_KEY = 'fleet_bio_enabled';
+  var enabled = localStorage.getItem(BIO_KEY) === '1';
+  var storedName = localStorage.getItem('fleet_bio_name') || localStorage.getItem('fleet_bio_user') || '';
+  if (enabled) {
+    e.preventDefault();
+    var msg = storedName
+      ? 'Keep fingerprint login enabled for ' + storedName + ' next time?'
+      : 'Keep fingerprint login enabled for next time?';
+    var keep = window.confirm(msg + '\n\n[OK] = Keep\u00a0\u00a0 [Cancel] = Remove');
+    if (!keep) {
+      localStorage.removeItem('fleet_bio_enabled');
+      localStorage.removeItem('fleet_bio_token');
+      localStorage.removeItem('fleet_bio_user');
+      localStorage.removeItem('fleet_bio_name');
+    }
+    window.location.href = link.href;
+    return false;
+  }
+  return confirm('Are you sure you want to logout?');
+}
+
+/* ── Biometric status row (fixed — no Checking... hang) ── */
 (function() {
-  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+  'use strict';
+  var BIO_KEY   = 'fleet_bio_enabled';
+  var TOKEN_KEY = 'fleet_bio_token';
+  var USER_KEY  = 'fleet_bio_user';
+  var NAME_KEY  = 'fleet_bio_name';
 
   var row        = document.getElementById('bioSettingRow');
   var statTxt    = document.getElementById('bioStatusText');
   var disableBtn = document.getElementById('bioDisableBtn');
-  var BIO_KEY    = 'fleet_bio_enabled';
-  var TOKEN_KEY  = 'fleet_bio_token';
-  var USER_KEY   = 'fleet_bio_user';
-  var NAME_KEY   = 'fleet_bio_name';
 
   if (!row) return;
+  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
 
-  var bioPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
-  if (!bioPlugin) return;
+  /* Clear the default "Checking..." text — row is hidden, so no flicker */
+  if (statTxt) statTxt.textContent = '';
 
-  /* Show row if biometric hardware available */
-  bioPlugin.checkBiometry().then(function(info) {
-    var hwAvail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
-    if (!hwAvail) return;
+  /* Get plugin at call-time */
+  var bp = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
+  if (!bp || typeof bp.checkBiometry !== 'function') return;
 
+  /* Race checkBiometry against a 3-second timeout */
+  Promise.race([
+    bp.checkBiometry(),
+    new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, 3000); })
+  ])
+  .then(function(info) {
+    var hwAvail = info && (info.isAvailable || info.strongBiometryIsAvailable);
+    if (!hwAvail) {
+      /* Sensor present but nothing enrolled — keep row hidden */
+      return;
+    }
+    /* Hardware available — show row with correct state */
     row.style.display = 'flex';
     var enabled = localStorage.getItem(BIO_KEY) === '1';
-
     if (enabled) {
-      var storedName = localStorage.getItem(NAME_KEY) || localStorage.getItem(USER_KEY) || '';
-      statTxt.textContent = storedName ? 'Enabled for ' + storedName : 'Enabled';
+      var name = localStorage.getItem(NAME_KEY) || localStorage.getItem(USER_KEY) || '';
+      if (statTxt) statTxt.textContent = name ? 'Enabled for ' + name : 'Enabled';
       if (disableBtn) disableBtn.style.display = 'inline-block';
     } else {
-      statTxt.textContent = 'Disabled — enable on Login screen';
+      if (statTxt) statTxt.textContent = 'Not enabled \u2014 will prompt on next login';
       if (disableBtn) disableBtn.style.display = 'none';
     }
-  }).catch(function() {
-    row.style.display = 'flex';
-    statTxt.textContent = 'Biometric hardware unavailable';
+  })
+  .catch(function() {
+    /* Timeout or hardware error — silently keep row hidden (no ugly error message) */
   });
 
   /* Disable button */
   if (disableBtn) {
     disableBtn.addEventListener('click', function() {
-      if (!confirm('Disable biometric login? You will need to re-enable it from the Login screen.')) return;
+      if (!confirm('Disable biometric login?\nYou can re-enable it on your next login.')) return;
       localStorage.removeItem(BIO_KEY);
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
       localStorage.removeItem(NAME_KEY);
       disableBtn.style.display = 'none';
-      if (statTxt) statTxt.textContent = 'Disabled — enable on Login screen';
+      if (statTxt) statTxt.textContent = 'Not enabled \u2014 will prompt on next login';
     });
   }
 })();

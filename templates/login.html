@@ -114,8 +114,9 @@
   });
 })();
 
-/* ── Banking-Style Biometric Login ───────────────────────────────── */
+/* ── HBL-Style Biometric Login (v2 — fixed) ─────────────────────── */
 (function() {
+  'use strict';
   if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
 
   var BIO_KEY   = 'fleet_bio_enabled';
@@ -127,7 +128,6 @@
   var storedToken = localStorage.getItem(TOKEN_KEY);
   var storedUser  = localStorage.getItem(USER_KEY);
   var storedName  = localStorage.getItem(NAME_KEY) || storedUser || 'User';
-  var bioPlugin   = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
 
   var bioView     = document.getElementById('bioLoginView');
   var loginForm   = document.getElementById('loginForm');
@@ -138,6 +138,28 @@
   var bioStatus   = document.getElementById('bioStatusMsg');
   var bioUsePass  = document.getElementById('bioUsePassword');
   var bioDiff     = document.getElementById('bioDiffAccount');
+
+  /* Get plugin at call-time (handles async Capacitor bridge loading) */
+  function _bp() {
+    return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
+  }
+
+  /* Race a promise against a timeout */
+  function _timed(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise(function(_, rej) {
+        setTimeout(function() { rej({ code: 'timeout', message: 'timeout' }); }, ms);
+      })
+    ]);
+  }
+
+  function _clearBio() {
+    localStorage.removeItem(BIO_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(NAME_KEY);
+  }
 
   function showBioView() {
     if (bioName)    bioName.textContent = storedName;
@@ -154,11 +176,30 @@
     if (loginSub)   loginSub.style.display = 'block';
   }
 
-  /* ── Show biometric view on load if enabled ── */
-  if (isEnabled && storedToken && storedUser && bioPlugin) {
-    showBioView();
-    /* Auto-trigger after short delay */
-    setTimeout(function() { triggerBio(); }, 600);
+  /* ── Init: verify hardware before showing bio view ── */
+  if (isEnabled && storedToken && storedUser) {
+    var bp = _bp();
+    if (bp && typeof bp.checkBiometry === 'function') {
+      /* Verify sensor is still enrolled & available (3 s timeout) */
+      _timed(bp.checkBiometry(), 3000)
+        .then(function(info) {
+          if (info && (info.isAvailable || info.strongBiometryIsAvailable)) {
+            showBioView();
+            setTimeout(function() { triggerBio(); }, 700);
+          } else {
+            /* Hardware present but nothing enrolled — fall back silently */
+            _clearBio();
+            showPasswordForm();
+          }
+        })
+        .catch(function() {
+          /* Timeout or bridge error — safe fallback to password */
+          showPasswordForm();
+        });
+    } else {
+      /* Plugin not yet bridged — safe fallback */
+      showPasswordForm();
+    }
   }
 
   /* ── Fingerprint button tap ── */
@@ -175,56 +216,55 @@
   if (bioDiff) {
     bioDiff.addEventListener('click', function() {
       if (!confirm('This will remove saved biometric login. Continue?')) return;
-      localStorage.removeItem(BIO_KEY);
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(USER_KEY);
-      localStorage.removeItem(NAME_KEY);
+      _clearBio();
       window.location.reload();
     });
   }
 
   function triggerBio() {
-    if (!bioPlugin) { showPasswordForm(); return; }
+    var bp = _bp();
+    if (!bp || typeof bp.authenticate !== 'function') { showPasswordForm(); return; }
     if (bioThumbBtn) bioThumbBtn.disabled = true;
-    if (bioStatus)   bioStatus.textContent = 'Authenticating…';
+    if (bioStatus)   bioStatus.textContent = 'Authenticating\u2026';
 
-    bioPlugin.authenticate({
+    _timed(bp.authenticate({
       reason: 'Verify your identity to sign in to Fleet Manager',
       cancelTitle: 'Use Password',
       allowDeviceCredential: false,
       iosFallbackTitle: 'Use Password'
-    }).then(function() {
-      if (bioStatus) bioStatus.textContent = 'Verified! Signing in…';
+    }), 30000)
+    .then(function() {
+      if (bioStatus) bioStatus.textContent = 'Verified! Signing in\u2026';
       return fetch('/auth/biometric-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: storedUser, token: storedToken })
       });
-    }).then(function(r) {
-      return r.json();
-    }).then(function(data) {
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
       if (data.ok) {
         window.location.href = data.redirect || '/dashboard';
       } else {
-        localStorage.removeItem(BIO_KEY);
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(USER_KEY);
-        localStorage.removeItem(NAME_KEY);
+        _clearBio();
         showPasswordForm();
         _lpToast('Biometric login failed. Please sign in with your password.', 'danger');
       }
-    }).catch(function(err) {
+    })
+    .catch(function(err) {
       if (bioThumbBtn) bioThumbBtn.disabled = false;
       if (bioStatus)   bioStatus.textContent = 'Touch the sensor to sign in';
-      var code = (err && (err.code || err.message || ''));
-      if (code === 'biometricCanceled' || String(code) === '10') {
-        /* User tapped cancel — stay on bio view, show password option */
+      var code = String(err && (err.code || err.message || ''));
+      if (code === 'biometricCanceled' || code === '10' || code === 'userCanceled') {
         if (bioStatus) bioStatus.textContent = 'Cancelled. Tap again or use password.';
-      } else if (code === 'biometricLockout' || code === 'biometricPermanentLockout') {
-        localStorage.removeItem(BIO_KEY); localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(USER_KEY); localStorage.removeItem(NAME_KEY);
-        showPasswordForm();
-        _lpToast('Too many attempts. Please sign in with your password.', 'warning');
+      } else if (code === 'biometricLockout' || code === 'biometricPermanentLockout' || code === '7' || code === '8') {
+        _clearBio(); showPasswordForm();
+        _lpToast('Too many failed attempts. Please sign in with your password.', 'warning');
+      } else if (code === 'biometricNotAvailable' || code === 'biometricNotEnrolled' || code === '5' || code === '6') {
+        _clearBio(); showPasswordForm();
+        _lpToast('Fingerprint not available. Please sign in with your password.', 'warning');
+      } else if (code === 'timeout') {
+        if (bioStatus) bioStatus.textContent = 'Sensor timed out. Tap to retry.';
       } else {
         if (bioStatus) bioStatus.textContent = 'Biometric failed. Tap to retry.';
       }
@@ -246,7 +286,7 @@
     }, 4500);
   }
 
-  /* ── On manual form submit: flag base.html to show T&C + biometric setup ── */
+  /* ── On password form submit: flag base.html to show biometric setup ── */
   if (loginForm) {
     loginForm.addEventListener('submit', function() {
       if (!isEnabled) sessionStorage.setItem('fleet_bio_setup', '1');
