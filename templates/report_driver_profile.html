@@ -1,137 +1,464 @@
 {% extends "base.html" %}
-{% block title %}Driver Profile - {{ driver.name }}{% endblock %}
+{% block title %}Driver Profile – {{ driver.name }}{% endblock %}
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-4">
-    <h2 class="mb-0"><i class="bi bi-person-badge me-2 text-primary"></i>Driver Profile Report</h2>
+<style>
+  .profile-page { background: #f0f2f5; min-height: 100vh; padding: 1.5rem; }
+
+  /* ── Action bar ── */
+  .action-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+  .action-bar h4 { margin: 0; font-weight: 700; color: #2c3e50; font-size: 1.1rem; }
+  .btn-action { padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: 6px; font-weight: 500; }
+
+  /* ── Header card ── */
+  .profile-header {
+    background: linear-gradient(135deg, #1565c0 0%, #1e88e5 60%, #42a5f5 100%);
+    border-radius: 12px;
+    padding: 1.75rem 2rem;
+    color: #fff;
+    margin-bottom: 1.25rem;
+    position: relative;
+  }
+  .profile-header h2 { font-size: 1.8rem; font-weight: 700; margin: 0 0 0.3rem; }
+  .profile-header .sub { font-size: 0.9rem; opacity: 0.85; margin: 0.1rem 0; }
+  .status-badge {
+    position: absolute; top: 1.5rem; right: 1.75rem;
+    background: rgba(255,255,255,0.15);
+    border: 1.5px solid rgba(255,255,255,0.5);
+    color: #fff;
+    padding: 0.3rem 1rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    backdrop-filter: blur(4px);
+  }
+  .status-badge.left { background: rgba(220,53,69,0.3); border-color: rgba(220,53,69,0.6); }
+  .photo-circle {
+    width: 80px; height: 80px; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.6);
+    object-fit: cover; margin-right: 1.25rem;
+  }
+  .photo-placeholder {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    border: 3px solid rgba(255,255,255,0.5);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2rem; color: rgba(255,255,255,0.8);
+    margin-right: 1.25rem;
+  }
+
+  /* ── Stats row ── */
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.25rem; }
+  .stat-box {
+    background: #fff;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .stat-box .stat-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: #9e9e9e; font-weight: 600; margin-bottom: 0.4rem; }
+  .stat-box .stat-value { font-size: 1.3rem; font-weight: 700; color: #1565c0; }
+
+  /* ── Section card ── */
+  .section-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .section-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #1565c0;
+    border-left: 3px solid #1565c0;
+    padding-left: 0.6rem;
+    margin-bottom: 1.25rem;
+  }
+
+  /* ── Info grid ── */
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem 2rem; }
+  .info-item .info-label { font-size: 0.72rem; color: #9e9e9e; font-weight: 500; margin-bottom: 0.15rem; }
+  .info-item .info-value { font-size: 0.9rem; color: #2c3e50; font-weight: 500; }
+
+  /* ── Document cards (CNIC / License) ── */
+  .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .doc-card {
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+  }
+  .doc-card-title { font-size: 0.8rem; font-weight: 700; color: #555; margin-bottom: 0.85rem; }
+  .doc-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem; }
+  .validity-badge {
+    display: inline-block;
+    margin-top: 0.65rem;
+    padding: 0.2rem 0.7rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .badge-valid { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+  .badge-expired { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+  .badge-unknown { background: #f5f5f5; color: #757575; border: 1px solid #ddd; }
+
+  /* ── Uniform box ── */
+  .uniform-box {
+    background: #f8f9fa;
+    border: 1px solid #e8e8e8;
+    border-radius: 6px;
+    padding: 0.65rem 1rem;
+    font-size: 0.875rem;
+    color: #444;
+    margin-top: 0.75rem;
+  }
+
+  /* ── Timeline ── */
+  .timeline { position: relative; padding-left: 1.5rem; }
+  .timeline::before {
+    content: '';
+    position: absolute; left: 8px; top: 0; bottom: 0;
+    width: 2px; background: #e0e0e0;
+  }
+  .timeline-item { position: relative; margin-bottom: 1.5rem; }
+  .timeline-item:last-child { margin-bottom: 0; }
+  .timeline-dot {
+    position: absolute; left: -1.5rem; top: 2px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #1e88e5; border: 3px solid #fff;
+    box-shadow: 0 0 0 2px #1e88e5;
+  }
+  .timeline-dot.transfer { background: #fb8c00; box-shadow: 0 0 0 2px #fb8c00; }
+  .timeline-dot.left-job { background: #e53935; box-shadow: 0 0 0 2px #e53935; }
+  .timeline-dot.rejoin { background: #43a047; box-shadow: 0 0 0 2px #43a047; }
+  .timeline-date { font-size: 0.8rem; font-weight: 700; color: #1e88e5; margin-bottom: 0.2rem; }
+  .timeline-date.transfer { color: #fb8c00; }
+  .timeline-date.left-job { color: #e53935; }
+  .timeline-date.rejoin { color: #43a047; }
+  .timeline-type { font-size: 0.78rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #555; margin-bottom: 0.4rem; }
+  .timeline-body {
+    background: #f8f9fa;
+    border: 1px solid #ececec;
+    border-radius: 6px;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.85rem;
+    color: #444;
+  }
+  .timeline-body strong { color: #2c3e50; }
+  .timeline-body .remarks { font-style: italic; color: #777; margin-top: 0.3rem; font-size: 0.82rem; }
+
+  /* ── Current assignment badge ── */
+  .current-tag {
+    display: inline-block;
+    background: #e3f2fd;
+    color: #1565c0;
+    border-radius: 4px;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  @media (max-width: 640px) {
+    .stats-row { grid-template-columns: 1fr; }
+    .info-grid { grid-template-columns: 1fr; }
+    .doc-grid { grid-template-columns: 1fr; }
+    .profile-header h2 { font-size: 1.35rem; }
+    .status-badge { position: static; margin-top: 0.75rem; display: inline-block; }
+  }
+</style>
+
+<div class="profile-page">
+  <!-- Action Bar -->
+  <div class="action-bar">
+    <h4><i class="bi bi-person-badge me-2 text-primary"></i>Driver Profile</h4>
     <div class="d-flex gap-2">
-      <a href="{{ url_for('driver_form', id=driver.id) }}" class="btn btn-outline-primary btn-sm">Edit Driver</a>
-      <a href="{{ url_for('reports_index') }}" class="btn btn-outline-secondary btn-sm">All Reports</a>
+      <a href="{{ url_for('drivers_list') }}" class="btn btn-outline-secondary btn-action">
+        <i class="bi bi-arrow-left me-1"></i>Back
+      </a>
+      <a href="{{ url_for('driver_form', id=driver.id) }}" class="btn btn-outline-warning btn-action">
+        <i class="bi bi-pencil me-1"></i>Edit
+      </a>
+      <button onclick="window.print()" class="btn btn-outline-primary btn-action">
+        <i class="bi bi-printer me-1"></i>Print
+      </button>
+      {% if driver.document_path %}
+      <a href="{{ url_for('uploaded_file', filename=driver.document_path) }}" target="_blank" class="btn btn-outline-danger btn-action">
+        <i class="bi bi-file-earmark-pdf me-1"></i>Docs
+      </a>
+      {% endif %}
     </div>
   </div>
 
-  <!-- Basic Info -->
-  <div class="card shadow border-0 mb-4">
-    <div class="card-header bg-light"><strong>{{ driver.name }}</strong> — {{ driver.driver_id }}</div>
-    <div class="card-body">
-      <div class="row">
-        <div class="col-md-6">
-          {% if driver.photo_path %}
-          <p class="mb-2"><img src="{{ url_for('uploaded_file', filename=driver.photo_path) }}" alt="Driver photo" class="img-thumbnail" style="max-height: 140px;"></p>
-          {% endif %}
-          <p class="mb-1"><strong>CNIC:</strong> {{ driver.cnic_no|cnic_fmt }}</p>
-          <p class="mb-1"><strong>Phone:</strong> {{ driver.phone1|phone_fmt }}{% if driver.phone2 %} / {{ driver.phone2|phone_fmt }}{% endif %}</p>
-          <p class="mb-1"><strong>Application Date:</strong> {{ driver.application_date|ddmmyyyy if driver.application_date else '-' }}</p>
-          <p class="mb-1"><strong>Status:</strong> {{ driver.status }}</p>
-          <p class="mb-1"><strong>District (home):</strong> {{ driver.driver_district or '-' }}</p>
-        </div>
-        <div class="col-md-6">
-          <p class="mb-1"><strong>License:</strong> {{ driver.license_no }} — {{ driver.license_status or '-' }}</p>
-          <p class="mb-1"><strong>License Expiry:</strong> {{ driver.license_expiry_date|ddmmyyyy if driver.license_expiry_date else '-' }}</p>
-          <p class="mb-1"><strong>CNIC Expiry:</strong> {{ driver.cnic_expiry_date|ddmmyyyy if driver.cnic_expiry_date else '-' }}</p>
-          {% if driver.document_path %}
-          <p class="mb-1"><a href="{{ url_for('uploaded_file', filename=driver.document_path) }}" target="_blank" class="text-primary"><i class="bi bi-file-earmark-pdf me-1"></i>View Documents (PDF)</a></p>
-          {% endif %}
-        </div>
+  <!-- Header Card -->
+  <div class="profile-header">
+    <div class="d-flex align-items-center">
+      {% if driver.photo_path %}
+      <img src="{{ url_for('uploaded_file', filename=driver.photo_path) }}" alt="Photo" class="photo-circle">
+      {% else %}
+      <div class="photo-placeholder"><i class="bi bi-person-fill"></i></div>
+      {% endif %}
+      <div>
+        <h2>{{ driver.name }}</h2>
+        <p class="sub">ID: {{ driver.driver_id }}{% if driver.post %} &nbsp;|&nbsp; Post: {{ driver.post }}{% endif %}</p>
+        <p class="sub">District: {{ driver.driver_district or '—' }}</p>
+      </div>
+    </div>
+    <span class="status-badge {% if driver.status == 'Left' %}left{% endif %}">{{ (driver.status or 'Active')|upper }}</span>
+  </div>
+
+  <!-- Stats Row -->
+  <div class="stats-row">
+    <div class="stat-box">
+      <div class="stat-label">Total Actions</div>
+      <div class="stat-value">{{ total_actions }}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Application Date</div>
+      <div class="stat-value" style="font-size:1rem;">{{ driver.application_date|ddmmyyyy if driver.application_date else '—' }}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Last Action</div>
+      <div class="stat-value" style="font-size:1rem;">{{ last_action|ddmmyyyy if last_action else '—' }}</div>
+    </div>
+  </div>
+
+  <!-- Personal Profile -->
+  <div class="section-card">
+    <div class="section-title">Personal Profile</div>
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">Father Name</div>
+        <div class="info-value">{{ driver.father_name or '—' }}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Date of Birth</div>
+        <div class="info-value">{{ driver.dob|ddmmyyyy if driver.dob else '—' }}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Phone No 1</div>
+        <div class="info-value">{{ driver.phone1|phone_fmt if driver.phone1 else '—' }}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Phone No 2</div>
+        <div class="info-value">{{ driver.phone2|phone_fmt if driver.phone2 else '—' }}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Education</div>
+        <div class="info-value">{{ driver.education or '—' }}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Blood Group</div>
+        <div class="info-value">{{ driver.blood_group or '—' }}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Emergency No</div>
+        <div class="info-value">{{ driver.emergency_no or '—' }}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Address</div>
+        <div class="info-value">{{ driver.address or '—' }}</div>
       </div>
     </div>
   </div>
 
   <!-- Current Assignment -->
-  <div class="card shadow border-0 mb-4">
-    <div class="card-header bg-light">Current Assignment</div>
-    <div class="card-body">
-      <p class="mb-1"><strong>Project:</strong> {{ driver.project.name if driver.project else '-' }}</p>
-      <p class="mb-1"><strong>District:</strong> {{ driver.district.name if driver.district else '-' }}</p>
-      <p class="mb-1"><strong>Vehicle:</strong> {{ driver.vehicle.vehicle_no if driver.vehicle else '-' }}{% if driver.vehicle and driver.vehicle.vehicle_type %} ({{ driver.vehicle.vehicle_type }}){% endif %} ({{ driver.shift or '-' }} shift)</p>
-      <p class="mb-0"><strong>Assigned to vehicle since:</strong> {{ driver.assign_date|ddmmyyyy if driver.assign_date else '-' }}</p>
+  {% if driver.vehicle or driver.project %}
+  <div class="section-card">
+    <div class="section-title">Current Assignment</div>
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">Vehicle</div>
+        <div class="info-value">
+          {% if driver.vehicle %}
+            <strong>{{ driver.vehicle.vehicle_no }}</strong>
+            {% if driver.vehicle.vehicle_type %}<span class="text-muted">({{ driver.vehicle.vehicle_type }})</span>{% endif %}
+            &nbsp;<span class="current-tag">{{ driver.shift or '' }} Shift</span>
+          {% else %}—{% endif %}
+        </div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Assigned Since</div>
+        <div class="info-value">{{ driver.assign_date|ddmmyyyy if driver.assign_date else '—' }}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Project</div>
+        <div class="info-value">{{ driver.project.name if driver.project else '—' }}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">District</div>
+        <div class="info-value">{{ driver.district.name if driver.district else '—' }}</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Identification Documents -->
+  <div class="section-card">
+    <div class="section-title">Identification Documents</div>
+    <div class="doc-grid">
+      <!-- CNIC -->
+      <div class="doc-card">
+        <div class="doc-card-title"><i class="bi bi-person-vcard me-1"></i>CNIC Details</div>
+        <div class="info-item mb-2">
+          <div class="info-label">Number</div>
+          <div class="info-value fw-bold">{{ driver.cnic_no|cnic_fmt if driver.cnic_no else '—' }}</div>
+        </div>
+        <div class="doc-dates">
+          <div class="info-item">
+            <div class="info-label">Issue Date</div>
+            <div class="info-value">{{ driver.cnic_issue_date|ddmmyyyy if driver.cnic_issue_date else '—' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Expiry Date</div>
+            <div class="info-value">{{ driver.cnic_expiry_date|ddmmyyyy if driver.cnic_expiry_date else '—' }}</div>
+          </div>
+        </div>
+        {% if driver.cnic_expiry_date %}
+        <div>
+          <span class="validity-badge {% if driver.cnic_status == 'Valid' %}badge-valid{% elif driver.cnic_status == 'Expired' %}badge-expired{% else %}badge-unknown{% endif %}">
+            {% if driver.cnic_status == 'Valid' %}✓ Valid (Expires on {{ driver.cnic_expiry_date|ddmmyyyy }})
+            {% elif driver.cnic_status == 'Expired' %}✗ Expired ({{ driver.cnic_expiry_date|ddmmyyyy }})
+            {% else %}— Unknown{% endif %}
+          </span>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- License -->
+      <div class="doc-card">
+        <div class="doc-card-title"><i class="bi bi-card-checklist me-1"></i>License Details</div>
+        <div class="info-grid" style="grid-template-columns:1fr 1fr; gap:0.5rem 1rem;">
+          <div class="info-item">
+            <div class="info-label">Number</div>
+            <div class="info-value fw-bold">{{ driver.license_no or '—' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Type</div>
+            <div class="info-value">{{ driver.license_type or '—' }}</div>
+          </div>
+        </div>
+        <div class="info-item mt-2 mb-2">
+          <div class="info-label">Issue District</div>
+          <div class="info-value">{{ driver.issue_district or '—' }}</div>
+        </div>
+        <div class="doc-dates">
+          <div class="info-item">
+            <div class="info-label">Issue Date</div>
+            <div class="info-value">{{ driver.license_issue_date|ddmmyyyy if driver.license_issue_date else '—' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Expiry Date</div>
+            <div class="info-value">{{ driver.license_expiry_date|ddmmyyyy if driver.license_expiry_date else '—' }}</div>
+          </div>
+        </div>
+        {% if driver.license_expiry_date %}
+        <div>
+          <span class="validity-badge {% if driver.license_status == 'Valid' %}badge-valid{% elif driver.license_status == 'Expired' %}badge-expired{% else %}badge-unknown{% endif %}">
+            {% if driver.license_status == 'Valid' %}✓ Valid (Expires on {{ driver.license_expiry_date|ddmmyyyy }})
+            {% elif driver.license_status == 'Expired' %}✗ Expired ({{ driver.license_expiry_date|ddmmyyyy }})
+            {% else %}— Unknown{% endif %}
+          </span>
+        </div>
+        {% endif %}
+      </div>
     </div>
   </div>
 
-  <!-- Transfer History (Project / District / Vehicle) -->
-  <div class="card shadow border-0 mb-4">
-    <div class="card-header bg-light">Transfer History</div>
-    <div class="table-responsive">
-      <table class="table table-sm mb-0">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>From (Project / District / Vehicle)</th>
-            <th>To (Project / District / Vehicle)</th>
-            <th>Remarks</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for t in transfers %}
-          <tr>
-            <td>{{ t.transfer_date|ddmmyyyy }}</td>
-            <td>
-              {{ t.old_project.name if t.old_project else '-' }} /
-              {{ t.old_district.name if t.old_district else '-' }} /
-              {{ t.old_vehicle.vehicle_no if t.old_vehicle else '-' }} ({{ t.old_shift or '-' }})
-            </td>
-            <td>
-              {{ t.new_project.name if t.new_project else '-' }} /
-              {{ t.new_district.name if t.new_district else '-' }} /
-              {{ t.new_vehicle.vehicle_no if t.new_vehicle else '-' }} ({{ t.new_shift or '-' }})
-            </td>
-            <td class="small">{{ t.remarks or '-' }}</td>
-          </tr>
-          {% else %}
-          <tr><td colspan="4" class="text-muted">No transfers.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <!-- Official Details -->
+  <div class="section-card">
+    <div class="section-title">Official Details</div>
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">Bank Name</div>
+        <div class="info-value">{{ driver.bank_name or '—' }}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Account No</div>
+        <div class="info-value">{{ driver.account_no or '—' }}</div>
+      </div>
+      <div class="info-item" style="grid-column:1/-1;">
+        <div class="info-label">Account Title</div>
+        <div class="info-value">{{ driver.account_title or '—' }}</div>
+      </div>
     </div>
+    {% if driver.shirt_size or driver.trouser_size or driver.jacket_size %}
+    <div class="uniform-box mt-3">
+      <span class="text-muted" style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Uniform Sizes</span><br>
+      <span><strong>Shirt:</strong> {{ driver.shirt_size or '—' }}</span>
+      &nbsp;•&nbsp;
+      <span><strong>Trouser:</strong> {{ driver.trouser_size or '—' }}</span>
+      &nbsp;•&nbsp;
+      <span><strong>Jacket:</strong> {{ driver.jacket_size or '—' }}</span>
+    </div>
+    {% endif %}
   </div>
 
-  <!-- Status Changes (Job Left / Rejoin) – complete details -->
-  <div class="card shadow border-0">
-    <div class="card-header bg-light">Status Changes (Job Left / Rejoin)</div>
-    <div class="table-responsive">
-      <table class="table table-sm mb-0">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Type</th>
-            <th>Reason</th>
-            <th>Left (Project / District / Vehicle)</th>
-            <th>Rejoin (Project / District / Vehicle)</th>
-            <th>Remarks</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for s in status_changes %}
-          <tr>
-            <td>{{ s.change_date|ddmmyyyy }}</td>
-            <td>{{ s.action_type }}</td>
-            <td>{{ s.reason or '-' }}</td>
-            <td>
-              {% if s.action_type == 'left' %}
-                {{ s.left_project.name if s.left_project else '-' }} /
-                {{ s.left_district.name if s.left_district else '-' }} /
-                {{ s.left_vehicle.vehicle_no if s.left_vehicle else '-' }} ({{ s.left_shift or '-' }})
+  <!-- Job History Timeline -->
+  <div class="section-card">
+    <div class="section-title">Job History (Oldest First)</div>
+    {% if job_history %}
+    <div class="timeline">
+      {% for item in job_history %}
+        {% if item.type == 'assignment' %}
+          {% set d = item.data %}
+          <div class="timeline-item">
+            <div class="timeline-dot"></div>
+            <div class="timeline-date">{{ item.date|ddmmyyyy }}</div>
+            <div class="timeline-type">Assignment</div>
+            <div class="timeline-body">
+              To Vehicle: <strong>{{ d.vehicle.vehicle_no if d.vehicle else '—' }}</strong>
+              {% if d.vehicle and d.vehicle.vehicle_type %} ({{ d.vehicle.vehicle_type }}){% endif %}<br>
+              {% if d.project %}Project: {{ d.project.name }}<br>{% endif %}
+              {% if d.district %}District: {{ d.district.name }} | {% endif %}Shift: {{ d.shift or '—' }}
+              {% if d.assign_remarks %}<div class="remarks">{{ d.assign_remarks }}</div>{% endif %}
+            </div>
+          </div>
+        {% elif item.type == 'transfer' %}
+          {% set t = item.data %}
+          <div class="timeline-item">
+            <div class="timeline-dot transfer"></div>
+            <div class="timeline-date transfer">{{ item.date|ddmmyyyy }}</div>
+            <div class="timeline-type">Transfer</div>
+            <div class="timeline-body">
+              From: {{ t.old_vehicle.vehicle_no if t.old_vehicle else '—' }}
+              →&nbsp;To: <strong>{{ t.new_vehicle.vehicle_no if t.new_vehicle else '—' }}</strong>
+              {% if t.new_vehicle and t.new_vehicle.vehicle_type %} ({{ t.new_vehicle.vehicle_type }}){% endif %}
+              {% if t.new_project %}<br>Project: {{ t.new_project.name }}{% endif %}
+              {% if t.new_district %}<br>District: {{ t.new_district.name }}{% endif %}
+              {% if t.old_shift or t.new_shift %}<br>Shift: {{ t.old_shift or '—' }} → {{ t.new_shift or '—' }}{% endif %}
+              {% if t.remarks %}<div class="remarks">{{ t.remarks }}</div>{% endif %}
+            </div>
+          </div>
+        {% elif item.type == 'status' %}
+          {% set s = item.data %}
+          {% set is_left = s.action_type == 'left' %}
+          <div class="timeline-item">
+            <div class="timeline-dot {{ 'left-job' if is_left else 'rejoin' }}"></div>
+            <div class="timeline-date {{ 'left-job' if is_left else 'rejoin' }}">{{ item.date|ddmmyyyy }}</div>
+            <div class="timeline-type">{{ 'Job Left' if is_left else 'Rejoin' }}</div>
+            <div class="timeline-body">
+              {% if is_left %}
+                Left from: <strong>{{ s.left_vehicle.vehicle_no if s.left_vehicle else '—' }}</strong>
+                {% if s.left_project %}<br>Project: {{ s.left_project.name }}{% endif %}
+                {% if s.left_district %}<br>District: {{ s.left_district.name }}{% endif %}
+                {% if s.reason %}<br>Reason: {{ s.reason }}{% endif %}
               {% else %}
-                -
+                Rejoined to: <strong>{{ s.new_vehicle.vehicle_no if s.new_vehicle else '—' }}</strong>
+                {% if s.new_project %}<br>Project: {{ s.new_project.name }}{% endif %}
+                {% if s.new_district %}<br>District: {{ s.new_district.name }}{% endif %}
               {% endif %}
-            </td>
-            <td>
-              {% if s.action_type == 'rejoin' and (s.new_project or s.new_vehicle) %}
-                {{ s.new_project.name if s.new_project else '-' }} /
-                {{ s.new_district.name if s.new_district else '-' }} /
-                {{ s.new_vehicle.vehicle_no if s.new_vehicle else '-' }} ({{ s.new_shift or '-' }})
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td class="small">{{ s.remarks or '-' }}</td>
-          </tr>
-          {% else %}
-          <tr><td colspan="6" class="text-muted">No status changes.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+              {% if s.remarks %}<div class="remarks">{{ s.remarks }}</div>{% endif %}
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
     </div>
+    {% else %}
+    <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>No job history recorded yet.</p>
+    {% endif %}
   </div>
+
 </div>
 {% endblock %}

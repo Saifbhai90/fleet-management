@@ -2488,8 +2488,8 @@ def employee_form(id=None):
         (p.id, f"{p.full_name} ({p.short_name})") for p in posts
     ]
 
-    # Projects & Districts for assignment (multi-select): company-assigned projects, all districts
-    projects_list = Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    # Projects & Districts for assignment (multi-select): all projects, all districts
+    projects_list = Project.query.order_by(Project.name).all()
     districts_list = District.query.order_by(District.name).all()
     project_choices = [(p.id, p.name) for p in projects_list]
     district_choices = [(d.id, d.name) for d in districts_list]
@@ -2731,7 +2731,7 @@ def employee_document_delete(id, doc_id):
 @app.route('/employee/assignment', methods=['GET', 'POST'])
 def employee_assignment_form():
     """Separate form for Project & District assignment. Save here saves employee (from session draft) + assignment."""
-    projects_list = Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    projects_list = Project.query.order_by(Project.name).all()
     districts_list = District.query.order_by(District.name).all()
     project_choices = [(p.id, p.name) for p in projects_list]
     district_choices = [(d.id, d.name) for d in districts_list]
@@ -12550,17 +12550,31 @@ def report_vehicle_summary():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
-        disable_project=disable_project,
-        disable_district=disable_district,
     )
 
 
 @app.route('/reports/driver-profile/<int:driver_id>')
 def report_driver_profile(driver_id):
     driver = Driver.query.get_or_404(driver_id)
-    transfers = DriverTransfer.query.filter_by(driver_id=driver_id).order_by(DriverTransfer.transfer_date.desc()).all()
-    status_changes = DriverStatusChange.query.filter_by(driver_id=driver_id).order_by(DriverStatusChange.change_date.desc()).all()
-    return render_template('report_driver_profile.html', driver=driver, transfers=transfers, status_changes=status_changes)
+    transfers = DriverTransfer.query.filter_by(driver_id=driver_id).order_by(DriverTransfer.transfer_date.asc()).all()
+    status_changes = DriverStatusChange.query.filter_by(driver_id=driver_id).order_by(DriverStatusChange.change_date.asc()).all()
+
+    # Build combined job history sorted oldest first
+    job_history = []
+    if driver.assign_date:
+        job_history.append({'date': driver.assign_date, 'type': 'assignment', 'data': driver})
+    for t in transfers:
+        job_history.append({'date': t.transfer_date, 'type': 'transfer', 'data': t})
+    for s in status_changes:
+        job_history.append({'date': s.change_date, 'type': 'status', 'data': s})
+    job_history.sort(key=lambda x: x['date'])
+
+    total_actions = len(job_history)
+    last_action = job_history[-1]['date'] if job_history else None
+
+    return render_template('report_driver_profile.html', driver=driver,
+                           job_history=job_history, total_actions=total_actions,
+                           last_action=last_action)
 
 
 @app.route('/reports/vehicle-profile/<int:vehicle_id>')
