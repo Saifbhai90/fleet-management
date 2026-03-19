@@ -6545,13 +6545,17 @@ def get_available_shifts(vehicle_id):
     if driver_id_to_exclude:
         query = query.filter(Driver.id != driver_id_to_exclude)
         
-    existing_shifts = [d.shift for d in query.all()]
+    existing_shifts = [(d.shift or '').strip().title() for d in query.all()]
     
     shifts = []
     if cap == 1:
-        if "Morning" not in existing_shifts: shifts.append({"id": "Morning", "name": "Morning"})
+        if "Morning" not in existing_shifts:
+            shifts.append({"id": "Morning", "name": "Morning"})
     else:
-        if "Night" not in existing_shifts: shifts.append({"id": "Night", "name": "Night"})
+        if "Morning" not in existing_shifts:
+            shifts.append({"id": "Morning", "name": "Morning"})
+        if "Night" not in existing_shifts:
+            shifts.append({"id": "Night", "name": "Night"})
         
     return jsonify(shifts)
 
