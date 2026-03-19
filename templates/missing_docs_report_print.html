@@ -1,0 +1,138 @@
+{% extends "base_print.html" %}
+{% block title %}Print – Driver Missing Documents Report{% endblock %}
+
+{% block extra_head %}
+<style>
+    .rpt-header {
+        background: linear-gradient(135deg, #b71c1c 0%, #7f0000 100%);
+        color: #fff;
+        border-radius: 10px;
+        padding: 1rem 1.4rem;
+        margin-bottom: 1rem;
+    }
+    .rpt-header h2 { margin: 0; font-size: 1.25rem; font-weight: 700; }
+    .rpt-header .sub  { font-size: 0.82rem; opacity: 0.85; margin-top: 0.2rem; }
+    .rpt-meta { font-size: 0.78rem; color: #546e7a; margin-bottom: 0.75rem; }
+    .total-badge {
+        display: inline-block;
+        background: #fce4ec;
+        color: #880e4f;
+        font-size: 0.82rem;
+        font-weight: 700;
+        padding: 0.2rem 0.75rem;
+        border-radius: 20px;
+    }
+    .rpt-table { font-size: 0.82rem; }
+    .rpt-table thead th {
+        background: #fce4ec;
+        color: #880e4f;
+        font-weight: 700;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        border-bottom: 2px solid #e91e63;
+        white-space: nowrap;
+        padding: 0.45rem 0.65rem;
+    }
+    .rpt-table tbody td { vertical-align: middle; padding: 0.4rem 0.65rem; }
+    .rpt-table tbody tr:nth-child(even) { background: #fff8f8; }
+    .driver-name { font-weight: 600; color: #1a237e; }
+    .driver-sub  { color: #607d8b; font-size: 0.73rem; }
+    .sr-badge    { background: #b71c1c; color: #fff; border-radius: 4px; padding: 0.1rem 0.4rem; font-size: 0.73rem; font-weight: 700; }
+    .missing-tag {
+        display: inline-block;
+        background: #fff3cd;
+        color: #7d5a00;
+        border: 1px solid #ffc107;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.08rem 0.4rem;
+        margin: 0.08rem 0.12rem 0.08rem 0;
+        white-space: nowrap;
+    }
+    .missing-count {
+        display: inline-block;
+        background: #b71c1c;
+        color: #fff;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0.08rem 0.45rem;
+    }
+    @media print {
+        .rpt-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .rpt-table thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .rpt-table tbody tr:nth-child(even) { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .sr-badge, .missing-count { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .missing-tag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="print-container">
+
+    <!-- Header -->
+    <div class="rpt-header">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="me-auto">
+                <h2><i class="bi bi-file-earmark-x-fill me-2"></i>Driver Missing Documents Report</h2>
+                <div class="sub"><i class="bi bi-info-circle me-1"></i>Active drivers with one or more missing documents</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Meta info -->
+    <div class="rpt-meta d-flex flex-wrap gap-3 mb-2">
+        <span><i class="bi bi-calendar3 me-1"></i>Generated: {{ now }}</span>
+        {% if project_label %}<span><i class="bi bi-folder2 me-1"></i>Project: <strong>{{ project_label }}</strong></span>{% endif %}
+        {% if district_label %}<span><i class="bi bi-geo-alt me-1"></i>District: <strong>{{ district_label }}</strong></span>{% endif %}
+        {% if doc_filter_label %}<span><i class="bi bi-file-earmark me-1"></i>Filter: <strong>{{ doc_filter_label }}</strong></span>{% endif %}
+    </div>
+
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="total-badge"><i class="bi bi-exclamation-triangle-fill me-1"></i>Total: {{ total }} driver{{ 's' if total != 1 else '' }} with missing docs</span>
+    </div>
+
+    <!-- Table -->
+    <table class="table table-sm table-bordered rpt-table w-100">
+        <thead>
+            <tr>
+                <th style="width:4%">Sr No</th>
+                <th style="width:22%">Driver Name (ID) / CNIC</th>
+                <th>Missing Documents</th>
+                <th style="width:10%">Missing Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            {% set driver = row.driver %}
+            <tr>
+                <td class="text-center"><span class="sr-badge">{{ loop.index }}</span></td>
+                <td>
+                    <div class="driver-name">{{ driver.name }}</div>
+                    <div class="driver-sub">{{ driver.driver_id or '-' }}</div>
+                    <div class="driver-sub"><i class="bi bi-person-vcard me-1"></i>{{ driver.cnic_no or '-' }}</div>
+                </td>
+                <td>
+                    {% for doc in row.missing %}
+                    <span class="missing-tag"><i class="bi bi-x-circle-fill me-1" style="color:#e53935;font-size:0.68rem;"></i>{{ doc }}</span>
+                    {% endfor %}
+                </td>
+                <td class="text-center">
+                    <span class="missing-count">{{ row.missing|length }} / {{ doc_fields|length }}</span>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" class="text-center py-4 text-muted">
+                    <i class="bi bi-check-circle-fill text-success me-2"></i>All drivers have complete documents!
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+{% endblock %}
