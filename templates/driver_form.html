@@ -128,7 +128,7 @@
 
         <div class="form-panel">
           <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION <small class="text-white-50 fs-6 fw-normal">v1.8 - Final Logic Correction</small></span>
+            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION <small class="text-white-50 fs-6 fw-normal">v1.9 - Manual Input Control</small></span>
             <div class="d-flex align-items-center gap-2">
               <a href="{{ url_for('drivers_list') }}" class="btn btn-light btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>Back to List
@@ -472,7 +472,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
-  // ── robustParse: exact user-provided logic ──
+  // ── robustParse: exact user-provided logic (v1.8, proven correct) ──
   function robustParse(input) {
       if (!input) return null;
       let raw = input.toLowerCase().trim();
@@ -546,32 +546,50 @@ document.addEventListener('DOMContentLoaded', function () {
     form.classList.add('was-validated');
   }, false);
 
-  // 3. Initialize Flatpickr with onClose hook — the ONLY reliable trigger
+  // 3. Global raw input tracker — captures keystrokes BEFORE Flatpickr can touch them
+  let rawInputs = {};
+
+  // 4. Initialize Flatpickr as calendar-only (NO onClose/onChange for parsing)
   document.querySelectorAll('.datepicker').forEach(function(el) {
       var isExpiry = el.classList.contains('expiry-trigger');
       flatpickr(el, {
           dateFormat: "d-m-Y",
           allowInput: true,
-          maxDate: isExpiry ? null : "today",
-          onClose: function(selectedDates, dateStr, instance) {
-              var raw = instance.input.value.trim();
-              if (!raw) return;
-
-              // If Flatpickr already parsed it correctly (e.g. calendar click), skip
-              if (selectedDates.length > 0 && /^\d{2}-\d{2}-\d{4}$/.test(dateStr)) return;
-
-              // Manual input detected — run our parser
-              var formatted = robustParse(raw);
-              if (formatted) {
-                  instance.setDate(formatted, true, 'd-m-Y');
-                  updateExpiryStatus();
-              } else {
-                  alert('Incorrect Date Format! Please use 03031997 or 03-mar-1997');
-                  instance.clear();
-                  updateExpiryStatus();
-              }
-          }
+          clickOpens: true,
+          maxDate: isExpiry ? null : "today"
       });
+
+      // Track every keystroke into rawInputs BEFORE Flatpickr can corrupt it
+      el.addEventListener('input', function(e) {
+          rawInputs[el.id] = e.target.value;
+      });
+
+      // Capture-phase blur — fires BEFORE Flatpickr's bubble-phase blur
+      el.addEventListener('blur', function(e) {
+          e.stopImmediatePropagation();
+
+          // Get the raw value we saved (untouched by Flatpickr)
+          var typedValue = rawInputs[el.id];
+          if (!typedValue || typedValue.trim() === '') return;
+
+          // If already in correct DD-MM-YYYY format, Flatpickr handled it (calendar click)
+          if (/^\d{2}-\d{2}-\d{4}$/.test(typedValue.trim())) return;
+
+          // Run our parser on the raw input
+          var formatted = robustParse(typedValue);
+          if (formatted) {
+              el._flatpickr.setDate(formatted, false);
+              el.value = formatted;
+              rawInputs[el.id] = formatted;
+              updateExpiryStatus();
+          } else {
+              alert('Ghalat Format! Sahi tareeqa: 03031997 ya 03-mar-1997');
+              el._flatpickr.clear();
+              el.value = '';
+              rawInputs[el.id] = '';
+              updateExpiryStatus();
+          }
+      }, true);  // true = CAPTURE PHASE
   });
 
   // 4. Auto License/CNIC Status on Expiry Change and on Load
