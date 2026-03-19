@@ -2505,56 +2505,63 @@
         });
         _sdObs.observe(document.body, { childList: true, subtree: true });
 
-        // ── Global Enter-to-Tab: move focus to next field instead of submitting ──
-        var _lastEnterTime = 0;
-        document.addEventListener('keydown', function(e) {
+        // ── Global Enter-to-Tab (Window-Capture) ──
+        var _enterGuard = 0;
+        window.addEventListener('keydown', function(e) {
             if (e.key !== 'Enter' && e.keyCode !== 13) return;
-
-            // Debounce: prevent double-trigger causing field skipping
-            var now = Date.now();
-            if (now - _lastEnterTime < 150) { e.preventDefault(); e.stopImmediatePropagation(); return; }
-            _lastEnterTime = now;
-
-            var el = document.activeElement;
+            var el = e.target;
             if (!el) return;
             var tag = el.tagName.toLowerCase();
 
-            // Textarea: normal Enter = newline; Ctrl+Enter = move to next field
-            if (tag === 'textarea' && !e.ctrlKey) return;
+            // Textarea without Ctrl: allow normal newline
+            if (tag === 'textarea' && !e.ctrlKey && !e.shiftKey) return;
 
-            // Only intercept on form fields (input, select, textarea)
+            // Only act on form fields
             if (tag !== 'input' && tag !== 'select' && tag !== 'textarea') return;
 
-            // Submit button: let Enter submit the form normally
+            // Submit button: allow form submission
             if (tag === 'button' || (tag === 'input' && el.type === 'submit')) return;
 
-            // Find the parent form
+            // Find parent form
             var form = el.closest('form');
             if (!form) return;
 
-            // Gather all visible, enabled, focusable elements in this form
+            // Bulletproof focusable list
             var focusable = Array.prototype.slice.call(
-                form.querySelectorAll('input:not([type="hidden"]), select, textarea, button:not([disabled])')
+                form.querySelectorAll('input, select, textarea, button, [tabindex]')
             ).filter(function(f) {
+                if (f.type === 'hidden') return false;
                 if (f.disabled || f.readOnly) return false;
-                if (f.tabIndex === -1) return false;
                 if (f.offsetParent === null) return false;
+                try { if (getComputedStyle(f).visibility === 'hidden') return false; } catch(x) {}
                 return true;
             });
 
             var idx = focusable.indexOf(el);
+            var nextEl = (idx !== -1 && idx < focusable.length - 1) ? focusable[idx + 1] : null;
 
-            // Last field or not found → allow normal Enter (form submit)
-            if (idx === -1 || idx >= focusable.length - 1) return;
+            // Last element or no next → allow form submit
+            if (!nextEl) return;
+            // If next is submit button, allow form submit
+            var nextTag = nextEl.tagName.toLowerCase();
+            if (nextTag === 'button' || (nextTag === 'input' && nextEl.type === 'submit')) {
+                // Move focus to the submit button but don't block
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                nextEl.focus();
+                return;
+            }
 
-            // ── STRICT: block form submission immediately ──
+            // ── KILL SWITCH: block form submission ──
             e.preventDefault();
             e.stopImmediatePropagation();
 
-            var nextEl = focusable[idx + 1];
+            // 200ms ghost guard: ignore rapid duplicate Enter events
+            var now = Date.now();
+            if (now - _enterGuard < 200) return;
+            _enterGuard = now;
 
-            // Datepicker: blur first so smart date logic (setTimeout 20ms) runs,
-            // then move focus after it completes
+            // Datepicker: blur triggers smart date (20ms), then move focus
             if (el.classList && el.classList.contains('datepicker')) {
                 el.blur();
                 setTimeout(function() { nextEl.focus(); }, 50);
@@ -2562,7 +2569,7 @@
                 el.blur();
                 nextEl.focus();
             }
-        });
+        }, true);
 
         $('.select2-enable').select2({
             theme: 'bootstrap-5',
