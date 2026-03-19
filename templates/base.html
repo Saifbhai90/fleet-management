@@ -2387,13 +2387,23 @@
             document.querySelectorAll(selector).forEach(function(el) {
                 if (el._smartDateInit) return;
                 el._smartDateInit = true;
-                // Convert existing YYYY-MM-DD values to DD-MM-YYYY before Flatpickr init
-                var existingVal = el.value ? el.value.trim() : '';
+
+                // WTForms 3.x renders DateField as type="date" — browser rejects DD-MM-YYYY
+                // and clears el.value. Force type="text" and recover from HTML attribute.
+                var attrVal = el.getAttribute('value') || '';
+                if (el.type === 'date') {
+                    el.type = 'text';
+                }
+                var existingVal = (el.value || attrVal || '').trim();
+
+                // Convert YYYY-MM-DD → DD-MM-YYYY
                 if (/^\d{4}-\d{2}-\d{2}$/.test(existingVal)) {
                     var p = existingVal.split('-');
-                    el.value = p[2] + '-' + p[1] + '-' + p[0];
-                    existingVal = el.value;
+                    existingVal = p[2] + '-' + p[1] + '-' + p[0];
                 }
+                el.value = existingVal;
+                console.log('initSmartDate:', el.id || el.name, 'val:', existingVal);
+
                 var fp = flatpickr(el, {
                     dateFormat: "d-m-Y",
                     allowInput: true,
@@ -2430,6 +2440,22 @@
         };
 
         window.initSmartDateFields('.datepicker');
+
+        // MutationObserver: catch .datepicker fields added dynamically or inside hidden tabs
+        var _sdObs = new MutationObserver(function(mutations) {
+            mutations.forEach(function(m) {
+                m.addedNodes.forEach(function(node) {
+                    if (node.nodeType !== 1) return;
+                    if (node.classList && node.classList.contains('datepicker')) {
+                        window.initSmartDateFields('.datepicker');
+                    } else if (node.querySelectorAll) {
+                        var inner = node.querySelectorAll('.datepicker');
+                        if (inner.length) window.initSmartDateFields('.datepicker');
+                    }
+                });
+            });
+        });
+        _sdObs.observe(document.body, { childList: true, subtree: true });
         $('.select2-enable').select2({
             theme: 'bootstrap-5',
             width: '100%'
