@@ -128,7 +128,7 @@
 
         <div class="form-panel">
           <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION <small class="text-white-50 fs-6 fw-normal">v1.7 - Fully Audited Logic</small></span>
+            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION <small class="text-white-50 fs-6 fw-normal">v1.8 - Final Logic Correction</small></span>
             <div class="d-flex align-items-center gap-2">
               <a href="{{ url_for('drivers_list') }}" class="btn btn-light btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>Back to List
@@ -472,84 +472,54 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
-  // ── Month Map for text-month parsing ──
-  var mmap = {
-      jan:'01', feb:'02', mar:'03', apr:'04', may:'05', jun:'06',
-      jul:'07', aug:'08', sep:'09', oct:'10', nov:'11', dec:'12'
-  };
-
-  // ── robustParse: strict string manipulation, NO new Date() ──
+  // ── robustParse: exact user-provided logic ──
   function robustParse(input) {
       if (!input) return null;
-      var raw = input.trim();
-      var d = '', m = '', y = '';
+      let raw = input.toLowerCase().trim();
+      let d, m, y;
 
-      var clean = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-      // CASE A: Pure 8 digits (03031997)
-      if (/^\d{8}$/.test(clean)) {
-          d = clean.substr(0, 2);
-          m = clean.substr(2, 2);
-          y = clean.substr(4, 4);
+      // CASE 1: 8 Digits ONLY (03031997)
+      if (/^\d{8}$/.test(raw)) {
+          d = raw.substring(0, 2);
+          m = raw.substring(2, 4);
+          y = raw.substring(4, 8);
       }
-      // CASE B: Pure 6 digits (030397)
-      else if (/^\d{6}$/.test(clean)) {
-          d = clean.substr(0, 2);
-          m = clean.substr(2, 2);
-          y = clean.substr(4, 2);
+      // CASE 2: 6 Digits ONLY (030397)
+      else if (/^\d{6}$/.test(raw)) {
+          d = raw.substring(0, 2);
+          m = raw.substring(2, 4);
+          y = raw.substring(4, 6);
       }
-      // CASE C: Contains letters (03mar1997, 3-mar-97)
-      else if (/[a-z]/.test(clean)) {
-          var foundMonth = '';
-          for (var key in mmap) {
-              if (clean.indexOf(key) !== -1) { foundMonth = key; break; }
-          }
-          if (!foundMonth) return null;
-          var pos = clean.indexOf(foundMonth);
-          d = clean.substr(0, pos);
-          m = mmap[foundMonth];
-          y = clean.substr(pos + 3);
-          if (!d || !y) return null;
-      }
-      // CASE D: Separators (03-03-1997, 03/03/1997)
-      else {
-          var parts = raw.split(/[-/. ]/);
+      // CASE 3: Text Month (03-mar-1997 or 3 mar 97)
+      else if (/[a-z]{3}/.test(raw)) {
+          const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+          let parts = raw.split(/[^a-z0-9]/).filter(x => x.length > 0);
           if (parts.length === 3) {
-              d = parts[0].trim();
-              m = parts[1].trim();
-              y = parts[2].trim();
+              d = parts[0].padStart(2, '0');
+              let monthKey = parts[1].substring(0, 3);
+              m = months[monthKey] || null;
+              y = parts[2];
+          }
+      }
+      // CASE 4: Standard with separators (03-03-1997)
+      else {
+          let parts = raw.split(/[^0-9]/).filter(x => x.length > 0);
+          if (parts.length === 3) {
+              d = parts[0].padStart(2, '0');
+              m = parts[1].padStart(2, '0');
+              y = parts[2];
           }
       }
 
-      if (!d || !m || !y) return null;
+      if (!d || !m || !y || isNaN(d) || isNaN(m)) return null;
 
-      // Pad day
-      d = String(parseInt(d, 10));
-      if (d.length === 1) d = '0' + d;
-
-      // Pad month (if numeric string)
-      if (/^\d+$/.test(m)) {
-          m = String(parseInt(m, 10));
-          if (m.length === 1) m = '0' + m;
+      // Year Correction
+      if (y.length === 2) {
+          y = (parseInt(y) < 50) ? '20' + y : '19' + y;
       }
 
-      // YEAR GUARD: 4 digits = NEVER TOUCH. 2 digits = expand. Else = invalid.
-      if (y.length === 4) {
-          // Keep exactly as typed
-      } else if (y.length === 2) {
-          var yy = parseInt(y, 10);
-          y = (yy < 50) ? '20' + y : '19' + y;
-      } else {
-          return null;
-      }
-
-      // Strict validation
-      var di = parseInt(d, 10);
-      var mi = parseInt(m, 10);
-      var yi = parseInt(y, 10);
-      if (di < 1 || di > 31) return null;
-      if (mi < 1 || mi > 12) return null;
-      if (yi < 1920 || yi > 2050) return null;
+      // Basic Boundary Check
+      if (parseInt(d) > 31 || parseInt(m) > 12 || y.length !== 4) return null;
 
       return d + '-' + m + '-' + y;
   }
@@ -596,8 +566,9 @@ document.addEventListener('DOMContentLoaded', function () {
                   instance.setDate(formatted, true, 'd-m-Y');
                   updateExpiryStatus();
               } else {
+                  alert('Incorrect Date Format! Please use 03031997 or 03-mar-1997');
                   instance.clear();
-                  alert('Invalid Date Format! Use DD-MM-YYYY or 03031997');
+                  updateExpiryStatus();
               }
           }
       });
