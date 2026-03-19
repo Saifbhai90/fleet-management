@@ -494,66 +494,52 @@ document.addEventListener('DOMContentLoaded', function () {
     form.classList.add('was-validated');
   }, false);
 
-  // 3. Smart Date Parser + Flatpickr init
-  // monthMap uses string values to avoid any integer arithmetic bugs
-  var monthMap = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
-                  jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+  // 3. Regex-First Date Formatter + Flatpickr init
+  var mmap = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
+              jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
 
-  function _smartDateParse(s) {
-    if (!s || typeof s !== 'string') return null;
-
-    // Step A: Clean
-    var str = s.trim().toLowerCase();
+  function finalDateFormatter(input) {
+    if (!input || typeof input !== 'string') return null;
+    var s = input.trim().toLowerCase();
     var d, m, y;
 
-    // Check if purely digits (no separators)
-    var allDigits = true;
-    for (var i = 0; i < str.length; i++) {
-      var c = str.charCodeAt(i);
-      if (c < 48 || c > 57) { allDigits = false; break; }
-    }
+    // Pattern 1: exactly 8 digits → DDMMYYYY (4-digit year, keep as-is)
+    if (/^\d{8}$/.test(s)) {
+      d = s.slice(0, 2);
+      m = s.slice(2, 4);
+      y = s.slice(4, 8);
 
-    if (allDigits) {
-      // Step B: 8-digit DDMMYYYY
-      if (str.length === 8) {
-        d = str.slice(0, 2);
-        m = str.slice(2, 4);
-        y = str.slice(4, 8);   // 4-digit year — keep exactly as typed
-      // Step C: 6-digit DDMMYY
-      } else if (str.length === 6) {
-        d = str.slice(0, 2);
-        m = str.slice(2, 4);
-        y = str.slice(4, 6);   // 2-digit year — expand below
-      } else {
-        return null;
-      }
+    // Pattern 2: exactly 6 digits → DDMMYY (2-digit year, expand below)
+    } else if (/^\d{6}$/.test(s)) {
+      d = s.slice(0, 2);
+      m = s.slice(2, 4);
+      y = s.slice(4, 6);
+
+    // Pattern 3: text month — e.g. 03-mar-1997 or 03/mar/97
+    } else if (/^\d{1,2}[-\/\.][a-z]{3}[-\/\.]\d{2,4}$/.test(s)) {
+      var sep3 = s.indexOf('-') !== -1 ? '-' : (s.indexOf('/') !== -1 ? '/' : '.');
+      var p3   = s.split(sep3);
+      d = p3[0];
+      var mText = mmap[p3[1].slice(0, 3)];
+      if (!mText) return null;
+      m = mText;
+      y = p3[2];
+
+    // Pattern 4: numeric separators — e.g. 3/3/97 or 03-03-1997
+    } else if (/^\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}$/.test(s)) {
+      var sep4 = s.indexOf('-') !== -1 ? '-' : (s.indexOf('/') !== -1 ? '/' : '.');
+      var p4   = s.split(sep4);
+      d = p4[0];
+      m = String(parseInt(p4[1], 10)).padStart(2, '0');
+      y = p4[2];
+
     } else {
-      // Step D: Separated input — detect single separator char
-      var sep = '';
-      if (str.indexOf('-') !== -1)      sep = '-';
-      else if (str.indexOf('/') !== -1) sep = '/';
-      else if (str.indexOf('.') !== -1) sep = '.';
-      else return null;
-
-      var parts = str.split(sep);
-      if (parts.length !== 3) return null;
-
-      d = parts[0];
-      m = parts[1];
-      y = parts[2];
+      return null;
     }
 
-    // ── Month handling ──────────────────────────────────────────────────
-    var mKey = m.slice(0, 3);
-    if (monthMap[mKey]) {
-      m = monthMap[mKey];            // text → '01'…'12'
-    } else {
-      m = String(parseInt(m, 10) || 0).padStart(2, '0');  // numeric
-    }
-
-    // ── Year handling (CRUCIAL) ──────────────────────────────────────────
+    // Year: 4-digit → keep exactly as typed; 2-digit → expand
     if (y.length === 4) {
-      // Keep exactly as typed — never alter a 4-digit year
+      // intentionally unchanged
     } else if (y.length === 2) {
       var yy = parseInt(y, 10);
       y = (yy < 50) ? '20' + y : '19' + y;
@@ -561,84 +547,46 @@ document.addEventListener('DOMContentLoaded', function () {
       return null;
     }
 
-    // ── Day padding ──────────────────────────────────────────────────────
-    d = String(parseInt(d, 10) || 0).padStart(2, '0');
+    // Pad day
+    d = String(parseInt(d, 10)).padStart(2, '0');
 
-    // ── Validate ranges ──────────────────────────────────────────────────
+    // Range check
     var di = parseInt(d, 10);
     var mi = parseInt(m, 10);
     var yi = parseInt(y, 10);
     if (di < 1 || di > 31 || mi < 1 || mi > 12 || yi < 1900 || yi > 2100) return null;
 
-    // ── Calendar cross-check (catches Feb 30, etc.) ──────────────────────
+    // Calendar cross-check (rejects Feb 30, etc.)
     var dt = new Date(yi, mi - 1, di);
     if (dt.getDate() !== di || dt.getMonth() !== mi - 1 || dt.getFullYear() !== yi) return null;
-    return dt;
+
+    return d + '-' + m + '-' + y;
   }
 
-  // Public helper for other scripts
-  window.formatDateInput = function(value) {
-    var dt = _smartDateParse(value);
-    if (!dt) return null;
-    return String(dt.getDate()).padStart(2,'0') + '-' +
-           String(dt.getMonth()+1).padStart(2,'0') + '-' +
-           dt.getFullYear();
-  };
+  // Init each datepicker individually, attach blur directly to altInput
+  document.querySelectorAll('.datepicker').forEach(function(el) {
+    var fp = flatpickr(el, {
+      dateFormat: "d-m-Y",
+      allowInput: true,
+      altInput: true,
+      altFormat: "d-m-Y",
+      maxDate: "today"
+    });
 
-  // Helper: show/clear error on a datepicker's parent element
-  function _dpError(instance, show) {
-    var ai = instance.altInput || instance.input;
-    var parent = instance.input.parentElement;
-    var err = parent.querySelector('.date-fmt-error');
-    if (show) {
-      ai.style.borderColor = '#dc3545';
-      ai.style.boxShadow  = '0 0 0 0.2rem rgba(220,53,69,.2)';
-      if (!err) {
-        err = document.createElement('div');
-        err.className = 'date-fmt-error text-danger small mt-1';
-        err.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Invalid date – use DD-MM-YYYY or e.g. 030326';
-        parent.appendChild(err);
-      }
-    } else {
-      ai.style.borderColor = '';
-      ai.style.boxShadow  = '';
-      if (err) err.remove();
-    }
-  }
+    // Blur fires AFTER user leaves the field — Flatpickr has not yet touched the value
+    fp.altInput.addEventListener('blur', function() {
+      var raw = fp.altInput.value.trim();
+      if (!raw) return;
 
-  flatpickr(".datepicker", {
-    dateFormat: "d-m-Y",
-    allowInput: true,
-    altInput: true,
-    altFormat: "d-m-Y",
-    maxDate: "today",
-    onReady: function(selectedDates, dateStr, instance) {
-      // Capture every keystroke BEFORE Flatpickr gets to munge the value
-      var ai = instance.altInput || instance.input;
-      ai.addEventListener('input', function() {
-        ai._rawTyped = ai.value;
-      });
-    },
-    onOpen: function(selectedDates, dateStr, instance) {
-      _dpError(instance, false);
-    },
-    onClose: function(selectedDates, dateStr, instance) {
-      var ai = instance.altInput || instance.input;
-      // Use the captured raw value; if user picked from calendar _rawTyped is null
-      var raw = (ai._rawTyped != null ? ai._rawTyped : ai.value).trim();
-      ai._rawTyped = null;
-
-      if (!raw) { _dpError(instance, false); return; }
-
-      var formatted = window.formatDateInput(raw);
+      var formatted = finalDateFormatter(raw);
       if (formatted) {
-        instance.setDate(formatted, true, 'd-m-Y');
-        _dpError(instance, false);
+        fp.setDate(formatted, true, 'd-m-Y');
         updateExpiryStatus();
       } else {
-        _dpError(instance, true);
+        fp.clear();
+        alert('Please use DD-MM-YYYY or DD-MMM-YYYY  (e.g. 03-03-1997 or 03-mar-1997)');
       }
-    }
+    });
   });
 
   // 4. Auto License/CNIC Status on Expiry Change and on Load
