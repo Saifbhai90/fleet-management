@@ -2349,37 +2349,59 @@
 
     // Initialize Components
     $(document).ready(function() {
-        // ── Global Smart Date Fields (v1.9 Expert Logic) ──
+        // ── Global Smart Date Fields v2.0 — Total Isolation ──
         window._smartDateRawInputs = {};
 
         window.robustParse = function(input) {
             if (!input) return null;
             var raw = input.toLowerCase().trim();
             var d, m, y;
+            var months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
+                          jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+
+            // Case A: 8-digit pure numeric  e.g. 03031997
             if (/^\d{8}$/.test(raw)) {
                 d = raw.substring(0, 2); m = raw.substring(2, 4); y = raw.substring(4, 8);
+
+            // Case B: 6-digit pure numeric  e.g. 030397
             } else if (/^\d{6}$/.test(raw)) {
                 d = raw.substring(0, 2); m = raw.substring(2, 4); y = raw.substring(4, 6);
-            } else if (/[a-z]{3}/.test(raw)) {
-                var months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
-                var parts = raw.split(/[^a-z0-9]/).filter(function(x){ return x.length > 0; });
-                if (parts.length === 3) {
-                    d = parts[0].length < 2 ? '0' + parts[0] : parts[0];
-                    var monthKey = parts[1].substring(0, 3);
-                    m = months[monthKey] || null;
-                    y = parts[2];
+
+            // Case C: Text month  e.g. 03-mar-1997, 3/mar/97, 03 march 1997
+            } else if (/[a-z]/.test(raw)) {
+                var tokens = raw.split(/[^a-z0-9]+/).filter(function(x){ return x.length > 0; });
+                var numParts = []; var monthPart = null;
+                for (var i = 0; i < tokens.length; i++) {
+                    var tk = tokens[i];
+                    var mk = tk.replace(/[^a-z]/g, '').substring(0, 3);
+                    if (mk && months[mk]) {
+                        monthPart = months[mk];
+                    } else {
+                        var digits = tk.replace(/[^0-9]/g, '');
+                        if (digits) numParts.push(digits);
+                    }
                 }
+                if (monthPart && numParts.length >= 2) {
+                    d = numParts[0]; m = monthPart; y = numParts[1];
+                }
+
+            // Case D: Numeric with separators  e.g. 03-03-1997, 03/03/1997
             } else {
-                var parts2 = raw.split(/[^0-9]/).filter(function(x){ return x.length > 0; });
+                var parts2 = raw.split(/[^0-9]+/).filter(function(x){ return x.length > 0; });
                 if (parts2.length === 3) {
-                    d = parts2[0].length < 2 ? '0' + parts2[0] : parts2[0];
-                    m = parts2[1].length < 2 ? '0' + parts2[1] : parts2[1];
-                    y = parts2[2];
+                    d = parts2[0]; m = parts2[1]; y = parts2[2];
                 }
             }
-            if (!d || !m || !y || isNaN(d) || isNaN(m)) return null;
+
+            if (!d || !m || !y) return null;
+            d = d.replace(/[^0-9]/g, ''); y = y.replace(/[^0-9]/g, '');
+            if (!d || !m || !y || isNaN(parseInt(d)) || isNaN(parseInt(y))) return null;
+            if (d.length === 1) d = '0' + d;
+            if (typeof m === 'string' && m.length === 1) m = '0' + m;
             if (y.length === 2) { y = (parseInt(y) < 50) ? '20' + y : '19' + y; }
-            if (parseInt(d) > 31 || parseInt(m) > 12 || y.length !== 4) return null;
+            if (d.length > 2 || y.length !== 4) return null;
+            var di = parseInt(d), mi = parseInt(m);
+            if (di < 1 || di > 31 || mi < 1 || mi > 12) return null;
             return d + '-' + m + '-' + y;
         };
 
@@ -2388,53 +2410,79 @@
                 if (el._smartDateInit) return;
                 el._smartDateInit = true;
 
-                // WTForms 3.x renders DateField as type="date" — browser rejects DD-MM-YYYY
-                // and clears el.value. Force type="text" and recover from HTML attribute.
+                // WTForms 3.x renders DateField as type="date" — browser rejects DD-MM-YYYY.
+                // Force type="text" and recover original value from HTML attribute.
                 var attrVal = el.getAttribute('value') || '';
-                if (el.type === 'date') {
-                    el.type = 'text';
-                }
+                if (el.type === 'date') el.type = 'text';
                 var existingVal = (el.value || attrVal || '').trim();
-
-                // Convert YYYY-MM-DD → DD-MM-YYYY
                 if (/^\d{4}-\d{2}-\d{2}$/.test(existingVal)) {
                     var p = existingVal.split('-');
                     existingVal = p[2] + '-' + p[1] + '-' + p[0];
                 }
                 el.value = existingVal;
-                console.log('initSmartDate:', el.id || el.name, 'val:', existingVal);
+                console.log('initSmartDate v2.0:', el.id || el.name, 'val:', existingVal);
 
                 var fp = flatpickr(el, {
                     dateFormat: "d-m-Y",
                     allowInput: true,
                     clickOpens: true
                 });
-                // Ensure Flatpickr internal state matches existing value
                 if (existingVal && fp) {
                     fp.setDate(existingVal, false);
                     el.value = existingVal;
                 }
+
+                // ── Total Isolation: block Flatpickr from seeing keyboard events ──
+                el.addEventListener('keydown', function(e) { e.stopPropagation(); }, true);
                 el.addEventListener('input', function(e) {
+                    e.stopPropagation();
                     window._smartDateRawInputs[el.id || el.name] = e.target.value;
-                });
+                }, true);
+
+                // ── Fresh state on every focus ──
+                el.addEventListener('focus', function() {
+                    window._smartDateRawInputs[el.id || el.name] = '';
+                }, true);
+
+                // ── Last Word: setTimeout(20) so we override after Flatpickr finishes ──
                 el.addEventListener('blur', function(e) {
                     e.stopImmediatePropagation();
                     var key = el.id || el.name;
-                    var typedValue = window._smartDateRawInputs[key];
-                    if (!typedValue || typedValue.trim() === '') return;
-                    if (/^\d{2}-\d{2}-\d{4}$/.test(typedValue.trim())) return;
-                    var formatted = window.robustParse(typedValue);
-                    if (formatted) {
-                        el._flatpickr.setDate(formatted, false);
-                        el.value = formatted;
-                        window._smartDateRawInputs[key] = formatted;
-                        el.dispatchEvent(new Event('change', {bubbles: true}));
-                    } else {
-                        alert('Ghalat Format! Sahi tareeqa: 03031997 ya 03-mar-1997');
-                        el._flatpickr.clear();
-                        el.value = '';
-                        window._smartDateRawInputs[key] = '';
-                    }
+                    var typedValue = (window._smartDateRawInputs[key] || '').trim();
+
+                    setTimeout(function() {
+                        // Nothing typed → leave as-is (calendar pick or pre-filled)
+                        if (!typedValue) return;
+                        // Already correct DD-MM-YYYY → just sync Flatpickr
+                        if (/^\d{2}-\d{2}-\d{4}$/.test(typedValue)) {
+                            if (el._flatpickr) {
+                                el._flatpickr.setDate(typedValue, false);
+                                el.value = typedValue;
+                            }
+                            el.dispatchEvent(new Event('change', {bubbles: true}));
+                            return;
+                        }
+                        var formatted = window.robustParse(typedValue);
+                        if (formatted) {
+                            if (el._flatpickr) {
+                                el._flatpickr.setDate(formatted, false);
+                                el.value = formatted;
+                            }
+                            window._smartDateRawInputs[key] = formatted;
+                            el.dispatchEvent(new Event('change', {bubbles: true}));
+                        } else {
+                            // No-Alert: clear + red border flash
+                            if (el._flatpickr) el._flatpickr.clear();
+                            el.value = '';
+                            window._smartDateRawInputs[key] = '';
+                            el.style.borderColor = '#dc3545';
+                            el.style.boxShadow = '0 0 0 0.2rem rgba(220,53,69,0.25)';
+                            setTimeout(function() {
+                                el.style.borderColor = '';
+                                el.style.boxShadow = '';
+                            }, 1500);
+                        }
+                    }, 20);
                 }, true);
             });
         };
