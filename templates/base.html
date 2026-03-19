@@ -1635,6 +1635,11 @@
                     <i class="bi bi-person-lines-fill text-primary"></i><span>Active Driver Summary</span>
                 </a>
                 {% endif %}
+                {% if can_see_page('missing_documents_report') %}
+                <a href="{{ url_for('missing_documents_report') }}" class="collapse-item {% if request.endpoint == 'missing_documents_report' %}active-link{% endif %}">
+                    <i class="bi bi-file-earmark-x text-danger"></i><span>Missing Documents</span>
+                </a>
+                {% endif %}
                 {% if can_see_page('report_vehicle_summary') %}
                 <a href="{{ url_for('report_vehicle_summary') }}" class="collapse-item {% if request.endpoint == 'report_vehicle_summary' %}active-link{% endif %}">
                     <i class="bi bi-truck"></i><span>Vehicle Summary</span>

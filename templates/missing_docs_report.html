@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Driver Missing Documents Report{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<style>
+    .report-header { background: linear-gradient(135deg, #b71c1c 0%, #7f0000 100%); color: #fff; border-radius: 10px; padding: 1.1rem 1.4rem; margin-bottom: 1rem; }
+    .report-header h2 { margin: 0; font-size: 1.35rem; font-weight: 700; }
+    .report-header .subtitle { font-size: 0.85rem; opacity: 0.85; margin-top: 0.2rem; }
+    .filter-card { background: #fff; border-radius: 8px; padding: 0.9rem 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .filter-input { border: 1px solid #ddd; border-radius: 5px; padding: 0.38rem 0.7rem; font-size: 0.855rem; }
+    .filter-input:focus { border-color: #b71c1c; box-shadow: 0 0 0 2px rgba(183,28,28,0.12); outline: none; }
+    .btn-filter { background: #b71c1c; color: #fff; border: none; border-radius: 5px; padding: 0.4rem 1rem; font-size: 0.855rem; font-weight: 600; }
+    .btn-filter:hover { background: #7f0000; color: #fff; }
+    .table-wrap { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; padding: 1rem; }
+    #missingDocsTable { font-size: 0.855rem; }
+    #missingDocsTable thead th { background: #fce4ec; color: #880e4f; font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 2px solid #e91e63; white-space: nowrap; }
+    #missingDocsTable tbody tr:hover { background: #fff8f8; }
+    #missingDocsTable td { vertical-align: middle; padding: 0.5rem 0.7rem; }
+    .driver-name { font-weight: 600; color: #1a237e; }
+    .driver-id   { color: #607d8b; font-size: 0.78rem; }
+    .sr-badge    { background: #b71c1c; color: #fff; border-radius: 4px; padding: 0.12rem 0.45rem; font-size: 0.75rem; font-weight: 700; }
+    .total-badge { background: #fce4ec; color: #880e4f; font-size: 0.82rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 20px; }
+    .missing-tag { display: inline-block; background: #fff3cd; color: #7d5a00; border: 1px solid #ffc107; border-radius: 4px; font-size: 0.74rem; font-weight: 600; padding: 0.1rem 0.45rem; margin: 0.1rem 0.15rem 0.1rem 0; white-space: nowrap; }
+    .missing-count { display: inline-block; background: #b71c1c; color: #fff; border-radius: 20px; font-size: 0.72rem; font-weight: 700; padding: 0.1rem 0.5rem; margin-left: 0.3rem; }
+    div.dataTables_wrapper div.dataTables_filter input { border: 1px solid #ddd; border-radius: 5px; padding: 0.32rem 0.65rem; font-size: 0.84rem; margin-left: 6px; }
+    div.dataTables_wrapper div.dataTables_filter input:focus { border-color: #b71c1c; outline: none; }
+    div.dataTables_wrapper div.dataTables_filter label,
+    div.dataTables_wrapper div.dataTables_length label,
+    div.dataTables_wrapper div.dataTables_info { font-size: 0.84rem; color: #455a64; }
+    div.dataTables_wrapper div.dataTables_length select { border: 1px solid #ddd; border-radius: 5px; padding: 0.28rem 0.5rem; font-size: 0.84rem; }
+    div.dataTables_wrapper div.dataTables_paginate .paginate_button.current { background: #b71c1c !important; border-color: #b71c1c !important; color: #fff !important; border-radius: 4px; }
+    @media (max-width: 767px) { .filter-card .row > div { margin-bottom: 0.45rem; } }
+</style>
+
+<div class="container-fluid py-3 px-3 px-md-4">
+
+    <div class="report-header">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="me-auto">
+                <h2 class="mb-0"><i class="bi bi-file-earmark-x-fill me-2"></i>Driver Missing Documents Report</h2>
+                <div class="subtitle mt-1">
+                    <i class="bi bi-info-circle me-1"></i>Active drivers with one or more missing documents
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-card">
+        <form method="GET" action="{{ url_for('missing_documents_report') }}">
+            <div class="row g-2 align-items-end">
+                <div class="col-6 col-md-3">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Project</label>
+                    <select name="project_id" class="form-select filter-input">
+                        {% for val, label in project_choices %}
+                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">District</label>
+                    <select name="district_id" class="form-select filter-input">
+                        {% for val, label in district_choices %}
+                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Missing Document</label>
+                    <select name="doc_filter" class="form-select filter-input">
+                        <option value="" {% if not doc_filter %}selected{% endif %}>-- All Missing --</option>
+                        {% for key, attr, label in doc_fields %}
+                        <option value="{{ key }}" {% if doc_filter == key %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-1 d-flex gap-1">
+                    <button type="submit" class="btn btn-filter w-100">
+                        <i class="bi bi-funnel-fill"></i> Filter
+                    </button>
+                </div>
+                {% if project_id or district_id or doc_filter %}
+                <div class="col-12">
+                    <a href="{{ url_for('missing_documents_report') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-x-circle me-1"></i>Clear Filters
+                    </a>
+                    <span class="total-badge ms-2">{{ total }} driver{{ 's' if total != 1 else '' }} found</span>
+                </div>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+            <span class="total-badge"><i class="bi bi-exclamation-triangle-fill me-1"></i>Total: {{ total }} driver{{ 's' if total != 1 else '' }} with missing docs</span>
+            <div class="d-flex align-items-center gap-2">
+                <input type="text" id="dtSearchInput" class="form-control form-control-sm"
+                       placeholder="🔍 Search..." autocomplete="off"
+                       style="width:200px;border:1px solid #ddd;border-radius:5px;font-size:0.82rem;">
+                <select id="dtLengthSelect" class="form-select form-select-sm" style="width:auto;font-size:0.82rem;">
+                    <option value="10">10 / page</option>
+                    <option value="25" selected>25 / page</option>
+                    <option value="50">50 / page</option>
+                    <option value="100">100 / page</option>
+                    <option value="-1">All</option>
+                </select>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table id="missingDocsTable" class="table table-sm table-bordered table-hover align-middle w-100">
+                <thead>
+                    <tr>
+                        <th style="width:4%">Sr No</th>
+                        <th>Driver Name (ID) / CNIC</th>
+                        <th>Missing Documents</th>
+                        <th>Missing Count</th>
+                        <th style="width:9%">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    {% set driver = row.driver %}
+                    <tr>
+                        <td class="text-center"><span class="sr-badge">{{ loop.index }}</span></td>
+                        <td>
+                            <div class="driver-name">{{ driver.name }}</div>
+                            <div class="driver-id">{{ driver.driver_id or '-' }}</div>
+                            <div class="driver-id"><i class="bi bi-person-vcard me-1 text-secondary"></i>{{ driver.cnic_no or '-' }}</div>
+                        </td>
+                        <td>
+                            {% for doc in row.missing %}
+                            <span class="missing-tag"><i class="bi bi-x-circle-fill me-1" style="color:#e53935;font-size:0.7rem;"></i>{{ doc }}</span>
+                            {% endfor %}
+                        </td>
+                        <td class="text-center">
+                            <span class="missing-count">{{ row.missing|length }} / {{ doc_fields|length }}</span>
+                        </td>
+                        <td class="text-center">
+                            <a href="{{ url_for('report_driver_profile', driver_id=driver.id) }}" target="_blank"
+                               class="btn btn-sm" style="background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;font-size:0.72rem;padding:0.2rem 0.55rem;">
+                               <i class="bi bi-eye-fill me-1"></i>View Profile</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">
+                            <i class="bi bi-check-circle-fill text-success me-2" style="font-size:1.4rem;"></i>
+                            <span style="font-size:0.95rem;">All drivers have complete documents!</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script>
+$(document).ready(function() {
+    var table = $('#missingDocsTable').DataTable({
+        paging: true,
+        pageLength: 25,
+        searching: true,
+        ordering: true,
+        info: true,
+        dom: 'tip',
+        language: { emptyTable: 'No drivers with missing documents found.' }
+    });
+    $('#dtSearchInput').on('keyup', function() { table.search(this.value).draw(); });
+    $('#dtLengthSelect').on('change', function() { table.page.len($(this).val()).draw(); });
+});
+</script>
+{% endblock %}

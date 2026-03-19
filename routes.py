@@ -7213,12 +7213,81 @@ def active_drivers_report_print():
         allowed_vehicles=allowed_vehicles, allowed_projects=allowed_projects,
         allowed_districts=allowed_districts, is_master_or_admin=is_master_or_admin,
     )
+
+
+# ── Driver Missing Documents Report ───────────────────────────────────────
+@app.route('/missing-documents-report')
+def missing_documents_report():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    allowed_projects   = user_context.get('allowed_projects', set())
+    allowed_districts  = user_context.get('allowed_districts', set())
+
+    project_id  = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    doc_filter  = request.args.get('doc_filter', '').strip()
+
+    query = Driver.query.filter(Driver.status != 'Left')
+
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(Driver.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(Driver.district_id.in_(list(allowed_districts)))
+
+    if project_id:
+        query = query.filter(Driver.project_id == project_id)
+    if district_id:
+        query = query.filter(Driver.district_id == district_id)
+
+    DOC_FIELDS = [
+        ('photo',         'photo_path',         'Driver Photo'),
+        ('cnic_front',    'cnic_front_path',     'CNIC Front'),
+        ('cnic_back',     'cnic_back_path',       'CNIC Back'),
+        ('license_front', 'license_front_path',   'License Front'),
+        ('license_back',  'license_back_path',    'License Back'),
+        ('driver_file',   'document_path',        'Complete Driver File'),
+    ]
+
+    if doc_filter:
+        field_map = {k: v for k, v, _ in DOC_FIELDS}
+        col_name = field_map.get(doc_filter)
+        if col_name:
+            col = getattr(Driver, col_name)
+            query = query.filter(or_(col.is_(None), col == ''))
+
+    all_drivers = query.order_by(Driver.name).all()
+
+    rows = []
+    for d in all_drivers:
+        missing = []
+        for key, attr, label in DOC_FIELDS:
+            val = getattr(d, attr, None)
+            if not val:
+                missing.append(label)
+        if missing:
+            rows.append({'driver': d, 'missing': missing})
+
+    proj_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_q.all()]
+
+    dist_q = District.query.order_by(District.name)
+    if not is_master_or_admin and allowed_districts:
+        dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
+    district_choices = [(0, '-- All Districts --')] + [(d2.id, d2.name) for d2 in dist_q.all()]
+
     return render_template(
-        'active_driver_summary_print.html',
-        results=results,
-        from_date=from_date_str, to_date=to_date_str,
-        total=len(results),
-        now=datetime.now,
+        'missing_docs_report.html',
+        rows=rows, total=len(rows),
+        project_id=project_id, district_id=district_id,
+        doc_filter=doc_filter,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        doc_fields=DOC_FIELDS,
     )
 
 
