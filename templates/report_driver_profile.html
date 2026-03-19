@@ -678,9 +678,17 @@
 
   /* ── Close mobile inline viewer ── */
   function closeDocViewer() {
-    document.getElementById('docViewer').style.display = 'none';
+    var viewer = document.getElementById('docViewer');
+    var sv = parseInt(viewer.dataset.scrollY || '0', 10);
+    viewer.style.display = 'none';
     document.getElementById('viewerImg').src = '';
+    /* Restore body from position:fixed scroll-lock */
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
     document.body.style.overflow = '';
+    document.documentElement.style.overflow = '';
+    window.scrollTo(0, sv);
   }
 
   /* ── Image / File viewer ──
@@ -702,8 +710,20 @@
       dlEl.setAttribute('download', dlName);
       document.getElementById('viewerImg').src = proxyUrl;
       var viewer = document.getElementById('docViewer');
-      viewer.style.display = 'flex';
+      /* Move to <body> root so position:fixed escapes any ancestor container
+         (Flutter WebView does not honour fixed inside nested overflow elements) */
+      if (viewer.parentElement !== document.body) {
+        document.body.appendChild(viewer);
+      }
+      /* Lock page scroll behind the overlay */
+      var _sv = window.scrollY || window.pageYOffset || 0;
+      viewer.dataset.scrollY = _sv;
+      document.documentElement.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = '-' + _sv + 'px';
+      document.body.style.width = '100%';
+      viewer.style.display = 'flex';
       return;
     }
 
