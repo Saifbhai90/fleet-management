@@ -679,9 +679,10 @@
     document.getElementById('lightboxImg').src = url;
     document.getElementById('lightboxTitle').textContent = title;
     document.getElementById('lightboxOpen').href = url;
-    lb.scrollTop = 0;
     lb.style.display = 'flex';
     document.body.style.overflow = 'hidden';
+    /* scrollTop must run AFTER display:flex so the layout is rendered */
+    requestAnimationFrame(function() { lb.scrollTop = 0; });
   }
   function closeLightbox(e) {
     if (e.target === document.getElementById('photoLightbox')) closeLightboxBtn();
@@ -695,20 +696,92 @@
     if (e.key === 'Escape') closeLightboxBtn();
   });
 
-  /* ── Shared: fetch cross-origin imgs through proxy → blob URLs (guaranteed loaded) ── */
+  /* ── Print: pre-fetch R2 imgs via proxy → blob URLs for reliable print rendering ──
+     beforeprint/afterprint work for BOTH the Print button AND native Ctrl+P           */
+  var _printBlobMap = {};   /* src → blobUrl */
+
+  function _isCrossOrigin(src) {
+    return src && !src.startsWith('blob:') && !src.startsWith('data:') &&
+           !src.startsWith('/') && src.indexOf(location.hostname) === -1;
+  }
+
+  function _prefetchForPrint() {
+    var fetches = Array.from(document.querySelectorAll('img'))
+      .filter(function(img) {
+        var s = img.getAttribute('src') || '';
+        return _isCrossOrigin(s) && !_printBlobMap[s];
+      })
+      .map(function(img) {
+        var src = img.getAttribute('src');
+        return fetch('/image-proxy?url=' + encodeURIComponent(src))
+          .then(function(r) { return r.ok ? r.blob() : Promise.reject(r.status); })
+          .then(function(blob) { _printBlobMap[src] = URL.createObjectURL(blob); })
+          .catch(function(e) { console.warn('Print prefetch failed:', src, e); });
+      });
+    return Promise.all(fetches);
+  }
+
+  /* Synchronously swap to blob URLs right before browser renders print layout */
+  window.addEventListener('beforeprint', function() {
+    document.querySelectorAll('img').forEach(function(img) {
+      var src = img.getAttribute('src') || '';
+      if (_printBlobMap[src]) {
+        img.dataset.printOrig = src;
+        img.setAttribute('src', _printBlobMap[src]);
+      }
+    });
+  });
+
+  /* Restore original srcs after print dialog closes */
+  window.addEventListener('afterprint', function() {
+    document.querySelectorAll('img').forEach(function(img) {
+      if (img.dataset.printOrig) {
+        img.setAttribute('src', img.dataset.printOrig);
+        delete img.dataset.printOrig;
+      }
+    });
+  });
+
+  /* Start pre-fetching in background as soon as page loads */
+  window.addEventListener('load', function() { _prefetchForPrint(); });
+
+  /* Print button: ensure pre-fetch is done before opening print dialog */
+  function doPrint() {
+    var pb = document.getElementById('printBtn');
+    var needsFetch = Array.from(document.querySelectorAll('img')).some(function(img) {
+      var s = img.getAttribute('src') || '';
+      return _isCrossOrigin(s) && !_printBlobMap[s];
+    });
+    if (!needsFetch) { window.print(); return; }
+    if (pb) { pb.disabled = true; pb.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...'; }
+    var safety = setTimeout(function() {
+      if (pb) { pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; }
+      window.print();
+    }, 25000);
+    _prefetchForPrint().then(function() {
+      clearTimeout(safety);
+      if (pb) { pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; }
+      window.print();
+    }).catch(function() {
+      clearTimeout(safety);
+      if (pb) { pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; }
+      window.print();
+    });
+  }
+
+  /* ── Shared proxy helper (used by PDF) ── */
   function _proxyImages(scope) {
     var imgs = Array.from((scope || document).querySelectorAll('img'));
     var origSrcs = imgs.map(function(img) { return img.getAttribute('src') || ''; });
     var blobUrls = new Array(imgs.length).fill(null);
-
     var waits = imgs.map(function(img, i) {
       var src = img.getAttribute('src') || '';
-      /* Skip: no src, already same-origin, or already a blob/proxy */
-      if (!src || src.startsWith('blob:') || src.startsWith('/image-proxy') ||
-          src.indexOf(location.hostname) !== -1) {
+      if (!_isCrossOrigin(src)) return Promise.resolve();
+      /* Re-use already-fetched blob if available */
+      if (_printBlobMap[src]) {
+        img.setAttribute('src', _printBlobMap[src]);
         return Promise.resolve();
       }
-      /* Fetch through Flask proxy → convert to blob URL so browser has it in memory */
       var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       var timer = setTimeout(function() { if (ctrl) ctrl.abort(); }, 15000);
       var fetchOpts = ctrl ? { signal: ctrl.signal } : {};
@@ -720,52 +793,21 @@
         })
         .then(function(blob) {
           var bUrl = URL.createObjectURL(blob);
+          _printBlobMap[src] = bUrl;  /* cache for future use */
           blobUrls[i] = bUrl;
           img.setAttribute('src', bUrl);
         })
-        .catch(function(err) {
-          clearTimeout(timer);
-          console.warn('Proxy failed:', src, err && err.message);
-          /* Leave original src — image may not show in print but won't crash */
-        });
+        .catch(function(err) { clearTimeout(timer); console.warn('PDF proxy failed:', src, err && err.message); });
     });
-
     function restore() {
       imgs.forEach(function(img, i) {
         if (origSrcs[i]) img.setAttribute('src', origSrcs[i]);
-        if (blobUrls[i]) { try { URL.revokeObjectURL(blobUrls[i]); } catch(e) {} }
+        if (blobUrls[i] && blobUrls[i] !== _printBlobMap[origSrcs[i]]) {
+          try { URL.revokeObjectURL(blobUrls[i]); } catch(e) {}
+        }
       });
-      blobUrls.fill(null);
     }
     return { waits: waits, restore: restore };
-  }
-
-  /* ── Print with proxy-preloaded images ── */
-  function doPrint() {
-    var pb = document.getElementById('printBtn');
-    if (pb) { pb.disabled = true; pb.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...'; }
-    var job = _proxyImages(document);
-    var safety = setTimeout(function() {
-      job.restore();
-      if (pb) { pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; }
-      window.print();
-    }, 20000);
-    Promise.all(job.waits).then(function() {
-      clearTimeout(safety);
-      /* 300 ms delay: let browser repaint blob-URL images before print engine captures */
-      setTimeout(function() {
-        window.print();
-        setTimeout(function() {
-          job.restore();
-          if (pb) { pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; }
-        }, 1500);
-      }, 300);
-    }).catch(function() {
-      clearTimeout(safety);
-      job.restore();
-      if (pb) { pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; }
-      window.print();
-    });
   }
 
   /* ── PDF generation ── */
