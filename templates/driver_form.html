@@ -501,47 +501,76 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function _smartDateParse(s) {
     if (!s || typeof s !== 'string') return null;
+
+    // Step A: Clean
     var str = s.trim().toLowerCase();
     var d, m, y;
 
-    // All-digit shorthand: DDMMYY (6 digits) or DDMMYYYY (8 digits)
-    if (/^\d{6}$/.test(str)) {
-      d = str.slice(0,2); m = str.slice(2,4); y = str.slice(4,6);
-      y = +y < 50 ? '20' + y : '19' + y;
-    } else if (/^\d{8}$/.test(str)) {
-      d = str.slice(0,2); m = str.slice(2,4); y = str.slice(4,8);
-    } else {
-      // Split on -, /, ., or space
-      var parts = str.split(/[-\/\.\s]+/);
-      if (parts.length !== 3) return null;
-      d = parts[0];
-      var rawM = parts[1];
-      y = parts[2];
+    // Check if purely digits (no separators)
+    var allDigits = true;
+    for (var i = 0; i < str.length; i++) {
+      var c = str.charCodeAt(i);
+      if (c < 48 || c > 57) { allDigits = false; break; }
+    }
 
-      // Month: text name (e.g. 'mar') or numeric
-      var mKey = rawM.slice(0, 3);
-      if (monthMap[mKey]) {
-        m = monthMap[mKey];           // '03' for mar, '01' for jan, etc.
-      } else if (/^\d{1,2}$/.test(rawM)) {
-        m = rawM.padStart(2, '0');
+    if (allDigits) {
+      // Step B: 8-digit DDMMYYYY
+      if (str.length === 8) {
+        d = str.slice(0, 2);
+        m = str.slice(2, 4);
+        y = str.slice(4, 8);   // 4-digit year — keep exactly as typed
+      // Step C: 6-digit DDMMYY
+      } else if (str.length === 6) {
+        d = str.slice(0, 2);
+        m = str.slice(2, 4);
+        y = str.slice(4, 6);   // 2-digit year — expand below
       } else {
         return null;
       }
+    } else {
+      // Step D: Separated input — detect single separator char
+      var sep = '';
+      if (str.indexOf('-') !== -1)      sep = '-';
+      else if (str.indexOf('/') !== -1) sep = '/';
+      else if (str.indexOf('.') !== -1) sep = '.';
+      else return null;
 
-      // Expand 2-digit year
-      if (/^\d{2}$/.test(y)) {
-        y = +y < 50 ? '20' + y : '19' + y;
-      }
+      var parts = str.split(sep);
+      if (parts.length !== 3) return null;
+
+      d = parts[0];
+      m = parts[1];
+      y = parts[2];
     }
 
-    // Pad day to 2 digits
-    d = String(+d).padStart(2, '0');
+    // ── Month handling ──────────────────────────────────────────────────
+    var mKey = m.slice(0, 3);
+    if (monthMap[mKey]) {
+      m = monthMap[mKey];            // text → '01'…'12'
+    } else {
+      m = String(parseInt(m, 10) || 0).padStart(2, '0');  // numeric
+    }
 
-    // Integer validation
-    var di = +d, mi = +m, yi = +y;
-    if (!di || !mi || !yi || di < 1 || di > 31 || mi < 1 || mi > 12 || yi < 1900 || yi > 2100) return null;
+    // ── Year handling (CRUCIAL) ──────────────────────────────────────────
+    if (y.length === 4) {
+      // Keep exactly as typed — never alter a 4-digit year
+    } else if (y.length === 2) {
+      var yy = parseInt(y, 10);
+      y = (yy < 50) ? '20' + y : '19' + y;
+    } else {
+      return null;
+    }
 
-    // Date object cross-check (catches invalid days like Feb 30)
+    // ── Day padding ──────────────────────────────────────────────────────
+    d = String(parseInt(d, 10) || 0).padStart(2, '0');
+
+    // ── Validate ranges ──────────────────────────────────────────────────
+    var di = parseInt(d, 10);
+    var mi = parseInt(m, 10);
+    var yi = parseInt(y, 10);
+    if (di < 1 || di > 31 || mi < 1 || mi > 12 || yi < 1900 || yi > 2100) return null;
+
+    // ── Calendar cross-check (catches Feb 30, etc.) ──────────────────────
     var dt = new Date(yi, mi - 1, di);
     if (dt.getDate() !== di || dt.getMonth() !== mi - 1 || dt.getFullYear() !== yi) return null;
     return dt;
@@ -605,6 +634,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (formatted) {
         instance.setDate(formatted, true, 'd-m-Y');
         _dpError(instance, false);
+        updateExpiryStatus();
       } else {
         _dpError(instance, true);
       }
@@ -631,6 +661,17 @@ document.addEventListener('DOMContentLoaded', function () {
       targetHidden.value = "Expired";
     }
   }
+  function updateExpiryStatus() {
+    document.querySelectorAll('.expiry-trigger').forEach(function(el) {
+      if (el.value) {
+        var expiryDate = parseExpiryDate(el.value);
+        var targetDisplay = document.getElementById(el.dataset.target);
+        var targetHidden  = document.getElementById(el.dataset.hidden);
+        applyExpiryStatus(expiryDate, targetDisplay, targetHidden);
+      }
+    });
+  }
+
   document.querySelectorAll('.expiry-trigger').forEach(el => {
     el.addEventListener('change', function() {
       const expiryDate = parseExpiryDate(this.value);
