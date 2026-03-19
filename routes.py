@@ -5525,6 +5525,25 @@ def get_unassigned_drivers():
     drivers = Driver.query.filter(Driver.vehicle_id == None).all()
     return jsonify([{"id": d.id, "name": f"{d.name} ({d.driver_id})"} for d in drivers])
 
+@app.route('/get_driver_details/<int:driver_id>')
+def get_driver_details(driver_id):
+    d = Driver.query.get_or_404(driver_id)
+    district_name = d.district.name if d.district else (d.driver_district or '-')
+    photo_url = d.photo_path if d.photo_path else None
+    return jsonify({
+        'name':        d.name,
+        'driver_id':   d.driver_id or '-',
+        'post':        d.post or 'Driver',
+        'status':      d.status or 'Active',
+        'district':    district_name,
+        'photo_url':   photo_url,
+        'father_name': d.father_name or '-',
+        'cnic_no':     d.cnic_no or '-',
+        'phone1':      d.phone1 or '-',
+        'phone2':      d.phone2 or '-',
+        'address':     d.address or '-',
+    })
+
 @app.route('/assign_driver_to_vehicle/new', methods=['GET', 'POST'])
 def assign_driver_to_vehicle_new():
     from auth_utils import get_user_context
@@ -5533,7 +5552,7 @@ def assign_driver_to_vehicle_new():
     allowed_projects = user_context.get('allowed_projects', set())
     allowed_districts = user_context.get('allowed_districts', set())
     is_master_or_admin = user_context.get('is_master_or_admin', False)
-    
+
     form = AssignDriverToVehicleForm()
     proj_q = Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name)
     if not is_master_or_admin and allowed_projects:
