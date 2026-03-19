@@ -104,15 +104,15 @@
     <div class="filter-bar">
         <form method="GET">
             <div class="row g-2 align-items-center mb-2">
-                <div class="col-md-2">
+                <div class="col-md-3">
                     <input type="text" name="from_date" class="form-control filter-input datepicker" 
                            placeholder="From Date (dd-mm-yyyy)" value="{{ from_date or '' }}" autocomplete="off">
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-3">
                     <input type="text" name="to_date" class="form-control filter-input datepicker" 
                            placeholder="To Date (dd-mm-yyyy)" value="{{ to_date or '' }}" autocomplete="off">
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-3">
                     <select name="project_id" class="form-select filter-input" {% if disable_project %}disabled{% endif %}>
                         {% for val, label in project_choices %}
                         <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
@@ -126,23 +126,28 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <input type="text" name="search" class="form-control filter-input" placeholder="Search..." value="{{ search or '' }}">
-                </div>
                 <div class="col-md-1">
                     <button type="submit" class="btn btn-primary-compact w-100">
                         <i class="bi bi-funnel"></i>
                     </button>
                 </div>
             </div>
-            {% if search or project_id or district_id or from_date or to_date %}
+            {% if project_id or district_id or from_date or to_date %}
             <a href="{{ url_for('assign_vehicle_to_district') }}" class="btn btn-outline-secondary btn-sm">Clear Filters</a>
             {% endif %}
         </form>
     </div>
 
     <div class="data-table-wrapper">
-        <div class="section-heading">Assigned Vehicles</div>
+        <div class="section-heading d-flex justify-content-between align-items-center">
+            <span>Assigned Vehicles</span>
+            <div style="min-width:260px;">
+                <input type="text" id="tableRTSearch" class="form-control form-control-sm"
+                       placeholder="&#128269; Search all columns..."
+                       style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:rgba(255,255,255,0.7);border-radius:6px;"
+                       autocomplete="off">
+            </div>
+        </div>
         <div class="table-responsive">
             <table class="table table-sm align-middle mb-0 compact-table">
                 <thead>
@@ -242,22 +247,28 @@
 </div>
 
 <script>
-    // Initialize Lucide icons
     lucide.createIcons();
-    
+
+    (function() {
+        var si = document.getElementById('tableRTSearch');
+        si.addEventListener('input', function() {
+            var term = this.value.toLowerCase().trim();
+            document.querySelectorAll('.compact-table tbody tr').forEach(function(row) {
+                row.style.display = (!term || row.textContent.toLowerCase().includes(term)) ? '' : 'none';
+            });
+        });
+        si.addEventListener('focus', function() { this.style.color = '#fff'; });
+        si.addEventListener('blur',  function() { this.style.color = this.value ? '#fff' : 'rgba(255,255,255,0.7)'; });
+    })();
+
     function sortTable(column) {
         const urlParams = new URLSearchParams(window.location.search);
         const currentSort = urlParams.get('sort_by');
         const currentOrder = urlParams.get('sort_order') || 'desc';
-        
         let newOrder = 'asc';
-        if (currentSort === column && currentOrder === 'asc') {
-            newOrder = 'desc';
-        }
-        
+        if (currentSort === column && currentOrder === 'asc') { newOrder = 'desc'; }
         urlParams.set('sort_by', column);
         urlParams.set('sort_order', newOrder);
-        
         window.location.search = urlParams.toString();
     }
 </script>
