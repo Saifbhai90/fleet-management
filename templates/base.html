@@ -2506,22 +2506,27 @@
         _sdObs.observe(document.body, { childList: true, subtree: true });
 
         // ── Global Enter-to-Tab: move focus to next field instead of submitting ──
+        var _lastEnterTime = 0;
         document.addEventListener('keydown', function(e) {
             if (e.key !== 'Enter' && e.keyCode !== 13) return;
+
+            // Debounce: prevent double-trigger causing field skipping
+            var now = Date.now();
+            if (now - _lastEnterTime < 150) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+            _lastEnterTime = now;
+
             var el = document.activeElement;
             if (!el) return;
             var tag = el.tagName.toLowerCase();
 
             // Textarea: normal Enter = newline; Ctrl+Enter = move to next field
-            if (tag === 'textarea') {
-                if (!e.ctrlKey) return;
-            }
+            if (tag === 'textarea' && !e.ctrlKey) return;
 
-            // Submit/button: let Enter submit the form
-            if (tag === 'button' || (tag === 'input' && el.type === 'submit')) return;
-
-            // Only intercept on form fields
+            // Only intercept on form fields (input, select, textarea)
             if (tag !== 'input' && tag !== 'select' && tag !== 'textarea') return;
+
+            // Submit button: let Enter submit the form normally
+            if (tag === 'button' || (tag === 'input' && el.type === 'submit')) return;
 
             // Find the parent form
             var form = el.closest('form');
@@ -2531,8 +2536,9 @@
             var focusable = Array.prototype.slice.call(
                 form.querySelectorAll('input:not([type="hidden"]), select, textarea, button:not([disabled])')
             ).filter(function(f) {
-                if (f.disabled) return false;
-                if (f.offsetParent === null && f.type !== 'hidden') return false;
+                if (f.disabled || f.readOnly) return false;
+                if (f.tabIndex === -1) return false;
+                if (f.offsetParent === null) return false;
                 return true;
             });
 
@@ -2541,18 +2547,19 @@
             // Last field or not found → allow normal Enter (form submit)
             if (idx === -1 || idx >= focusable.length - 1) return;
 
-            // Prevent form submission
+            // ── STRICT: block form submission immediately ──
             e.preventDefault();
-            e.stopPropagation();
+            e.stopImmediatePropagation();
 
             var nextEl = focusable[idx + 1];
 
-            // If current field is a datepicker, trigger blur first so smart date logic runs,
-            // then move focus after the setTimeout(20) in the blur handler completes
+            // Datepicker: blur first so smart date logic (setTimeout 20ms) runs,
+            // then move focus after it completes
             if (el.classList && el.classList.contains('datepicker')) {
                 el.blur();
-                setTimeout(function() { nextEl.focus(); }, 30);
+                setTimeout(function() { nextEl.focus(); }, 50);
             } else {
+                el.blur();
                 nextEl.focus();
             }
         });
