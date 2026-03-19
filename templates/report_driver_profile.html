@@ -633,18 +633,82 @@
     {% endif %}
   </div>
 
+  <!-- ── Mobile inline viewer (shown inside WebView — no new-tab / browser dialog) ── -->
+  <div id="docViewer"
+       style="display:none;position:fixed;inset:0;z-index:9999;
+              background:#111;flex-direction:column;">
+    <!-- Toolbar -->
+    <div style="height:54px;background:#111;display:flex;align-items:center;
+                gap:8px;padding:0 14px;border-bottom:1px solid #333;flex-shrink:0;">
+      <span id="viewerTitle"
+            style="flex:1;color:#ddd;font-size:.875rem;font-weight:600;
+                   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <a id="viewerDl" href="#" download=""
+         style="display:inline-flex;align-items:center;gap:5px;padding:8px 14px;
+                background:#2e7d32;color:#fff;border-radius:5px;font-size:.8rem;
+                font-weight:600;text-decoration:none;white-space:nowrap;">
+        &#11015; Download</a>
+      <button onclick="closeDocViewer()"
+              style="display:inline-flex;align-items:center;gap:5px;padding:8px 14px;
+                     background:#b71c1c;color:#fff;border:none;border-radius:5px;
+                     font-size:.8rem;font-weight:600;cursor:pointer;white-space:nowrap;">
+        &#10005; Close</button>
+    </div>
+    <!-- Scrollable image/pdf area -->
+    <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+                display:flex;justify-content:center;align-items:flex-start;
+                padding:16px;background:#1a1a1a;">
+      <img id="viewerImg" src="" alt=""
+           style="max-width:100%;height:auto;border-radius:6px;
+                  display:block;box-shadow:0 4px 24px rgba(0,0,0,.7);">
+    </div>
+  </div>
+
   <script>
-  /* ── Image / File viewer: opens in a new tab with Close · Print · Download ── */
+  /* ── Detect mobile / WebView context (Flutter Android WebView) ── */
+  function _isMobileCtx() {
+    var ua = navigator.userAgent || '';
+    /* Android WebView always has "wv" token or "WebView" */
+    if (/wv\b|WebView/i.test(ua)) return true;
+    /* Any Android or iOS device */
+    if (/Android|iPhone|iPad|iPod/i.test(ua)) return true;
+    /* Fallback: touch-only narrow screen */
+    return ('ontouchstart' in window) && window.innerWidth <= 900;
+  }
+
+  /* ── Close mobile inline viewer ── */
+  function closeDocViewer() {
+    document.getElementById('docViewer').style.display = 'none';
+    document.getElementById('viewerImg').src = '';
+    document.body.style.overflow = '';
+  }
+
+  /* ── Image / File viewer ──
+     Mobile  → inline overlay (Download + Close only, no browser intent)
+     Desktop → new tab (Print + Download + Close)                        */
   function openDocModal(url, title) {
     var isPdf = /\.pdf(\?|$)/i.test(url) || /application\/pdf/i.test(url);
-    /* Route cross-origin (R2) URLs through the Flask proxy so the new tab
-       can load/download them without CORS or same-origin restrictions.      */
+    /* Route cross-origin R2 URLs through the Flask proxy */
     var proxyUrl = (url && url.startsWith('http') && url.indexOf(location.hostname) === -1)
       ? '/image-proxy?url=' + encodeURIComponent(url)
       : url;
     var dlName = (title || 'file').replace(/[^\w\s-]/g, '') + (isPdf ? '.pdf' : '');
-    var safeTitle = (title || '').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+    /* ── Mobile / WebView: show inline overlay — no window.open() ── */
+    if (_isMobileCtx()) {
+      document.getElementById('viewerTitle').textContent = title || '';
+      var dlEl = document.getElementById('viewerDl');
+      dlEl.href = proxyUrl;
+      dlEl.setAttribute('download', dlName);
+      document.getElementById('viewerImg').src = proxyUrl;
+      var viewer = document.getElementById('docViewer');
+      viewer.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      return;
+    }
+
+    /* ── Desktop: open new tab with Print · Download · Close ── */
+    var safeTitle = (title || '').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     var html = [
       '<!DOCTYPE html><html lang="en"><head>',
       '<meta charset="UTF-8">',
@@ -667,15 +731,10 @@
       '.btn-close{background:#b71c1c}',
       '.content{margin-top:54px;display:flex;justify-content:center;',
         'align-items:flex-start;padding:20px;min-height:calc(100vh - 54px)}',
-      'img{max-width:100%;height:auto;border-radius:6px;',
-        'box-shadow:0 6px 32px rgba(0,0,0,.7)}',
+      'img{max-width:100%;height:auto;border-radius:6px;box-shadow:0 6px 32px rgba(0,0,0,.7)}',
       'iframe{width:100%;height:calc(100vh - 54px);border:none;background:#fff}',
-      '@media print{',
-        '.bar{display:none}',
-        '.content{margin-top:0;padding:0}',
-        'img{max-width:100%;width:100%;box-shadow:none}',
-        'iframe{height:100vh}',
-      '}',
+      '@media print{.bar{display:none}.content{margin-top:0;padding:0}',
+        'img{max-width:100%;width:100%;box-shadow:none}iframe{height:100vh}}',
       '</style></head><body>',
       '<div class="bar">',
         '<span class="bar-title">' + safeTitle + '</span>',
@@ -684,19 +743,13 @@
         '<button class="btn btn-close" onclick="window.close()">&#10005; Close</button>',
       '</div>',
       '<div class="content">',
-        isPdf
-          ? '<iframe src="' + proxyUrl + '"></iframe>'
-          : '<img src="' + proxyUrl + '" alt="' + safeTitle + '">',
-      '</div>',
-      '</body></html>'
+        isPdf ? '<iframe src="' + proxyUrl + '"></iframe>'
+              : '<img src="' + proxyUrl + '" alt="' + safeTitle + '">',
+      '</div></body></html>'
     ].join('');
 
     var win = window.open('', '_blank');
-    if (!win) {
-      /* Popup blocked — fall back to navigating directly */
-      window.open(proxyUrl, '_blank');
-      return;
-    }
+    if (!win) { window.open(proxyUrl, '_blank'); return; }
     win.document.write(html);
     win.document.close();
   }
