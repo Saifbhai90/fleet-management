@@ -1,102 +1,135 @@
 {% extends "base.html" %}
+{% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
+.page-shell { max-width: 1280px; margin: 0 auto; padding: 20px 16px 40px; }
+.page-hdr {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 14px; padding: 14px 22px; margin-bottom: 22px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.page-hdr h5 { margin: 0; font-weight: 700; color: #fff; font-size: 1.05rem; }
+.form-card { background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 2px 12px rgba(0,0,0,.06); padding: 24px; }
+.step-lbl { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; }
+.form-label { font-size: .82rem; font-weight: 700; color: #334155; margin-bottom: 4px; }
+.form-control, .form-select {
+    border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important;
+    font-size: .86rem !important; height: 40px !important;
+    transition: border-color .2s;
+}
+.form-control:focus, .form-select:focus { border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,.12) !important; }
+textarea.form-control { height: auto !important; }
+.select2-container--bootstrap-5 .select2-selection { height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; font-size: .86rem !important; }
+.select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered { line-height: 38px !important; }
+.section-divider { border: none; border-top: 1.5px dashed #e2e8f0; margin: 20px 0; }
+.driver-banner { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 16px; display: flex; align-items: center; gap: 10px; font-size: .85rem; color: #1d4ed8; margin-bottom: 18px; }
+.cap-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 20px; font-size: .75rem; font-weight: 700; margin-top: 6px; }
+.cap-pill.info    { background: #e0f2fe; color: #0369a1; }
+.cap-pill.success { background: #dcfce7; color: #15803d; }
+.btn-save {
+    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+    color: #fff; border: none; border-radius: 10px;
+    padding: 11px 32px; font-weight: 700; font-size: .9rem;
+    transition: all .25s; box-shadow: 0 3px 10px rgba(29,78,216,.3);
+}
+.btn-save:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(29,78,216,.35); color: #fff; }
+</style>
+{% endblock %}
+
 {% block content %}
+<div class="page-shell">
+    <div class="page-hdr">
+        <h5><i class="bi bi-pencil-square me-2 text-warning"></i>Edit Driver Assignment</h5>
+        <a href="{{ url_for('assign_driver_to_vehicle_list') }}" class="btn btn-sm btn-outline-light fw-bold">
+            <i class="bi bi-arrow-left-circle me-1"></i> Back to List
+        </a>
+    </div>
 
-<div class="container py-4">
-    <div class="card shadow border-0 rounded-4 overflow-hidden">
-        <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
-            <h5 class="mb-0 fw-bold">
-                <i class="bi bi-pencil-square me-2"></i>Edit Driver Assignment
-            </h5>
-            <a href="{{ url_for('assign_driver_to_vehicle_list') }}" 
-               class="btn btn-sm btn-light text-dark fw-bold">
-                <i class="bi bi-arrow-left me-1"></i> Back to List
-            </a>
-        </div>
-
-        <div class="card-body p-4 bg-light">
-
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} alert-dismissible fade show mb-4" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-
-            {% if form.errors %}
-            <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-                <strong>Please correct the following errors:</strong>
-                <ul class="mb-0">
-                    {% for field, field_errors in form.errors.items() %}
-                        {% for error in field_errors %}
-                            <li>{{ form[field].label.text }}: {{ error }}</li>
-                        {% endfor %}
-                    {% endfor %}
-                </ul>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for cat, msg in messages %}
+            <div class="alert alert-{{ cat }} alert-dismissible fade show mb-3" role="alert">
+                {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
-            {% endif %}
+        {% endfor %}{% endif %}
+    {% endwith %}
+    {% if form.errors %}
+    <div class="alert alert-danger alert-dismissible fade show mb-3">
+        <strong><i class="bi bi-exclamation-triangle me-1"></i> Please correct:</strong>
+        <ul class="mb-0 mt-1">{% for f, errs in form.errors.items() %}{% for e in errs %}<li>{{ form[f].label.text }}: {{ e }}</li>{% endfor %}{% endfor %}</ul>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
 
-            <form method="POST" id="driverAssignForm">
-                {{ form.hidden_tag() }}
-
-                <div class="alert alert-info py-2 px-3 fw-bold mb-4 shadow-sm border-0">
-                    <i class="bi bi-person-fill me-2"></i> 
-                    Currently Editing: {{ driver.name }} (ID: {{ driver.driver_id }})
+    <div class="row g-3 align-items-start">
+        <!-- LEFT: Form -->
+        <div class="col-lg-7">
+            <div class="form-card">
+                <div class="driver-banner">
+                    <i class="bi bi-person-badge-fill fs-5"></i>
+                    <div><strong>Editing:</strong> {{ driver.name }} &nbsp;|&nbsp; ID: <strong>{{ driver.driver_id }}</strong></div>
                 </div>
 
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold">1. Project</label>
-                        {{ form.project_id(class="form-select select2-enable", id="project_select") }}
-                    </div>
+                <form method="POST" id="driverAssignForm">
+                    {{ form.hidden_tag() }}
 
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold">2. District</label>
-                        {{ form.district_id(class="form-select select2-enable", id="district_select") }}
-                    </div>
-
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold">3. Vehicle</label>
-                        {{ form.vehicle_id(class="form-select select2-enable", id="vehicle_select") }}
-                    </div>
-
-                    <div class="col-md-6 mt-4">
-                        <div class="bg-white p-4 rounded-3 shadow-sm border-start border-warning border-4">
-                            <label class="form-label fw-bold text-warning">4. Update Shift</label>
-                            {{ form.shift(class="form-select", id="shift_select") }}
-                            <div id="capacity_info" class="mt-2 small fw-bold"></div>
+                    <span class="step-lbl text-primary">01. Location</span>
+                    <div class="row g-2 mt-1 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Project</label>
+                            {{ form.project_id(class="form-select select2-enable", id="project_select") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">District</label>
+                            {{ form.district_id(class="form-select select2-enable", id="district_select") }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Vehicle</label>
+                            {{ form.vehicle_id(class="form-select select2-enable", id="vehicle_select") }}
                         </div>
                     </div>
 
-                    <div class="col-md-6 mt-4">
-                        <div class="bg-white p-4 rounded-3 shadow-sm border-start border-success border-4">
-                            <label class="form-label fw-bold text-success">5. Update/Swap Driver</label>
+                    <hr class="section-divider">
+                    <span class="step-lbl text-warning">02. Shift & Driver</span>
+                    <div class="row g-2 mt-1 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Shift</label>
+                            {{ form.shift(class="form-select", id="shift_select") }}
+                            <div id="capacity_info"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Swap / Keep Driver</label>
                             {{ form.driver_id(class="form-select select2-enable", id="driver_select") }}
                         </div>
                     </div>
 
-                    <div class="col-md-6 mt-3">
-                        <label class="form-label fw-bold">Assign Date</label>
-                        {{ form.assign_date(class="form-control datepicker") }}
+                    <hr class="section-divider">
+                    <span class="step-lbl text-success">03. Details</span>
+                    <div class="row g-2 mt-1">
+                        <div class="col-md-6">
+                            <label class="form-label">Assign Date</label>
+                            {{ form.assign_date(class="form-control datepicker") }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Remarks (Optional)</label>
+                            {{ form.remarks(class="form-control", rows=2) }}
+                        </div>
                     </div>
 
-                    <div class="col-md-6 mt-3">
-                        <label class="form-label fw-bold">Remarks (Optional)</label>
-                        {{ form.remarks(class="form-control", rows=2) }}
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn-save">
+                            <i class="bi bi-save me-1"></i> Save Changes
+                        </button>
+                        <a href="{{ url_for('assign_driver_to_vehicle_list') }}" class="btn btn-outline-secondary fw-bold" style="border-radius:10px;">
+                            Cancel
+                        </a>
                     </div>
-                </div>
-
-                <div class="mt-5 text-center">
-                    <button type="submit" class="btn btn-primary btn-lg px-5 fw-bold shadow-sm">
-                        <i class="bi bi-save me-1"></i> Save Changes
-                    </button>
-                </div>
-            </form>
+                </form>
+            </div>
         </div>
+
+        <!-- RIGHT: Driver Insight Panel -->
+        {% include '_driver_insight_panel.html' %}
     </div>
 </div>
 
@@ -104,86 +137,69 @@
 $(document).ready(function() {
     $('.select2-enable').select2({ theme: 'bootstrap-5', width: '100%' });
 
-    var $proj = $('#project_select'), 
-        $dist = $('#district_select'), 
-        $veh  = $('#vehicle_select'),
+    var $proj   = $('#project_select'),
+        $dist   = $('#district_select'),
+        $veh    = $('#vehicle_select'),
         $driver = $('#driver_select');
 
-    // Project change → districts
-    $proj.on('select2:select', function(e) {
+    var currentDriverId = {{ driver.id|default(0)|tojson }};
+
+    // Load insight for the current driver immediately
+    loadDriverInsight(currentDriverId);
+
+    // Swap driver → update insight
+    $driver.on('select2:select select2:unselect change', function() {
+        var val = $(this).val();
+        loadDriverInsight(val && val != '0' ? val : currentDriverId);
+    });
+
+    $proj.on('select2:select', function() {
         var pid = $(this).val();
-        $dist.empty().append('<option value="">Loading...</option>').trigger('change');
+        $dist.empty().append('<option value="">Loading…</option>').trigger('change');
         $veh.empty().append('<option value="">-- Select --</option>').trigger('change');
-        if(pid && pid != '0') {
-            $.ajax({
-                url: '/get_districts_by_project/' + pid,
-                success: function(data) {
-                    $dist.empty().append('<option value="">-- Select District --</option>');
-                    $.each(data, function(i, v) {
-                        $dist.append('<option value="' + v.id + '">' + v.name + '</option>');
-                    });
-                    $dist.trigger('change');
-                }
+        if (pid && pid != '0') {
+            $.getJSON('/get_districts_by_project/' + pid, function(data) {
+                $dist.empty().append('<option value="">-- Select District --</option>');
+                $.each(data, function(i, v) { $dist.append('<option value="' + v.id + '">' + v.name + '</option>'); });
+                $dist.trigger('change');
             });
         }
     });
 
-    // District change → vehicles
-    $dist.on('select2:select', function(e) {
-        var did = $(this).val();
-        var pid = $proj.val();
-        $veh.empty().append('<option value="">Loading...</option>').trigger('change');
-        if(did && pid && pid != '0') {
+    $dist.on('select2:select', function() {
+        var did = $(this).val(), pid = $proj.val();
+        $veh.empty().append('<option value="">Loading…</option>').trigger('change');
+        if (did && pid && pid != '0') {
             $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(data) {
                 $veh.empty().append('<option value="">-- Select Vehicle --</option>');
-                $.each(data, function(i, v) {
-                    $veh.append('<option value="' + v.id + '">' + v.no + '</option>');
-                });
+                $.each(data, function(i, v) { $veh.append('<option value="' + v.id + '">' + v.no + '</option>'); });
                 $veh.trigger('change');
             });
         }
     });
 
-    // Vehicle change → Capacity ke hisaab se Shift options (edit: current driver exclude)
-    var currentDriverId = {{ driver.id|default(0)|tojson }};
     $veh.on('change', function() {
         var vid = $(this).val();
-        var $capInfo = $('#capacity_info');
-        var $shiftSelect = $('#shift_select');
-        if (!vid || vid == '0') {
-            $capInfo.text('');
-            return;
-        }
-        $.getJSON('/get_vehicle_capacity_info/' + vid, function(capData) {
-            var capacity = capData.capacity || 1;
-            if (capacity === 1) {
-                $capInfo.removeClass('text-warning text-success').addClass('text-info').html('<i class="bi bi-person me-1"></i> Capacity: 1 — Sirf <strong>Morning</strong> shift.');
-            } else {
-                $capInfo.removeClass('text-warning text-info').addClass('text-success').html('<i class="bi bi-people me-1"></i> Capacity: 2 — <strong>Morning</strong> & <strong>Night</strong> dono shifts.');
-            }
-        }).fail(function() { $capInfo.text(''); });
+        if (!vid || vid == '0') { $('#capacity_info').html(''); return; }
+        $.getJSON('/get_vehicle_capacity_info/' + vid, function(c) {
+            var cap = c.capacity || 1;
+            $('#capacity_info').html(cap === 1
+                ? '<span class="cap-pill info"><i class="bi bi-person me-1"></i>Capacity 1 — Morning only</span>'
+                : '<span class="cap-pill success"><i class="bi bi-people me-1"></i>Capacity 2 — Morning & Night</span>');
+        });
         var url = '/get_available_shifts/' + vid + (currentDriverId ? '?exclude_driver_id=' + currentDriverId : '');
         $.getJSON(url, function(shifts) {
-            $shiftSelect.empty().append('<option value="">-- Select Shift --</option>');
-            $.each(shifts, function(i, s) {
-                $shiftSelect.append('<option value="' + (s.id || s.name) + '">' + (s.name || s.id) + '</option>');
-            });
-            if (shifts.length === 0) {
-                $shiftSelect.append('<option value="" disabled>Vehicle full — no shift available</option>');
-            }
-            // Restore current shift selection if still in list
-            var curVal = $shiftSelect.data('currentShift');
-            if (curVal && shifts.some(function(s){ return (s.id || s.name) === curVal; })) {
-                $shiftSelect.val(curVal);
-            }
-        }).fail(function() {
-            $shiftSelect.empty().append('<option value="">-- Select Shift --</option>');
+            var $sh = $('#shift_select');
+            var prev = $sh.data('currentShift');
+            $sh.empty().append('<option value="">-- Select Shift --</option>');
+            $.each(shifts, function(i, s) { $sh.append('<option value="' + (s.id||s.name) + '">' + (s.name||s.id) + '</option>'); });
+            if (shifts.length === 0) $sh.append('<option value="" disabled>Vehicle full</option>');
+            if (prev && shifts.some(function(s){ return (s.id||s.name) === prev; })) $sh.val(prev);
         });
     });
-    // Set current shift for restore after reload
+
     $('#shift_select').data('currentShift', $('#shift_select').val());
     if ($veh.val() && $veh.val() != '0') { $veh.trigger('change'); }
 });
 </script>
-
 {% endblock %}

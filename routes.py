@@ -5520,28 +5520,109 @@ def assign_vehicle_to_parking_edit(vehicle_id):
 
     return render_template('assign_vehicle_to_parking_edit.html', form=form, vehicle=vehicle)
 
-@app.route('/get_unassigned_drivers')
-def get_unassigned_drivers():
-    drivers = Driver.query.filter(Driver.vehicle_id == None).all()
-    return jsonify([{"id": d.id, "name": f"{d.name} ({d.driver_id})"} for d in drivers])
-
 @app.route('/get_driver_details/<int:driver_id>')
 def get_driver_details(driver_id):
     d = Driver.query.get_or_404(driver_id)
     district_name = d.district.name if d.district else (d.driver_district or '-')
     photo_url = d.photo_path if d.photo_path else None
+    proj_obj = Project.query.get(d.project_id) if d.project_id else None
+    project_name = proj_obj.name if proj_obj else '-'
+
+    # ── Build Job History ──
+    history = []
+
+    # 1. Initial Assignment event
+    if d.assign_date:
+        transfers_sorted = sorted(d.transfer_history, key=lambda t: t.transfer_date)
+        if transfers_sorted:
+            ft = transfers_sorted[0]
+            init_veh = ft.old_vehicle.vehicle_no if ft.old_vehicle else '-'
+            if ft.old_vehicle and ft.old_vehicle.model:
+                init_veh += f" ({ft.old_vehicle.model})"
+            init_dist = ft.old_district.name if ft.old_district else '-'
+            init_proj = ft.old_project.name if ft.old_project else '-'
+            init_shift = ft.old_shift or '-'
+        else:
+            init_veh = (d.vehicle.vehicle_no + (f" ({d.vehicle.model})" if d.vehicle.model else '')) if d.vehicle else '-'
+            init_dist  = district_name
+            init_proj  = project_name
+            init_shift = d.shift or '-'
+        history.append({
+            'date_sort': d.assign_date.isoformat(),
+            'date':  d.assign_date.strftime('%d-%m-%Y'),
+            'type':  'assignment',
+            'title': 'ASSIGNMENT',
+            'line1': f"To Vehicle: {init_veh}",
+            'line2': f"Project: {init_proj}",
+            'line3': f"District: {init_dist} | Shift: {init_shift}",
+            'remarks': d.assign_remarks or '',
+        })
+
+    # 2. Transfers
+    for t in sorted(d.transfer_history, key=lambda x: x.transfer_date):
+        new_veh = t.new_vehicle.vehicle_no if t.new_vehicle else '-'
+        if t.new_vehicle and t.new_vehicle.model:
+            new_veh += f" ({t.new_vehicle.model})"
+        history.append({
+            'date_sort': t.transfer_date.isoformat(),
+            'date':  t.transfer_date.strftime('%d-%m-%Y'),
+            'type':  'transfer',
+            'title': 'TRANSFER',
+            'line1': f"To Vehicle: {new_veh}",
+            'line2': f"Project: {t.new_project.name if t.new_project else '-'}",
+            'line3': f"District: {t.new_district.name if t.new_district else '-'} | Shift: {t.new_shift or '-'}",
+            'remarks': t.remarks or '',
+        })
+
+    # 3. Status Changes (left / rejoin)
+    for sc in sorted(d.status_changes, key=lambda x: x.change_date):
+        if sc.action_type == 'left':
+            lv = sc.left_vehicle.vehicle_no if sc.left_vehicle else '-'
+            if sc.left_vehicle and sc.left_vehicle.model:
+                lv += f" ({sc.left_vehicle.model})"
+            history.append({
+                'date_sort': sc.change_date.isoformat(),
+                'date':  sc.change_date.strftime('%d-%m-%Y'),
+                'type':  'left',
+                'title': 'JOB LEFT',
+                'line1': f"Reason: {sc.reason or '-'}",
+                'line2': f"From Vehicle: {lv}",
+                'line3': f"District: {sc.left_district.name if sc.left_district else '-'} | Project: {sc.left_project.name if sc.left_project else '-'}",
+                'remarks': sc.remarks or '',
+            })
+        elif sc.action_type == 'rejoin':
+            rv = sc.new_vehicle.vehicle_no if sc.new_vehicle else '-'
+            if sc.new_vehicle and sc.new_vehicle.model:
+                rv += f" ({sc.new_vehicle.model})"
+            history.append({
+                'date_sort': sc.change_date.isoformat(),
+                'date':  sc.change_date.strftime('%d-%m-%Y'),
+                'type':  'rejoin',
+                'title': 'REJOINED',
+                'line1': f"To Vehicle: {rv}",
+                'line2': f"Project: {sc.new_project.name if sc.new_project else '-'}",
+                'line3': f"District: {sc.new_district.name if sc.new_district else '-'} | Shift: {sc.new_shift or '-'}",
+                'remarks': sc.remarks or '',
+            })
+
+    history.sort(key=lambda x: x['date_sort'])
+    for h in history:
+        del h['date_sort']
+
     return jsonify({
         'name':        d.name,
         'driver_id':   d.driver_id or '-',
         'post':        d.post or 'Driver',
         'status':      d.status or 'Active',
         'district':    district_name,
+        'shift':       d.shift or '-',
         'photo_url':   photo_url,
         'father_name': d.father_name or '-',
         'cnic_no':     d.cnic_no or '-',
         'phone1':      d.phone1 or '-',
         'phone2':      d.phone2 or '-',
         'address':     d.address or '-',
+        'history':     history,
     })
 
 @app.route('/assign_driver_to_vehicle/new', methods=['GET', 'POST'])
@@ -5616,10 +5697,8 @@ def assign_driver_to_vehicle_new():
                     form.vehicle_id.choices = [
                         (v.id, f"{v.vehicle_no} – {v.model or 'N/A'}") for v in vehicles
                     ]
-            if not form.district_id.choices:
-                form.district_id.choices = [(0, '-- Select District --')]
-            if not form.vehicle_id.choices:
-                form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
+            if not form.district_id.choices: form.district_id.choices = [(0, '-- Select District --')]
+            if not form.vehicle_id.choices:  form.vehicle_id.choices  = [(0, '-- Select Vehicle --')]
             return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
 
         current_count = Driver.query.filter_by(vehicle_id=vehicle.id).count()
@@ -5652,8 +5731,7 @@ def assign_driver_to_vehicle_new():
             flash(f"Error saving assignment: {str(e)}", "danger")
 
     if not form.district_id.choices: form.district_id.choices = [(0, '-- Select District --')]
-    if not form.vehicle_id.choices: form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
-
+    if not form.vehicle_id.choices:  form.vehicle_id.choices  = [(0, '-- Select Vehicle --')]
     return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
 
 @app.route('/get_vehicle_capacity_info/<int:vehicle_id>')

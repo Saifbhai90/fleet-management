@@ -1,0 +1,262 @@
+<style>
+/* ── Driver Insight Panel – shared styles ── */
+.insight-panel { position: sticky; top: 20px; }
+
+.insight-placeholder {
+    background: #fff;
+    border: 2px dashed #c7d2e8;
+    border-radius: 14px;
+    padding: 3.5rem 1.5rem;
+    text-align: center;
+    color: #94a3b8;
+}
+.insight-placeholder .ph-icon {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    background: #f1f5f9;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 1rem;
+    font-size: 2.2rem; color: #94a3b8;
+}
+.insight-placeholder h6 { font-weight: 700; color: #64748b; font-size: 0.92rem; margin-bottom: 6px; }
+.insight-placeholder p  { font-size: 0.8rem; margin: 0; line-height: 1.5; }
+
+/* ── Profile Card ── */
+.driver-profile-card {
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.13);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity .35s ease, transform .35s ease;
+}
+.driver-profile-card.visible { opacity: 1; transform: translateY(0); }
+
+.drv-header {
+    background: linear-gradient(135deg, #1565C0 0%, #1e88e5 55%, #42a5f5 100%);
+    padding: 1rem 1.2rem;
+    display: flex; align-items: center; gap: 12px;
+}
+.drv-avatar {
+    width: 54px; height: 54px; border-radius: 50%;
+    border: 2.5px solid rgba(255,255,255,.5);
+    background: rgba(255,255,255,.2);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; flex-shrink: 0;
+}
+.drv-avatar img   { width: 54px; height: 54px; object-fit: cover; border-radius: 50%; }
+.drv-avatar i     { font-size: 1.8rem; color: rgba(255,255,255,.85); }
+.drv-title        { flex: 1; min-width: 0; }
+.drv-title .name  { font-size: .95rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drv-title .sub   { font-size: .72rem; color: rgba(255,255,255,.82); margin-top: 2px; }
+.drv-status-badge {
+    background: rgba(255,255,255,.18); color: #fff;
+    border: 1.5px solid rgba(255,255,255,.5);
+    border-radius: 20px; padding: 3px 12px;
+    font-size: .68rem; font-weight: 800; letter-spacing: .8px;
+    white-space: nowrap; flex-shrink: 0; align-self: flex-start;
+}
+
+/* Mini-info grid */
+.drv-mini-info {
+    background: #fff; padding: 0;
+    border: 1px solid #dde8f5; border-top: none;
+    display: flex; flex-wrap: wrap;
+}
+.drv-info-chip {
+    flex: 1 1 50%;
+    padding: .4rem .9rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+.drv-info-chip:nth-child(odd)  { border-right: 1px solid #f1f5f9; }
+.drv-info-chip.full            { flex: 1 1 100%; border-right: none; }
+.drv-info-chip .lbl { font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #90a4ae; margin-bottom: 1px; }
+.drv-info-chip .val { font-size: .8rem; font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Timeline section */
+.tl-section-header {
+    padding: .5rem 1.1rem;
+    background: #f0f4fa;
+    border: 1px solid #dde8f5; border-top: none;
+    font-size: .67rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .8px; color: #5271a0;
+    display: flex; align-items: center; gap: 6px;
+}
+.tl-wrap {
+    background: #fff;
+    padding: .85rem 1rem 1rem;
+    border: 1px solid #dde8f5; border-top: none;
+    border-radius: 0 0 14px 14px;
+    max-height: 360px; overflow-y: auto;
+}
+.tl-wrap::-webkit-scrollbar       { width: 4px; }
+.tl-wrap::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+.tl-wrap::-webkit-scrollbar-thumb { background: #c5d2e0; border-radius: 4px; }
+
+.tl-item {
+    display: flex; gap: 10px;
+    padding: 0 0 14px 0; position: relative;
+}
+.tl-item::before {
+    content: ''; position: absolute;
+    left: 11px; top: 24px; bottom: 0;
+    width: 2px; background: #e2e8f0;
+}
+.tl-item:last-child::before { display: none; }
+
+.tl-dot {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .65rem; flex-shrink: 0; margin-top: 1px; z-index: 1;
+}
+.tl-dot.assignment { background: #e3f2fd; color: #1565c0; border: 2px solid #90caf9; }
+.tl-dot.transfer   { background: #fff3e0; color: #e65100; border: 2px solid #ffcc80; }
+.tl-dot.left       { background: #fce4ec; color: #c62828; border: 2px solid #ef9a9a; }
+.tl-dot.rejoin     { background: #e8f5e9; color: #1b5e20; border: 2px solid #a5d6a7; }
+
+.tl-content        { flex: 1; min-width: 0; }
+.tl-date           { font-size: .72rem; font-weight: 700; color: #3949ab; margin-bottom: 2px; }
+.tl-type           { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 4px; }
+.tl-type.assignment { color: #1565c0; }
+.tl-type.transfer   { color: #e65100; }
+.tl-type.left       { color: #c62828; }
+.tl-type.rejoin     { color: #1b5e20; }
+
+.tl-detail {
+    background: #f8fafc; border: 1px solid #e9edf3;
+    border-radius: 8px; padding: 5px 9px;
+    font-size: .75rem; color: #475569; line-height: 1.55;
+}
+.tl-detail span              { display: block; }
+.tl-detail .line3            { color: #1565c0; }
+.tl-detail .remark-line      { color: #94a3b8; font-style: italic; margin-top: 2px; font-size: .7rem; }
+.tl-empty { text-align: center; color: #94a3b8; font-size: .8rem; padding: .8rem 0; }
+</style>
+
+<div class="col-lg-5">
+    <div class="insight-panel">
+
+        <!-- Placeholder (shown until a driver is selected) -->
+        <div id="insightPlaceholder" class="insight-placeholder">
+            <div class="ph-icon"><i class="bi bi-person-bounding-box"></i></div>
+            <h6>Driver Digital Profile</h6>
+            <p>Select a driver from the form<br>to preview their complete job history.</p>
+        </div>
+
+        <!-- Profile Card (hidden initially) -->
+        <div id="driverProfileCard" class="driver-profile-card" style="display:none;">
+
+            <div class="drv-header">
+                <div class="drv-avatar">
+                    <img id="drvPhoto" src="" alt="" style="display:none;">
+                    <i class="bi bi-person-fill" id="drvPhotoFallback"></i>
+                </div>
+                <div class="drv-title">
+                    <div class="name" id="drvName"></div>
+                    <div class="sub">ID: <span id="drvIdSpan"></span>&nbsp;|&nbsp;<span id="drvPhone1"></span></div>
+                    <div class="sub">CNIC: <span id="drvCnic"></span></div>
+                </div>
+                <span class="drv-status-badge" id="drvStatus"></span>
+            </div>
+
+            <div class="drv-mini-info">
+                <div class="drv-info-chip">
+                    <div class="lbl"><i class="bi bi-geo-alt"></i> District</div>
+                    <div class="val" id="drvDistrict">-</div>
+                </div>
+                <div class="drv-info-chip">
+                    <div class="lbl"><i class="bi bi-moon-stars"></i> Current Shift</div>
+                    <div class="val" id="drvShift">-</div>
+                </div>
+                <div class="drv-info-chip">
+                    <div class="lbl"><i class="bi bi-people"></i> Father</div>
+                    <div class="val" id="drvFather">-</div>
+                </div>
+                <div class="drv-info-chip">
+                    <div class="lbl"><i class="bi bi-telephone-plus"></i> Phone 2</div>
+                    <div class="val" id="drvPhone2">-</div>
+                </div>
+            </div>
+
+            <div class="tl-section-header">
+                <i class="bi bi-clock-history"></i> Job History (Oldest First)
+            </div>
+
+            <div class="tl-wrap" id="drvTimeline">
+                <div class="tl-empty">No history available.</div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+function loadDriverInsight(driverId) {
+    if (!driverId || driverId == '0') {
+        $('#driverProfileCard').removeClass('visible').fadeOut(180, function() {
+            $('#insightPlaceholder').fadeIn(200);
+        });
+        return;
+    }
+    $.getJSON('/get_driver_details/' + driverId, function(data) {
+        $('#drvName').text(data.name || '-');
+        $('#drvIdSpan').text(data.driver_id || '-');
+        $('#drvCnic').text(data.cnic_no || '-');
+        $('#drvPhone1').text(data.phone1 || '-');
+        $('#drvPhone2').text(data.phone2 || '-');
+        $('#drvFather').text(data.father_name || '-');
+        $('#drvDistrict').text(data.district || '-');
+        $('#drvShift').text(data.shift && data.shift !== '-' ? data.shift : 'N/A');
+        $('#drvStatus').text((data.status || 'Active').toUpperCase());
+
+        if (data.photo_url) {
+            $('#drvPhoto').attr('src', data.photo_url).show();
+            $('#drvPhotoFallback').hide();
+        } else {
+            $('#drvPhoto').hide();
+            $('#drvPhotoFallback').show();
+        }
+
+        var $tl = $('#drvTimeline');
+        $tl.empty();
+        var typeIcons = {
+            'assignment': '<i class="bi bi-car-front-fill"></i>',
+            'transfer':   '<i class="bi bi-arrow-left-right"></i>',
+            'left':       '<i class="bi bi-door-open-fill"></i>',
+            'rejoin':     '<i class="bi bi-person-check-fill"></i>'
+        };
+
+        if (!data.history || data.history.length === 0) {
+            $tl.html('<div class="tl-empty"><i class="bi bi-clock me-1"></i>No job history found.</div>');
+        } else {
+            $.each(data.history, function(i, ev) {
+                var icon = typeIcons[ev.type] || '<i class="bi bi-circle"></i>';
+                function esc(s){ return s ? $('<div>').text(s).html() : ''; }
+                var details = '';
+                if (ev.line1) details += '<span>'  + esc(ev.line1) + '</span>';
+                if (ev.line2) details += '<span>'  + esc(ev.line2) + '</span>';
+                if (ev.line3) details += '<span class="line3">' + esc(ev.line3) + '</span>';
+                if (ev.remarks) details += '<span class="remark-line"><i class="bi bi-chat-text me-1"></i>' + esc(ev.remarks) + '</span>';
+
+                $tl.append(
+                    '<div class="tl-item">' +
+                    '  <div class="tl-dot ' + ev.type + '">' + icon + '</div>' +
+                    '  <div class="tl-content">' +
+                    '    <div class="tl-date">' + esc(ev.date) + '</div>' +
+                    '    <div class="tl-type ' + ev.type + '">' + esc(ev.title) + '</div>' +
+                    '    <div class="tl-detail">' + details + '</div>' +
+                    '  </div>' +
+                    '</div>'
+                );
+            });
+        }
+
+        $('#insightPlaceholder').fadeOut(150, function() {
+            $('#driverProfileCard').show().addClass('visible');
+        });
+    }).fail(function() {
+        $('#driverProfileCard').removeClass('visible').hide();
+        $('#insightPlaceholder').show();
+    });
+}
+</script>

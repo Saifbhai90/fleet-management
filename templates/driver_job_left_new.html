@@ -1,374 +1,195 @@
 {% extends "base.html" %}
 {% block title %}Mark Driver Job Left{% endblock %}
 
-{% block content %}
+{% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-    /* Ultra-Compact Screen Fit */
-    .page-wrapper {
-        min-height: calc(100vh - 80px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        background-color: #f4f7f9;
-    }
-    
-    .glass-card {
-        background: #ffffff;
-        border-radius: 16px;
-        border: none;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.06);
-        width: 100%;
-        max-width: 1200px;
-        overflow: hidden;
-    }
-
-    /* Section Headers */
-    .pane-header {
-        background: #fff;
-        border-bottom: 1px solid #f1f4f8;
-        padding: 20px 30px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .step-title {
-        font-size: 0.7rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        color: #adb5bd;
-        letter-spacing: 1.2px;
-        margin-bottom: 15px;
-        display: block;
-    }
-
-    /* Grid Layout */
-    .form-pane {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1.2fr;
-        gap: 0;
-    }
-
-    .pane-column {
-        padding: 25px 30px;
-        border-right: 1px solid #f1f4f8;
-    }
-
-    .pane-column:last-child { 
-        border-right: none; 
-        background-color: #fcfcfd; 
-    }
-
-    /* Form Elements */
-    .form-group { margin-bottom: 15px; }
-    
-    .form-label {
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: #344767;
-        margin-bottom: 5px;
-    }
-
-    .input-group-custom {
-        position: relative;
-        display: flex;
-        align-items: center;
-    }
-
-    .input-group-custom i {
-        position: absolute;
-        left: 14px;
-        color: #adb5bd;
-        z-index: 10;
-        font-size: 0.9rem;
-    }
-
-    .form-control, .form-select, .select2-container--bootstrap-5 .select2-selection {
-        padding-left: 40px !important;
-        height: 42px !important;
-        border-radius: 10px !important;
-        font-size: 0.88rem !important;
-        border: 1px solid #d2d6da !important;
-        background-color: #fff !important;
-    }
-
-    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
-        padding-left: 0 !important;
-        line-height: 42px !important;
-    }
-
-    /* Status Box */
-    .status-box {
-        background: #fff5f5;
-        border: 1px dashed #feb2b2;
-        border-radius: 12px;
-        padding: 15px;
-        margin-top: 15px;
-    }
-
-    /* Submit Button */
-    .btn-submit {
-        background: linear-gradient(310deg, #ea0606, #ff667c);
-        color: #fff;
-        border: none;
-        padding: 14px;
-        border-radius: 10px;
-        font-weight: 700;
-        width: 100%;
-        margin-top: 10px;
-        transition: all 0.3s;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .btn-submit:hover { 
-        transform: translateY(-2px); 
-        box-shadow: 0 5px 15px rgba(234, 6, 6, 0.3); 
-        color: #fff; 
-    }
-
-    .btn-return {
-        color: #8392ab;
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-align: center;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-top: 15px;
-        text-decoration: none;
-        transition: color 0.2s;
-    }
-
-    .btn-return:hover { color: #344767; }
-    
-    .text-danger-custom { color: #ea0606; }
-
-    /* For Other Reason Field Animation */
-    .animate-fade {
-        animation: fadeIn 0.3s ease-in;
-    }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(-5px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
+body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
+.page-shell { max-width: 1280px; margin: 0 auto; padding: 20px 16px 40px; }
+.page-hdr {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 14px; padding: 14px 22px; margin-bottom: 22px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.page-hdr h5 { margin: 0; font-weight: 700; color: #fff; font-size: 1.05rem; }
+.form-card { background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 2px 12px rgba(0,0,0,.06); padding: 24px; }
+.step-lbl { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; }
+.form-label { font-size: .82rem; font-weight: 700; color: #334155; margin-bottom: 4px; }
+.form-control, .form-select {
+    border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important;
+    font-size: .86rem !important; height: 40px !important;
+}
+.form-control:focus, .form-select:focus { border-color: #f43f5e !important; box-shadow: 0 0 0 3px rgba(244,63,94,.12) !important; }
+textarea.form-control { height: auto !important; }
+.select2-container--bootstrap-5 .select2-selection { height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; }
+.select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered { line-height: 38px !important; }
+.section-divider { border: none; border-top: 1.5px dashed #e2e8f0; margin: 18px 0; }
+.status-badge { background: #fff5f5; border: 1px dashed #fca5a5; border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 16px; font-size: .83rem; color: #dc2626; }
+.animate-fade { animation: fadeIn .3s ease-in; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
+.btn-left {
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+    color: #fff; border: none; border-radius: 10px;
+    padding: 11px 28px; font-weight: 700; font-size: .9rem;
+    text-transform: uppercase; letter-spacing: .5px;
+    transition: all .25s; box-shadow: 0 3px 10px rgba(220,38,38,.3);
+}
+.btn-left:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(220,38,38,.4); color: #fff; }
 </style>
+{% endblock %}
 
-<div class="page-wrapper">
-    <div class="glass-card">
-        <!-- Header Section -->
-        <div class="pane-header">
-            <div>
-                <h5 class="mb-0 fw-bold text-dark">
-                    <i class="bi bi-person-x-fill text-danger-custom me-2"></i>Job Left Initiation
-                </h5>
-                <p class="text-muted small mb-0">Process driver termination and update inventory records.</p>
+{% block content %}
+<div class="page-shell">
+    <div class="page-hdr">
+        <h5><i class="bi bi-person-x-fill me-2 text-danger"></i>Job Left — Initiation</h5>
+        <a href="{{ url_for('driver_job_left_list') }}" class="btn btn-sm btn-outline-light fw-bold">
+            <i class="bi bi-arrow-left-circle me-1"></i> Back to List
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for cat, msg in messages %}
+            <div class="alert alert-{{ cat }} alert-dismissible fade show mb-3">
+                {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
-            <div>
-                <span class="badge bg-light text-secondary border px-3 py-2">Form ID: #JL-{{ range(1000, 9999) | random }}</span>
+        {% endfor %}{% endif %}
+    {% endwith %}
+
+    <div class="row g-3 align-items-start">
+        <!-- LEFT: Form -->
+        <div class="col-lg-7">
+            <div class="form-card">
+                <div class="status-badge">
+                    <i class="bi bi-person-x-fill fs-5"></i>
+                    <div><strong>Termination Form</strong> — Select the driver's current deployment then confirm separation.</div>
+                </div>
+
+                <form method="POST" id="jobLeftForm" novalidate>
+                    {{ form.hidden_tag() }}
+
+                    {% if form.errors %}
+                    <div class="alert alert-danger alert-dismissible fade show mb-3">
+                        <strong><i class="bi bi-exclamation-triangle me-1"></i> Please correct:</strong>
+                        <ul class="mb-0 mt-1">{% for fn, errs in form.errors.items() %}{% for e in errs %}<li>{{ form[fn].label.text }}: {{ e }}</li>{% endfor %}{% endfor %}</ul>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endif %}
+
+                    <span class="step-lbl text-primary">01. Deployment Area</span>
+                    <div class="row g-2 mt-1 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Project <span class="text-danger">*</span></label>
+                            {{ form.project_id(class="form-select select2-enable" + (" is-invalid" if form.project_id.errors else ""), id="project_select") }}
+                            {% for e in form.project_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">District <span class="text-danger">*</span></label>
+                            {{ form.district_id(class="form-select select2-enable" + (" is-invalid" if form.district_id.errors else ""), id="district_select") }}
+                            {% for e in form.district_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Vehicle <span class="text-danger">*</span></label>
+                            {{ form.vehicle_id(class="form-select select2-enable" + (" is-invalid" if form.vehicle_id.errors else ""), id="vehicle_select") }}
+                            {% for e in form.vehicle_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                        </div>
+                    </div>
+
+                    <hr class="section-divider">
+                    <span class="step-lbl text-danger">02. Target Driver</span>
+                    <div class="row g-2 mt-1 mb-3">
+                        <div class="col-12">
+                            <label class="form-label text-danger fw-bold">Driver to Mark as Left <span class="text-danger">*</span></label>
+                            {{ form.driver_id(class="form-select select2-enable" + (" is-invalid" if form.driver_id.errors else ""), id="driver_select") }}
+                            {% for e in form.driver_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                        </div>
+                    </div>
+
+                    <hr class="section-divider">
+                    <span class="step-lbl text-success">03. Separation Details</span>
+                    <div class="row g-2 mt-1 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Leaving Date <span class="text-danger">*</span></label>
+                            {{ form.leave_date(class="form-control datepicker" + (" is-invalid" if form.leave_date.errors else ""), placeholder="dd-mm-yyyy", autocomplete="off") }}
+                            {% for e in form.leave_date.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Reason <span class="text-danger">*</span></label>
+                            {{ form.reason(class="form-select" + (" is-invalid" if form.reason.errors else ""), id="reason_select") }}
+                            {% for e in form.reason.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="col-12" id="other_reason_group" style="display:none;">
+                            <label class="form-label">Specify Reason</label>
+                            {{ form.other_reason(class="form-control animate-fade", placeholder="Explain briefly...") }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Remarks / Notes</label>
+                            {{ form.remarks(class="form-control", rows=2, placeholder="Handover notes...") }}
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 mt-2">
+                        <button type="submit" class="btn-left">
+                            <i class="bi bi-person-dash me-1"></i> Confirm Termination
+                        </button>
+                        <a href="{{ url_for('driver_job_left_list') }}" class="btn btn-outline-secondary fw-bold" style="border-radius:10px;">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
             </div>
         </div>
 
-        <form method="POST" id="jobLeftForm" novalidate>
-            {{ form.hidden_tag() }}
-            
-            {% if form.errors %}
-            <div class="alert alert-danger alert-dismissible fade show m-4 mb-0" role="alert">
-                <strong><i class="bi bi-exclamation-triangle me-1"></i> Please fill all required fields:</strong>
-                <ul class="mb-0 mt-2">
-                    {% for field_name, errors in form.errors.items() %}
-                        {% for err in errors %}
-                            <li>{{ form[field_name].label.text }}: {{ err }}</li>
-                        {% endfor %}
-                    {% endfor %}
-                </ul>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            {% endif %}
-            
-            <div class="form-pane">
-                <!-- Column 1: Deployment Context -->
-                <div class="pane-column">
-                    <span class="step-title">01. Deployment Area</span>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Active Project <span class="text-danger">*</span></label>
-                        <div class="input-group-custom">
-                            <i class="bi bi-buildings"></i>
-                            {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else ""), id="project_select") }}
-                        </div>
-                        {% for error in form.project_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Operations District <span class="text-danger">*</span></label>
-                        <div class="input-group-custom">
-                            <i class="bi bi-geo-alt"></i>
-                            {{ form.district_id(class="form-select select2-enable " + ("is-invalid" if form.district_id.errors else ""), id="district_select") }}
-                        </div>
-                        {% for error in form.district_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Assigned Vehicle <span class="text-danger">*</span></label>
-                        <div class="input-group-custom">
-                            <i class="bi bi-truck"></i>
-                            {{ form.vehicle_id(class="form-select select2-enable " + ("is-invalid" if form.vehicle_id.errors else ""), id="vehicle_select") }}
-                        </div>
-                        {% for error in form.vehicle_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
-                    </div>
-                </div>
-
-                <!-- Column 2: Driver Identification -->
-                <div class="pane-column">
-                    <span class="step-title">02. Personnel Identification</span>
-                    
-                    <div class="form-group">
-                        <label class="form-label text-danger-custom">Target Driver <span class="text-danger">*</span></label>
-                        <div class="input-group-custom">
-                            <i class="bi bi-person-badge"></i>
-                            {{ form.driver_id(class="form-select select2-enable " + ("is-invalid" if form.driver_id.errors else ""), id="driver_select") }}
-                        </div>
-                        {% for error in form.driver_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
-                    </div>
-
-                    <div class="status-box d-flex align-items-center">
-                        <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 42px; height: 42px;">
-                            <i class="bi bi-person-x fs-5"></i>
-                        </div>
-                        <div>
-                            <small class="text-muted d-block fw-bold">System Status</small>
-                            <span class="text-danger fw-bold small">Ready for Deactivation</span>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-4 small text-muted">
-                        <i class="bi bi-info-circle-fill me-2 text-info"></i>
-                        Selecting a driver will unlink them from the current vehicle and project records.
-                    </div>
-                </div>
-
-                <!-- Column 3: Logistics & Submission -->
-                <div class="pane-column">
-                    <span class="step-title">03. Separation Logistics</span>
-                    
-                    <div class="row g-2">
-                        <div class="col-6">
-                            <div class="form-group">
-                                <label class="form-label">Leaving Date <span class="text-danger">*</span></label>
-                                <div class="input-group-custom">
-                                    <i class="bi bi-calendar-event"></i>
-                                    {{ form.leave_date(
-                                        class="form-control datepicker " + ("is-invalid" if form.leave_date.errors else ""),
-                                        placeholder="dd-mm-yyyy",
-                                        autocomplete="off"
-                                    ) }}
-                                </div>
-                                {% for error in form.leave_date.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="form-group">
-                                <label class="form-label">Reason Category <span class="text-danger">*</span></label>
-                                {{ form.reason(class="form-select " + ("is-invalid" if form.reason.errors else ""), id="reason_select") }}
-                                {% for error in form.reason.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="other_reason_group" class="form-group d-none animate-fade">
-                        <label class="form-label">Specify Reason</label>
-                        {{ form.other_reason(class="form-control", placeholder="Explain briefly...") }}
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Remarks / Audit Notes</label>
-                        {{ form.remarks(class="form-control", rows=2, placeholder="Add any handover notes...") }}
-                    </div>
-
-                    <div class="mt-4">
-                        <button type="submit" class="btn btn-submit shadow">
-                            Confirm Termination
-                        </button>
-                        
-                        <a href="{{ url_for('driver_job_left_list') }}" class="btn btn-return">
-                            <i class="bi bi-arrow-left me-2"></i> Return to List
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </form>
+        <!-- RIGHT: Driver Insight Panel -->
+        {% include '_driver_insight_panel.html' %}
     </div>
 </div>
 
-<!-- Scripts for Dynamic Behavior -->
 <script>
 $(document).ready(function() {
-    // 1. Initialize Select2
-    if ($.fn.select2) {
-        $('.select2-enable').select2({
-            theme: 'bootstrap-5',
-            width: '100%',
-            placeholder: "-- Select --"
-        });
-    }
+    $('.select2-enable').select2({ theme: 'bootstrap-5', width: '100%', placeholder: '-- Select --' });
 
-    // 2. Toggle Other Reason Field
     $('#reason_select').on('change', function() {
-        if ($(this).val() === 'Other') {
-            $('#other_reason_group').removeClass('d-none');
-        } else {
-            $('#other_reason_group').addClass('d-none');
-        }
+        $('#other_reason_group').toggle($(this).val() === 'Other');
     });
 
-    // 3. Cascading Dropdowns Logic
-    const $proj = $('#project_select'), 
-          $dist = $('#district_select'), 
-          $veh = $('#vehicle_select'), 
-          $drv = $('#driver_select');
+    var $proj = $('#project_select'), $dist = $('#district_select'),
+        $veh  = $('#vehicle_select'), $drv  = $('#driver_select');
 
     $proj.on('change', function() {
-        let pid = $(this).val();
-        $dist.empty().append('<option value="">Loading...</option>').trigger('change');
-        if (pid) {
-            $.getJSON('/get_districts_by_project/' + pid, function(data) {
-                $dist.empty().append('<option value="">-- Select District --</option>');
-                $.each(data, function(i, d) { 
-                    $dist.append('<option value="' + d.id + '">' + d.name + '</option>'); 
-                });
-                $dist.trigger('change');
-            });
-        }
+        var pid = $(this).val();
+        $dist.html('<option value="">Loading…</option>').trigger('change');
+        $veh.html('<option value="">-- Select --</option>').trigger('change');
+        $drv.html('<option value="">-- Select --</option>').trigger('change');
+        if (pid) $.getJSON('/get_districts_by_project/' + pid, function(data) {
+            var o = '<option value="">-- Select District --</option>';
+            $.each(data, function(i, d) { o += '<option value="' + d.id + '">' + d.name + '</option>'; });
+            $dist.html(o);
+        });
     });
 
     $dist.on('change', function() {
-        let did = $(this).val(), pid = $proj.val();
-        $veh.empty().append('<option value="">Loading...</option>').trigger('change');
-        if (did && pid) {
-            $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(data) {
-                $veh.empty().append('<option value="">-- Select Vehicle --</option>');
-                $.each(data, function(i, v) { 
-                    $veh.append('<option value="' + v.id + '">' + v.no + '</option>'); 
-                });
-                $veh.trigger('change');
-            });
-        }
+        var did = $(this).val(), pid = $proj.val();
+        $veh.html('<option value="">Loading…</option>').trigger('change');
+        $drv.html('<option value="">-- Select --</option>').trigger('change');
+        if (did && pid) $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(data) {
+            var o = '<option value="">-- Select Vehicle --</option>';
+            $.each(data, function(i, v) { o += '<option value="' + v.id + '">' + v.no + '</option>'; });
+            $veh.html(o);
+        });
     });
 
     $veh.on('change', function() {
-        let vid = $(this).val();
-        $drv.empty().append('<option value="">Loading...</option>').trigger('change');
-        if (vid) {
-            $.getJSON('/get_drivers_by_vehicle/' + vid, function(data) {
-                $drv.empty().append('<option value="">-- Select Driver --</option>');
-                $.each(data, function(i, d) { 
-                    $drv.append('<option value="' + d.id + '">' + d.name + '</option>'); 
-                });
-                $drv.trigger('change');
-            });
-        }
+        var vid = $(this).val();
+        $drv.html('<option value="">Loading…</option>').trigger('change');
+        if (vid) $.getJSON('/get_drivers_by_vehicle/' + vid, function(data) {
+            var o = '<option value="">-- Select Driver --</option>';
+            $.each(data, function(i, d) { o += '<option value="' + d.id + '">' + d.name + '</option>'; });
+            $drv.html(o);
+        });
+    });
+
+    $drv.on('change', function() {
+        loadDriverInsight($(this).val());
     });
 });
 </script>

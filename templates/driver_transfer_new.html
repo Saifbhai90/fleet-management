@@ -1,310 +1,228 @@
 {% extends "base.html" %}
-{% block title %}Driver Re-Assignment{% endblock %}
+{% block title %}Driver Transfer{% endblock %}
+{% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
+.page-shell { max-width: 1280px; margin: 0 auto; padding: 20px 16px 40px; }
+.page-hdr {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 14px; padding: 14px 22px; margin-bottom: 22px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.page-hdr h5 { margin: 0; font-weight: 700; color: #fff; font-size: 1.05rem; }
+.form-card { background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 2px 12px rgba(0,0,0,.06); padding: 24px; }
+.step-lbl { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; }
+.form-label { font-size: .82rem; font-weight: 700; color: #334155; margin-bottom: 4px; }
+.form-control, .form-select {
+    border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important;
+    font-size: .86rem !important; height: 40px !important;
+}
+.form-control:focus, .form-select:focus { border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,.12) !important; }
+textarea.form-control { height: auto !important; }
+.select2-container--bootstrap-5 .select2-selection { height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; }
+.select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered { line-height: 38px !important; }
+.section-divider { border: none; border-top: 1.5px dashed #e2e8f0; margin: 18px 0; }
+.zone-box { border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.zone-box.from-zone { background: #fff5f5; border: 1.5px solid #fecaca; }
+.zone-box.to-zone   { background: #f0fdf4; border: 1.5px solid #a7f3d0; }
+.zone-title { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+.info-banner { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 14px; font-size: .82rem; color: #1d4ed8; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 8px; }
+.btn-transfer {
+    background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+    color: #fff; border: none; border-radius: 10px;
+    padding: 11px 28px; font-weight: 700; font-size: .9rem;
+    text-transform: uppercase; letter-spacing: .5px;
+    transition: all .25s; box-shadow: 0 3px 10px rgba(217,119,6,.3);
+}
+.btn-transfer:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(217,119,6,.4); color: #fff; }
+.btn-transfer:disabled { background: #cbd5e1; cursor: not-allowed; box-shadow: none; }
+</style>
+{% endblock %}
 
 {% block content %}
-<!-- Google Fonts & Plugins -->
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<div class="page-shell">
+    <div class="page-hdr">
+        <h5><i class="bi bi-arrow-left-right me-2 text-warning"></i>Driver Transfer Portal</h5>
+        <a href="{{ url_for('driver_transfers') }}" class="btn btn-sm btn-outline-light fw-bold">
+            <i class="bi bi-arrow-left-circle me-1"></i> Back to List
+        </a>
+    </div>
 
-<style>
-    body { background-color: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; color: #334155; }
-    
-    .main-wrapper { max-width: 1100px; margin: 20px auto; }
-    
-    /* Card Design */
-    .transfer-card {
-        background: white;
-        border-radius: 12px;
-        border: none;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        overflow: hidden;
-    }
-
-    /* Header Styling */
-    .header-dark {
-        background: #1e293b;
-        color: white;
-        padding: 12px 20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .header-dark h5 { margin: 0; font-weight: 700; font-size: 1.1rem; }
-    .badge-process { background: #f59e0b; color: #000; font-size: 0.75rem; font-weight: 700; padding: 5px 12px; border-radius: 20px; }
-
-    /* Info Box */
-    .info-box {
-        background: #f0f7ff;
-        border: 1px solid #e0eefe;
-        border-radius: 10px;
-        padding: 12px 15px;
-        margin: 15px;
-        display: flex;
-        align-items: center;
-        font-size: 0.85rem;
-        color: #1e40af;
-    }
-
-    /* Column Sections */
-    .column-box {
-        border: 1px solid #e2e8f0;
-        border-radius: 15px;
-        padding: 20px;
-        height: 100%;
-        background: #fff;
-    }
-    .column-box.source { border-left: 5px solid #ef4444; } /* Red Border */
-    .column-box.dest { border-left: 5px solid #10b981; }   /* Green Border */
-
-    .section-title {
-        font-size: 0.8rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 15px;
-    }
-
-    /* Form Elements */
-    .form-group-custom { margin-bottom: 12px; }
-    .form-group-custom label {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: #64748b;
-        margin-bottom: 4px;
-        display: block;
-    }
-
-    .form-control, .form-select, .select2-container--default .select2-selection--single {
-        height: 38px !important;
-        border: 1px solid #cbd5e1 !important;
-        border-radius: 8px !important;
-        font-size: 0.85rem !important;
-    }
-    .select2-container--default .select2-selection--single .select2-selection__rendered {
-        line-height: 36px !important;
-        padding-left: 12px !important;
-    }
-
-    /* Remarks & Button Area */
-    .bottom-section { padding: 0 15px 20px 15px; }
-    .remarks-box {
-        border-radius: 10px;
-        border: 1px solid #e2e8f0;
-        padding: 10px;
-        width: 100%;
-        font-size: 0.9rem;
-    }
-
-    .btn-confirm {
-        background: #f59e0b;
-        color: white;
-        font-weight: 700;
-        border: none;
-        width: 100%;
-        padding: 12px;
-        border-radius: 0 0 12px 12px;
-        transition: 0.3s;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    .btn-confirm:hover:not(:disabled) { background: #d97706; }
-    .btn-confirm:disabled { background: #cbd5e1; cursor: not-allowed; }
-
-</style>
-
-<div class="main-wrapper">
-    <div class="card transfer-card">
-        <!-- Header -->
-        <div class="header-dark">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-truck text-warning me-2 fs-5"></i>
-                <h5>Driver Re-Assignment Portal</h5>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for cat, msg in messages %}
+            <div class="alert alert-{{ cat }} alert-dismissible fade show mb-3">
+                {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
-            <a href="{{ url_for('driver_transfers') }}" class="btn btn-sm btn-outline-light fw-bold">
-                <i class="bi bi-arrow-left-circle me-1"></i> Back to List
-            </a>
-        </div>
+        {% endfor %}{% endif %}
+    {% endwith %}
 
-        <!-- Info Alert -->
-        <div class="info-box">
-            <i class="bi bi-info-circle-fill me-3 fs-5"></i>
-            <div>
-                <strong>Transfer Policy:</strong> Driver ka project ya district tabdeel karne se pehle ensure karein ke target vehicle mein shift khali hai. Purani assignment automatically khatam ho jayegi.
+    <div class="row g-3 align-items-start">
+        <!-- LEFT: Form -->
+        <div class="col-lg-7">
+            <div class="form-card">
+                <div class="info-banner">
+                    <i class="bi bi-info-circle-fill fs-5 mt-1"></i>
+                    <div><strong>Transfer Policy:</strong> Select the driver's current location (FROM) then the new destination (TO). The old assignment will be automatically closed.</div>
+                </div>
+
+                <form method="POST" id="transferForm">
+                    {{ form.hidden_tag() }}
+
+                    <!-- FROM Section -->
+                    <div class="zone-box from-zone">
+                        <div class="zone-title text-danger"><i class="bi bi-geo-alt-fill"></i> Current Location (FROM)</div>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Project</label>
+                                {{ form.from_project_id(class="form-select select2-enable", id="from_project", disabled=disable_from_project) }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">District</label>
+                                {{ form.from_district_id(class="form-select select2-enable", id="from_district") }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Vehicle</label>
+                                {{ form.from_vehicle_id(class="form-select select2-enable", id="from_vehicle") }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-primary fw-bold">Driver to Transfer</label>
+                                {{ form.driver_id(class="form-select select2-enable", id="driver_id") }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TO Section -->
+                    <div class="zone-box to-zone">
+                        <div class="zone-title text-success"><i class="bi bi-geo-fill"></i> New Destination (TO)</div>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label">New Project</label>
+                                {{ form.new_project_id(class="form-select select2-enable", id="new_project", disabled=disable_new_project) }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">New District</label>
+                                {{ form.new_district_id(class="form-select select2-enable", id="new_district") }}
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">New Vehicle</label>
+                                {{ form.new_vehicle_id(class="form-select select2-enable", id="new_vehicle") }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">New Shift</label>
+                                {{ form.new_shift(class="form-select", id="new_shift") }}
+                                <div id="shift_warning" class="text-danger small mt-1 d-none">
+                                    <i class="bi bi-exclamation-triangle me-1"></i><span id="warning_text"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Effective Date <span class="text-danger">*</span></label>
+                                {{ form.transfer_date(class="form-control datepicker", placeholder="dd-mm-yyyy") }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="section-divider">
+                    <div class="mb-3">
+                        <label class="form-label">Transfer Remarks</label>
+                        {{ form.remarks(class="form-control", rows=2, placeholder="Reason for transfer...") }}
+                    </div>
+
+                    <button type="submit" class="btn-transfer" id="submitBtn" disabled>
+                        <i class="bi bi-check-circle me-1"></i> Confirm Driver Transfer
+                    </button>
+                </form>
             </div>
         </div>
 
-        <form method="POST" id="transferForm">
-            {{ form.hidden_tag() }}
-            
-            <!-- Main Content Grid -->
-            <div class="row g-3 px-3 mb-3">
-                <!-- FROM SECTION -->
-                <div class="col-md-6">
-                    <div class="column-box source">
-                        <div class="section-title text-danger">Current Location (From)</div>
-                        
-                        <div class="form-group-custom">
-                            <label>Select Project</label>
-                            {{ form.from_project_id(class="form-select select2-enable", id="from_project", disabled=disable_from_project) }}
-                        </div>
-
-                        <div class="form-group-custom">
-                            <label>District</label>
-                            {{ form.from_district_id(class="form-select select2-enable", id="from_district") }}
-                        </div>
-
-                        <div class="form-group-custom">
-                            <label>Select Vehicle</label>
-                            {{ form.from_vehicle_id(class="form-select select2-enable", id="from_vehicle") }}
-                        </div>
-
-                        <div class="form-group-custom">
-                            <label class="text-primary">Driver to Transfer</label>
-                            {{ form.driver_id(class="form-select select2-enable", id="driver_id") }}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TO SECTION -->
-                <div class="col-md-6">
-                    <div class="column-box dest">
-                        <div class="section-title text-success">New Destination (To)</div>
-                        
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <div class="form-group-custom">
-                                    <label>New Project</label>
-                                    {{ form.new_project_id(class="form-select select2-enable", id="new_project", disabled=disable_new_project) }}
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="form-group-custom">
-                                    <label>New District</label>
-                                    {{ form.new_district_id(class="form-select select2-enable", id="new_district") }}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="form-group-custom">
-                            <label>New Target Vehicle</label>
-                            {{ form.new_vehicle_id(class="form-select select2-enable", id="new_vehicle") }}
-                        </div>
-
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <div class="form-group-custom">
-                                    <label>Assign New Shift</label>
-                                    {{ form.new_shift(class="form-select", id="new_shift") }}
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="form-group-custom">
-                                    <label>Effective Date <span class="text-danger">*</span></label>
-                                    {{ form.transfer_date(class="form-control datepicker", placeholder="Select date") }}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div id="shift_warning" class="alert alert-danger py-1 px-2 d-none mt-2" style="font-size: 0.75rem;">
-                            <i class="bi bi-exclamation-triangle"></i> <span id="warning_text"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bottom Remarks -->
-            <div class="bottom-section">
-                <label class="form-label fw-bold text-muted small mb-1">TRANSFER REMARKS</label>
-                {{ form.remarks(class="form-control remarks-box", rows=2, placeholder="Enter transfer details or reason...") }}
-            </div>
-
-            <!-- Footer Button -->
-            <button type="submit" class="btn-confirm" id="submitBtn" disabled>
-                Confirm Driver Transfer
-            </button>
-        </form>
+        <!-- RIGHT: Driver Insight Panel -->
+        {% include '_driver_insight_panel.html' %}
     </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
 <script>
-    $(document).ready(function() {
-        $('.select2-enable').select2({ width: '100%' });
-        function resetDropdown(selector) {
-            $(selector).html('<option value="">-- Select --</option>').trigger('change');
-        }
+$(document).ready(function() {
+    $('.select2-enable').select2({ theme: 'bootstrap-5', width: '100%' });
 
-        // --- Same chaining logic as before ---
-        $('#from_project').on('change', function() {
-            let pid = $(this).val(); resetDropdown('#from_district');
-            if(pid) $.get('/get_districts_by_project/' + pid, d => {
-                let opts = '<option value="">-- Select --</option>';
-                d.forEach(x => opts += `<option value="${x.id}">${x.name}</option>`);
-                $('#from_district').html(opts);
-            });
-        });
+    function resetSelect(sel, placeholder) {
+        $(sel).html('<option value="">' + (placeholder || '-- Select --') + '</option>').trigger('change');
+    }
 
-        $('#from_district').on('change', function() {
-            let pid = $('#from_project').val(), did = $(this).val(); resetDropdown('#from_vehicle');
-            if(pid && did) $.get(`/get_vehicles_by_district/${pid}/${did}`, v => {
-                let opts = '<option value="">-- Select --</option>';
-                v.forEach(x => opts += `<option value="${x.id}">${x.no}</option>`);
-                $('#from_vehicle').html(opts);
-            });
-        });
-
-        $('#from_vehicle').on('change', function() {
-            let vid = $(this).val(); resetDropdown('#driver_id');
-            if(vid) $.get('/get_drivers_by_vehicle/' + vid, d => {
-                let opts = '<option value="">-- Select Driver --</option>';
-                d.forEach(x => opts += `<option value="${x.id}">${x.name}</option>`);
-                $('#driver_id').html(opts);
-            });
-        });
-
-        $('#new_project').on('change', function() {
-            let pid = $(this).val(); resetDropdown('#new_district');
-            if(pid) $.get('/get_districts_by_project/' + pid, d => {
-                let opts = '<option value="">-- Select --</option>';
-                d.forEach(x => opts += `<option value="${x.id}">${x.name}</option>`);
-                $('#new_district').html(opts);
-            });
-        });
-
-        $('#new_district').on('change', function() {
-            let pid = $('#new_project').val(), did = $(this).val(); resetDropdown('#new_vehicle');
-            if(pid && did) $.get(`/get_vehicles_by_district/${pid}/${did}`, v => {
-                let opts = '<option value="">-- Select --</option>';
-                v.forEach(x => opts += `<option value="${x.id}">${x.no}</option>`);
-                $('#new_vehicle').html(opts);
-            });
-        });
-
-        $('#new_vehicle').on('change', function() {
-            let vid = $(this).val();
-            if(vid) {
-                $.get('/get_available_shifts/' + vid, data => {
-                    if (data.length === 0) {
-                        $('#shift_warning').removeClass('d-none');
-                        $('#warning_text').text('Target vehicle is full.');
-                        $('#new_shift').html('<option value="">Full</option>');
-                        $('#submitBtn').prop('disabled', true);
-                    } else {
-                        $('#shift_warning').addClass('d-none');
-                        let opts = '<option value="">-- Select --</option>';
-                        data.forEach(s => opts += `<option value="${s.id}">${s.name}</option>`);
-                        $('#new_shift').html(opts);
-                    }
-                });
-            }
-        });
-
-        $('#new_shift').on('change', function() {
-            $('#submitBtn').prop('disabled', !$(this).val());
+    $('#from_project').on('change', function() {
+        var pid = $(this).val();
+        resetSelect('#from_district'); resetSelect('#from_vehicle'); resetSelect('#driver_id');
+        if (pid) $.getJSON('/get_districts_by_project/' + pid, function(d) {
+            var o = '<option value="">-- Select --</option>';
+            d.forEach(function(x){ o += '<option value="' + x.id + '">' + x.name + '</option>'; });
+            $('#from_district').html(o);
         });
     });
+
+    $('#from_district').on('change', function() {
+        var pid = $('#from_project').val(), did = $(this).val();
+        resetSelect('#from_vehicle'); resetSelect('#driver_id');
+        if (pid && did) $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(v) {
+            var o = '<option value="">-- Select --</option>';
+            v.forEach(function(x){ o += '<option value="' + x.id + '">' + x.no + '</option>'; });
+            $('#from_vehicle').html(o);
+        });
+    });
+
+    $('#from_vehicle').on('change', function() {
+        var vid = $(this).val();
+        resetSelect('#driver_id', '-- Select Driver --');
+        if (vid) $.getJSON('/get_drivers_by_vehicle/' + vid, function(d) {
+            var o = '<option value="">-- Select Driver --</option>';
+            d.forEach(function(x){ o += '<option value="' + x.id + '">' + x.name + '</option>'; });
+            $('#driver_id').html(o);
+        });
+    });
+
+    $('#driver_id').on('change', function() {
+        loadDriverInsight($(this).val());
+    });
+
+    $('#new_project').on('change', function() {
+        var pid = $(this).val();
+        resetSelect('#new_district'); resetSelect('#new_vehicle');
+        if (pid) $.getJSON('/get_districts_by_project/' + pid, function(d) {
+            var o = '<option value="">-- Select --</option>';
+            d.forEach(function(x){ o += '<option value="' + x.id + '">' + x.name + '</option>'; });
+            $('#new_district').html(o);
+        });
+    });
+
+    $('#new_district').on('change', function() {
+        var pid = $('#new_project').val(), did = $(this).val();
+        resetSelect('#new_vehicle');
+        if (pid && did) $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(v) {
+            var o = '<option value="">-- Select --</option>';
+            v.forEach(function(x){ o += '<option value="' + x.id + '">' + x.no + '</option>'; });
+            $('#new_vehicle').html(o);
+        });
+    });
+
+    $('#new_vehicle').on('change', function() {
+        var vid = $(this).val();
+        if (!vid) return;
+        $.getJSON('/get_available_shifts/' + vid, function(data) {
+            if (data.length === 0) {
+                $('#shift_warning').removeClass('d-none');
+                $('#warning_text').text('Target vehicle is full — no shift available.');
+                $('#new_shift').html('<option value="">Full</option>');
+                $('#submitBtn').prop('disabled', true);
+            } else {
+                $('#shift_warning').addClass('d-none');
+                var o = '<option value="">-- Select Shift --</option>';
+                data.forEach(function(s){ o += '<option value="' + s.id + '">' + s.name + '</option>'; });
+                $('#new_shift').html(o);
+            }
+        });
+    });
+
+    $('#new_shift').on('change', function() {
+        $('#submitBtn').prop('disabled', !$(this).val());
+    });
+});
 </script>
 {% endblock %}
