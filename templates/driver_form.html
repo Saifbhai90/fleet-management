@@ -494,73 +494,29 @@ document.addEventListener('DOMContentLoaded', function () {
     form.classList.add('was-validated');
   }, false);
 
-  // 3. Regex-First Date Formatter + Flatpickr init
-  var mmap = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
-              jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
-
-  function finalDateFormatter(input) {
+  // 3. Strict DD-MM-YYYY validator + Flatpickr init
+  // Only accepts: DD-MM-YYYY  (dashes only, 4-digit year)
+  // All other formats (slashes, dots, text months, shortcuts) are rejected.
+  function strictDateCheck(input) {
     if (!input || typeof input !== 'string') return null;
-    var s = input.trim().toLowerCase();
-    var d, m, y;
+    var s = input.trim();
 
-    // Pattern 1: exactly 8 digits → DDMMYYYY (4-digit year, keep as-is)
-    if (/^\d{8}$/.test(s)) {
-      d = s.slice(0, 2);
-      m = s.slice(2, 4);
-      y = s.slice(4, 8);
+    // Must match D-M-YYYY or DD-MM-YYYY (dashes, 4-digit year)
+    if (!/^\d{1,2}-\d{1,2}-\d{4}$/.test(s)) return null;
 
-    // Pattern 2: exactly 6 digits → DDMMYY (2-digit year, expand below)
-    } else if (/^\d{6}$/.test(s)) {
-      d = s.slice(0, 2);
-      m = s.slice(2, 4);
-      y = s.slice(4, 6);
+    var parts = s.split('-');
+    var di = parseInt(parts[0], 10);
+    var mi = parseInt(parts[1], 10);
+    var yi = parseInt(parts[2], 10);
 
-    // Pattern 3: text month — e.g. 03-mar-1997 or 03/mar/97
-    } else if (/^\d{1,2}[-\/\.][a-z]{3}[-\/\.]\d{2,4}$/.test(s)) {
-      var sep3 = s.indexOf('-') !== -1 ? '-' : (s.indexOf('/') !== -1 ? '/' : '.');
-      var p3   = s.split(sep3);
-      d = p3[0];
-      var mText = mmap[p3[1].slice(0, 3)];
-      if (!mText) return null;
-      m = mText;
-      y = p3[2];
-
-    // Pattern 4: numeric separators — e.g. 3/3/97 or 03-03-1997
-    } else if (/^\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}$/.test(s)) {
-      var sep4 = s.indexOf('-') !== -1 ? '-' : (s.indexOf('/') !== -1 ? '/' : '.');
-      var p4   = s.split(sep4);
-      d = p4[0];
-      m = String(parseInt(p4[1], 10)).padStart(2, '0');
-      y = p4[2];
-
-    } else {
-      return null;
-    }
-
-    // Year: 4-digit → keep exactly as typed; 2-digit → expand
-    if (y.length === 4) {
-      // intentionally unchanged
-    } else if (y.length === 2) {
-      var yy = parseInt(y, 10);
-      y = (yy < 50) ? '20' + y : '19' + y;
-    } else {
-      return null;
-    }
-
-    // Pad day
-    d = String(parseInt(d, 10)).padStart(2, '0');
-
-    // Range check
-    var di = parseInt(d, 10);
-    var mi = parseInt(m, 10);
-    var yi = parseInt(y, 10);
     if (di < 1 || di > 31 || mi < 1 || mi > 12 || yi < 1900 || yi > 2100) return null;
 
-    // Calendar cross-check (rejects Feb 30, etc.)
+    // Calendar cross-check (rejects Feb 30, Apr 31, etc.)
     var dt = new Date(yi, mi - 1, di);
     if (dt.getDate() !== di || dt.getMonth() !== mi - 1 || dt.getFullYear() !== yi) return null;
 
-    return d + '-' + m + '-' + y;
+    // Return canonical zero-padded form
+    return String(di).padStart(2,'0') + '-' + String(mi).padStart(2,'0') + '-' + yi;
   }
 
   // Init each datepicker individually, attach blur directly to altInput
@@ -573,19 +529,18 @@ document.addEventListener('DOMContentLoaded', function () {
       maxDate: "today"
     });
 
-    // Capture phase = fires BEFORE Flatpickr's bubble-phase blur handler
-    // so we read the raw typed value before Flatpickr can process/clear it
+    // Capture phase fires BEFORE Flatpickr's bubble-phase blur handler
     fp.altInput.addEventListener('blur', function() {
       var raw = fp.altInput.value.trim();
       if (!raw) return;
 
-      var formatted = finalDateFormatter(raw);
+      var formatted = strictDateCheck(raw);
       if (formatted) {
         fp.setDate(formatted, true, 'd-m-Y');
         updateExpiryStatus();
       } else {
         fp.clear();
-        alert('Please use DD-MM-YYYY or DD-MMM-YYYY  (e.g. 03-03-1997 or 03-mar-1997)');
+        alert('Sirf DD-MM-YYYY format use karein (e.g. 03-03-1997)');
       }
     }, true);
   });
