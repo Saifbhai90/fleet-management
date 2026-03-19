@@ -1,283 +1,493 @@
 {% extends "base.html" %}
+{% block extra_head %}
+<style>
+/* ── Page Shell ── */
+.adv-page-wrap { background: #f0f2f5; min-height: 100vh; padding: 1.5rem 1rem; }
+
+/* ── Page Header ── */
+.adv-page-header {
+    background: linear-gradient(135deg, #1a237e 0%, #283593 60%, #3949ab 100%);
+    border-radius: 12px;
+    padding: 1rem 1.4rem;
+    margin-bottom: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 18px rgba(26,35,126,0.18);
+}
+.adv-page-header h5 { color: #fff; font-size: 1.05rem; font-weight: 700; margin: 0; letter-spacing: 0.3px; }
+.adv-page-header .sub { color: rgba(255,255,255,0.75); font-size: 0.78rem; margin-top: 2px; }
+
+/* ── Left Form Card ── */
+.form-card {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    padding: 1.5rem 1.6rem;
+}
+.form-card .section-divider {
+    border: none;
+    border-top: 1px dashed #e2e8f0;
+    margin: 1.2rem 0;
+}
+.step-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #475569;
+    margin-bottom: 5px;
+}
+.step-badge {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #e8eaf6;
+    color: #3949ab;
+    font-size: 0.68rem;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.form-control, .form-select {
+    border: 1px solid #dde3ec;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    padding: 0.48rem 0.75rem;
+    color: #1e293b;
+    transition: border-color .15s, box-shadow .15s;
+}
+.form-control:focus, .form-select:focus {
+    border-color: #3949ab;
+    box-shadow: 0 0 0 3px rgba(57,73,171,0.1);
+}
+.info-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-top: 6px;
+}
+.info-pill.success { background: #e8f5e9; color: #2e7d32; }
+.info-pill.warning { background: #fff8e1; color: #e65100; }
+.info-pill.info    { background: #e3f2fd; color: #1565c0; }
+
+/* ── Submit Button ── */
+.btn-finalize {
+    background: linear-gradient(135deg, #1a237e 0%, #3949ab 100%);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 0.65rem 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    width: 100%;
+    letter-spacing: 0.4px;
+    box-shadow: 0 4px 14px rgba(26,35,126,0.25);
+    transition: opacity .18s, transform .18s;
+}
+.btn-finalize:hover { opacity: 0.92; transform: translateY(-1px); color: #fff; }
+
+/* ── Right Insight Panel ── */
+.insight-panel { position: sticky; top: 20px; }
+
+.insight-placeholder {
+    background: #fff;
+    border: 2px dashed #c7d2e8;
+    border-radius: 14px;
+    padding: 3rem 1.5rem;
+    text-align: center;
+    color: #94a3b8;
+    transition: opacity .3s;
+}
+.insight-placeholder .ph-icon {
+    width: 70px; height: 70px;
+    border-radius: 50%;
+    background: #f1f5f9;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 1rem;
+    font-size: 2.2rem;
+    color: #94a3b8;
+}
+.insight-placeholder h6 { font-weight: 700; color: #64748b; font-size: 0.92rem; }
+.insight-placeholder p  { font-size: 0.8rem; margin: 0; }
+
+/* ── Driver Profile Card ── */
+.driver-profile-card {
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 4px 22px rgba(0,0,0,0.12);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity .35s ease, transform .35s ease;
+}
+.driver-profile-card.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+.drv-header {
+    background: linear-gradient(135deg, #1565C0 0%, #1e88e5 55%, #42a5f5 100%);
+    padding: 1.2rem 1.3rem;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: relative;
+}
+.drv-avatar {
+    width: 58px; height: 58px;
+    border-radius: 50%;
+    border: 2.5px solid rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.2);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.drv-avatar img { width: 58px; height: 58px; object-fit: cover; border-radius: 50%; }
+.drv-avatar i   { font-size: 2rem; color: rgba(255,255,255,0.85); }
+.drv-title { flex: 1; min-width: 0; }
+.drv-title .name   { font-size: 1rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drv-title .sub    { font-size: 0.76rem; color: rgba(255,255,255,0.82); margin-top: 2px; }
+.drv-status-badge  {
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    border: 1.5px solid rgba(255,255,255,0.5);
+    border-radius: 20px;
+    padding: 3px 13px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    align-self: flex-start;
+}
+.drv-body {
+    background: #fff;
+    padding: 1rem 1.3rem 1.2rem;
+    border: 1px solid #dde8f5;
+    border-top: none;
+}
+.drv-field-row { display: flex; flex-wrap: wrap; gap: 0; }
+.drv-field {
+    flex: 1 1 50%;
+    padding: 0.55rem 0.4rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+.drv-field:nth-child(odd)  { border-right: 1px solid #f1f5f9; }
+.drv-field.full { flex: 1 1 100%; border-right: none; }
+.drv-field .lbl {
+    font-size: 0.67rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #90a4ae;
+    margin-bottom: 2px;
+    display: flex; align-items: center; gap: 4px;
+}
+.drv-field .val { font-size: 0.82rem; font-weight: 600; color: #1e293b; }
+
+/* ── Select2 override ── */
+.select2-container--bootstrap-5 .select2-selection {
+    border: 1px solid #dde3ec !important;
+    border-radius: 8px !important;
+    min-height: 38px !important;
+}
+.select2-container--bootstrap-5 .select2-selection:focus,
+.select2-container--bootstrap-5.select2-container--focus .select2-selection {
+    border-color: #3949ab !important;
+    box-shadow: 0 0 0 3px rgba(57,73,171,0.1) !important;
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container py-4">
-    <div class="card shadow border-0 rounded-4 overflow-hidden">
-        <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
-            <h5 class="mb-0 fw-bold"><i class="bi bi-person-video2 me-2"></i>Assign Driver (Shift & Capacity Control)</h5>
-            <a href="{{ url_for('assign_driver_to_vehicle_list') }}" class="btn btn-sm btn-light text-dark fw-bold">
-                <i class="bi bi-x-lg me-1"></i> Cancel
-            </a>
+<div class="adv-page-wrap">
+<div class="container-fluid px-2 px-md-3" style="max-width:1200px;margin:0 auto;">
+
+    <!-- Page Header -->
+    <div class="adv-page-header">
+        <div>
+            <h5><i class="bi bi-person-video2 me-2"></i>Assign Driver to Vehicle</h5>
+            <div class="sub"><i class="bi bi-info-circle me-1"></i>Shift &amp; Capacity Control — Fill all steps to finalize</div>
         </div>
-        <div class="card-body p-4 bg-light">
+        <a href="{{ url_for('assign_driver_to_vehicle_list') }}"
+           class="btn btn-sm"
+           style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:8px;font-size:0.8rem;font-weight:600;">
+            <i class="bi bi-arrow-left me-1"></i>Back to List
+        </a>
+    </div>
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} alert-dismissible fade show mb-4" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show mb-3 rounded-3" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
-            {% if form.errors %}
-            <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-                <strong>Please correct the following errors:</strong>
-                <ul class="mb-0">
-                    {% for field, field_errors in form.errors.items() %}
-                        {% for error in field_errors %}
-                            <li>{{ form[field].label.text }}: {{ error }}</li>
-                        {% endfor %}
-                    {% endfor %}
-                </ul>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            {% endif %}
+    {% if form.errors %}
+    <div class="alert alert-danger alert-dismissible fade show mb-3 rounded-3" role="alert">
+        <strong><i class="bi bi-exclamation-triangle me-1"></i>Please correct the following:</strong>
+        <ul class="mb-0 mt-1">
+            {% for field, field_errors in form.errors.items() %}
+                {% for error in field_errors %}
+                    <li>{{ form[field].label.text }}: {{ error }}</li>
+                {% endfor %}
+            {% endfor %}
+        </ul>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
 
-            <form method="POST" id="driverAssignForm">
-               {{ form.hidden_tag() }}
+    <!-- 2-Column Layout -->
+    <form method="POST" id="driverAssignForm">
+    {{ form.hidden_tag() }}
+    <div class="row g-3 align-items-start">
+
+        <!-- ══ LEFT: Form ══ -->
+        <div class="col-lg-7">
+            <div class="form-card">
+
+                <!-- Step 1 & 2 -->
                 <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold">1. Project</label>
-                        {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else ""), id="project_select", disabled=disable_project) }}
+                    <div class="col-md-6">
+                        <div class="step-label"><span class="step-badge">1</span> Project</div>
+                        {{ form.project_id(class="form-select select2-enable" + (" is-invalid" if form.project_id.errors else ""), id="project_select", disabled=disable_project) }}
                         {% if form.project_id.errors %}<div class="invalid-feedback d-block">{% for e in form.project_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold">2. District</label>
-                        {{ form.district_id(class="form-select select2-enable " + ("is-invalid" if form.district_id.errors else ""), id="district_select") }}
+                    <div class="col-md-6">
+                        <div class="step-label"><span class="step-badge">2</span> District</div>
+                        {{ form.district_id(class="form-select select2-enable" + (" is-invalid" if form.district_id.errors else ""), id="district_select") }}
                         {% if form.district_id.errors %}<div class="invalid-feedback d-block">{% for e in form.district_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold">3. Vehicle</label>
-                        {{ form.vehicle_id(class="form-select select2-enable " + ("is-invalid" if form.vehicle_id.errors else ""), id="vehicle_select") }}
-                        {% if form.vehicle_id.errors %}<div class="invalid-feedback d-block">{% for e in form.vehicle_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
-                        <div id="vehicle_parking_info" class="mt-2 small text-muted fw-bold" style="min-height: 1.5em;"></div>
-                    </div>
+                </div>
 
-                    <div class="col-md-6 mt-4">
-                        <div class="bg-white p-4 rounded-3 shadow-sm border-start border-primary border-4">
-                            <label class="form-label fw-bold text-primary">4. Select Shift</label>
-                            {{ form.shift(class="form-select " + ("is-invalid" if form.shift.errors else ""), id="shift_select") }}
-                            {% if form.shift.errors %}<div class="invalid-feedback d-block">{% for e in form.shift.errors %}{{ e }}{% endfor %}</div>{% endif %}
-                            <div id="capacity_info" class="mt-2 small fw-bold"></div>
-                        </div>
-                    </div>
+                <hr class="section-divider">
 
-                    <div class="col-md-6 mt-4">
-                        <div class="bg-white p-4 rounded-3 shadow-sm border-start border-success border-4">
-                            <label class="form-label fw-bold text-success">5. Select Available Driver</label>
-                            {{ form.driver_id(class="form-select select2-enable " + ("is-invalid" if form.driver_id.errors else ""), id="driver_select") }}
-                            {% if form.driver_id.errors %}<div class="invalid-feedback d-block">{% for e in form.driver_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
-                        </div>
-                    </div>
+                <!-- Step 3: Vehicle -->
+                <div class="step-label"><span class="step-badge">3</span> Vehicle</div>
+                {{ form.vehicle_id(class="form-select select2-enable" + (" is-invalid" if form.vehicle_id.errors else ""), id="vehicle_select") }}
+                {% if form.vehicle_id.errors %}<div class="invalid-feedback d-block">{% for e in form.vehicle_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
+                <div id="vehicle_parking_info" style="min-height:1.6em;"></div>
 
-                    <!-- Driver Detail Card -->
-                    <div class="col-12" id="driverDetailWrap" style="display:none;">
-                        <div style="border-radius:10px;overflow:hidden;box-shadow:0 2px 14px rgba(0,0,0,0.13);">
-                            <!-- Blue gradient header -->
-                            <div style="background:linear-gradient(135deg,#1565C0 0%,#42A5F5 100%);padding:14px 20px;display:flex;align-items:center;gap:16px;position:relative;">
-                                <div id="drvPhotoWrap" style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">
-                                    <img id="drvPhoto" src="" style="width:52px;height:52px;object-fit:cover;border-radius:50%;display:none;" alt="">
-                                    <i class="bi bi-person-fill" id="drvPhotoFallback" style="font-size:2rem;color:rgba(255,255,255,0.8);"></i>
-                                </div>
-                                <div style="flex:1;min-width:0;">
-                                    <div id="drvName" style="font-size:1.08rem;font-weight:700;color:#fff;"></div>
-                                    <div style="font-size:0.8rem;color:rgba(255,255,255,0.88);margin-top:3px;">
-                                        ID: <span id="drvIdSpan"></span>&nbsp;&nbsp;|&nbsp;&nbsp;Post: <span id="drvPost"></span>
-                                    </div>
-                                    <div style="font-size:0.8rem;color:rgba(255,255,255,0.88);margin-top:1px;">
-                                        District: <span id="drvDistrict"></span>
-                                    </div>
-                                </div>
-                                <div style="flex-shrink:0;">
-                                    <span id="drvStatus" style="background:rgba(255,255,255,0.18);color:#fff;border:1.5px solid rgba(255,255,255,0.55);border-radius:20px;padding:4px 16px;font-size:0.75rem;font-weight:700;letter-spacing:0.7px;"></span>
-                                </div>
-                            </div>
-                            <!-- Details body -->
-                            <div style="background:#fff;padding:14px 20px 16px 20px;border:1px solid #e3e8ef;border-top:none;border-radius:0 0 10px 10px;">
-                                <div class="row g-3" style="font-size:0.83rem;">
-                                    <div class="col-md-4 col-6">
-                                        <div style="color:#78909c;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;"><i class="bi bi-person me-1"></i>Father Name</div>
-                                        <div id="drvFather" style="color:#263238;font-weight:600;">-</div>
-                                    </div>
-                                    <div class="col-md-4 col-6">
-                                        <div style="color:#78909c;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;"><i class="bi bi-credit-card-2-front me-1"></i>CNIC No</div>
-                                        <div id="drvCnic" style="color:#263238;font-weight:600;">-</div>
-                                    </div>
-                                    <div class="col-md-4 col-6">
-                                        <div style="color:#78909c;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;"><i class="bi bi-telephone me-1"></i>Phone No 1</div>
-                                        <div id="drvPhone1" style="color:#263238;font-weight:600;">-</div>
-                                    </div>
-                                    <div class="col-md-4 col-6">
-                                        <div style="color:#78909c;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;"><i class="bi bi-telephone me-1"></i>Phone No 2</div>
-                                        <div id="drvPhone2" style="color:#263238;font-weight:600;">-</div>
-                                    </div>
-                                    <div class="col-md-8 col-12">
-                                        <div style="color:#78909c;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;"><i class="bi bi-geo-alt me-1"></i>Address</div>
-                                        <div id="drvAddress" style="color:#263238;font-weight:600;">-</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <hr class="section-divider">
 
-                    <div class="col-md-6 mt-3">
-                        <label class="form-label fw-bold">Assign Date</label>
-                        {{ form.assign_date(class="form-control datepicker " + ("is-invalid" if form.assign_date.errors else "")) }}
+                <!-- Step 4 & 5 -->
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="step-label"><span class="step-badge" style="background:#e3f2fd;color:#1565c0;">4</span> Shift</div>
+                        {{ form.shift(class="form-select" + (" is-invalid" if form.shift.errors else ""), id="shift_select") }}
+                        {% if form.shift.errors %}<div class="invalid-feedback d-block">{% for e in form.shift.errors %}{{ e }}{% endfor %}</div>{% endif %}
+                        <div id="capacity_info" style="min-height:1.6em;"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="step-label"><span class="step-badge" style="background:#e8f5e9;color:#2e7d32;">5</span> Available Driver</div>
+                        {{ form.driver_id(class="form-select select2-enable" + (" is-invalid" if form.driver_id.errors else ""), id="driver_select") }}
+                        {% if form.driver_id.errors %}<div class="invalid-feedback d-block">{% for e in form.driver_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
+                    </div>
+                </div>
+
+                <hr class="section-divider">
+
+                <!-- Date & Remarks -->
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="step-label"><i class="bi bi-calendar3"></i> Assign Date</div>
+                        {{ form.assign_date(class="form-control datepicker" + (" is-invalid" if form.assign_date.errors else "")) }}
                         {% if form.assign_date.errors %}<div class="invalid-feedback d-block">{% for e in form.assign_date.errors %}{{ e }}{% endfor %}</div>{% endif %}
                     </div>
-                    <div class="col-md-6 mt-3">
-                        <label class="form-label fw-bold">Remarks</label>
+                    <div class="col-md-6">
+                        <div class="step-label"><i class="bi bi-chat-left-text"></i> Remarks</div>
                         {{ form.remarks(class="form-control", rows=1) }}
                     </div>
                 </div>
 
-                <div class="mt-5 text-center">
-                    <button type="submit" id="submit_btn" class="btn btn-primary btn-lg px-5 fw-bold shadow-sm">
-                        <i class="bi bi-check-circle me-1"></i> Finalize Assignment
-                    </button>
-                    <a href="{{ url_for('assign_driver_to_vehicle_list') }}" class="btn btn-outline-secondary btn-lg px-4 fw-bold ms-2">
-                        <i class="bi bi-x-lg me-1"></i> Cancel
-                    </a>
+                <hr class="section-divider">
+
+                <!-- Submit -->
+                <div class="row g-2">
+                    <div class="col-8">
+                        <button type="submit" class="btn-finalize">
+                            <i class="bi bi-check-circle me-2"></i>Finalize Assignment
+                        </button>
+                    </div>
+                    <div class="col-4">
+                        <a href="{{ url_for('assign_driver_to_vehicle_list') }}"
+                           class="btn btn-outline-secondary w-100 fw-bold"
+                           style="border-radius:10px;padding:0.65rem 0;font-size:0.88rem;">
+                            <i class="bi bi-x-lg me-1"></i>Cancel
+                        </a>
+                    </div>
                 </div>
-            </form>
+
+            </div>
         </div>
-    </div>
+
+        <!-- ══ RIGHT: Driver Insight Panel ══ -->
+        <div class="col-lg-5">
+            <div class="insight-panel">
+
+                <!-- Placeholder (shown when no driver selected) -->
+                <div id="insightPlaceholder" class="insight-placeholder">
+                    <div class="ph-icon"><i class="bi bi-person-bounding-box"></i></div>
+                    <h6>Driver Digital Profile</h6>
+                    <p>Select a driver from Step 5 to preview<br>their complete digital profile here.</p>
+                </div>
+
+                <!-- Driver Profile Card (hidden initially) -->
+                <div id="driverProfileCard" class="driver-profile-card" style="display:none;">
+                    <!-- Header -->
+                    <div class="drv-header">
+                        <div class="drv-avatar">
+                            <img id="drvPhoto" src="" alt="" style="display:none;">
+                            <i class="bi bi-person-fill" id="drvPhotoFallback"></i>
+                        </div>
+                        <div class="drv-title">
+                            <div class="name" id="drvName"></div>
+                            <div class="sub">ID: <span id="drvIdSpan"></span>&nbsp;&nbsp;|&nbsp;&nbsp;Post: <span id="drvPost"></span></div>
+                            <div class="sub">District: <span id="drvDistrict"></span></div>
+                        </div>
+                        <span class="drv-status-badge" id="drvStatus"></span>
+                    </div>
+                    <!-- Body -->
+                    <div class="drv-body">
+                        <div class="drv-field-row">
+                            <div class="drv-field">
+                                <div class="lbl"><i class="bi bi-person"></i> Father Name</div>
+                                <div class="val" id="drvFather">-</div>
+                            </div>
+                            <div class="drv-field">
+                                <div class="lbl"><i class="bi bi-credit-card-2-front"></i> CNIC No</div>
+                                <div class="val" id="drvCnic">-</div>
+                            </div>
+                            <div class="drv-field">
+                                <div class="lbl"><i class="bi bi-telephone"></i> Phone No 1</div>
+                                <div class="val" id="drvPhone1">-</div>
+                            </div>
+                            <div class="drv-field">
+                                <div class="lbl"><i class="bi bi-telephone"></i> Phone No 2</div>
+                                <div class="val" id="drvPhone2">-</div>
+                            </div>
+                            <div class="drv-field full" style="border-bottom:none;">
+                                <div class="lbl"><i class="bi bi-geo-alt"></i> Address</div>
+                                <div class="val" id="drvAddress">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div><!-- /row -->
+    </form>
+
+</div>
 </div>
 
 <script>
 $(document).ready(function() {
-    // 1. Select2 Initialize
     $('.select2-enable').select2({ theme: 'bootstrap-5', width: '100%' });
 
-    var $proj = $('#project_select'), 
-        $dist = $('#district_select'), 
-        $veh = $('#vehicle_select'), 
-        $drv = $('#driver_select');
+    var $proj = $('#project_select'),
+        $dist = $('#district_select'),
+        $veh  = $('#vehicle_select'),
+        $drv  = $('#driver_select');
 
-    // --- A. Project -> District ---
-    // 'change' event use kiya hai jo zyada reliable hai
+    // --- A. Project → District ---
     $proj.on('change', function() {
         var pid = $(this).val();
-        console.log("Project Selected ID:", pid);
-        
-        // Jab project change ho tu purane districts aur vehicles clear kar dein
         $dist.empty().append('<option value="">-- Select District --</option>').trigger('change');
         $veh.empty().append('<option value="">-- Select Vehicle --</option>').trigger('change');
-        $('#vehicle_parking_info').text('');
-
-        if(pid && pid != '0') {
-            $dist.empty().append('<option value="">Loading Districts...</option>').trigger('change');
-            $.ajax({
-                url: '/get_districts_by_project/' + pid,
-                type: 'GET',
-                success: function(data) {
-                    console.log("Districts received:", data);
-                    $dist.empty().append('<option value="">-- Select District --</option>');
-                    $.each(data, function(i, v) {
-                        $dist.append('<option value="' + v.id + '">' + v.name + '</option>');
-                    });
-                    $dist.trigger('change'); // Select2 ko update karein
-                },
-                error: function() { alert("Could not fetch districts!"); }
-            });
+        $('#vehicle_parking_info').html('');
+        if (pid && pid != '0') {
+            $dist.empty().append('<option value="">Loading...</option>').trigger('change');
+            $.getJSON('/get_districts_by_project/' + pid, function(data) {
+                $dist.empty().append('<option value="">-- Select District --</option>');
+                $.each(data, function(i, v) { $dist.append('<option value="' + v.id + '">' + v.name + '</option>'); });
+                $dist.trigger('change');
+            }).fail(function() { alert('Could not fetch districts!'); });
         }
     });
 
-    // --- B. District -> Vehicle ---
+    // --- B. District → Vehicle ---
     $dist.on('change', function() {
-        var did = $(this).val();
-        var pid = $proj.val();
-        
+        var did = $(this).val(), pid = $proj.val();
         $veh.empty().append('<option value="">-- Select Vehicle --</option>').trigger('change');
-        $('#vehicle_parking_info').text('');
-
-        if(did && pid && pid != '0') {
-            $veh.empty().append('<option value="">Loading Vehicles...</option>').trigger('change');
+        $('#vehicle_parking_info').html('');
+        if (did && pid && pid != '0') {
+            $veh.empty().append('<option value="">Loading...</option>').trigger('change');
             $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(data) {
                 $veh.empty().append('<option value="">-- Select Vehicle --</option>');
-                $.each(data, function(i, v) {
-                    $veh.append('<option value="' + v.id + '">' + v.no + '</option>');
-                });
+                $.each(data, function(i, v) { $veh.append('<option value="' + v.id + '">' + v.no + '</option>'); });
                 $veh.trigger('change');
             });
         }
     });
 
-    // --- Vehicle change -> show parking station + capacity & shift options ---
+    // --- C. Vehicle → Parking + Capacity + Shifts ---
     $veh.on('change', function() {
         var vid = $(this).val();
         var $info = $('#vehicle_parking_info');
-        var $capInfo = $('#capacity_info');
-        var $shiftSelect = $('#shift_select');
-
-        if(!vid || vid == '0') {
-            $info.removeClass('text-success text-warning').text('');
-            $capInfo.text('');
-            $shiftSelect.empty().append('<option value="">-- Select Shift --</option>');
+        var $cap  = $('#capacity_info');
+        var $shift = $('#shift_select');
+        if (!vid || vid == '0') {
+            $info.html(''); $cap.html('');
+            $shift.empty().append('<option value="">-- Select Shift --</option>');
             return;
         }
-
-        // Parking station info
-        $.getJSON('/get_vehicle_parking/' + vid, function(data) {
-            if(data.error) {
-                $info.removeClass('text-success').addClass('text-warning').text('Vehicle not found.');
-                return;
-            }
-            if(data.parking_station_name) {
-                $info.removeClass('text-warning').addClass('text-success').html('<i class="bi bi-geo-alt me-1"></i> Parking Station: <strong>' + data.parking_station_name + '</strong>');
+        $.getJSON('/get_vehicle_parking/' + vid, function(d) {
+            if (d.parking_station_name) {
+                $info.html('<span class="info-pill success"><i class="bi bi-geo-alt-fill"></i>Parking: <strong>' + d.parking_station_name + '</strong></span>');
             } else {
-                $info.removeClass('text-success').addClass('text-warning').html('<i class="bi bi-exclamation-triangle me-1"></i> Is vehicle ko pehle Parking Station assign karo.');
+                $info.html('<span class="info-pill warning"><i class="bi bi-exclamation-triangle-fill"></i>No parking assigned yet</span>');
             }
-        }).fail(function() {
-            $info.removeClass('text-success').addClass('text-warning').text('Could not load parking info.');
-        });
+        }).fail(function() { $info.html('<span class="info-pill warning">Could not load parking info</span>'); });
 
-        // Capacity + Shift: Vehicle ki driver capacity ke hisaab se Shift options show karo
-        $.getJSON('/get_vehicle_capacity_info/' + vid, function(capData) {
-            var capacity = capData.capacity || 1;
-            var occupied = capData.occupied_shifts || [];
-            if (capacity === 1) {
-                $capInfo.removeClass('text-warning text-success').addClass('text-info').html('<i class="bi bi-person me-1"></i> Capacity: 1 — Sirf <strong>Morning</strong> shift.');
+        $.getJSON('/get_vehicle_capacity_info/' + vid, function(d) {
+            var cap = d.capacity || 1;
+            if (cap === 1) {
+                $cap.html('<span class="info-pill info"><i class="bi bi-person"></i>Capacity: 1 — Morning shift only</span>');
             } else {
-                $capInfo.removeClass('text-warning text-info').addClass('text-success').html('<i class="bi bi-people me-1"></i> Capacity: 2 — <strong>Morning</strong> & <strong>Night</strong> dono shifts.');
+                $cap.html('<span class="info-pill success"><i class="bi bi-people"></i>Capacity: 2 — Morning &amp; Night</span>');
             }
-        }).fail(function() {
-            $capInfo.text('Capacity load nahi hui.');
-        });
+        }).fail(function() { $cap.html(''); });
 
         $.getJSON('/get_available_shifts/' + vid, function(shifts) {
-            $shiftSelect.empty().append('<option value="">-- Select Shift --</option>');
-            $.each(shifts, function(i, s) {
-                $shiftSelect.append('<option value="' + (s.id || s.name) + '">' + (s.name || s.id) + '</option>');
-            });
-            if (shifts.length === 0) {
-                $shiftSelect.append('<option value="" disabled>Vehicle full — no shift available</option>');
-            }
-        }).fail(function() {
-            $shiftSelect.empty().append('<option value="">-- Select Shift --</option>');
-            $capInfo.text('Shifts load nahi hue.');
-        });
+            $shift.empty().append('<option value="">-- Select Shift --</option>');
+            $.each(shifts, function(i, s) { $shift.append('<option value="' + (s.id || s.name) + '">' + (s.name || s.id) + '</option>'); });
+            if (shifts.length === 0) { $shift.append('<option value="" disabled>Vehicle full — no shift available</option>'); }
+        }).fail(function() { $shift.empty().append('<option value="">-- Select Shift --</option>'); });
     });
 
-    // --- C. Drivers Load (Page load par) ---
+    // --- D. Drivers Load ---
     function loadDrivers() {
         $.getJSON('/get_unassigned_drivers', function(data) {
             $drv.empty().append('<option value="">-- Select Driver --</option>');
-            $.each(data, function(i, v) {
-                $drv.append('<option value="' + v.id + '">' + v.name + '</option>');
-            });
+            $.each(data, function(i, v) { $drv.append('<option value="' + v.id + '">' + v.name + '</option>'); });
             $drv.trigger('change');
         });
     }
     loadDrivers();
 
-    // --- D. Driver selected → show detail card ---
+    // --- E. Driver selected → show insight panel ---
     $drv.on('change', function() {
         var did = $(this).val();
         if (!did || did == '0') {
-            $('#driverDetailWrap').hide();
+            $('#driverProfileCard').removeClass('visible').fadeOut(180, function() {
+                $('#insightPlaceholder').fadeIn(200);
+            });
             return;
         }
         $.getJSON('/get_driver_details/' + did, function(data) {
@@ -291,7 +501,6 @@ $(document).ready(function() {
             $('#drvPhone1').text(data.phone1 || '-');
             $('#drvPhone2').text(data.phone2 || '-');
             $('#drvAddress').text(data.address || '-');
-            // Photo
             if (data.photo_url) {
                 $('#drvPhoto').attr('src', data.photo_url).show();
                 $('#drvPhotoFallback').hide();
@@ -299,14 +508,17 @@ $(document).ready(function() {
                 $('#drvPhoto').hide();
                 $('#drvPhotoFallback').show();
             }
-            $('#driverDetailWrap').slideDown(200);
+            $('#insightPlaceholder').fadeOut(150, function() {
+                $('#driverProfileCard').show().addClass('visible');
+            });
         }).fail(function() {
-            $('#driverDetailWrap').hide();
+            $('#driverProfileCard').removeClass('visible').hide();
+            $('#insightPlaceholder').show();
         });
     });
 
-    // If vehicle already selected (e.g. after validation / no-parking error), show its parking
-    if($veh.val() && $veh.val() != '0') { $veh.trigger('change'); }
+    // Restore vehicle state on validation failure
+    if ($veh.val() && $veh.val() != '0') { $veh.trigger('change'); }
 });
 </script>
 {% endblock %}
