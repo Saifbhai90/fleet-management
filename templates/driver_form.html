@@ -128,7 +128,7 @@
 
         <div class="form-panel">
           <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION <small class="text-white-50 fs-6 fw-normal">v1.2 - Date Fix Applied</small></span>
+            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION <small class="text-white-50 fs-6 fw-normal">v1.3 - Final Logic Fix</small></span>
             <div class="d-flex align-items-center gap-2">
               <a href="{{ url_for('drivers_list') }}" class="btn btn-light btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>Back to List
@@ -494,53 +494,110 @@ document.addEventListener('DOMContentLoaded', function () {
     form.classList.add('was-validated');
   }, false);
 
-  // 3. Strict DD-MM-YYYY validator + Flatpickr init
-  // Only accepts: DD-MM-YYYY  (dashes only, 4-digit year)
-  // All other formats (slashes, dots, text months, shortcuts) are rejected.
-  function strictDateCheck(input) {
+  // 3. robustParse — handles 4 patterns; NO new Date() string parsing; manual month map only
+  var mmap = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
+              jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+
+  function robustParse(input) {
     if (!input || typeof input !== 'string') return null;
-    var s = input.trim();
+    var s = input.trim().toLowerCase();
+    var d, m, y;
 
-    // Must match D-M-YYYY or DD-MM-YYYY (dashes, 4-digit year)
-    if (!/^\d{1,2}-\d{1,2}-\d{4}$/.test(s)) return null;
+    // Does input have a non-alphanumeric separator?
+    var hasSep = /[-\/\. ]/.test(s);
 
-    var parts = s.split('-');
-    var di = parseInt(parts[0], 10);
-    var mi = parseInt(parts[1], 10);
-    var yi = parseInt(parts[2], 10);
+    // --- Pattern C first: detect text month (jan/feb/etc.) ---
+    var monthKey = null;
+    for (var k in mmap) {
+      if (s.indexOf(k) !== -1) { monthKey = k; break; }
+    }
 
-    if (di < 1 || di > 31 || mi < 1 || mi > 12 || yi < 1900 || yi > 2100) return null;
+    if (monthKey) {
+      var pos    = s.indexOf(monthKey);
+      var before = s.slice(0, pos).replace(/\D/g, '');      // digits before month
+      var after  = s.slice(pos + 3).replace(/\D/g, '');    // digits after month
+      if (!before || !after) return null;
+      d = before;
+      m = mmap[monthKey];
+      y = after;
 
-    // Calendar cross-check (rejects Feb 30, Apr 31, etc.)
-    var dt = new Date(yi, mi - 1, di);
-    if (dt.getDate() !== di || dt.getMonth() !== mi - 1 || dt.getFullYear() !== yi) return null;
+    } else if (!hasSep && /^\d{8}$/.test(s.replace(/\D/g, ''))) {
+      // --- Pattern A: exactly 8 digits e.g. 03031997 ---
+      var c = s.replace(/\D/g, '');
+      d = c.slice(0, 2);
+      m = c.slice(2, 4);
+      y = c.slice(4, 8);
 
-    // Return canonical zero-padded form
-    return String(di).padStart(2,'0') + '-' + String(mi).padStart(2,'0') + '-' + yi;
+    } else if (!hasSep && /^\d{6}$/.test(s.replace(/\D/g, ''))) {
+      // --- Pattern B: exactly 6 digits e.g. 030397 ---
+      var c = s.replace(/\D/g, '');
+      d = c.slice(0, 2);
+      m = c.slice(2, 4);
+      y = c.slice(4, 6);
+
+    } else if (hasSep) {
+      // --- Pattern D: numeric with separator e.g. 03-03-1997, 3/3/1997 ---
+      var sep = s.indexOf('-') !== -1 ? '-' :
+                s.indexOf('/') !== -1 ? '/' :
+                s.indexOf('.') !== -1 ? '.' : ' ';
+      var parts = s.split(sep);
+      if (parts.length !== 3) return null;
+      d = parts[0].trim();
+      m = parts[1].trim();
+      y = parts[2].trim();
+      if (!/^\d+$/.test(d) || !/^\d+$/.test(m) || !/^\d+$/.test(y)) return null;
+
+    } else {
+      return null;
+    }
+
+    // Year rule: 2-digit → expand; 4-digit → keep exactly as typed
+    if (y.length === 2) {
+      var yy = parseInt(y, 10);
+      y = (yy < 50 ? '20' : '19') + y;
+    } else if (y.length !== 4) {
+      return null;
+    }
+
+    // Zero-pad day and month
+    d = String(parseInt(d, 10)).padStart(2, '0');
+    m = String(parseInt(m, 10)).padStart(2, '0');
+
+    // Range check
+    var di = parseInt(d, 10), mi2 = parseInt(m, 10), yi = parseInt(y, 10);
+    if (di < 1 || di > 31 || mi2 < 1 || mi2 > 12 || yi < 1900 || yi > 2100) return null;
+
+    // Calendar cross-check using numeric constructor only (NOT string parsing)
+    var dt = new Date(yi, mi2 - 1, di);
+    if (dt.getDate() !== di || dt.getMonth() !== mi2 - 1 || dt.getFullYear() !== yi) return null;
+
+    return d + '-' + m + '-' + y;
   }
 
-  // Init each datepicker individually, attach blur directly to original element
+  // Init each datepicker individually
   document.querySelectorAll('.datepicker').forEach(function(el) {
     var isExpiry = el.classList.contains('expiry-trigger');
     var fp = flatpickr(el, {
       dateFormat: "d-m-Y",
       allowInput: true,
-      maxDate: isExpiry ? null : "today"  // expiry dates can be in future
+      maxDate: isExpiry ? null : "today"
     });
 
-    // Capture phase: our listener fires BEFORE Flatpickr's bubble-phase blur
-    el.addEventListener('blur', function() {
-      alert('Date Logic v1.2 Running');
+    // Capture phase + stopImmediatePropagation = our handler runs exclusively;
+    // Flatpickr's own bubble-phase blur handler is completely prevented from firing.
+    el.addEventListener('blur', function(e) {
+      e.stopImmediatePropagation();
+      alert('Date Logic v1.3 Running');
       var raw = el.value.trim();
       if (!raw) return;
 
-      var formatted = strictDateCheck(raw);
+      var formatted = robustParse(raw);
       if (formatted) {
-        fp.setDate(formatted, true, 'd-m-Y');
+        fp.setDate(formatted, true);
         updateExpiryStatus();
       } else {
         fp.clear();
-        alert('Sirf DD-MM-YYYY format use karein (e.g. 03-03-1997)');
+        alert('Invalid Date! Please use DD-MM-YYYY or 03031997');
       }
     }, true);
   });
