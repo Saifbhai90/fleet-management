@@ -494,13 +494,107 @@ document.addEventListener('DOMContentLoaded', function () {
     form.classList.add('was-validated');
   }, false);
 
-  // 3. Flatpickr Datepickers
+  // 3. Smart Date Parser + Flatpickr init
+  // monthMap uses string values to avoid any integer arithmetic bugs
+  var monthMap = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
+                  jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+
+  function _smartDateParse(s) {
+    if (!s || typeof s !== 'string') return null;
+    var str = s.trim().toLowerCase();
+    var d, m, y;
+
+    // All-digit shorthand: DDMMYY (6 digits) or DDMMYYYY (8 digits)
+    if (/^\d{6}$/.test(str)) {
+      d = str.slice(0,2); m = str.slice(2,4); y = str.slice(4,6);
+      y = +y < 50 ? '20' + y : '19' + y;
+    } else if (/^\d{8}$/.test(str)) {
+      d = str.slice(0,2); m = str.slice(2,4); y = str.slice(4,8);
+    } else {
+      // Split on -, /, ., or space
+      var parts = str.split(/[-\/\.\s]+/);
+      if (parts.length !== 3) return null;
+      d = parts[0];
+      var rawM = parts[1];
+      y = parts[2];
+
+      // Month: text name (e.g. 'mar') or numeric
+      var mKey = rawM.slice(0, 3);
+      if (monthMap[mKey]) {
+        m = monthMap[mKey];           // '03' for mar, '01' for jan, etc.
+      } else if (/^\d{1,2}$/.test(rawM)) {
+        m = rawM.padStart(2, '0');
+      } else {
+        return null;
+      }
+
+      // Expand 2-digit year
+      if (/^\d{2}$/.test(y)) {
+        y = +y < 50 ? '20' + y : '19' + y;
+      }
+    }
+
+    // Pad day to 2 digits
+    d = String(+d).padStart(2, '0');
+
+    // Integer validation
+    var di = +d, mi = +m, yi = +y;
+    if (!di || !mi || !yi || di < 1 || di > 31 || mi < 1 || mi > 12 || yi < 1900 || yi > 2100) return null;
+
+    // Date object cross-check (catches invalid days like Feb 30)
+    var dt = new Date(yi, mi - 1, di);
+    if (dt.getDate() !== di || dt.getMonth() !== mi - 1 || dt.getFullYear() !== yi) return null;
+    return dt;
+  }
+
+  // Public helper for other scripts
+  window.formatDateInput = function(value) {
+    var dt = _smartDateParse(value);
+    if (!dt) return null;
+    return String(dt.getDate()).padStart(2,'0') + '-' +
+           String(dt.getMonth()+1).padStart(2,'0') + '-' +
+           dt.getFullYear();
+  };
+
+  // Helper: show/clear error on a datepicker's parent element
+  function _dpError(instance, show) {
+    var ai = instance.altInput || instance.input;
+    var parent = instance.input.parentElement;
+    var err = parent.querySelector('.date-fmt-error');
+    if (show) {
+      ai.style.borderColor = '#dc3545';
+      ai.style.boxShadow  = '0 0 0 0.2rem rgba(220,53,69,.2)';
+      if (!err) {
+        err = document.createElement('div');
+        err.className = 'date-fmt-error text-danger small mt-1';
+        err.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Invalid date – use DD-MM-YYYY or e.g. 030326';
+        parent.appendChild(err);
+      }
+    } else {
+      ai.style.borderColor = '';
+      ai.style.boxShadow  = '';
+      if (err) err.remove();
+    }
+  }
+
   flatpickr(".datepicker", {
     dateFormat: "d-m-Y",
     allowInput: true,
     altInput: true,
     altFormat: "d-m-Y",
-    maxDate: "today"
+    maxDate: "today",
+    // Our parser replaces Flatpickr's built-in one — handles all flexible formats
+    parseDate: _smartDateParse,
+    onOpen: function(selectedDates, dateStr, instance) {
+      _dpError(instance, false);
+    },
+    onClose: function(selectedDates, dateStr, instance) {
+      var ai = instance.altInput || instance.input;
+      var raw = ai.value.trim();
+      if (!raw) { _dpError(instance, false); return; }
+      // selectedDates is empty when Flatpickr couldn't parse (our parseDate returned null)
+      _dpError(instance, selectedDates.length === 0);
+    }
   });
 
   // 4. Auto License/CNIC Status on Expiry Change and on Load
@@ -599,113 +693,6 @@ document.addEventListener('DOMContentLoaded', function () {
       }).catch(function() {});
     });
   }
-
-  // ── 9. Smart Date Formatter ───────────────────────────────────────────
-  // Parses flexible input → Date object, or null if unparseable.
-  // Accepted formats: 030326 · 03032026 · 3/3/26 · 03-Mar-26 · 03-03-2026
-  function _smartDateParse(s) {
-    if (!s) return null;
-    s = s.trim();
-    var MONTHS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
-    var d, m, y;
-
-    // All-digit shorthand: DDMMYY (6) or DDMMYYYY (8)
-    if (/^\d{6}$/.test(s)) {
-      d = +s.slice(0,2); m = +s.slice(2,4); y = +s.slice(4,6);
-      y = y < 50 ? 2000 + y : 1900 + y;
-    } else if (/^\d{8}$/.test(s)) {
-      d = +s.slice(0,2); m = +s.slice(2,4); y = +s.slice(4,8);
-    } else {
-      // Split on -, /, ., or space
-      var parts = s.split(/[-\/\.\s]+/);
-      if (parts.length !== 3) return null;
-      var mStr = parts[1].toLowerCase().slice(0,3);
-      if (MONTHS[mStr]) {
-        // dd-Mon-yy(yy)
-        d = +parts[0]; m = MONTHS[mStr]; y = +parts[2];
-      } else {
-        // dd-mm-yy(yy)  or  d-m-yy(yy)
-        d = +parts[0]; m = +parts[1]; y = +parts[2];
-      }
-      if (y < 100) y = y < 50 ? 2000 + y : 1900 + y;
-    }
-
-    // Sanity-check ranges
-    if (!d || !m || !y || d < 1 || d > 31 || m < 1 || m > 12 || y < 1900 || y > 2100) return null;
-    var dt = new Date(y, m - 1, d);
-    if (dt.getDate() !== d || dt.getMonth() !== m - 1 || dt.getFullYear() !== y) return null;
-    return dt;
-  }
-
-  // Public helper used by other scripts if needed
-  window.formatDateInput = function(value) {
-    var dt = _smartDateParse(value);
-    if (!dt) return null;
-    var dd = String(dt.getDate()).padStart(2,'0');
-    var mm = String(dt.getMonth()+1).padStart(2,'0');
-    return dd + '-' + mm + '-' + dt.getFullYear();
-  };
-
-  // Attach to every datepicker field in this form
-  document.querySelectorAll('#driverForm .datepicker').forEach(function(el) {
-    var fp = el._flatpickr;
-    if (!fp) return;
-
-    // Flatpickr may create an altInput (visible) — target that, not the hidden original
-    var activeInput = fp.altInput || fp.input;
-
-    // Remove error styling when user re-focuses the field
-    activeInput.addEventListener('focus', function() {
-      var err = el.parentElement.querySelector('.date-fmt-error');
-      if (err) err.remove();
-      activeInput.style.borderColor = '';
-      activeInput.style.boxShadow  = '';
-    });
-
-    activeInput.addEventListener('blur', function() {
-      var val = (fp.altInput ? fp.altInput.value : fp.input.value).trim();
-
-      // Empty field — nothing to do
-      if (!val) {
-        var err = el.parentElement.querySelector('.date-fmt-error');
-        if (err) err.remove();
-        activeInput.style.borderColor = '';
-        activeInput.style.boxShadow  = '';
-        return;
-      }
-
-      // Already in correct DD-MM-YYYY format — quick exit
-      if (/^\d{2}-\d{2}-\d{4}$/.test(val)) {
-        var err = el.parentElement.querySelector('.date-fmt-error');
-        if (err) err.remove();
-        activeInput.style.borderColor = '';
-        activeInput.style.boxShadow  = '';
-        return;
-      }
-
-      var formatted = window.formatDateInput(val);
-      if (formatted) {
-        // Feed back through Flatpickr so it validates, updates hidden input,
-        // and fires 'change' (which re-runs expiry status for expiry-trigger fields)
-        fp.setDate(formatted, true, 'd-m-Y');
-        var err = el.parentElement.querySelector('.date-fmt-error');
-        if (err) err.remove();
-        activeInput.style.borderColor = '';
-        activeInput.style.boxShadow  = '';
-      } else {
-        // Unparseable — highlight field and show hint
-        activeInput.style.borderColor = '#dc3545';
-        activeInput.style.boxShadow  = '0 0 0 0.2rem rgba(220,53,69,.2)';
-        var err = el.parentElement.querySelector('.date-fmt-error');
-        if (!err) {
-          err = document.createElement('div');
-          err.className = 'date-fmt-error text-danger small mt-1';
-          err.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Invalid date – use DD-MM-YYYY or e.g. 030326';
-          el.parentElement.appendChild(err);
-        }
-      }
-    });
-  });
 
 });
 </script>
