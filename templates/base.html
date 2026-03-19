@@ -2349,11 +2349,14 @@
 
     // Initialize Components
     $(document).ready(function() {
-        flatpickr(".datepicker", {
-            dateFormat: "d-m-Y",
-            allowInput: true,
-            altInput: true,
-            altFormat: "d-m-Y"
+        // Only init datepickers NOT marked for custom page-level init
+        document.querySelectorAll('.datepicker:not([data-custom-init])').forEach(function(el) {
+            flatpickr(el, {
+                dateFormat: "d-m-Y",
+                allowInput: true,
+                altInput: true,
+                altFormat: "d-m-Y"
+            });
         });
         $('.select2-enable').select2({
             theme: 'bootstrap-5',
