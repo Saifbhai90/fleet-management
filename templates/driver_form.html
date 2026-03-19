@@ -573,7 +573,8 @@ document.addEventListener('DOMContentLoaded', function () {
       maxDate: "today"
     });
 
-    // Blur fires AFTER user leaves the field — Flatpickr has not yet touched the value
+    // Capture phase = fires BEFORE Flatpickr's bubble-phase blur handler
+    // so we read the raw typed value before Flatpickr can process/clear it
     fp.altInput.addEventListener('blur', function() {
       var raw = fp.altInput.value.trim();
       if (!raw) return;
@@ -586,7 +587,7 @@ document.addEventListener('DOMContentLoaded', function () {
         fp.clear();
         alert('Please use DD-MM-YYYY or DD-MMM-YYYY  (e.g. 03-03-1997 or 03-mar-1997)');
       }
-    });
+    }, true);
   });
 
   // 4. Auto License/CNIC Status on Expiry Change and on Load
