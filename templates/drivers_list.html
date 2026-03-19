@@ -165,21 +165,21 @@
             <td>{{ driver.cnic_no|cnic_fmt or '-' }}</td>
             <td>
               {% if driver.cnic_status == 'Valid' %}
-                <span class="badge badge-sm badge-success">Valid</span>
+                <span class="badge bg-success">Valid</span>
               {% elif driver.cnic_status == 'Expired' %}
-                <span class="badge badge-sm badge-danger">Expired</span>
+                <span class="badge bg-danger">Expired</span>
               {% else %}
-                <span class="badge badge-sm badge-secondary">N/A</span>
+                <span class="badge bg-secondary">N/A</span>
               {% endif %}
             </td>
             <td>{{ driver.license_no or '-' }}</td>
             <td>
               {% if driver.license_status == 'Valid' %}
-                <span class="badge badge-sm badge-success">Valid</span>
+                <span class="badge bg-success">Valid</span>
               {% elif driver.license_status == 'Expired' %}
-                <span class="badge badge-sm badge-danger">Expired</span>
+                <span class="badge bg-danger">Expired</span>
               {% else %}
-                <span class="badge badge-sm badge-secondary">N/A</span>
+                <span class="badge bg-secondary">N/A</span>
               {% endif %}
             </td>
             <td>{{ driver.phone1|phone_fmt or '-' }}</td>

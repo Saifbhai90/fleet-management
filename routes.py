@@ -2413,6 +2413,10 @@ def driver_form(id=None):
         try:
             u = None
             form.populate_obj(driver)
+            # Always recalculate status server-side — do not rely on JS hidden fields
+            _today = date.today()
+            driver.cnic_status = ('Valid' if driver.cnic_expiry_date >= _today else 'Expired') if driver.cnic_expiry_date else None
+            driver.license_status = ('Valid' if driver.license_expiry_date >= _today else 'Expired') if driver.license_expiry_date else None
             if not id:
                 db.session.add(driver)
             db.session.commit()
@@ -13202,3 +13206,27 @@ def system_health():
         'DATABASE_URL', 'SECRET_KEY',
     ]}
     return render_template('system_health.html', data=data, env_vars_set=env_vars_set)
+
+
+@app.cli.command('fix-driver-status')
+def fix_driver_status():
+    """One-time backfill: calculate cnic_status and license_status for all drivers where it is blank."""
+    today = date.today()
+    drivers = Driver.query.all()
+    updated = 0
+    for d in drivers:
+        changed = False
+        if d.cnic_expiry_date:
+            correct = 'Valid' if d.cnic_expiry_date >= today else 'Expired'
+            if d.cnic_status != correct:
+                d.cnic_status = correct
+                changed = True
+        if d.license_expiry_date:
+            correct = 'Valid' if d.license_expiry_date >= today else 'Expired'
+            if d.license_status != correct:
+                d.license_status = correct
+                changed = True
+        if changed:
+            updated += 1
+    db.session.commit()
+    print(f'Done. {updated} driver(s) updated out of {len(drivers)} total.')
