@@ -52,6 +52,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///company_manag
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload
+app.config['TEMPLATES_AUTO_RELOAD'] = True  # Force template reload on every request
 
 # Backup: optional path to save backups; email via env MAIL_*
 app.config['BACKUP_PATH'] = os.environ.get('BACKUP_PATH', '')  # empty = no save-to-path
