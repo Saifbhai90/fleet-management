@@ -2349,7 +2349,7 @@
 
     // Initialize Components
     $(document).ready(function() {
-        // ── Global Smart Date Fields v2.0 — Total Isolation ──
+        // ── Global Smart Date Fields — Total Isolation ──
         window._smartDateRawInputs = {};
 
         window.robustParse = function(input) {
@@ -2420,7 +2420,7 @@
                     existingVal = p[2] + '-' + p[1] + '-' + p[0];
                 }
                 el.value = existingVal;
-                console.log('initSmartDate v2.0:', el.id || el.name, 'val:', existingVal);
+                console.log('initSmartDate:', el.id || el.name, 'val:', existingVal);
 
                 var fp = flatpickr(el, {
                     dateFormat: "d-m-Y",
@@ -2504,6 +2504,59 @@
             });
         });
         _sdObs.observe(document.body, { childList: true, subtree: true });
+
+        // ── Global Enter-to-Tab: move focus to next field instead of submitting ──
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter' && e.keyCode !== 13) return;
+            var el = document.activeElement;
+            if (!el) return;
+            var tag = el.tagName.toLowerCase();
+
+            // Textarea: normal Enter = newline; Ctrl+Enter = move to next field
+            if (tag === 'textarea') {
+                if (!e.ctrlKey) return;
+            }
+
+            // Submit/button: let Enter submit the form
+            if (tag === 'button' || (tag === 'input' && el.type === 'submit')) return;
+
+            // Only intercept on form fields
+            if (tag !== 'input' && tag !== 'select' && tag !== 'textarea') return;
+
+            // Find the parent form
+            var form = el.closest('form');
+            if (!form) return;
+
+            // Gather all visible, enabled, focusable elements in this form
+            var focusable = Array.prototype.slice.call(
+                form.querySelectorAll('input:not([type="hidden"]), select, textarea, button:not([disabled])')
+            ).filter(function(f) {
+                if (f.disabled) return false;
+                if (f.offsetParent === null && f.type !== 'hidden') return false;
+                return true;
+            });
+
+            var idx = focusable.indexOf(el);
+
+            // Last field or not found → allow normal Enter (form submit)
+            if (idx === -1 || idx >= focusable.length - 1) return;
+
+            // Prevent form submission
+            e.preventDefault();
+            e.stopPropagation();
+
+            var nextEl = focusable[idx + 1];
+
+            // If current field is a datepicker, trigger blur first so smart date logic runs,
+            // then move focus after the setTimeout(20) in the blur handler completes
+            if (el.classList && el.classList.contains('datepicker')) {
+                el.blur();
+                setTimeout(function() { nextEl.focus(); }, 30);
+            } else {
+                nextEl.focus();
+            }
+        });
+
         $('.select2-enable').select2({
             theme: 'bootstrap-5',
             width: '100%'
