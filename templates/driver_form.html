@@ -128,7 +128,7 @@
 
         <div class="form-panel">
           <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION <small class="text-white-50 fs-6 fw-normal">v1.9 - Manual Input Control</small></span>
+            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION</span>
             <div class="d-flex align-items-center gap-2">
               <a href="{{ url_for('drivers_list') }}" class="btn btn-light btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>Back to List
@@ -157,7 +157,7 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Application Date</label>
-                {{ form.application_date(class="form-control datepicker", required=True, data_custom_init="true") }}
+                {{ form.application_date(class="form-control datepicker", required=True, ) }}
                 {% for error in form.application_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -179,7 +179,7 @@
               </div>
               <div class="col-md-2">
                 <label class="form-label required">Date of Birth</label>
-                {{ form.dob(class="form-control datepicker", required=True, data_custom_init="true") }}
+                {{ form.dob(class="form-control datepicker", required=True, ) }}
                 {% for error in form.dob.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -251,14 +251,14 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">CNIC Issue Date</label>
-                {{ form.cnic_issue_date(class="form-control datepicker", required=True, data_custom_init="true") }}
+                {{ form.cnic_issue_date(class="form-control datepicker", required=True, ) }}
                 {% for error in form.cnic_issue_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label required">CNIC Expiry Date</label>
-                {{ form.cnic_expiry_date(class="form-control datepicker expiry-trigger", data_target="cnic_status_display", data_hidden="cnic_status_hidden", required=True, data_custom_init="true") }}
+                {{ form.cnic_expiry_date(class="form-control datepicker expiry-trigger", data_target="cnic_status_display", data_hidden="cnic_status_hidden", required=True, ) }}
                 {% for error in form.cnic_expiry_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -295,14 +295,14 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">License Issue Date</label>
-                {{ form.license_issue_date(class="form-control datepicker", required=True, data_custom_init="true") }}
+                {{ form.license_issue_date(class="form-control datepicker", required=True, ) }}
                 {% for error in form.license_issue_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label required">License Expiry Date</label>
-                {{ form.license_expiry_date(class="form-control datepicker expiry-trigger", data_target="license_status_display", data_hidden="license_status_hidden", required=True, data_custom_init="true") }}
+                {{ form.license_expiry_date(class="form-control datepicker expiry-trigger", data_target="license_status_display", data_hidden="license_status_hidden", required=True, ) }}
                 {% for error in form.license_expiry_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -472,58 +472,6 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
-  // ── robustParse: exact user-provided logic (v1.8, proven correct) ──
-  function robustParse(input) {
-      if (!input) return null;
-      let raw = input.toLowerCase().trim();
-      let d, m, y;
-
-      // CASE 1: 8 Digits ONLY (03031997)
-      if (/^\d{8}$/.test(raw)) {
-          d = raw.substring(0, 2);
-          m = raw.substring(2, 4);
-          y = raw.substring(4, 8);
-      }
-      // CASE 2: 6 Digits ONLY (030397)
-      else if (/^\d{6}$/.test(raw)) {
-          d = raw.substring(0, 2);
-          m = raw.substring(2, 4);
-          y = raw.substring(4, 6);
-      }
-      // CASE 3: Text Month (03-mar-1997 or 3 mar 97)
-      else if (/[a-z]{3}/.test(raw)) {
-          const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
-          let parts = raw.split(/[^a-z0-9]/).filter(x => x.length > 0);
-          if (parts.length === 3) {
-              d = parts[0].padStart(2, '0');
-              let monthKey = parts[1].substring(0, 3);
-              m = months[monthKey] || null;
-              y = parts[2];
-          }
-      }
-      // CASE 4: Standard with separators (03-03-1997)
-      else {
-          let parts = raw.split(/[^0-9]/).filter(x => x.length > 0);
-          if (parts.length === 3) {
-              d = parts[0].padStart(2, '0');
-              m = parts[1].padStart(2, '0');
-              y = parts[2];
-          }
-      }
-
-      if (!d || !m || !y || isNaN(d) || isNaN(m)) return null;
-
-      // Year Correction
-      if (y.length === 2) {
-          y = (parseInt(y) < 50) ? '20' + y : '19' + y;
-      }
-
-      // Basic Boundary Check
-      if (parseInt(d) > 31 || parseInt(m) > 12 || y.length !== 4) return null;
-
-      return d + '-' + m + '-' + y;
-  }
-
   // 1. Auto Generate Driver ID
   var driverIdField = document.getElementById('driver_id_field');
   function generateID() {
@@ -546,50 +494,9 @@ document.addEventListener('DOMContentLoaded', function () {
     form.classList.add('was-validated');
   }, false);
 
-  // 3. Global raw input tracker — captures keystrokes BEFORE Flatpickr can touch them
-  let rawInputs = {};
-
-  // 4. Initialize Flatpickr as calendar-only (NO onClose/onChange for parsing)
-  document.querySelectorAll('.datepicker').forEach(function(el) {
-      var isExpiry = el.classList.contains('expiry-trigger');
-      flatpickr(el, {
-          dateFormat: "d-m-Y",
-          allowInput: true,
-          clickOpens: true,
-          maxDate: isExpiry ? null : "today"
-      });
-
-      // Track every keystroke into rawInputs BEFORE Flatpickr can corrupt it
-      el.addEventListener('input', function(e) {
-          rawInputs[el.id] = e.target.value;
-      });
-
-      // Capture-phase blur — fires BEFORE Flatpickr's bubble-phase blur
-      el.addEventListener('blur', function(e) {
-          e.stopImmediatePropagation();
-
-          // Get the raw value we saved (untouched by Flatpickr)
-          var typedValue = rawInputs[el.id];
-          if (!typedValue || typedValue.trim() === '') return;
-
-          // If already in correct DD-MM-YYYY format, Flatpickr handled it (calendar click)
-          if (/^\d{2}-\d{2}-\d{4}$/.test(typedValue.trim())) return;
-
-          // Run our parser on the raw input
-          var formatted = robustParse(typedValue);
-          if (formatted) {
-              el._flatpickr.setDate(formatted, false);
-              el.value = formatted;
-              rawInputs[el.id] = formatted;
-              updateExpiryStatus();
-          } else {
-              alert('Ghalat Format! Sahi tareeqa: 03031997 ya 03-mar-1997');
-              el._flatpickr.clear();
-              el.value = '';
-              rawInputs[el.id] = '';
-              updateExpiryStatus();
-          }
-      }, true);  // true = CAPTURE PHASE
+  // 3. Set maxDate for non-expiry date fields (global init already ran from base.html)
+  document.querySelectorAll('.datepicker:not(.expiry-trigger)').forEach(function(el) {
+      if (el._flatpickr) el._flatpickr.set('maxDate', 'today');
   });
 
   // 4. Auto License/CNIC Status on Expiry Change and on Load

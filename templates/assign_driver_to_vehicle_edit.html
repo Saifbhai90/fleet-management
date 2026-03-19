@@ -144,12 +144,6 @@ $(document).ready(function() {
         }
     });
 
-    $('.datepicker').datepicker({
-        format: 'yyyy-mm-dd',
-        autoclose: true,
-        todayHighlight: true
-    });
-
     // Vehicle change → Capacity ke hisaab se Shift options (edit: current driver exclude)
     var currentDriverId = {{ driver.id|default(0)|tojson }};
     $veh.on('change', function() {

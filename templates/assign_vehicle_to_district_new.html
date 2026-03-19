@@ -195,13 +195,13 @@ $(document).ready(function() {
             if ($vehicleSelect.length && $vehicleSelect.data('select2')) {
                 $vehicleSelect.val('0').trigger('change');
             }
-            // Date
+            // Date — clear via Flatpickr API
             var $dateInput = $form.find('.datepicker');
             if ($dateInput.length) {
-                $dateInput.val('');
-                if ($dateInput.data('datepicker')) {
-                    $dateInput.datepicker('setDate', null);
-                }
+                $dateInput.each(function() {
+                    if (this._flatpickr) this._flatpickr.clear();
+                    this.value = '';
+                });
             }
             // Remarks already cleared by native reset
         }, 0);

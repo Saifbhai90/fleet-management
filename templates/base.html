@@ -2349,15 +2349,75 @@
 
     // Initialize Components
     $(document).ready(function() {
-        // Only init datepickers NOT marked for custom page-level init
-        document.querySelectorAll('.datepicker:not([data-custom-init])').forEach(function(el) {
-            flatpickr(el, {
-                dateFormat: "d-m-Y",
-                allowInput: true,
-                altInput: true,
-                altFormat: "d-m-Y"
+        // ── Global Smart Date Fields (v1.9 Expert Logic) ──
+        window._smartDateRawInputs = {};
+
+        window.robustParse = function(input) {
+            if (!input) return null;
+            var raw = input.toLowerCase().trim();
+            var d, m, y;
+            if (/^\d{8}$/.test(raw)) {
+                d = raw.substring(0, 2); m = raw.substring(2, 4); y = raw.substring(4, 8);
+            } else if (/^\d{6}$/.test(raw)) {
+                d = raw.substring(0, 2); m = raw.substring(2, 4); y = raw.substring(4, 6);
+            } else if (/[a-z]{3}/.test(raw)) {
+                var months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+                var parts = raw.split(/[^a-z0-9]/).filter(function(x){ return x.length > 0; });
+                if (parts.length === 3) {
+                    d = parts[0].length < 2 ? '0' + parts[0] : parts[0];
+                    var monthKey = parts[1].substring(0, 3);
+                    m = months[monthKey] || null;
+                    y = parts[2];
+                }
+            } else {
+                var parts2 = raw.split(/[^0-9]/).filter(function(x){ return x.length > 0; });
+                if (parts2.length === 3) {
+                    d = parts2[0].length < 2 ? '0' + parts2[0] : parts2[0];
+                    m = parts2[1].length < 2 ? '0' + parts2[1] : parts2[1];
+                    y = parts2[2];
+                }
+            }
+            if (!d || !m || !y || isNaN(d) || isNaN(m)) return null;
+            if (y.length === 2) { y = (parseInt(y) < 50) ? '20' + y : '19' + y; }
+            if (parseInt(d) > 31 || parseInt(m) > 12 || y.length !== 4) return null;
+            return d + '-' + m + '-' + y;
+        };
+
+        window.initSmartDateFields = function(selector) {
+            document.querySelectorAll(selector).forEach(function(el) {
+                if (el._smartDateInit) return;
+                el._smartDateInit = true;
+                flatpickr(el, {
+                    dateFormat: "d-m-Y",
+                    allowInput: true,
+                    clickOpens: true
+                });
+                el.addEventListener('input', function(e) {
+                    window._smartDateRawInputs[el.id || el.name] = e.target.value;
+                });
+                el.addEventListener('blur', function(e) {
+                    e.stopImmediatePropagation();
+                    var key = el.id || el.name;
+                    var typedValue = window._smartDateRawInputs[key];
+                    if (!typedValue || typedValue.trim() === '') return;
+                    if (/^\d{2}-\d{2}-\d{4}$/.test(typedValue.trim())) return;
+                    var formatted = window.robustParse(typedValue);
+                    if (formatted) {
+                        el._flatpickr.setDate(formatted, false);
+                        el.value = formatted;
+                        window._smartDateRawInputs[key] = formatted;
+                        el.dispatchEvent(new Event('change', {bubbles: true}));
+                    } else {
+                        alert('Ghalat Format! Sahi tareeqa: 03031997 ya 03-mar-1997');
+                        el._flatpickr.clear();
+                        el.value = '';
+                        window._smartDateRawInputs[key] = '';
+                    }
+                }, true);
             });
-        });
+        };
+
+        window.initSmartDateFields('.datepicker');
         $('.select2-enable').select2({
             theme: 'bootstrap-5',
             width: '100%'
