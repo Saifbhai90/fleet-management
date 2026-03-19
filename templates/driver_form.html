@@ -583,17 +583,31 @@ document.addEventListener('DOMContentLoaded', function () {
     altInput: true,
     altFormat: "d-m-Y",
     maxDate: "today",
-    // Our parser replaces Flatpickr's built-in one — handles all flexible formats
-    parseDate: _smartDateParse,
+    onReady: function(selectedDates, dateStr, instance) {
+      // Capture every keystroke BEFORE Flatpickr gets to munge the value
+      var ai = instance.altInput || instance.input;
+      ai.addEventListener('input', function() {
+        ai._rawTyped = ai.value;
+      });
+    },
     onOpen: function(selectedDates, dateStr, instance) {
       _dpError(instance, false);
     },
     onClose: function(selectedDates, dateStr, instance) {
       var ai = instance.altInput || instance.input;
-      var raw = ai.value.trim();
+      // Use the captured raw value; if user picked from calendar _rawTyped is null
+      var raw = (ai._rawTyped != null ? ai._rawTyped : ai.value).trim();
+      ai._rawTyped = null;
+
       if (!raw) { _dpError(instance, false); return; }
-      // selectedDates is empty when Flatpickr couldn't parse (our parseDate returned null)
-      _dpError(instance, selectedDates.length === 0);
+
+      var formatted = window.formatDateInput(raw);
+      if (formatted) {
+        instance.setDate(formatted, true, 'd-m-Y');
+        _dpError(instance, false);
+      } else {
+        _dpError(instance, true);
+      }
     }
   });
 
