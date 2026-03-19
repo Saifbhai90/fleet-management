@@ -519,19 +519,18 @@ document.addEventListener('DOMContentLoaded', function () {
     return String(di).padStart(2,'0') + '-' + String(mi).padStart(2,'0') + '-' + yi;
   }
 
-  // Init each datepicker individually, attach blur directly to altInput
+  // Init each datepicker individually, attach blur directly to original element
   document.querySelectorAll('.datepicker').forEach(function(el) {
+    var isExpiry = el.classList.contains('expiry-trigger');
     var fp = flatpickr(el, {
       dateFormat: "d-m-Y",
       allowInput: true,
-      altInput: true,
-      altFormat: "d-m-Y",
-      maxDate: "today"
+      maxDate: isExpiry ? null : "today"  // expiry dates can be in future
     });
 
-    // Capture phase fires BEFORE Flatpickr's bubble-phase blur handler
-    fp.altInput.addEventListener('blur', function() {
-      var raw = fp.altInput.value.trim();
+    // Capture phase: our listener fires BEFORE Flatpickr's bubble-phase blur
+    el.addEventListener('blur', function() {
+      var raw = el.value.trim();
       if (!raw) return;
 
       var formatted = strictDateCheck(raw);
