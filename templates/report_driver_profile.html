@@ -745,28 +745,54 @@
   /* Start pre-fetching in background as soon as page loads */
   window.addEventListener('load', function() { _prefetchForPrint(); });
 
-  /* Print button: ensure pre-fetch is done before opening print dialog */
+  /* Print button: same pipeline as PDF — renders via html2canvas, opens PDF blob in new tab */
   function doPrint() {
     var pb = document.getElementById('printBtn');
-    var needsFetch = Array.from(document.querySelectorAll('img')).some(function(img) {
-      var s = img.getAttribute('src') || '';
-      return _isCrossOrigin(s) && !_printBlobMap[s];
-    });
-    if (!needsFetch) { window.print(); return; }
-    if (pb) { pb.disabled = true; pb.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...'; }
-    var safety = setTimeout(function() {
-      if (pb) { pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; }
-      window.print();
-    }, 25000);
-    _prefetchForPrint().then(function() {
-      clearTimeout(safety);
-      if (pb) { pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; }
-      window.print();
-    }).catch(function() {
-      clearTimeout(safety);
-      if (pb) { pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; }
-      window.print();
-    });
+    pb.disabled = true;
+    pb.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing...';
+    var wm = document.getElementById('pdfWatermark');
+    var globalTimer;
+    function resetBtn() {
+      clearTimeout(globalTimer);
+      pb.disabled = false;
+      pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
+      if (wm) wm.style.display = 'none';
+    }
+    globalTimer = setTimeout(function() { console.warn('Print timed out'); resetBtn(); }, 90000);
+    try {
+      if (wm) {
+        var d = new Date();
+        var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
+                 ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+        var pdfDateEl = document.getElementById('pdfDate');
+        if (pdfDateEl) pdfDateEl.textContent = ds;
+        wm.style.display = 'block';
+      }
+      var el = document.getElementById('profile-content');
+      var job = _proxyImages(el);
+      Promise.all(job.waits).then(function() {
+        var opt = {
+          margin: [10, 10, 10, 10],
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: { scale: 2, useCORS: false, allowTaint: true, letterRendering: true, logging: false },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        html2pdf().set(opt).from(el).output('blob')
+          .then(function(blob) {
+            job.restore();
+            resetBtn();
+            var pdfUrl = URL.createObjectURL(blob);
+            var win = window.open(pdfUrl, '_blank');
+            if (!win) {
+              alert('Pop-up blocked — please allow pop-ups for this site, then click Print again.');
+              URL.revokeObjectURL(pdfUrl);
+            } else {
+              setTimeout(function() { try { URL.revokeObjectURL(pdfUrl); } catch(e) {} }, 120000);
+            }
+          })
+          .catch(function(err) { console.error('Print render error:', err); job.restore(); resetBtn(); });
+      }).catch(function(err) { console.error('Proxy error:', err); job.restore(); resetBtn(); });
+    } catch(err) { console.error('Print exception:', err); resetBtn(); }
   }
 
   /* ── Shared proxy helper (used by PDF) ── */
