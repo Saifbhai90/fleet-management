@@ -329,7 +329,7 @@
     <div class="d-flex align-items-center">
       {% if driver.photo_path %}
       <img src="{{ driver.photo_path | media_url }}" alt=""
-           class="photo-circle" crossorigin="anonymous"
+           class="photo-circle"
            onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
       <div class="photo-placeholder" style="display:none;"><i class="bi bi-person-fill"></i></div>
       {% else %}
@@ -543,7 +543,7 @@
         <div class="doc-photo-label"><i class="bi bi-person-fill me-1"></i>Driver Photo</div>
         {% if driver.photo_path %}
         <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.photo_path | media_url }}','Driver Photo')">
-          <img src="{{ driver.photo_path | media_url }}" alt="Driver Photo" crossorigin="anonymous"
+          <img src="{{ driver.photo_path | media_url }}" alt="Driver Photo"
                onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
           <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
         </div>
@@ -557,7 +557,7 @@
         <div class="doc-photo-label"><i class="bi bi-person-vcard me-1"></i>CNIC Front</div>
         {% if driver.cnic_front_path %}
         <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.cnic_front_path | media_url }}','CNIC Front')">
-          <img src="{{ driver.cnic_front_path | media_url }}" alt="CNIC Front" crossorigin="anonymous"
+          <img src="{{ driver.cnic_front_path | media_url }}" alt="CNIC Front"
                onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
           <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
         </div>
@@ -571,7 +571,7 @@
         <div class="doc-photo-label"><i class="bi bi-person-vcard-fill me-1"></i>CNIC Back</div>
         {% if driver.cnic_back_path %}
         <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.cnic_back_path | media_url }}','CNIC Back')">
-          <img src="{{ driver.cnic_back_path | media_url }}" alt="CNIC Back" crossorigin="anonymous"
+          <img src="{{ driver.cnic_back_path | media_url }}" alt="CNIC Back"
                onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
           <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
         </div>
@@ -585,7 +585,7 @@
         <div class="doc-photo-label"><i class="bi bi-card-checklist me-1"></i>License Front</div>
         {% if driver.license_front_path %}
         <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.license_front_path | media_url }}','License Front')">
-          <img src="{{ driver.license_front_path | media_url }}" alt="License Front" crossorigin="anonymous"
+          <img src="{{ driver.license_front_path | media_url }}" alt="License Front"
                onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
           <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
         </div>
@@ -599,7 +599,7 @@
         <div class="doc-photo-label"><i class="bi bi-card-checklist me-1"></i>License Back</div>
         {% if driver.license_back_path %}
         <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.license_back_path | media_url }}','License Back')">
-          <img src="{{ driver.license_back_path | media_url }}" alt="License Back" crossorigin="anonymous"
+          <img src="{{ driver.license_back_path | media_url }}" alt="License Back"
                onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
           <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
         </div>
@@ -709,22 +709,35 @@
       }
       var el = document.getElementById('profile-content');
       var imgs = Array.from(el.querySelectorAll('img'));
+      /* Swap cross-origin R2 URLs through the Flask proxy so html2canvas
+         can capture them from same origin (no CORS taint issue) */
+      var origSrcs = imgs.map(function(img) { return img.getAttribute('src') || ''; });
       var waits = imgs.map(function(img) {
+        var src = img.getAttribute('src') || '';
+        if (src && src.startsWith('http') && src.indexOf(location.hostname) === -1) {
+          return new Promise(function(res) {
+            img.onload = res; img.onerror = res;
+            img.setAttribute('src', '/image-proxy?url=' + encodeURIComponent(src));
+          });
+        }
         if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
         return new Promise(function(res) { img.onload = res; img.onerror = res; });
       });
+      function restoreSrcs() {
+        imgs.forEach(function(img, i) { if (origSrcs[i]) img.setAttribute('src', origSrcs[i]); });
+      }
       Promise.all(waits).then(function() {
         var opt = {
           margin: [10, 10, 10, 10],
           filename: 'Driver_Profile_{{ driver.driver_id }}.pdf',
           image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, allowTaint: false, letterRendering: true, logging: false },
+          html2canvas: { scale: 2, useCORS: false, allowTaint: true, letterRendering: true, logging: false },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
         html2pdf().set(opt).from(el).save()
-          .then(function() { resetBtn(); })
-          .catch(function(err) { console.error('PDF error:', err); resetBtn(); });
-      }).catch(function(err) { console.error('Image load error:', err); resetBtn(); });
+          .then(function() { restoreSrcs(); resetBtn(); })
+          .catch(function(err) { console.error('PDF error:', err); restoreSrcs(); resetBtn(); });
+      }).catch(function(err) { console.error('Image load error:', err); restoreSrcs(); resetBtn(); });
     } catch(err) {
       console.error('PDF exception:', err);
       resetBtn();

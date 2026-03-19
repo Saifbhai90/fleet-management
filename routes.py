@@ -474,6 +474,26 @@ def uploaded_file(filename):
         return '', 404
     return send_from_directory(base, filename)
 
+@app.route('/image-proxy')
+def image_proxy():
+    """Proxy an external image (R2) through Flask so html2canvas can capture it same-origin."""
+    import urllib.request as _urllib_req
+    url = request.args.get('url', '').strip()
+    if not url or not (url.startswith('https://') or url.startswith('http://')):
+        return '', 400
+    try:
+        req_obj = _urllib_req.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with _urllib_req.urlopen(req_obj, timeout=10) as resp:
+            data = resp.read()
+            content_type = resp.headers.get('Content-Type', 'image/jpeg')
+        return data, 200, {
+            'Content-Type': content_type,
+            'Cache-Control': 'public, max-age=3600',
+            'Access-Control-Allow-Origin': '*',
+        }
+    except Exception:
+        return '', 502
+
 @app.template_filter('media_url')
 def media_url_filter(path):
     """Convert a stored file path (local relative or R2 full URL) to a usable URL."""
