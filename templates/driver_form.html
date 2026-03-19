@@ -128,7 +128,7 @@
 
         <div class="form-panel">
           <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION <small class="text-white-50 fs-6 fw-normal">v1.5 - Debugging Logic</small></span>
+            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION <small class="text-white-50 fs-6 fw-normal">v1.6 - Direct Trigger Mode</small></span>
             <div class="d-flex align-items-center gap-2">
               <a href="{{ url_for('drivers_list') }}" class="btn btn-light btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>Back to List
@@ -157,7 +157,7 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Application Date</label>
-                {{ form.application_date(class="form-control datepicker", required=True) }}
+                {{ form.application_date(class="form-control datepicker", required=True, onblur="handleDateBlur(this)") }}
                 {% for error in form.application_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -179,7 +179,7 @@
               </div>
               <div class="col-md-2">
                 <label class="form-label required">Date of Birth</label>
-                {{ form.dob(class="form-control datepicker", required=True) }}
+                {{ form.dob(class="form-control datepicker", required=True, onblur="handleDateBlur(this)") }}
                 {% for error in form.dob.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -251,14 +251,14 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">CNIC Issue Date</label>
-                {{ form.cnic_issue_date(class="form-control datepicker", required=True) }}
+                {{ form.cnic_issue_date(class="form-control datepicker", required=True, onblur="handleDateBlur(this)") }}
                 {% for error in form.cnic_issue_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label required">CNIC Expiry Date</label>
-                {{ form.cnic_expiry_date(class="form-control datepicker expiry-trigger", data_target="cnic_status_display", data_hidden="cnic_status_hidden", required=True) }}
+                {{ form.cnic_expiry_date(class="form-control datepicker expiry-trigger", data_target="cnic_status_display", data_hidden="cnic_status_hidden", required=True, onblur="handleDateBlur(this)") }}
                 {% for error in form.cnic_expiry_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -295,14 +295,14 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">License Issue Date</label>
-                {{ form.license_issue_date(class="form-control datepicker", required=True) }}
+                {{ form.license_issue_date(class="form-control datepicker", required=True, onblur="handleDateBlur(this)") }}
                 {% for error in form.license_issue_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label required">License Expiry Date</label>
-                {{ form.license_expiry_date(class="form-control datepicker expiry-trigger", data_target="license_status_display", data_hidden="license_status_hidden", required=True) }}
+                {{ form.license_expiry_date(class="form-control datepicker expiry-trigger", data_target="license_status_display", data_hidden="license_status_hidden", required=True, onblur="handleDateBlur(this)") }}
                 {% for error in form.license_expiry_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -471,6 +471,109 @@
 
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
 <script>
+alert('JS v1.6 Loaded');
+
+// ── GLOBAL SCOPE: Month Map + Parser + Blur Handler ──
+var mmap = {
+    jan:'01', feb:'02', mar:'03', apr:'04', may:'05', jun:'06',
+    jul:'07', aug:'08', sep:'09', oct:'10', nov:'11', dec:'12'
+};
+
+function robustParse(input) {
+    if (!input) return null;
+    var raw = input.trim();
+    var d = '', m = '', y = '';
+
+    // Strip all non-alphanumeric to detect pattern
+    var clean = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // CASE A: Pure 8 digits like 03031997
+    if (/^\d{8}$/.test(clean)) {
+        d = clean.substr(0, 2);
+        m = clean.substr(2, 2);
+        y = clean.substr(4, 4);
+    }
+    // CASE B: Pure 6 digits like 030397
+    else if (/^\d{6}$/.test(clean)) {
+        d = clean.substr(0, 2);
+        m = clean.substr(2, 2);
+        y = clean.substr(4, 2);
+    }
+    // CASE C: Contains letters like 03mar1997 or 3mar97
+    else if (/[a-z]/.test(clean)) {
+        var foundMonth = '';
+        for (var key in mmap) {
+            if (clean.indexOf(key) !== -1) {
+                foundMonth = key;
+                break;
+            }
+        }
+        if (!foundMonth) return null;
+        var pos = clean.indexOf(foundMonth);
+        d = clean.substr(0, pos);
+        m = mmap[foundMonth];
+        y = clean.substr(pos + 3);
+        if (!d || !y) return null;
+    }
+    // CASE D: Has separators like 03-03-1997 or 03/03/1997
+    else {
+        var parts = raw.split(/[-/. ]/);
+        if (parts.length === 3) {
+            d = parts[0].trim();
+            m = parts[1].trim();
+            y = parts[2].trim();
+        }
+    }
+
+    if (!d || !m || !y) return null;
+
+    // Pad day to 2 digits
+    d = String(parseInt(d, 10));
+    if (d.length === 1) d = '0' + d;
+
+    // Pad month to 2 digits (if numeric)
+    if (/^\d+$/.test(m)) {
+        m = String(parseInt(m, 10));
+        if (m.length === 1) m = '0' + m;
+    }
+
+    // YEAR GUARD: 4 digits = DO NOT TOUCH. 2 digits = expand. Else = invalid.
+    if (y.length === 4) {
+        // Keep as is
+    } else if (y.length === 2) {
+        var yy = parseInt(y, 10);
+        y = (yy < 50) ? '20' + y : '19' + y;
+    } else {
+        return null;
+    }
+
+    // STRICT VALIDATION
+    var di = parseInt(d, 10);
+    var mi = parseInt(m, 10);
+    var yi = parseInt(y, 10);
+    if (di < 1 || di > 31) return null;
+    if (mi < 1 || mi > 12) return null;
+    if (yi < 1920 || yi > 2050) return null;
+
+    return d + '-' + m + '-' + y;
+}
+
+function handleDateBlur(el) {
+    alert('Blur detected on: ' + el.id + ' Value: ' + el.value);
+    if (!el.value || el.value.trim() === '') return;
+
+    var formatted = robustParse(el.value);
+    if (formatted) {
+        el._flatpickr.setDate(formatted, true, 'd-m-Y');
+        if (typeof updateExpiryStatus === 'function') updateExpiryStatus();
+    } else {
+        alert('Invalid Year or Date!');
+        el.value = '';
+        el._flatpickr.clear();
+    }
+}
+
+// ── DOMContentLoaded: Everything else ──
 document.addEventListener('DOMContentLoaded', function () {
   // 1. Auto Generate Driver ID
   const driverIdField = document.getElementById('driver_id_field');
@@ -494,121 +597,7 @@ document.addEventListener('DOMContentLoaded', function () {
     form.classList.add('was-validated');
   }, false);
 
-  // 3. Simple Month Map
-  const mmap = {
-      jan:'01', feb:'02', mar:'03', apr:'04', may:'05', jun:'06',
-      jul:'07', aug:'08', sep:'09', oct:'10', nov:'11', dec:'12'
-  };
-
-  function robustParse(input) {
-      if (!input) return null;
-      let raw = input.trim();
-      let d = '', m = '', y = '';
-
-      // Step 1: Strip all non-alphanumeric to detect pattern
-      let clean = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-      // CASE A: Pure 8 digits like 03031997
-      if (/^\d{8}$/.test(clean)) {
-          d = clean.substr(0, 2);
-          m = clean.substr(2, 2);
-          y = clean.substr(4, 4);
-      }
-      // CASE B: Pure 6 digits like 030397
-      else if (/^\d{6}$/.test(clean)) {
-          d = clean.substr(0, 2);
-          m = clean.substr(2, 2);
-          y = clean.substr(4, 2);
-      }
-      // CASE C: Contains letters like 03mar1997 or 3mar97
-      else if (/[a-z]/.test(clean)) {
-          // Find the month name
-          let foundMonth = '';
-          for (let key in mmap) {
-              if (clean.indexOf(key) !== -1) {
-                  foundMonth = key;
-                  break;
-              }
-          }
-          if (!foundMonth) return null;
-          let pos = clean.indexOf(foundMonth);
-          d = clean.substr(0, pos);           // digits before month
-          m = mmap[foundMonth];                // month number from map
-          y = clean.substr(pos + 3);           // digits after month
-          if (!d || !y) return null;
-      }
-      // CASE D: Has separators like 03-03-1997 or 03/03/1997
-      else {
-          let parts = raw.split(/[-/. ]/);
-          if (parts.length === 3) {
-              d = parts[0].trim();
-              m = parts[1].trim();
-              y = parts[2].trim();
-          }
-      }
-
-      // If any part is missing, it's invalid
-      if (!d || !m || !y) return null;
-
-      // Pad day and month to 2 digits
-      d = String(parseInt(d, 10));
-      if (d.length === 1) d = '0' + d;
-
-      // Month: if already numeric, pad; if from map, already padded
-      if (/^\d+$/.test(m)) {
-          m = String(parseInt(m, 10));
-          if (m.length === 1) m = '0' + m;
-      }
-
-      // YEAR GUARD: Only expand if exactly 2 digits. If 4 digits, DO NOT TOUCH.
-      if (y.length === 4) {
-          // Keep as is - DO NOT ADD ANYTHING
-      } else if (y.length === 2) {
-          let yy = parseInt(y, 10);
-          if (yy < 50) {
-              y = '20' + y;
-          } else {
-              y = '19' + y;
-          }
-      } else {
-          // Year is not 2 or 4 digits = invalid
-          return null;
-      }
-
-      // DEBUG ALERT - will be removed after fixing
-      alert('Original: ' + input + '\nClean: ' + clean + '\nParsed as: ' + d + '-' + m + '-' + y);
-
-      // STRICT VALIDATION
-      let di = parseInt(d, 10);
-      let mi = parseInt(m, 10);
-      let yi = parseInt(y, 10);
-
-      if (di < 1 || di > 31) return null;
-      if (mi < 1 || mi > 12) return null;
-      if (yi < 1920 || yi > 2050) return null;
-
-      return d + '-' + m + '-' + y;
-  }
-
-  // CRITICAL: Register blur listeners FIRST, BEFORE Flatpickr init.
-  document.querySelectorAll('.datepicker').forEach(el => {
-      el.addEventListener('blur', function(e) {
-          let val = this.value;
-          if (!val || val.trim() === '') return;
-
-          let formatted = robustParse(val);
-          if (formatted) {
-              this._flatpickr.setDate(formatted, true, 'd-m-Y');
-              if (typeof updateExpiryStatus === 'function') updateExpiryStatus();
-          } else {
-              alert('Invalid Year or Date!');
-              this.value = '';
-              this._flatpickr.clear();
-          }
-      }, true);
-  });
-
-  // THEN initialize Flatpickr (its blur handler registers AFTER ours)
+  // 3. Initialize Flatpickr on all date fields
   document.querySelectorAll('.datepicker').forEach(function(el) {
       var isExpiry = el.classList.contains('expiry-trigger');
       flatpickr(el, {
