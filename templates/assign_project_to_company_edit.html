@@ -60,8 +60,7 @@
                 <label class="form-label fw-semibold text-secondary small text-uppercase">Assignment Date <span class="text-danger">*</span></label>
                 <div class="input-group">
                   <span class="input-group-text bg-light text-warning"><i class="bi bi-calendar-event"></i></span>
-                  <input type="date" name="assign_date" id="assign_date" class="form-control {{ 'is-invalid' if form.assign_date.errors else '' }}"
-                         value="{% if form.assign_date.data %}{{ form.assign_date.data.strftime('%Y-%m-%d') }}{% elif project.assign_date %}{{ project.assign_date.strftime('%Y-%m-%d') }}{% endif %}">
+                  {{ form.assign_date(class="form-control datepicker " + ("is-invalid" if form.assign_date.errors else ""), placeholder="dd-mm-yyyy") }}
                 </div>
                 {% for error in form.assign_date.errors %}
                 <div class="text-danger small mt-1">{{ error }}</div>

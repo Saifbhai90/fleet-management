@@ -248,7 +248,7 @@ class AssignProjectToCompanyForm(FlaskForm):
 class EditProjectAssignmentForm(FlaskForm):
     company_id = SelectField('Select Company', coerce=int, validators=[DataRequired()])
     project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
-    assign_date = DateField('Assign Date', format='%Y-%m-%d', validators=[DataRequired()])  # HTML5 date input uses YYYY-MM-DD
+    assign_date = DateField('Assign Date', format='%d-%m-%Y', validators=[DataRequired()])
     assign_remarks = TextAreaField('Assignment Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Update Assignment')	
 
