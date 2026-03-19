@@ -128,7 +128,7 @@
 
         <div class="form-panel">
           <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION</span>
+            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION <small class="text-white-50 fs-6 fw-normal">v1.2 - Date Fix Applied</small></span>
             <div class="d-flex align-items-center gap-2">
               <a href="{{ url_for('drivers_list') }}" class="btn btn-light btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>Back to List
@@ -469,7 +469,7 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   // 1. Auto Generate Driver ID
@@ -530,6 +530,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Capture phase: our listener fires BEFORE Flatpickr's bubble-phase blur
     el.addEventListener('blur', function() {
+      alert('Date Logic v1.2 Running');
       var raw = el.value.trim();
       if (!raw) return;
 
