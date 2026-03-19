@@ -128,7 +128,7 @@
 
         <div class="form-panel">
           <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION <small class="text-white-50 fs-6 fw-normal">v1.4 - Fixed by Expert Code</small></span>
+            <span class="fw-bold fs-4"><i class="bi bi-person-badge-fill me-2"></i>DRIVER REGISTRATION <small class="text-white-50 fs-6 fw-normal">v1.5 - Debugging Logic</small></span>
             <div class="d-flex align-items-center gap-2">
               <a href="{{ url_for('drivers_list') }}" class="btn btn-light btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>Back to List
@@ -494,72 +494,118 @@ document.addEventListener('DOMContentLoaded', function () {
     form.classList.add('was-validated');
   }, false);
 
-  // 3. Manual Month Map (Strict Strings)
+  // 3. Simple Month Map
   const mmap = {
       jan:'01', feb:'02', mar:'03', apr:'04', may:'05', jun:'06',
       jul:'07', aug:'08', sep:'09', oct:'10', nov:'11', dec:'12'
   };
 
   function robustParse(input) {
-      let s = input.toLowerCase().replace(/[^a-z0-9]/g, ''); // Remove all symbols
-      let d, m, y;
+      if (!input) return null;
+      let raw = input.trim();
+      let d = '', m = '', y = '';
 
-      // CASE A: 8 Digits (03031997)
-      if (/^\d{8}$/.test(s)) {
-          d = s.slice(0, 2);
-          m = s.slice(2, 4);
-          y = s.slice(4, 8);
+      // Step 1: Strip all non-alphanumeric to detect pattern
+      let clean = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      // CASE A: Pure 8 digits like 03031997
+      if (/^\d{8}$/.test(clean)) {
+          d = clean.substr(0, 2);
+          m = clean.substr(2, 2);
+          y = clean.substr(4, 4);
       }
-      // CASE B: 6 Digits (030397)
-      else if (/^\d{6}$/.test(s)) {
-          d = s.slice(0, 2);
-          m = s.slice(2, 4);
-          y = s.slice(4, 6);
+      // CASE B: Pure 6 digits like 030397
+      else if (/^\d{6}$/.test(clean)) {
+          d = clean.substr(0, 2);
+          m = clean.substr(2, 2);
+          y = clean.substr(4, 2);
       }
-      // CASE C: Text Months (03mar1997)
-      else if (/[a-z]{3}/.test(s)) {
-          let match = s.match(/(\d{1,2})([a-z]{3})(\d{2,4})/);
-          if (match) {
-              d = match[1].padStart(2, '0');
-              m = mmap[match[2]] || '01';
-              y = match[3];
+      // CASE C: Contains letters like 03mar1997 or 3mar97
+      else if (/[a-z]/.test(clean)) {
+          // Find the month name
+          let foundMonth = '';
+          for (let key in mmap) {
+              if (clean.indexOf(key) !== -1) {
+                  foundMonth = key;
+                  break;
+              }
           }
+          if (!foundMonth) return null;
+          let pos = clean.indexOf(foundMonth);
+          d = clean.substr(0, pos);           // digits before month
+          m = mmap[foundMonth];                // month number from map
+          y = clean.substr(pos + 3);           // digits after month
+          if (!d || !y) return null;
       }
-      // CASE D: Separators (03-03-1997)
+      // CASE D: Has separators like 03-03-1997 or 03/03/1997
       else {
-          let parts = input.split(/[-/.]/);
+          let parts = raw.split(/[-/. ]/);
           if (parts.length === 3) {
-              d = parts[0].padStart(2, '0');
-              m = parts[1].padStart(2, '0');
-              y = parts[2];
+              d = parts[0].trim();
+              m = parts[1].trim();
+              y = parts[2].trim();
           }
       }
 
+      // If any part is missing, it's invalid
       if (!d || !m || !y) return null;
 
-      // Year Correction
-      if (y.length === 2) {
-          y = (parseInt(y) < 50) ? '20' + y : '19' + y;
+      // Pad day and month to 2 digits
+      d = String(parseInt(d, 10));
+      if (d.length === 1) d = '0' + d;
+
+      // Month: if already numeric, pad; if from map, already padded
+      if (/^\d+$/.test(m)) {
+          m = String(parseInt(m, 10));
+          if (m.length === 1) m = '0' + m;
       }
 
-      return `${d}-${m}-${y}`;
+      // YEAR GUARD: Only expand if exactly 2 digits. If 4 digits, DO NOT TOUCH.
+      if (y.length === 4) {
+          // Keep as is - DO NOT ADD ANYTHING
+      } else if (y.length === 2) {
+          let yy = parseInt(y, 10);
+          if (yy < 50) {
+              y = '20' + y;
+          } else {
+              y = '19' + y;
+          }
+      } else {
+          // Year is not 2 or 4 digits = invalid
+          return null;
+      }
+
+      // DEBUG ALERT - will be removed after fixing
+      alert('Original: ' + input + '\nClean: ' + clean + '\nParsed as: ' + d + '-' + m + '-' + y);
+
+      // STRICT VALIDATION
+      let di = parseInt(d, 10);
+      let mi = parseInt(m, 10);
+      let yi = parseInt(y, 10);
+
+      if (di < 1 || di > 31) return null;
+      if (mi < 1 || mi > 12) return null;
+      if (yi < 1920 || yi > 2050) return null;
+
+      return d + '-' + m + '-' + y;
   }
 
   // CRITICAL: Register blur listeners FIRST, BEFORE Flatpickr init.
-  // At the target element, handlers fire in registration order.
-  // This ensures our parser reads the raw typed value BEFORE Flatpickr can corrupt it.
   document.querySelectorAll('.datepicker').forEach(el => {
       el.addEventListener('blur', function(e) {
-          let formatted = robustParse(this.value);
+          let val = this.value;
+          if (!val || val.trim() === '') return;
+
+          let formatted = robustParse(val);
           if (formatted) {
               this._flatpickr.setDate(formatted, true, 'd-m-Y');
               if (typeof updateExpiryStatus === 'function') updateExpiryStatus();
-          } else if (this.value.length > 0) {
-              alert('Invalid Date! Use 03031997 or 03-mar-1997');
+          } else {
+              alert('Invalid Year or Date!');
               this.value = '';
               this._flatpickr.clear();
           }
-      }, true); // True is important!
+      }, true);
   });
 
   // THEN initialize Flatpickr (its blur handler registers AFTER ours)
