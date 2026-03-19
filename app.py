@@ -108,6 +108,8 @@ app.jinja_env.filters['ddmmyyyy'] = format_date_ddmmyyyy
 app.jinja_env.filters['cnic_fmt'] = format_cnic
 app.jinja_env.filters['phone_fmt'] = format_phone
 
+from urllib.parse import quote as _url_quote
+app.jinja_env.filters['url_quote'] = lambda s: _url_quote(str(s), safe='')
 
 @app.context_processor
 def inject_notification_badge():

@@ -305,12 +305,14 @@
   <div class="action-bar" id="profile-action-bar">
     <h4><i class="bi bi-person-badge me-2 text-primary"></i>Driver Profile</h4>
     <div class="d-flex gap-2">
-      <a href="{{ url_for('drivers_list') }}" class="btn btn-outline-secondary btn-action">
+      <a href="{{ ref if ref else url_for('drivers_list') }}" class="btn btn-outline-secondary btn-action">
         <i class="bi bi-arrow-left me-1"></i>Back
       </a>
+      {% if not ref %}
       <a href="{{ url_for('driver_form', id=driver.id) }}" class="btn btn-outline-warning btn-action">
         <i class="bi bi-pencil me-1"></i>Edit
       </a>
+      {% endif %}
       <button onclick="doPrint()" class="btn btn-outline-primary btn-action" id="printBtn">
         <i class="bi bi-printer me-1"></i>Print
       </button>
