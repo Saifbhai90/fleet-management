@@ -1,7 +1,7 @@
 """add emergency_relation to driver
 
 Revision ID: h1i2j3k4l5m6
-Revises: g9h0i1j2k3l4
+Revises: 3498c269d73b
 Create Date: 2026-03-22
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'h1i2j3k4l5m6'
-down_revision = 'g9h0i1j2k3l4'
+down_revision = '3498c269d73b'
 branch_labels = None
 depends_on = None
 
