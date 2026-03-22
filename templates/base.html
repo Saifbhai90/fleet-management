@@ -32,8 +32,33 @@
     <style>
         /* Anti-flicker: hide native selects before Tom Select replaces them */
         select.search-select { display: none; }
-        /* Full-width TS wrapper to match Bootstrap layout */
+        /* Full-width TS wrapper */
         .ts-wrapper { width: 100%; }
+        /* Hide the invisible empty-value item so TS placeholder text shows through */
+        .ts-control .ts-empty-sel { display: none !important; width: 0; height: 0; padding: 0; margin: 0; }
+        /* Highlighted (active) option — strong ERP-style blue */
+        .ts-dropdown .active {
+            background-color: #0d6efd !important;
+            color: #fff !important;
+            font-weight: 600;
+        }
+        /* Hover state for options */
+        .ts-dropdown .option:hover {
+            background-color: #e9ecef;
+            color: #212529;
+        }
+        /* Focused TS control matches Bootstrap focus ring */
+        .ts-wrapper.focus .ts-control {
+            border-color: #86b7fe !important;
+            box-shadow: 0 0 0 0.25rem rgba(13,110,253,.25) !important;
+            outline: 0;
+        }
+        /* Make TS control look/feel identical to Bootstrap form-select */
+        .ts-wrapper.single .ts-control { cursor: pointer; }
+        /* Placeholder text colour */
+        .ts-control input::placeholder { color: #6c757d; opacity: 1; }
+        /* Dropdown item font size */
+        .ts-dropdown .option { font-size: 0.9rem; padding: 6px 12px; }
     </style>
 
     <style>
@@ -2389,13 +2414,34 @@
         root.querySelectorAll('select.search-select').forEach(function(el) {
             if (el.tomselect) return;
             try {
+                // Extract clean placeholder from the first empty option
+                var placeholder = 'Select...';
+                if (el.options.length > 0 && el.options[0].value === '') {
+                    var raw = el.options[0].text;
+                    placeholder = raw.replace(/^[-\s]+/, '').replace(/[-\s]+$/, '').trim() || 'Select...';
+                }
+
                 var ts = new TomSelect(el, {
                     create: el.classList.contains('create-mode'),
                     allowEmptyOption: true,
                     openOnFocus: true,
                     selectOnTab: true,
-                    maxOptions: 300
+                    maxOptions: 300,
+                    placeholder: placeholder,
+                    render: {
+                        // Render the empty-value option as a zero-size invisible span
+                        // so the placeholder text shows through instead of "-- Select --"
+                        item: function(data, escape) {
+                            if (!data.value) return '<span class="ts-empty-sel"></span>';
+                            return '<span class="item">' + escape(data.text) + '</span>';
+                        }
+                    }
                 });
+
+                // Store direct reference on the input so the capture listener
+                // can resolve the original <select> in O(1) without DOM search
+                ts.control_input._tsOrigSelect = el;
+
                 // 1st Enter (dropdown OPEN)  → TS selects item natively
                 // 2nd Enter (dropdown CLOSED) → move focus to next field
                 ts.control_input.addEventListener('keydown', function(e) {
@@ -2405,6 +2451,7 @@
                     e.stopImmediatePropagation();
                     _tsMoveFocus(el);
                 }, true);
+
             } catch(ex) {
                 console.warn('[TomSelect] init failed:', (el.name || el.id), ex);
             }
@@ -2592,22 +2639,17 @@
             if (!el) return;
             var tag = el.tagName.toLowerCase();
 
-            // Tom Select input: detect via .ts-control parent, handle open/closed state
+            // Tom Select input: use O(1) direct reference stored during init
             if (el.closest && el.closest('.ts-control')) {
-                var _tsForm = el.closest('form');
-                if (_tsForm) {
-                    var _tsSels = _tsForm.querySelectorAll('select.search-select');
-                    for (var _tsi = 0; _tsi < _tsSels.length; _tsi++) {
-                        if (_tsSels[_tsi].tomselect && _tsSels[_tsi].tomselect.control_input === el) {
-                            if (_tsSels[_tsi].tomselect.isOpen) return; // TS handles Enter → select item
-                            e.preventDefault();
-                            e.stopImmediatePropagation();
-                            _tsMoveFocus(_tsSels[_tsi]);
-                            return;
-                        }
-                    }
+                var _origSel = el._tsOrigSelect;
+                if (_origSel && _origSel.tomselect) {
+                    if (_origSel.tomselect.isOpen) return; // TS handles Enter → select item
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    _tsMoveFocus(_origSel);
+                    return;
                 }
-                return; // Inside TS but no matching instance — let TS handle
+                return; // Inside TS but ref not set — let TS handle
             }
 
             // Textarea without Ctrl: allow normal newline
