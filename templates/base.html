@@ -2379,6 +2379,29 @@
         }
     });
 
+    // ── kickFocusToNext: document-wide focus-jump utility ──────────────────
+    // Searches the ENTIRE document (not just the parent form) so it works
+    // regardless of how fields are nested. Only truly visible elements are
+    // considered (offsetParent !== null).
+    function kickFocusToNext(currentEl) {
+        var all = Array.from(document.querySelectorAll(
+            'input:not([type="hidden"]):not([disabled]):not([readonly]), ' +
+            'select:not([disabled]), ' +
+            'textarea:not([disabled]):not([readonly]), ' +
+            'button[type="submit"]'
+        )).filter(function(f) {
+            return f.offsetParent !== null;
+        });
+        var idx = all.indexOf(currentEl);
+        if (idx < 0) return;
+        var next = all[idx + 1];
+        if (!next) return;
+        next.focus();
+        if (next.tagName !== 'BUTTON' && typeof next.select === 'function') {
+            try { next.select(); } catch(x) {}
+        }
+    }
+
     // ── Tom Select: Global Searchable Dropdowns ────────────────────────────
     // Defined at global script scope (NOT inside jQuery ready) so the function
     // is available immediately — the content block fields are already in
@@ -2462,9 +2485,9 @@
                     }, 0);
                 });
 
-                // Store direct reference on the input so the capture listener
-                // can resolve the original <select> in O(1) without DOM search
+                // Store references on the control_input for O(1) lookup in capture listener
                 ts.control_input._tsOrigSelect = el;
+                ts.control_input._ts = ts; // direct TS instance reference for v2.3 capture
 
                 // Backup: 2nd Enter on control_input (dropdown CLOSED) → next field
                 ts.control_input.addEventListener('keydown', function(e) {
@@ -2662,17 +2685,18 @@
             if (!el) return;
             var tag = el.tagName.toLowerCase();
 
-            // Tom Select input: use O(1) direct reference stored during init
+            // ── Tom Select: intercepted BEFORE any other listener ──────────
             if (el.closest && el.closest('.ts-control')) {
-                var _origSel = el._tsOrigSelect;
-                if (_origSel && _origSel.tomselect) {
-                    if (_origSel.tomselect.isOpen) return; // TS handles Enter → select item
+                var tsInst = el._ts;
+                if (tsInst) {
+                    if (tsInst.isOpen) return; // 1st Enter: let TS select the highlighted item
+                    // 2nd Enter: dropdown is CLOSED — aggressively move focus
                     e.preventDefault();
                     e.stopImmediatePropagation();
-                    _tsMoveFocus(_origSel);
+                    kickFocusToNext(el);
                     return;
                 }
-                return; // Inside TS but ref not set — let TS handle
+                return; // inside TS wrapper but no _ts ref — let TS handle
             }
 
             // Textarea without Ctrl: allow normal newline
@@ -2723,13 +2747,13 @@
             if (now - _enterGuard < 200) return;
             _enterGuard = now;
 
-            // Datepicker: blur triggers smart date (20ms), then move focus
+            // Datepicker: blur lets flatpickr finish formatting, then kick focus
             if (el.classList && el.classList.contains('datepicker')) {
                 el.blur();
-                setTimeout(function() { nextEl.focus(); }, 50);
+                setTimeout(function() { kickFocusToNext(el); }, 50);
             } else {
                 el.blur();
-                nextEl.focus();
+                kickFocusToNext(el);
             }
         }, true);
 
