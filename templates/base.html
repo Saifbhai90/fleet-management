@@ -27,6 +27,8 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+    <!-- Tom Select: keyboard-first searchable dropdowns -->
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
 
     <style>
         body {
@@ -2078,6 +2080,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 
 <script>
     // ─── Activity logging: device ID + geolocation (one-time permission, background updates) ───
@@ -2513,6 +2516,9 @@
             if (!el) return;
             var tag = el.tagName.toLowerCase();
 
+            // Skip Tom Select control inputs — they manage their own Enter key
+            if (el.classList && el.classList.contains('ts-input')) return;
+
             // Textarea without Ctrl: allow normal newline
             if (tag === 'textarea' && !e.ctrlKey && !e.shiftKey) return;
 
@@ -2576,6 +2582,69 @@
             width: '100%'
         });
 
+        // ── Tom Select: Global Searchable Dropdowns (keyboard-first) ─────────
+        function _tsMoveFocus(originalSelect) {
+            var form = originalSelect.closest('form');
+            if (!form) return;
+            // Build focusable list: include TS-managed selects by position even though hidden
+            var focusable = Array.from(form.querySelectorAll(
+                'input:not([type="hidden"]):not([disabled]):not([readonly]), ' +
+                'select:not([disabled]), ' +
+                'textarea:not([disabled]):not([readonly]), ' +
+                'button[type="submit"]'
+            )).filter(function(f) {
+                if (f.tagName === 'SELECT' && f.tomselect) return true;
+                return f.offsetParent !== null;
+            });
+            var idx = focusable.indexOf(originalSelect);
+            if (idx === -1) return;
+            var next = focusable[idx + 1] || null;
+            if (!next) return;
+            if (next.tomselect) {
+                // openOnFocus will auto-open the dropdown
+                setTimeout(function() { next.tomselect.focus(); }, 50);
+            } else {
+                next.focus();
+            }
+        }
+
+        window.initSearchableDropdowns = function(scope) {
+            var root = scope || document;
+            root.querySelectorAll('select.search-select').forEach(function(el) {
+                if (el.tomselect) return; // already initialized
+                var ts = new TomSelect(el, {
+                    create: false,
+                    allowEmptyOption: true,
+                    openOnFocus: true,
+                    selectOnTab: true,
+                    maxOptions: 300
+                });
+                // Second Enter (dropdown CLOSED) → move focus to next field
+                // First Enter (dropdown OPEN)  → Tom Select handles it natively (select item)
+                ts.control_input.addEventListener('keydown', function(e) {
+                    if (e.key !== 'Enter') return;
+                    if (ts.isOpen) return; // TS handles selection — don't interfere
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    _tsMoveFocus(el);
+                }, true); // capture: fires before TS re-open logic
+            });
+        };
+
+        window.initSearchableDropdowns();
+
+        // Re-init for dynamically added .search-select elements
+        (new MutationObserver(function(muts) {
+            muts.forEach(function(m) {
+                m.addedNodes.forEach(function(node) {
+                    if (node.nodeType !== 1) return;
+                    if (node.querySelector && node.querySelector('select.search-select')) {
+                        window.initSearchableDropdowns(node);
+                    }
+                });
+            });
+        })).observe(document.body, { childList: true, subtree: true });
+
         // Auto-format Pakistan mobile: 03001112346 -> 0300-1112346 on blur
         $(document).on("blur", ".phone-format", function() {
             var el = this;
@@ -2621,6 +2690,9 @@
     document.addEventListener("keydown", function(event) {
         if (event.key === "Enter") {
             const target = event.target;
+
+            // Skip Tom Select control inputs — handled by initSearchableDropdowns
+            if (target.classList && target.classList.contains('ts-input')) return;
 
             // Select2: when Enter is pressed inside a Select2 (search dropdown), move focus to next form field
             const select2Container = target.closest && target.closest(".select2-container");

@@ -88,7 +88,7 @@ class VehicleImportForm(FlaskForm):
 # Driver Form
 class DriverForm(FlaskForm):
     driver_id = StringField('Driver ID', validators=[DataRequired()])
-    post = SelectField('Post', choices=[], validators=[DataRequired()])
+    post = SelectField('Post', choices=[], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     application_date = DateField('Application Date', format='%d-%m-%Y', validators=[DataRequired()])
     name = StringField('Full Name', validators=[DataRequired()])
     father_name = StringField('Father Name', validators=[DataRequired()])
@@ -111,12 +111,12 @@ class DriverForm(FlaskForm):
         ('PhD', 'PhD'),
         ('Hafiz-e-Quran', 'Hafiz-e-Quran'),
         ('Other', 'Other'),
-    ], validators=[DataRequired()])
+    ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     blood_group = SelectField('Blood Group', choices=[
         ('', '-- Select Blood Group --'),
         ('O+', 'O+'), ('A+', 'A+'), ('B+', 'B+'), ('AB+', 'AB+'),
         ('O-', 'O-'), ('A-', 'A-'), ('B-', 'B-'), ('AB-', 'AB-')
-    ], validators=[DataRequired()])
+    ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     driver_district = StringField('Driver District', validators=[DataRequired()])
     
     # CNIC & License
@@ -130,7 +130,7 @@ class DriverForm(FlaskForm):
         ('M/Car', 'M/Car'), ('LTV', 'LTV'), ('HTV', 'HTV'), ('PSV', 'PSV'),
         ('M/Car, LTV', 'M/Car, LTV'), ('M/Car, HTV', 'M/Car, HTV'),
         ('M/Car, LTV, HTV', 'M/Car, LTV, HTV'), ('M/Car, LTV, HTV, PSV', 'M/Car, LTV, HTV, PSV')
-    ], validators=[DataRequired()])
+    ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     issue_district = StringField('Issue District', validators=[DataRequired()])
     license_issue_date = DateField('License Issue Date', format='%d-%m-%Y', validators=[DataRequired()])
     license_expiry_date = DateField('License Expiry Date', format='%d-%m-%Y', validators=[DataRequired()])
@@ -143,15 +143,15 @@ class DriverForm(FlaskForm):
     shirt_size = SelectField('Shirt Size', choices=[
         ('', '-- Size --'), ('2XS', '2XS'), ('XS', 'XS'), ('S', 'S'), ('M', 'M'),
         ('L', 'L'), ('XL', 'XL'), ('XXL', 'XXL'), ('3XL', '3XL'), ('4XL', '4XL')
-    ])
+    ], render_kw={'class': 'form-select search-select'})
     trouser_size = SelectField('Trouser Size', choices=[
         ('', '-- Size --'), ('26', '26'), ('28', '28'), ('30', '30'), ('32', '32'),
         ('34', '34'), ('36', '36'), ('38', '38'), ('40', '40'), ('42', '42'), ('44', '44')
-    ])
+    ], render_kw={'class': 'form-select search-select'})
     jacket_size = SelectField('Jacket Size', choices=[
         ('', '-- Size --'), ('2XS', '2XS'), ('XS', 'XS'), ('S', 'S'), ('M', 'M'),
         ('L', 'L'), ('XL', 'XL'), ('XXL', 'XXL'), ('3XL', '3XL'), ('4XL', '4XL')
-    ])
+    ], render_kw={'class': 'form-select search-select'})
 
     photo = FileField('Driver Photo', validators=[Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])

@@ -111,9 +111,13 @@
   window.closeCnicOverlay = function() {
     document.getElementById('cnicCheckOverlay').style.display = 'none';
     setTimeout(function() {
-      var postField = document.querySelector('select[name="post"]');
-      if (postField) postField.focus();
-    }, 80);
+      var postSelect = document.querySelector('select[name="post"]');
+      if (postSelect && postSelect.tomselect) {
+        postSelect.tomselect.focus(); // openOnFocus auto-opens the dropdown
+      } else if (postSelect) {
+        postSelect.focus();
+      }
+    }, 120);
   };
 
   document.getElementById('cnicCheckOverlay').addEventListener('keydown', function(e) {
@@ -154,7 +158,7 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Post</label>
-                {{ form.post(class="form-select", required=True) }}
+                {{ form.post(class="form-select search-select", required=True) }}
                 {% for error in form.post.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -231,14 +235,14 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Education</label>
-                {{ form.education(class="form-select", required=True) }}
+                {{ form.education(class="form-select search-select", required=True) }}
                 {% for error in form.education.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Blood Group</label>
-                {{ form.blood_group(class="form-select", required=True) }}
+                {{ form.blood_group(class="form-select search-select", required=True) }}
                 {% for error in form.blood_group.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -297,7 +301,7 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">License Type</label>
-                {{ form.license_type(class="form-select", required=True) }}
+                {{ form.license_type(class="form-select search-select", required=True) }}
                 {% for error in form.license_type.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -358,21 +362,21 @@
               </div>
               <div class="col-md-4">
                 {{ form.shirt_size.label(class="form-label") }}
-                {{ form.shirt_size(class="form-select") }}
+                {{ form.shirt_size(class="form-select search-select") }}
                 {% for error in form.shirt_size.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-4">
                 {{ form.trouser_size.label(class="form-label") }}
-                {{ form.trouser_size(class="form-select") }}
+                {{ form.trouser_size(class="form-select search-select") }}
                 {% for error in form.trouser_size.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-4">
                 {{ form.jacket_size.label(class="form-label") }}
-                {{ form.jacket_size(class="form-select") }}
+                {{ form.jacket_size(class="form-select search-select") }}
                 {% for error in form.jacket_size.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
