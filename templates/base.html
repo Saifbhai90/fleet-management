@@ -34,8 +34,6 @@
         select.search-select { display: none; }
         /* Full-width TS wrapper */
         .ts-wrapper { width: 100%; }
-        /* Hide the invisible empty-value item so TS placeholder text shows through */
-        .ts-control .ts-empty-sel { display: none !important; width: 0; height: 0; padding: 0; margin: 0; }
         /* Highlighted (active) option — strong ERP-style blue */
         .ts-dropdown .active {
             background-color: #0d6efd !important;
@@ -2388,23 +2386,32 @@
     function _tsMoveFocus(origSelect) {
         var form = origSelect.closest('form');
         if (!form) return;
-        var focusable = Array.from(form.querySelectorAll(
+        var all = Array.from(form.querySelectorAll(
             'input:not([type="hidden"]):not([disabled]):not([readonly]), ' +
             'select:not([disabled]), ' +
             'textarea:not([disabled]):not([readonly]), ' +
             'button[type="submit"]'
-        )).filter(function(f) {
+        ));
+        // Build focusable list: TS-managed selects included by .tomselect check,
+        // everything else must be visible in layout (offsetParent !== null)
+        var focusable = all.filter(function(f) {
             if (f.tagName === 'SELECT' && f.tomselect) return true;
             return f.offsetParent !== null;
         });
         var idx = focusable.indexOf(origSelect);
-        if (idx === -1) return;
-        var next = focusable[idx + 1] || null;
-        if (!next) return;
-        if (next.tomselect) {
-            setTimeout(function() { next.tomselect.focus(); next.tomselect.open(); }, 50);
-        } else {
-            next.focus();
+        if (idx < 0) return;
+        // Walk forward to find the next truly visible/focusable candidate
+        for (var i = idx + 1; i < focusable.length; i++) {
+            var candidate = focusable[i];
+            if (candidate.tagName === 'SELECT' && candidate.tomselect) {
+                // Let TS handle opening via its own focus listener
+                setTimeout(function(n) { n.tomselect.focus(); }, 30, candidate);
+                return;
+            }
+            if (candidate.offsetParent !== null) {
+                candidate.focus();
+                return;
+            }
         }
     }
 
@@ -2423,27 +2430,43 @@
 
                 var ts = new TomSelect(el, {
                     create: el.classList.contains('create-mode'),
-                    allowEmptyOption: true,
-                    openOnFocus: true,
+                    // allowEmptyOption:false → empty option not in dropdown;
+                    // TS shows placeholder text when nothing is selected
+                    allowEmptyOption: false,
+                    // openOnFocus:false — we open manually below so we can
+                    // block re-open immediately after item selection
+                    openOnFocus: false,
                     selectOnTab: true,
                     maxOptions: 300,
-                    placeholder: placeholder,
-                    render: {
-                        // Render the empty-value option as a zero-size invisible span
-                        // so the placeholder text shows through instead of "-- Select --"
-                        item: function(data, escape) {
-                            if (!data.value) return '<span class="ts-empty-sel"></span>';
-                            return '<span class="item">' + escape(data.text) + '</span>';
-                        }
+                    placeholder: placeholder
+                });
+
+                // ── Open-on-focus (manual, with post-selection guard) ──────────
+                // After item_add, TS internally re-focuses control_input which
+                // would re-open the dropdown with openOnFocus:true (blocking 2nd
+                // Enter). We gate open() with a _justSelected flag instead.
+                ts.on('focus', function() {
+                    if (!ts._justSelected) {
+                        ts.open();
                     }
+                    ts._justSelected = false;
+                });
+
+                ts.on('item_add', function() {
+                    ts._justSelected = true;
+                    // Re-focus control_input (TS may have blurred it) without
+                    // re-opening: flag is still true when focus fires below
+                    setTimeout(function() {
+                        ts._justSelected = true; // keep true during the refocus
+                        ts.control_input.focus();
+                    }, 0);
                 });
 
                 // Store direct reference on the input so the capture listener
                 // can resolve the original <select> in O(1) without DOM search
                 ts.control_input._tsOrigSelect = el;
 
-                // 1st Enter (dropdown OPEN)  → TS selects item natively
-                // 2nd Enter (dropdown CLOSED) → move focus to next field
+                // Backup: 2nd Enter on control_input (dropdown CLOSED) → next field
                 ts.control_input.addEventListener('keydown', function(e) {
                     if (e.key !== 'Enter') return;
                     if (ts.isOpen) return;
