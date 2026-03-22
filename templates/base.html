@@ -25,8 +25,6 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
     <!-- Tom Select: keyboard-first searchable dropdowns -->
     <link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
     <style>
@@ -674,8 +672,8 @@
         /* ── Badge pills: bigger ── */
         .capacitor-native .badge { font-size: 0.8rem !important; padding: 6px 10px !important; border-radius: 8px !important; }
 
-        /* ── Select2: native feel ── */
-        .capacitor-native .select2-container--bootstrap-5 .select2-selection {
+        /* ── Tom Select: native feel ── */
+        .capacitor-native .ts-wrapper .ts-control {
             min-height: 52px !important;
             border-radius: 12px !important;
             border: 1.5px solid #e2e8f0 !important;
@@ -2108,7 +2106,6 @@
 <!-- External JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
 
 <script>
@@ -2757,10 +2754,6 @@
             }
         }, true);
 
-        $('.select2-enable').select2({
-            theme: 'bootstrap-5',
-            width: '100%'
-        });
 
         // Auto-format Pakistan mobile: 03001112346 -> 0300-1112346 on blur
         $(document).on("blur", ".phone-format", function() {
@@ -2811,28 +2804,6 @@
             // Skip Tom Select inputs entirely — window capture listener above handles them
             if (target.closest && target.closest('.ts-control')) return;
 
-            // Select2: when Enter is pressed inside a Select2 (search dropdown), move focus to next form field
-            const select2Container = target.closest && target.closest(".select2-container");
-            if (select2Container) {
-                const select = select2Container.previousElementSibling;
-                if (select && select.tagName === "SELECT" && select.form) {
-                    const form = select.form;
-                    const allFields = Array.from(form.querySelectorAll(
-                        "input:not([type=\"hidden\"]):not([readonly]):not([disabled]), select:not([disabled]), textarea:not([readonly]):not([disabled])"
-                    )).filter(function(el) { return el.offsetWidth > 0 && el.offsetHeight > 0; });
-                    const idx = allFields.indexOf(select);
-                    if (idx >= 0) {
-                        event.preventDefault();
-                        if (idx < allFields.length - 1) {
-                            allFields[idx + 1].focus();
-                        } else {
-                            const submitBtn = form.querySelector("button[type=\"submit\"], input[type=\"submit\"]");
-                            if (submitBtn) submitBtn.focus();
-                        }
-                        return;
-                    }
-                }
-            }
 
             // Check if the target is an input, select, or textarea within a form
             if (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA") {
@@ -2843,7 +2814,7 @@
                     const focusableElements = Array.from(form.querySelectorAll(
                         "input:not([type=\"hidden\"]):not([readonly]):not([disabled]), select:not([readonly]):not([disabled]), textarea:not([readonly]):not([disabled])"
                     )).filter(
-                        el => el.offsetWidth > 0 && el.offsetHeight > 0 && (el.tagName !== "SELECT" || !el.closest(".select2-container"))
+                        el => el.offsetWidth > 0 && el.offsetHeight > 0
                     );
 
                     const currentElementIndex = focusableElements.indexOf(target);
@@ -3650,11 +3621,6 @@
                 var m = modals[modals.length - 1];
                 var inst = window.bootstrap && bootstrap.Modal ? bootstrap.Modal.getInstance(m) : null;
                 if (inst) { inst.hide(); return true; }
-            }
-            // Select2 dropdown
-            if (document.querySelector('.select2-dropdown')) {
-                if (window.$) $(document).trigger('click');
-                return true;
             }
             // FAB dial
             var dial = document.getElementById('fabDialMenu');

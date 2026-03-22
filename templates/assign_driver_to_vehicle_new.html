@@ -193,14 +193,13 @@
 }
 .drv-field .val { font-size: 0.82rem; font-weight: 600; color: #1e293b; }
 
-/* ── Select2 override ── */
-.select2-container--bootstrap-5 .select2-selection {
+/* ── Tom Select override ── */
+.ts-wrapper .ts-control {
     border: 1px solid #dde3ec !important;
     border-radius: 8px !important;
     min-height: 38px !important;
 }
-.select2-container--bootstrap-5 .select2-selection:focus,
-.select2-container--bootstrap-5.select2-container--focus .select2-selection {
+.ts-wrapper.focus .ts-control {
     border-color: #3949ab !important;
     box-shadow: 0 0 0 3px rgba(57,73,171,0.1) !important;
 }
@@ -263,12 +262,12 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <div class="step-label"><span class="step-badge">1</span> Project</div>
-                        {{ form.project_id(class="form-select select2-enable" + (" is-invalid" if form.project_id.errors else ""), id="project_select", disabled=disable_project) }}
+                        {{ form.project_id(class="form-select search-select" + (" is-invalid" if form.project_id.errors else ""), id="project_select", disabled=disable_project) }}
                         {% if form.project_id.errors %}<div class="invalid-feedback d-block">{% for e in form.project_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
                     </div>
                     <div class="col-md-6">
                         <div class="step-label"><span class="step-badge">2</span> District</div>
-                        {{ form.district_id(class="form-select select2-enable" + (" is-invalid" if form.district_id.errors else ""), id="district_select") }}
+                        {{ form.district_id(class="form-select search-select" + (" is-invalid" if form.district_id.errors else ""), id="district_select") }}
                         {% if form.district_id.errors %}<div class="invalid-feedback d-block">{% for e in form.district_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
                     </div>
                 </div>
@@ -277,7 +276,7 @@
 
                 <!-- Step 3: Vehicle -->
                 <div class="step-label"><span class="step-badge">3</span> Vehicle</div>
-                {{ form.vehicle_id(class="form-select select2-enable" + (" is-invalid" if form.vehicle_id.errors else ""), id="vehicle_select") }}
+                {{ form.vehicle_id(class="form-select search-select" + (" is-invalid" if form.vehicle_id.errors else ""), id="vehicle_select") }}
                 {% if form.vehicle_id.errors %}<div class="invalid-feedback d-block">{% for e in form.vehicle_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
                 <div id="vehicle_parking_info" style="min-height:1.6em;"></div>
 
@@ -293,7 +292,7 @@
                     </div>
                     <div class="col-md-6">
                         <div class="step-label"><span class="step-badge" style="background:#e8f5e9;color:#2e7d32;">5</span> Available Driver</div>
-                        {{ form.driver_id(class="form-select select2-enable" + (" is-invalid" if form.driver_id.errors else ""), id="driver_select") }}
+                        {{ form.driver_id(class="form-select search-select" + (" is-invalid" if form.driver_id.errors else ""), id="driver_select") }}
                         {% if form.driver_id.errors %}<div class="invalid-feedback d-block">{% for e in form.driver_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
                     </div>
                 </div>
@@ -397,128 +396,100 @@
 </div>
 
 <script>
-$(document).ready(function() {
-    $('.select2-enable').select2({ theme: 'bootstrap-5', width: '100%' });
+(function() {
+  function rebuildSel(el, html) {
+    if (!el) return;
+    if (el.tomselect) { el.tomselect.destroy(); }
+    el.innerHTML = html;
+    initSearchableDropdowns(el.parentNode);
+  }
 
-    var $proj = $('#project_select'),
-        $dist = $('#district_select'),
-        $veh  = $('#vehicle_select'),
-        $drv  = $('#driver_select');
+  var proj  = document.getElementById('project_select');
+  var dist  = document.getElementById('district_select');
+  var veh   = document.getElementById('vehicle_select');
+  var drv   = document.getElementById('driver_select');
+  var shift = document.getElementById('shift_select');
 
-    // --- A. Project → District ---
-    $proj.on('change', function() {
-        var pid = $(this).val();
-        $dist.empty().append('<option value="">-- Select District --</option>').trigger('change');
-        $veh.empty().append('<option value="">-- Select Vehicle --</option>').trigger('change');
-        $('#vehicle_parking_info').html('');
-        if (pid && pid != '0') {
-            $dist.empty().append('<option value="">Loading...</option>').trigger('change');
-            $.getJSON('/get_districts_by_project/' + pid, function(data) {
-                $dist.empty().append('<option value="">-- Select District --</option>');
-                $.each(data, function(i, v) { $dist.append('<option value="' + v.id + '">' + v.name + '</option>'); });
-                $dist.trigger('change');
-            }).fail(function() { alert('Could not fetch districts!'); });
-        }
+  if (proj) {
+    proj.addEventListener('change', function() {
+      var pid = this.value;
+      rebuildSel(dist, '<option value="">-- Select District --</option>');
+      rebuildSel(veh,  '<option value="">-- Select Vehicle --</option>');
+      var parkInfo = document.getElementById('vehicle_parking_info');
+      if (parkInfo) parkInfo.innerHTML = '';
+      if (pid && pid !== '0') {
+        rebuildSel(dist, '<option value="">Loading...</option>');
+        fetch('/get_districts_by_project/' + pid).then(function(r){return r.json();}).then(function(data){
+          var html = '<option value="">-- Select District --</option>';
+          data.forEach(function(v){ html += '<option value="' + v.id + '">' + v.name + '</option>'; });
+          rebuildSel(dist, html);
+        }).catch(function(){ alert('Could not fetch districts!'); });
+      }
     });
+  }
 
-    // --- B. District → Vehicle ---
-    $dist.on('change', function() {
-        var did = $(this).val(), pid = $proj.val();
-        $veh.empty().append('<option value="">-- Select Vehicle --</option>').trigger('change');
-        $('#vehicle_parking_info').html('');
-        if (did && pid && pid != '0') {
-            $veh.empty().append('<option value="">Loading...</option>').trigger('change');
-            $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(data) {
-                $veh.empty().append('<option value="">-- Select Vehicle --</option>');
-                $.each(data, function(i, v) { $veh.append('<option value="' + v.id + '">' + v.no + '</option>'); });
-                $veh.trigger('change');
-            });
-        }
-    });
-
-    // --- C. Vehicle → Parking + Capacity + Shifts ---
-    $veh.on('change', function() {
-        var vid = $(this).val();
-        var $info = $('#vehicle_parking_info');
-        var $cap  = $('#capacity_info');
-        var $shift = $('#shift_select');
-        if (!vid || vid == '0') {
-            $info.html(''); $cap.html('');
-            $shift.empty().append('<option value="">-- Select Shift --</option>');
-            return;
-        }
-        $.getJSON('/get_vehicle_parking/' + vid, function(d) {
-            if (d.parking_station_name) {
-                $info.html('<span class="info-pill success"><i class="bi bi-geo-alt-fill"></i>Parking: <strong>' + d.parking_station_name + '</strong></span>');
-            } else {
-                $info.html('<span class="info-pill warning"><i class="bi bi-exclamation-triangle-fill"></i>No parking assigned yet</span>');
-            }
-        }).fail(function() { $info.html('<span class="info-pill warning">Could not load parking info</span>'); });
-
-        $.getJSON('/get_vehicle_capacity_info/' + vid, function(d) {
-            var cap = d.capacity || 1;
-            if (cap === 1) {
-                $cap.html('<span class="info-pill info"><i class="bi bi-person"></i>Capacity: 1 — Morning shift only</span>');
-            } else {
-                $cap.html('<span class="info-pill success"><i class="bi bi-people"></i>Capacity: 2 — Morning &amp; Night</span>');
-            }
-        }).fail(function() { $cap.html(''); });
-
-        $.getJSON('/get_available_shifts/' + vid, function(shifts) {
-            $shift.empty().append('<option value="">-- Select Shift --</option>');
-            $.each(shifts, function(i, s) { $shift.append('<option value="' + (s.id || s.name) + '">' + (s.name || s.id) + '</option>'); });
-            if (shifts.length === 0) { $shift.append('<option value="" disabled>Vehicle full — no shift available</option>'); }
-        }).fail(function() { $shift.empty().append('<option value="">-- Select Shift --</option>'); });
-    });
-
-    // --- D. Drivers Load ---
-    function loadDrivers() {
-        $.getJSON('/get_unassigned_drivers', function(data) {
-            $drv.empty().append('<option value="">-- Select Driver --</option>');
-            $.each(data, function(i, v) { $drv.append('<option value="' + v.id + '">' + v.name + '</option>'); });
-            $drv.trigger('change');
+  if (dist) {
+    dist.addEventListener('change', function() {
+      var did = this.value, pid = proj ? proj.value : '';
+      rebuildSel(veh, '<option value="">-- Select Vehicle --</option>');
+      var parkInfo = document.getElementById('vehicle_parking_info');
+      if (parkInfo) parkInfo.innerHTML = '';
+      if (did && pid && pid !== '0') {
+        rebuildSel(veh, '<option value="">Loading...</option>');
+        fetch('/get_vehicles_by_district/' + pid + '/' + did).then(function(r){return r.json();}).then(function(data){
+          var html = '<option value="">-- Select Vehicle --</option>';
+          data.forEach(function(v){ html += '<option value="' + v.id + '">' + v.no + '</option>'; });
+          rebuildSel(veh, html);
         });
-    }
-    loadDrivers();
-
-    // --- E. Driver selected → show insight panel ---
-    $drv.on('change', function() {
-        var did = $(this).val();
-        if (!did || did == '0') {
-            $('#driverProfileCard').removeClass('visible').fadeOut(180, function() {
-                $('#insightPlaceholder').fadeIn(200);
-            });
-            return;
-        }
-        $.getJSON('/get_driver_details/' + did, function(data) {
-            $('#drvName').text(data.name || '-');
-            $('#drvIdSpan').text(data.driver_id || '-');
-            $('#drvPost').text(data.post || '-');
-            $('#drvDistrict').text(data.district || '-');
-            $('#drvStatus').text((data.status || 'Active').toUpperCase());
-            $('#drvFather').text(data.father_name || '-');
-            $('#drvCnic').text(data.cnic_no || '-');
-            $('#drvPhone1').text(data.phone1 || '-');
-            $('#drvPhone2').text(data.phone2 || '-');
-            $('#drvAddress').text(data.address || '-');
-            if (data.photo_url) {
-                $('#drvPhoto').attr('src', data.photo_url).show();
-                $('#drvPhotoFallback').hide();
-            } else {
-                $('#drvPhoto').hide();
-                $('#drvPhotoFallback').show();
-            }
-            $('#insightPlaceholder').fadeOut(150, function() {
-                $('#driverProfileCard').show().addClass('visible');
-            });
-        }).fail(function() {
-            $('#driverProfileCard').removeClass('visible').hide();
-            $('#insightPlaceholder').show();
-        });
+      }
     });
+  }
 
-    // Restore vehicle state on validation failure
-    if ($veh.val() && $veh.val() != '0') { $veh.trigger('change'); }
-});
+  if (veh) {
+    veh.addEventListener('change', function() {
+      var vid = this.value;
+      var info = document.getElementById('vehicle_parking_info');
+      var cap  = document.getElementById('capacity_info');
+      if (!vid || vid === '0') {
+        if (info) info.innerHTML = '';
+        if (cap) cap.innerHTML = '';
+        rebuildSel(shift, '<option value="">-- Select Shift --</option>');
+        return;
+      }
+      fetch('/get_vehicle_parking/' + vid).then(function(r){return r.json();}).then(function(d){
+        if (info) info.innerHTML = d.parking_station_name
+          ? '<span class="info-pill success"><i class="bi bi-geo-alt-fill"></i>Parking: <strong>' + d.parking_station_name + '</strong></span>'
+          : '<span class="info-pill warning"><i class="bi bi-exclamation-triangle-fill"></i>No parking assigned yet</span>';
+      }).catch(function(){
+        if (info) info.innerHTML = '<span class="info-pill warning">Could not load parking info</span>';
+      });
+      fetch('/get_vehicle_capacity_info/' + vid).then(function(r){return r.json();}).then(function(d){
+        var c = d.capacity || 1;
+        if (cap) cap.innerHTML = c === 1
+          ? '<span class="info-pill info"><i class="bi bi-person"></i>Capacity: 1 — Morning shift only</span>'
+          : '<span class="info-pill success"><i class="bi bi-people"></i>Capacity: 2 — Morning &amp; Night</span>';
+      }).catch(function(){ if (cap) cap.innerHTML = ''; });
+      fetch('/get_available_shifts/' + vid).then(function(r){return r.json();}).then(function(shifts){
+        var html = '<option value="">-- Select Shift --</option>';
+        shifts.forEach(function(s){ html += '<option value="' + (s.id||s.name) + '">' + (s.name||s.id) + '</option>'; });
+        if (shifts.length === 0) html += '<option value="" disabled>Vehicle full — no shift available</option>';
+        rebuildSel(shift, html);
+      }).catch(function(){ rebuildSel(shift, '<option value="">-- Select Shift --</option>'); });
+    });
+    if (veh.value && veh.value !== '0') { veh.dispatchEvent(new Event('change')); }
+  }
+
+  fetch('/get_unassigned_drivers').then(function(r){return r.json();}).then(function(data){
+    var html = '<option value="">-- Select Driver --</option>';
+    data.forEach(function(v){ html += '<option value="' + v.id + '">' + v.name + '</option>'; });
+    rebuildSel(drv, html);
+  });
+
+  if (drv) {
+    drv.addEventListener('change', function() {
+      if (typeof loadDriverInsight === 'function') loadDriverInsight(this.value);
+    });
+  }
+})();
 </script>
 {% endblock %}

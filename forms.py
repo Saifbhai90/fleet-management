@@ -61,7 +61,8 @@ class VehicleForm(FlaskForm):
             ('USG+Passanger', 'USG+Passanger'),
             ('USG', 'USG'),
         ],
-        validators=[DataRequired()]
+        validators=[DataRequired()],
+        render_kw={'class': 'form-select search-select'}
     )
     driver_capacity = IntegerField('Driver Capacity', validators=[DataRequired(), NumberRange(min=1)])
 
@@ -235,13 +236,15 @@ class AssignProjectToCompanyForm(FlaskForm):
         'Select Company',
         coerce=int,
         validators=[DataRequired(), NumberRange(min=1, message='Please select a company.')],
-        choices=[(0, '-- Select Company --')]
+        choices=[(0, '-- Select Company --')],
+        render_kw={'class': 'form-select search-select'}
     )
     project_id = SelectField(
         'Select Project',
         coerce=int,
         validators=[DataRequired(), NumberRange(min=1, message='Please select a project.')],
-        choices=[(0, '-- Select Project --')]
+        choices=[(0, '-- Select Project --')],
+        render_kw={'class': 'form-select search-select'}
     )
     assign_date = DateField('Assign Date', format='%d-%m-%Y', validators=[DataRequired()])
     assign_remarks = TextAreaField('Remarks (Optional)')
@@ -249,8 +252,8 @@ class AssignProjectToCompanyForm(FlaskForm):
 
 
 class EditProjectAssignmentForm(FlaskForm):
-    company_id = SelectField('Select Company', coerce=int, validators=[DataRequired()])
-    project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
+    company_id = SelectField('Select Company', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     assign_date = DateField('Assign Date', format='%d-%m-%Y', validators=[DataRequired()])
     assign_remarks = TextAreaField('Assignment Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Update Assignment')	
@@ -261,13 +264,15 @@ class AssignProjectToDistrictForm(FlaskForm):
         'Select Project',
         coerce=int,
         validators=[DataRequired(), NumberRange(min=1, message='Please select a project.')],
-        choices=[(0, '-- Select Project --')]
+        choices=[(0, '-- Select Project --')],
+        render_kw={'class': 'form-select search-select'}
     )
     district_id = SelectField(
         'Select District',
         coerce=int,
         validators=[DataRequired(), NumberRange(min=1, message='Please select a district.')],
-        choices=[(0, '-- Select District --')]
+        choices=[(0, '-- Select District --')],
+        render_kw={'class': 'form-select search-select'}
     )
     assign_date = DateField('Assign Date', format='%d-%m-%Y', validators=[DataRequired()])
     remarks = TextAreaField('Remarks (Optional)', validators=[Optional()])
@@ -275,18 +280,18 @@ class AssignProjectToDistrictForm(FlaskForm):
 
 
 class AssignVehicleToDistrictForm(FlaskForm):
-    project_id = SelectField('Select Project', coerce=int, validators=[DataRequired(), NumberRange(min=1, message='Please select a project.')])
-    district_id = SelectField('Select District', coerce=int, validators=[DataRequired(), NumberRange(min=1, message='Please select a district.')])
-    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired(), NumberRange(min=1, message='Please select a vehicle.')])
+    project_id = SelectField('Select Project', coerce=int, validators=[DataRequired(), NumberRange(min=1, message='Please select a project.')], render_kw={'class': 'form-select search-select'})
+    district_id = SelectField('Select District', coerce=int, validators=[DataRequired(), NumberRange(min=1, message='Please select a district.')], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired(), NumberRange(min=1, message='Please select a vehicle.')], render_kw={'class': 'form-select search-select'})
     assign_date = DateField('Assignment Date', format='%d-%m-%Y', validators=[DataRequired()])
     remarks = TextAreaField('Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Assign Vehicle to District')
 
 class AssignVehicleToParkingForm(FlaskForm):
-    project_id = SelectField('Select Project', coerce=int, validators=[DataRequired()])
-    district_id = SelectField('Select District', coerce=int, validators=[DataRequired()])
-    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired()])
-    parking_station_id = SelectField('Select Parking Station', coerce=int, validators=[DataRequired(), NumberRange(min=1, message='Please select a parking station.')])
+    project_id = SelectField('Select Project', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    district_id = SelectField('Select District', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    parking_station_id = SelectField('Select Parking Station', coerce=int, validators=[DataRequired(), NumberRange(min=1, message='Please select a parking station.')], render_kw={'class': 'form-select search-select'})
     assign_date = DateField('Assign Date', format='%d-%m-%Y', validators=[DataRequired()])
     remarks = TextAreaField('Remarks (Optional)')
     submit = SubmitField('Finalize Parking Assignment')
@@ -297,34 +302,39 @@ class AssignDriverToVehicleForm(FlaskForm):
         'Select Project',
         coerce=int,
         validators=[DataRequired(), NumberRange(min=1, message='Please select a project.')],
-        choices=[(0, '-- Select Project --')]
+        choices=[(0, '-- Select Project --')],
+        render_kw={'class': 'form-select search-select'}
     )
     
     district_id = SelectField(
         'Select District',
         coerce=int,
         validators=[DataRequired(), NumberRange(min=1, message='Please select a district.')],
-        choices=[(0, '-- Select District --')]
+        choices=[(0, '-- Select District --')],
+        render_kw={'class': 'form-select search-select'}
     )
     
     vehicle_id = SelectField(
         'Select Vehicle',
         coerce=int,
         validators=[DataRequired(), NumberRange(min=1, message='Please select a vehicle.')],
-        choices=[(0, '-- Select Vehicle --')]
+        choices=[(0, '-- Select Vehicle --')],
+        render_kw={'class': 'form-select search-select'}
     )
     
     driver_id = SelectField(
         'Select Driver (Unassigned)',
         coerce=int,
         validators=[DataRequired(), NumberRange(min=1, message='Please select a driver.')],
-        choices=[(0, '-- Select Driver --')]
+        choices=[(0, '-- Select Driver --')],
+        render_kw={'class': 'form-select search-select'}
     )
     
     shift = SelectField(
         'Select Shift',
         choices=[('', '-- Select Shift --'), ('Morning', 'Morning'), ('Night', 'Night')],
-        validators=[DataRequired(message="Shift is required")]
+        validators=[DataRequired(message="Shift is required")],
+        render_kw={'class': 'form-select search-select'}
     )
     
     assign_date = DateField(
@@ -348,8 +358,8 @@ class AssignDriverToVehicleForm(FlaskForm):
 
 
 class ProjectTransferForm(FlaskForm):
-    project_id = SelectField('Select Project to Transfer', coerce=int, validators=[DataRequired(message='Please select a project.')], choices=[])
-    new_company_id = SelectField('Transfer to New Company', coerce=int, validators=[DataRequired(message='Please select a company.')], choices=[])
+    project_id = SelectField('Select Project to Transfer', coerce=int, validators=[DataRequired(message='Please select a project.')], choices=[], render_kw={'class': 'form-select search-select'})
+    new_company_id = SelectField('Transfer to New Company', coerce=int, validators=[DataRequired(message='Please select a company.')], choices=[], render_kw={'class': 'form-select search-select'})
     transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
     remarks = TextAreaField('Transfer Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Confirm Transfer')
@@ -362,7 +372,8 @@ class VehicleTransferForm(FlaskForm):
             DataRequired(message='Please select project.'),
             NumberRange(min=1, message='Please select project.')
         ],
-        choices=[(0, '-- Select Project --')]
+        choices=[(0, '-- Select Project --')],
+        render_kw={'class': 'form-select search-select'}
     )
     from_district_id = SelectField(
         'From District',
@@ -371,12 +382,13 @@ class VehicleTransferForm(FlaskForm):
             DataRequired(message='Please select district.'),
             NumberRange(min=1, message='Please select district.')
         ],
-        choices=[(0, '-- Select District --')]
+        choices=[(0, '-- Select District --')],
+        render_kw={'class': 'form-select search-select'}
     )
-    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired(message='Please select vehicle.'), NumberRange(min=1, message='Please select a vehicle.')], choices=[(0, '-- Select Vehicle --')])
+    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired(message='Please select vehicle.'), NumberRange(min=1, message='Please select a vehicle.')], choices=[(0, '-- Select Vehicle --')], render_kw={'class': 'form-select search-select'})
     
-    new_project_id = SelectField('Transfer to Project', coerce=int, validators=[DataRequired(message='Please select new project.'), NumberRange(min=1, message='Please select new project.')], choices=[(0, '-- Select Project --')])
-    new_district_id = SelectField('Transfer to District', coerce=int, validators=[DataRequired(message='Please select new district.'), NumberRange(min=1, message='Please select new district.')], choices=[(0, '-- Select District --')])
+    new_project_id = SelectField('Transfer to Project', coerce=int, validators=[DataRequired(message='Please select new project.'), NumberRange(min=1, message='Please select new project.')], choices=[(0, '-- Select Project --')], render_kw={'class': 'form-select search-select'})
+    new_district_id = SelectField('Transfer to District', coerce=int, validators=[DataRequired(message='Please select new district.'), NumberRange(min=1, message='Please select new district.')], choices=[(0, '-- Select District --')], render_kw={'class': 'form-select search-select'})
     new_parking_id = SelectField(
         'Transfer to Parking',
         coerce=int,
@@ -384,7 +396,8 @@ class VehicleTransferForm(FlaskForm):
             DataRequired(message='Please select parking.'),
             NumberRange(min=1, message='Please select parking.')
         ],
-        choices=[(0, '-- Select Parking --')]
+        choices=[(0, '-- Select Parking --')],
+        render_kw={'class': 'form-select search-select'}
     )
     
     transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
@@ -397,24 +410,24 @@ class VehicleTransferForm(FlaskForm):
             raise ValidationError('Transfer date cannot be in the future.')
 
 class EditVehicleTransferForm(FlaskForm):
-    new_project_id = SelectField('Transfer to Project', coerce=int, validators=[DataRequired(message='Please select new project.'), NumberRange(min=1, message='Please select new project.')], choices=[(0, '-- Select Project --')])
-    new_district_id = SelectField('Transfer to District', coerce=int, validators=[DataRequired(message='Please select new district.'), NumberRange(min=1, message='Please select new district.')], choices=[(0, '-- Select District --')])
-    new_parking_id = SelectField('Transfer to Parking (Optional)', coerce=int, validators=[Optional()], choices=[(0, '-- No Parking --')])
+    new_project_id = SelectField('Transfer to Project', coerce=int, validators=[DataRequired(message='Please select new project.'), NumberRange(min=1, message='Please select new project.')], choices=[(0, '-- Select Project --')], render_kw={'class': 'form-select search-select'})
+    new_district_id = SelectField('Transfer to District', coerce=int, validators=[DataRequired(message='Please select new district.'), NumberRange(min=1, message='Please select new district.')], choices=[(0, '-- Select District --')], render_kw={'class': 'form-select search-select'})
+    new_parking_id = SelectField('Transfer to Parking (Optional)', coerce=int, validators=[Optional()], choices=[(0, '-- No Parking --')], render_kw={'class': 'form-select search-select'})
     transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
     remarks = TextAreaField('Transfer Remarks (Optional)', validators=[Optional()])
     submit = SubmitField('Update Transfer')
 
 
 class DriverTransferForm(FlaskForm):
-    from_project_id = SelectField('From Project', coerce=int, validators=[DataRequired()])
-    from_district_id = SelectField('From District', coerce=int, validators=[DataRequired()])
-    from_vehicle_id = SelectField('From Vehicle', coerce=int, validators=[DataRequired()])
-    driver_id = SelectField('Select Driver', coerce=int, validators=[DataRequired()])
+    from_project_id = SelectField('From Project', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    from_district_id = SelectField('From District', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    from_vehicle_id = SelectField('From Vehicle', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    driver_id = SelectField('Select Driver', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     
-    new_project_id = SelectField('Transfer to Project', coerce=int, validators=[DataRequired()])
-    new_district_id = SelectField('Transfer to District', coerce=int, validators=[DataRequired()])
-    new_vehicle_id = SelectField('Transfer to Vehicle', coerce=int, validators=[DataRequired()])
-    new_shift = SelectField('Select Shift', choices=[('', '-- Select Shift --')], validators=[DataRequired()])
+    new_project_id = SelectField('Transfer to Project', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    new_district_id = SelectField('Transfer to District', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    new_vehicle_id = SelectField('Transfer to Vehicle', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    new_shift = SelectField('Select Shift', choices=[('', '-- Select Shift --')], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     
     transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired(message='Please select transfer date.')], render_kw={'placeholder': 'Select date'})
     remarks = TextAreaField('Transfer Remarks (Optional)', validators=[Optional()])
@@ -426,10 +439,10 @@ class DriverTransferForm(FlaskForm):
             raise ValidationError('Transfer date cannot be in the future.')
 
 class DriverJobLeftForm(FlaskForm):
-    project_id = SelectField('Select Project', coerce=int, validators=[DataRequired(message='Please select project.')])
-    district_id = SelectField('Select District', coerce=int, validators=[DataRequired(message='Please select district.')])
-    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired(message='Please select vehicle.')])
-    driver_id = SelectField('Select Driver (currently assigned)', coerce=int, validators=[DataRequired(message='Please select driver.')])
+    project_id = SelectField('Select Project', coerce=int, validators=[DataRequired(message='Please select project.')], render_kw={'class': 'form-select search-select'})
+    district_id = SelectField('Select District', coerce=int, validators=[DataRequired(message='Please select district.')], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Select Vehicle', coerce=int, validators=[DataRequired(message='Please select vehicle.')], render_kw={'class': 'form-select search-select'})
+    driver_id = SelectField('Select Driver (currently assigned)', coerce=int, validators=[DataRequired(message='Please select driver.')], render_kw={'class': 'form-select search-select'})
     
     reason = SelectField('Leave Reason', 
         choices=[
@@ -441,7 +454,8 @@ class DriverJobLeftForm(FlaskForm):
             ('End of Contract', 'End of Contract'),
             ('Other', 'Other')
         ],
-        validators=[DataRequired(message="Please select reason.")]
+        validators=[DataRequired(message="Please select reason.")],
+        render_kw={'class': 'form-select search-select'}
     )
     
     other_reason = StringField('Other Reason (if selected)', 
@@ -465,12 +479,12 @@ class DriverJobLeftForm(FlaskForm):
             raise ValidationError('Leave date cannot be in the future.')
 
 class DriverRejoinForm(FlaskForm):
-    driver_id = SelectField('Select Driver to Rejoin', coerce=int, validators=[DataRequired(message='Please select driver.')])
+    driver_id = SelectField('Select Driver to Rejoin', coerce=int, validators=[DataRequired(message='Please select driver.')], render_kw={'class': 'form-select search-select'})
     
-    project_id = SelectField('Project', coerce=int, validators=[DataRequired(message='Please select project.')])
-    district_id = SelectField('District', coerce=int, validators=[DataRequired(message='Please select district.')])
-    vehicle_id = SelectField('Vehicle', coerce=int, validators=[DataRequired(message='Please select vehicle.')])
-    shift = SelectField('Shift', choices=[], validators=[DataRequired(message='Please select shift.')])  # dynamic
+    project_id = SelectField('Project', coerce=int, validators=[DataRequired(message='Please select project.')], render_kw={'class': 'form-select search-select'})
+    district_id = SelectField('District', coerce=int, validators=[DataRequired(message='Please select district.')], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle', coerce=int, validators=[DataRequired(message='Please select vehicle.')], render_kw={'class': 'form-select search-select'})
+    shift = SelectField('Shift', choices=[], validators=[DataRequired(message='Please select shift.')], render_kw={'class': 'form-select search-select'})  # dynamic
     
     rejoin_date = DateField(
         'Rejoin Date',
@@ -499,27 +513,27 @@ ATTENDANCE_STATUS_CHOICES = [
 
 class DriverAttendanceFilterForm(FlaskForm):
     attendance_date = DateField('Date', format='%d-%m-%Y', default=date.today, validators=[DataRequired()])
-    project_id = SelectField('Project (optional)', coerce=int, validators=[Optional()])
-    district_id = SelectField('District (optional)', coerce=int, validators=[Optional()])
-    vehicle_id = SelectField('Vehicle (optional)', coerce=int, validators=[Optional()])
-    shift = SelectField('Shift (optional)', validators=[Optional()])
+    project_id = SelectField('Project (optional)', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
+    district_id = SelectField('District (optional)', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle (optional)', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
+    shift = SelectField('Shift (optional)', validators=[Optional()], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('Load')
 
 
 class DriverAttendanceReportForm(FlaskForm):
     month = IntegerField('Month', validators=[DataRequired(), NumberRange(min=1, max=12)])
     year = IntegerField('Year', validators=[DataRequired(), NumberRange(min=2020, max=2030)])
-    project_id = SelectField('Project (optional)', coerce=int, validators=[Optional()])
-    district_id = SelectField('District (optional)', coerce=int, validators=[Optional()])
+    project_id = SelectField('Project (optional)', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
+    district_id = SelectField('District (optional)', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
     search = StringField('Search', validators=[Optional(), Length(max=100)])
     submit = SubmitField('Show Report')
 
 
 # Task Report (Daily Vehicle Task)
 class TaskReportForm(FlaskForm):
-    district_id = SelectField('District', coerce=int, validators=[DataRequired()], choices=[(0, '-- Select District --')])
-    project_id = SelectField('Project', coerce=int, validators=[DataRequired()], choices=[(0, '-- Select Project --')])
-    vehicle_id = SelectField('Vehicle No', coerce=int, validators=[DataRequired()], choices=[(0, '-- Select Vehicle --')])
+    district_id = SelectField('District', coerce=int, validators=[DataRequired()], choices=[(0, '-- Select District --')], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[DataRequired()], choices=[(0, '-- Select Project --')], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle No', coerce=int, validators=[DataRequired()], choices=[(0, '-- Select Vehicle --')], render_kw={'class': 'form-select search-select'})
     task_date = DateField('Date', format='%d-%m-%Y', validators=[DataRequired()],
                           render_kw={"class": "form-control datepicker"})
     close_reading = DecimalField('Close Reading', places=2, validators=[DataRequired(), NumberRange(min=0)])
@@ -533,8 +547,8 @@ class TaskReportFilterForm(FlaskForm):
                           render_kw={"class": "form-control datepicker"})
     to_date = DateField('To Date', format='%d-%m-%Y', validators=[Optional()],
                         render_kw={"class": "form-control datepicker"})
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- All Districts --')])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- All Projects --')])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- All Districts --')], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- All Projects --')], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('View Report')
 
 
@@ -592,8 +606,8 @@ class RedTaskFilterForm(FlaskForm):
                           render_kw={"class": "form-control datepicker"})
     to_date = DateField('To Date', format='%d-%m-%Y', validators=[Optional()],
                         render_kw={"class": "form-control datepicker"})
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- All Districts --')])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- All Projects --')])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- All Districts --')], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- All Projects --')], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('View Report')
 
 
@@ -601,9 +615,9 @@ class RedTaskForm(FlaskForm):
     task_date = DateField('Date', format='%d-%m-%Y', validators=[DataRequired()],
                          render_kw={"class": "form-control datepicker"})
     task_id = StringField('Task ID', validators=[Optional(), Length(max=50)], render_kw={"placeholder": "e.g. PHF-4642638"})
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[])
-    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     reason = TextAreaField('Reason of Red Task', validators=[Optional()], render_kw={"rows": 2})
     driver_name = StringField('Driver Name', validators=[Optional(), Length(max=100)])
     call_to_dto = RadioField('Call to DTO / according to CRC', choices=[('Yes', 'Yes'), ('No', 'No')], validators=[Optional()])
@@ -614,7 +628,7 @@ class RedTaskForm(FlaskForm):
         ('Fine', 'Fine'),
         ('Warning', 'Warning'),
         ('Other', 'Other'),
-    ], validators=[Optional()])
+    ], validators=[Optional()], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('Save')
 
 
@@ -623,17 +637,17 @@ class VehicleMoveWithoutTaskFilterForm(FlaskForm):
                           render_kw={"class": "form-control datepicker"})
     to_date = DateField('To Date', format='%d-%m-%Y', validators=[Optional()],
                         render_kw={"class": "form-control datepicker"})
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- All Districts --')])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- All Projects --')])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- All Districts --')], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- All Projects --')], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('View Report')
 
 
 class VehicleMoveWithoutTaskForm(FlaskForm):
     move_date = DateField('Date', format='%d-%m-%Y', validators=[DataRequired()],
                           render_kw={"class": "form-control datepicker"})
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[])
-    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     km_in = DecimalField('KM IN', validators=[Optional()], render_kw={"class": "form-control", "step": "0.01"})
     km_out = DecimalField('KM Out', validators=[Optional()], render_kw={"class": "form-control", "step": "0.01"})
     d_km = DecimalField('D.Km', validators=[Optional()], render_kw={"class": "form-control", "step": "0.01"})
@@ -650,18 +664,18 @@ class PenaltyRecordFilterForm(FlaskForm):
                           render_kw={"class": "form-control datepicker"})
     to_date = DateField('To Date', format='%d-%m-%Y', validators=[Optional()],
                         render_kw={"class": "form-control datepicker"})
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- All Districts --')])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- All Projects --')])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- All Districts --')], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- All Projects --')], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('View Report')
 
 
 class PenaltyRecordForm(FlaskForm):
     record_date = DateField('Date', format='%d-%m-%Y', validators=[DataRequired()],
                            render_kw={"class": "form-control datepicker"})
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[])
-    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[])
-    driver_id = SelectField('Driver', coerce=int, validators=[Optional()], choices=[])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
+    driver_id = SelectField('Driver', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     fine = StringField('Fine', validators=[Optional(), Length(max=100)], render_kw={"placeholder": "Amount or description"})
     remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 3})
     submit = SubmitField('Save')
@@ -701,8 +715,8 @@ PARTY_TYPE_CHOICES = [
 
 class PartyForm(FlaskForm):
     name = StringField('Party Name', validators=[DataRequired(), Length(max=150)], render_kw={"placeholder": "Pump / Workshop / Shop name"})
-    party_type = SelectField('Type', choices=PARTY_TYPE_CHOICES, validators=[DataRequired()])
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[], default=None)
+    party_type = SelectField('Type', choices=PARTY_TYPE_CHOICES, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[], default=None, render_kw={'class': 'form-select search-select'})
     contact = StringField('Contact', validators=[Optional(), Length(max=100)])
     address = StringField('Address', validators=[Optional(), Length(max=255)])
     remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 2})
@@ -723,7 +737,7 @@ class ProductForm(FlaskForm):
 class EmployeePostForm(FlaskForm):
     short_name = StringField('Post Short Name', validators=[DataRequired(), Length(min=1, max=50)])
     full_name = StringField('Post Full Name', validators=[DataRequired(), Length(min=2, max=150)])
-    role_id = SelectField('Access Role (for User Management)', coerce=int, validators=[Optional()], choices=[])
+    role_id = SelectField('Access Role (for User Management)', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 2})
     submit = SubmitField('Save')
 
@@ -731,7 +745,7 @@ class EmployeePostForm(FlaskForm):
 class EmployeeForm(FlaskForm):
     code = StringField('Employee Code', validators=[Length(max=20)])
     name = StringField('Employee Name', validators=[DataRequired(), Length(max=100)])
-    post_id = SelectField('Employee Post', coerce=int, validators=[DataRequired()], choices=[])
+    post_id = SelectField('Employee Post', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
     department = StringField('Department', validators=[DataRequired(), Length(max=100)])
 
     father_name = StringField('Father Name', validators=[DataRequired(), Length(max=100)])
@@ -746,13 +760,13 @@ class EmployeeForm(FlaskForm):
         ('Graduate', 'Graduate'),
         ('Masters', 'Masters'),
         ('Other', 'Other'),
-    ], validators=[DataRequired()])
+    ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     marital_status = SelectField('Marital Status', choices=[
         ('Single', 'Single'),
         ('Married', 'Married'),
         ('Divorced', 'Divorced'),
         ('Widowed', 'Widowed'),
-    ], validators=[DataRequired()])
+    ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     cnic_no = StringField('CNIC No', validators=[
         DataRequired(),
         Regexp(r'^[0-9]{5}-[0-9]{7}-[0-9]{1}$', message='Format: 32304-1111111-5')
@@ -772,7 +786,7 @@ class EmployeeForm(FlaskForm):
         ('Active', 'Active'),
         ('Inactive', 'Inactive'),
         ('Left', 'Left'),
-    ], default='Active', validators=[DataRequired()])
+    ], default='Active', validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
 
     bank_name = StringField('Bank Name', validators=[Optional(), Length(max=100)])
     account_no = StringField('Account No', validators=[Optional(), Length(max=50)])
@@ -792,7 +806,7 @@ class EmployeeFormStep1(FlaskForm):
     """Tab 1: Basic & Personal Info only."""
     code = StringField('Employee Code', validators=[Length(max=20)])
     name = StringField('Employee Name', validators=[DataRequired(), Length(max=100)])
-    post_id = SelectField('Employee Post', coerce=int, validators=[DataRequired()], choices=[])
+    post_id = SelectField('Employee Post', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
     department = StringField('Department', validators=[DataRequired(), Length(max=100)])
     father_name = StringField('Father Name', validators=[DataRequired(), Length(max=100)])
     place_of_birth = StringField('Place of Birth', validators=[DataRequired(), Length(max=100)])
@@ -802,10 +816,10 @@ class EmployeeFormStep1(FlaskForm):
         ('', '-- Select Education --'),
         ('Middle', 'Middle'), ('Matric', 'Matric'), ('Intermediate', 'Intermediate'),
         ('Graduate', 'Graduate'), ('Masters', 'Masters'), ('Other', 'Other'),
-    ], validators=[DataRequired()])
+    ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     marital_status = SelectField('Marital Status', choices=[
         ('Single', 'Single'), ('Married', 'Married'), ('Divorced', 'Divorced'), ('Widowed', 'Widowed'),
-    ], validators=[DataRequired()])
+    ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     cnic_no = StringField('CNIC No', validators=[
         DataRequired(),
         Regexp(r'^[0-9]{5}-[0-9]{7}-[0-9]{1}$', message='Format: 32304-1111111-5')
@@ -815,7 +829,6 @@ class EmployeeFormStep1(FlaskForm):
     joining_date = DateField('Joining Date', format='%d-%m-%Y', validators=[DataRequired()],
                              render_kw={"class": "form-control datepicker"})
 
-
 class EmployeeFormStep2(FlaskForm):
     """Tab 2: Contact, Job & Bank only."""
     phone1 = StringField('Phone No 1', validators=[DataRequired(), Length(max=20)], render_kw={"placeholder": "03xx-xxxxxxx"})
@@ -823,12 +836,11 @@ class EmployeeFormStep2(FlaskForm):
     email = StringField('Email', validators=[Optional(), Email(), Length(max=120)])
     status = SelectField('Status', choices=[
         ('Active', 'Active'), ('Inactive', 'Inactive'), ('Left', 'Left'),
-    ], default='Active', validators=[DataRequired()])
+    ], default='Active', validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     bank_name = StringField('Bank Name', validators=[Optional(), Length(max=100)])
     account_no = StringField('Account No', validators=[Optional(), Length(max=50)])
     account_title = StringField('Account Title', validators=[Optional(), Length(max=100)])
     remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 3, "placeholder": "Previous job experience / other notes"})
-
 
 class EmployeeFormStep3(FlaskForm):
     """Tab 3: Project & District Assignment only."""
@@ -868,7 +880,7 @@ class UserForm(FlaskForm):
     reset_password = BooleanField('Reset password to default (123)', default=False, validators=[Optional()])
     full_name = StringField('Full Name', validators=[Optional(), Length(max=120)],
                             render_kw={"placeholder": "Display name"})
-    employee_post_id = SelectField('Post', coerce=int, validators=[Optional()], choices=[])
+    employee_post_id = SelectField('Post', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     is_active = BooleanField('Active', default=True, validators=[Optional()])
     submit = SubmitField('Save User')
 
@@ -876,7 +888,7 @@ class UserForm(FlaskForm):
 class RoleForm(FlaskForm):
     """Add/Edit role. Add: Post from Employee Posts (searchable). Edit: Role Name."""
     post_id = SelectField('Post', coerce=int, validators=[Optional()], choices=[],
-                         render_kw={"placeholder": "Search post..."})
+                         render_kw={"placeholder": "Search post...", "class": "form-select search-select"})
     name = StringField('Role Name', validators=[Optional(), Length(min=2, max=80)],
                       render_kw={"placeholder": "e.g. Accountant"})
     description = StringField('Description', validators=[Optional(), Length(max=255)],
@@ -890,7 +902,7 @@ class NotificationForm(FlaskForm):
     message = TextAreaField('Message', validators=[Optional()], render_kw={"rows": 3, "placeholder": "Details (optional)"})
     link = StringField('Link URL', validators=[Optional(), Length(max=500)], render_kw={"placeholder": "/reports/ (optional)"})
     link_text = StringField('Link Text', validators=[Optional(), Length(max=100)], render_kw={"placeholder": "View (optional)"})
-    notification_type = SelectField('Type', choices=[('info', 'Info'), ('warning', 'Warning'), ('success', 'Success'), ('danger', 'Urgent')], validators=[DataRequired()])
+    notification_type = SelectField('Type', choices=[('info', 'Info'), ('warning', 'Warning'), ('success', 'Success'), ('danger', 'Urgent')], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('Send to All Users')
 
 
@@ -932,24 +944,24 @@ class FuelExpenseFilterForm(FlaskForm):
                           render_kw={"class": "form-control datepicker"})
     to_date = DateField('To Date', format='%d-%m-%Y', validators=[Optional()],
                         render_kw={"class": "form-control datepicker"})
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')])
-    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[(0, '-- All Vehicles --')])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[(0, '-- All Vehicles --')], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('Apply Filter')
 
 
 class FuelExpenseForm(FlaskForm):
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')])
-    vehicle_id = SelectField('Vehicle No', coerce=int, validators=[DataRequired()], choices=[])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle No', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
     fueling_date = DateField('Fueling Date', format='%d-%m-%Y', validators=[DataRequired()],
                              render_kw={"class": "form-control datepicker"})
     card_swipe_date = DateField('Card Swipe Date', format='%d-%m-%Y', validators=[Optional()],
                                  render_kw={"class": "form-control datepicker"})
-    payment_type = SelectField('Payment Type', choices=PAYMENT_TYPE_CHOICES, validators=[Optional()])
+    payment_type = SelectField('Payment Type', choices=PAYMENT_TYPE_CHOICES, validators=[Optional()], render_kw={'class': 'form-select search-select'})
     slip_no = StringField('Slip No', validators=[Optional(), Length(max=50)], render_kw={"placeholder": "e.g. 4270"})
-    fuel_type = SelectField('Fuel Type', choices=FUEL_TYPE_CHOICES, validators=[Optional()])
-    fuel_pump_id = SelectField('Fuel Pump Name', coerce=int, validators=[Optional()], choices=[(0, '-- Select Pump --')])
+    fuel_type = SelectField('Fuel Type', choices=FUEL_TYPE_CHOICES, validators=[Optional()], render_kw={'class': 'form-select search-select'})
+    fuel_pump_id = SelectField('Fuel Pump Name', coerce=int, validators=[Optional()], choices=[(0, '-- Select Pump --')], render_kw={'class': 'form-select search-select'})
     previous_reading = DecimalField('Previous Reading', validators=[Optional()], render_kw={"class": "form-control", "step": "0.01", "readonly": True})
     current_reading = DecimalField('Current Reading', validators=[DataRequired()], render_kw={"class": "form-control", "step": "0.01"})
     amount = DecimalField('Amount', validators=[Optional()], render_kw={"class": "form-control", "step": "0.01"})
@@ -962,16 +974,16 @@ class OilExpenseFilterForm(FlaskForm):
                           render_kw={"class": "form-control datepicker"})
     to_date = DateField('To Date', format='%d-%m-%Y', validators=[Optional()],
                         render_kw={"class": "form-control datepicker"})
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')])
-    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[(0, '-- All Vehicles --')])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[(0, '-- All Vehicles --')], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('Apply Filter')
 
 
 class OilExpenseForm(FlaskForm):
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')])
-    vehicle_id = SelectField('Vehicle No', coerce=int, validators=[DataRequired()], choices=[])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle No', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
     expense_date = DateField('Oil Change Date', format='%d-%m-%Y', validators=[DataRequired()],
                              render_kw={"class": "form-control datepicker"})
     card_swipe_date = DateField('Card Swipe Date', format='%d-%m-%Y', validators=[Optional()],
@@ -989,16 +1001,16 @@ class MaintenanceExpenseFilterForm(FlaskForm):
                           render_kw={"class": "form-control datepicker"})
     to_date = DateField('To Date', format='%d-%m-%Y', validators=[Optional()],
                         render_kw={"class": "form-control datepicker"})
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')])
-    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[(0, '-- All Vehicles --')])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[(0, '-- All Vehicles --')], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('Apply Filter')
 
 
 class MaintenanceExpenseForm(FlaskForm):
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')])
-    vehicle_id = SelectField('Vehicle No', coerce=int, validators=[DataRequired()], choices=[])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle No', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
     expense_date = DateField('Date', format='%d-%m-%Y', validators=[DataRequired()],
                              render_kw={"class": "form-control datepicker"})
     previous_reading = DecimalField('Previous Reading', validators=[Optional()],
@@ -1025,8 +1037,8 @@ class PaymentVoucherForm(FlaskForm):
     """Payment Voucher: Money going out (Accounts → DTO, DTO → Party)"""
     payment_date = DateField('Payment Date', format='%d-%m-%Y', validators=[DataRequired()], 
                              render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
-    from_account_id = SelectField('From Account (Source)', coerce=int, validators=[DataRequired()], choices=[])
-    to_account_id = SelectField('To Account (Destination)', coerce=int, validators=[DataRequired()], choices=[])
+    from_account_id = SelectField('From Account (Source)', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
+    to_account_id = SelectField('To Account (Destination)', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
     amount = DecimalField('Amount', validators=[DataRequired(), NumberRange(min=0.01)], 
                          render_kw={"class": "form-control", "placeholder": "0.00", "step": "0.01"})
     payment_mode = SelectField('Payment Mode', choices=[
@@ -1034,13 +1046,13 @@ class PaymentVoucherForm(FlaskForm):
         ('Cheque', 'Cheque'),
         ('Bank Transfer', 'Bank Transfer'),
         ('Online', 'Online Payment')
-    ], validators=[DataRequired()])
+    ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     cheque_number = StringField('Cheque Number', validators=[Optional(), Length(max=50)],
                                render_kw={"class": "form-control", "placeholder": "If payment mode is Cheque"})
     description = TextAreaField('Description', validators=[Optional()], 
                                render_kw={"class": "form-control", "rows": 3, "placeholder": "Payment details..."})
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[])
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('Save Payment Voucher')
 
 
@@ -1048,8 +1060,8 @@ class ReceiptVoucherForm(FlaskForm):
     """Receipt Voucher: Money coming in (refunds, income)"""
     receipt_date = DateField('Receipt Date', format='%d-%m-%Y', validators=[DataRequired()],
                             render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
-    from_account_id = SelectField('From Account (Source)', coerce=int, validators=[DataRequired()], choices=[])
-    to_account_id = SelectField('To Account (Our Account)', coerce=int, validators=[DataRequired()], choices=[])
+    from_account_id = SelectField('From Account (Source)', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
+    to_account_id = SelectField('To Account (Our Account)', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
     amount = DecimalField('Amount', validators=[DataRequired(), NumberRange(min=0.01)],
                          render_kw={"class": "form-control", "placeholder": "0.00", "step": "0.01"})
     receipt_mode = SelectField('Receipt Mode', choices=[
@@ -1057,7 +1069,7 @@ class ReceiptVoucherForm(FlaskForm):
         ('Cheque', 'Cheque'),
         ('Bank Transfer', 'Bank Transfer'),
         ('Online', 'Online Payment')
-    ], validators=[DataRequired()])
+    ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     description = TextAreaField('Description', validators=[Optional()],
                                render_kw={"class": "form-control", "rows": 3, "placeholder": "Receipt details..."})
     submit = SubmitField('Save Receipt Voucher')
@@ -1067,8 +1079,8 @@ class BankEntryForm(FlaskForm):
     """Bank Entry: Transfer between bank accounts or cash"""
     entry_date = DateField('Entry Date', format='%d-%m-%Y', validators=[DataRequired()],
                           render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
-    from_account_id = SelectField('From Account', coerce=int, validators=[DataRequired()], choices=[])
-    to_account_id = SelectField('To Account', coerce=int, validators=[DataRequired()], choices=[])
+    from_account_id = SelectField('From Account', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
+    to_account_id = SelectField('To Account', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
     amount = DecimalField('Amount', validators=[DataRequired(), NumberRange(min=0.01)],
                          render_kw={"class": "form-control", "placeholder": "0.00", "step": "0.01"})
     description = TextAreaField('Description', validators=[Optional()],
@@ -1082,8 +1094,8 @@ class JournalVoucherForm(FlaskForm):
                           render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
     description = TextAreaField('Description', validators=[DataRequired()],
                                render_kw={"class": "form-control", "rows": 3, "placeholder": "Journal entry description..."})
-    district_id = SelectField('District (Optional)', coerce=int, validators=[Optional()], choices=[])
-    project_id = SelectField('Project (Optional)', coerce=int, validators=[Optional()], choices=[])
+    district_id = SelectField('District (Optional)', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project (Optional)', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('Save Journal Voucher')
     # Note: Journal lines will be added dynamically via JavaScript
 
@@ -1092,15 +1104,15 @@ class EmployeeExpenseForm(FlaskForm):
     """Employee Expense: Non-vehicle expenses (Travel, Office, Communication, etc.)"""
     expense_date = DateField('Expense Date', format='%d-%m-%Y', validators=[DataRequired()],
                             render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
-    employee_id = SelectField('Employee (Optional)', coerce=int, validators=[Optional()], choices=[])
-    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[])
-    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[])
+    employee_id = SelectField('Employee (Optional)', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
+    district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     expense_category = SelectField('Expense Category', choices=[
         ('Travel', 'Travel Expense'),
         ('Office', 'Office Expense'),
         ('Communication', 'Communication Expense'),
         ('Other', 'Other Expense')
-    ], validators=[DataRequired()])
+    ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     description = TextAreaField('Description', validators=[DataRequired()],
                                render_kw={"class": "form-control", "rows": 3, "placeholder": "Expense details..."})
     amount = DecimalField('Amount', validators=[DataRequired(), NumberRange(min=0.01)],
@@ -1109,7 +1121,7 @@ class EmployeeExpenseForm(FlaskForm):
         ('Cash', 'Cash'),
         ('Reimbursement', 'Reimbursement'),
         ('Advance', 'Advance')
-    ], validators=[DataRequired()])
+    ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     receipt = FileField('Receipt/Bill (Optional)', validators=[Optional(),
         FileAllowed(['pdf', 'jpg', 'jpeg', 'png'], 'PDF or images only')])
     submit = SubmitField('Save Employee Expense')
@@ -1117,13 +1129,13 @@ class EmployeeExpenseForm(FlaskForm):
 
 class AccountLedgerFilterForm(FlaskForm):
     """Filter form for Account Ledger view"""
-    account_id = SelectField('Select Account', coerce=int, validators=[Optional()], choices=[])
+    account_id = SelectField('Select Account', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     from_date = DateField('From Date', format='%d-%m-%Y', validators=[Optional()],
                          render_kw={"class": "form-control datepicker", "placeholder": "Start date"})
     to_date = DateField('To Date', format='%d-%m-%Y', validators=[Optional()],
                        render_kw={"class": "form-control datepicker", "placeholder": "End date"})
-    district_id = SelectField('District (Optional)', coerce=int, validators=[Optional()], choices=[])
-    project_id = SelectField('Project (Optional)', coerce=int, validators=[Optional()], choices=[])
+    district_id = SelectField('District (Optional)', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project (Optional)', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('View Ledger')
 
 

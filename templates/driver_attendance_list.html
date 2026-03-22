@@ -43,7 +43,7 @@
         <div class="row g-3 align-items-end">
           <div class="col-md-3 col-lg-2">
             <label class="form-label">Project</label>
-            <select id="projectSelect" class="form-select select2-enable" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
+            <select id="projectSelect" class="form-select search-select" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
               <option value="0" {% if not project_id %}selected{% endif %}>All Projects</option>
               {% for p in form.project_id.choices if p[0] != 0 %}
                 <option value="{{ p[0] }}" {% if project_id == p[0] %}selected{% endif %}>{{ p[1] }}</option>
@@ -52,7 +52,7 @@
           </div>
           <div class="col-md-3 col-lg-2">
             <label class="form-label">District</label>
-            <select id="districtSelect" class="form-select select2-enable" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
+            <select id="districtSelect" class="form-select search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
               <option value="0" {% if not district_id %}selected{% endif %}>All Districts</option>
               {% for d in form.district_id.choices if d[0] != 0 %}
                 <option value="{{ d[0] }}" {% if district_id == d[0] %}selected{% endif %}>{{ d[1] }}</option>
@@ -61,7 +61,7 @@
           </div>
           <div class="col-md-3 col-lg-2">
             <label class="form-label">Vehicle</label>
-            <select id="vehicleSelect" class="form-select select2-enable" data-placeholder="Search vehicle..." {% if disable_vehicle %}disabled{% endif %}>
+            <select id="vehicleSelect" class="form-select search-select" data-placeholder="Search vehicle..." {% if disable_vehicle %}disabled{% endif %}>
               <option value="0" {% if not vehicle_id %}selected{% endif %}>All Vehicles</option>
               {% for v in form.vehicle_id.choices if v[0] != 0 %}
                 <option value="{{ v[0] }}" {% if vehicle_id == v[0] %}selected{% endif %}>{{ v[1] }}</option>
@@ -70,7 +70,7 @@
           </div>
           <div class="col-md-3 col-lg-2">
             <label class="form-label">Shift</label>
-            <select id="shiftSelect" class="form-select select2-enable" data-placeholder="Shift" {% if disable_shift %}disabled{% endif %}>
+            <select id="shiftSelect" class="form-select search-select" data-placeholder="Shift" {% if disable_shift %}disabled{% endif %}>
               <option value="" {% if not shift %}selected{% endif %}>All Shifts</option>
               {% for s in form.shift.choices if s[0] != '' %}
                 <option value="{{ s[0] }}" {% if shift == s[0] %}selected{% endif %}>{{ s[1] }}</option>
@@ -79,7 +79,7 @@
           </div>
           <div class="col-md-3 col-lg-2">
             <label class="form-label">Driver</label>
-            <select id="driverSelect" class="form-select select2-enable" data-placeholder="Search driver...">
+            <select id="driverSelect" class="form-select search-select" data-placeholder="Search driver...">
               <option value="0" {% if not driver_id %}selected{% endif %}>All Drivers</option>
               {% for d in vehicle_drivers %}
                 <option value="{{ d.id }}" {% if driver_id == d.id %}selected{% endif %}>{{ d.name }} ({{ d.driver_id or '-' }}) - {{ d.shift or '-' }}</option>
@@ -274,62 +274,19 @@
     if (hiddenDriverId && driverSelect) hiddenDriverId.value = driverSelect.value || '0';
   }
 
-  function syncSelectFromSelect2(sel, hiddenEl, emptyVal) {
-    if (typeof $ === 'undefined' || !$.fn.select2 || !sel) return;
-    var v = $(sel).val();
-    var val = (v != null && v !== '') ? v : (emptyVal !== undefined ? emptyVal : '0');
-    sel.value = val;
-    if (hiddenEl) hiddenEl.value = val;
-  }
-
-  function initSelect2For(el, placeholder) {
-    if (!el || !$.fn.select2) return;
-    var $el = $(el);
-    if ($el.data('select2')) $el.select2('destroy');
-    $el.select2({ theme: 'bootstrap-5', width: '100%', placeholder: placeholder || 'Search...' });
+  function reinitDropdown(el, placeholder) {
+    if (!el) return;
+    if (el.tomselect) el.tomselect.destroy();
+    initSearchableDropdowns(el.parentNode);
   }
 
   setTimeout(function() {
-    initSelect2For(projectSelect, 'Search project...');
-    initSelect2For(districtSelect, 'Search district...');
-    initSelect2For(vehicleSelect, 'Search vehicle...');
-    initSelect2For(shiftSelect, 'Shift');
-    initSelect2For(driverSelect, 'Search driver...');
+    reinitDropdown(projectSelect, 'Search project...');
+    reinitDropdown(districtSelect, 'Search district...');
+    reinitDropdown(vehicleSelect, 'Search vehicle...');
+    reinitDropdown(shiftSelect, 'Shift');
+    reinitDropdown(driverSelect, 'Search driver...');
 
-    $(projectSelect).on('select2:select', function(e) {
-      if (e.params && e.params.data && e.params.data.id != null) {
-        projectSelect.value = e.params.data.id;
-        if (hiddenProjectId) hiddenProjectId.value = e.params.data.id;
-        runProjectChange(e.params.data.id);
-      }
-    });
-    $(districtSelect).on('select2:select', function(e) {
-      if (e.params && e.params.data && e.params.data.id != null) {
-        districtSelect.value = e.params.data.id;
-        if (hiddenDistrictId) hiddenDistrictId.value = e.params.data.id;
-        runDistrictChange(projectSelect ? projectSelect.value : '0', e.params.data.id);
-      }
-    });
-    $(vehicleSelect).on('select2:select', function(e) {
-      if (e.params && e.params.data && e.params.data.id != null) {
-        vehicleSelect.value = e.params.data.id;
-        if (hiddenVehicleId) hiddenVehicleId.value = e.params.data.id;
-        syncHiddenFromSelects();
-        refreshDriverDropdown(true);
-      }
-    });
-    $(shiftSelect).on('select2:select', function(e) {
-      var v = e.params && e.params.data && e.params.data.id;
-      shiftSelect.value = (v != null && v !== '') ? v : '';
-      if (hiddenShift) hiddenShift.value = shiftSelect.value;
-      refreshDriverDropdown(true);
-    });
-    $(driverSelect).on('select2:select', function(e) {
-      if (e.params && e.params.data && e.params.data.id != null) {
-        driverSelect.value = e.params.data.id;
-        if (hiddenDriverId) hiddenDriverId.value = e.params.data.id;
-      }
-    });
     projectSelect.addEventListener('change', syncHiddenFromSelects);
     districtSelect.addEventListener('change', syncHiddenFromSelects);
     vehicleSelect.addEventListener('change', syncHiddenFromSelects);
@@ -340,14 +297,7 @@
   var filterForm = document.getElementById('filterForm');
   if (filterForm) {
     filterForm.addEventListener('submit', function(e) {
-      e.preventDefault();
-      syncSelectFromSelect2(projectSelect, hiddenProjectId);
-      syncSelectFromSelect2(districtSelect, hiddenDistrictId);
-      syncSelectFromSelect2(vehicleSelect, hiddenVehicleId);
-      syncSelectFromSelect2(shiftSelect, hiddenShift, '');
-      syncSelectFromSelect2(driverSelect, hiddenDriverId);
       syncHiddenFromSelects();
-      filterForm.submit();
     });
   }
 
@@ -362,7 +312,7 @@
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(arr) {
-        if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
+        if (driverSelect.tomselect) driverSelect.tomselect.destroy();
         driverSelect.innerHTML = '<option value="0">All Drivers</option>';
         var ids = ['0'];
         (arr || []).forEach(function(d) {
@@ -375,13 +325,13 @@
         var keep = keepSelectionIfInList && currentDriverId && ids.indexOf(String(currentDriverId)) !== -1;
         driverSelect.value = keep ? currentDriverId : '0';
         if (hiddenDriverId) hiddenDriverId.value = driverSelect.value;
-        initSelect2For(driverSelect, 'Search driver...');
+        reinitDropdown(driverSelect, 'Search driver...');
       })
       .catch(function() {
         driverSelect.innerHTML = '<option value="0">All Drivers</option>';
         driverSelect.value = '0';
         if (hiddenDriverId) hiddenDriverId.value = '0';
-        initSelect2For(driverSelect, 'Search driver...');
+        reinitDropdown(driverSelect, 'Search driver...');
       });
   }
 
@@ -390,14 +340,14 @@
     if (hiddenVehicleId) hiddenVehicleId.value = '0';
     if (hiddenDistrictId) hiddenDistrictId.value = '0';
     if (hiddenDriverId) hiddenDriverId.value = '0';
-    if ($(districtSelect).data('select2')) $(districtSelect).select2('destroy');
+    if (districtSelect.tomselect) districtSelect.tomselect.destroy();
     districtSelect.innerHTML = '<option value="0">All Districts</option>';
     vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
     if (driverSelect) driverSelect.innerHTML = '<option value="0">All Drivers</option>';
     vehicleSelect.value = '0';
-    initSelect2For(vehicleSelect, 'Search vehicle...');
-    initSelect2For(districtSelect, 'Search district...');
-    if (driverSelect) initSelect2For(driverSelect, 'Search driver...');
+    reinitDropdown(vehicleSelect, 'Search vehicle...');
+    reinitDropdown(districtSelect, 'Search district...');
+    if (driverSelect) reinitDropdown(driverSelect, 'Search driver...');
     if (pid && pid !== '0') {
       fetch('/api/filter/districts-by-project?project_id=' + pid)
         .then(function(r) { return r.json(); })
@@ -408,12 +358,12 @@
             opt.textContent = d.name;
             districtSelect.appendChild(opt);
           });
-          initSelect2For(districtSelect, 'Search district...');
+          reinitDropdown(districtSelect, 'Search district...');
         });
       fetch('/api/filter/all-vehicles-by-project-district?project_id=' + pid + '&district_id=0')
         .then(function(r) { return r.json(); })
         .then(function(vehicles) {
-          if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+          if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
           vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
           vehicles.forEach(function(v) {
             var opt = document.createElement('option');
@@ -422,14 +372,14 @@
             vehicleSelect.appendChild(opt);
           });
           vehicleSelect.value = '0';
-          initSelect2For(vehicleSelect, 'Search vehicle...');
+          reinitDropdown(vehicleSelect, 'Search vehicle...');
           refreshDriverDropdown(false);
         });
     } else {
       fetch('/api/filter/all-vehicles-by-project-district')
         .then(function(r) { return r.json(); })
         .then(function(vehicles) {
-          if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+          if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
           vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
           (vehicles || []).forEach(function(v) {
             var opt = document.createElement('option');
@@ -438,7 +388,7 @@
             vehicleSelect.appendChild(opt);
           });
           vehicleSelect.value = '0';
-          initSelect2For(vehicleSelect, 'Search vehicle...');
+          reinitDropdown(vehicleSelect, 'Search vehicle...');
           refreshDriverDropdown(false);
         });
     }
@@ -448,17 +398,17 @@
     if (hiddenDistrictId) hiddenDistrictId.value = did || '0';
     if (hiddenVehicleId) hiddenVehicleId.value = '0';
     if (hiddenDriverId) hiddenDriverId.value = '0';
-    if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
-    if (driverSelect && $(driverSelect).data('select2')) $(driverSelect).select2('destroy');
+    if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
+    if (driverSelect && driverSelect.tomselect) driverSelect.tomselect.destroy();
     vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
     if (driverSelect) driverSelect.innerHTML = '<option value="0">All Drivers</option>';
     vehicleSelect.value = '0';
-    initSelect2For(vehicleSelect, 'Search vehicle...');
-    if (driverSelect) initSelect2For(driverSelect, 'Search driver...');
+    reinitDropdown(vehicleSelect, 'Search vehicle...');
+    if (driverSelect) reinitDropdown(driverSelect, 'Search driver...');
     fetch('/api/filter/all-vehicles-by-project-district?project_id=' + (pid || '0') + '&district_id=' + (did || '0'))
       .then(function(r) { return r.json(); })
       .then(function(vehicles) {
-        if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+        if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
         vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
         vehicles.forEach(function(v) {
           var opt = document.createElement('option');
@@ -467,7 +417,7 @@
           vehicleSelect.appendChild(opt);
         });
         vehicleSelect.value = '0';
-        initSelect2For(vehicleSelect, 'Search vehicle...');
+        reinitDropdown(vehicleSelect, 'Search vehicle...');
         refreshDriverDropdown(true);
       });
   }

@@ -74,8 +74,8 @@
   .fuel-form-wrap .btn-cancel { border-radius: 6px; font-size: 0.85rem; }
   .fuel-form-wrap #priceHintPanel { font-size: 0.7rem; padding: 0.35rem 0.5rem; margin-top: 0.25rem; }
   .fuel-form-wrap #suggestedPriceWrap { font-size: 0.7rem; margin-top: 0.2rem; }
-  .fuel-form-wrap .select2-container--bootstrap-5 .select2-selection { min-height: 32px; }
-  .fuel-form-wrap .select2-container--bootstrap-5 .select2-selection .select2-selection__rendered { font-size: 0.8rem; line-height: 1.2; }
+  .fuel-form-wrap .ts-wrapper .ts-control { min-height: 32px; }
+  .fuel-form-wrap .ts-wrapper .ts-control input { font-size: 0.8rem; line-height: 1.2; }
 </style>
 <div class="container-fluid fuel-form-wrap py-2">
   <div class="page-header d-flex justify-content-between align-items-center">
@@ -111,7 +111,7 @@
               <div class="col-12 field-group">
                 <label class="form-label">Fuel Pump Name</label>
                 <div class="d-flex gap-2 align-items-center">
-                  {{ form.fuel_pump_id(class="form-select", id="fuelPumpSelect") }}
+                  {{ form.fuel_pump_id(class="form-select search-select", id="fuelPumpSelect") }}
                   <a href="{{ url_for('party_form') }}?type=Pump&next={{ request.url | urlencode }}" class="btn btn-outline-primary btn-sm text-nowrap" title="Create new pump">Create Pump</a>
                 </div>
               </div>
@@ -304,8 +304,11 @@ document.addEventListener('DOMContentLoaded', function() {
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
+      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
+      if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
       projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
       vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+      initSearchableDropdowns(vehicleSelect.parentNode);
       if (did && did !== '0') {
         fetch('/get_projects_by_district/' + did)
           .then(function(r) { return r.json(); })
@@ -316,7 +319,10 @@ document.addEventListener('DOMContentLoaded', function() {
               o.textContent = p.name;
               projectSelect.appendChild(o);
             });
+            initSearchableDropdowns(projectSelect.parentNode);
           });
+      } else {
+        initSearchableDropdowns(projectSelect.parentNode);
       }
     });
   }
@@ -325,6 +331,7 @@ document.addEventListener('DOMContentLoaded', function() {
     projectSelect.addEventListener('change', function() {
       var pid = projectSelect.value;
       var did = districtSelect ? districtSelect.value : '';
+      if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
       vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
       if (pid && pid !== '0') {
         var url = '/get_vehicles_by_project_district?project_id=' + pid;
@@ -336,7 +343,10 @@ document.addEventListener('DOMContentLoaded', function() {
             o.textContent = v.vehicle_no;
             vehicleSelect.appendChild(o);
           });
+          initSearchableDropdowns(vehicleSelect.parentNode);
         });
+      } else {
+        initSearchableDropdowns(vehicleSelect.parentNode);
       }
     });
   }
@@ -419,8 +429,10 @@ document.addEventListener('DOMContentLoaded', function() {
     fuelPriceInput.addEventListener('focus', fetchPriceHint);
   }
 
-  if (typeof $ !== 'undefined' && $('#fuelPumpSelect').length) {
-    $('#fuelPumpSelect').select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search pump...' });
+  var fuelPumpSel = document.getElementById('fuelPumpSelect');
+  if (fuelPumpSel) {
+    if (fuelPumpSel.tomselect) fuelPumpSel.tomselect.destroy();
+    initSearchableDropdowns(fuelPumpSel.parentNode);
   }
 
   fetchLastReading();

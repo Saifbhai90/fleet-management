@@ -16,7 +16,7 @@
         </div>
         <div class="col-md-3">
           <label class="form-label">District <span class="text-danger">*</span></label>
-          <select name="district_id" id="districtSelect" class="form-select" required>
+          <select name="district_id" id="districtSelect" class="form-select search-select" required>
             <option value="0">-- Select District --</option>
             {% for d in districts %}
               <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -25,7 +25,7 @@
         </div>
         <div class="col-md-3">
           <label class="form-label">Project <span class="text-danger">*</span></label>
-          <select name="project_id" id="projectSelect" class="form-select" required>
+          <select name="project_id" id="projectSelect" class="form-select search-select" required>
             <option value="0">-- Select Project --</option>
             {% for p in projects %}
               <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
@@ -126,6 +126,7 @@
   if (projectSelect && document.getElementById('districtSelect')) {
     document.getElementById('districtSelect').addEventListener('change', function() {
       var did = this.value;
+      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
       projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
       if (did && did !== '0') {
         fetch('/get_projects_by_district/' + did)
@@ -137,7 +138,10 @@
               o.textContent = p.name;
               projectSelect.appendChild(o);
             });
+            initSearchableDropdowns(projectSelect.parentNode);
           });
+      } else {
+        initSearchableDropdowns(projectSelect.parentNode);
       }
     });
   }

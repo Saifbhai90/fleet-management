@@ -24,7 +24,7 @@
             <label class="form-label fw-bold text-secondary small">PROJECT <span class="text-danger">*</span></label>
             <div class="input-group">
               <span class="input-group-text bg-light"><i class="bi bi-briefcase"></i></span>
-              {{ form.project_id(class="form-select form-select-lg select2-enable") }}
+              {{ form.project_id(class="form-select form-select-lg search-select") }}
             </div>
             {% for error in form.project_id.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
           </div>
@@ -35,7 +35,7 @@
             <label class="form-label fw-bold text-secondary small">TRANSFER TO COMPANY <span class="text-danger">*</span></label>
             <div class="input-group">
               <span class="input-group-text bg-light"><i class="bi bi-building"></i></span>
-              {{ form.new_company_id(class="form-select form-select-lg select2-enable") }}
+              {{ form.new_company_id(class="form-select form-select-lg search-select") }}
             </div>
             {% for error in form.new_company_id.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
           </div>
@@ -71,13 +71,4 @@
   </div>
 </div>
 
-<!-- Select2 & Flatpickr Scripts -->
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script>
-  $(document).ready(function() {
-    $('.select2-enable').select2({ placeholder: "Please select...", allowClear: true, width: '100%' });
-  });
-</script>
 {% endblock %}

@@ -23,7 +23,7 @@
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">Project</label>
-            <select name="project_id" id="reportProjectSelect" class="form-select" {% if disable_project %}disabled{% endif %}>
+            <select name="project_id" id="reportProjectSelect" class="form-select search-select" {% if disable_project %}disabled{% endif %}>
               {% for val, label in form.project_id.choices %}
                 <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -32,7 +32,7 @@
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">District</label>
-            <select name="district_id" id="reportDistrictSelect" class="form-select" {% if disable_district %}disabled{% endif %}>
+            <select name="district_id" id="reportDistrictSelect" class="form-select search-select" {% if disable_district %}disabled{% endif %}>
               {% for val, label in form.district_id.choices %}
                 <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -41,7 +41,7 @@
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">Vehicle</label>
-            <select name="vehicle_id" id="reportVehicleSelect" class="form-select">
+            <select name="vehicle_id" id="reportVehicleSelect" class="form-select search-select">
               <option value="0">-- All Vehicles --</option>
               {% if vehicle_choices %}
                 {% for v_id, v_label in vehicle_choices %}
@@ -57,7 +57,7 @@
           <div class="col-md-2 col-lg-2">
             <label class="form-label">Shift</label>
             {% set allowed_shifts = session.get('allowed_shifts') or [] %}
-            <select name="shift" id="reportShiftSelect" class="form-select">
+            <select name="shift" id="reportShiftSelect" class="form-select search-select">
               <option value="">-- All Shifts --</option>
               {% if not allowed_shifts %}
               <option value="Morning" {% if (selected_shift or '') == 'Morning' %}selected{% endif %}>Morning</option>
@@ -71,7 +71,7 @@
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">Driver</label>
-            <select name="driver_id" id="reportDriverSelect" class="form-select">
+            <select name="driver_id" id="reportDriverSelect" class="form-select search-select">
               <option value="0">-- All Drivers --</option>
               {% for d in vehicle_drivers %}
               <option value="{{ d.id }}" {% if selected_driver_id == d.id %}selected{% endif %}>{{ d.name }} ({{ d.driver_id or '-' }}) - {{ d.shift or '-' }}</option>

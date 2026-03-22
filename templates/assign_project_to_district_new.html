@@ -22,14 +22,14 @@
         {{ form.hidden_tag() }}
         <div class="mb-3">
           <label class="form-label fw-bold">Select Project</label>
-          {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else ""), id="project_id") }}
+          {{ form.project_id(class="form-select search-select " + ("is-invalid" if form.project_id.errors else ""), id="project_id") }}
           {% for error in form.project_id.errors %}
           <div class="invalid-feedback d-block">{{ error }}</div>
           {% endfor %}
         </div>
         <div class="mb-3">
           <label class="form-label fw-bold">Select District</label>
-          {{ form.district_id(class="form-select select2-enable " + ("is-invalid" if form.district_id.errors else ""), id="district_id") }}
+          {{ form.district_id(class="form-select search-select " + ("is-invalid" if form.district_id.errors else ""), id="district_id") }}
           {% for error in form.district_id.errors %}
           <div class="invalid-feedback d-block">{{ error }}</div>
           {% endfor %}
@@ -55,75 +55,57 @@
 </div>
 <script>
 (function() {
+  function rebuildSel(el, html) {
+    if (!el) return;
+    if (el.tomselect) el.tomselect.destroy();
+    el.innerHTML = html;
+    initSearchableDropdowns(el.parentNode);
+  }
+
+  var projSel = document.getElementById('project_id');
+  var distSel = document.getElementById('district_id');
+
   function loadUnassignedDistricts(projectId, preserveDistrictId) {
-    var $districtSelect = $('#district_id');
     if (!projectId || projectId === '0') {
-      $districtSelect.empty().append('<option value="0">-- Select District --</option>');
-      $districtSelect.val('0').trigger('change');
+      rebuildSel(distSel, '<option value="0">-- Select District --</option>');
       return;
     }
-    // Destroy Select2 before changing options so it reflects new list
-    if ($districtSelect.data('select2')) {
-      $districtSelect.select2('destroy');
-    }
-    $districtSelect.empty().append('<option value="0">Loading...</option>').val('0');
-    $districtSelect.select2({ theme: 'bootstrap-5', width: '100%' });
-
+    rebuildSel(distSel, '<option value="0">Loading...</option>');
     fetch('/get_unassigned_districts_by_project/' + projectId)
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if ($districtSelect.data('select2')) {
-          $districtSelect.select2('destroy');
-        }
-        $districtSelect.empty().append('<option value="0">-- Select District --</option>');
-        data.forEach(function(d) {
-          $districtSelect.append($('<option></option>').attr('value', d.id).text(d.name));
-        });
+        var html = '<option value="0">-- Select District --</option>';
+        data.forEach(function(d) { html += '<option value="' + d.id + '">' + d.name + '</option>'; });
+        rebuildSel(distSel, html);
         if (preserveDistrictId && preserveDistrictId !== '0' && preserveDistrictId !== '') {
-          $districtSelect.val(preserveDistrictId);
-        } else {
-          $districtSelect.val('0');
+          if (distSel.tomselect) distSel.tomselect.setValue(preserveDistrictId);
+          else distSel.value = preserveDistrictId;
         }
-        $districtSelect.select2({ theme: 'bootstrap-5', width: '100%' });
-        $districtSelect.trigger('change');
       })
       .catch(function() {
-        if ($districtSelect.data('select2')) {
-          $districtSelect.select2('destroy');
-        }
-        $districtSelect.empty().append('<option value="0">-- Select District --</option>').val('0');
-        $districtSelect.select2({ theme: 'bootstrap-5', width: '100%' });
+        rebuildSel(distSel, '<option value="0">-- Select District --</option>');
       });
   }
 
-  $(document).ready(function() {
-    var $projectSelect = $('#project_id');
-    var $districtSelect = $('#district_id');
-    var $form = $('form[method="POST"]');
-
-    // Project change: load only unassigned districts for this project
-    $projectSelect.on('change', function() {
-      var pid = $(this).val();
-      loadUnassignedDistricts(pid, null);
+  if (projSel) {
+    projSel.addEventListener('change', function() {
+      loadUnassignedDistricts(this.value, null);
     });
+  }
 
-    $form.on('reset', function() {
+  var btnClear = document.getElementById('btnClear');
+  if (btnClear) {
+    btnClear.addEventListener('click', function() {
       setTimeout(function() {
-        if ($districtSelect.data('select2')) {
-          $districtSelect.select2('destroy');
-        }
-        $districtSelect.empty().append('<option value="0">-- Select District --</option>').val('0');
-        $districtSelect.select2({ theme: 'bootstrap-5', width: '100%' });
-        $projectSelect.val('0').trigger('change');
+        rebuildSel(distSel, '<option value="0">-- Select District --</option>');
+        if (projSel) { if (projSel.tomselect) projSel.tomselect.setValue('0'); else projSel.value = '0'; }
       }, 0);
     });
+  }
 
-    // After validation error: project may already be selected; load its unassigned districts
-    var selectedProject = $projectSelect.val();
-    if (selectedProject && selectedProject !== '0') {
-      loadUnassignedDistricts(selectedProject, $districtSelect.val());
-    }
-  });
+  if (projSel && projSel.value && projSel.value !== '0') {
+    loadUnassignedDistricts(projSel.value, distSel ? distSel.value : null);
+  }
 })();
 </script>
 {% endblock %}

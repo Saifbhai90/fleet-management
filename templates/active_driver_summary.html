@@ -99,7 +99,7 @@
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Project</label>
-                    <select name="project_id" id="projectSelect" class="form-select filter-input" {% if disable_project %}disabled{% endif %}>
+                    <select name="project_id" id="projectSelect" class="form-select filter-input search-select" {% if disable_project %}disabled{% endif %}>
                         {% for val, label in project_choices %}
                         <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -108,7 +108,7 @@
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">District</label>
-                    <select name="district_id" id="districtSelect" class="form-select filter-input" {% if disable_district %}disabled{% endif %}>
+                    <select name="district_id" id="districtSelect" class="form-select filter-input search-select" {% if disable_district %}disabled{% endif %}>
                         {% for val, label in district_choices %}
                         <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -117,7 +117,7 @@
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Vehicle</label>
-                    <select name="vehicle_id" id="vehicleSelect" class="form-select filter-input" {% if disable_vehicle %}disabled{% endif %}>
+                    <select name="vehicle_id" id="vehicleSelect" class="form-select filter-input search-select" {% if disable_vehicle %}disabled{% endif %}>
                         {% for val, label in vehicle_choices %}
                         <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -126,7 +126,7 @@
                 </div>
                 <div class="col-6 col-md-1">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Shift</label>
-                    <select name="shift" id="shiftSelect" class="form-select filter-input" {% if disable_shift %}disabled{% endif %}>
+                    <select name="shift" id="shiftSelect" class="form-select filter-input search-select" {% if disable_shift %}disabled{% endif %}>
                         <option value="" {% if not shift %}selected{% endif %}>All</option>
                         <option value="Morning" {% if shift == 'Morning' %}selected{% endif %}>Morning</option>
                         <option value="Night" {% if shift == 'Night' %}selected{% endif %}>Night</option>

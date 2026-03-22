@@ -21,8 +21,7 @@ body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
 }
 .form-control:focus, .form-select:focus { border-color: #10b981 !important; box-shadow: 0 0 0 3px rgba(16,185,129,.12) !important; }
 textarea.form-control { height: auto !important; }
-.select2-container--bootstrap-5 .select2-selection { height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; }
-.select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered { line-height: 38px !important; }
+.ts-wrapper .ts-control { min-height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; }
 .section-divider { border: none; border-top: 1.5px dashed #e2e8f0; margin: 18px 0; }
 .zone-box { border-radius: 12px; padding: 16px; margin-bottom: 16px; }
 .zone-box.old-zone { background: #f8fafc; border: 1.5px solid #e2e8f0; }
@@ -82,7 +81,7 @@ textarea.form-control { height: auto !important; }
                         <div class="row g-2">
                             <div class="col-md-4">
                                 <label class="form-label">Old Project</label>
-                                <select id="old_project" name="old_project" class="form-select select2-enable">
+                                <select id="old_project" name="old_project" class="form-select search-select">
                                     <option value="">-- Select Project --</option>
                                     {% for p in projects %}
                                     <option value="{{ p.id }}" {% if old_project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
@@ -91,7 +90,7 @@ textarea.form-control { height: auto !important; }
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Old District</label>
-                                <select id="old_district" name="old_district" class="form-select select2-enable" {% if not old_project_id %}disabled{% endif %}>
+                                <select id="old_district" name="old_district" class="form-select search-select" {% if not old_project_id %}disabled{% endif %}>
                                     <option value="">-- Select District --</option>
                                     {% for d in old_districts %}
                                     <option value="{{ d.id }}" {% if old_district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -100,7 +99,7 @@ textarea.form-control { height: auto !important; }
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Old Vehicle</label>
-                                <select id="old_vehicle" name="old_vehicle" class="form-select select2-enable" {% if not old_district_id %}disabled{% endif %}>
+                                <select id="old_vehicle" name="old_vehicle" class="form-select search-select" {% if not old_district_id %}disabled{% endif %}>
                                     <option value="">-- Select Vehicle --</option>
                                     {% for v in old_vehicles %}
                                     <option value="{{ v.id }}" {% if old_vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
@@ -109,7 +108,7 @@ textarea.form-control { height: auto !important; }
                             </div>
                             <div class="col-12">
                                 <label class="form-label text-danger fw-bold">Left Driver <span class="text-danger">*</span></label>
-                                {{ form.driver_id(class="form-select select2-enable" + (" is-invalid" if form.driver_id.errors else ""), id="target_driver") }}
+                                {{ form.driver_id(class="form-select search-select" + (" is-invalid" if form.driver_id.errors else ""), id="target_driver") }}
                                 {% for e in form.driver_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
                             </div>
                         </div>
@@ -121,17 +120,17 @@ textarea.form-control { height: auto !important; }
                         <div class="row g-2">
                             <div class="col-md-6">
                                 <label class="form-label">New Project <span class="text-danger">*</span></label>
-                                {{ form.project_id(class="form-select select2-enable" + (" is-invalid" if form.project_id.errors else ""), id="new_project") }}
+                                {{ form.project_id(class="form-select search-select" + (" is-invalid" if form.project_id.errors else ""), id="new_project") }}
                                 {% for e in form.project_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">New District <span class="text-danger">*</span></label>
-                                {{ form.district_id(class="form-select select2-enable" + (" is-invalid" if form.district_id.errors else ""), id="new_district") }}
+                                {{ form.district_id(class="form-select search-select" + (" is-invalid" if form.district_id.errors else ""), id="new_district") }}
                                 {% for e in form.district_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
                             </div>
                             <div class="col-12">
                                 <label class="form-label">New Vehicle <span class="text-danger">*</span></label>
-                                {{ form.vehicle_id(class="form-select select2-enable" + (" is-invalid" if form.vehicle_id.errors else ""), id="new_vehicle") }}
+                                {{ form.vehicle_id(class="form-select search-select" + (" is-invalid" if form.vehicle_id.errors else ""), id="new_vehicle") }}
                                 {% for e in form.vehicle_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
                                 <div id="capacity_info"></div>
                             </div>
@@ -170,105 +169,148 @@ textarea.form-control { height: auto !important; }
 </div>
 
 <script>
-$(document).ready(function() {
-    $('.select2-enable').select2({ theme: 'bootstrap-5', width: '100%' });
+(function() {
+  function rebuildSel(el, html) {
+    if (!el) return;
+    if (el.tomselect) el.tomselect.destroy();
+    el.innerHTML = html;
+    initSearchableDropdowns(el.parentNode);
+  }
 
-    // OLD CONTEXT cascade
-    $('#old_project').on('change', function() {
-        var pid = $(this).val();
-        $('#old_district').prop('disabled', !pid).html('<option value="">Loading…</option>');
-        $('#old_vehicle').prop('disabled', true).html('<option value="">-- Select --</option>');
-        $('#target_driver').html('<option value="">-- Select Driver --</option>');
-        if (pid) $.getJSON('/get_districts_by_project/' + pid, function(data) {
-            var o = '<option value="">-- Select District --</option>';
-            $.each(data, function(i, d) { o += '<option value="' + d.id + '">' + d.name + '</option>'; });
-            $('#old_district').html(o).prop('disabled', false);
+  var oldProj  = document.getElementById('old_project');
+  var oldDist  = document.getElementById('old_district');
+  var oldVeh   = document.getElementById('old_vehicle');
+  var tgtDrv   = document.getElementById('target_driver');
+  var newProj  = document.getElementById('new_project');
+  var newDist  = document.getElementById('new_district');
+  var newVeh   = document.getElementById('new_vehicle');
+  var shiftSel = document.getElementById('shift_select');
+  var capInfo  = document.getElementById('capacity_info');
+  var submitBtn= document.getElementById('submitBtn');
+  var rejoinForm = document.getElementById('rejoinForm');
+
+  if (oldProj) {
+    oldProj.addEventListener('change', function() {
+      var pid = this.value;
+      rebuildSel(oldDist, '<option value="">Loading…</option>');
+      rebuildSel(oldVeh,  '<option value="">-- Select --</option>');
+      rebuildSel(tgtDrv,  '<option value="">-- Select Driver --</option>');
+      if (pid) {
+        fetch('/get_districts_by_project/' + pid).then(function(r){return r.json();}).then(function(data){
+          var html = '<option value="">-- Select District --</option>';
+          data.forEach(function(d){ html += '<option value="' + d.id + '">' + d.name + '</option>'; });
+          rebuildSel(oldDist, html);
         });
+      }
     });
+  }
 
-    $('#old_district').on('change', function() {
-        var did = $(this).val(), pid = $('#old_project').val();
-        $('#old_vehicle').prop('disabled', !did).html('<option value="">Loading…</option>');
-        if (did && pid) $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(data) {
-            var o = '<option value="">-- Select Vehicle --</option>';
-            $.each(data, function(i, v) { o += '<option value="' + v.id + '">' + v.no + '</option>'; });
-            $('#old_vehicle').html(o).prop('disabled', false);
+  if (oldDist) {
+    oldDist.addEventListener('change', function() {
+      var did = this.value, pid = oldProj ? oldProj.value : '';
+      rebuildSel(oldVeh, '<option value="">Loading…</option>');
+      if (did && pid) {
+        fetch('/get_vehicles_by_district/' + pid + '/' + did).then(function(r){return r.json();}).then(function(data){
+          var html = '<option value="">-- Select Vehicle --</option>';
+          data.forEach(function(v){ html += '<option value="' + v.id + '">' + v.no + '</option>'; });
+          rebuildSel(oldVeh, html);
         });
+      }
     });
+  }
 
-    $('#old_vehicle').on('change', function() {
-        var vid = $(this).val();
-        $('#target_driver').html('<option value="">Searching…</option>');
-        if (vid) $.getJSON('/api/get_left_drivers_by_vehicle/' + vid, function(data) {
-            if (!data.length) {
-                $('#target_driver').html('<option value="0">-- No Left Drivers Found --</option>');
-            } else {
-                var o = '<option value="">-- Select Driver --</option>';
-                $.each(data, function(i, d) { o += '<option value="' + d.id + '">' + d.name + ' (' + d.driver_id + ')</option>'; });
-                $('#target_driver').html(o);
-            }
+  if (oldVeh) {
+    oldVeh.addEventListener('change', function() {
+      var vid = this.value;
+      rebuildSel(tgtDrv, '<option value="">Searching…</option>');
+      if (vid) {
+        fetch('/api/get_left_drivers_by_vehicle/' + vid).then(function(r){return r.json();}).then(function(data){
+          var html;
+          if (!data.length) {
+            html = '<option value="0">-- No Left Drivers Found --</option>';
+          } else {
+            html = '<option value="">-- Select Driver --</option>';
+            data.forEach(function(d){ html += '<option value="' + d.id + '">' + d.name + ' (' + d.driver_id + ')</option>'; });
+          }
+          rebuildSel(tgtDrv, html);
         });
+      }
     });
+  }
 
-    $('#target_driver').on('change', function() {
-        loadDriverInsight($(this).val());
+  if (tgtDrv) {
+    tgtDrv.addEventListener('change', function() {
+      if (typeof loadDriverInsight === 'function') loadDriverInsight(this.value);
     });
+  }
 
-    // NEW ASSIGNMENT cascade
-    $('#new_project').on('change', function() {
-        var pid = $(this).val();
-        $('#new_district').html('<option value="">Loading…</option>');
-        $('#new_vehicle').html('<option value="">-- Select --</option>');
-        if (pid) $.getJSON('/get_districts_by_project/' + pid, function(data) {
-            var o = '<option value="">-- Select District --</option>';
-            $.each(data, function(i, d) { o += '<option value="' + d.id + '">' + d.name + '</option>'; });
-            $('#new_district').html(o);
+  if (newProj) {
+    newProj.addEventListener('change', function() {
+      var pid = this.value;
+      rebuildSel(newDist, '<option value="">Loading…</option>');
+      rebuildSel(newVeh,  '<option value="">-- Select --</option>');
+      if (pid) {
+        fetch('/get_districts_by_project/' + pid).then(function(r){return r.json();}).then(function(data){
+          var html = '<option value="">-- Select District --</option>';
+          data.forEach(function(d){ html += '<option value="' + d.id + '">' + d.name + '</option>'; });
+          rebuildSel(newDist, html);
         });
+      }
     });
+  }
 
-    $('#new_district').on('change', function() {
-        var did = $(this).val(), pid = $('#new_project').val();
-        $('#new_vehicle').html('<option value="">Loading…</option>');
-        if (did && pid) $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(data) {
-            var o = '<option value="">-- Select Vehicle --</option>';
-            $.each(data, function(i, v) { o += '<option value="' + v.id + '">' + v.no + '</option>'; });
-            $('#new_vehicle').html(o);
+  if (newDist) {
+    newDist.addEventListener('change', function() {
+      var did = this.value, pid = newProj ? newProj.value : '';
+      rebuildSel(newVeh, '<option value="">Loading…</option>');
+      if (did && pid) {
+        fetch('/get_vehicles_by_district/' + pid + '/' + did).then(function(r){return r.json();}).then(function(data){
+          var html = '<option value="">-- Select Vehicle --</option>';
+          data.forEach(function(v){ html += '<option value="' + v.id + '">' + v.no + '</option>'; });
+          rebuildSel(newVeh, html);
         });
+      }
     });
+  }
 
-    $('#new_vehicle').on('change', function() {
-        var vid = $(this).val();
-        if (!vid) return;
-        $.getJSON('/api/check_vehicle_shifts/' + vid, function(res) {
-            $('#shift_select').html('<option value="">-- Select Shift --</option>');
-            if (res.capacity === 1) {
-                if (res.occupied_shifts.indexOf('Morning') !== -1) {
-                    $('#capacity_info').html('<span class="cap-pill unavailable"><i class="bi bi-x-circle me-1"></i>Full (Morning taken)</span>');
-                    $('#submitBtn').prop('disabled', true);
-                } else {
-                    $('#shift_select').append('<option value="Morning">Morning</option>');
-                    $('#capacity_info').html('<span class="cap-pill available"><i class="bi bi-check-circle me-1"></i>Morning Available</span>');
-                    $('#submitBtn').prop('disabled', false);
-                }
-            } else {
-                var m = res.occupied_shifts.indexOf('Morning') === -1;
-                var n = res.occupied_shifts.indexOf('Night') === -1;
-                if (m) $('#shift_select').append('<option value="Morning">Morning</option>');
-                if (n) $('#shift_select').append('<option value="Night">Night</option>');
-                if (!m && !n) {
-                    $('#capacity_info').html('<span class="cap-pill unavailable"><i class="bi bi-x-circle me-1"></i>Vehicle Full</span>');
-                    $('#submitBtn').prop('disabled', true);
-                } else {
-                    $('#capacity_info').html('<span class="cap-pill available"><i class="bi bi-check-circle me-1"></i>Shifts Available</span>');
-                    $('#submitBtn').prop('disabled', false);
-                }
-            }
-        });
+  if (newVeh) {
+    newVeh.addEventListener('change', function() {
+      var vid = this.value;
+      if (!vid) return;
+      fetch('/api/check_vehicle_shifts/' + vid).then(function(r){return r.json();}).then(function(res){
+        var html = '<option value="">-- Select Shift --</option>';
+        rebuildSel(shiftSel, html);
+        if (res.capacity === 1) {
+          if (res.occupied_shifts.indexOf('Morning') !== -1) {
+            if (capInfo) capInfo.innerHTML = '<span class="cap-pill unavailable"><i class="bi bi-x-circle me-1"></i>Full (Morning taken)</span>';
+            if (submitBtn) submitBtn.disabled = true;
+          } else {
+            if (shiftSel) { var o = document.createElement('option'); o.value = 'Morning'; o.textContent = 'Morning'; shiftSel.appendChild(o); }
+            if (capInfo) capInfo.innerHTML = '<span class="cap-pill available"><i class="bi bi-check-circle me-1"></i>Morning Available</span>';
+            if (submitBtn) submitBtn.disabled = false;
+          }
+        } else {
+          var m = res.occupied_shifts.indexOf('Morning') === -1;
+          var n = res.occupied_shifts.indexOf('Night') === -1;
+          if (m && shiftSel) { var om = document.createElement('option'); om.value = 'Morning'; om.textContent = 'Morning'; shiftSel.appendChild(om); }
+          if (n && shiftSel) { var on2 = document.createElement('option'); on2.value = 'Night'; on2.textContent = 'Night'; shiftSel.appendChild(on2); }
+          if (!m && !n) {
+            if (capInfo) capInfo.innerHTML = '<span class="cap-pill unavailable"><i class="bi bi-x-circle me-1"></i>Vehicle Full</span>';
+            if (submitBtn) submitBtn.disabled = true;
+          } else {
+            if (capInfo) capInfo.innerHTML = '<span class="cap-pill available"><i class="bi bi-check-circle me-1"></i>Shifts Available</span>';
+            if (submitBtn) submitBtn.disabled = false;
+          }
+        }
+      });
     });
+  }
 
-    $('#rejoinForm').on('submit', function() {
-        $('#old_project, #old_district, #old_vehicle').prop('disabled', false);
+  if (rejoinForm) {
+    rejoinForm.addEventListener('submit', function() {
+      [oldProj, oldDist, oldVeh].forEach(function(el){ if (el) el.disabled = false; });
     });
-});
+  }
+})();
 </script>
 {% endblock %}

@@ -34,7 +34,7 @@
           </div>
           <div class="col-md-3">
             <label class="form-label">District</label>
-            <select id="districtSelect" class="form-select select2-enable" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
+            <select id="districtSelect" class="form-select search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
               <option value="">-- Select District --</option>
               {% for d in districts %}
               <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -43,7 +43,7 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">Project</label>
-            <select id="projectSelect" class="form-select select2-enable" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
+            <select id="projectSelect" class="form-select search-select" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
               <option value="">-- Select Project --</option>
               {% for p in projects %}
               <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
@@ -128,11 +128,11 @@
     if (hiddenProjectId && projectSelect) hiddenProjectId.value = projectSelect.value || '';
   }
 
-  function initProjectSelect2() {
-    if (!projectSelect || typeof $ === 'undefined' || !$.fn.select2) return;
-    var $el = $(projectSelect);
-    if ($el.data('select2')) $el.select2('destroy');
-    $el.select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search project...' });
+  function rebuildSel(el, html) {
+    if (!el) return;
+    if (el.tomselect) el.tomselect.destroy();
+    el.innerHTML = html;
+    initSearchableDropdowns(el.parentNode);
   }
 
   var loadProjectsTimeout = null;
@@ -141,78 +141,35 @@
     if (loadProjectsTimeout) clearTimeout(loadProjectsTimeout);
     loadProjectsTimeout = setTimeout(function doLoad() {
       loadProjectsTimeout = null;
-      if ($(projectSelect).data('select2')) $(projectSelect).select2('destroy');
-      projectSelect.innerHTML = '<option value="">-- Select Project --</option>';
+      rebuildSel(projectSelect, '<option value="">-- Select Project --</option>');
       if (hiddenProjectId) hiddenProjectId.value = '';
       fetch(projectsApiUrl + '?district_id=' + encodeURIComponent(districtId))
         .then(function(r) { return r.json(); })
         .then(function(arr) {
           if (!Array.isArray(arr)) return;
-          var seen = {};
-          var list = [];
-          for (var i = 0; i < arr.length; i++) {
-            var p = arr[i];
-            var id = p && p.id;
-            if (id === undefined || seen[id]) continue;
-            seen[id] = true;
-            list.push(p);
-          }
-          list.forEach(function(p) {
-            var opt = document.createElement('option');
-            opt.value = p.id;
-            opt.textContent = p.name;
-            projectSelect.appendChild(opt);
+          var seen = {}, html = '<option value="">-- Select Project --</option>';
+          arr.forEach(function(p) {
+            if (!p || p.id === undefined || seen[p.id]) return;
+            seen[p.id] = true;
+            html += '<option value="' + p.id + '">' + p.name + '</option>';
           });
-          initProjectSelect2();
+          rebuildSel(projectSelect, html);
         })
-        .catch(function() { initProjectSelect2(); });
+        .catch(function() { rebuildSel(projectSelect, '<option value="">-- Select Project --</option>'); });
     }, 50);
   }
 
   function initBulkOffForm() {
     if (!districtSelect || !projectSelect) return;
-
-    $(districtSelect).off('change.bulkoff select2:select.bulkoff');
-    $(districtSelect).on('change.bulkoff', function() {
-      var did = districtSelect.value || (hiddenDistrictId && hiddenDistrictId.value);
+    districtSelect.addEventListener('change', function() {
       syncHiddenInputs();
-      loadProjectsForDistrict(did);
+      loadProjectsForDistrict(this.value);
     });
-    $(districtSelect).on('select2:select.bulkoff', function(e) {
-      var id = e.params && e.params.data && e.params.data.id;
-      if (id !== undefined && id !== null && id !== '') {
-        districtSelect.value = id;
-        if (hiddenDistrictId) hiddenDistrictId.value = id;
-      }
-      loadProjectsForDistrict(id !== undefined && id !== null ? String(id) : (districtSelect.value || ''));
-    });
-
-    $(projectSelect).off('change.bulkoff select2:select.bulkoff');
-    $(projectSelect).on('change.bulkoff', function() { syncHiddenInputs(); });
-    $(projectSelect).on('select2:select.bulkoff', function(e) {
-      var id = e.params && e.params.data && e.params.data.id;
-      if (id !== undefined && id !== null && id !== '') {
-        projectSelect.value = id;
-        if (hiddenProjectId) hiddenProjectId.value = id;
-      }
-      syncHiddenInputs();
-    });
-
+    projectSelect.addEventListener('change', function() { syncHiddenInputs(); });
     var filterForm = document.getElementById('filterForm');
     if (filterForm) {
-      filterForm.removeEventListener('submit', _bulkOffSubmitHandler);
-      filterForm.addEventListener('submit', _bulkOffSubmitHandler);
+      filterForm.addEventListener('submit', function() { syncHiddenInputs(); });
     }
-  }
-
-  function _bulkOffSubmitHandler(e) {
-    if (typeof $ !== 'undefined' && $.fn.select2 && districtSelect && projectSelect) {
-      var dVal = $(districtSelect).val();
-      var pVal = $(projectSelect).val();
-      districtSelect.value = (dVal != null && dVal !== '') ? dVal : '';
-      projectSelect.value = (pVal != null && pVal !== '') ? pVal : '';
-    }
-    syncHiddenInputs();
   }
 
   if (document.readyState === 'loading') {

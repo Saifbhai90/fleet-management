@@ -23,7 +23,7 @@
         </div>
         <div class="col-md-2">
           <label class="form-label">District</label>
-          <select name="district_id" id="districtSelect" class="form-select">
+          <select name="district_id" id="districtSelect" class="form-select search-select">
             {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -31,7 +31,7 @@
         </div>
         <div class="col-md-2">
           <label class="form-label">Project</label>
-          <select name="project_id" id="projectSelect" class="form-select">
+          <select name="project_id" id="projectSelect" class="form-select search-select">
             {% for val, label in form.project_id.choices %}
               <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -114,6 +114,7 @@
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
+      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
       projectSelect.innerHTML = '<option value="0">-- All Projects --</option>';
       if (did && did !== '0') {
         fetch('/get_projects_by_district/' + did)
@@ -125,7 +126,10 @@
               o.textContent = p.name;
               projectSelect.appendChild(o);
             });
+            initSearchableDropdowns(projectSelect.parentNode);
           });
+      } else {
+        initSearchableDropdowns(projectSelect.parentNode);
       }
     });
   }

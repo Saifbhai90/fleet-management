@@ -60,7 +60,7 @@
             <div class="row g-2 align-items-end">
                 <div class="col-6 col-md-3">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Project</label>
-                    <select name="project_id" class="form-select filter-input">
+                    <select name="project_id" class="form-select filter-input search-select">
                         {% for val, label in project_choices %}
                         <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -68,7 +68,7 @@
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">District</label>
-                    <select name="district_id" class="form-select filter-input">
+                    <select name="district_id" class="form-select filter-input search-select">
                         {% for val, label in district_choices %}
                         <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -76,7 +76,7 @@
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Missing Document</label>
-                    <select name="doc_filter" class="form-select filter-input">
+                    <select name="doc_filter" class="form-select filter-input search-select">
                         <option value="" {% if not doc_filter %}selected{% endif %}>-- All Missing --</option>
                         {% for key, attr, label in doc_fields %}
                         <option value="{{ key }}" {% if doc_filter == key %}selected{% endif %}>{{ label }}</option>

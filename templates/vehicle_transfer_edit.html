@@ -55,7 +55,7 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label fw-semibold small text-muted text-uppercase">New Project <span class="text-danger">*</span></label>
-                            {{ form.new_project_id(class="form-select select2-enable shadow-sm " + ("is-invalid" if form.new_project_id.errors else ""), id="new_project") }}
+                            {{ form.new_project_id(class="form-select search-select shadow-sm " + ("is-invalid" if form.new_project_id.errors else ""), id="new_project") }}
                             {% for error in form.new_project_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                         </div>
                         <div class="col-md-6">
@@ -117,67 +117,85 @@
     .form-select, .form-control { border-radius: 10px; border: 1px solid #e0e0e0; padding: 12px 15px; }
     .form-select:focus, .form-control:focus { box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.1); border-color: #0d6efd; }
     .bg-light { background-color: #f9fafb !important; }
-    .select2-container--default .select2-selection--single {
-        height: 50px !important;
+    .ts-wrapper .ts-control {
+        min-height: 50px !important;
         border-radius: 10px !important;
         border: 1px solid #e0e0e0 !important;
-        padding-top: 10px !important;
     }
 </style>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
-  $(document).ready(function() {
-    
-    // --- Driver Status Logic for Edit ---
-    // Note: Edit mein "From" location fixed hai (Jo transfer record mein pehle se thi)
-    const fromP = "{{ transfer.from_project_id }}";
-    const fromD = "{{ transfer.from_district_id }}";
+(function() {
+  function rebuildSel(el, html) {
+    if (!el) return;
+    if (el.tomselect) el.tomselect.destroy();
+    el.innerHTML = html;
+    initSearchableDropdowns(el.parentNode);
+  }
 
-    function checkDriverImpact() {
-        let newP = $('#new_project').val();
-        let newD = $('#new_district').val();
+  var fromP = {{ transfer.from_project_id | tojson }};
+  var fromD = {{ transfer.from_district_id | tojson }};
+  var newProject = document.getElementById('new_project');
+  var newDistrict = document.getElementById('new_district');
+  var newParking = document.getElementById('new_parking');
+  var alertEl = document.getElementById('driver_status_alert');
+  var iconEl = document.getElementById('driver_icon');
+  var titleEl = document.getElementById('driver_title');
+  var msgEl = document.getElementById('driver_msg');
 
-        if(newP > 0 && newD > 0) {
-            $('#driver_status_alert').attr('style', 'display: flex !important');
-            if(fromP == newP && fromD == newD) {
-                $('#driver_status_alert').removeClass('alert-danger text-danger').addClass('alert-info text-primary bg-info-subtle');
-                $('#driver_icon').attr('class', 'bi bi-person-check-fill fs-2 me-3');
-                $('#driver_title').text('Driver Remains Attached');
-                $('#driver_msg').text('Since project and district are the same, the driver will stay with the vehicle.');
-            } else {
-                $('#driver_status_alert').removeClass('alert-info text-primary').addClass('alert-danger text-danger bg-danger-subtle');
-                $('#driver_icon').attr('class', 'bi bi-person-x-fill fs-2 me-3');
-                $('#driver_title').text('Driver Detachment Warning');
-                $('#driver_msg').text('Changing the Project or District will automatically release the current driver.');
-            }
-        }
+  function checkDriverImpact() {
+    var newP = newProject ? newProject.value : '';
+    var newD = newDistrict ? newDistrict.value : '';
+    if (newP > 0 && newD > 0) {
+      alertEl.style.cssText = 'display: flex !important';
+      if (String(fromP) === String(newP) && String(fromD) === String(newD)) {
+        alertEl.className = alertEl.className.replace(/alert-danger|text-danger|bg-danger-subtle/g, '').trim() + ' alert-info text-primary bg-info-subtle';
+        iconEl.className = 'bi bi-person-check-fill fs-2 me-3';
+        titleEl.textContent = 'Driver Remains Attached';
+        msgEl.textContent = 'Since project and district are the same, the driver will stay with the vehicle.';
+      } else {
+        alertEl.className = alertEl.className.replace(/alert-info|text-primary|bg-info-subtle/g, '').trim() + ' alert-danger text-danger bg-danger-subtle';
+        iconEl.className = 'bi bi-person-x-fill fs-2 me-3';
+        titleEl.textContent = 'Driver Detachment Warning';
+        msgEl.textContent = 'Changing the Project or District will automatically release the current driver.';
+      }
     }
+  }
 
-    // Initial check on load
-    checkDriverImpact();
+  checkDriverImpact();
 
-    // Cascading Dropdowns logic
-    $('#new_project').change(function() {
-      let pid = $(this).val();
+  if (newProject) {
+    newProject.addEventListener('change', function() {
+      var pid = this.value;
       checkDriverImpact();
-      $.get('/get_districts_by_project/' + pid, function(data) {
-        let options = '<option value="0">-- Select District --</option>';
-        data.forEach(d => options += `<option value="${d.id}">${d.name}</option>`);
-        $('#new_district').html(options);
-        $('#new_parking').html('<option value="0">-- No Parking --</option>');
-      });
+      if (newParking) rebuildSel(newParking, '<option value="0">-- No Parking --</option>');
+      if (pid && pid !== '0') {
+        fetch('/get_districts_by_project/' + pid)
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var html = '<option value="0">-- Select District --</option>';
+            data.forEach(function(d) { html += '<option value="' + d.id + '">' + d.name + '</option>'; });
+            rebuildSel(newDistrict, html);
+          });
+      }
     });
+  }
 
-    $('#new_district').change(function() {
-      let did = $(this).val();
+  if (newDistrict) {
+    newDistrict.addEventListener('change', function() {
+      var did = this.value;
       checkDriverImpact();
-      $.get('/get_parking_by_district/' + did, function(data) {
-        let options = '<option value="0">-- No Parking --</option>';
-        data.forEach(p => options += `<option value="${p.id}">${p.name}</option>`);
-        $('#new_parking').html(options);
-      });
+      if (did && did !== '0') {
+        fetch('/get_parking_by_district/' + did)
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var html = '<option value="0">-- No Parking --</option>';
+            data.forEach(function(p) { html += '<option value="' + p.id + '">' + p.name + '</option>'; });
+            rebuildSel(newParking, html);
+          });
+      }
     });
-  });
+  }
+})();
 </script>
 {% endblock %}

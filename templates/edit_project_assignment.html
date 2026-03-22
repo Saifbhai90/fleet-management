@@ -3,18 +3,6 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block extra_head %}
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
-<script>
-  $(document).ready(function() {
-    $('#company_id').select2({
-      placeholder: "Search and select company...",
-      allowClear: true,
-      width: '100%'
-    });
-  });
-</script>
 {% endblock %}
 
 {% block content %}
@@ -39,7 +27,7 @@
             <!-- Select Company -->
             <div class="mb-4">
               <label class="form-label fw-bold fs-5 text-primary">Change Company</label>
-              {{ form.company_id(class="form-select form-select-lg", id="company_id") }}
+              {{ form.company_id(class="form-select form-select-lg search-select", id="company_id") }}
               {% for error in form.company_id.errors %}
                 <div class="text-danger small mt-1">{{ error }}</div>
               {% endfor %}

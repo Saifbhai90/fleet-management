@@ -185,6 +185,7 @@
 
   function rebuildSelect(sel, items, valueKey, labelKey, allLabel) {
     if (!sel) return;
+    if (sel.tomselect) { sel.tomselect.destroy(); }
     sel.innerHTML = '<option value="0">' + allLabel + '</option>';
     (items || []).forEach(function(item) {
       var opt = document.createElement('option');
@@ -192,6 +193,7 @@
       opt.textContent = item[labelKey];
       sel.appendChild(opt);
     });
+    initSearchableDropdowns(sel.parentNode);
   }
 
   function loadParkingStations(pid, did, vid) {

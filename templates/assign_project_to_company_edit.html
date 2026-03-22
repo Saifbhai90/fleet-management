@@ -3,9 +3,7 @@
 {% block title %}Edit Assignment{% endblock %}
 
 {% block content %}
-<!-- Select2 & Icons -->
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<!-- Icons -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
 <div class="container mt-4">
@@ -36,7 +34,7 @@
                 <label class="form-label fw-semibold text-secondary small text-uppercase">Select Company</label>
                 <div class="input-group">
                   <span class="input-group-text bg-light text-warning"><i class="bi bi-building"></i></span>
-                  {{ form.company_id(class="form-select select2-enable " + ("is-invalid" if form.company_id.errors else "")) }}
+                  {{ form.company_id(class="form-select search-select " + ("is-invalid" if form.company_id.errors else "")) }}
                 </div>
                 {% for error in form.company_id.errors %}
                 <div class="text-danger small mt-1">{{ error }}</div>
@@ -46,7 +44,7 @@
                 <label class="form-label fw-semibold text-secondary small text-uppercase">Select Project</label>
                 <div class="input-group">
                   <span class="input-group-text bg-light text-warning"><i class="bi bi-folder2-open"></i></span>
-                  {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else "")) }}
+                  {{ form.project_id(class="form-select search-select " + ("is-invalid" if form.project_id.errors else "")) }}
                 </div>
                 {% for error in form.project_id.errors %}
                 <div class="text-danger small mt-1">{{ error }}</div>
@@ -99,19 +97,6 @@
     </div>
   </div>
 </div>
-
-<!-- Select2 & Initialization -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script>
-  $(document).ready(function() {
-    $('.select2-enable').select2({
-      theme: 'bootstrap-5',
-      width: '100%',
-      placeholder: 'Search and select...'
-    });
-  });
-</script>
 
 <style>
   .form-label { margin-bottom: 0.4rem; letter-spacing: 0.5px; }

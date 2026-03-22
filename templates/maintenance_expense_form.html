@@ -74,7 +74,7 @@
         <div class="row g-2 align-items-end mb-3 border rounded p-2 bg-light" id="entryRow">
           <div class="col-md-3">
             <label class="form-label mb-0">Product</label>
-            <select id="entryProductSelect" class="form-select form-select-sm">
+            <select id="entryProductSelect" class="form-select form-select-sm search-select">
               <option value="">-- Search / Select --</option>
             </select>
           </div>
@@ -185,9 +185,8 @@
       o.textContent = p.name;
       entryProductSelect.appendChild(o);
     });
-    if (typeof $ !== 'undefined' && $(entryProductSelect).length) {
-      $(entryProductSelect).select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Search product...' });
-    }
+    if (entryProductSelect.tomselect) entryProductSelect.tomselect.destroy();
+    initSearchableDropdowns(entryProductSelect.parentNode);
     itemsBody.querySelectorAll('.item-row').forEach(function(tr) { bindListRow(tr); });
     updateTotals();
   });
@@ -201,8 +200,7 @@
   entryPrice.addEventListener('input', updateEntryAmount);
 
   function clearEntryRow() {
-    if (typeof $ !== 'undefined' && $(entryProductSelect).length) $(entryProductSelect).val(null).trigger('change');
-    else entryProductSelect.value = '';
+    entryProductSelect.value = '';
     entryQty.value = '0';
     entryPrice.value = '0';
     entryAmount.value = '';

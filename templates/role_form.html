@@ -140,7 +140,7 @@
             {% if not role %}
             <div class="mb-3">
               {{ form.post_id.label(class="form-label fw-semibold") }}
-              {{ form.post_id(class="form-select select2-enable" + (" is-invalid" if form.post_id.errors else "")) }}
+              {{ form.post_id(class="form-select search-select" + (" is-invalid" if form.post_id.errors else "")) }}
               <small class="text-muted d-block mt-1">Employee Posts se post search karein, role ka naam auto set ho jayega.</small>
               {% for e in form.post_id.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
             </div>

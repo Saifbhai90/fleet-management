@@ -123,8 +123,11 @@ document.addEventListener('DOMContentLoaded', function() {
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
+      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
+      if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
       projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
       vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+      initSearchableDropdowns(vehicleSelect.parentNode);
       if (did && did !== '0') {
         fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
           arr.forEach(function(p) {
@@ -133,7 +136,10 @@ document.addEventListener('DOMContentLoaded', function() {
             o.textContent = p.name;
             projectSelect.appendChild(o);
           });
+          initSearchableDropdowns(projectSelect.parentNode);
         });
+      } else {
+        initSearchableDropdowns(projectSelect.parentNode);
       }
     });
   }
@@ -141,6 +147,7 @@ document.addEventListener('DOMContentLoaded', function() {
     projectSelect.addEventListener('change', function() {
       var pid = projectSelect.value;
       var did = districtSelect ? districtSelect.value : '';
+      if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
       vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
       if (pid && pid !== '0') {
         var url = '/get_vehicles_by_project_district?project_id=' + pid;
@@ -152,7 +159,10 @@ document.addEventListener('DOMContentLoaded', function() {
             o.textContent = v.vehicle_no;
             vehicleSelect.appendChild(o);
           });
+          initSearchableDropdowns(vehicleSelect.parentNode);
         });
+      } else {
+        initSearchableDropdowns(vehicleSelect.parentNode);
       }
     });
   }

@@ -39,7 +39,7 @@
           <div class="row g-2">
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">1</span>District</label>
-              <select id="districtSelect" class="form-select form-select-sm select2-enable" {% if auto_district_id %}disabled{% endif %} data-placeholder="Search district...">
+              <select id="districtSelect" class="form-select form-select-sm search-select" {% if auto_district_id %}disabled{% endif %} data-placeholder="Search district...">
                 <option value="">-- Select District --</option>
                 {% for d in districts %}
                 <option value="{{ d.id }}" {% if d.id == auto_district_id %}selected{% endif %}>{{ d.name }}</option>
@@ -48,7 +48,7 @@
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">2</span>Project</label>
-              <select id="projectSelect" class="form-select form-select-sm select2-enable" {% if not auto_district_id %}disabled{% endif %} {% if auto_project_id %}disabled{% endif %} data-placeholder="Search project...">
+              <select id="projectSelect" class="form-select form-select-sm search-select" {% if not auto_district_id %}disabled{% endif %} {% if auto_project_id %}disabled{% endif %} data-placeholder="Search project...">
                 <option value="">-- Select Project --</option>
                 {% for p in pre_projects %}
                 <option value="{{ p.id }}" {% if p.id == auto_project_id %}selected{% endif %}>{{ p.name }}</option>
@@ -57,7 +57,7 @@
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">3</span>Vehicle</label>
-              <select id="vehicleSelect" class="form-select form-select-sm select2-enable" {% if not auto_project_id %}disabled{% endif %} {% if auto_vehicle_id %}disabled{% endif %} data-placeholder="Search vehicle...">
+              <select id="vehicleSelect" class="form-select form-select-sm search-select" {% if not auto_project_id %}disabled{% endif %} {% if auto_vehicle_id %}disabled{% endif %} data-placeholder="Search vehicle...">
                 <option value="">-- Select Vehicle --</option>
                 {% for v in pre_vehicles_data %}
                 <option value="{{ v.id }}" {% if v.id == auto_vehicle_id %}selected{% endif %} data-index="{{ loop.index0 }}">{{ v.vehicle_no }}{% if v.vehicle_type %} ({{ v.vehicle_type }}){% endif %}</option>
@@ -76,7 +76,7 @@
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">5</span>Shift</label>
-              <select id="shiftSelect" class="form-select form-select-sm select2-enable" {% if not auto_vehicle_id %}disabled{% endif %} {% if auto_shift %}disabled{% endif %} data-placeholder="Search shift...">
+              <select id="shiftSelect" class="form-select form-select-sm search-select" {% if not auto_vehicle_id %}disabled{% endif %} {% if auto_shift %}disabled{% endif %} data-placeholder="Search shift...">
                 <option value="">-- Select Shift --</option>
                 {% if scope_shifts_list %}
                   {% for s in scope_shifts_list %}
@@ -90,7 +90,7 @@
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">6</span>Driver</label>
-              <select id="driverSelect" class="form-select form-select-sm select2-enable" disabled required data-placeholder="Search driver...">
+              <select id="driverSelect" class="form-select form-select-sm search-select" disabled required data-placeholder="Search driver...">
                 <option value="">-- Select Driver --</option>
               </select>
             </div>
@@ -206,11 +206,10 @@
   var timeWindow = {};
   var hasGpsCheckin = false;
 
-  function initSelect2For(el, placeholder) {
-    if (!el || typeof $ === 'undefined' || !$.fn.select2) return;
-    var $el = $(el);
-    if ($el.data('select2')) $el.select2('destroy');
-    $el.select2({ theme: 'bootstrap-5', width: '100%', placeholder: placeholder || 'Search...' });
+  function reinitDropdown(el, placeholder) {
+    if (!el) return;
+    if (el.tomselect) el.tomselect.destroy();
+    initSearchableDropdowns(el.parentNode);
   }
 
   function minutesFromMidnight(hhmm) {
@@ -330,61 +329,43 @@
 
   function onDistrictChange(optionalId) {
     var id = optionalId !== undefined && optionalId !== null ? String(optionalId) : districtSelect.value;
-    if ($(projectSelect).data('select2')) $(projectSelect).select2('destroy');
+    if (projectSelect.tomselect) projectSelect.tomselect.destroy();
     projectSelect.innerHTML = '<option value="">-- Select Project --</option>';
     projectSelect.disabled = !id;
-    if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+    if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
     vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
     vehicleSelect.disabled = true;
-    if ($(shiftSelect).data('select2')) $(shiftSelect).select2('destroy');
+    if (shiftSelect.tomselect) shiftSelect.tomselect.destroy();
     shiftSelect.value = ''; shiftSelect.disabled = true;
-    if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
+    if (driverSelect.tomselect) driverSelect.tomselect.destroy();
     driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
     driverSelect.disabled = true;
     parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
     parkingCoords = null; vehiclesData = []; parkingNotSetMessage.classList.add('d-none');
-    if (!id) { initSelect2For(projectSelect, 'Search project...'); return; }
+    if (!id) { reinitDropdown(projectSelect, 'Search project...'); return; }
     fetch('{{ url_for("api_attendance_projects") }}?district_id=' + id).then(function(r) { return r.json(); }).then(function(arr) {
       arr.forEach(function(p) { var o = document.createElement('option'); o.value = p.id; o.textContent = p.name; projectSelect.appendChild(o); });
-      initSelect2For(projectSelect, 'Search project...');
+      reinitDropdown(projectSelect, 'Search project...');
     });
   }
 
   function attachDistrictProjectHandlers() {
     districtSelect.addEventListener('change', function() { onDistrictChange(); });
-    $(districtSelect).on('select2:select', function(e) {
-      var id = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
-      onDistrictChange(id);
-    });
     projectSelect.addEventListener('change', function() { onProjectChange(); });
-    $(projectSelect).on('select2:select', function(e) {
-      var id = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
-      setTimeout(function() { projectSelect.value = id; onProjectChange(); }, 0);
-    });
     setTimeout(function() {
-      if (typeof $ !== 'undefined' && $.fn.select2) {
-        if (districtSelect.value) { $(districtSelect).trigger('change.select2'); }
-        if (projectSelect.value) { $(projectSelect).trigger('change.select2'); }
-        if (vehicleSelect.value) { $(vehicleSelect).trigger('change.select2'); }
-        if (shiftSelect.value) { $(shiftSelect).trigger('change.select2'); }
-      }
       if (vehicleSelect.value) { onVehicleChange(); }
     }, 0);
   }
-  if (typeof $ !== 'undefined' && $.fn.select2) {
-    $(document).ready(attachDistrictProjectHandlers);
-  } else {
-    attachDistrictProjectHandlers();
-  }
+  attachDistrictProjectHandlers();
 
   function onProjectChange() {
     var id = projectSelect.value;
-    if ($(vehicleSelect).data('select2')) $(vehicleSelect).select2('destroy');
+    if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
     vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
     vehicleSelect.disabled = !id;
-    if ($(shiftSelect).data('select2')) $(shiftSelect).select2('destroy');
+    if (shiftSelect.tomselect) shiftSelect.tomselect.destroy();
     shiftSelect.value = ''; shiftSelect.disabled = true;
-    if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
+    if (driverSelect.tomselect) driverSelect.tomselect.destroy();
     driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
     driverSelect.disabled = true;
     parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
@@ -400,16 +381,12 @@
         vehicleSelect.appendChild(o);
       });
       shiftSelect.disabled = false;
-      initSelect2For(vehicleSelect, 'Search vehicle...');
-      initSelect2For(shiftSelect, 'Shift');
+      reinitDropdown(vehicleSelect, 'Search vehicle...');
+      reinitDropdown(shiftSelect, 'Shift');
     });
   }
 
   vehicleSelect.addEventListener('change', function() { onVehicleChange(); });
-  $(vehicleSelect).on('select2:select', function(e) {
-    var id = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
-    setTimeout(function() { vehicleSelect.value = id; onVehicleChange(); }, 10);
-  });
 
   function onVehicleChange() {
     var opt = vehicleSelect.options[vehicleSelect.selectedIndex];
@@ -426,17 +403,13 @@
     } else { parkingNotSetMessage.classList.remove('d-none'); }
     if (!serverAutoShift) {
       shiftSelect.disabled = false;
-      initSelect2For(shiftSelect, 'Search shift...');
+      reinitDropdown(shiftSelect, 'Search shift...');
     }
     updateDistanceUI();
     loadDrivers();
   }
 
   shiftSelect.addEventListener('change', function() { onShiftChange(); });
-  $(shiftSelect).on('select2:select', function(e) {
-    var val = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
-    setTimeout(function() { shiftSelect.value = val; onShiftChange(); }, 10);
-  });
 
   function onShiftChange() {
     loadDrivers();
@@ -445,7 +418,7 @@
 
   function loadDrivers() {
     var projectId = projectSelect.value, vehicleId = vehicleSelect.value, shift = shiftSelect.value;
-    if ($(driverSelect).data('select2')) $(driverSelect).select2('destroy');
+    if (driverSelect.tomselect) driverSelect.tomselect.destroy();
     driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
     driverSelect.disabled = !projectId || !vehicleId || !shift;
     if (!projectId || !vehicleId || !shift) return;
@@ -469,10 +442,7 @@
       if (isAutoLocked) {
         driverSelect.disabled = true;
       }
-      initSelect2For(driverSelect, 'Search driver...');
-      if (typeof $ !== 'undefined' && $.fn.select2 && driverSelect.value) {
-        $(driverSelect).val(driverSelect.value).trigger('change.select2');
-      }
+      reinitDropdown(driverSelect, 'Search driver...');
       if (driverSelect.value && parkingLat.value && parkingLng.value) {
         fetchHasGpsCheckin();
         fetchLocation();
@@ -481,10 +451,6 @@
   }
 
   driverSelect.addEventListener('change', function() { onDriverChange(); });
-  $(driverSelect).on('select2:select', function(e) {
-    var id = (e.params && e.params.data && e.params.data.id !== undefined && e.params.data.id !== null) ? String(e.params.data.id) : '';
-    setTimeout(function() { driverSelect.value = id; onDriverChange(); }, 10);
-  });
 
   function onDriverChange() {
     hasGpsCheckin = false;

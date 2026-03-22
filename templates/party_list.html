@@ -67,7 +67,7 @@
           <input type="text" name="search" class="form-control filter-input" placeholder="Search by name..." value="{{ search }}">
         </div>
         <div class="col-md-3">
-          <select name="type" class="form-select filter-input">
+          <select name="type" class="form-select filter-input search-select">
             <option value="">All Types</option>
             <option value="Pump" {% if party_type == 'Pump' %}selected{% endif %}>Pump</option>
             <option value="Workshop" {% if party_type == 'Workshop' %}selected{% endif %}>Workshop</option>

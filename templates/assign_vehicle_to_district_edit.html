@@ -29,7 +29,7 @@
                                 <div class="bg-white p-4 rounded-4 shadow-sm border-start border-warning border-4">
                                     <div class="mb-3">
                                         <label class="form-label fw-bold">1. Select Project <span class="text-danger">*</span></label>
-                                        {{ form.project_id(class="form-select select2-enable " + ("is-invalid" if form.project_id.errors else ""), id="project_select") }}
+                                        {{ form.project_id(class="form-select search-select " + ("is-invalid" if form.project_id.errors else ""), id="project_select") }}
                                         {% for error in form.project_id.errors %}
                                         <div class="text-danger small mt-1">{{ error }}</div>
                                         {% endfor %}
@@ -37,7 +37,7 @@
                                     
                                     <div class="mb-3">
                                         <label class="form-label fw-bold">2. Assigned Districts <span class="text-danger">*</span></label>
-                                        {{ form.district_id(class="form-select select2-enable " + ("is-invalid" if form.district_id.errors else ""), id="district_select") }}
+                                        {{ form.district_id(class="form-select search-select " + ("is-invalid" if form.district_id.errors else ""), id="district_select") }}
                                         {% for error in form.district_id.errors %}
                                         <div class="text-danger small mt-1">{{ error }}</div>
                                         {% endfor %}
@@ -46,7 +46,7 @@
 
                                     <div class="mb-0">
                                         <label class="form-label fw-bold">3. Select Vehicle <span class="text-danger">*</span></label>
-                                        {{ form.vehicle_id(class="form-select select2-enable " + ("is-invalid" if form.vehicle_id.errors else "")) }}
+                                        {{ form.vehicle_id(class="form-select search-select " + ("is-invalid" if form.vehicle_id.errors else "")) }}
                                         {% for error in form.vehicle_id.errors %}
                                         <div class="text-danger small mt-1">{{ error }}</div>
                                         {% endfor %}
@@ -92,49 +92,40 @@
 
 <!-- AJAX Script for Dynamic Districts -->
 <script>
-$(document).ready(function() {
-    // Select2 Initialization
-    $('.select2-enable').select2({
-        theme: 'bootstrap-5',
-        width: '100%'
-    });
+(function() {
+  function rebuildSel(el, html) {
+    if (!el) return;
+    if (el.tomselect) { el.tomselect.destroy(); }
+    el.innerHTML = html;
+    initSearchableDropdowns(el.parentNode);
+  }
+  var projSel = document.getElementById('project_select');
+  var distSel = document.getElementById('district_select');
 
-    var $projectSelect = $('#project_select');
-    var $districtSelect = $('#district_select');
-
-    function loadDistricts(projectId, selectedDistrictId = null) {
-        if (!projectId || projectId == "0") return;
-
-        $.ajax({
-            url: '/get_districts_by_project/' + projectId,
-            type: 'GET',
-            success: function(data) {
-                $districtSelect.empty();
-                if (data.length > 0) {
-                    $districtSelect.append('<option value="">-- Select District --</option>');
-                    $.each(data, function(i, item) {
-                        var selected = (item.id == selectedDistrictId) ? 'selected' : '';
-                        $districtSelect.append('<option value="' + item.id + '" ' + selected + '>' + item.name + '</option>');
-                    });
-                } else {
-                    $districtSelect.append('<option value="">No districts assigned</option>');
-                }
-                $districtSelect.trigger('change');
-            }
+  function loadDistricts(projectId, selectedDistrictId) {
+    if (!projectId || projectId == '0') return;
+    fetch('/get_districts_by_project/' + projectId).then(function(r){return r.json();}).then(function(data){
+      var html;
+      if (data.length > 0) {
+        html = '<option value="">-- Select District --</option>';
+        data.forEach(function(item) {
+          var sel = (selectedDistrictId && item.id == selectedDistrictId) ? ' selected' : '';
+          html += '<option value="' + item.id + '"' + sel + '>' + item.name + '</option>';
         });
-    }
-
-    // Jab Project tabdeel ho
-    $projectSelect.on('change', function() {
-        loadDistricts($(this).val());
+      } else {
+        html = '<option value="">No districts assigned</option>';
+      }
+      rebuildSel(distSel, html);
     });
+  }
 
-    // Page load par agar data hai (For Edit Mode)
-    var initialProjectId = "{{ form.project_id.data }}";
-    var initialDistrictId = "{{ form.district_id.data }}";
-    if (initialProjectId) {
-        loadDistricts(initialProjectId, initialDistrictId);
-    }
-});
+  if (projSel) {
+    projSel.addEventListener('change', function() { loadDistricts(this.value); });
+  }
+
+  var initialProjectId  = "{{ form.project_id.data }}";
+  var initialDistrictId = "{{ form.district_id.data }}";
+  if (initialProjectId) { loadDistricts(initialProjectId, initialDistrictId); }
+})();
 </script>
 {% endblock %}

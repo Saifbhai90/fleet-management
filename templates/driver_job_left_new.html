@@ -21,8 +21,7 @@ body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
 }
 .form-control:focus, .form-select:focus { border-color: #f43f5e !important; box-shadow: 0 0 0 3px rgba(244,63,94,.12) !important; }
 textarea.form-control { height: auto !important; }
-.select2-container--bootstrap-5 .select2-selection { height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; }
-.select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered { line-height: 38px !important; }
+.ts-wrapper .ts-control { min-height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; }
 .section-divider { border: none; border-top: 1.5px dashed #e2e8f0; margin: 18px 0; }
 .status-badge { background: #fff5f5; border: 1px dashed #fca5a5; border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 16px; font-size: .83rem; color: #dc2626; }
 .animate-fade { animation: fadeIn .3s ease-in; }
@@ -79,17 +78,17 @@ textarea.form-control { height: auto !important; }
                     <div class="row g-2 mt-1 mb-3">
                         <div class="col-md-4">
                             <label class="form-label">Project <span class="text-danger">*</span></label>
-                            {{ form.project_id(class="form-select select2-enable" + (" is-invalid" if form.project_id.errors else ""), id="project_select") }}
+                            {{ form.project_id(class="form-select search-select" + (" is-invalid" if form.project_id.errors else ""), id="project_select") }}
                             {% for e in form.project_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">District <span class="text-danger">*</span></label>
-                            {{ form.district_id(class="form-select select2-enable" + (" is-invalid" if form.district_id.errors else ""), id="district_select") }}
+                            {{ form.district_id(class="form-select search-select" + (" is-invalid" if form.district_id.errors else ""), id="district_select") }}
                             {% for e in form.district_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Vehicle <span class="text-danger">*</span></label>
-                            {{ form.vehicle_id(class="form-select select2-enable" + (" is-invalid" if form.vehicle_id.errors else ""), id="vehicle_select") }}
+                            {{ form.vehicle_id(class="form-select search-select" + (" is-invalid" if form.vehicle_id.errors else ""), id="vehicle_select") }}
                             {% for e in form.vehicle_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
                         </div>
                     </div>
@@ -99,7 +98,7 @@ textarea.form-control { height: auto !important; }
                     <div class="row g-2 mt-1 mb-3">
                         <div class="col-12">
                             <label class="form-label text-danger fw-bold">Driver to Mark as Left <span class="text-danger">*</span></label>
-                            {{ form.driver_id(class="form-select select2-enable" + (" is-invalid" if form.driver_id.errors else ""), id="driver_select") }}
+                            {{ form.driver_id(class="form-select search-select" + (" is-invalid" if form.driver_id.errors else ""), id="driver_select") }}
                             {% for e in form.driver_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
                         </div>
                     </div>
@@ -145,52 +144,77 @@ textarea.form-control { height: auto !important; }
 </div>
 
 <script>
-$(document).ready(function() {
-    $('.select2-enable').select2({ theme: 'bootstrap-5', width: '100%', placeholder: '-- Select --' });
+(function() {
+  function rebuildSel(el, html) {
+    if (!el) return;
+    if (el.tomselect) el.tomselect.destroy();
+    el.innerHTML = html;
+    initSearchableDropdowns(el.parentNode);
+  }
+  var proj = document.getElementById('project_select');
+  var dist = document.getElementById('district_select');
+  var veh  = document.getElementById('vehicle_select');
+  var drv  = document.getElementById('driver_select');
+  var reasonSel  = document.getElementById('reason_select');
+  var otherGroup = document.getElementById('other_reason_group');
 
-    $('#reason_select').on('change', function() {
-        $('#other_reason_group').toggle($(this).val() === 'Other');
+  if (reasonSel && otherGroup) {
+    reasonSel.addEventListener('change', function() {
+      otherGroup.style.display = this.value === 'Other' ? '' : 'none';
     });
+  }
 
-    var $proj = $('#project_select'), $dist = $('#district_select'),
-        $veh  = $('#vehicle_select'), $drv  = $('#driver_select');
-
-    $proj.on('change', function() {
-        var pid = $(this).val();
-        $dist.html('<option value="">Loading…</option>').trigger('change');
-        $veh.html('<option value="">-- Select --</option>').trigger('change');
-        $drv.html('<option value="">-- Select --</option>').trigger('change');
-        if (pid) $.getJSON('/get_districts_by_project/' + pid, function(data) {
-            var o = '<option value="">-- Select District --</option>';
-            $.each(data, function(i, d) { o += '<option value="' + d.id + '">' + d.name + '</option>'; });
-            $dist.html(o);
+  if (proj) {
+    proj.addEventListener('change', function() {
+      var pid = this.value;
+      rebuildSel(dist, '<option value="">-- Select District --</option>');
+      rebuildSel(veh,  '<option value="">-- Select --</option>');
+      rebuildSel(drv,  '<option value="">-- Select --</option>');
+      if (pid) {
+        rebuildSel(dist, '<option value="">Loading…</option>');
+        fetch('/get_districts_by_project/' + pid).then(function(r){return r.json();}).then(function(data){
+          var html = '<option value="">-- Select District --</option>';
+          data.forEach(function(d){ html += '<option value="' + d.id + '">' + d.name + '</option>'; });
+          rebuildSel(dist, html);
         });
+      }
     });
+  }
 
-    $dist.on('change', function() {
-        var did = $(this).val(), pid = $proj.val();
-        $veh.html('<option value="">Loading…</option>').trigger('change');
-        $drv.html('<option value="">-- Select --</option>').trigger('change');
-        if (did && pid) $.getJSON('/get_vehicles_by_district/' + pid + '/' + did, function(data) {
-            var o = '<option value="">-- Select Vehicle --</option>';
-            $.each(data, function(i, v) { o += '<option value="' + v.id + '">' + v.no + '</option>'; });
-            $veh.html(o);
+  if (dist) {
+    dist.addEventListener('change', function() {
+      var did = this.value, pid = proj ? proj.value : '';
+      rebuildSel(veh, '<option value="">Loading…</option>');
+      rebuildSel(drv, '<option value="">-- Select --</option>');
+      if (did && pid) {
+        fetch('/get_vehicles_by_district/' + pid + '/' + did).then(function(r){return r.json();}).then(function(data){
+          var html = '<option value="">-- Select Vehicle --</option>';
+          data.forEach(function(v){ html += '<option value="' + v.id + '">' + v.no + '</option>'; });
+          rebuildSel(veh, html);
         });
+      }
     });
+  }
 
-    $veh.on('change', function() {
-        var vid = $(this).val();
-        $drv.html('<option value="">Loading…</option>').trigger('change');
-        if (vid) $.getJSON('/get_drivers_by_vehicle/' + vid, function(data) {
-            var o = '<option value="">-- Select Driver --</option>';
-            $.each(data, function(i, d) { o += '<option value="' + d.id + '">' + d.name + '</option>'; });
-            $drv.html(o);
+  if (veh) {
+    veh.addEventListener('change', function() {
+      var vid = this.value;
+      rebuildSel(drv, '<option value="">Loading…</option>');
+      if (vid) {
+        fetch('/get_drivers_by_vehicle/' + vid).then(function(r){return r.json();}).then(function(data){
+          var html = '<option value="">-- Select Driver --</option>';
+          data.forEach(function(d){ html += '<option value="' + d.id + '">' + d.name + '</option>'; });
+          rebuildSel(drv, html);
         });
+      }
     });
+  }
 
-    $drv.on('change', function() {
-        loadDriverInsight($(this).val());
+  if (drv) {
+    drv.addEventListener('change', function() {
+      if (typeof loadDriverInsight === 'function') loadDriverInsight(this.value);
     });
-});
+  }
+})();
 </script>
 {% endblock %}

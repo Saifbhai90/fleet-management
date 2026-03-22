@@ -110,6 +110,7 @@
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
+      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
       projectSelect.innerHTML = '<option value="0">-- All Projects --</option>';
       if (did && did !== '0') {
         fetch('/get_projects_by_district/' + did)
@@ -121,7 +122,10 @@
               o.textContent = p.name;
               projectSelect.appendChild(o);
             });
+            initSearchableDropdowns(projectSelect.parentNode);
           });
+      } else {
+        initSearchableDropdowns(projectSelect.parentNode);
       }
     });
   }
