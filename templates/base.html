@@ -29,6 +29,12 @@
     <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
     <!-- Tom Select: keyboard-first searchable dropdowns -->
     <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    <style>
+        /* Anti-flicker: hide native selects before Tom Select replaces them */
+        select.search-select { display: none; }
+        /* Full-width TS wrapper to match Bootstrap layout */
+        .ts-wrapper { width: 100%; }
+    </style>
 
     <style>
         body {
@@ -2516,8 +2522,8 @@
             if (!el) return;
             var tag = el.tagName.toLowerCase();
 
-            // Skip Tom Select control inputs — they manage their own Enter key
-            if (el.classList && el.classList.contains('ts-input')) return;
+            // Skip Tom Select control inputs (marked in onInitialize) — they manage their own Enter
+            if (el.classList && el.classList.contains('ts-ignore-enter')) return;
 
             // Textarea without Ctrl: allow normal newline
             if (tag === 'textarea' && !e.ctrlKey && !e.shiftKey) return;
@@ -2609,25 +2615,36 @@
         }
 
         window.initSearchableDropdowns = function(scope) {
+            if (typeof TomSelect === 'undefined') return;
             var root = scope || document;
             root.querySelectorAll('select.search-select').forEach(function(el) {
                 if (el.tomselect) return; // already initialized
-                var ts = new TomSelect(el, {
-                    create: false,
-                    allowEmptyOption: true,
-                    openOnFocus: true,
-                    selectOnTab: true,
-                    maxOptions: 300
-                });
-                // Second Enter (dropdown CLOSED) → move focus to next field
-                // First Enter (dropdown OPEN)  → Tom Select handles it natively (select item)
-                ts.control_input.addEventListener('keydown', function(e) {
-                    if (e.key !== 'Enter') return;
-                    if (ts.isOpen) return; // TS handles selection — don't interfere
-                    e.preventDefault();
-                    e.stopImmediatePropagation();
-                    _tsMoveFocus(el);
-                }, true); // capture: fires before TS re-open logic
+                try {
+                    var ts = new TomSelect(el, {
+                        create: el.classList.contains('create-mode'),
+                        allowEmptyOption: true,
+                        openOnFocus: true,
+                        selectOnTab: true,
+                        maxOptions: 300,
+                        onInitialize: function() {
+                            if (this.control_input) {
+                                // Mark so global Enter-to-Tab listeners skip this input
+                                this.control_input.classList.add('ts-ignore-enter');
+                            }
+                        }
+                    });
+                    // 1st Enter (dropdown OPEN)  → TS selects item natively
+                    // 2nd Enter (dropdown CLOSED) → move focus to next field
+                    ts.control_input.addEventListener('keydown', function(e) {
+                        if (e.key !== 'Enter') return;
+                        if (ts.isOpen) return; // TS handles selection — do NOT interfere
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        _tsMoveFocus(el);
+                    }, true); // capture phase: fires before any global listener
+                } catch(ex) {
+                    console.warn('[TomSelect] init failed for:', (el.name || el.id), ex);
+                }
             });
         };
 
@@ -2691,8 +2708,8 @@
         if (event.key === "Enter") {
             const target = event.target;
 
-            // Skip Tom Select control inputs — handled by initSearchableDropdowns
-            if (target.classList && target.classList.contains('ts-input')) return;
+            // Skip Tom Select control inputs (marked in onInitialize) — handled by initSearchableDropdowns
+            if (target.classList && target.classList.contains('ts-ignore-enter')) return;
 
             // Select2: when Enter is pressed inside a Select2 (search dropdown), move focus to next form field
             const select2Container = target.closest && target.closest(".select2-container");
@@ -4852,6 +4869,22 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 {% endif %}
 
+</script>
+
+<script>
+/* Tom Select fallback init — isolated from main script so errors there don't block this */
+(function() {
+    function _tsRunInit() {
+        if (typeof TomSelect !== 'undefined' && typeof window.initSearchableDropdowns === 'function') {
+            window.initSearchableDropdowns();
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _tsRunInit);
+    } else {
+        _tsRunInit();
+    }
+})();
 </script>
 
 </body>

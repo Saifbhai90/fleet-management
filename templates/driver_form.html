@@ -111,13 +111,11 @@
   window.closeCnicOverlay = function() {
     document.getElementById('cnicCheckOverlay').style.display = 'none';
     setTimeout(function() {
-      var postSelect = document.querySelector('select[name="post"]');
-      if (postSelect && postSelect.tomselect) {
-        postSelect.tomselect.focus(); // openOnFocus auto-opens the dropdown
-      } else if (postSelect) {
-        postSelect.focus();
-      }
-    }, 120);
+      var postEl = document.getElementById('post');
+      var ts = postEl && postEl.tomselect;
+      if (ts) { ts.focus(); ts.open(); }
+      else if (postEl) { postEl.style.display = ''; postEl.focus(); }
+    }, 150);
   };
 
   document.getElementById('cnicCheckOverlay').addEventListener('keydown', function(e) {
