@@ -96,6 +96,7 @@ class DriverForm(FlaskForm):
     phone1 = StringField('Phone No 1', validators=[DataRequired(), Regexp(r'^03[0-9]{2}-[0-9]{7}$', message='Format: 0300-1110810')], render_kw={"placeholder": "0300-1110810"})
     phone2 = StringField('Phone No 2', validators=[Optional(), Regexp(r'^03[0-9]{2}-[0-9]{7}$', message='Format: 0300-1110810')], render_kw={"placeholder": "03xx-xxxxxxx"})
     emergency_no = StringField('Emergency No', validators=[DataRequired(), Regexp(r'^03[0-9]{2}-[0-9]{7}$', message='Format: 03xx-xxxxxxx')], render_kw={"placeholder": "03xx-xxxxxxx"})
+    emergency_relation = StringField('Emergency Relation', validators=[Optional()])
     address = TextAreaField('Address', validators=[DataRequired()])
     education = SelectField('Education', choices=[
         ('', '-- Select Education --'),
@@ -112,6 +113,7 @@ class DriverForm(FlaskForm):
         ('Other', 'Other'),
     ], validators=[DataRequired()])
     blood_group = SelectField('Blood Group', choices=[
+        ('', '-- Select Blood Group --'),
         ('O+', 'O+'), ('A+', 'A+'), ('B+', 'B+'), ('AB+', 'AB+'),
         ('O-', 'O-'), ('A-', 'A-'), ('B-', 'B-'), ('AB-', 'AB-')
     ], validators=[DataRequired()])
@@ -124,6 +126,7 @@ class DriverForm(FlaskForm):
     cnic_status = StringField('CNIC Status', render_kw={'readonly': True})
     license_no = StringField('License No', validators=[DataRequired()])
     license_type = SelectField('License Type', choices=[
+        ('', '-- Select License Type --'),
         ('M/Car', 'M/Car'), ('LTV', 'LTV'), ('HTV', 'HTV'), ('PSV', 'PSV'),
         ('M/Car, LTV', 'M/Car, LTV'), ('M/Car, HTV', 'M/Car, HTV'),
         ('M/Car, LTV, HTV', 'M/Car, LTV, HTV'), ('M/Car, LTV, HTV, PSV', 'M/Car, LTV, HTV, PSV')

@@ -77,6 +77,7 @@ def update_database_schema():
             ('driver_status_change', 'new_vehicle_id', 'INTEGER REFERENCES vehicle(id)'),
             ('driver_status_change', 'new_shift', 'VARCHAR(20)'),
             ('driver', 'status', "VARCHAR(20) DEFAULT 'Active'"),
+            ('driver', 'emergency_relation', 'VARCHAR(100)'),
         ]
 
         for table_name, column_name, col_def in column_additions:

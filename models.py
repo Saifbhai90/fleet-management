@@ -185,6 +185,7 @@ class Driver(db.Model):
     blood_group = db.Column(db.String(10))
     address = db.Column(db.Text)
     emergency_no = db.Column(db.String(20))
+    emergency_relation = db.Column(db.String(100), nullable=True)
     
     # Identity
     cnic_no = db.Column(db.String(20), unique=True)

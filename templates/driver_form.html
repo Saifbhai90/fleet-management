@@ -110,6 +110,10 @@
 
   window.closeCnicOverlay = function() {
     document.getElementById('cnicCheckOverlay').style.display = 'none';
+    setTimeout(function() {
+      var postField = document.querySelector('select[name="post"]');
+      if (postField) postField.focus();
+    }, 80);
   };
 
   document.getElementById('cnicCheckOverlay').addEventListener('keydown', function(e) {
@@ -203,6 +207,18 @@
                 <label class="form-label required">Emergency No</label>
                 {{ form.emergency_no(class="form-control phone-format", required=True) }}
                 {% for error in form.emergency_no.errors %}
+                  <div class="text-danger small">{{ error }}</div>
+                {% endfor %}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Emergency Relation</label>
+                {{ form.emergency_relation(class="form-control", list="relationSuggestions", autocomplete="off", placeholder="e.g. Brother, Father") }}
+                <datalist id="relationSuggestions">
+                  {% for rel in relation_suggestions %}
+                  <option value="{{ rel }}"></option>
+                  {% endfor %}
+                </datalist>
+                {% for error in form.emergency_relation.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>

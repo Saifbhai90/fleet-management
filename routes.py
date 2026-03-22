@@ -2497,7 +2497,13 @@ def driver_form(id=None):
         except Exception as e:
             db.session.rollback()
             flash(f"Error saving driver: {str(e)}", 'danger')
-    return render_template('driver_form.html', form=form, title=title, driver=driver)
+    relation_suggestions = [
+        r[0] for r in db.session.query(Driver.emergency_relation)
+        .filter(Driver.emergency_relation != None, Driver.emergency_relation != '')
+        .distinct().order_by(Driver.emergency_relation).all()
+    ]
+    return render_template('driver_form.html', form=form, title=title, driver=driver,
+                           relation_suggestions=relation_suggestions)
 # Employees (non-driver staff)
 # ────────────────────────────────────────────────
 @app.route('/employees')
