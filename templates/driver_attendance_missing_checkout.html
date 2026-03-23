@@ -113,8 +113,15 @@
       {% if records %}
       <div class="d-flex align-items-center gap-2 flex-wrap">
         <div class="list-search-wrap flex-grow-1 flex-md-grow-0">
-          <input type="text" id="missingCoTableSearch" class="form-control" placeholder="Search in list..." aria-label="Search in list">
+          <input type="text" id="missingCoTableSearch" class="form-control heading-search-input" placeholder="&#128269; Search all columns..." aria-label="Search in list">
         </div>
+        <span class="heading-per-page-label">Per Page:</span>
+        <select id="missingPerPage" class="form-select form-select-sm heading-per-page-select" onchange="attPaginate('missingCoTable','missingPerPage','missingPagNav','missingCount')">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
       </div>
       {% endif %}
     </div>
@@ -172,7 +179,8 @@
     </div>
     {% if records %}
     <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span class="text-muted small">{{ records|length }} driver(s) — check-in hai, check-out nahi</span>
+      <span class="text-muted small" id="missingCount"></span>
+      <nav id="missingPagNav"></nav>
     </div>
     {% endif %}
   </div>
@@ -386,8 +394,49 @@
         var text = row.innerText.toLowerCase();
         row.style.display = text.indexOf(q) > -1 ? '' : 'none';
       });
+      attPaginate('missingCoTable','missingPerPage','missingPagNav','missingCount');
     });
   }
 })();
+
+function attPaginate(tableId, perPageId, navId, countId) {
+  var table     = document.getElementById(tableId);
+  var perPageEl = document.getElementById(perPageId);
+  var navEl     = document.getElementById(navId);
+  var countEl   = document.getElementById(countId);
+  if (!table || !navEl) return;
+  var perPage   = perPageEl ? parseInt(perPageEl.value) : 20;
+  var allRows   = Array.from(table.querySelectorAll('tbody tr'));
+  var visRows   = allRows.filter(function(r){ return r.dataset.pagHidden !== '1'; });
+  var total     = visRows.length;
+  var curPage   = parseInt(table.dataset.curPage || '1');
+  var totalPages = Math.max(1, Math.ceil(total / perPage));
+  if (curPage > totalPages) curPage = 1;
+  visRows.forEach(function(r, i) {
+    r.style.display = (i >= (curPage-1)*perPage && i < curPage*perPage) ? '' : 'none';
+  });
+  if (countEl) countEl.textContent = 'Showing ' + (total===0?0:(curPage-1)*perPage+1) + ' to ' + Math.min(curPage*perPage,total) + ' of ' + total + ' entries';
+  var html = '<ul class="pagination pagination-sm mb-0">';
+  html += '<li class="page-item'+(curPage<=1?' disabled':'')+'"><a class="page-link" style="cursor:pointer" onclick="attGoPage(\''+tableId+'\',\''+perPageId+'\',\''+navId+'\',\''+countId+'\','+(curPage-1)+')"><i class=\'bi bi-chevron-left\'></i></a></li>';
+  for (var p=1;p<=totalPages;p++) {
+    html += '<li class="page-item'+(p===curPage?' active':'')+'"><a class="page-link" style="cursor:pointer" onclick="attGoPage(\''+tableId+'\',\''+perPageId+'\',\''+navId+'\',\''+countId+'\','+p+')">'+p+'</a></li>';
+  }
+  html += '<li class="page-item'+(curPage>=totalPages?' disabled':'')+'"><a class="page-link" style="cursor:pointer" onclick="attGoPage(\''+tableId+'\',\''+perPageId+'\',\''+navId+'\',\''+countId+'\','+(curPage+1)+')"><i class=\'bi bi-chevron-right\'></i></a></li>';
+  html += '</ul>';
+  navEl.innerHTML = html;
+}
+function attGoPage(tableId, perPageId, navId, countId, p) {
+  var table = document.getElementById(tableId);
+  if (!table) return;
+  var perPageEl = document.getElementById(perPageId);
+  var perPage = perPageEl ? parseInt(perPageEl.value) : 20;
+  var total = Array.from(table.querySelectorAll('tbody tr')).filter(function(r){return r.dataset.pagHidden!=='1';}).length;
+  var totalPages = Math.max(1, Math.ceil(total/perPage));
+  table.dataset.curPage = Math.max(1, Math.min(p, totalPages));
+  attPaginate(tableId, perPageId, navId, countId);
+}
+document.addEventListener('DOMContentLoaded', function() {
+  attPaginate('missingCoTable','missingPerPage','missingPagNav','missingCount');
+});
 </script>
 {% endblock %}

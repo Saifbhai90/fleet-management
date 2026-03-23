@@ -14,7 +14,7 @@
         of <strong>{{ pagination.total }}</strong> entries
         &nbsp;|&nbsp; Page <strong>{{ pagination.page }}</strong> of <strong>{{ pagination.pages }}</strong>
     </div>
-    {% if pagination.pages > 1 %}
+    {% if pagination %}
     <nav>
         <ul class="pagination pagination-sm mb-0">
             <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">

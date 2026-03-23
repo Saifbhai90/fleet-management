@@ -6596,7 +6596,10 @@ def vehicle_transfers():
     else:
         query = query.order_by(order_col.desc())
 
-    transfers = query.all()
+    page     = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    transfers  = pagination.items
 
     # Filter dropdown choices by user scope
     project_q = Project.query
@@ -6612,6 +6615,8 @@ def vehicle_transfers():
     return render_template(
         'vehicle_transfers.html',
         transfers=transfers,
+        pagination=pagination,
+        per_page=per_page,
         project_id=project_id,
         district_id=district_id,
         q=q,
@@ -7066,7 +7071,10 @@ def driver_transfers():
     else:
         query = query.order_by(order_col.desc())
 
-    transfers = query.all()
+    page     = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    transfers  = pagination.items
 
     # Filter dropdown choices by user scope
     project_q = Project.query
@@ -7082,6 +7090,8 @@ def driver_transfers():
     return render_template(
         'driver_transfers.html',
         transfers=transfers,
+        pagination=pagination,
+        per_page=per_page,
         project_id=project_id,
         district_id=district_id,
         sort_by=sort_by,
