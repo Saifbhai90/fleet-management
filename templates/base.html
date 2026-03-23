@@ -92,6 +92,44 @@
         .btn-primary:hover { box-shadow: 0 4px 16px rgba(59,130,246,0.4) !important; }
         .btn-success:hover { box-shadow: 0 4px 16px rgba(16,185,129,0.4) !important; }
         .btn-danger:hover  { box-shadow: 0 4px 16px rgba(239,68,68,0.4) !important; }
+        /* ── List-view search/filter button — stable across ALL states ──────
+           Bootstrap 5's .btn:focus-visible applies background-color:var(--bs-btn-hover-bg)
+           which is transparent for non-variant buttons, collapsing the appearance.
+           !important pins the green background in every state. ── */
+        .btn-success-compact {
+            background-color: #4caf50 !important;
+            color: #fff !important;
+            border: none !important;
+            padding: 0.45rem 1rem !important;
+            min-height: 38px;
+            line-height: 1.5;
+            font-size: 0.875rem;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .btn-success-compact:hover {
+            background-color: #388e3c !important;
+            color: #fff !important;
+            box-shadow: 0 4px 12px rgba(76,175,80,0.4) !important;
+            transform: translateY(-2px) !important;
+        }
+        .btn-success-compact:focus,
+        .btn-success-compact:focus-visible {
+            background-color: #4caf50 !important;
+            color: #fff !important;
+            border: none !important;
+            outline: none !important;
+            box-shadow: 0 0 0 0.25rem rgba(76,175,80,0.35) !important;
+            transform: none !important;
+            padding: 0.45rem 1rem !important;
+        }
+        .btn-success-compact:active {
+            background-color: #2e7d32 !important;
+            color: #fff !important;
+            border: none !important;
+            box-shadow: 0 0 0 0.25rem rgba(76,175,80,0.35) !important;
+            transform: none !important;
+        }
         /* ── Card hover lift ── */
         .card {
             transition: transform 0.2s ease, box-shadow 0.2s ease !important;
