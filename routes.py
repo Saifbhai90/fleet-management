@@ -88,6 +88,7 @@ class SimplePagination:
                 last = num
 
 
+
 def _attendance_local_time():
     """Current time in APP_TIMEZONE for attendance window comparison (Control form times are in local time)."""
     try:
@@ -899,14 +900,13 @@ def notification_list():
     read_ids = set()
     if user_id:
         read_ids = {r.notification_id for r in NotificationRead.query.filter_by(user_id=user_id).all()}
+    all_n = Notification.query.order_by(Notification.created_at.desc()).limit(150).all()
+    notifications = [n for n in all_n if not _is_parking_full_notification(n)][:100]
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    all_n = Notification.query.order_by(Notification.created_at.desc()).limit(150).all()
-    notifications_all = [n for n in all_n if not _is_parking_full_notification(n)]
-    pagination = SimplePagination(notifications_all, page, per_page)
+    pagination = SimplePagination(notifications, page, per_page)
     notifications = pagination.items
-    return render_template('notification_list.html', notifications=notifications, read_ids=read_ids,
-                           pagination=pagination, per_page=per_page)
+    return render_template('notification_list.html', notifications=notifications, read_ids=read_ids, pagination=pagination, per_page=per_page)
 
 
 @app.route('/notifications/new', methods=['GET', 'POST'])
@@ -953,10 +953,10 @@ def reminder_list():
     user_id = session.get('user_id')
     if not user_id:
         return redirect(url_for('login'))
+    reminders = Reminder.query.filter_by(user_id=user_id).order_by(Reminder.reminder_date.desc(), Reminder.reminder_time).all()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    reminders_all = Reminder.query.filter_by(user_id=user_id).order_by(Reminder.reminder_date.desc(), Reminder.reminder_time).all()
-    pagination = SimplePagination(reminders_all, page, per_page)
+    pagination = SimplePagination(reminders, page, per_page)
     reminders = pagination.items
     return render_template('reminder_list.html', reminders=reminders, pagination=pagination, per_page=per_page)
 
@@ -3308,10 +3308,10 @@ def login():
                 session.permanent = True  # Always persistent (30 days); inactivity timer handles web security
 
                 # ── User scope: projects/districts/vehicles/shifts ───────────────────────────────
-                allowed_projects  = set()
+                allowed_projects = set()
                 allowed_districts = set()
-                allowed_vehicles  = set()
-                allowed_shifts    = set()
+                allowed_vehicles = set()
+                allowed_shifts = set()
                 if not (is_master or is_admin):
                     # Employee assignments (projects/districts) via CNIC
                     try:
@@ -3323,10 +3323,10 @@ def login():
                     except Exception:
                         emp = None
                     if emp:
-                        for p in (emp.projects or []):
+                        for p in emp.projects:
                             if p and p.id:
                                 allowed_projects.add(p.id)
-                        for d in (emp.districts or []):
+                        for d in emp.districts:
                             if d and d.id:
                                 allowed_districts.add(d.id)
                     # Driver assignment (project/vehicle/shift) via CNIC
@@ -3353,10 +3353,10 @@ def login():
                         session.clear()
                         return redirect(url_for('login'))
 
-                session['allowed_projects']  = list(allowed_projects)
+                session['allowed_projects'] = list(allowed_projects)
                 session['allowed_districts'] = list(allowed_districts)
-                session['allowed_vehicles']  = list(allowed_vehicles)
-                session['allowed_shifts']    = list(allowed_shifts)
+                session['allowed_vehicles'] = list(allowed_vehicles)
+                session['allowed_shifts'] = list(allowed_shifts)
                 try:
                     login_log = LoginLog(
                         user_id=user.id,
@@ -3621,12 +3621,13 @@ def user_list():
                 User.full_name.ilike(like),
             )
         )
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
-    users_all = query.order_by(User.username).all()
+    users = query.order_by(User.username).all()
     if not _current_user_is_master():
         # Admin login: Master user ki koi information show na ho
-        users_all = [u for u in users_all if not (u.role and u.role.name == 'Master')]
+        users = [u for u in users if not (u.role and u.role.name == 'Master')]
+    users_all = users
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(users_all, page, per_page)
     users = pagination.items
     return render_template('user_list.html', users=users, search=search, pagination=pagination, per_page=per_page)
@@ -3840,9 +3841,9 @@ def role_list():
     if not _current_user_is_master():
         # Admin login: Master role show na ho
         roles = [r for r in roles if r.name != 'Master']
+    roles_all = roles
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    roles_all = roles
     pagination = SimplePagination(roles_all, page, per_page)
     roles = pagination.items
     return render_template('role_list.html', roles=roles, pagination=pagination, per_page=per_page)
@@ -5037,6 +5038,304 @@ def assign_vehicle_to_district():
     )
 
 
+@app.route('/assign_vehicle_to_district/export')
+def assign_vehicle_to_district_export():
+    search = request.args.get('search', '').strip()
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    assigned = _assign_vehicle_to_district_data(search=search, project_id=project_id, district_id=district_id)
+    headers = ['Vehicle No', 'Model', 'Project', 'District', 'Assignment Date', 'Remarks']
+    rows = []
+    for v in assigned:
+        rows.append([
+            v.vehicle_no or '',
+            v.model or '',
+            v.project.name if v.project else '',
+            v.district.name if v.district else '',
+            v.assign_to_district_date.strftime('%Y-%m-%d') if v.assign_to_district_date else '-',
+            (v.assignment_remarks or '').replace('\r\n', ' ').replace('\n', ' ')[:200]
+        ])
+    filename = 'vehicle_district_assignments.xlsx' if not search else f'vehicle_district_assignments_{search[:30].replace("/", "-")}.xlsx'
+    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
+
+
+@app.route('/assign_vehicle_to_district/print')
+def assign_vehicle_to_district_print():
+    search = request.args.get('search', '').strip()
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    assigned = _assign_vehicle_to_district_data(search=search, project_id=project_id, district_id=district_id)
+    return render_template(
+        'assign_vehicle_to_district_print.html',
+        assigned_vehicles=assigned,
+        search=search
+    )
+
+
+@app.route('/assign_vehicle_to_district/new', methods=['GET', 'POST'])
+def assign_vehicle_to_district_new():
+    form = AssignVehicleToDistrictForm()
+    form.project_id.choices = [(0, '-- Select Project --')] + [
+        (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    ]
+    form.district_id.choices = [(0, '-- Select District --')]  # Loaded via AJAX when project selected
+    # Only show vehicles not yet assigned (so they can't be assigned twice)
+    unassigned_vehicles = Vehicle.query.filter(Vehicle.district_id.is_(None)).order_by(Vehicle.vehicle_no).all()
+    form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, f"{v.vehicle_no} ({v.model})") for v in unassigned_vehicles]
+    if request.method == 'POST':
+        p_id = request.form.get('project_id', type=int)
+        if p_id:
+            project = Project.query.get(p_id)
+            form.district_id.choices = [(0, '-- Select District --')] + ([(d.id, d.name) for d in project.districts] if project else [])
+        else:
+            form.district_id.choices = [(0, '-- Select District --')]
+
+    if form.validate_on_submit():
+        try:
+            vehicle = Vehicle.query.get(form.vehicle_id.data)
+            project = Project.query.get(form.project_id.data)
+            district = District.query.get(form.district_id.data)
+            if not vehicle:
+                flash("Selected vehicle not found.", "danger")
+            elif not project:
+                flash("Selected project does not exist.", "danger")
+            elif not district:
+                flash("Selected district does not exist.", "danger")
+            else:
+                vehicle.project_id = project.id
+                vehicle.district_id = district.id
+                vehicle.assign_to_district_date = form.assign_date.data
+                vehicle.assignment_remarks = form.remarks.data
+                db.session.commit()
+                flash(f"Vehicle {vehicle.vehicle_no} assigned successfully!", "success")
+                return redirect(url_for('assign_vehicle_to_district'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error: {str(e)}", "danger")
+    return render_template('assign_vehicle_to_district_new.html', form=form)
+
+
+@app.route('/get_districts_by_project/<int:project_id>')
+def get_districts_by_project(project_id):
+    districts = District.query.join(project_district) \
+                     .filter(project_district.c.project_id == project_id) \
+                     .order_by(District.name).all()
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    if scope_districts:
+        allowed = set(scope_districts)
+        districts = [d for d in districts if d.id in allowed]
+    if scope_projects and project_id not in (scope_projects or []):
+        districts = []
+    return jsonify([{"id": d.id, "name": d.name} for d in districts])
+
+
+@app.route('/get_all_districts')
+def get_all_districts():
+    """Return all districts for filter dropdown when no project selected."""
+    districts = District.query.order_by(District.name).all()
+    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+    if scope_districts:
+        allowed = set(scope_districts)
+        districts = [d for d in districts if d.id in allowed]
+    return jsonify([{"id": d.id, "name": d.name} for d in districts])
+
+
+@app.route('/assign_vehicle_to_district/desassign/<int:vehicle_id>', methods=['POST'])
+def desassign_vehicle_from_district(vehicle_id):
+    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    if vehicle.parking_station_id or vehicle.driver_id:
+        parts = []
+        if vehicle.parking_station_id:
+            parts.append('Parking')
+        if vehicle.driver_id:
+            parts.append('Driver')
+        flash(
+            f'Cannot deassign: Vehicle "{vehicle.vehicle_no}" is linked with {" and ".join(parts)}. '
+            'Remove parking assignment or driver assignment first.',
+            'danger'
+        )
+        return redirect(url_for('assign_vehicle_to_district'))
+    vehicle.district_id = None
+    vehicle.assign_to_district_date = None
+    vehicle.assignment_remarks = None
+    db.session.commit()
+    flash("Vehicle desassigned successfully.", "info")
+    return redirect(url_for('assign_vehicle_to_district'))
+
+@app.route('/company/report/<int:id>')
+def company_report(id):
+    company = Company.query.get_or_404(id)
+    today = date.today().strftime('%d %b, %Y')
+    return render_template('company_report.html', company=company, current_date=today)
+
+
+@app.route('/assign_vehicle_to_district/edit/<int:vehicle_id>', methods=['GET', 'POST'])
+def assign_vehicle_to_district_edit(vehicle_id):
+    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    if vehicle.parking_station_id or vehicle.driver_id:
+        parts = []
+        if vehicle.parking_station_id:
+            parts.append('Parking')
+        if vehicle.driver_id:
+            parts.append('Driver')
+        flash(
+            f'Cannot edit: Vehicle "{vehicle.vehicle_no}" is linked with {" and ".join(parts)}. '
+            'Remove parking or driver assignment first.',
+            'danger'
+        )
+        return redirect(url_for('assign_vehicle_to_district'))
+    form = AssignVehicleToDistrictForm()
+    form.project_id.choices = [
+        (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    ]
+    # Show current vehicle + only unassigned vehicles (so already-assigned vehicles can't be selected for another project/district)
+    form.vehicle_id.choices = [
+        (v.id, f"{v.vehicle_no} ({v.model})")
+        for v in Vehicle.query.filter(
+            or_(Vehicle.district_id.is_(None), Vehicle.id == vehicle_id)
+        ).order_by(Vehicle.vehicle_no).all()
+    ]
+    
+    current_p_id = request.form.get('project_id', type=int) or vehicle.project_id
+    if current_p_id:
+        project = Project.query.get(current_p_id)
+        form.district_id.choices = [(d.id, d.name) for d in project.districts]
+    else:
+        form.district_id.choices = []
+
+    if request.method == 'GET':
+        form.project_id.data = vehicle.project_id
+        form.district_id.data = vehicle.district_id
+        form.vehicle_id.data = vehicle.id
+        form.assign_date.data = vehicle.assign_to_district_date
+        form.remarks.data = vehicle.assignment_remarks
+
+    if form.validate_on_submit():
+        try:
+            if vehicle.id != form.vehicle_id.data:
+                vehicle.project_id = None
+                vehicle.district_id = None
+                vehicle = Vehicle.query.get(form.vehicle_id.data)
+            
+            vehicle.project_id = form.project_id.data
+            vehicle.district_id = form.district_id.data
+            vehicle.assign_to_district_date = form.assign_date.data
+            vehicle.assignment_remarks = form.remarks.data
+            
+            db.session.commit()
+            flash("Assignment updated successfully!", "success")
+            return redirect(url_for('assign_vehicle_to_district'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error: {str(e)}", "danger")
+
+    return render_template('assign_vehicle_to_district_edit.html', form=form, vehicle=vehicle)
+
+
+@app.route('/get_parking_by_project/<int:project_id>')
+def get_parking_by_project(project_id):
+    project = Project.query.get(project_id)
+    if not project:
+        return jsonify([])
+    stations = [{"id": p.id, "name": p.name} for p in project.parking_stations]
+    return jsonify(stations)
+
+@app.route('/assign_vehicle_to_parking/new', methods=['GET', 'POST'])
+def assign_vehicle_to_parking_new():
+    form = AssignVehicleToParkingForm()
+    form.project_id.choices = [(0, "Select Project")] + [
+        (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    ]
+
+    if request.method == 'POST':
+        p_id = request.form.get('project_id', type=int) or form.project_id.data
+        d_id = request.form.get('district_id', type=int) or form.district_id.data
+        # Repopulate choices so submitted values are preserved when validation fails (form does not reset)
+        if p_id:
+            proj = Project.query.get(p_id)
+            form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in (proj.districts.order_by(District.name).all() if proj else [])]
+        else:
+            form.district_id.choices = [(0, '-- Select District --')]
+        if d_id and p_id:
+            dist_obj = District.query.get(d_id)
+            vehicles = Vehicle.query.filter(
+                Vehicle.project_id == p_id,
+                Vehicle.district_id == d_id,
+                Vehicle.parking_station_id.is_(None)
+            ).order_by(Vehicle.vehicle_no).all()
+            form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicles]
+            if dist_obj:
+                stations = ParkingStation.query.filter_by(district=dist_obj.name).all()
+                form.parking_station_id.choices = [(0, '-- Select Parking --')] + [(s.id, s.name) for s in stations]
+            else:
+                form.parking_station_id.choices = [(0, '-- Select Parking --')]
+        else:
+            form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
+            form.parking_station_id.choices = [(0, '-- Select Parking --')]
+    else:
+        form.district_id.choices = [(0, '-- Select District --')]
+        form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
+        form.parking_station_id.choices = [(0, '-- Select Parking --')]
+
+    if form.validate_on_submit():
+        try:
+            vehicle = Vehicle.query.get(form.vehicle_id.data)
+            vehicle.parking_station_id = form.parking_station_id.data
+            vehicle.parking_assign_date = form.assign_date.data 
+            vehicle.parking_remarks = form.remarks.data
+            db.session.commit()
+            flash("Vehicle assigned to parking successfully!", "success")
+            return redirect(url_for('assign_vehicle_to_parking_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error: {str(e)}", "danger")
+
+    return render_template('assign_vehicle_to_parking_new.html', form=form)
+
+@app.route('/get_vehicles_by_district/<int:project_id>/<int:district_id>')
+def get_vehicles_by_district(project_id, district_id):
+    vehicles = Vehicle.query.filter(
+        Vehicle.project_id == project_id,
+        Vehicle.district_id == district_id
+    ).order_by(Vehicle.vehicle_no).all()
+    return jsonify([{"id": v.id, "no": v.vehicle_no} for v in vehicles])
+
+
+@app.route('/get_vehicles_by_district_no_parking/<int:project_id>/<int:district_id>')
+def get_vehicles_by_district_no_parking(project_id, district_id):
+    """Vehicles in project+district that have NO parking assigned. Optional ?include_vehicle_id=X to include that vehicle (for edit form)."""
+    include_id = request.args.get('include_vehicle_id', type=int)
+    query = Vehicle.query.filter(
+        Vehicle.project_id == project_id,
+        Vehicle.district_id == district_id
+    )
+    if include_id:
+        query = query.filter(
+            (Vehicle.parking_station_id.is_(None)) | (Vehicle.id == include_id)
+        )
+    else:
+        query = query.filter(Vehicle.parking_station_id.is_(None))
+    vehicles = query.order_by(Vehicle.vehicle_no).all()
+    return jsonify([{"id": v.id, "no": v.vehicle_no} for v in vehicles])
+
+@app.route('/get_parking_by_district/<int:district_id>')
+def get_parking_by_district(district_id):
+    district = District.query.get(district_id)
+    if not district:
+        return jsonify([])
+    stations = ParkingStation.query.filter_by(district=district.name).all()
+    output = []
+    for s in stations:
+        occupied = Vehicle.query.filter_by(parking_station_id=s.id).count()
+        available = s.capacity - occupied
+        output.append({
+            "id": s.id, 
+            "name": f"{s.name} (Available: {available}/{s.capacity})",
+            "is_full": available <= 0
+        })
+    return jsonify(output)
+
+
 @app.route('/assign_vehicle_to_parking')
 def assign_vehicle_to_parking_list():
     from auth_utils import get_user_context
@@ -5104,6 +5403,431 @@ def assign_vehicle_to_parking_list():
         per_page=per_page,
     )
 
+
+def _assign_vehicle_to_parking_data(search=None, project_id=None, district_id=None, from_date=None, to_date=None, sort_by='assign_date', sort_order='desc'):
+    """Query vehicles with parking assigned (optionally filtered by search, project_id, district_id, date range). Returns list of Vehicle."""
+    query = Vehicle.query.filter(Vehicle.parking_station_id.isnot(None))
+    if project_id:
+        query = query.filter(Vehicle.project_id == project_id)
+    if district_id:
+        query = query.filter(Vehicle.district_id == district_id)
+    if from_date:
+        query = query.filter(Vehicle.parking_assign_date >= from_date)
+    if to_date:
+        query = query.filter(Vehicle.parking_assign_date <= to_date)
+    if search:
+        query = query.join(Project).join(ParkingStation).filter(
+            (Vehicle.vehicle_no.ilike(f'%{search}%')) |
+            (Project.name.ilike(f'%{search}%')) |
+            (ParkingStation.name.ilike(f'%{search}%'))
+        )
+    
+    # Apply sorting - database level for performance
+    if sort_by == 'vehicle':
+        order_col = Vehicle.vehicle_no
+    elif sort_by == 'project':
+        query = query.join(Project, Vehicle.project_id == Project.id)
+        order_col = Project.name
+    elif sort_by == 'parking':
+        query = query.join(ParkingStation, Vehicle.parking_station_id == ParkingStation.id)
+        order_col = ParkingStation.name
+    elif sort_by == 'assign_date':
+        order_col = Vehicle.parking_assign_date
+    else:
+        order_col = Vehicle.parking_assign_date
+    
+    if sort_order == 'asc':
+        query = query.order_by(order_col.asc())
+    else:
+        query = query.order_by(order_col.desc())
+    
+    return query.all()
+
+
+@app.route('/assign_vehicle_to_parking/export')
+def assign_vehicle_to_parking_export():
+    search = request.args.get('search', '').strip()
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    from_date_str = request.args.get('from_date', '').strip()
+    to_date_str = request.args.get('to_date', '').strip()
+    from_date = parse_date_dmy(from_date_str) if from_date_str else None
+    to_date = parse_date_dmy(to_date_str) if to_date_str else None
+    parked_vehicles = _assign_vehicle_to_parking_data(search=search, project_id=project_id, district_id=district_id, from_date=from_date, to_date=to_date)
+    headers = ['Vehicle No', 'Model', 'Project', 'Parking Station', 'District', 'Assign Date', 'Remarks']
+    rows = []
+    for v in parked_vehicles:
+        rows.append([
+            v.vehicle_no or '',
+            v.model or '',
+            v.project.name if v.project else '',
+            v.parking_station.name if v.parking_station else '',
+            v.district.name if v.district else '',
+            v.parking_assign_date.strftime('%d-%m-%Y') if v.parking_assign_date else '',
+            (v.parking_remarks or '').replace('\r\n', ' ').replace('\n', ' ')[:200]
+        ])
+    filename = 'vehicle_parking_assignments.xlsx' if not search else f'vehicle_parking_assignments_{search[:30].replace("/", "-")}.xlsx'
+    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
+
+
+@app.route('/assign_vehicle_to_parking/print')
+def assign_vehicle_to_parking_print():
+    search = request.args.get('search', '').strip()
+    project_id = request.args.get('project_id', type=int)
+    district_id = request.args.get('district_id', type=int)
+    from_date_str = request.args.get('from_date', '').strip()
+    to_date_str = request.args.get('to_date', '').strip()
+    from_date = parse_date_dmy(from_date_str) if from_date_str else None
+    to_date = parse_date_dmy(to_date_str) if to_date_str else None
+    parked_vehicles = _assign_vehicle_to_parking_data(search=search, project_id=project_id, district_id=district_id, from_date=from_date, to_date=to_date)
+    return render_template(
+        'assign_vehicle_to_parking_print.html',
+        parked_vehicles=parked_vehicles,
+        search=search,
+        project_id=project_id or 0,
+        district_id=district_id or 0,
+        from_date=from_date_str,
+        to_date=to_date_str,
+    )
+
+
+@app.route('/assign_vehicle_to_parking/desassign/<int:vehicle_id>', methods=['POST'])
+def desassign_vehicle_from_parking(vehicle_id):
+    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    has_driver = Driver.query.filter_by(vehicle_id=vehicle.id).first() is not None
+    if has_driver:
+        flash(
+            f'Cannot deassign: Vehicle "{vehicle.vehicle_no}" has a driver attached. '
+            'Remove driver assignment first (Assignment → Driver to Vehicle).',
+            'danger'
+        )
+        return redirect(url_for('assign_vehicle_to_parking_list'))
+    station_name = vehicle.parking_station.name if vehicle.parking_station else "Parking"
+    vehicle.parking_station_id = None
+    db.session.commit()
+    flash(f"Vehicle {vehicle.vehicle_no} removed from {station_name}.", "info")
+    return redirect(url_for('assign_vehicle_to_parking_list'))
+
+@app.route('/assign_vehicle_to_parking/edit/<int:vehicle_id>', methods=['GET', 'POST'])
+def assign_vehicle_to_parking_edit(vehicle_id):
+    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    has_driver = Driver.query.filter_by(vehicle_id=vehicle.id).first() is not None
+    if has_driver:
+        flash(
+            f'Cannot edit: Vehicle "{vehicle.vehicle_no}" has a driver attached. '
+            'Remove driver assignment first (Assignment → Driver to Vehicle).',
+            'danger'
+        )
+        return redirect(url_for('assign_vehicle_to_parking_list'))
+    form = AssignVehicleToParkingForm()
+    
+    form.project_id.choices = [
+        (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
+    ]
+    p_id = request.form.get('project_id', type=int) or vehicle.project_id
+    d_id = request.form.get('district_id', type=int) or vehicle.district_id
+    # Vehicle list: only those without parking in this project+district, or the current vehicle (for edit)
+    if p_id and d_id:
+        vehicles_for_choice = Vehicle.query.filter(
+            Vehicle.project_id == p_id,
+            Vehicle.district_id == d_id
+        ).filter(
+            (Vehicle.parking_station_id.is_(None)) | (Vehicle.id == vehicle_id)
+        ).order_by(Vehicle.vehicle_no).all()
+        form.vehicle_id.choices = [(v.id, f"{v.vehicle_no} ({v.model})") for v in vehicles_for_choice]
+    else:
+        form.vehicle_id.choices = []
+    
+
+    if p_id:
+        proj = Project.query.get(p_id)
+        form.district_id.choices = [(d.id, d.name) for d in proj.districts.all()]
+    else:
+        form.district_id.choices = []
+
+    if d_id:
+        dist_obj = District.query.get(d_id)
+        stations = ParkingStation.query.filter_by(district=dist_obj.name).all()
+        form.parking_station_id.choices = [(s.id, s.name) for s in stations]
+    else:
+        form.parking_station_id.choices = []
+
+    if request.method == 'GET':
+        form.project_id.data = vehicle.project_id
+        form.district_id.data = vehicle.district_id
+        form.vehicle_id.data = vehicle.id
+        form.parking_station_id.data = vehicle.parking_station_id
+        form.assign_date.data = vehicle.parking_assign_date
+        form.remarks.data = vehicle.parking_remarks 
+
+    if form.validate_on_submit():
+        try:
+            new_ps_id = form.parking_station_id.data
+            if new_ps_id != vehicle.parking_station_id:
+                parking = ParkingStation.query.get(new_ps_id)
+                occupied = Vehicle.query.filter_by(parking_station_id=new_ps_id).count()
+                if occupied >= parking.capacity:
+                    flash(f"Error: {parking.name} is full!", "danger")
+                    return render_template('assign_vehicle_to_parking_edit.html', form=form, vehicle=vehicle)
+            
+            if vehicle.id != form.vehicle_id.data:
+                vehicle.parking_station_id = None
+                vehicle = Vehicle.query.get(form.vehicle_id.data)
+
+            vehicle.parking_station_id = new_ps_id
+            vehicle.parking_assign_date = form.assign_date.data
+            vehicle.parking_remarks = form.remarks.data
+            db.session.commit()
+            flash("Parking assignment updated successfully!", "success")
+            return redirect(url_for('assign_vehicle_to_parking_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error: {str(e)}", "danger")
+
+    return render_template('assign_vehicle_to_parking_edit.html', form=form, vehicle=vehicle)
+
+@app.route('/get_driver_details/<int:driver_id>')
+def get_driver_details(driver_id):
+    d = Driver.query.get_or_404(driver_id)
+    district_name = d.district.name if d.district else (d.driver_district or '-')
+    photo_url = d.photo_path if d.photo_path else None
+    proj_obj = Project.query.get(d.project_id) if d.project_id else None
+    project_name = proj_obj.name if proj_obj else '-'
+
+    # ── Build Job History ──
+    history = []
+
+    # 1. Initial Assignment event
+    if d.assign_date:
+        transfers_sorted = sorted(d.transfer_history, key=lambda t: t.transfer_date)
+        if transfers_sorted:
+            ft = transfers_sorted[0]
+            init_veh = ft.old_vehicle.vehicle_no if ft.old_vehicle else '-'
+            if ft.old_vehicle and ft.old_vehicle.model:
+                init_veh += f" ({ft.old_vehicle.model})"
+            init_dist = ft.old_district.name if ft.old_district else '-'
+            init_proj = ft.old_project.name if ft.old_project else '-'
+            init_shift = ft.old_shift or '-'
+        else:
+            init_veh = (d.vehicle.vehicle_no + (f" ({d.vehicle.model})" if d.vehicle.model else '')) if d.vehicle else '-'
+            init_dist  = district_name
+            init_proj  = project_name
+            init_shift = d.shift or '-'
+        history.append({
+            'date_sort': d.assign_date.isoformat(),
+            'date':  d.assign_date.strftime('%d-%m-%Y'),
+            'type':  'assignment',
+            'title': 'ASSIGNMENT',
+            'line1': f"To Vehicle: {init_veh}",
+            'line2': f"Project: {init_proj}",
+            'line3': f"District: {init_dist} | Shift: {init_shift}",
+            'remarks': d.assign_remarks or '',
+        })
+
+    # 2. Transfers
+    for t in sorted(d.transfer_history, key=lambda x: x.transfer_date):
+        new_veh = t.new_vehicle.vehicle_no if t.new_vehicle else '-'
+        if t.new_vehicle and t.new_vehicle.model:
+            new_veh += f" ({t.new_vehicle.model})"
+        history.append({
+            'date_sort': t.transfer_date.isoformat(),
+            'date':  t.transfer_date.strftime('%d-%m-%Y'),
+            'type':  'transfer',
+            'title': 'TRANSFER',
+            'line1': f"To Vehicle: {new_veh}",
+            'line2': f"Project: {t.new_project.name if t.new_project else '-'}",
+            'line3': f"District: {t.new_district.name if t.new_district else '-'} | Shift: {t.new_shift or '-'}",
+            'remarks': t.remarks or '',
+        })
+
+    # 3. Status Changes (left / rejoin)
+    for sc in sorted(d.status_changes, key=lambda x: x.change_date):
+        if sc.action_type == 'left':
+            lv = sc.left_vehicle.vehicle_no if sc.left_vehicle else '-'
+            if sc.left_vehicle and sc.left_vehicle.model:
+                lv += f" ({sc.left_vehicle.model})"
+            history.append({
+                'date_sort': sc.change_date.isoformat(),
+                'date':  sc.change_date.strftime('%d-%m-%Y'),
+                'type':  'left',
+                'title': 'JOB LEFT',
+                'line1': f"Reason: {sc.reason or '-'}",
+                'line2': f"From Vehicle: {lv}",
+                'line3': f"District: {sc.left_district.name if sc.left_district else '-'} | Project: {sc.left_project.name if sc.left_project else '-'}",
+                'remarks': sc.remarks or '',
+            })
+        elif sc.action_type == 'rejoin':
+            rv = sc.new_vehicle.vehicle_no if sc.new_vehicle else '-'
+            if sc.new_vehicle and sc.new_vehicle.model:
+                rv += f" ({sc.new_vehicle.model})"
+            history.append({
+                'date_sort': sc.change_date.isoformat(),
+                'date':  sc.change_date.strftime('%d-%m-%Y'),
+                'type':  'rejoin',
+                'title': 'REJOINED',
+                'line1': f"To Vehicle: {rv}",
+                'line2': f"Project: {sc.new_project.name if sc.new_project else '-'}",
+                'line3': f"District: {sc.new_district.name if sc.new_district else '-'} | Shift: {sc.new_shift or '-'}",
+                'remarks': sc.remarks or '',
+            })
+
+    history.sort(key=lambda x: x['date_sort'])
+    for h in history:
+        del h['date_sort']
+
+    return jsonify({
+        'name':        d.name,
+        'driver_id':   d.driver_id or '-',
+        'post':        d.post or 'Driver',
+        'status':      d.status or 'Active',
+        'district':    district_name,
+        'shift':       d.shift or '-',
+        'photo_url':   photo_url,
+        'father_name': d.father_name or '-',
+        'cnic_no':     d.cnic_no or '-',
+        'phone1':      d.phone1 or '-',
+        'phone2':      d.phone2 or '-',
+        'address':     d.address or '-',
+        'history':     history,
+    })
+
+@app.route('/assign_driver_to_vehicle/new', methods=['GET', 'POST'])
+def assign_driver_to_vehicle_new():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    form = AssignDriverToVehicleForm()
+    proj_q = Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in proj_q.all()]
+    
+    # Auto-select if only 1 project allowed
+    disable_project = False
+    if not is_master_or_admin and len(allowed_projects) == 1:
+        single_proj = next(iter(allowed_projects))
+        if not form.project_id.data or form.project_id.data == 0:
+            form.project_id.data = single_proj
+        disable_project = True
+
+    selected_project_id = None
+    selected_district_id = None
+
+    if request.method == 'POST':
+        selected_project_id = form.project_id.data
+        selected_district_id = form.district_id.data
+
+        if selected_project_id and selected_project_id != 0:
+            project = Project.query.get(selected_project_id)
+            if project:
+                form.district_id.choices = [(d.id, d.name) for d in project.districts]
+
+                if selected_district_id and selected_district_id != 0:
+                    vehicles = Vehicle.query.filter_by(
+                        project_id=selected_project_id,
+                        district_id=selected_district_id
+                    ).all()
+                    form.vehicle_id.choices = [
+                        (v.id, f"{v.vehicle_no} – {v.model or 'N/A'}") for v in vehicles
+                    ]
+
+    unassigned_drivers = Driver.query.filter(Driver.vehicle_id.is_(None)).order_by(Driver.name).all()
+    form.driver_id.choices = [(0, '-- Select Driver --')] + [
+        (d.id, f"{d.name} ({d.driver_id})") for d in unassigned_drivers
+    ]
+
+    if form.validate_on_submit():
+        vehicle = Vehicle.query.get(form.vehicle_id.data)
+        driver = Driver.query.get(form.driver_id.data)
+
+        if not vehicle or not driver:
+            flash("Selected vehicle or driver not found.", "danger")
+            return render_template('assign_driver_to_vehicle_new.html', form=form)
+
+        if not vehicle.parking_station_id:
+            flash("Pehle es vehicle ko Parking Station assign karo.", "danger")
+            if not form.district_id.choices or form.district_id.choices == [(0, '-- Select District --')]:
+                if selected_project_id and selected_project_id != 0:
+                    project = Project.query.get(selected_project_id)
+                    if project:
+                        form.district_id.choices = [(d.id, d.name) for d in project.districts]
+                if selected_district_id and selected_district_id != 0:
+                    vehicles = Vehicle.query.filter_by(
+                        project_id=selected_project_id,
+                        district_id=selected_district_id
+                    ).all()
+                    form.vehicle_id.choices = [
+                        (v.id, f"{v.vehicle_no} – {v.model or 'N/A'}") for v in vehicles
+                    ]
+            if not form.district_id.choices: form.district_id.choices = [(0, '-- Select District --')]
+            if not form.vehicle_id.choices:  form.vehicle_id.choices  = [(0, '-- Select Vehicle --')]
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
+
+        current_count = Driver.query.filter_by(vehicle_id=vehicle.id).count()
+        if current_count >= (vehicle.driver_capacity or 1):
+            flash(f"Vehicle capacity ({vehicle.driver_capacity or 1}) already reached!", "danger")
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
+
+        shift_taken = Driver.query.filter_by(vehicle_id=vehicle.id, shift=form.shift.data).first()
+        if shift_taken:
+            flash(f"{form.shift.data} shift already assigned to this vehicle!", "danger")
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
+
+        cap = vehicle.driver_capacity or 1
+        if cap == 1 and form.shift.data != 'Morning':
+            flash("Is vehicle ki capacity 1 hai — sirf Morning shift allowed.", "danger")
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
+
+        try:
+            driver.vehicle_id = vehicle.id
+            driver.shift = form.shift.data
+            driver.project_id = form.project_id.data
+            driver.district_id = form.district_id.data if (form.district_id.data and form.district_id.data != 0) else vehicle.district_id
+            driver.assign_date = form.assign_date.data
+            driver.assign_remarks = form.remarks.data
+            db.session.commit()
+            flash(f"Driver {driver.name} assigned to {vehicle.vehicle_no} ({form.shift.data}) successfully!", "success")
+            return redirect(url_for('assign_driver_to_vehicle_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error saving assignment: {str(e)}", "danger")
+
+    if not form.district_id.choices: form.district_id.choices = [(0, '-- Select District --')]
+    if not form.vehicle_id.choices:  form.vehicle_id.choices  = [(0, '-- Select Vehicle --')]
+    return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
+
+@app.route('/get_vehicle_capacity_info/<int:vehicle_id>')
+def get_vehicle_capacity_info(vehicle_id):
+    vehicle = Vehicle.query.get(vehicle_id)
+    if not vehicle:
+        return jsonify({"error": "Not found"}), 404
+    assigned_drivers = Driver.query.filter_by(vehicle_id=vehicle_id).all()
+    occupied_shifts = [d.shift for d in assigned_drivers]
+    return jsonify({
+        "capacity": vehicle.driver_capacity or 1,
+        "occupied_shifts": occupied_shifts,
+        "available_morning": "Morning" not in occupied_shifts,
+        "available_night": "Night" not in occupied_shifts
+    })
+
+
+@app.route('/get_vehicle_parking/<int:vehicle_id>')
+def get_vehicle_parking(vehicle_id):
+    """Returns parking station info for a vehicle (for Driver-to-Vehicle form)."""
+    vehicle = Vehicle.query.get(vehicle_id)
+    if not vehicle:
+        return jsonify({"error": "Not found"}), 404
+    if not vehicle.parking_station_id:
+        return jsonify({"parking_station_id": None, "parking_station_name": None})
+    ps = ParkingStation.query.get(vehicle.parking_station_id)
+    return jsonify({
+        "parking_station_id": vehicle.parking_station_id,
+        "parking_station_name": ps.name if ps else None
+    })
 
 @app.route('/assign_driver_to_vehicle')
 def assign_driver_to_vehicle_list():
@@ -5195,6 +5919,10 @@ def assign_driver_to_vehicle_list():
         pagination=pagination,
         per_page=per_page,
     )
+
+
+def _assign_driver_to_vehicle_data(search=None, project_id=None, district_id=None, sort_by='driver', sort_order='asc'):
+    """Query (Driver, Vehicle) pairs for assigned drivers. Optional filter by project_id, district_id."""
     query = db.session.query(Driver, Vehicle).join(Vehicle, Driver.vehicle_id == Vehicle.id)
     if project_id:
         query = query.filter(Driver.project_id == project_id)
@@ -7118,6 +7846,7 @@ def driver_job_left_list():
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
     districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(left_records, page, per_page)
@@ -7139,6 +7868,171 @@ def driver_job_left_list():
         per_page=per_page,
     )
 
+@app.route('/driver-job-left/view/<int:id>')
+def driver_job_left_view(id):
+    record = DriverStatusChange.query.get_or_404(id)
+    return render_template('driver_job_left_view.html', record=record)
+
+# 2. EDIT ROUTE
+@app.route('/driver-job-left/edit/<int:id>', methods=['GET', 'POST'])
+def driver_job_left_edit(id):
+    record = DriverStatusChange.query.get_or_404(id)
+    
+    # Form initialize karein aur populate karein
+    form = DriverJobLeftForm()
+    
+    # Dropdowns ko populate karein
+    form.project_id.choices = [(p.id, p.name) for p in Project.query.all()]
+    form.district_id.choices = [(d.id, d.name) for d in District.query.all()]
+    form.vehicle_id.choices = [(v.id, v.vehicle_no) for v in Vehicle.query.all()]
+    form.driver_id.choices = [(d.id, d.name) for d in Driver.query.all()]
+
+    if request.method == 'GET':
+        # Pre-fill data from DB to Form
+        form.project_id.data = record.left_project_id
+        form.district_id.data = record.left_district_id
+        form.vehicle_id.data = record.left_vehicle_id
+        form.driver_id.data = record.driver_id
+        form.reason.data = record.reason
+        form.leave_date.data = record.change_date
+        form.remarks.data = record.remarks
+
+    if form.validate_on_submit():
+        record.reason = form.reason.data
+        if form.reason.data == 'Other':
+            record.reason = form.other_reason.data
+        record.change_date = form.leave_date.data
+        record.remarks = form.remarks.data
+        record.driver_id = form.driver_id.data
+        record.left_project_id = form.project_id.data
+        record.left_district_id = form.district_id.data
+        record.left_vehicle_id = form.vehicle_id.data
+        
+        db.session.commit()
+        flash('Record updated successfully!', 'success')
+        return redirect(url_for('driver_job_left_view', id=record.id))
+        
+    return render_template('driver_job_left_edit.html', record=record, form=form)
+
+# 3. DELETE ROUTE
+@app.route('/driver-job-left/delete/<int:id>', methods=['POST'])
+def driver_job_left_delete(id):
+    record = DriverStatusChange.query.get_or_404(id)
+    
+    try:
+        # Optionally Revert Driver Status back to Active
+        driver = record.driver
+        if driver:
+            driver.status = 'Active'
+            # Agar assignments wapas deni hain:
+            # driver.project_id = record.left_project_id
+            # driver.district_id = record.left_district_id
+            # driver.vehicle_id = record.left_vehicle_id
+            # driver.shift = record.left_shift
+            
+        db.session.delete(record)
+        db.session.commit()
+        flash('Job left record has been deleted and driver activated.', 'warning')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error deleting record.', 'danger')
+        
+    return redirect(url_for('driver_job_left_list'))
+
+@app.route('/driver-job-left/export')
+def driver_job_left_export():
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = (request.args.get('q') or '').strip()
+    
+    query = DriverStatusChange.query.filter_by(action_type='left')
+    if project_id:
+        query = query.filter(DriverStatusChange.left_project_id == project_id)
+    if district_id:
+        query = query.filter(DriverStatusChange.left_district_id == district_id)
+    if q:
+        like = f'%{q}%'
+        query = query.join(Driver).outerjoin(Project, DriverStatusChange.left_project_id == Project.id).outerjoin(
+            District, DriverStatusChange.left_district_id == District.id
+        ).filter(or_(
+            Driver.name.ilike(like),
+            Driver.driver_id.ilike(like),
+            Project.name.ilike(like),
+            District.name.ilike(like),
+            DriverStatusChange.reason.ilike(like),
+            DriverStatusChange.remarks.ilike(like),
+        ))
+    
+    records = query.order_by(DriverStatusChange.change_date.desc()).all()
+    
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output)
+    worksheet = workbook.add_worksheet('Driver Job Left')
+    
+    header_format = workbook.add_format({'bold': True, 'bg_color': '#dc3545', 'font_color': 'white', 'border': 1})
+    cell_format = workbook.add_format({'border': 1, 'text_wrap': True})
+    
+    headers = ['Sr No', 'Exit Date', 'Driver Name', 'Driver ID', 'Project', 'District', 'Vehicle', 'Shift', 'Reason', 'Remarks']
+    for col, header in enumerate(headers):
+        worksheet.write(0, col, header, header_format)
+    
+    for idx, record in enumerate(records, start=1):
+        worksheet.write(idx, 0, idx, cell_format)
+        worksheet.write(idx, 1, record.change_date.strftime('%d %b, %Y') if record.change_date else '', cell_format)
+        worksheet.write(idx, 2, record.driver.name if record.driver else '', cell_format)
+        worksheet.write(idx, 3, record.driver.driver_id if record.driver else '', cell_format)
+        worksheet.write(idx, 4, record.left_project.name if record.left_project else '-', cell_format)
+        worksheet.write(idx, 5, record.left_district.name if record.left_district else '-', cell_format)
+        worksheet.write(idx, 6, record.left_vehicle.vehicle_no if record.left_vehicle else '-', cell_format)
+        worksheet.write(idx, 7, record.left_shift or '-', cell_format)
+        worksheet.write(idx, 8, record.reason or '', cell_format)
+        worksheet.write(idx, 9, record.remarks or '', cell_format)
+    
+    worksheet.set_column(0, 0, 8)
+    worksheet.set_column(1, 1, 15)
+    worksheet.set_column(2, 3, 18)
+    worksheet.set_column(4, 7, 18)
+    worksheet.set_column(8, 8, 15)
+    worksheet.set_column(9, 9, 30)
+    
+    workbook.close()
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'driver_job_left_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@app.route('/driver-job-left/print')
+def driver_job_left_print():
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    q = (request.args.get('q') or '').strip()
+    
+    query = DriverStatusChange.query.filter_by(action_type='left')
+    if project_id:
+        query = query.filter(DriverStatusChange.left_project_id == project_id)
+    if district_id:
+        query = query.filter(DriverStatusChange.left_district_id == district_id)
+    if q:
+        like = f'%{q}%'
+        query = query.join(Driver).outerjoin(Project, DriverStatusChange.left_project_id == Project.id).outerjoin(
+            District, DriverStatusChange.left_district_id == District.id
+        ).filter(or_(
+            Driver.name.ilike(like),
+            Driver.driver_id.ilike(like),
+            Project.name.ilike(like),
+            District.name.ilike(like),
+            DriverStatusChange.reason.ilike(like),
+            DriverStatusChange.remarks.ilike(like),
+        ))
+    
+    records = query.order_by(DriverStatusChange.change_date.desc()).all()
+    return render_template('driver_job_left_print.html', records=records, q=q, project_id=project_id, district_id=district_id)
+
+# routes.py mein ye function add karein
 @app.route('/driver/rejoin/list')
 def driver_rejoin_list():
     from auth_utils import get_user_context
@@ -7220,6 +8114,7 @@ def driver_rejoin_list():
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
     districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rejoin_records, page, per_page)
@@ -7240,6 +8135,10 @@ def driver_rejoin_list():
         pagination=pagination,
         per_page=per_page,
     )
+
+@app.route('/driver/rejoin/print')
+def driver_rejoin_print():
+    search = request.args.get('search', '').strip()
     query = DriverStatusChange.query.filter_by(action_type='rejoin') \
                          .join(Driver, DriverStatusChange.driver_id == Driver.id) \
                          .outerjoin(Project, DriverStatusChange.new_project_id == Project.id) \
@@ -9235,9 +10134,7 @@ def task_report_list():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
-    return render_template('task_report_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date,
-                           total_kms=total_kms, total_tracker=total_tracker, total_diff=total_diff, total_pct=total_pct, total_tasks=total_tasks,
-                           pagination=pagination, per_page=per_page)
+    return render_template('task_report_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date,                           total_kms=total_kms, total_tracker=total_tracker, total_diff=total_diff, total_pct=total_pct, total_tasks=total_tasks, pagination=pagination, per_page=per_page)
 
 
 def _logbook_vehicle_aggregate(vehicle_id, from_date, to_date):
@@ -9792,10 +10689,10 @@ def red_task_list():
         query = query.filter(RedTask.district_id == district_id)
     if project_id:
         query = query.filter(RedTask.project_id == project_id)
-    rows_all = query.order_by(RedTask.task_date.desc(), RedTask.id.desc()).all()
+    rows = query.order_by(RedTask.task_date.desc(), RedTask.id.desc()).all()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    pagination = SimplePagination(rows_all, page, per_page)
+    pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
     return render_template('red_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page)
 
@@ -9921,10 +10818,10 @@ def without_task_list():
         query = query.filter(VehicleMoveWithoutTask.district_id == district_id)
     if project_id:
         query = query.filter(VehicleMoveWithoutTask.project_id == project_id)
-    rows_all = query.order_by(VehicleMoveWithoutTask.move_date.desc(), VehicleMoveWithoutTask.id.desc()).all()
+    rows = query.order_by(VehicleMoveWithoutTask.move_date.desc(), VehicleMoveWithoutTask.id.desc()).all()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    pagination = SimplePagination(rows_all, page, per_page)
+    pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
     return render_template('without_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page)
 
@@ -10057,10 +10954,10 @@ def penalty_record_list():
         query = query.filter(PenaltyRecord.district_id == district_id)
     if project_id:
         query = query.filter(PenaltyRecord.project_id == project_id)
-    rows_all = query.order_by(PenaltyRecord.record_date.desc(), PenaltyRecord.id.desc()).all()
+    rows = query.order_by(PenaltyRecord.record_date.desc(), PenaltyRecord.id.desc()).all()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    pagination = SimplePagination(rows_all, page, per_page)
+    pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
     return render_template('penalty_record_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, pagination=pagination, per_page=per_page)
 
