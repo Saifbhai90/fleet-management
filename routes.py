@@ -4645,21 +4645,53 @@ def _assign_project_to_company_data(search=None, sort_by='assign_date', sort_ord
 @app.route('/assign_project_to_company')
 def assign_project_to_company():
     from auth_utils import get_user_context
-    
+
     user_id = session.get('user_id')
     user_context = get_user_context(user_id) if user_id else {}
     allowed_projects = user_context.get('allowed_projects', set())
     is_master_or_admin = user_context.get('is_master_or_admin', False)
-    
+
     search = request.args.get('search', '').strip()
+    from_date_str = request.args.get('from_date', '').strip()
+    to_date_str = request.args.get('to_date', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
     sort_by = request.args.get('sort_by', 'assign_date')
     sort_order = request.args.get('sort_order', 'desc')
-    assigned_projects = _assign_project_to_company_data(search, sort_by, sort_order)
-    
-    # Apply user data scope
+
+    def _dmy(s):
+        from datetime import datetime as _dt
+        try: return _dt.strptime(s, '%d-%m-%Y').date() if s else None
+        except ValueError: return None
+
+    from_date = _dmy(from_date_str)
+    to_date = _dmy(to_date_str)
+
+    q = Project.query.filter(Project.company_id.isnot(None))
+    if search:
+        like = f'%{search}%'
+        q = q.outerjoin(Company, Project.company_id == Company.id).filter(
+            or_(Project.name.ilike(like), Company.name.ilike(like))
+        )
+    if from_date:
+        q = q.filter(Project.assign_date >= from_date)
+    if to_date:
+        q = q.filter(Project.assign_date <= to_date)
     if not is_master_or_admin and allowed_projects:
-        assigned_projects = [p for p in assigned_projects if p.id in allowed_projects]
-    # Project IDs that have at least one district linked (lock Edit/Deassign)
+        q = q.filter(Project.id.in_(list(allowed_projects)))
+
+    if sort_by == 'project':
+        order_col = Project.name
+    elif sort_by == 'company':
+        q = q.join(Company, Project.company_id == Company.id)
+        order_col = Company.name
+    else:
+        order_col = Project.assign_date
+    q = q.order_by(order_col.asc() if sort_order == 'asc' else order_col.desc())
+
+    pagination = q.paginate(page=page, per_page=per_page, error_out=False)
+    assigned_projects = pagination.items
+
     project_ids_with_districts = set(
         r[0] for r in db.session.query(project_district.c.project_id).distinct().all()
     )
@@ -4667,8 +4699,12 @@ def assign_project_to_company():
         'assign_project_to_company.html',
         assigned_projects=assigned_projects,
         search=search,
+        from_date=from_date_str,
+        to_date=to_date_str,
         sort_by=sort_by,
         sort_order=sort_order,
+        pagination=pagination,
+        per_page=per_page,
         project_ids_with_districts=project_ids_with_districts
     )
 
@@ -4822,9 +4858,23 @@ def assign_project_to_district():
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     
     search = request.args.get('search', '').strip()
+    from_date_str = request.args.get('from_date', '').strip()
+    to_date_str = request.args.get('to_date', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    sort_by = request.args.get('sort_by', 'project')
+    sort_order = request.args.get('sort_order', 'asc')
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
-    
+
+    def _dmy(s):
+        from datetime import datetime as _dt
+        try: return _dt.strptime(s, '%d-%m-%Y').date() if s else None
+        except ValueError: return None
+
+    from_date = _dmy(from_date_str)
+    to_date = _dmy(to_date_str)
+
     # Auto-select if only 1 option available
     disable_project = False
     disable_district = False
@@ -4837,38 +4887,92 @@ def assign_project_to_district():
             if not district_id:
                 district_id = next(iter(allowed_districts))
             disable_district = True
-    
-    assigned_structured = _assign_project_to_district_data(search=search, project_id=project_id, district_id=district_id)
-    
-    # Apply user data scope to assignments
-    if not is_master_or_admin:
-        if allowed_projects or allowed_districts:
-            assigned_structured = [
-                (link_data, proj, dist) for link_data, proj, dist in assigned_structured
-                if (not allowed_projects or proj.id in allowed_projects) and
-                   (not allowed_districts or dist.id in allowed_districts)
-            ]
-    
+
+    all_assigned = _assign_project_to_district_data(search=search, project_id=project_id, district_id=district_id)
+
+    # Apply user data scope
+    if not is_master_or_admin and (allowed_projects or allowed_districts):
+        all_assigned = [
+            (link_data, proj, dist) for link_data, proj, dist in all_assigned
+            if (not allowed_projects or proj.id in allowed_projects) and
+               (not allowed_districts or dist.id in allowed_districts)
+        ]
+
+    # Apply date range filter
+    if from_date:
+        all_assigned = [(l, p, d) for l, p, d in all_assigned
+                        if l.get('assign_date') and l['assign_date'] >= from_date]
+    if to_date:
+        all_assigned = [(l, p, d) for l, p, d in all_assigned
+                        if l.get('assign_date') and l['assign_date'] <= to_date]
+
+    # Apply sort
+    from datetime import date as _date_type
+    _rev = sort_order == 'desc'
+    if sort_by == 'district':
+        all_assigned.sort(key=lambda x: (x[2].name or '').lower(), reverse=_rev)
+    elif sort_by == 'assign_date':
+        all_assigned.sort(key=lambda x: x[0].get('assign_date') or _date_type.min, reverse=_rev)
+    else:
+        all_assigned.sort(key=lambda x: (x[1].name or '').lower(), reverse=_rev)
+
+    # Manual pagination
+    total = len(all_assigned)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * per_page
+    assigned_page = all_assigned[start:start + per_page]
+
+    class _Pagination:
+        def __init__(self):
+            self.page = page
+            self.per_page = per_page
+            self.total = total
+            self.pages = total_pages
+            self.has_prev = page > 1
+            self.has_next = page < total_pages
+            self.prev_num = page - 1
+            self.next_num = page + 1
+            self.items = assigned_page
+        def iter_pages(self, left_edge=1, right_edge=1, left_current=2, right_current=2):
+            last = 0
+            for num in range(1, self.pages + 1):
+                if (num <= left_edge or
+                        self.page - left_current - 1 < num < self.page + right_current or
+                        num > self.pages - right_edge):
+                    if last + 1 != num:
+                        yield None
+                    yield num
+                    last = num
+
+    pagination = _Pagination()
+
     # Filter dropdown choices by user scope
     project_q = Project.query.filter(Project.company_id.isnot(None))
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
     projects = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
-    
+
     district_q = District.query
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
     districts = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
     return render_template(
         'assign_project_to_district.html',
-        assigned=assigned_structured,
+        assigned=assigned_page,
         search=search,
+        from_date=from_date_str,
+        to_date=to_date_str,
         project_id=project_id or 0,
         district_id=district_id or 0,
         project_choices=projects,
         district_choices=districts,
         disable_project=disable_project,
         disable_district=disable_district,
+        pagination=pagination,
+        per_page=per_page,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
 
 

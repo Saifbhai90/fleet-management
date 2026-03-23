@@ -49,7 +49,7 @@
 
             <div class="mb-4">
               <label class="form-label fw-bold fs-5 text-primary">Assign Date</label>
-              {{ form.assign_date(class="form-control datepicker", required=True) }}
+              {{ form.assign_date(class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
               {% for error in form.assign_date.errors %}
                 <div class="text-danger small mt-1">{{ error }}</div>
               {% endfor %}

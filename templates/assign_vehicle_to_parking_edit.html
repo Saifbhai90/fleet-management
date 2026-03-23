@@ -53,12 +53,12 @@
                             <div class="col-md-4">
                                 <div class="bg-white p-4 rounded-3 shadow-sm mt-3">
                                     <label class="form-label fw-bold">Assign Date <span class="text-danger">*</span></label>
-                                    {{ form.assign_date(class="form-control datepicker " + ("is-invalid" if form.assign_date.errors else "")) }}
+                                    {{ form.assign_date(class="form-control datepicker " + ("is-invalid" if form.assign_date.errors else ""), placeholder="dd-mm-yyyy") }}
                                     {% for error in form.assign_date.errors %}
                                     <div class="text-danger small mt-1">{{ error }}</div>
                                     {% endfor %}
                                     <label class="form-label fw-bold mt-2">Remarks</label>
-                                    {{ form.remarks(class="form-control", rows=2) }}
+                                    {{ form.remarks(class="form-control", rows=2, placeholder="Update any notes about this parking assignment...") }}
                                 </div>
                             </div>
                         </div>

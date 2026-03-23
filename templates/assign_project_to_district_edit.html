@@ -37,12 +37,12 @@
 
         <div class="mb-3">
           <label class="form-label fw-bold">Assignment Date</label>
-          {{ form.assign_date(class="form-control datepicker") }}
+          {{ form.assign_date(class="form-control datepicker", placeholder="dd-mm-yyyy") }}
         </div>
 
         <div class="mb-4">
           <label class="form-label fw-bold">Update Remarks</label>
-          {{ form.remarks(class="form-control", rows=4) }}
+          {{ form.remarks(class="form-control", rows=4, placeholder="Any notes about this district assignment...") }}
         </div>
 
         <div class="d-grid gap-2">

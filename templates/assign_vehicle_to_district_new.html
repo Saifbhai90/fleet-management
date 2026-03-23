@@ -74,7 +74,7 @@
                                             <label class="form-label fw-semibold small">Assignment Date <span class="text-danger">*</span></label>
                                             <div class="input-group">
                                                 <span class="input-group-text bg-light"><i class="bi bi-calendar-event"></i></span>
-                                                {{ form.assign_date(class="form-control datepicker " + ("is-invalid" if form.assign_date.errors else "")) }}
+                                                {{ form.assign_date(class="form-control datepicker " + ("is-invalid" if form.assign_date.errors else ""), placeholder="dd-mm-yyyy") }}
                                             </div>
                                             {% for error in form.assign_date.errors %}
                                             <div class="text-danger small mt-1">{{ error }}</div>

@@ -107,11 +107,11 @@ textarea.form-control { height: auto !important; }
                     <div class="row g-2 mt-1">
                         <div class="col-md-6">
                             <label class="form-label">Assign Date</label>
-                            {{ form.assign_date(class="form-control datepicker") }}
+                            {{ form.assign_date(class="form-control datepicker", placeholder="dd-mm-yyyy") }}
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Remarks (Optional)</label>
-                            {{ form.remarks(class="form-control", rows=2) }}
+                            {{ form.remarks(class="form-control", rows=2, placeholder="Any notes about this driver assignment...") }}
                         </div>
                     </div>
 

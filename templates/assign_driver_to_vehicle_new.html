@@ -303,12 +303,12 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <div class="step-label"><i class="bi bi-calendar3"></i> Assign Date</div>
-                        {{ form.assign_date(class="form-control datepicker" + (" is-invalid" if form.assign_date.errors else "")) }}
+                        {{ form.assign_date(class="form-control datepicker" + (" is-invalid" if form.assign_date.errors else ""), placeholder="dd-mm-yyyy") }}
                         {% if form.assign_date.errors %}<div class="invalid-feedback d-block">{% for e in form.assign_date.errors %}{{ e }}{% endfor %}</div>{% endif %}
                     </div>
                     <div class="col-md-6">
                         <div class="step-label"><i class="bi bi-chat-left-text"></i> Remarks</div>
-                        {{ form.remarks(class="form-control", rows=1) }}
+                        {{ form.remarks(class="form-control", rows=1, placeholder="Any notes about this driver assignment...") }}
                     </div>
                 </div>
 

@@ -61,6 +61,12 @@
         /* Hide placeholder div instantly once the user starts typing */
         .ts-wrapper.single.has-items .ts-control .placeholder,
         .ts-wrapper.focus .ts-control .placeholder { display: none !important; }
+        /* When user is actively typing in a single Tom Select (filter dropdowns like
+           --All Projects--), hide the selected item text so only the search input shows */
+        .ts-wrapper.single.input-active .ts-control > .item {
+            visibility: hidden !important;
+            pointer-events: none;
+        }
         /* Single-mode: Tom Select hides the input with input-hidden class when closed.
            When nothing is selected (.has-items absent) we un-hide it so the
            input's placeholder attribute is visible to the user immediately. */

@@ -36,14 +36,14 @@
         </div>
         <div class="mb-3">
           <label class="form-label fw-bold">Assign Date</label>
-          {{ form.assign_date(class="form-control datepicker " + ("is-invalid" if form.assign_date.errors else "")) }}
+          {{ form.assign_date(class="form-control datepicker " + ("is-invalid" if form.assign_date.errors else ""), placeholder="dd-mm-yyyy") }}
           {% for error in form.assign_date.errors %}
           <div class="invalid-feedback d-block">{{ error }}</div>
           {% endfor %}
         </div>
         <div class="mb-4">
           <label class="form-label fw-bold">Remarks (Optional)</label>
-          {{ form.remarks(class="form-control", rows=3) }}
+          {{ form.remarks(class="form-control", rows=3, placeholder="Any notes about this district assignment...") }}
         </div>
         <div class="d-grid gap-2">
           {{ form.submit(class="btn btn-success btn-lg") }}
