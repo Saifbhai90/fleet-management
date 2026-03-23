@@ -2699,7 +2699,6 @@
                     existingVal = p[2] + '-' + p[1] + '-' + p[0];
                 }
                 el.value = existingVal;
-                console.log('initSmartDate:', el.id || el.name, 'val:', existingVal);
 
                 var fp = flatpickr(el, {
                     dateFormat: "d-m-Y",
@@ -2913,6 +2912,9 @@
 
             // Skip Tom Select inputs entirely — window capture listener above handles them
             if (target.closest && target.closest('.ts-control')) return;
+
+            // Skip datepicker fields — window capture listener handles blur + flatpickr formatting
+            if (target.classList && target.classList.contains('datepicker')) return;
 
 
             // Check if the target is an input, select, or textarea within a form

@@ -77,15 +77,18 @@ class Project(db.Model):
 
     @property
     def vehicle_count(self):
-        return len(self.vehicles)
+        from sqlalchemy import func
+        return db.session.query(func.count(Vehicle.id)).filter(Vehicle.project_id == self.id).scalar() or 0
 
     @property
     def driver_count(self):
-        return len(self.drivers)
+        from sqlalchemy import func
+        return db.session.query(func.count(Driver.id)).filter(Driver.project_id == self.id).scalar() or 0
 
     @property
     def parking_count(self):
-        return len(self.parking_stations)
+        from sqlalchemy import func
+        return db.session.query(func.count(ParkingStation.id)).filter(ParkingStation.project_id == self.id).scalar() or 0
 
     def __repr__(self):
         return f'<Project {self.name}>'
@@ -226,9 +229,9 @@ class Driver(db.Model):
     document_path = db.Column(db.String(500), nullable=True)
 
     # Links
-    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
-    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=True)
-    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=True, index=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)
     district = db.relationship('District', backref='drivers', lazy=True)
     vehicle = db.relationship('Vehicle', backref=db.backref('drivers', lazy=True), foreign_keys=[vehicle_id], lazy=True)
     def __repr__(self):
@@ -251,10 +254,10 @@ class Vehicle(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Assignment Links
-    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
-    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)
     parking_station_id = db.Column(db.Integer, db.ForeignKey('parking_station.id'), nullable=True)
-    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True, index=True)
 
     # Assignment Details (Vehicle -> District)
     assign_to_district_date = db.Column(db.Date, index=True)
@@ -453,7 +456,7 @@ class DriverAttendance(db.Model):
     __tablename__ = 'driver_attendance'
     __table_args__ = (db.UniqueConstraint('driver_id', 'attendance_date', name='uq_attendance_driver_date'),)
     id = db.Column(db.Integer, primary_key=True)
-    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=False)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=False, index=True)
     attendance_date = db.Column(db.Date, nullable=False)
     status = db.Column(db.String(20), nullable=False, default='Present')
     # Present | Absent | Leave | Late | Half-Day | Off

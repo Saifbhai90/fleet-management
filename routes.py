@@ -2419,7 +2419,6 @@ def handle_csrf_error(e):
 
 @app.route('/driver/add', methods=['GET', 'POST'])
 @app.route('/driver/edit/<int:id>', methods=['GET', 'POST'])
-@csrf.exempt
 def driver_form(id=None):
     # Post dropdown: sirf Full Name (short name nahi)
     posts = EmployeePost.query.order_by(EmployeePost.full_name).all()

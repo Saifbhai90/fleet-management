@@ -325,4 +325,4 @@ if __name__ == '__main__':
     print(f"Server starting at: http://127.0.0.1:{port}")
     print("Browser mein ye URL open karein. Band karne ke liye Ctrl+C")
     print("="*50 + "\n")
-    app.run(debug=True, host='0.0.0.0', port=port, use_reloader=False)
+    app.run(debug=os.environ.get('FLASK_DEBUG', '0') == '1', host='0.0.0.0', port=port, use_reloader=False)

@@ -4,7 +4,7 @@ JWT-based authentication for mobile app integration.
 
 Endpoints:
   POST /api/v1/login              → returns JWT token
-  GET  /api/v1/me                 → driver/user profile
+  GET  /api/v1/mobile-profile     → driver/user profile (JWT)
   GET  /api/v1/dashboard/stats    → summary KPIs
   POST /api/v1/attendance/checkin → mark attendance check-in
   POST /api/v1/attendance/checkout→ mark attendance check-out
@@ -59,7 +59,10 @@ def _record_failed_attempt(ip: str):
 
 
 def _jwt_secret():
-    return current_app.config.get('SECRET_KEY', 'changeme')
+    secret = current_app.config.get('SECRET_KEY')
+    if not secret:
+        raise RuntimeError("SECRET_KEY is not set. Cannot sign JWT tokens.")
+    return secret
 
 
 def _make_token(payload: dict) -> str:
@@ -166,11 +169,12 @@ def mobile_login():
     })
 
 
-# ── GET /api/v1/me ────────────────────────────────────────────────────────────
-@api_bp.route('/me', methods=['GET'])
+# ── GET /api/v1/mobile-profile ────────────────────────────────────────────────
+# Renamed from /me to avoid conflict with the session-based /api/v1/me in routes.py
+@api_bp.route('/mobile-profile', methods=['GET'])
 @jwt_required
 def mobile_me():
-    """Returns the logged-in user's profile."""
+    """Returns the JWT-authenticated driver's profile for the mobile app."""
     from models import User, Driver
     uid = request.jwt_payload.get('user_id')
     user = User.query.get(uid)
