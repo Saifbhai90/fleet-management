@@ -4952,42 +4952,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════
-   App Lifecycle: Auto-logout when app closes or goes to background
+   App Lifecycle: No auto-logout on background.
+   Fresh-start login is handled by startPath=/mobile-init in capacitor.config.json.
+   Resume from Recent Apps keeps the session alive.
    ═══════════════════════════════════════════════════════════════════ */
-(function() {
-  'use strict';
-  if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
-  
-  var App = Capacitor.Plugins && Capacitor.Plugins.App;
-  if (!App) return;
-
-  /* Track whether we went to background and cleared session */
-  var _sessionCleared = false;
-
-  App.addListener('appStateChange', function(state) {
-    if (!state.isActive) {
-      /* App going to background / being closed:
-         POST to app-logout (JSON endpoint, no redirect) to clear server session.
-         Keep localStorage intact so HBL biometric screen shows on next open. */
-      _sessionCleared = false;
-      fetch('/auth/app-logout', {
-        method: 'POST',
-        keepalive: true,
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-      })
-      .then(function() { _sessionCleared = true; })
-      .catch(function() { _sessionCleared = true; /* Mark cleared even on error */ });
-    } else {
-      /* App coming back to foreground - navigate to login so biometric prompt fires.
-         fleet_bio_token + fleet_saved_name are still in localStorage, so HBL screen
-         will show automatically with toggle ON and auto-trigger fingerprint. */
-      if (_sessionCleared) {
-        _sessionCleared = false;
-        window.location.href = '/login';
-      }
-    }
-  });
-})();
+/* (background auto-logout removed — Recent Apps stay logged in) */
 
 /* ═══════════════════════════════════════════════════════════════════
    Save logged-in user info to localStorage for HBL login view
