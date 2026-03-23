@@ -486,9 +486,54 @@ body .ts-wrapper.focus .ts-control {
 
   if (drv) {
     drv.addEventListener('change', function() {
-      if (typeof loadDriverInsight === 'function') loadDriverInsight(this.value);
+      loadDriverInsight(this.value);
     });
   }
 })();
+
+function loadDriverInsight(driverId) {
+  var placeholder = document.getElementById('insightPlaceholder');
+  var card        = document.getElementById('driverProfileCard');
+  if (!driverId || driverId === '0') {
+    if (card)        { card.classList.remove('visible'); card.style.display = 'none'; }
+    if (placeholder) { placeholder.style.display = 'block'; }
+    return;
+  }
+  fetch('/get_driver_details/' + driverId)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      function set(id, val) { var el = document.getElementById(id); if (el) el.textContent = val || '-'; }
+      set('drvName',     d.name);
+      set('drvIdSpan',   d.driver_id);
+      set('drvPost',     d.post);
+      set('drvDistrict', d.district);
+      set('drvStatus',   (d.status || 'Active').toUpperCase());
+      set('drvFather',   d.father_name);
+      set('drvCnic',     d.cnic_no);
+      set('drvPhone1',   d.phone1);
+      set('drvPhone2',   d.phone2);
+      set('drvAddress',  d.address);
+
+      var photo    = document.getElementById('drvPhoto');
+      var fallback = document.getElementById('drvPhotoFallback');
+      if (d.photo_url) {
+        if (photo)    { photo.src = d.photo_url; photo.style.display = 'block'; }
+        if (fallback) { fallback.style.display = 'none'; }
+      } else {
+        if (photo)    { photo.style.display = 'none'; }
+        if (fallback) { fallback.style.display = 'block'; }
+      }
+
+      if (placeholder) { placeholder.style.display = 'none'; }
+      if (card) {
+        card.style.display = 'block';
+        requestAnimationFrame(function() { card.classList.add('visible'); });
+      }
+    })
+    .catch(function() {
+      if (card)        { card.classList.remove('visible'); card.style.display = 'none'; }
+      if (placeholder) { placeholder.style.display = 'block'; }
+    });
+}
 </script>
 {% endblock %}
