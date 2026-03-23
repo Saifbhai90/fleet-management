@@ -1365,15 +1365,25 @@ def projects_list():
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     
     search = request.args.get('search', '').strip()
+    from_date_str = request.args.get('from_date', '').strip()
+    to_date_str = request.args.get('to_date', '').strip()
     sort_by = request.args.get('sort_by', 'name')
     sort_order = request.args.get('sort_order', 'asc')
-    
+
+    def _dmy(s):
+        from datetime import datetime as _dt
+        try: return _dt.strptime(s, '%d-%m-%Y').date() if s else None
+        except ValueError: return None
+
+    from_date = _dmy(from_date_str)
+    to_date = _dmy(to_date_str)
+
     query = Project.query
-    
+
     # Apply user data scope
     if not is_master_or_admin and allowed_projects:
         query = query.filter(Project.id.in_(list(allowed_projects)))
-    
+
     if search:
         like = f'%{search}%'
         query = query.filter(
@@ -1381,6 +1391,10 @@ def projects_list():
             Project.status.ilike(like) |
             Project.remarks.ilike(like)
         )
+    if from_date:
+        query = query.filter(Project.start_date >= from_date)
+    if to_date:
+        query = query.filter(Project.start_date <= to_date)
 
     # Apply sorting based on sort_by column
     if sort_by == 'id':
@@ -1391,12 +1405,14 @@ def projects_list():
         order_col = Project.status.asc() if sort_order == 'asc' else Project.status.desc()
     else:  # default to name
         order_col = Project.name.asc() if sort_order == 'asc' else Project.name.desc()
-    
+
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     projects = pagination.items
-    return render_template('projects_list.html', projects=projects, search=search, sort_by=sort_by, sort_order=sort_order, pagination=pagination, per_page=per_page)
+    return render_template('projects_list.html', projects=projects, search=search,
+                           from_date=from_date_str, to_date=to_date_str,
+                           sort_by=sort_by, sort_order=sort_order, pagination=pagination, per_page=per_page)
 
 
 @app.route('/projects/export')
@@ -1534,20 +1550,30 @@ def vehicles_list():
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     
     search = request.args.get('search', '').strip()
+    from_date_str = request.args.get('from_date', '').strip()
+    to_date_str = request.args.get('to_date', '').strip()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     sort_by = request.args.get('sort_by', 'vehicle_no')
     sort_order = request.args.get('sort_order', 'asc')
 
+    def _dmy(s):
+        from datetime import datetime as _dt
+        try: return _dt.strptime(s, '%d-%m-%Y').date() if s else None
+        except ValueError: return None
+
+    from_date = _dmy(from_date_str)
+    to_date = _dmy(to_date_str)
+
     query = Vehicle.query
-    
+
     # Apply user data scope
     if not is_master_or_admin:
         if allowed_projects:
             query = query.filter(Vehicle.project_id.in_(list(allowed_projects)))
         if allowed_districts:
             query = query.filter(Vehicle.district_id.in_(list(allowed_districts)))
-    
+
     if search:
         like = f'%{search}%'
         query = query.filter(
@@ -1558,6 +1584,10 @@ def vehicles_list():
             Vehicle.engine_no.ilike(like) |
             Vehicle.chassis_no.ilike(like)
         )
+    if from_date:
+        query = query.filter(Vehicle.active_date >= from_date)
+    if to_date:
+        query = query.filter(Vehicle.active_date <= to_date)
 
     # Apply sorting based on sort_by column
     if sort_by == 'id':
@@ -1574,10 +1604,11 @@ def vehicles_list():
         order_col = Vehicle.district_id.asc() if sort_order == 'asc' else Vehicle.district_id.desc()
     else:  # default to vehicle_no
         order_col = Vehicle.vehicle_no.asc() if sort_order == 'asc' else Vehicle.vehicle_no.desc()
-    
+
     pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     vehicles = pagination.items
     return render_template('vehicles_list.html', vehicles=vehicles, search=search,
+                           from_date=from_date_str, to_date=to_date_str,
                            pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
 
 
@@ -2617,17 +2648,26 @@ def employees_list():
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     
     search = request.args.get('search', '').strip()
+    from_date_str = request.args.get('from_date', '').strip()
+    to_date_str = request.args.get('to_date', '').strip()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     sort_by = request.args.get('sort_by', 'name')
     sort_order = request.args.get('sort_order', 'asc')
 
+    def _dmy(s):
+        from datetime import datetime as _dt
+        try: return _dt.strptime(s, '%d-%m-%Y').date() if s else None
+        except ValueError: return None
+
+    from_date = _dmy(from_date_str)
+    to_date = _dmy(to_date_str)
+
     query = Employee.query
-    
+
     # Apply user data scope - employees assigned to user's projects/districts
     if not is_master_or_admin:
         if allowed_projects or allowed_districts:
-            # Filter employees who have at least one matching project or district
             from sqlalchemy import or_
             filters = []
             if allowed_projects:
@@ -2636,7 +2676,7 @@ def employees_list():
                 filters.append(Employee.districts.any(District.id.in_(list(allowed_districts))))
             if filters:
                 query = query.filter(or_(*filters))
-    
+
     if search:
         like = f"%{search}%"
         query = query.filter(
@@ -2647,7 +2687,11 @@ def employees_list():
             Employee.phone1.ilike(like) |
             Employee.father_name.ilike(like)
         )
-    
+    if from_date:
+        query = query.filter(Employee.joining_date >= from_date)
+    if to_date:
+        query = query.filter(Employee.joining_date <= to_date)
+
     # Apply sorting based on sort_by column
     if sort_by == 'code':
         order_col = Employee.code.asc() if sort_order == 'asc' else Employee.code.desc()
@@ -2661,10 +2705,11 @@ def employees_list():
         order_col = Employee.phone.asc() if sort_order == 'asc' else Employee.phone.desc()
     else:  # default to name
         order_col = Employee.name.asc() if sort_order == 'asc' else Employee.name.desc()
-    
+
     pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     employees = pagination.items
     return render_template('employees_list.html', employees=employees, search=search,
+                           from_date=from_date_str, to_date=to_date_str,
                            pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
 
 
@@ -4431,11 +4476,21 @@ def delete_parking(id):
 # ────────────────────────────────────────────────
 @app.route('/districts/')
 def districts_list():
-    search = request.args.get('search', '')
+    search = request.args.get('search', '').strip()
+    from_date_str = request.args.get('from_date', '').strip()
+    to_date_str = request.args.get('to_date', '').strip()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     sort_by = request.args.get('sort_by', 'name')
     sort_order = request.args.get('sort_order', 'asc')
+
+    def _dmy(s):
+        from datetime import datetime as _dt
+        try: return _dt.strptime(s, '%d-%m-%Y').date() if s else None
+        except ValueError: return None
+
+    from_date = _dmy(from_date_str)
+    to_date = _dmy(to_date_str)
 
     query = District.query
     if search:
@@ -4443,7 +4498,12 @@ def districts_list():
             District.name.ilike(f'%{search}%') |
             District.province.ilike(f'%{search}%')
         )
-    
+    if from_date:
+        query = query.filter(District.created_at >= from_date)
+    if to_date:
+        from datetime import timedelta
+        query = query.filter(District.created_at < (to_date + timedelta(days=1)))
+
     # Apply sorting based on sort_by column
     if sort_by == 'id':
         order_col = District.id.asc() if sort_order == 'asc' else District.id.desc()
@@ -4453,10 +4513,11 @@ def districts_list():
         order_col = District.created_at.asc() if sort_order == 'asc' else District.created_at.desc()
     else:  # default to name
         order_col = District.name.asc() if sort_order == 'asc' else District.name.desc()
-    
+
     districts_pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     districts = districts_pagination.items
     return render_template('districts_list.html', districts=districts, search=search,
+                           from_date=from_date_str, to_date=to_date_str,
                            pagination=districts_pagination, per_page=per_page,
                            sort_by=sort_by, sort_order=sort_order)
 
