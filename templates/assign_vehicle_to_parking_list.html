@@ -199,7 +199,7 @@
                             <span class="badge-sm badge-success"><i class="bi bi-p-square me-1"></i>{{ v.parking_station.name }}</span>
                         </td>
                         <td>
-                            <small><i class="bi bi-calendar-check me-1"></i>{{ v.parking_assign_date.strftime('%d %b, %Y') if v.parking_assign_date else 'Not Set' }}</small>
+                            <small><i class="bi bi-calendar-check me-1"></i>{{ v.parking_assign_date.strftime('%d-%m-%Y') if v.parking_assign_date else 'Not Set' }}</small>
                         </td>
                         <td>
                             <div class="d-flex gap-1">

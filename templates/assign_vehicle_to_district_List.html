@@ -196,7 +196,7 @@
                             <small class="text-muted">{{ v.model }}{% if v.vehicle_type %} · {{ v.vehicle_type }}{% endif %}</small>
                         </td>
                         <td>
-                            <small><i class="bi bi-calendar-check me-1"></i>{{ v.assign_to_district_date.strftime('%d %b, %Y') if v.assign_to_district_date else 'Not Set' }}</small>
+                            <small><i class="bi bi-calendar-check me-1"></i>{{ v.assign_to_district_date.strftime('%d-%m-%Y') if v.assign_to_district_date else 'Not Set' }}</small>
                         </td>
                         <td>
                             <small class="text-muted" title="{{ v.assignment_remarks }}"><i class="bi bi-chat-left-text me-1"></i>{{ v.assignment_remarks|truncate(25) or 'No remarks' }}</small>
