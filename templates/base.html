@@ -4955,8 +4955,29 @@ document.addEventListener('DOMContentLoaded', function() {
    App Lifecycle: No auto-logout on background.
    Fresh-start login is handled by startPath=/mobile-init in capacitor.config.json.
    Resume from Recent Apps keeps the session alive.
+   Fresh-start (app killed) detection uses sessionStorage which Android clears on kill.
    ═══════════════════════════════════════════════════════════════════ */
-/* (background auto-logout removed — Recent Apps stay logged in) */
+(function() {
+  'use strict';
+  if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
+
+  var SESSION_KEY = '_fleetAppSession';
+  var currentPath = window.location.pathname;
+
+  /* sessionStorage is wiped when Android kills the app process.
+     On fresh start it will be empty → redirect to /mobile-init to clear Flask session.
+     On resume from Recent Apps it will still have the key → do nothing. */
+  if (!sessionStorage.getItem(SESSION_KEY)) {
+    /* Mark this session so resume doesn't re-trigger */
+    sessionStorage.setItem(SESSION_KEY, '1');
+
+    /* Only redirect if we are NOT already on login or mobile-init
+       (prevents infinite loop if user is already on login page) */
+    if (currentPath !== '/mobile-init' && currentPath !== '/login') {
+      window.location.replace('/mobile-init');
+    }
+  }
+})();
 
 /* ═══════════════════════════════════════════════════════════════════
    Save logged-in user info to localStorage for HBL login view
