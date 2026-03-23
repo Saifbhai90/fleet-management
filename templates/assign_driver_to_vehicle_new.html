@@ -193,13 +193,12 @@
 }
 .drv-field .val { font-size: 0.82rem; font-weight: 600; color: #1e293b; }
 
-/* ── Tom Select override ── */
-.ts-wrapper .ts-control {
+/* Tom Select border/radius matches form theme; height controlled globally */
+body .ts-wrapper .ts-control {
     border: 1px solid #dde3ec !important;
     border-radius: 8px !important;
-    min-height: 38px !important;
 }
-.ts-wrapper.focus .ts-control {
+body .ts-wrapper.focus .ts-control {
     border-color: #3949ab !important;
     box-shadow: 0 0 0 3px rgba(57,73,171,0.1) !important;
 }

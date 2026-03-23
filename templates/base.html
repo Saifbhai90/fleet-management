@@ -43,64 +43,64 @@
             background-color: #e9ecef;
             color: #212529;
         }
-        /* ── Tom Select: global stable dimensions ────────────────────────────── */
-        .ts-control {
-            height: 38px !important;
-            min-height: 38px !important;
+        /* ═══════════════════════════════════════════════════════════════════
+           UI v3.0 — NUCLEAR TOM SELECT FIX
+           Uses body-prefixed selectors (specificity 0,2,1) to beat all
+           local child-template overrides (specificity 0,2,0).
+           ═══════════════════════════════════════════════════════════════════ */
+
+        /* Lock height + padding on ALL single-select wrappers */
+        body .ts-wrapper .ts-control,
+        body .ts-wrapper.single .ts-control {
+            height: 40px !important;
+            min-height: 40px !important;
+            padding: 0 12px !important;
             display: flex !important;
             align-items: center !important;
             overflow: hidden !important;
             position: relative !important;
             box-sizing: border-box !important;
         }
-        /* Multi-select may grow; only lock min-height */
-        .ts-wrapper.multi .ts-control {
+        /* Multi-select: only lock min-height, allow vertical growth */
+        body .ts-wrapper.multi .ts-control {
             height: auto !important;
-            min-height: 38px !important;
+            min-height: 40px !important;
             overflow: visible !important;
         }
-        /* Focused: ONLY subtle blue glow — NO size/border/padding change */
-        .ts-wrapper.focus .ts-control {
+        /* Focused: ONLY a subtle blue glow — no size/border/padding change */
+        body .ts-wrapper.focus .ts-control,
+        body .ts-wrapper.single.focus .ts-control {
             border-color: #86b7fe !important;
             box-shadow: 0 0 0 0.2rem rgba(13,110,253,.18) !important;
             outline: 0;
         }
-        /* Filter-bar: consistent padding for smaller inputs */
-        .filter-bar .ts-wrapper .ts-control,
-        .filter-bar .ts-wrapper.focus .ts-control,
-        .filter-bar .ts-wrapper.dropdown-active .ts-control {
-            padding: 0.35rem 0.6rem !important;
-            font-size: 0.875rem !important;
-            border-radius: 4px !important;
-        }
-        .ts-wrapper.single .ts-control { cursor: pointer; }
-        /* ── Placeholder: always centered and grey when no item selected ──── */
-        .ts-control .placeholder {
+        /* Placeholder: absolutely-positioned, always visible, RED for v3.0 test */
+        body .ts-wrapper .ts-control .placeholder {
+            display: block !important;
+            visibility: visible !important;
+            color: #dc3545 !important;
+            opacity: 1 !important;
             position: absolute !important;
             top: 50% !important;
             transform: translateY(-50%) !important;
-            display: block !important;
-            visibility: visible !important;
-            color: #6c757d !important;
-            font-style: italic;
             pointer-events: none;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             max-width: 90%;
         }
-        /* Hide placeholder when item is selected or user is actively searching */
-        .ts-wrapper.single.has-items .ts-control .placeholder,
-        .ts-wrapper.focus .ts-control .placeholder { display: none !important; }
-        /* When user is actively typing, hide selected item text */
-        .ts-wrapper.single.input-active .ts-control > .item {
+        /* Hide placeholder when item IS selected or user is actively typing */
+        body .ts-wrapper.single.has-items .ts-control .placeholder,
+        body .ts-wrapper.focus .ts-control .placeholder { display: none !important; }
+        /* Hide selected item text while actively typing (search mode) */
+        body .ts-wrapper.single.input-active .ts-control > .item {
             visibility: hidden !important;
             pointer-events: none;
         }
+        .ts-wrapper.single .ts-control { cursor: pointer; }
         /* Dropdown item font size */
         .ts-dropdown .option { font-size: 0.9rem; padding: 6px 12px; }
-        /* No-selection state: grey text */
-        .ts-wrapper.single:not(.has-items) .ts-control { color: #6c757d; }
+        /* Ensure inner input doesn't shift layout */
         .ts-control input::placeholder { color: #6c757d; opacity: 1; }
         /* ── Section-heading inline search + per-page — visible on any bg color ── */
         .heading-search-input {
@@ -1922,6 +1922,10 @@
                 <i class="bi bi-box-arrow-right" style="color:#f87171;"></i><span>Logout</span>
             </a>
         </div>
+        <!-- UI Version Marker — remove after confirming UI v3.0 is live -->
+        <div class="mt-2 text-center" style="font-size:0.65rem;opacity:0.7;">
+            <span style="color:#f87171;font-weight:600;">UI v3.0 - Global Fix Applied</span>
+        </div>
     </div>
 </div>
 
@@ -2587,6 +2591,7 @@
 
     window.initSearchableDropdowns = function(scope) {
         if (typeof TomSelect === 'undefined') return;
+        console.log('--- UI v3.0 ACTIVE --- initSearchableDropdowns called');
         var root = scope || document;
         root.querySelectorAll('select.search-select').forEach(function(el) {
             if (el.tomselect) return;
@@ -2692,6 +2697,21 @@
 
     // Run immediately — content block is above scripts in the rendered HTML
     window.initSearchableDropdowns();
+
+    // ── Aggressive placeholder enforcer (UI v3.0) ────────────────────────
+    // Runs every 200ms for the first 3 seconds after page load to
+    // guarantee placeholder divs are visible even after TS's own render.
+    (function() {
+        var _runs = 0;
+        var _iv = setInterval(function() {
+            document.querySelectorAll('.ts-wrapper.single:not(.has-items) .ts-control .placeholder').forEach(function(ph) {
+                ph.style.setProperty('display', 'block', 'important');
+                ph.style.setProperty('visibility', 'visible', 'important');
+            });
+            _runs++;
+            if (_runs >= 15) clearInterval(_iv); // stop after 3 s
+        }, 200);
+    })();
 
     // Re-init for any dynamically added .search-select elements
     (new MutationObserver(function(muts) {
