@@ -19,7 +19,7 @@
           <div class="card-body">
             <div class="mb-3">
               {{ form.name.label(class="form-label") }}
-              {{ form.name(class="form-control " + ("is-invalid" if form.name.errors else "")) }}
+              {{ form.name(class="form-control " + ("is-invalid" if form.name.errors else ""), placeholder="e.g. ABC Logistics (Pvt) Ltd") }}
               {% for error in form.name.errors %}
                 <div class="invalid-feedback">{{ error }}</div>
               {% endfor %}
@@ -27,7 +27,7 @@
 
             <div class="mb-3">
               {{ form.office_address.label(class="form-label") }}
-              {{ form.office_address(class="form-control " + ("is-invalid" if form.office_address.errors else "")) }}
+              {{ form.office_address(class="form-control " + ("is-invalid" if form.office_address.errors else ""), placeholder="e.g. 123 Main Street, Lahore") }}
               {% for error in form.office_address.errors %}
                 <div class="invalid-feedback">{{ error }}</div>
               {% endfor %}
@@ -36,7 +36,7 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 {{ form.state.label(class="form-label") }}
-                {{ form.state(class="form-control " + ("is-invalid" if form.state.errors else "")) }}
+                {{ form.state(class="form-control " + ("is-invalid" if form.state.errors else ""), placeholder="e.g. Punjab") }}
                 {% for error in form.state.errors %}
                   <div class="invalid-feedback">{{ error }}</div>
                 {% endfor %}
@@ -60,7 +60,7 @@
               </div>
               <div class="col-md-6 mb-3">
                 {{ form.phone.label(class="form-label") }}
-                {{ form.phone(class="form-control phone-format " + ("is-invalid" if form.phone.errors else "")) }}
+                {{ form.phone(class="form-control phone-format " + ("is-invalid" if form.phone.errors else ""), placeholder="051-1234567") }}
                 {% for error in form.phone.errors %}
                   <div class="invalid-feedback">{{ error }}</div>
                 {% endfor %}
@@ -69,7 +69,7 @@
 
             <div class="mb-3">
               {{ form.email.label(class="form-label") }}
-              {{ form.email(class="form-control " + ("is-invalid" if form.email.errors else "")) }}
+              {{ form.email(class="form-control " + ("is-invalid" if form.email.errors else ""), placeholder="info@company.com") }}
               {% for error in form.email.errors %}
                 <div class="invalid-feedback">{{ error }}</div>
               {% endfor %}
@@ -87,7 +87,7 @@
           <div class="card-body">
             <div class="mb-3">
               {{ form.remarks.label(class="form-label") }}
-              {{ form.remarks(class="form-control", rows=6) }}
+              {{ form.remarks(class="form-control", rows=6, placeholder="Any additional notes about this company...") }}
             </div>
           </div>
         </div>

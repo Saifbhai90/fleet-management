@@ -117,7 +117,7 @@ def require_login():
     endpoint = request.endpoint or ''
     if endpoint.startswith('static'):
         return
-    if endpoint in ('login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout'):
+    if endpoint in ('login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init'):
         return
     if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
         return  # First-time password set flow (no full login yet)
@@ -1062,6 +1062,13 @@ def biometric_token():
     return jsonify({'ok': True, 'token': token, 'username': user.username, 'display_name': display_name})
 
 
+@app.route('/mobile-init')
+def mobile_init():
+    """Capacitor mobile app startup: always clear session and go to login."""
+    session.clear()
+    return redirect(url_for('login'))
+
+
 @app.route('/auth/app-logout', methods=['POST'])
 @csrf.exempt
 def app_logout():
@@ -1243,12 +1250,31 @@ def account_change_password():
 # ────────────────────────────────────────────────
 @app.route('/companies/')
 def companies():
-    search = request.args.get('search', '')
+    search = request.args.get('search', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    sort_by = request.args.get('sort_by', 'name')
+    sort_order = request.args.get('sort_order', 'asc')
+
     query = Company.query
     if search:
-        query = query.filter(Company.name.ilike(f'%{search}%'))
-    companies_list = query.order_by(Company.name).all()
-    return render_template('companies.html', companies=companies_list, search=search)
+        like = f'%{search}%'
+        query = query.filter(
+            Company.name.ilike(like) |
+            Company.email.ilike(like) |
+            Company.mobile.ilike(like) |
+            Company.phone.ilike(like) |
+            Company.office_address.ilike(like) |
+            Company.district.ilike(like) |
+            Company.state.ilike(like)
+        )
+
+    order_col = Company.id.asc() if (sort_by == 'id' and sort_order == 'asc') else \
+                Company.id.desc() if sort_by == 'id' else \
+                Company.name.desc() if sort_order == 'desc' else Company.name.asc()
+    pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
+    return render_template('companies.html', companies=pagination.items, search=search,
+                           pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
 
 
 @app.route('/company/add', methods=['GET', 'POST'])
@@ -1289,12 +1315,41 @@ def delete_company(id):
 
 @app.route('/companies/print')
 def companies_print():
-    search = request.args.get('search', '')
+    search = request.args.get('search', '').strip()
     query = Company.query
     if search:
-        query = query.filter(Company.name.ilike(f'%{search}%'))
+        like = f'%{search}%'
+        query = query.filter(
+            Company.name.ilike(like) | Company.email.ilike(like) |
+            Company.mobile.ilike(like) | Company.office_address.ilike(like)
+        )
     companies_list = query.order_by(Company.name).all()
     return render_template('companies_print.html', companies=companies_list, search=search)
+
+
+@app.route('/companies/export')
+def companies_export():
+    """Export companies list to CSV."""
+    import csv, io as _io
+    search = request.args.get('search', '').strip()
+    query = Company.query
+    if search:
+        like = f'%{search}%'
+        query = query.filter(
+            Company.name.ilike(like) | Company.email.ilike(like) |
+            Company.mobile.ilike(like) | Company.office_address.ilike(like)
+        )
+    companies_list = query.order_by(Company.name).all()
+    output = _io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['ID', 'Company Name', 'Email', 'Mobile', 'Phone', 'Office Address', 'District', 'State', 'Remarks'])
+    for c in companies_list:
+        writer.writerow([c.id, c.name, c.email or '', c.mobile or '', c.phone or '',
+                         c.office_address or '', c.district or '', c.state or '', c.remarks or ''])
+    output.seek(0)
+    filename = f'companies{"_" + search if search else ""}.csv'
+    return Response(output.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename={filename}'})
 
 
 # ────────────────────────────────────────────────
@@ -1320,8 +1375,13 @@ def projects_list():
         query = query.filter(Project.id.in_(list(allowed_projects)))
     
     if search:
-        query = query.filter(Project.name.ilike(f'%{search}%'))
-    
+        like = f'%{search}%'
+        query = query.filter(
+            Project.name.ilike(like) |
+            Project.status.ilike(like) |
+            Project.remarks.ilike(like)
+        )
+
     # Apply sorting based on sort_by column
     if sort_by == 'id':
         order_col = Project.id.asc() if sort_order == 'asc' else Project.id.desc()
@@ -1493,9 +1553,12 @@ def vehicles_list():
         query = query.filter(
             Vehicle.vehicle_no.ilike(like) |
             Vehicle.model.ilike(like) |
-            Vehicle.vehicle_type.ilike(like)
+            Vehicle.vehicle_type.ilike(like) |
+            Vehicle.phone_no.ilike(like) |
+            Vehicle.engine_no.ilike(like) |
+            Vehicle.chassis_no.ilike(like)
         )
-    
+
     # Apply sorting based on sort_by column
     if sort_by == 'id':
         order_col = Vehicle.id.asc() if sort_order == 'asc' else Vehicle.id.desc()

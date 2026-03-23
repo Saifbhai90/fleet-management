@@ -5070,5 +5070,70 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 
+{% if session.get('user') %}
+<!-- ── Web Inactivity Auto-Logout: 15 minutes ── -->
+<div id="inactivity-warning" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,0.75);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:2rem;max-width:380px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+    <div style="width:56px;height:56px;background:#fff3cd;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
+      <i class="bi bi-clock-history" style="font-size:1.6rem;color:#856404;"></i>
+    </div>
+    <h5 style="color:#1e3a8a;font-weight:700;margin-bottom:0.5rem;">Session Expiring Soon</h5>
+    <p style="color:#475569;font-size:0.9rem;margin-bottom:1.25rem;">
+      Ap <strong id="inactivity-countdown">60</strong> seconds mein logout ho jayenge.<br>
+      <span style="font-size:0.8rem;color:#94a3b8;">Kaam karna jaari rakhnay ke liye Stay Logged In click karein.</span>
+    </p>
+    <button onclick="resetInactivityTimer()" style="background:#1e3a8a;color:#fff;border:none;border-radius:8px;padding:0.6rem 1.5rem;font-weight:600;cursor:pointer;font-size:0.95rem;">
+      <i class="bi bi-arrow-clockwise me-1"></i>Stay Logged In
+    </button>
+  </div>
+</div>
+<script>
+(function() {
+  var TIMEOUT_MS = 15 * 60 * 1000;   // 15 minutes total
+  var WARNING_MS = 14 * 60 * 1000;   // show warning at 14 minutes
+  var _lastActivity = Date.now();
+  var _warningShown = false;
+  var _countdownInterval = null;
+
+  function _resetTimer() {
+    _lastActivity = Date.now();
+    if (_warningShown) {
+      _warningShown = false;
+      document.getElementById('inactivity-warning').style.display = 'none';
+      if (_countdownInterval) { clearInterval(_countdownInterval); _countdownInterval = null; }
+    }
+  }
+  window.resetInactivityTimer = _resetTimer;
+
+  ['mousemove','keydown','click','touchstart','scroll'].forEach(function(ev) {
+    document.addEventListener(ev, _resetTimer, { passive: true });
+  });
+
+  function _showWarning(secsLeft) {
+    _warningShown = true;
+    var box = document.getElementById('inactivity-warning');
+    box.style.display = 'flex';
+    var cd = document.getElementById('inactivity-countdown');
+    cd.textContent = secsLeft;
+    if (_countdownInterval) clearInterval(_countdownInterval);
+    _countdownInterval = setInterval(function() {
+      secsLeft--;
+      cd.textContent = secsLeft;
+      if (secsLeft <= 0) { clearInterval(_countdownInterval); window.location.href = '{{ url_for("logout") }}?inactivity=1'; }
+    }, 1000);
+  }
+
+  setInterval(function() {
+    var idle = Date.now() - _lastActivity;
+    if (idle >= TIMEOUT_MS) {
+      window.location.href = '{{ url_for("logout") }}?inactivity=1';
+    } else if (idle >= WARNING_MS && !_warningShown) {
+      _showWarning(Math.round((TIMEOUT_MS - idle) / 1000));
+    }
+  }, 10000);
+})();
+</script>
+{% endif %}
+
 </body>
 </html>

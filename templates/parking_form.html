@@ -34,7 +34,8 @@
               </div>
               <div class="col-md-6 mb-3">
                 <label class="form-label fw-bold">{{ form.create_date.label.text }}</label>
-                {{ form.create_date(class="form-control datepicker " + ("is-invalid" if form.create_date.errors else "")) }}
+                {{ form.create_date(class="form-control datepicker " + ("is-invalid" if form.create_date.errors else ""), placeholder="dd-mm-yyyy") }}
+                <div class="form-text">Format: dd-mm-yyyy</div>
                 {% for error in form.create_date.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
               </div>
             </div>

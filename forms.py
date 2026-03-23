@@ -762,6 +762,7 @@ class EmployeeForm(FlaskForm):
         ('Other', 'Other'),
     ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     marital_status = SelectField('Marital Status', choices=[
+        ('', '-- Select Marital Status --'),
         ('Single', 'Single'),
         ('Married', 'Married'),
         ('Divorced', 'Divorced'),
@@ -818,6 +819,7 @@ class EmployeeFormStep1(FlaskForm):
         ('Graduate', 'Graduate'), ('Masters', 'Masters'), ('Other', 'Other'),
     ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     marital_status = SelectField('Marital Status', choices=[
+        ('', '-- Select Marital Status --'),
         ('Single', 'Single'), ('Married', 'Married'), ('Divorced', 'Divorced'), ('Widowed', 'Widowed'),
     ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     cnic_no = StringField('CNIC No', validators=[
