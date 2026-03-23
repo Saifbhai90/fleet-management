@@ -1954,7 +1954,7 @@
         {% endif %}
     {% endwith %}
     <script>
-    /* initServerSearch — must be defined BEFORE {% block content %} scripts run */
+    /* initServerSearch — defined here so all template scripts can call it */
     window.initServerSearch = function(elOrId, paramName) {
         var el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId;
         if (!el) return;
