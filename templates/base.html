@@ -4084,39 +4084,19 @@
             });
         }
 
-        /* ── Auto-logout + navigate to login on app background/foreground ── */
+        /* ── Bio/PIN lock on app resume (no auto-logout — fresh-start login handled by startPath) ── */
         var _firstActivation = true;
-        var _bgTimer = null;
-        var _didAutoLogout = false;
-        var BG_TIMEOUT_MS = 30000; // 30 seconds in background → auto-logout
 
         AppPlugin.addListener('appStateChange', function(state) {
             if (state && !state.isActive) {
-                /* App went to background — start timer */
-                _bgTimer = setTimeout(function() {
-                    _didAutoLogout = true;
-                    fetch('/auth/app-logout', {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        headers: { 'Content-Type': 'application/json' }
-                    }).catch(function() {});
-                }, BG_TIMEOUT_MS);
+                /* App went to background — nothing to do */
                 return;
             }
 
             /* App came to foreground */
-            if (_bgTimer) { clearTimeout(_bgTimer); _bgTimer = null; }
-
             if (_firstActivation) { _firstActivation = false; return; }
 
-            if (_didAutoLogout) {
-                /* Session cleared — navigate to login (biometric auto-triggers there) */
-                _didAutoLogout = false;
-                window.location.href = '/login';
-                return;
-            }
-
-            /* Short background (< 30s) — show biometric/PIN lock overlay */
+            /* Show biometric/PIN lock overlay if configured */
             var hasBio = localStorage.getItem(BIO_KEY) === '1' && localStorage.getItem(TOKEN_KEY);
             if (hasBio) {
                 triggerBioLock();
@@ -5071,7 +5051,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 {% if session.get('user') %}
-<!-- ── Web Inactivity Auto-Logout: 15 minutes ── -->
+<!-- ── Web Inactivity Auto-Logout: 15 minutes (web browser only, skipped on Capacitor) ── -->
 <div id="inactivity-warning" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,0.75);align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:14px;padding:2rem;max-width:380px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
     <div style="width:56px;height:56px;background:#fff3cd;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
@@ -5089,6 +5069,9 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <script>
 (function() {
+  /* Skip inactivity timer entirely on Capacitor mobile app */
+  if (typeof window.Capacitor !== 'undefined') { return; }
+
   var TIMEOUT_MS = 15 * 60 * 1000;   // 15 minutes total
   var WARNING_MS = 14 * 60 * 1000;   // show warning at 14 minutes
   var _lastActivity = Date.now();
