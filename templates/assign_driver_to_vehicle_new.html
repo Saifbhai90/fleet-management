@@ -472,10 +472,14 @@ body .ts-wrapper.focus .ts-control {
         var html = '<option value="">-- Select Shift --</option>';
         shifts.forEach(function(s){ html += '<option value="' + (s.id||s.name) + '">' + (s.name||s.id) + '</option>'; });
         rebuildSel(shift, html);
-        // If no shifts returned, open the dropdown immediately so the
-        // "No Shift available" empty-state message is visible at once
-        if (shifts.length === 0 && shift.tomselect) {
-          setTimeout(function() { shift.tomselect.open(); }, 50);
+        if (shifts.length === 0) {
+          // Inline pill — always visible even if dropdown state doesn't fire
+          var cap = document.getElementById('capacity_info');
+          if (cap) cap.innerHTML = '<span class="info-pill warning"><i class="bi bi-ban me-1"></i>Vehicle full — no shift available</span>';
+          // Also disable the shift select so user can't pick it
+          if (shift.tomselect) { shift.tomselect.disable(); }
+        } else {
+          if (shift.tomselect) { shift.tomselect.enable(); }
         }
       }).catch(function(){ rebuildSel(shift, '<option value="">-- Select Shift --</option>'); });
     });

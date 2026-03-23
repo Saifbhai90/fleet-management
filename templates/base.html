@@ -2661,6 +2661,14 @@
         }
     }
 
+    function _emptyStateHTML(labelHTML) {
+        return '<div class="ts-empty-state">' +
+            '<span class="ts-empty-icon"><i class="bi bi-info-circle"></i></span>' +
+            '<span class="ts-empty-label">' + labelHTML + '</span>' +
+            '<span class="ts-empty-hint">Try a different filter or check your selection</span>' +
+            '</div>';
+    }
+
     window.initSearchableDropdowns = function(scope) {
         if (typeof TomSelect === 'undefined') return;
         var root = scope || document;
@@ -2730,15 +2738,12 @@
                     maxOptions: 300,
                     placeholder: placeholder,
                     render: {
+                        /* Triggered by TomSelect when a text search finds nothing */
                         no_results: function(data, escape) {
                             var hint = data.input
                                 ? 'No match for &ldquo;' + escape(data.input) + '&rdquo;'
                                 : 'No ' + escape(_emptyLabelCap) + ' available';
-                            return '<div class="ts-empty-state">' +
-                                '<span class="ts-empty-icon"><i class="bi bi-info-circle"></i></span>' +
-                                '<span class="ts-empty-label">' + hint + '</span>' +
-                                '<span class="ts-empty-hint">Try a different search or check filters</span>' +
-                                '</div>';
+                            return _emptyStateHTML(hint);
                         }
                     },
                     onInitialize: function() {
@@ -2765,11 +2770,32 @@
                 if (phValue !== null && _removeFromList) {
                     try { ts.removeOption(phValue); } catch(e) {}
                     ts.refreshOptions(false);
-                    // After removeOption, if had no value ensure placeholder stays visible
                     if (_hadNoValue) {
                         ts.wrapper.classList.remove('has-items');
                     }
                 }
+
+                // ── Bulletproof empty-state: inject message whenever dropdown
+                //    opens and there are literally zero options to display.
+                //    TomSelect's render.no_results only fires during a text search;
+                //    this covers the "options list is empty on open" case too.
+                ts.on('dropdown_open', function() {
+                    requestAnimationFrame(function() {
+                        var dc = ts.dropdown_content;
+                        if (!dc) return;
+                        dc.querySelectorAll('.ts-empty-forced').forEach(function(n){ n.remove(); });
+                        var hasVisible = dc.querySelector('.option, .optgroup-header, [data-value]');
+                        if (!hasVisible) {
+                            var div = document.createElement('div');
+                            div.className = 'ts-empty-state ts-empty-forced';
+                            var lbl = ts.inputValue()
+                                ? 'No match for &ldquo;' + ts.inputValue() + '&rdquo;'
+                                : 'No ' + _emptyLabelCap + ' available';
+                            div.innerHTML = _emptyStateHTML(lbl);
+                            dc.appendChild(div);
+                        }
+                    });
+                });
 
                 // ── Highlight-and-Overwrite (SAP/Excel-style) ─────────────────
                 ts._justSelected   = false;
