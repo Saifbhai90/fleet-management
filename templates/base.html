@@ -43,50 +43,53 @@
             background-color: #e9ecef;
             color: #212529;
         }
-        /* Focused TS control matches Bootstrap focus ring — no size/shape change */
+        /* Focused TS control — ONLY adds subtle blue glow, NO size/border/padding change */
         .ts-wrapper.focus .ts-control {
             border-color: #86b7fe !important;
-            box-shadow: 0 0 0 0.25rem rgba(13,110,253,.25) !important;
+            box-shadow: 0 0 0 0.2rem rgba(13,110,253,.18) !important;
             outline: 0;
         }
-        /* Ensure filter-bar Tom Select dropdowns keep exact same dimensions on focus */
-        .filter-bar .ts-wrapper,
-        .filter-bar .ts-wrapper.focus {
-            min-height: unset;
-        }
+        /* Filter-bar dropdowns: lock height/padding so focus never changes shape */
+        .filter-bar .ts-wrapper { min-height: unset !important; }
         .filter-bar .ts-wrapper .ts-control,
-        .filter-bar .ts-wrapper.focus .ts-control {
+        .filter-bar .ts-wrapper.focus .ts-control,
+        .filter-bar .ts-wrapper.dropdown-active .ts-control {
+            height: 36px !important;
             min-height: unset !important;
+            max-height: 36px !important;
             padding: 0.375rem 0.75rem !important;
             font-size: 0.875rem !important;
             border-radius: 4px !important;
-            box-sizing: border-box;
+            box-sizing: border-box !important;
+            align-items: center;
+            display: flex;
         }
         /* Make TS control look/feel identical to Bootstrap form-select */
         .ts-wrapper.single .ts-control { cursor: pointer; }
-        /* Placeholder text colour — grey, fades to nothing when user types */
+        /* Placeholder text colour — grey (#6c757d), italic */
         .ts-control input::placeholder { color: #6c757d; opacity: 1; }
-        .ts-control .placeholder { color: #6c757d !important; opacity: 0.75 !important; font-style: italic; }
+        .ts-control .placeholder {
+            color: #6c757d !important;
+            opacity: 1 !important;
+            font-style: italic;
+            display: block !important;
+        }
+        /* Guarantee placeholder is visible when nothing is selected and control is idle */
+        .ts-wrapper.single:not(.has-items):not(.focus) .ts-control .placeholder {
+            display: block !important;
+            visibility: visible !important;
+        }
         /* Dropdown item font size */
         .ts-dropdown .option { font-size: 0.9rem; padding: 6px 12px; }
-        /* No-selection state: ensure placeholder is visible, not a blank box */
+        /* No-selection state */
         .ts-wrapper.single:not(.has-items) .ts-control { color: #6c757d; }
-        /* Hide placeholder div instantly once the user starts typing */
+        /* Hide placeholder when item is selected OR control is focused (user is searching) */
         .ts-wrapper.single.has-items .ts-control .placeholder,
         .ts-wrapper.focus .ts-control .placeholder { display: none !important; }
-        /* When user is actively typing in a single Tom Select (filter dropdowns like
-           --All Projects--), hide the selected item text so only the search input shows */
+        /* When user is actively typing, hide selected item text so only the input shows */
         .ts-wrapper.single.input-active .ts-control > .item {
             visibility: hidden !important;
             pointer-events: none;
-        }
-        /* Single-mode: Tom Select hides the input with input-hidden class when closed.
-           When nothing is selected (.has-items absent) we un-hide it so the
-           input's placeholder attribute is visible to the user immediately. */
-        .ts-wrapper.single.input-hidden:not(.has-items) .ts-control > input {
-            opacity: 1 !important;
-            width: 100% !important;
-            cursor: pointer !important;
         }
         /* ── Section-heading inline search + per-page — visible on any bg color ── */
         .heading-search-input {
@@ -2623,7 +2626,12 @@
                     // Use _hadNoValue (captured before init) so edit-form pre-selections
                     // are preserved while new-form dropdowns always show the placeholder.
                     if (_hadNoValue) {
-                        ts.clear(true);
+                        ts.clear();
+                        // Belt-and-suspenders: directly ensure wrapper has no 'has-items'
+                        // and the .placeholder div is visible regardless of TS internals.
+                        ts.wrapper.classList.remove('has-items');
+                        var phDiv = ts.control.querySelector('.placeholder');
+                        if (phDiv) { phDiv.style.display = 'block'; phDiv.style.visibility = 'visible'; }
                     }
                 }
 
