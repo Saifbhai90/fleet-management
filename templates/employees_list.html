@@ -76,7 +76,7 @@
     <form method="GET">
       <div class="row g-2">
         <div class="col-md-10">
-          <input type="text" name="search" class="form-control filter-input" placeholder="Search by name, code or department..." value="{{ search }}">
+          <input type="text" name="search" class="form-control filter-input" placeholder="Search by code, name, CNIC, phone or department..." value="{{ search }}">
         </div>
         <div class="col-md-2">
           <button class="btn btn-success-compact w-100" type="submit"><i class="bi bi-search"></i></button>
@@ -162,7 +162,7 @@
               </td>
               <td>{{ emp.department or '-' }}</td>
               <td>{{ emp.phone1 or emp.phone2 or '-' }}</td>
-              <td>{{ emp.joining_date.strftime('%d-%b-%Y') if emp.joining_date else '-' }}</td>
+              <td>{{ emp.joining_date.strftime('%d-%m-%Y') if emp.joining_date else '-' }}</td>
               <td>
                 {% if emp.status == 'Active' %}
                   <span class="badge bg-success">Active</span>

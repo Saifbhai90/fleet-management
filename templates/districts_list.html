@@ -181,7 +181,7 @@ body { background: #f8f9fa; }
             <td class="fw-bold">{{ district.name }}</td>
             <td>{{ district.province or '-' }}</td>
             <td class="text-muted">{{ district.remarks|truncate(80) or '-' }}</td>
-            <td>{{ district.created_at.strftime('%Y-%m-%d') }}</td>
+            <td>{{ district.created_at.strftime('%d-%m-%Y') }}</td>
             <td>
               <div class="btn-group btn-group-sm" role="group">
                 {% if can_see_page('districts_edit') %}

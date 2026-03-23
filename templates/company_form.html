@@ -53,7 +53,7 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 {{ form.mobile.label(class="form-label") }}
-                {{ form.mobile(class="form-control phone-format " + ("is-invalid" if form.mobile.errors else "")) }}
+                {{ form.mobile(class="form-control phone-format " + ("is-invalid" if form.mobile.errors else ""), placeholder="03xx-xxxxxxx") }}
                 {% for error in form.mobile.errors %}
                   <div class="invalid-feedback">{{ error }}</div>
                 {% endfor %}

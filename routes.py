@@ -2580,7 +2580,9 @@ def employees_list():
             Employee.name.ilike(like) |
             Employee.code.ilike(like) |
             Employee.department.ilike(like) |
-            Employee.cnic_no.ilike(like)
+            Employee.cnic_no.ilike(like) |
+            Employee.phone1.ilike(like) |
+            Employee.father_name.ilike(like)
         )
     
     # Apply sorting based on sort_by column

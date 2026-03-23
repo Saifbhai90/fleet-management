@@ -36,7 +36,7 @@
               <td>{{ district.name }}</td>
               <td>{{ district.province or '-' }}</td>
               <td>{{ district.remarks or '-' }}</td>
-              <td>{{ district.created_at.strftime('%Y-%m-%d') }}</td>
+              <td>{{ district.created_at.strftime('%d-%m-%Y') }}</td>
             </tr>
             {% else %}
             <tr>

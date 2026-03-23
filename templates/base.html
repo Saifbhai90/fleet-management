@@ -51,13 +51,16 @@
         }
         /* Make TS control look/feel identical to Bootstrap form-select */
         .ts-wrapper.single .ts-control { cursor: pointer; }
-        /* Placeholder text colour */
+        /* Placeholder text colour — grey, fades to nothing when user types */
         .ts-control input::placeholder { color: #6c757d; opacity: 1; }
-        .ts-control .placeholder { color: #6c757d !important; opacity: 1; }
+        .ts-control .placeholder { color: #6c757d !important; opacity: 0.75 !important; font-style: italic; }
         /* Dropdown item font size */
         .ts-dropdown .option { font-size: 0.9rem; padding: 6px 12px; }
         /* No-selection state: ensure placeholder is visible, not a blank box */
         .ts-wrapper.single:not(.has-items) .ts-control { color: #6c757d; }
+        /* Hide placeholder div instantly once the user starts typing */
+        .ts-wrapper.single.has-items .ts-control .placeholder,
+        .ts-wrapper.focus .ts-control .placeholder { display: none !important; }
         /* Single-mode: Tom Select hides the input with input-hidden class when closed.
            When nothing is selected (.has-items absent) we un-hide it so the
            input's placeholder attribute is visible to the user immediately. */
@@ -132,7 +135,9 @@
             transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
         }
         .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; }
-        .btn:active { transform: translateY(0) scale(0.97); }
+        .btn:active { transform: translateY(0); }
+        /* Prevent size/colour shift on focus for all standard buttons */
+        .btn:focus, .btn:focus-visible { transform: none; box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.25); }
         .btn-primary:hover { box-shadow: 0 4px 16px rgba(59,130,246,0.4) !important; }
         .btn-success:hover { box-shadow: 0 4px 16px rgba(16,185,129,0.4) !important; }
         .btn-danger:hover  { box-shadow: 0 4px 16px rgba(239,68,68,0.4) !important; }

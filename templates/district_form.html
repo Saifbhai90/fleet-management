@@ -18,7 +18,7 @@
           <div class="card-body">
             <div class="mb-3">
               {{ form.name.label(class="form-label") }}
-              {{ form.name(class="form-control " + ("is-invalid" if form.name.errors else "")) }}
+              {{ form.name(class="form-control " + ("is-invalid" if form.name.errors else ""), placeholder="e.g. Lahore") }}
               {% for error in form.name.errors %}
                 <div class="invalid-feedback">{{ error }}</div>
               {% endfor %}
@@ -26,7 +26,7 @@
 
             <div class="mb-3">
               {{ form.province.label(class="form-label") }}
-              {{ form.province(class="form-control " + ("is-invalid" if form.province.errors else "")) }}
+              {{ form.province(class="form-control " + ("is-invalid" if form.province.errors else ""), placeholder="e.g. Punjab") }}
               {% for error in form.province.errors %}
                 <div class="invalid-feedback">{{ error }}</div>
               {% endfor %}
@@ -34,7 +34,7 @@
 
             <div class="mb-3">
               {{ form.remarks.label(class="form-label") }}
-              {{ form.remarks(class="form-control", rows=5) }}
+              {{ form.remarks(class="form-control", rows=5, placeholder="Any additional notes...") }}
             </div>
           </div>
         </div>

@@ -42,7 +42,7 @@
                                         </div>
                                         <div class="col-md-4">
                                             <label class="form-label fw-semibold small">Vehicle Type</label>
-                                            {{ form.vehicle_type(class="form-select form-select-sm " + ("is-invalid" if form.vehicle_type.errors else "")) }}
+                                            {{ form.vehicle_type(class="form-select form-select-sm search-select " + ("is-invalid" if form.vehicle_type.errors else "")) }}
                                             {% for error in form.vehicle_type.errors %}
                                             <div class="invalid-feedback d-block">{{ error }}</div>
                                             {% endfor %}
@@ -74,11 +74,12 @@
                                         <!-- Row 4 -->
                                         <div class="col-md-6">
                                             <label class="form-label fw-semibold small">Vehicle Phone No</label>
-                                            {{ form.phone_no(class="form-control form-control-sm phone-format", placeholder="0300-1112346") }}
+                                            {{ form.phone_no(class="form-control form-control-sm phone-format", placeholder="03xx-xxxxxxx") }}
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label fw-semibold small">Active Date</label>
-                                            {{ form.active_date(class="form-control form-control-sm datepicker " + ("is-invalid" if form.active_date.errors else "")) }}
+                                            {{ form.active_date(class="form-control form-control-sm datepicker " + ("is-invalid" if form.active_date.errors else ""), placeholder="dd-mm-yyyy") }}
+                                            <div class="form-text">Format: dd-mm-yyyy</div>
                                             {% for error in form.active_date.errors %}
                                             <div class="invalid-feedback d-block">{{ error }}</div>
                                             {% endfor %}

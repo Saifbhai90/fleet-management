@@ -27,7 +27,8 @@
 
             <div class="mb-4">
               <label class="form-label fw-bold">{{ form.start_date.label.text }}</label>
-              {{ form.start_date(class="form-control form-control-lg datepicker " + ("is-invalid" if form.start_date.errors else "")) }}
+              {{ form.start_date(class="form-control form-control-lg datepicker " + ("is-invalid" if form.start_date.errors else ""), placeholder="dd-mm-yyyy") }}
+              <div class="form-text">Format: dd-mm-yyyy</div>
               {% for error in form.start_date.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
               {% endfor %}
@@ -47,7 +48,8 @@
             <!-- Inactive Date (Only shows if status is Inactive) -->
             <div class="mb-3" id="inactive_date_group" style="display:none;">
               <label class="form-label fw-bold">{{ form.inactive_date.label.text }}</label>
-              {{ form.inactive_date(class="form-control datepicker " + ("is-invalid" if form.inactive_date.errors else "")) }}
+              {{ form.inactive_date(class="form-control datepicker " + ("is-invalid" if form.inactive_date.errors else ""), placeholder="dd-mm-yyyy") }}
+              <div class="form-text">Format: dd-mm-yyyy</div>
               {% for error in form.inactive_date.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
               {% endfor %}

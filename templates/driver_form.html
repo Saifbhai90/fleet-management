@@ -163,14 +163,14 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Application Date</label>
-                {{ form.application_date(class="form-control datepicker", required=True, ) }}
+                {{ form.application_date(class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.application_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Full Name</label>
-                {{ form.name(class="form-control", required=True) }}
+                {{ form.name(class="form-control", required=True, placeholder="e.g. Muhammad Ali") }}
                 {% for error in form.name.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -178,28 +178,28 @@
 
               <div class="col-md-4">
                 <label class="form-label required">Father Name</label>
-                {{ form.father_name(class="form-control", required=True) }}
+                {{ form.father_name(class="form-control", required=True, placeholder="e.g. Muhammad Raza") }}
                 {% for error in form.father_name.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-2">
                 <label class="form-label required">Date of Birth</label>
-                {{ form.dob(class="form-control datepicker", required=True, ) }}
+                {{ form.dob(class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.dob.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Phone No 1</label>
-                {{ form.phone1(class="form-control phone-format", required=True) }}
+                {{ form.phone1(class="form-control phone-format", required=True, placeholder="03xx-xxxxxxx") }}
                 {% for error in form.phone1.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label">Phone No 2 (Optional)</label>
-                {{ form.phone2(class="form-control phone-format") }}
+                {{ form.phone2(class="form-control phone-format", placeholder="03xx-xxxxxxx") }}
                 {% for error in form.phone2.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -207,7 +207,7 @@
 
               <div class="col-md-3">
                 <label class="form-label required">Emergency No</label>
-                {{ form.emergency_no(class="form-control phone-format", required=True) }}
+                {{ form.emergency_no(class="form-control phone-format", required=True, placeholder="03xx-xxxxxxx") }}
                 {% for error in form.emergency_no.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -226,7 +226,7 @@
               </div>
               <div class="col-md-6">
                 <label class="form-label required">Address</label>
-                {{ form.address(class="form-control", rows=2, required=True) }}
+                {{ form.address(class="form-control", rows=2, required=True, placeholder="Street, City, District") }}
                 {% for error in form.address.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -247,7 +247,7 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Driver District</label>
-                {{ form.driver_district(class="form-control", required=True, list="districtOptions") }}
+                {{ form.driver_district(class="form-control", required=True, list="districtOptions", placeholder="e.g. Lahore") }}
                 {% for error in form.driver_district.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -269,14 +269,14 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">CNIC Issue Date</label>
-                {{ form.cnic_issue_date(class="form-control datepicker", required=True, ) }}
+                {{ form.cnic_issue_date(class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.cnic_issue_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label required">CNIC Expiry Date</label>
-                {{ form.cnic_expiry_date(class="form-control datepicker expiry-trigger", data_target="cnic_status_display", data_hidden="cnic_status_hidden", required=True, ) }}
+                {{ form.cnic_expiry_date(class="form-control datepicker expiry-trigger", data_target="cnic_status_display", data_hidden="cnic_status_hidden", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.cnic_expiry_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -291,7 +291,7 @@
             <div class="row g-3">
               <div class="col-md-3">
                 <label class="form-label required">License No</label>
-                {{ form.license_no(class="form-control", id="license_no_field", required=True) }}
+                {{ form.license_no(class="form-control", id="license_no_field", required=True, placeholder="e.g. LH-123456") }}
                 <div id="license_check_message" class="small mt-1" role="alert"></div>
                 {% for error in form.license_no.errors %}
                   <div class="text-danger small">{{ error }}</div>
@@ -306,21 +306,21 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Issue District</label>
-                {{ form.issue_district(class="form-control", required=True, list="districtOptions") }}
+                {{ form.issue_district(class="form-control", required=True, list="districtOptions", placeholder="e.g. Lahore") }}
                 {% for error in form.issue_district.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label required">License Issue Date</label>
-                {{ form.license_issue_date(class="form-control datepicker", required=True, ) }}
+                {{ form.license_issue_date(class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.license_issue_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label required">License Expiry Date</label>
-                {{ form.license_expiry_date(class="form-control datepicker expiry-trigger", data_target="license_status_display", data_hidden="license_status_hidden", required=True, ) }}
+                {{ form.license_expiry_date(class="form-control datepicker expiry-trigger", data_target="license_status_display", data_hidden="license_status_hidden", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.license_expiry_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -339,21 +339,21 @@
             <div class="row g-3">
               <div class="col-md-4">
                 {{ form.bank_name.label(class="form-label") }}
-                {{ form.bank_name(class="form-control") }}
+                {{ form.bank_name(class="form-control", placeholder="e.g. HBL, Meezan Bank") }}
                 {% for error in form.bank_name.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-4">
                 {{ form.account_no.label(class="form-label") }}
-                {{ form.account_no(class="form-control") }}
+                {{ form.account_no(class="form-control", placeholder="e.g. 1234-5678901-234") }}
                 {% for error in form.account_no.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-4">
                 {{ form.account_title.label(class="form-label") }}
-                {{ form.account_title(class="form-control") }}
+                {{ form.account_title(class="form-control", placeholder="Full account holder name") }}
                 {% for error in form.account_title.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
