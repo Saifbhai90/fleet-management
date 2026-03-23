@@ -19,7 +19,7 @@
         </div>
         <div class="col-md-2">
           <label class="form-label">User ID</label>
-          <select name="user_id" class="form-select">
+          <select name="user_id" class="form-select search-select">
             <option value="">-- All --</option>
             {% for u in users_for_filter %}
               <option value="{{ u.id }}" {% if user_id_q == u.id %}selected{% endif %}>{{ u.id }} - {{ u.username }}</option>

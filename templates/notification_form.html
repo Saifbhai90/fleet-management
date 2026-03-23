@@ -35,7 +35,7 @@
             </div>
             <div class="mb-3">
               {{ form.notification_type.label(class="form-label") }}
-              {{ form.notification_type(class="form-select" + (" is-invalid" if form.notification_type.errors else "")) }}
+              {{ form.notification_type(class="form-select search-select" + (" is-invalid" if form.notification_type.errors else "")) }}
               {% for e in form.notification_type.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
             </div>
             <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>

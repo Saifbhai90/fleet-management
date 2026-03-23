@@ -38,7 +38,7 @@
           </div>
           <div class="col-md-6">
             {{ form.employee_post_id.label(class="form-label") }}
-            {{ form.employee_post_id(class="form-select") }}
+            {{ form.employee_post_id(class="form-select search-select") }}
             {% if allowed_roles_master_only %}
             <small class="text-muted">As Master (Developer), you can assign a Post linked to Admin. Only Master can assign Admin or Master.</small>
             {% else %}

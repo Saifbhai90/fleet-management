@@ -53,8 +53,11 @@
         .ts-wrapper.single .ts-control { cursor: pointer; }
         /* Placeholder text colour */
         .ts-control input::placeholder { color: #6c757d; opacity: 1; }
+        .ts-control .placeholder { color: #6c757d !important; opacity: 1; }
         /* Dropdown item font size */
         .ts-dropdown .option { font-size: 0.9rem; padding: 6px 12px; }
+        /* No-selection state: ensure placeholder is visible, not a blank box */
+        .ts-wrapper.single:not(.has-items) .ts-control { color: #6c757d; }
     </style>
 
     <style>
@@ -2441,25 +2444,43 @@
         root.querySelectorAll('select.search-select').forEach(function(el) {
             if (el.tomselect) return;
             try {
-                // Extract clean placeholder from the first empty option
+                // ── Detect placeholder option ─────────────────────────────────
+                // Treat the first option as a placeholder if its value is '' or
+                // '0' (WTForms integer-coerced fields) AND its text looks like a
+                // prompt (starts with '--', 'Select', 'All', 'Choose', 'No ').
+                var phValue = null;
                 var placeholder = 'Select...';
-                if (el.options.length > 0 && el.options[0].value === '') {
-                    var raw = el.options[0].text;
-                    placeholder = raw.replace(/^[-\s]+/, '').replace(/[-\s]+$/, '').trim() || 'Select...';
+                if (el.options.length > 0) {
+                    var _fo  = el.options[0];
+                    var _fv  = _fo.value;
+                    var _ft  = (_fo.text || '').trim();
+                    if ((_fv === '' || _fv === '0') &&
+                        /^(--|select|all[\s(]|choose|pick|no\s)/i.test(_ft)) {
+                        placeholder = _ft.replace(/^[-\s]+/, '').replace(/[-\s]+$/, '').trim() || 'Select...';
+                        phValue = _fv;
+                    }
                 }
 
                 var ts = new TomSelect(el, {
                     create: el.classList.contains('create-mode'),
-                    // allowEmptyOption:false → empty option not in dropdown;
-                    // TS shows placeholder text when nothing is selected
                     allowEmptyOption: false,
-                    // openOnFocus:false — we open manually below so we can
-                    // block re-open immediately after item selection
                     openOnFocus: false,
                     selectOnTab: true,
                     maxOptions: 300,
                     placeholder: placeholder
                 });
+
+                // Remove the placeholder from the dropdown list so it cannot
+                // be clicked — it only appears as hint text in the closed control.
+                if (phValue !== null) {
+                    ts.removeOption(phValue);
+                    ts.refreshOptions(false);
+                    // If the select is still "selected" on the placeholder value,
+                    // clear TS so the placeholder hint text shows correctly.
+                    if (!el.value || el.value === phValue) {
+                        ts.clear(true);
+                    }
+                }
 
                 // ── Open-on-focus (manual, with post-selection guard) ──────────
                 // After item_add, TS internally re-focuses control_input which

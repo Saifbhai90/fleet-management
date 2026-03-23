@@ -286,7 +286,7 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <div class="step-label"><span class="step-badge" style="background:#e3f2fd;color:#1565c0;">4</span> Shift</div>
-                        {{ form.shift(class="form-select" + (" is-invalid" if form.shift.errors else ""), id="shift_select") }}
+                        {{ form.shift(class="form-select search-select" + (" is-invalid" if form.shift.errors else ""), id="shift_select") }}
                         {% if form.shift.errors %}<div class="invalid-feedback d-block">{% for e in form.shift.errors %}{{ e }}{% endfor %}</div>{% endif %}
                         <div id="capacity_info" style="min-height:1.6em;"></div>
                     </div>

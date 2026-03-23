@@ -113,7 +113,7 @@ textarea.form-control { height: auto !important; }
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Reason <span class="text-danger">*</span></label>
-                            {{ form.reason(class="form-select" + (" is-invalid" if form.reason.errors else ""), id="reason_select") }}
+                            {{ form.reason(class="form-select search-select" + (" is-invalid" if form.reason.errors else ""), id="reason_select") }}
                             {% for e in form.reason.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
                         </div>
                         <div class="col-12" id="other_reason_group" style="display:none;">
