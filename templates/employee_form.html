@@ -411,25 +411,7 @@
 
 <script>
 (function() {
-  var cnic = document.getElementById('employee_cnic');
-  if (cnic) {
-    cnic.addEventListener('input', function(e) {
-      var v = e.target.value.replace(/\D/g, '').match(/(\d{0,5})(\d{0,7})(\d{0,1})/);
-      if (v) e.target.value = !v[2] ? v[1] : v[1] + '-' + v[2] + (v[3] ? '-' + v[3] : '');
-    });
-    cnic.addEventListener('blur', function() {
-      var r = cnic.value.replace(/\D/g, '');
-      if (r.length === 13) cnic.value = r.slice(0,5) + '-' + r.slice(5,12) + '-' + r.slice(12);
-    });
-  }
-  function ph(inp) {
-    var r = inp.value.replace(/\D/g, '');
-    inp.value = r.length >= 4 ? r.slice(0,4) + (r.length > 4 ? '-' + r.slice(4,11) : '') : r;
-  }
-  ['phone1','phone2'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) { el.addEventListener('input', function() { ph(el); }); el.addEventListener('blur', function() { ph(el); }); }
-  });
+  // CNIC mask (.cnic-mask) and phone mask (.phone-mask / .phone-format) handled globally in base.html
 
   // Assignment tab: search filter for project/district lists (type in search box → list filters)
   document.querySelectorAll('.assignment-search').forEach(function(inp) {

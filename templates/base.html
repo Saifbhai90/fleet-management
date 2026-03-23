@@ -3148,13 +3148,33 @@
         }, true);
 
 
-        // Auto-format Pakistan mobile: 03001112346 -> 0300-1112346 on blur
-        $(document).on("blur", ".phone-format", function() {
-            var el = this;
-            var raw = (el.value || "").replace(/\D/g, "");
-            if (raw.length === 11 && raw.indexOf("03") === 0) {
-                el.value = raw.slice(0, 4) + "-" + raw.slice(4);
-            }
+        // ── CNIC Mask (.cnic-mask): auto-formats XXXXX-XXXXXXX-X, max 13 digits ──
+        function _applyCnicMask(el) {
+            var digits = (el.value || '').replace(/\D/g, '').slice(0, 13);
+            var v = digits.match(/(\d{0,5})(\d{0,7})(\d{0,1})/);
+            el.value = !v[2] ? v[1] : v[1] + '-' + v[2] + (v[3] ? '-' + v[3] : '');
+        }
+        $(document).on('input', '.cnic-mask', function() { _applyCnicMask(this); });
+        $(document).on('blur',  '.cnic-mask', function() { _applyCnicMask(this); });
+        $(document).on('keydown', '.cnic-mask', function(e) {
+            var allow = [8, 9, 13, 27, 46, 35, 36, 37, 38, 39, 40];
+            if (allow.indexOf(e.keyCode) !== -1) return;
+            if ((e.ctrlKey || e.metaKey) && [65, 67, 86, 88, 90].indexOf(e.keyCode) !== -1) return;
+            if (!/^\d$/.test(e.key)) e.preventDefault();
+        });
+
+        // ── Phone Mask (.phone-format, .phone-mask): XXXX-XXXXXXX, max 11 digits ──
+        function _applyPhoneMask(el) {
+            var digits = (el.value || '').replace(/\D/g, '').slice(0, 11);
+            el.value = digits.length > 4 ? digits.slice(0, 4) + '-' + digits.slice(4) : digits;
+        }
+        $(document).on('input', '.phone-format, .phone-mask', function() { _applyPhoneMask(this); });
+        $(document).on('blur',  '.phone-format, .phone-mask', function() { _applyPhoneMask(this); });
+        $(document).on('keydown', '.phone-format, .phone-mask', function(e) {
+            var allow = [8, 9, 13, 27, 46, 35, 36, 37, 38, 39, 40];
+            if (allow.indexOf(e.keyCode) !== -1) return;
+            if ((e.ctrlKey || e.metaKey) && [65, 67, 86, 88, 90].indexOf(e.keyCode) !== -1) return;
+            if (!/^\d$/.test(e.key)) e.preventDefault();
         });
 
         // Realtime search on list tables: as user types, rows filter instantly

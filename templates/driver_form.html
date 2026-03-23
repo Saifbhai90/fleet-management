@@ -261,7 +261,7 @@
             <div class="row g-3 mb-4">
               <div class="col-md-3">
                 <label class="form-label required">CNIC No</label>
-                {{ form.cnic_no(class="form-control cnic-mask", id="cnic_mask", required=True) }}
+                {{ form.cnic_no(class="form-control cnic-mask", id="cnic_mask", required=True, placeholder="32304-0907226-5") }}
                 <div id="cnic_check_message" class="small mt-1" role="alert"></div>
                 {% for error in form.cnic_no.errors %}
                   <div class="text-danger small">{{ error }}</div>
@@ -522,7 +522,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!str) return null;
     const parts = str.split('-');
     if (parts.length !== 3) return null;
-    return new Date(parts[2], parts[1] - 1, parts[0]);
+    // Handle both yyyy-mm-dd (WTForms raw) and dd-mm-yyyy (Flatpickr formatted)
+    if (parts[0].length === 4) {
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
   }
   function applyExpiryStatus(expiryDate, targetDisplay, targetHidden) {
     const today = new Date();
@@ -555,14 +559,11 @@ document.addEventListener('DOMContentLoaded', function () {
       const targetHidden = document.getElementById(this.dataset.hidden);
       applyExpiryStatus(expiryDate, targetDisplay, targetHidden);
     });
-
-    if (el.value) {
-      const expiryDate = parseExpiryDate(el.value);
-      const targetDisplay = document.getElementById(el.dataset.target);
-      const targetHidden = document.getElementById(el.dataset.hidden);
-      applyExpiryStatus(expiryDate, targetDisplay, targetHidden);
-    }
   });
+
+  // Run on load immediately (catches yyyy-mm-dd) and again after Flatpickr reformats to dd-mm-yyyy
+  updateExpiryStatus();
+  setTimeout(updateExpiryStatus, 350);
 
   // 5. Custom Reset Function
   window.resetAndClear = function() {
@@ -577,11 +578,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
-  // 6. CNIC Input Mask
-  document.getElementById('cnic_mask').addEventListener('input', function (e) {
-    let val = e.target.value.replace(/\D/g, '').match(/(\d{0,5})(\d{0,7})(\d{0,1})/);
-    e.target.value = !val[2] ? val[1] : val[1] + '-' + val[2] + (val[3] ? '-' + val[3] : '');
-  });
+  // 6. CNIC input mask handled globally via .cnic-mask in base.html
 
   // 7. CNIC duplicate check (on blur) – jese hi enter kren usi time batao
   var cnicInput = document.getElementById('cnic_mask');
