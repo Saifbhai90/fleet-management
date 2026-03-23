@@ -49,7 +49,7 @@
               </td>
               <td>{{ e.department or '-' }}</td>
               <td>{{ e.phone1 or e.phone2 or '-' }}</td>
-              <td>{{ e.joining_date.strftime('%Y-%m-%d') if e.joining_date else '-' }}</td>
+              <td>{{ e.joining_date.strftime('%d-%m-%Y') if e.joining_date else '-' }}</td>
               <td>{{ e.status or '-' }}</td>
             </tr>
             {% else %}

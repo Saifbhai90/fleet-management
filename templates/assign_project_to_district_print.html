@@ -33,7 +33,7 @@
             <tr>
               <td>{{ project.name }}</td>
               <td>{{ district.name }}</td>
-              <td>{{ link.assign_date.strftime('%Y-%m-%d') if link.assign_date else '-' }}</td>
+              <td>{{ link.assign_date.strftime('%d-%m-%Y') if link.assign_date else '-' }}</td>
               <td>{{ link.remarks or '-' }}</td>
             </tr>
             {% else %}

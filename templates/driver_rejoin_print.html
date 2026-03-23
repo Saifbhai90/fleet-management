@@ -35,7 +35,7 @@
             {% for record in records %}
             <tr>
               <td>{{ loop.index }}</td>
-              <td>{{ record.change_date.strftime('%Y-%m-%d') if record.change_date else '-' }}</td>
+              <td>{{ record.change_date.strftime('%d-%m-%Y') if record.change_date else '-' }}</td>
               <td>{{ record.driver.name if record.driver else '-' }}</td>
               <td>{{ record.driver.driver_id if record.driver else '-' }}</td>
               <td>{{ record.new_project.name if record.new_project else 'N/A' }}</td>

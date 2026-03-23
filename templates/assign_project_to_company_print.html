@@ -35,7 +35,7 @@
               <td>{{ proj.name }}</td>
               <td>#{{ proj.id }}</td>
               <td>{{ proj.company.name if proj.company else '-' }}</td>
-              <td>{{ proj.assign_date.strftime('%Y-%m-%d') if proj.assign_date else '-' }}</td>
+              <td>{{ proj.assign_date.strftime('%d-%m-%Y') if proj.assign_date else '-' }}</td>
               <td>{{ proj.assign_remarks or '-' }}</td>
             </tr>
             {% else %}

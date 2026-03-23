@@ -110,7 +110,7 @@
               <td>{{ vehicle.model }}</td>
               <td>{{ vehicle.vehicle_type or '-' }}</td>
               <td>{{ vehicle.phone_no or '-' }}</td>
-              <td>{{ vehicle.active_date.strftime('%Y-%m-%d') if vehicle.active_date else '-' }}</td>
+              <td>{{ vehicle.active_date.strftime('%d-%m-%Y') if vehicle.active_date else '-' }}</td>
               <td>
                 <a href="{{ url_for('vehicle_form', id=vehicle.id) }}" class="btn btn-sm btn-warning" title="Edit">
                   <i class="bi bi-pencil-square"></i> Edit

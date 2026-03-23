@@ -37,7 +37,7 @@
               <td>{{ v.model or '-' }}</td>
               <td>{{ v.project.name if v.project else '-' }}</td>
               <td>{{ v.district.name if v.district else '-' }}</td>
-              <td>{{ v.assign_to_district_date.strftime('%Y-%m-%d') if v.assign_to_district_date else '-' }}</td>
+              <td>{{ v.assign_to_district_date.strftime('%d-%m-%Y') if v.assign_to_district_date else '-' }}</td>
               <td>{{ v.assignment_remarks|truncate(40) or '-' }}</td>
             </tr>
             {% else %}

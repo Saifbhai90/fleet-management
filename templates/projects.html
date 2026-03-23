@@ -54,7 +54,7 @@
                 <a href="{{ url_for('project_detail', id=project.id) }}" class="fw-bold text-primary">
                   {{ project.name }}
                 </a>
-                <small class="d-block text-muted">{{ project.start_date.strftime('%Y-%m-%d') if project.start_date else 'No start date' }}</small>
+                <small class="d-block text-muted">{{ project.start_date.strftime('%d-%m-%Y') if project.start_date else 'No start date' }}</small>
               </td>
               <td>{{ project.vehicle_count }}</td>
               <td>{{ project.driver_count }}</td>

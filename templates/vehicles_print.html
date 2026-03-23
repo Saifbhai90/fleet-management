@@ -40,7 +40,7 @@
               <td>{{ v.vehicle_type or '-' }}</td>
               <td>{{ v.driver_capacity or '1' }}</td>
               <td>{{ v.phone_no or '-' }}</td>
-              <td>{{ v.active_date.strftime('%Y-%m-%d') if v.active_date else '-' }}</td>
+              <td>{{ v.active_date.strftime('%d-%m-%Y') if v.active_date else '-' }}</td>
             </tr>
             {% else %}
             <tr>
