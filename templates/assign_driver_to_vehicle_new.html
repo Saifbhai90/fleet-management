@@ -471,8 +471,12 @@ body .ts-wrapper.focus .ts-control {
       fetch('/get_available_shifts/' + vid).then(function(r){return r.json();}).then(function(shifts){
         var html = '<option value="">-- Select Shift --</option>';
         shifts.forEach(function(s){ html += '<option value="' + (s.id||s.name) + '">' + (s.name||s.id) + '</option>'; });
-        if (shifts.length === 0) html += '<option value="" disabled>Vehicle full — no shift available</option>';
         rebuildSel(shift, html);
+        // If no shifts returned, open the dropdown immediately so the
+        // "No Shift available" empty-state message is visible at once
+        if (shifts.length === 0 && shift.tomselect) {
+          setTimeout(function() { shift.tomselect.open(); }, 50);
+        }
       }).catch(function(){ rebuildSel(shift, '<option value="">-- Select Shift --</option>'); });
     });
     if (veh.value && veh.value !== '0') { veh.dispatchEvent(new Event('change')); }

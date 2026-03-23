@@ -131,6 +131,32 @@
         .ts-dropdown .option { font-size: 0.9rem; padding: 6px 12px; }
         /* Inner input placeholder color */
         .ts-control input::placeholder { color: #6c757d; opacity: 1; }
+        /* ── Smart "No Results" empty-state message ── */
+        .ts-dropdown .ts-empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 18px 12px;
+            color: #868e96;
+            font-size: 0.82rem;
+            gap: 6px;
+            text-align: center;
+        }
+        .ts-dropdown .ts-empty-state .ts-empty-icon {
+            font-size: 1.25rem;
+            color: #adb5bd;
+            line-height: 1;
+        }
+        .ts-dropdown .ts-empty-state .ts-empty-label {
+            font-weight: 500;
+            color: #6c757d;
+        }
+        .ts-dropdown .ts-empty-state .ts-empty-hint {
+            font-size: 0.75rem;
+            color: #adb5bd;
+            font-style: italic;
+        }
         /* ── Section-heading inline search + per-page — visible on any bg color ── */
         .heading-search-input {
             background: rgba(255,255,255,0.22) !important;
@@ -2669,6 +2695,33 @@
                 // when allowEmptyOption:false is set).
                 var _hadNoValue = !el.value || el.value === '' || el.value === '0';
 
+                // ── Smart "No Results" field-name detection ─────────────────────
+                var _emptyLabel = (function() {
+                    var raw = '';
+                    // 1. Explicit <label for="id">
+                    if (el.id) {
+                        var lbl = document.querySelector('label[for="' + el.id + '"]');
+                        if (lbl) raw = lbl.textContent;
+                    }
+                    // 2. Nearest .step-label, label, or legend in parent containers
+                    if (!raw && el.closest) {
+                        var wrap = el.closest('.col-md-6,.col-md-4,.col-md-3,.col-md-12,.col-md-2,.mb-3,.form-group');
+                        if (wrap) {
+                            var near = wrap.querySelector('.step-label, label, legend');
+                            if (near) raw = near.textContent;
+                        }
+                    }
+                    // 3. Fall back to the placeholder text
+                    if (!raw) raw = placeholder;
+                    // Strip leading icons / punctuation / prompt words
+                    raw = raw.replace(/[*:\u2460-\u2473\u24B6-\u24CF]/g, '')  // asterisks, circled numbers
+                             .replace(/\b(select|all|choose|pick)\s+/gi, '')
+                             .replace(/^[-\s\d.]+|[-\s]+$/g, '')
+                             .trim();
+                    return raw || 'option';
+                })();
+                var _emptyLabelCap = _emptyLabel.charAt(0).toUpperCase() + _emptyLabel.slice(1);
+
                 var ts = new TomSelect(el, {
                     create: el.classList.contains('create-mode'),
                     allowEmptyOption: false,
@@ -2676,6 +2729,18 @@
                     selectOnTab: true,
                     maxOptions: 300,
                     placeholder: placeholder,
+                    render: {
+                        no_results: function(data, escape) {
+                            var hint = data.input
+                                ? 'No match for &ldquo;' + escape(data.input) + '&rdquo;'
+                                : 'No ' + escape(_emptyLabelCap) + ' available';
+                            return '<div class="ts-empty-state">' +
+                                '<span class="ts-empty-icon"><i class="bi bi-info-circle"></i></span>' +
+                                '<span class="ts-empty-label">' + hint + '</span>' +
+                                '<span class="ts-empty-hint">Try a different search or check filters</span>' +
+                                '</div>';
+                        }
+                    },
                     onInitialize: function() {
                         // Native TS hook — runs after TS has fully built its DOM.
                         // If the select had no real value, clear any auto-selection
