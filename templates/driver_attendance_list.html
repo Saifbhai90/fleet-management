@@ -455,17 +455,7 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     });
   }
 
-  var tableSearch = document.getElementById('tableSearch');
-  if (tableSearch) {
-    tableSearch.addEventListener('keyup', function() {
-      var q = this.value.toLowerCase();
-      document.querySelectorAll('#attendanceTable tbody tr').forEach(function(row) {
-        if (row.cells.length < 2) return;
-        var text = row.innerText.toLowerCase();
-        row.style.display = text.indexOf(q) > -1 ? '' : 'none';
-      });
-    });
-  }
+  initServerSearch('tableSearch', 'search');
 })();
 </script>
 {% endblock %}

@@ -259,15 +259,7 @@
 <script>
     lucide.createIcons();
 
-    // Real-time table search
-    document.getElementById('parkingTableSearch').addEventListener('input', function() {
-        var term = this.value.toLowerCase().trim();
-        var rows = document.querySelectorAll('.compact-table tbody tr');
-        rows.forEach(function(row) {
-            var text = row.textContent.toLowerCase();
-            row.style.display = (!term || text.includes(term)) ? '' : 'none';
-        });
-    });
+    initServerSearch('parkingTableSearch', 'search');
 
 
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}

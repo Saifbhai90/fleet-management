@@ -269,17 +269,7 @@
 <script>
     lucide.createIcons();
 
-    (function() {
-        var si = document.getElementById('tableRTSearch');
-        si.addEventListener('input', function() {
-            var term = this.value.toLowerCase().trim();
-            document.querySelectorAll('.compact-table tbody tr').forEach(function(row) {
-                row.style.display = (!term || row.textContent.toLowerCase().includes(term)) ? '' : 'none';
-            });
-        });
-        si.addEventListener('focus', function() { this.style.color = '#fff'; });
-        si.addEventListener('blur',  function() { this.style.color = this.value ? '#fff' : 'rgba(255,255,255,0.7)'; });
-    })();
+    initServerSearch('tableRTSearch', 'search');
 
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
     function sortTable(column) {

@@ -2599,6 +2599,37 @@
         }
     }
 
+    /**
+     * initServerSearch — replace client-side DOM row filtering with server-side URL search.
+     * Call once per list page.  The function:
+     *   1. Pre-fills the input from the current URL param.
+     *   2. On input (debounced 400 ms), navigates to ?{paramName}={value}&page=1
+     *      while preserving all other existing query-string params.
+     *
+     * @param {HTMLElement|string} elOrId  – the <input> element or its id string
+     * @param {string}             paramName – URL query param name ('q' or 'search')
+     */
+    window.initServerSearch = function(elOrId, paramName) {
+        var el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId;
+        if (!el) return;
+        paramName = paramName || 'q';
+        // Pre-fill from URL
+        var cur = new URLSearchParams(window.location.search).get(paramName);
+        if (cur) el.value = cur;
+        // Debounced navigate on input
+        var timer;
+        el.addEventListener('input', function() {
+            clearTimeout(timer);
+            var val = this.value.trim();
+            timer = setTimeout(function() {
+                var u = new URLSearchParams(window.location.search);
+                if (val) { u.set(paramName, val); } else { u.delete(paramName); }
+                u.set('page', 1);
+                window.location.search = u.toString();
+            }, 400);
+        });
+    };
+
     window.initSearchableDropdowns = function(scope) {
         if (typeof TomSelect === 'undefined') return;
         var root = scope || document;

@@ -264,15 +264,7 @@
 <script>
     lucide.createIcons();
 
-    (function() {
-        var si = document.getElementById('tableRTSearch');
-        if (si) si.addEventListener('input', function() {
-            var term = this.value.toLowerCase().trim();
-            document.querySelectorAll('.compact-table tbody tr').forEach(function(row) {
-                row.style.display = (!term || row.textContent.toLowerCase().includes(term)) ? '' : 'none';
-            });
-        });
-    })();
+    initServerSearch('tableRTSearch', 'q');
 
     function goPage(p) {
         var u = new URLSearchParams(window.location.search);

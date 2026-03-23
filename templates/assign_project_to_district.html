@@ -242,13 +242,7 @@
 <script>
     lucide.createIcons();
 
-    // Real-time table search
-    document.getElementById('districtTableSearch').addEventListener('input', function() {
-        var term = this.value.toLowerCase().trim();
-        document.querySelectorAll('.compact-table tbody tr').forEach(function(row) {
-            row.style.display = (!term || row.textContent.toLowerCase().includes(term)) ? '' : 'none';
-        });
-    });
+    initServerSearch('districtTableSearch', 'search');
 
     function goPage(p) {
         const params = new URLSearchParams(window.location.search);
