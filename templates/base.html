@@ -43,11 +43,24 @@
             background-color: #e9ecef;
             color: #212529;
         }
-        /* Focused TS control matches Bootstrap focus ring */
+        /* Focused TS control matches Bootstrap focus ring — no size/shape change */
         .ts-wrapper.focus .ts-control {
             border-color: #86b7fe !important;
             box-shadow: 0 0 0 0.25rem rgba(13,110,253,.25) !important;
             outline: 0;
+        }
+        /* Ensure filter-bar Tom Select dropdowns keep exact same dimensions on focus */
+        .filter-bar .ts-wrapper,
+        .filter-bar .ts-wrapper.focus {
+            min-height: unset;
+        }
+        .filter-bar .ts-wrapper .ts-control,
+        .filter-bar .ts-wrapper.focus .ts-control {
+            min-height: unset !important;
+            padding: 0.375rem 0.75rem !important;
+            font-size: 0.875rem !important;
+            border-radius: 4px !important;
+            box-sizing: border-box;
         }
         /* Make TS control look/feel identical to Bootstrap form-select */
         .ts-wrapper.single .ts-control { cursor: pointer; }
