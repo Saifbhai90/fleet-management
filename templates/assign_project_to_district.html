@@ -222,19 +222,8 @@
             </table>
         </div>
         <div class="table-footer">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <i class="bi bi-list-ul me-1"></i>Showing
-                    {% if pagination %}{{ (pagination.page - 1) * per_page + 1 if assigned|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + assigned|length }} of {{ pagination.total }}{% else %}{{ '1' if assigned|length > 0 else '0' }} to {{ assigned|length }} of {{ assigned|length }}{% endif %} entries
-                </div>
-                {% if pagination and pagination.pages > 1 %}
-                <nav><ul class="pagination pagination-sm mb-0">
-                    <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
-                    {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
-                    <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
-                </ul></nav>
-                {% endif %}
-            </div>
+            {% set pagination_items_count = assigned|length %}
+            {% include '_pagination.html' %}
         </div>
     </div>
 </div>
