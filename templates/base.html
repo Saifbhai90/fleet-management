@@ -58,6 +58,50 @@
         .ts-dropdown .option { font-size: 0.9rem; padding: 6px 12px; }
         /* No-selection state: ensure placeholder is visible, not a blank box */
         .ts-wrapper.single:not(.has-items) .ts-control { color: #6c757d; }
+        /* Single-mode: Tom Select hides the input with input-hidden class when closed.
+           When nothing is selected (.has-items absent) we un-hide it so the
+           input's placeholder attribute is visible to the user immediately. */
+        .ts-wrapper.single.input-hidden:not(.has-items) .ts-control > input {
+            opacity: 1 !important;
+            width: 100% !important;
+            cursor: pointer !important;
+        }
+        /* ── Filter/funnel button — stable across ALL states ────────────────
+           Same Bootstrap focus-visible fix as btn-success-compact above. ── */
+        .btn-primary-compact {
+            background-color: #2196f3 !important;
+            color: #fff !important;
+            border: none !important;
+            padding: 0.45rem 1rem !important;
+            min-height: 38px;
+            line-height: 1.5;
+            font-size: 0.875rem;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .btn-primary-compact:hover {
+            background-color: #1976d2 !important;
+            color: #fff !important;
+            box-shadow: 0 4px 12px rgba(33,150,243,0.4) !important;
+            transform: translateY(-2px) !important;
+        }
+        .btn-primary-compact:focus,
+        .btn-primary-compact:focus-visible {
+            background-color: #2196f3 !important;
+            color: #fff !important;
+            border: none !important;
+            outline: none !important;
+            box-shadow: 0 0 0 0.25rem rgba(33,150,243,0.35) !important;
+            transform: none !important;
+            padding: 0.45rem 1rem !important;
+        }
+        .btn-primary-compact:active {
+            background-color: #1565c0 !important;
+            color: #fff !important;
+            border: none !important;
+            box-shadow: 0 0 0 0.25rem rgba(33,150,243,0.35) !important;
+            transform: none !important;
+        }
     </style>
 
     <style>
@@ -2488,6 +2532,7 @@
                 // prompt (starts with '--', 'Select', 'All', 'Choose', 'No ').
                 var phValue = null;
                 var placeholder = 'Select...';
+                var _removeFromList = false; // true only for pure prompts, not filter 'All...' options
                 if (el.options.length > 0) {
                     var _fo  = el.options[0];
                     var _fv  = _fo.value;
@@ -2496,6 +2541,11 @@
                         /^(--|select|all[\s(]|choose|pick|no\s)/i.test(_ft)) {
                         placeholder = _ft.replace(/^[-\s]+/, '').replace(/[-\s]+$/, '').trim() || 'Select...';
                         phValue = _fv;
+                        // 'All Projects', 'All Districts' etc. are valid filter resets —
+                        // keep them in the dropdown list so the user can click them.
+                        // Only remove pure prompt options ('-- Select --', 'Select...') 
+                        // that contain no 'All' word.
+                        _removeFromList = !/\ball\b/i.test(_ft);
                     }
                 }
 
@@ -2508,9 +2558,10 @@
                     placeholder: placeholder
                 });
 
-                // Remove the placeholder from the dropdown list so it cannot
-                // be clicked — it only appears as hint text in the closed control.
-                if (phValue !== null) {
+                // Remove only pure-prompt placeholders ('-- Select --') from the
+                // dropdown list. 'All Projects' / 'All Districts' stay selectable
+                // as valid filter-reset options and show as the selected item text.
+                if (phValue !== null && _removeFromList) {
                     ts.removeOption(phValue);
                     ts.refreshOptions(false);
                     // If the select is still "selected" on the placeholder value,
