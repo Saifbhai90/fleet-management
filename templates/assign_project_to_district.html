@@ -124,18 +124,13 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <input type="text" name="search" class="form-control filter-input" 
-                           placeholder="Search..." 
-                           value="{{ search or '' }}">
-                </div>
                 <div class="col-md-1">
                     <button type="submit" class="btn btn-primary-compact w-100">
                         <i class="bi bi-funnel"></i>
                     </button>
                 </div>
             </div>
-            {% if search or project_id or district_id or from_date or to_date %}
+            {% if project_id or district_id or from_date or to_date %}
             <a href="{{ url_for('assign_project_to_district') }}" class="btn btn-outline-secondary btn-sm">Clear Filters</a>
             {% endif %}
         </form>
@@ -145,12 +140,11 @@
         <div class="section-heading d-flex justify-content-between align-items-center">
             <span>Assigned Districts</span>
             <div class="d-flex align-items-center gap-2">
-                <input type="text" id="districtTableSearch" class="form-control form-control-sm"
+                <input type="text" id="districtTableSearch" class="form-control form-control-sm heading-search-input"
                        placeholder="&#128269; Search all columns..."
-                       style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:6px;"
                        autocomplete="off">
-                <span style="font-size:0.875rem;font-weight:400;white-space:nowrap;opacity:0.85;">Per Page:</span>
-                <select class="form-select form-select-sm" style="width:80px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
+                <span style="font-size:0.875rem;font-weight:500;white-space:nowrap;opacity:0.9;">Per Page:</span>
+                <select class="form-select form-select-sm heading-per-page-select" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
                   <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
                   <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
                   <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
@@ -249,16 +243,12 @@
     lucide.createIcons();
 
     // Real-time table search
-    var dSearch = document.getElementById('districtTableSearch');
-    dSearch.addEventListener('input', function() {
+    document.getElementById('districtTableSearch').addEventListener('input', function() {
         var term = this.value.toLowerCase().trim();
         document.querySelectorAll('.compact-table tbody tr').forEach(function(row) {
             row.style.display = (!term || row.textContent.toLowerCase().includes(term)) ? '' : 'none';
         });
     });
-    dSearch.addEventListener('focus', function() { this.style.color = '#fff'; });
-    dSearch.addEventListener('blur',  function() { this.style.color = this.value ? '#fff' : 'rgba(255,255,255,0.7)'; });
-    dSearch.style.color = 'rgba(255,255,255,0.7)';
 
     function goPage(p) {
         const params = new URLSearchParams(window.location.search);

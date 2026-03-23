@@ -88,6 +88,33 @@
             width: 100% !important;
             cursor: pointer !important;
         }
+        /* ── Section-heading inline search + per-page — visible on any bg color ── */
+        .heading-search-input {
+            background: rgba(255,255,255,0.22) !important;
+            border: 1.5px solid rgba(255,255,255,0.65) !important;
+            color: #fff !important;
+            border-radius: 6px !important;
+            min-width: 170px;
+            font-size: 0.85rem;
+        }
+        .heading-search-input::placeholder { color: rgba(255,255,255,0.75) !important; }
+        .heading-search-input:focus {
+            background: rgba(255,255,255,0.32) !important;
+            border-color: rgba(255,255,255,0.9) !important;
+            outline: none !important;
+            box-shadow: none !important;
+            color: #fff !important;
+        }
+        .heading-per-page-select {
+            width: 72px !important;
+            background: rgba(255,255,255,0.22) !important;
+            color: #fff !important;
+            border: 1.5px solid rgba(255,255,255,0.65) !important;
+            border-radius: 6px !important;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .heading-per-page-select option { background: #fff; color: #333; }
         /* ── Filter/funnel button — stable across ALL states ────────────────
            Same Bootstrap focus-visible fix as btn-success-compact above. ── */
         .btn-primary-compact {
@@ -2573,6 +2600,11 @@
                     }
                 }
 
+                // Capture whether this field has no real selection BEFORE TomSelect
+                // mutates el.value (it may auto-select the first non-empty option
+                // when allowEmptyOption:false is set).
+                var _hadNoValue = !el.value || el.value === '' || el.value === '0';
+
                 var ts = new TomSelect(el, {
                     create: el.classList.contains('create-mode'),
                     allowEmptyOption: false,
@@ -2586,11 +2618,11 @@
                 // dropdown list. 'All Projects' / 'All Districts' stay selectable
                 // as valid filter-reset options and show as the selected item text.
                 if (phValue !== null && _removeFromList) {
-                    ts.removeOption(phValue);
+                    try { ts.removeOption(phValue); } catch(e) {}
                     ts.refreshOptions(false);
-                    // If the select is still "selected" on the placeholder value,
-                    // clear TS so the placeholder hint text shows correctly.
-                    if (!el.value || el.value === phValue) {
+                    // Use _hadNoValue (captured before init) so edit-form pre-selections
+                    // are preserved while new-form dropdowns always show the placeholder.
+                    if (_hadNoValue) {
                         ts.clear(true);
                     }
                 }
