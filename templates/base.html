@@ -103,10 +103,25 @@
             overflow: hidden;
             white-space: nowrap;
             text-overflow: ellipsis;
+            border-radius: 3px;
+            transition: background .15s, color .15s;
         }
-        /* When item is selected, hide the search input (it's unused visually)  */
-        /* but keep it in DOM so keyboard can still trigger open/search         */
-        body .ts-wrapper.single.has-items .ts-control > input {
+        /* Overwrite-ready state: SAP/Excel-style item highlight on focus */
+        body .ts-wrapper .ts-control.ts-overwrite-ready .item {
+            background: #cfe2ff !important;
+            color: #0a3678 !important;
+            padding: 0 6px !important;
+            border-radius: 4px !important;
+        }
+        /* In overwrite-ready state, show the search input so typed chars go in */
+        body .ts-wrapper.single.has-items .ts-control.ts-overwrite-ready > input {
+            opacity: 1 !important;
+            width: auto !important;
+            position: static !important;
+        }
+        /* When item is selected (normal state), hide the search input visually  */
+        /* but keep it in DOM so keyboard can still trigger open/search          */
+        body .ts-wrapper.single.has-items .ts-control:not(.ts-overwrite-ready) > input {
             opacity: 0 !important;
             width: 1px !important;
             position: absolute !important;
@@ -2691,38 +2706,82 @@
                     }
                 }
 
-                // ── Open-on-focus (manual, with post-selection guard) ──────────
-                // After item_add, TS internally re-focuses control_input which
-                // would re-open the dropdown with openOnFocus:true (blocking 2nd
-                // Enter). We gate open() with a _justSelected flag instead.
-                ts.on('focus', function() {
-                    if (!ts._justSelected) {
-                        ts.open();
+                // ── Highlight-and-Overwrite (SAP/Excel-style) ─────────────────
+                ts._justSelected   = false;
+                ts._overwriteReady = false;
+
+                function _setOverwriteReady(on) {
+                    ts._overwriteReady = on;
+                    if (on) {
+                        ts.control.classList.add('ts-overwrite-ready');
+                    } else {
+                        ts.control.classList.remove('ts-overwrite-ready');
                     }
-                    ts._justSelected = false;
+                }
+
+                ts.on('focus', function() {
+                    if (ts._justSelected) {
+                        ts._justSelected = false;
+                        _setOverwriteReady(false);
+                        return; // just confirmed a selection — don't re-open
+                    }
+                    if (ts.getValue()) {
+                        // Field already has a value: enter overwrite-ready mode
+                        _setOverwriteReady(true);
+                    } else {
+                        _setOverwriteReady(false);
+                    }
+                    ts.open();
+                });
+
+                ts.on('blur', function() {
+                    _setOverwriteReady(false);
                 });
 
                 ts.on('item_add', function() {
                     ts._justSelected = true;
-                    // Re-focus control_input (TS may have blurred it) without
-                    // re-opening: flag is still true when focus fires below
+                    _setOverwriteReady(false);
+                    // Re-focus input after selection without re-opening
                     setTimeout(function() {
-                        ts._justSelected = true; // keep true during the refocus
+                        ts._justSelected = true;
                         ts.control_input.focus();
                     }, 0);
                 });
 
-                // Store references on the control_input for O(1) lookup in capture listener
-                ts.control_input._tsOrigSelect = el;
-                ts.control_input._ts = ts; // direct TS instance reference for v2.3 capture
+                ts.on('item_remove', function() {
+                    _setOverwriteReady(false);
+                    ts.open();
+                });
 
-                // Backup: 2nd Enter on control_input (dropdown CLOSED) → next field
+                // Store references for Enter-to-tab capture listener
+                ts.control_input._tsOrigSelect = el;
+                ts.control_input._ts = ts;
+
+                // ── Keydown: overwrite-on-type + Backspace + Enter-to-tab ──────
                 ts.control_input.addEventListener('keydown', function(e) {
-                    if (e.key !== 'Enter') return;
-                    if (ts.isOpen) return;
-                    e.preventDefault();
-                    e.stopImmediatePropagation();
-                    _tsMoveFocus(el);
+                    if (ts._overwriteReady) {
+                        if (e.key === 'Backspace') {
+                            e.preventDefault();
+                            ts.clear(true);
+                            _setOverwriteReady(false);
+                            if (!ts.isOpen) ts.open();
+                            return;
+                        }
+                        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                            // Printable key: clear item, stay out of overwrite mode,
+                            // let the character fall through into the search input naturally
+                            ts.clear(true);
+                            _setOverwriteReady(false);
+                            if (!ts.isOpen) ts.open();
+                            // Do NOT preventDefault — char goes into control_input
+                        }
+                    }
+                    // Enter-to-tab: when dropdown is already closed
+                    if (e.key === 'Enter' && !ts.isOpen) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        _tsMoveFocus(el);
+                    }
                 }, true);
 
             } catch(ex) {
