@@ -74,11 +74,11 @@
             box-shadow: 0 0 0 0.2rem rgba(13,110,253,.18) !important;
             outline: 0;
         }
-        /* Placeholder: absolutely-positioned, always visible, RED for v3.0 test */
+        /* ── Placeholder: always grey, centered, hidden only when item IS selected ── */
         body .ts-wrapper .ts-control .placeholder {
             display: block !important;
             visibility: visible !important;
-            color: #dc3545 !important;
+            color: #6c757d !important;
             opacity: 1 !important;
             position: absolute !important;
             top: 50% !important;
@@ -89,18 +89,32 @@
             text-overflow: ellipsis;
             max-width: 90%;
         }
-        /* Hide placeholder when item IS selected or user is actively typing */
-        body .ts-wrapper.single.has-items .ts-control .placeholder,
-        body .ts-wrapper.focus .ts-control .placeholder { display: none !important; }
-        /* Hide selected item text while actively typing (search mode) */
-        body .ts-wrapper.single.input-active .ts-control > .item {
-            visibility: hidden !important;
-            pointer-events: none;
+        /* Hide placeholder ONLY when an item is selected */
+        body .ts-wrapper.single.has-items .ts-control .placeholder { display: none !important; }
+        /* ── Selected item: ALWAYS black, always visible ── */
+        body .ts-wrapper .ts-control .item {
+            color: #212529 !important;
+            opacity: 1 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            visibility: visible !important;
+            height: 100%;
+            max-width: calc(100% - 24px);
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        /* When item is selected, hide the search input (it's unused visually)  */
+        /* but keep it in DOM so keyboard can still trigger open/search         */
+        body .ts-wrapper.single.has-items .ts-control > input {
+            opacity: 0 !important;
+            width: 1px !important;
+            position: absolute !important;
         }
         .ts-wrapper.single .ts-control { cursor: pointer; }
         /* Dropdown item font size */
         .ts-dropdown .option { font-size: 0.9rem; padding: 6px 12px; }
-        /* Ensure inner input doesn't shift layout */
+        /* Inner input placeholder color */
         .ts-control input::placeholder { color: #6c757d; opacity: 1; }
         /* ── Section-heading inline search + per-page — visible on any bg color ── */
         .heading-search-input {
@@ -2630,7 +2644,24 @@
                     openOnFocus: false,
                     selectOnTab: true,
                     maxOptions: 300,
-                    placeholder: placeholder
+                    placeholder: placeholder,
+                    onInitialize: function() {
+                        // Native TS hook — runs after TS has fully built its DOM.
+                        // If the select had no real value, clear any auto-selection
+                        // and guarantee the placeholder div is rendered and visible.
+                        var _self = this;
+                        var _val = _self.getValue();
+                        if (!_val || _val === '' || _val === '0') {
+                            try { _self.clear(true); } catch(e) {}
+                            _self.wrapper.classList.remove('has-items');
+                            var ph = _self.control.querySelector('.placeholder');
+                            if (ph) {
+                                ph.style.display     = 'block';
+                                ph.style.visibility  = 'visible';
+                                ph.style.color       = '#6c757d';
+                            }
+                        }
+                    }
                 });
 
                 // Remove pure-prompt placeholders ('-- Select Company --') from list;
@@ -2638,21 +2669,10 @@
                 if (phValue !== null && _removeFromList) {
                     try { ts.removeOption(phValue); } catch(e) {}
                     ts.refreshOptions(false);
-                }
-
-                // ── Universal placeholder force-show ─────────────────────────────
-                // For ANY dropdown where the original select had no real value
-                // (new forms, unset fields), clear TS state and make placeholder visible.
-                if (_hadNoValue) {
-                    try { ts.clear(); } catch(e) {}
-                    ts.wrapper.classList.remove('has-items');
-                    // Force placeholder div visible via inline style as final guarantee
-                    setTimeout(function() {
-                        var phDiv = ts.control.querySelector('.placeholder');
-                        if (phDiv) {
-                            phDiv.style.cssText = 'display:block!important;visibility:visible!important;color:#6c757d!important;';
-                        }
-                    }, 0);
+                    // After removeOption, if had no value ensure placeholder stays visible
+                    if (_hadNoValue) {
+                        ts.wrapper.classList.remove('has-items');
+                    }
                 }
 
                 // ── Open-on-focus (manual, with post-selection guard) ──────────
@@ -2698,20 +2718,7 @@
     // Run immediately — content block is above scripts in the rendered HTML
     window.initSearchableDropdowns();
 
-    // ── Aggressive placeholder enforcer (UI v3.0) ────────────────────────
-    // Runs every 200ms for the first 3 seconds after page load to
-    // guarantee placeholder divs are visible even after TS's own render.
-    (function() {
-        var _runs = 0;
-        var _iv = setInterval(function() {
-            document.querySelectorAll('.ts-wrapper.single:not(.has-items) .ts-control .placeholder').forEach(function(ph) {
-                ph.style.setProperty('display', 'block', 'important');
-                ph.style.setProperty('visibility', 'visible', 'important');
-            });
-            _runs++;
-            if (_runs >= 15) clearInterval(_iv); // stop after 3 s
-        }, 200);
-    })();
+    // onInitialize hook inside TomSelect handles placeholder — no setInterval needed.
 
     // Re-init for any dynamically added .search-select elements
     (new MutationObserver(function(muts) {
