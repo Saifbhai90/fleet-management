@@ -2811,28 +2811,40 @@
                 }
 
                 ts.on('focus', function() {
+                    // _justSelected guards against re-opening immediately after
+                    // the user confirms a selection (TS internally refocuses then).
                     if (ts._justSelected) {
-                        ts._justSelected = false;
+                        ts._justSelected = false; // consume the flag
                         _setOverwriteReady(false);
-                        return; // just confirmed a selection — don't re-open
+                        return;
                     }
-                    if (ts.getValue()) {
-                        // Field already has a value: enter overwrite-ready mode
-                        _setOverwriteReady(true);
-                    } else {
-                        _setOverwriteReady(false);
-                    }
-                    ts.open();
+                    // Open the dropdown immediately (no visual delay).
+                    if (!ts.isOpen) ts.open();
+                    // Apply the blue highlight slightly deferred so TS's own
+                    // focus routine has settled — fixes Shift+Tab first-attempt miss.
+                    setTimeout(function() {
+                        if (!ts.wrapper.classList.contains('focus')) return; // blurred already
+                        if (ts.getValue()) {
+                            _setOverwriteReady(true);
+                        } else {
+                            _setOverwriteReady(false);
+                        }
+                    }, 15);
                 });
 
                 ts.on('blur', function() {
                     _setOverwriteReady(false);
+                    // CRITICAL: clear _justSelected on every blur so that
+                    // Shift+Tab or any re-entry highlights on the FIRST return.
+                    ts._justSelected = false;
                 });
 
                 ts.on('item_add', function() {
                     ts._justSelected = true;
                     _setOverwriteReady(false);
-                    // Re-focus input after selection without re-opening
+                    // TS internally refocuses control_input after selection;
+                    // keep _justSelected true through that synthetic focus so
+                    // we don't re-open the dropdown.
                     setTimeout(function() {
                         ts._justSelected = true;
                         ts.control_input.focus();
@@ -2841,7 +2853,7 @@
 
                 ts.on('item_remove', function() {
                     _setOverwriteReady(false);
-                    ts.open();
+                    if (!ts.isOpen) ts.open();
                 });
 
                 // Store references for Enter-to-tab capture listener
