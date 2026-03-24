@@ -887,29 +887,36 @@
   window.addEventListener('load', function() { _prefetchForPrint(); });
 
   /* ══════════════════════════════════════════════════════════════════════════
-     SHARED PDF RENDERER
+     SHARED PDF RENDERER  —  v4 (overflow-override technique)
      ──────────────────────────────────────────────────────────────────────────
-     ROOT CAUSE FIX (half-page PDF):
-       Setting el.style.width='800px' is NOT enough — the element's parent
-       container (sidebar layout) still clips html2canvas at its own boundary.
-       The only reliable solution: temporarily move #profile-content to <body>
-       as a direct child, position it off-screen, and render it there.
-       This removes every parent overflow/clip/margin constraint.
+     ROOT CAUSE (half-page PDF):
+       base.html sets  body { overflow-x: hidden }  and
+       .main-content { margin-left: 300px }.
+       When we force #profile-content to width:800px the element overflows
+       the sidebar-constrained content area and the browser clips it.
+       html2canvas captures only the visible (clipped) slice → narrow PDF.
 
-     ROOT CAUSE FIX (page cuts):
-       @media print CSS is INVISIBLE to html2canvas (screen mode only).
-       break-inside:avoid must be in SCREEN CSS so html2pdf's css mode reads it.
-       That fix is already applied above in the screen styles.
+       FIX: inject a <style> tag that temporarily makes body / .main-content
+       overflow:visible so the 800px element is never clipped.
+       windowWidth:1200 simulates a wide desktop so no mobile breakpoints
+       fire and the sidebar + 800px content both fit without overflow.
+       Element stays in its original DOM position — no moving required.
+
+     ROOT CAUSE (page cuts in PDF):
+       @media print CSS is invisible to html2canvas (screen mode).
+       html2pdf's "css" pagebreak mode reads break-inside from the SCREEN
+       computed style. Fix is applied above: break-inside:avoid lives in the
+       normal (screen) CSS rules for .section-card, .doc-card, etc.
   ════════════════════════════════════════════════════════════════════════════ */
   function _renderToPdf(outputMode, filename) {
-    /* outputMode: 'save' → download; 'blob' → return Promise<Blob> */
     return new Promise(function(resolve, reject) {
-      var wm = document.getElementById('pdfWatermark');
-      var el = document.getElementById('profile-content');
+      var wm  = document.getElementById('pdfWatermark');
+      var el  = document.getElementById('profile-content');
+      var job = null;
 
-      /* Stamp watermark */
+      /* ── Watermark timestamp ── */
       if (wm) {
-        var d = new Date();
+        var d  = new Date();
         var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
                  ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
         var pdfDateEl = document.getElementById('pdfDate');
@@ -917,68 +924,69 @@
         wm.style.display = 'block';
       }
 
-      /* ── Save original DOM position ── */
-      var origParent = el.parentNode;
-      var origNext   = el.nextSibling;
-      var origStyle  = el.getAttribute('style') || '';
+      /* Save element's original inline style (usually empty string) */
+      var origElStyle = el.getAttribute('style') || '';
 
-      /* ── Move element to <body>, off-screen, at exactly 800 px ──
-         This breaks free from the sidebar layout entirely so html2canvas
-         captures the full 800 px width with no clipping from any ancestor. */
-      el.style.cssText = [
-        'position:absolute',
-        'top:0',
-        'left:-2000px',
-        'width:800px',
-        'max-width:none',
-        'overflow:visible',
-        'background:#f0f2f5',
-        'z-index:-1'
-      ].join(';');
-      document.body.appendChild(el);
+      /* ── Inject temporary CSS ──
+         Removes overflow clipping from body + .main-content so html2canvas
+         can measure and capture the full 800px element without side-clipping. */
+      var tempStyle = document.createElement('style');
+      tempStyle.id  = '__pdf_overflow_fix';
+      tempStyle.textContent =
+        'html,body{overflow:visible!important}' +
+        '.main-content{overflow:visible!important}' +
+        '#profile-content{width:800px!important;max-width:none!important;overflow:visible!important}';
+      document.head.appendChild(tempStyle);
 
-      function restoreEl() {
-        /* Move back to original DOM position */
-        if (origNext) origParent.insertBefore(el, origNext);
-        else          origParent.appendChild(el);
-        /* Restore original inline style (usually empty) */
-        if (origStyle) el.setAttribute('style', origStyle);
-        else           el.removeAttribute('style');
+      /* Also force inline style for maximum CSS specificity */
+      el.style.cssText = 'width:800px;max-width:none;overflow:visible;';
+
+      function cleanup() {
+        if (job) job.restore();
+        var ts = document.getElementById('__pdf_overflow_fix');
+        if (ts && ts.parentNode) ts.parentNode.removeChild(ts);
+        /* Restore original inline style */
+        if (origElStyle) el.setAttribute('style', origElStyle);
+        else             el.removeAttribute('style');
         if (wm) wm.style.display = 'none';
       }
 
-      var job = _proxyImages(el);
-      Promise.all(job.waits).then(function() {
-        var opt = {
-          margin:   [10, 10, 10, 10],
-          filename: filename || 'document.pdf',
-          image:    { type: 'jpeg', quality: 0.96 },
-          html2canvas: {
-            scale:           2,
-            useCORS:         true,
-            allowTaint:      false,
-            letterRendering: true,
-            logging:         false
-            /* NO width / windowWidth — element is already 800 px in <body>,
-               let html2canvas measure it naturally at its real width */
-          },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: {
-            mode:  ['css', 'legacy'],
-            avoid: [
-              '.section-card', '.doc-card', '.doc-grid',
-              '.docs-photo-grid', '.doc-photo-item',
-              '.timeline-item', '.stat-box', '.uniform-box'
-            ]
-          }
-        };
+      /* One animation frame so the browser reflows at 800px before html2canvas measures */
+      requestAnimationFrame(function() {
+        job = _proxyImages(el);
+        Promise.all(job.waits).then(function() {
+          var opt = {
+            margin:   [10, 10, 10, 10],
+            filename: filename || 'document.pdf',
+            image:    { type: 'jpeg', quality: 0.96 },
+            html2canvas: {
+              scale:           2,           /* Hi-DPI rendering */
+              useCORS:         true,        /* images are proxied → no taint */
+              allowTaint:      false,
+              letterRendering: true,
+              logging:         false,
+              windowWidth:     1200         /* simulate wide desktop:
+                                              sidebar(300px) + content(900px)
+                                              → forced 800px fits, no overflow clip */
+            },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: {
+              mode:  ['css', 'legacy'],
+              avoid: [
+                '.section-card', '.doc-card', '.doc-grid',
+                '.docs-photo-grid', '.doc-photo-item',
+                '.timeline-item', '.stat-box', '.uniform-box'
+              ]
+            }
+          };
 
-        var worker = html2pdf().set(opt).from(el);
-        var promise = (outputMode === 'save') ? worker.save() : worker.output('blob');
-        promise
-          .then(function(result) { job.restore(); restoreEl(); resolve(result); })
-          .catch(function(err)   { job.restore(); restoreEl(); reject(err); });
-      }).catch(function(err) { job.restore(); restoreEl(); reject(err); });
+          var worker  = html2pdf().set(opt).from(el);
+          var promise = (outputMode === 'save') ? worker.save() : worker.output('blob');
+          promise
+            .then(function(result) { cleanup(); resolve(result); })
+            .catch(function(err)   { cleanup(); reject(err);    });
+        }).catch(function(err) { cleanup(); reject(err); });
+      });
     });
   }
 
