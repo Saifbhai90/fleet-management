@@ -887,40 +887,35 @@
   window.addEventListener('load', function() { _prefetchForPrint(); });
 
   /* ══════════════════════════════════════════════════════════════════════════
-     SHARED PDF RENDERER  —  v5 (onclone technique)
+     SHARED PDF RENDERER  —  v6 · Hidden Iframe Sandbox
      ──────────────────────────────────────────────────────────────────────────
-     ROOT CAUSE (every previous attempt failed):
-       base.html has  body { overflow-x: hidden }  +  .main-content { margin-left: 300px }.
-       html2canvas renders the CLONED document — but the clone still inherits
-       all the same CSS, so the sidebar margin and overflow clipping persist
-       in the clone, making the element appear narrower than 800px.
+     WHY every previous attempt failed
+     ───────────────────────────────────
+     v1-v4: We tried to force the live page's element to 800px.
+            base.html has body{overflow-x:hidden} + .main-content{margin-left:300px}.
+            The browser always clips the overflow before html2canvas measures it.
 
-       Previous attempts:
-         v1: el.style.width='800px' + html2canvas.width:800  → element overflows
-             parent, body clips it, canvas shows left slice only (half page)
-         v2: move element to body left:-2000px  → html2canvas renders from x=0,
-             element at x=-2000 is outside the render area → blank page
-         v3: same as v2 (identical root cause)
-         v4: inject <style> + requestAnimationFrame → injected style is applied
-             to the LIVE document but html2canvas re-reads computed styles from
-             the CLONE (a fresh snapshot), so the injection has no effect
+     v5 (onclone): We modify the cloned document inside html2canvas.
+            BUT html2canvas clones the ENTIRE page DOM (sidebar + nav + content).
+            Hiding the sidebar in the clone still leaves all its CSS selectors
+            active, and the remaining margin/overflow constraints persist on the
+            cloned .main-content, so the element still renders narrow.
 
-       v5 FIX — use html2canvas's own  onclone  callback:
-         This callback receives the cloned document BEFORE rendering begins.
-         We directly modify the clone:
-           • hide the sidebar → main-content expands to full viewport
-           • clear margin-left / overflow on .main-content
-           • set #profile-content width to exactly 800px
-         html2canvas then renders the MODIFIED clone at 800px width.
-         The live page is never touched — no flash, no DOM side-effects.
+     v6 FIX — iframe sandbox (same technique used by Salesforce PDF, Notion export)
+     ─────────────────────────────────────────────────────────────────────────────
+     • Create a fresh, hidden <iframe> with NO sidebar, NO navbar, NO overflow.
+     • Write ONLY the #profile-content HTML + all page CSS into it.
+     • The iframe is a clean 1024px document. #profile-content starts at (0,0)
+       with width:800px — no parent constraints, no clipping, ever.
+     • html2canvas renders from (0,0) in the iframe's coordinate space → full A4.
+     • The live page is never modified. Zero flicker, zero side-effects.
   ════════════════════════════════════════════════════════════════════════════ */
   function _renderToPdf(outputMode, filename) {
     return new Promise(function(resolve, reject) {
-      var wm  = document.getElementById('pdfWatermark');
-      var el  = document.getElementById('profile-content');
-      var job = null;
+      var wm    = document.getElementById('pdfWatermark');
+      var srcEl = document.getElementById('profile-content');
 
-      /* ── Watermark timestamp ── */
+      /* ── 1. Stamp watermark on the source element BEFORE cloning ── */
       if (wm) {
         var d  = new Date();
         var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
@@ -930,89 +925,128 @@
         wm.style.display = 'block';
       }
 
+      /* ── 2. Collect ALL page CSS (links + inline blocks) ── */
+      var cssLinks = '';
+      document.querySelectorAll('link[rel="stylesheet"]').forEach(function(l) {
+        cssLinks += l.outerHTML + '\n';
+      });
+      var inlineCSS = '';
+      document.querySelectorAll('style').forEach(function(s) {
+        inlineCSS += s.textContent + '\n';
+      });
+      /* Sandbox overrides — strip every layout constraint from the host app */
+      inlineCSS += [
+        'html,body{margin:0!important;padding:0!important;',
+        '  background:#f0f2f5!important;width:1024px!important;',
+        '  overflow:visible!important;}',
+        /* nuke sidebar / nav / anything outside the content */
+        '.sidebar,#sidebar,[id*="sidebar"],[class*="sidebar"],',
+        '.navbar,nav,.topbar,.top-header,footer,.footer{display:none!important}',
+        /* strip the main-content wrapper constraints */
+        '.main-content,.content-wrapper{',
+        '  margin-left:0!important;overflow:visible!important;',
+        '  width:auto!important;max-width:none!important;padding:0!important;}',
+        /* profile-page padding would add grey outside margins */
+        '.profile-page{padding:0!important;background:#f0f2f5!important;}',
+        /* THE critical rule — 800px matches A4 content area at 96dpi */
+        '#profile-content{',
+        '  width:800px!important;max-width:none!important;',
+        '  overflow:visible!important;display:block!important;}'
+      ].join('');
+
+      /* ── 3. Create hidden iframe ──
+         Positioned off-screen in the PARENT (left:-9999px), but the iframe's
+         OWN coordinate space starts at (0,0).  html2canvas renders iEl from
+         (0,0) inside the iframe — the parent's off-screen position is invisible
+         to html2canvas because it uses iEl.ownerDocument.defaultView (the iframe
+         window), not the parent window. ── */
+      var iframe = document.createElement('iframe');
+      iframe.id  = '__pdfSandbox';
+      iframe.setAttribute('scrolling', 'no');
+      iframe.style.cssText = [
+        'position:fixed', 'top:0', 'left:-9999px',
+        'width:1024px',   'height:30000px',
+        'border:none',    'pointer-events:none', 'z-index:-1'
+      ].join(';');
+      document.body.appendChild(iframe);
+
+      /* ── 4. Write sanitized content into iframe ── */
+      var iDoc = iframe.contentDocument || iframe.contentWindow.document;
+      iDoc.open();
+      iDoc.write(
+        '<!DOCTYPE html><html><head>' +
+        '<meta charset="UTF-8"><meta name="viewport" content="width=1024">' +
+        cssLinks +
+        '<style>' + inlineCSS + '</style>' +
+        '</head><body>' +
+        srcEl.outerHTML +   /* full stamped #profile-content clone */
+        '</body></html>'
+      );
+      iDoc.close();
+
+      var proxyJob = null;
+
       function cleanup() {
-        if (job) job.restore();
+        if (proxyJob) proxyJob.restore();
+        var f = document.getElementById('__pdfSandbox');
+        if (f && f.parentNode) f.parentNode.removeChild(f);
         if (wm) wm.style.display = 'none';
       }
 
-      job = _proxyImages(el);     /* swap cross-origin imgs → blob URLs */
-      Promise.all(job.waits).then(function() {
-        var opt = {
-          margin:   [10, 10, 10, 10],
-          filename: filename || 'document.pdf',
-          image:    { type: 'jpeg', quality: 0.96 },
-          html2canvas: {
-            scale:           2,
-            useCORS:         true,
-            allowTaint:      false,
-            letterRendering: true,
-            logging:         false,
-            windowWidth:     900,   /* narrow enough that @media queries stay
-                                       at desktop breakpoint */
+      /* ── 5. Wait for CDN fonts / stylesheets to paint inside the iframe ── */
+      setTimeout(function() {
+        var iEl = iDoc.getElementById('profile-content');
+        if (!iEl) {
+          cleanup();
+          reject(new Error('PDF sandbox: profile-content not found'));
+          return;
+        }
 
-            /* ── THE KEY FIX ──
-               onclone fires AFTER html2canvas creates its internal document
-               clone but BEFORE it renders anything.
-               We get a reference to the cloned DOM and can mutate it freely
-               without affecting the live page. */
-            onclone: function(clonedDoc) {
-              /* 1. Hide sidebar in the clone so .main-content has no left margin */
-              var sidebarSelectors = [
-                '#sidebar', '.sidebar', '.sidenav',
-                '[id*="sidebar"]', '[class*="sidebar"]'
-              ];
-              sidebarSelectors.forEach(function(sel) {
-                try {
-                  clonedDoc.querySelectorAll(sel).forEach(function(node) {
-                    node.style.display = 'none';
-                  });
-                } catch(e) {}
-              });
+        /* Ensure iframe is scrolled to top */
+        try { iframe.contentWindow.scrollTo(0, 0); } catch(e) {}
 
-              /* 2. Remove overflow constraint + left margin from main wrapper */
-              var mc = clonedDoc.querySelector('.main-content');
-              if (mc) {
-                mc.style.setProperty('margin-left',  '0',        'important');
-                mc.style.setProperty('overflow',     'visible',  'important');
-                mc.style.setProperty('width',        'auto',     'important');
-                mc.style.setProperty('max-width',    'none',     'important');
-                mc.style.setProperty('padding-left', '0',        'important');
-              }
+        /* ── 6. Proxy cross-origin R2 images inside the iframe ── */
+        proxyJob = _proxyImages(iEl);
 
-              /* 3. Force #profile-content to exactly 800px — this is what
-                    determines the final PDF content width */
-              var pEl = clonedDoc.getElementById('profile-content');
-              if (pEl) {
-                pEl.style.setProperty('width',     '800px', 'important');
-                pEl.style.setProperty('max-width', 'none',  'important');
-                pEl.style.setProperty('overflow',  'visible', 'important');
-              }
+        Promise.all(proxyJob.waits).then(function() {
 
-              /* 4. Make .profile-page transparent to avoid grey padding
-                    bleeding into margins */
-              var pp = clonedDoc.querySelector('.profile-page');
-              if (pp) {
-                pp.style.setProperty('padding', '0', 'important');
-              }
+          /* ── 7. Generate PDF from iframe element ──
+             html2canvas uses iEl.ownerDocument.defaultView (the iframe window),
+             so windowWidth:1024 is the iframe's width — no sidebar, no margins. */
+          var opt = {
+            margin:   [10, 10, 10, 10],
+            filename: filename || 'document.pdf',
+            image:    { type: 'jpeg', quality: 0.96 },
+            html2canvas: {
+              scale:           2,           /* Hi-DPI: 2× canvas pixels per CSS px */
+              useCORS:         true,        /* images are blob URLs — no taint */
+              allowTaint:      false,
+              letterRendering: true,
+              logging:         false,
+              windowWidth:     1024,        /* iframe width → no responsive breakpoint fires */
+              scrollX:         0,
+              scrollY:         0
+            },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: {
+              mode:  ['css', 'legacy'],     /* reads break-inside from SCREEN CSS above */
+              avoid: [
+                '.section-card', '.doc-card', '.doc-grid',
+                '.docs-photo-grid', '.doc-photo-item',
+                '.timeline-item', '.stat-box', '.uniform-box'
+              ]
             }
-          },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: {
-            mode:  ['css', 'legacy'],
-            avoid: [
-              '.section-card', '.doc-card', '.doc-grid',
-              '.docs-photo-grid', '.doc-photo-item',
-              '.timeline-item', '.stat-box', '.uniform-box'
-            ]
-          }
-        };
+          };
 
-        var worker  = html2pdf().set(opt).from(el);
-        var promise = (outputMode === 'save') ? worker.save() : worker.output('blob');
-        promise
-          .then(function(result) { cleanup(); resolve(result); })
-          .catch(function(err)   { cleanup(); reject(err);    });
-      }).catch(function(err) { cleanup(); reject(err); });
+          var worker  = html2pdf().set(opt).from(iEl);
+          var promise = (outputMode === 'save') ? worker.save() : worker.output('blob');
+          promise
+            .then(function(result) { cleanup(); resolve(result); })
+            .catch(function(err)   { cleanup(); reject(err);    });
+
+        }).catch(function(err) { cleanup(); reject(err); });
+
+      }, 600);  /* 600ms — enough for Google Fonts + Bootstrap Icons CDN */
     });
   }
 
