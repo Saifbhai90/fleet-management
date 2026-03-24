@@ -1063,9 +1063,10 @@
     '#photos-docs-section { display: block !important; margin-top: 0 !important; padding-top: 0 !important; break-inside: auto !important; page-break-inside: auto !important; }',
 
     /* ── 11. Photos — inline-block, 3-per-row; each item → avoid ── */
-    /* Photos grid → overflow:hidden contains floats; each item floats left so break-inside:avoid is respected */
-    '#profile-content .docs-photo-grid { display: block !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }',
+    /* NO overflow:hidden on grid — avoids BFC so html2pdf can honour break-inside:avoid on each float child */
+    '#profile-content .docs-photo-grid { display: block !important; margin: 0 !important; padding: 0 !important; }',
     '#profile-content .doc-photo-item { float: left !important; width: 31% !important; margin: 0 0.8% 4px 0 !important; border: 1px solid #e5e7eb !important; background: #f9fafb !important; border-radius: 4px !important; overflow: hidden !important; break-inside: avoid !important; page-break-inside: avoid !important; font-size: 12px !important; }',
+    '#profile-content .docs-photo-grid::after { content: "" !important; display: table !important; clear: both !important; }',
     '#profile-content .doc-photo-label { display: block !important; background: #f3f4f6 !important; color: #374151 !important; font-size: 0.56rem !important; padding: 3px 5px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
     '#profile-content .doc-photo-thumb-wrap { display: block !important; height: 110px !important; overflow: hidden !important; }',
     '#profile-content .doc-photo-thumb-wrap img { display: block !important; width: 100% !important; height: 110px !important; object-fit: cover !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
