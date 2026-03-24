@@ -7674,7 +7674,22 @@ def missing_documents_report():
             col = getattr(Driver, col_name)
             query = query.filter(or_(col.is_(None), col == ''))
 
-    all_drivers = query.order_by(Driver.name).all()
+    all_drivers = query.options(
+        db.joinedload(Driver.vehicle),
+        db.joinedload(Driver.district),
+    ).order_by(Driver.name).all()
+
+    proj_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    all_projects = proj_q.all()
+    project_map = {p.id: p.name for p in all_projects}
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in all_projects]
+
+    dist_q = District.query.order_by(District.name)
+    if not is_master_or_admin and allowed_districts:
+        dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
+    district_choices = [(0, '-- All Districts --')] + [(d2.id, d2.name) for d2 in dist_q.all()]
 
     rows = []
     for d in all_drivers:
@@ -7684,17 +7699,13 @@ def missing_documents_report():
             if not val:
                 missing.append(label)
         if missing:
-            rows.append({'driver': d, 'missing': missing})
-
-    proj_q = Project.query.order_by(Project.name)
-    if not is_master_or_admin and allowed_projects:
-        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
-    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_q.all()]
-
-    dist_q = District.query.order_by(District.name)
-    if not is_master_or_admin and allowed_districts:
-        dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
-    district_choices = [(0, '-- All Districts --')] + [(d2.id, d2.name) for d2 in dist_q.all()]
+            rows.append({
+                'driver':       d,
+                'missing':      missing,
+                'project_name': project_map.get(d.project_id, '-') if d.project_id else '-',
+                'district_name': d.district.name if d.district else '-',
+                'vehicle_no':   d.vehicle.vehicle_no if d.vehicle else '-',
+            })
 
     return render_template(
         'missing_docs_report.html',
@@ -7751,7 +7762,12 @@ def missing_documents_report_print():
             col = getattr(Driver, col_name)
             query = query.filter(or_(col.is_(None), col == ''))
 
-    all_drivers = query.order_by(Driver.name).all()
+    all_drivers = query.options(
+        db.joinedload(Driver.vehicle),
+        db.joinedload(Driver.district),
+    ).order_by(Driver.name).all()
+
+    project_map = {p.id: p.name for p in Project.query.all()}
 
     rows = []
     for d in all_drivers:
@@ -7761,7 +7777,13 @@ def missing_documents_report_print():
             if not val:
                 missing.append(label)
         if missing:
-            rows.append({'driver': d, 'missing': missing})
+            rows.append({
+                'driver':        d,
+                'missing':       missing,
+                'project_name':  project_map.get(d.project_id, '-') if d.project_id else '-',
+                'district_name': d.district.name if d.district else '-',
+                'vehicle_no':    d.vehicle.vehicle_no if d.vehicle else '-',
+            })
 
     # Labels for meta display
     project_label = None
@@ -7769,8 +7791,7 @@ def missing_documents_report_print():
     doc_filter_label = None
 
     if project_id:
-        p = Project.query.get(project_id)
-        project_label = p.name if p else None
+        project_label = project_map.get(project_id)
     if district_id:
         dist = District.query.get(district_id)
         district_label = dist.name if dist else None

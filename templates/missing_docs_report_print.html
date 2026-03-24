@@ -100,9 +100,10 @@
         <thead>
             <tr>
                 <th style="width:4%">Sr No</th>
-                <th style="width:22%">Driver Name (ID) / CNIC</th>
+                <th style="width:20%">Driver Name (ID) / CNIC</th>
+                <th style="width:22%">Project / District / Vehicle</th>
                 <th>Missing Documents</th>
-                <th style="width:10%">Missing Count</th>
+                <th style="width:9%">Count</th>
             </tr>
         </thead>
         <tbody>
@@ -116,6 +117,11 @@
                     <div class="driver-sub"><i class="bi bi-person-vcard me-1"></i>{{ driver.cnic_no or '-' }}</div>
                 </td>
                 <td>
+                    <div class="driver-sub"><i class="bi bi-folder2 me-1"></i>{{ row.project_name }}</div>
+                    <div class="driver-sub"><i class="bi bi-geo-alt me-1"></i>{{ row.district_name }}</div>
+                    <div class="driver-sub"><i class="bi bi-truck me-1"></i>{{ row.vehicle_no }}</div>
+                </td>
+                <td>
                     {% for doc in row.missing %}
                     <span class="missing-tag"><i class="bi bi-x-circle-fill me-1" style="color:#e53935;font-size:0.68rem;"></i>{{ doc }}</span>
                     {% endfor %}
@@ -126,7 +132,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="4" class="text-center py-4 text-muted">
+                <td colspan="5" class="text-center py-4 text-muted">
                     <i class="bi bi-check-circle-fill text-success me-2"></i>All drivers have complete documents!
                 </td>
             </tr>
