@@ -233,6 +233,9 @@
     font-weight: 600;
   }
 
+  /* Screen: page-break class is a no-op */
+  .pdf-page-break-before { /* no screen styles */ }
+
   @media (max-width: 640px) {
     .stats-row { grid-template-columns: 1fr; }
     .info-grid { grid-template-columns: 1fr; }
@@ -242,23 +245,83 @@
   }
 
   @media print {
-    /* ── Hide ONLY navigation / chrome ── */
+    /* ══════════════════════════════════════════════════════════
+       A4 PAGE SETUP — 15 mm top/bottom breathing room
+       ══════════════════════════════════════════════════════════ */
+    @page {
+      size: A4 portrait;
+      margin: 15mm 12mm 16mm 12mm;
+    }
+
+    /* ── Hide navigation / chrome ── */
     nav, .navbar, .sidebar, #sidebar, aside,
     .top-header, .topbar, .page-header, .header-bar,
     .footer, footer, #footer, .pull-to-refresh, #pull-to-refresh,
     .action-bar, #profile-action-bar,
     .toast, .modal-backdrop, button.btn, a.btn,
-    .zoom-overlay, [style*="position:fixed"], [style*="position: fixed"] { display: none !important; }
+    .zoom-overlay, [style*="position:fixed"], [style*="position: fixed"],
+    #docViewer { display: none !important; }
 
-    /* ── Page/body reset ── */
-    html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; font-size: 9pt !important; }
+    /* ── Page / body reset ── */
+    html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; font-size: 9pt !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     body > div, .main-content, .content-wrapper, .wrapper, main { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; margin-left: 0 !important; box-shadow: none !important; }
     .profile-page { background: #fff !important; padding: 0 !important; }
-
-    /* ── Profile content: full A4 width, always visible ── */
     #profile-content { display: block !important; width: 100% !important; }
 
-    /* ── Header ── */
+    /* ══════════════════════════════════════════════════════════
+       ENTERPRISE PAGE-BREAK PROTECTION
+       If a block doesn't fit at the bottom of the current page,
+       the WHOLE block moves to the top of the next page.
+       Nothing ever gets sliced in the middle.
+       ══════════════════════════════════════════════════════════ */
+    .profile-header,
+    .stats-row,
+    .stat-box,
+    .section-card,
+    .doc-grid,
+    .doc-card,
+    .doc-photo-item,
+    .timeline-item,
+    .timeline-body,
+    .uniform-box,
+    .validity-badge,
+    .doc-dates,
+    .info-item {
+      page-break-inside: avoid !important;
+      break-inside:      avoid !important;
+    }
+
+    /* Section titles always stay glued to their content */
+    .section-title {
+      page-break-after: avoid !important;
+      break-after:      avoid !important;
+    }
+
+    /* Header glued to the stats row below it */
+    .profile-header {
+      page-break-after: avoid !important;
+      break-after:      avoid !important;
+    }
+
+    /* Stats row glued to the first section below */
+    .stats-row {
+      page-break-after: avoid !important;
+      break-after:      avoid !important;
+    }
+
+    /* Photos grid: keep all 6 thumbnails together on one page */
+    .docs-photo-grid {
+      page-break-inside: avoid !important;
+      break-inside:      avoid !important;
+    }
+
+    /* Timeline may span pages — but each event must stay intact */
+    .timeline {
+      page-break-inside: auto !important;
+      break-inside:      auto !important;
+    }
+
+    /* ── Header – colour-printing ── */
     .profile-header { background: #1565c0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; padding: 0.6rem 0.9rem !important; margin-bottom: 0.4rem !important; border-radius: 6px !important; box-shadow: none !important; }
     .profile-header h2 { font-size: 1.1rem !important; }
     .status-badge { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -269,17 +332,17 @@
     .stat-box { display: block !important; box-shadow: none !important; background: #fff !important; border: 1px solid #ccc !important; padding: 0.4rem !important; }
     .stat-box .stat-value { font-size: 1rem !important; }
 
-    /* ── Section cards: remove all shadows & backgrounds ── */
-    .section-card { display: block !important; box-shadow: none !important; background: #fff !important; border: 1px solid #ddd !important; border-radius: 4px !important; padding: 0.5rem 0.6rem !important; margin-bottom: 0.4rem !important; page-break-inside: avoid; }
+    /* ── Section cards ── */
+    .section-card { display: block !important; box-shadow: none !important; background: #fff !important; border: 1px solid #ddd !important; border-radius: 4px !important; padding: 0.5rem 0.6rem !important; margin-bottom: 0.4rem !important; }
     .section-title { margin-bottom: 0.4rem !important; font-size: 0.7rem !important; }
     .info-item .info-label { font-size: 0.62rem !important; }
     .info-item .info-value { font-size: 0.8rem !important; }
     .info-grid { display: grid !important; gap: 0.25rem 1.2rem !important; }
 
-    /* ── Doc cards side-by-side ── */
+    /* ── Identification Documents (doc-grid) ── */
     .doc-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0.5rem !important; }
 
-    /* ── Photos & Documents: EXPLICITLY VISIBLE ── */
+    /* ── Photos & Documents ── */
     .docs-photo-grid { display: grid !important; grid-template-columns: repeat(3,1fr) !important; gap: 0.4rem !important; }
     .doc-photo-item { display: block !important; background: #fff !important; border: 1px solid #ddd !important; box-shadow: none !important; overflow: visible !important; }
     .doc-photo-label { display: block !important; background: #f0f2f5 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -288,11 +351,17 @@
     .doc-photo-missing { display: flex !important; height: 60px !important; font-size: 0.65rem !important; }
     .doc-pdf-wrap { display: flex !important; height: 60px !important; font-size: 0.65rem !important; }
 
-    /* ── Timeline compact ── */
-    .timeline-item { margin-bottom: 0.5rem !important; page-break-inside: avoid; }
+    /* ── Timeline ── */
+    .timeline-item { margin-bottom: 0.5rem !important; }
     .timeline-body { padding: 0.3rem 0.5rem !important; font-size: 0.78rem !important; background: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-shadow: none !important; }
     .timeline-date, .timeline-type { font-size: 0.72rem !important; }
     .uniform-box { padding: 0.3rem 0.6rem !important; font-size: 0.78rem !important; background: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+    /* ── Explicit page-break hints for large sections ── */
+    .pdf-page-break-before {
+      page-break-before: always !important;
+      break-before:      page    !important;
+    }
 
     /* ── Watermark visible in print ── */
     #pdfWatermark { display: block !important; }
@@ -539,7 +608,7 @@
 
   <!-- Photos & Documents -->
   {% set _has_any_doc = driver.photo_path or driver.cnic_front_path or driver.cnic_back_path or driver.license_front_path or driver.license_back_path or driver.document_path %}
-  <div class="section-card">
+  <div class="section-card pdf-page-break-before">
     <div class="section-title"><i class="bi bi-images me-1"></i>Photos &amp; Documents</div>
     {% if _has_any_doc %}
     <div class="docs-photo-grid">
@@ -947,11 +1016,43 @@
       var job = _proxyImages(el);
       Promise.all(job.waits).then(function() {
         var opt = {
-          margin: [10, 10, 10, 10],
+          /* ── Page margins: 15 mm top/bottom, 12 mm sides (matches @page rule) ── */
+          margin:   [15, 12, 15, 12],
           filename: 'Driver_Profile_{{ driver.driver_id }}.pdf',
-          image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: false, allowTaint: true, letterRendering: true, logging: false },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          image:    { type: 'jpeg', quality: 0.96 },
+          html2canvas: {
+            scale:           2,
+            useCORS:         false,
+            allowTaint:      true,
+            letterRendering: true,
+            logging:         false,
+            /* Prevent canvas from rendering at scroll offset */
+            scrollX:         0,
+            scrollY:         -window.scrollY,
+            /* Fixed render width for consistent A4 layout */
+            windowWidth:     1024
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          /* ── Enterprise page-break strategy ──
+             avoid-all  : html2pdf's own element-level break detection
+             css        : respects page-break-inside / break-inside CSS
+             legacy     : fallback pixel-height algorithm
+          ── */
+          pagebreak: {
+            mode:   ['avoid-all', 'css', 'legacy'],
+            before: '.pdf-page-break-before',
+            avoid:  [
+              '.section-card',
+              '.doc-card',
+              '.doc-grid',
+              '.docs-photo-grid',
+              '.doc-photo-item',
+              '.timeline-item',
+              '.stat-box',
+              '.uniform-box',
+              '.validity-badge'
+            ]
+          }
         };
         html2pdf().set(opt).from(el).save()
           .then(function() { job.restore(); resetBtn(); })
@@ -968,7 +1069,7 @@
   </script>
 
   <!-- Job History Timeline -->
-  <div class="section-card">
+  <div class="section-card pdf-page-break-before">
     <div class="section-title">Job History (Oldest First)</div>
     {% if job_history %}
     <div class="timeline">
