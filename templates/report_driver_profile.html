@@ -930,33 +930,36 @@
      mode: 'blob' → return blob via onDone(blob)
      onDone(result, err) called after completion either way
   ─────────────────────────────────────────────────────────────────────── */
-  function _renderDoc(opts, mode, onDone) {
-    var wm = document.getElementById('pdfWatermark');
-    if (wm) {
-      var d  = new Date();
-      var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
-               ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
-      var pdfDateEl = document.getElementById('pdfDate');
-      if (pdfDateEl) pdfDateEl.textContent = ds;
-      wm.style.display = 'block';
+  /* Shared onclone handler — injects compact CSS + stamps watermark into the
+     html2canvas invisible clone only. The LIVE page is never modified, so the
+     user sees no flash or compression while the PDF/Print is being prepared. */
+  function _onCloneHandler(clonedDoc) {
+    /* Compact styles */
+    var s = clonedDoc.createElement('style');
+    s.textContent = _COMPACT_CSS;
+    clonedDoc.head.appendChild(s);
+    /* Watermark */
+    var d   = new Date();
+    var ds  = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
+              ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+    var wmC = clonedDoc.getElementById('pdfWatermark');
+    if (wmC) {
+      var pde = clonedDoc.getElementById('pdfDate');
+      if (pde) pde.textContent = ds;
+      wmC.style.setProperty('display', 'block', 'important');
     }
+  }
 
+  function _renderDoc(opts, mode, onDone) {
     var el  = document.getElementById('profile-content');
-
-    /* Inject compact styles before starting image proxy so both happen concurrently */
-    _injectCompactStyles();
-
     var job = _proxyImages(el);
 
     function cleanup(result, err) {
-      _removeCompactStyles();
       job.restore();
-      if (wm) wm.style.display = 'none';
       if (onDone) onDone(result, err);
     }
 
     Promise.all(job.waits).then(function() {
-      /* rAF + zero-timeout: ensures browser applies compact CSS and reflows before capture */
       requestAnimationFrame(function() {
         setTimeout(function() {
           var worker  = html2pdf().set(opts).from(el);
@@ -975,7 +978,14 @@
   var _PDF_OPTS = {
     margin: [8, 8, 8, 8],
     image: { type: 'jpeg', quality: 0.95 },
-    html2canvas: { scale: 2, useCORS: false, allowTaint: true, letterRendering: true, logging: false },
+    html2canvas: {
+      scale: 2,
+      useCORS: false,
+      allowTaint: true,
+      letterRendering: true,
+      logging: false,
+      onclone: _onCloneHandler   /* compact CSS + watermark applied to clone only */
+    },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
 
@@ -988,7 +998,6 @@
     var safeguard = setTimeout(function() {
       pb.disabled = false;
       pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
-      _removeCompactStyles();
     }, 90000);
 
     function resetPrint() {
@@ -997,72 +1006,63 @@
       pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
     }
 
-    var wm  = document.getElementById('pdfWatermark');
     var el  = document.getElementById('profile-content');
 
-    /* Stamp watermark */
-    if (wm) {
-      var d  = new Date();
-      var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
-               ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
-      var pde = document.getElementById('pdfDate');
-      if (pde) pde.textContent = ds;
-      wm.style.display = 'block';
-    }
+    /* html2pdf().toCanvas() uses the bundled html2canvas internally — no global
+       html2canvas dependency needed. onclone applies compact CSS + watermark to
+       the invisible clone only; the live page is never touched. */
+    var printOpts = {
+      html2canvas: {
+        scale: 1.8,
+        useCORS: false,
+        allowTaint: true,
+        letterRendering: true,
+        logging: false,
+        onclone: _onCloneHandler
+      }
+    };
 
-    _injectCompactStyles();
     var job = _proxyImages(el);
 
     Promise.all(job.waits).then(function() {
       requestAnimationFrame(function() {
         setTimeout(function() {
 
-          html2canvas(el, {
-            scale: 1.8,
-            useCORS: false,
-            allowTaint: true,
-            letterRendering: true,
-            logging: false
-          }).then(function(canvas) {
-            _removeCompactStyles();
-            job.restore();
-            if (wm) wm.style.display = 'none';
-            resetPrint();
+          html2pdf().set(printOpts).from(el).toCanvas()
+            .then(function(canvas) {
+              job.restore();
+              resetPrint();
 
-            /* Split canvas into A4-proportioned page images */
-            var cw   = canvas.width;
-            var pgH  = Math.round(cw * 297 / 210);   /* A4 aspect ratio */
-            var pages = [];
-            var y = 0;
-            while (y < canvas.height) {
-              var h  = Math.min(pgH, canvas.height - y);
-              var pc = document.createElement('canvas');
-              pc.width  = cw;
-              pc.height = h;
-              var ctx = pc.getContext('2d');
-              ctx.fillStyle = '#ffffff';
-              ctx.fillRect(0, 0, cw, h);
-              ctx.drawImage(canvas, 0, -y);
-              pages.push(pc.toDataURL('image/jpeg', 0.93));
-              y += pgH;
-            }
+              /* Split canvas into A4-proportioned page images */
+              var cw   = canvas.width;
+              var pgH  = Math.round(cw * 297 / 210);   /* A4 aspect ratio */
+              var pages = [];
+              var y = 0;
+              while (y < canvas.height) {
+                var h  = Math.min(pgH, canvas.height - y);
+                var pc = document.createElement('canvas');
+                pc.width  = cw;
+                pc.height = h;
+                var ctx = pc.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, cw, h);
+                ctx.drawImage(canvas, 0, -y);
+                pages.push(pc.toDataURL('image/jpeg', 0.93));
+                y += pgH;
+              }
 
-            _openPrintPreview(pages, 'Driver_Profile_{{ driver.driver_id }}');
-          }).catch(function(err) {
-            console.error('Canvas capture error:', err);
-            _removeCompactStyles();
-            job.restore();
-            if (wm) wm.style.display = 'none';
-            resetPrint();
-          });
+              _openPrintPreview(pages, 'Driver_Profile_{{ driver.driver_id }}');
+            }).catch(function(err) {
+              console.error('Canvas capture error:', err);
+              job.restore();
+              resetPrint();
+            });
 
         }, 0);
       });
     }).catch(function(err) {
       console.error('Image proxy error:', err);
-      _removeCompactStyles();
       job.restore();
-      if (wm) wm.style.display = 'none';
       resetPrint();
     });
   }
