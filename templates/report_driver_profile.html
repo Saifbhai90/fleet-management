@@ -240,6 +240,8 @@
 
   /* ── Photos grid — 2 columns for readability ── */
   .docs-photo-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 1rem; }
+  /* photo-row is transparent to grid on screen — items participate directly in parent grid */
+  .docs-photo-grid .photo-row { display: contents; }
   .doc-photo-item {
     border: 1px solid var(--border); border-radius: 8px;
     overflow: hidden; background: var(--bg-page);
@@ -685,90 +687,96 @@
     {% if _has_any_doc %}
     <div class="docs-photo-grid">
 
-      <!-- Driver Photo -->
-      <div class="doc-photo-item">
-        <div class="doc-photo-label"><i class="bi bi-person-fill me-1"></i>Driver Photo</div>
-        {% if driver.photo_path %}
-        <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.photo_path | media_url }}','Driver Photo')">
-          <img src="{{ driver.photo_path | media_url }}" alt="Driver Photo"
-               onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
-          <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+      <!-- Row 1: Driver Photo, CNIC Front, CNIC Back -->
+      <div class="photo-row">
+        <!-- Driver Photo -->
+        <div class="doc-photo-item">
+          <div class="doc-photo-label"><i class="bi bi-person-fill me-1"></i>Driver Photo</div>
+          {% if driver.photo_path %}
+          <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.photo_path | media_url }}','Driver Photo')">
+            <img src="{{ driver.photo_path | media_url }}" alt="Driver Photo"
+                 onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+            <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+          </div>
+          {% else %}
+          <div class="doc-photo-missing"><i class="bi bi-person-bounding-box"></i><span>Not Uploaded</span></div>
+          {% endif %}
         </div>
-        {% else %}
-        <div class="doc-photo-missing"><i class="bi bi-person-bounding-box"></i><span>Not Uploaded</span></div>
-        {% endif %}
-      </div>
 
-      <!-- CNIC Front -->
-      <div class="doc-photo-item">
-        <div class="doc-photo-label"><i class="bi bi-person-vcard me-1"></i>CNIC Front</div>
-        {% if driver.cnic_front_path %}
-        <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.cnic_front_path | media_url }}','CNIC Front')">
-          <img src="{{ driver.cnic_front_path | media_url }}" alt="CNIC Front"
-               onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
-          <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+        <!-- CNIC Front -->
+        <div class="doc-photo-item">
+          <div class="doc-photo-label"><i class="bi bi-person-vcard me-1"></i>CNIC Front</div>
+          {% if driver.cnic_front_path %}
+          <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.cnic_front_path | media_url }}','CNIC Front')">
+            <img src="{{ driver.cnic_front_path | media_url }}" alt="CNIC Front"
+                 onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+            <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+          </div>
+          {% else %}
+          <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
+          {% endif %}
         </div>
-        {% else %}
-        <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
-        {% endif %}
-      </div>
 
-      <!-- CNIC Back -->
-      <div class="doc-photo-item">
-        <div class="doc-photo-label"><i class="bi bi-person-vcard-fill me-1"></i>CNIC Back</div>
-        {% if driver.cnic_back_path %}
-        <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.cnic_back_path | media_url }}','CNIC Back')">
-          <img src="{{ driver.cnic_back_path | media_url }}" alt="CNIC Back"
-               onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
-          <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+        <!-- CNIC Back -->
+        <div class="doc-photo-item">
+          <div class="doc-photo-label"><i class="bi bi-person-vcard-fill me-1"></i>CNIC Back</div>
+          {% if driver.cnic_back_path %}
+          <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.cnic_back_path | media_url }}','CNIC Back')">
+            <img src="{{ driver.cnic_back_path | media_url }}" alt="CNIC Back"
+                 onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+            <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+          </div>
+          {% else %}
+          <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
+          {% endif %}
         </div>
-        {% else %}
-        <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
-        {% endif %}
-      </div>
+      </div><!-- /photo-row 1 -->
 
-      <!-- License Front -->
-      <div class="doc-photo-item">
-        <div class="doc-photo-label"><i class="bi bi-card-checklist me-1"></i>License Front</div>
-        {% if driver.license_front_path %}
-        <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.license_front_path | media_url }}','License Front')">
-          <img src="{{ driver.license_front_path | media_url }}" alt="License Front"
-               onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
-          <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+      <!-- Row 2: License Front, License Back, Complete Driver File -->
+      <div class="photo-row">
+        <!-- License Front -->
+        <div class="doc-photo-item">
+          <div class="doc-photo-label"><i class="bi bi-card-checklist me-1"></i>License Front</div>
+          {% if driver.license_front_path %}
+          <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.license_front_path | media_url }}','License Front')">
+            <img src="{{ driver.license_front_path | media_url }}" alt="License Front"
+                 onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+            <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+          </div>
+          {% else %}
+          <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
+          {% endif %}
         </div>
-        {% else %}
-        <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
-        {% endif %}
-      </div>
 
-      <!-- License Back -->
-      <div class="doc-photo-item">
-        <div class="doc-photo-label"><i class="bi bi-card-checklist me-1"></i>License Back</div>
-        {% if driver.license_back_path %}
-        <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.license_back_path | media_url }}','License Back')">
-          <img src="{{ driver.license_back_path | media_url }}" alt="License Back"
-               onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
-          <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+        <!-- License Back -->
+        <div class="doc-photo-item">
+          <div class="doc-photo-label"><i class="bi bi-card-checklist me-1"></i>License Back</div>
+          {% if driver.license_back_path %}
+          <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.license_back_path | media_url }}','License Back')">
+            <img src="{{ driver.license_back_path | media_url }}" alt="License Back"
+                 onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+            <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+          </div>
+          {% else %}
+          <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
+          {% endif %}
         </div>
-        {% else %}
-        <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
-        {% endif %}
-      </div>
 
-      <!-- Complete Driver File (PDF) -->
-      <div class="doc-photo-item">
-        <div class="doc-photo-label"><i class="bi bi-file-earmark-pdf me-1"></i>Complete Driver File</div>
-        {% if driver.document_path %}
-        <div class="doc-pdf-wrap">
-          <i class="bi bi-file-earmark-pdf pdf-icon"></i>
-          <a href="{{ driver.document_path | media_url }}" target="_blank" class="btn btn-sm btn-outline-danger">
-            <i class="bi bi-eye me-1"></i>View / Download
-          </a>
+        <!-- Complete Driver File (PDF) -->
+        <div class="doc-photo-item">
+          <div class="doc-photo-label"><i class="bi bi-file-earmark-pdf me-1"></i>Complete Driver File</div>
+          {% if driver.document_path %}
+          <div class="doc-pdf-wrap">
+            <i class="bi bi-file-earmark-pdf pdf-icon"></i>
+            <a href="{{ driver.document_path | media_url }}" target="_blank" class="btn btn-sm btn-outline-danger">
+              <i class="bi bi-eye me-1"></i>View / Download
+            </a>
+          </div>
+          {% else %}
+          <div class="doc-photo-missing"><i class="bi bi-file-earmark-x"></i><span>Not Uploaded</span></div>
+          {% endif %}
         </div>
-        {% else %}
-        <div class="doc-photo-missing"><i class="bi bi-file-earmark-x"></i><span>Not Uploaded</span></div>
-        {% endif %}
-      </div>
+      </div><!-- /photo-row 2 -->
 
     </div>
     {% else %}
@@ -1063,10 +1071,14 @@
     '#photos-docs-section { display: block !important; margin-top: 0 !important; padding-top: 0 !important; break-inside: auto !important; page-break-inside: auto !important; }',
 
     /* ── 11. Photos — inline-block, 3-per-row; each item → avoid ── */
-    /* NO overflow:hidden on grid — avoids BFC so html2pdf can honour break-inside:avoid on each float child */
+    /* Photo grid: plain block, no BFC */
     '#profile-content .docs-photo-grid { display: block !important; margin: 0 !important; padding: 0 !important; }',
-    '#profile-content .doc-photo-item { float: left !important; width: 31% !important; margin: 0 0.8% 4px 0 !important; border: 1px solid #e5e7eb !important; background: #f9fafb !important; border-radius: 4px !important; overflow: hidden !important; break-inside: avoid !important; page-break-inside: avoid !important; font-size: 12px !important; }',
-    '#profile-content .docs-photo-grid::after { content: "" !important; display: table !important; clear: both !important; }',
+    /* Each photo-row is a REAL block with overflow:hidden (BFC) + break-inside:avoid
+       html2pdf sees photo-row as a normal block element — its bounding box is correct
+       and break-inside:avoid reliably prevents the row from being cut across pages */
+    '#profile-content .photo-row { display: block !important; overflow: hidden !important; margin-bottom: 4px !important; break-inside: avoid !important; page-break-inside: avoid !important; }',
+    /* Items float inside each row — contained by row's BFC */
+    '#profile-content .doc-photo-item { float: left !important; width: 31% !important; margin: 0 0.8% 0 0 !important; border: 1px solid #e5e7eb !important; background: #f9fafb !important; border-radius: 4px !important; overflow: hidden !important; font-size: 12px !important; }',
     '#profile-content .doc-photo-label { display: block !important; background: #f3f4f6 !important; color: #374151 !important; font-size: 0.56rem !important; padding: 3px 5px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
     '#profile-content .doc-photo-thumb-wrap { display: block !important; height: 110px !important; overflow: hidden !important; }',
     '#profile-content .doc-photo-thumb-wrap img { display: block !important; width: 100% !important; height: 110px !important; object-fit: cover !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
