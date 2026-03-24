@@ -2517,7 +2517,6 @@ def handle_csrf_error(e):
     return redirect(referrer)
 
 
-@app.route('/driver/add', methods=['GET', 'POST'])
 @app.route('/r2-proxy')
 def r2_proxy():
     """Serve an R2 object through Flask so JS canvas can draw it without CORS taint."""
@@ -2566,6 +2565,7 @@ def driver_delete_document(driver_id):
     return jsonify({'ok': True})
 
 
+@app.route('/driver/add', methods=['GET', 'POST'])
 @app.route('/driver/edit/<int:id>', methods=['GET', 'POST'])
 def driver_form(id=None):
     # Post dropdown: sirf Full Name (short name nahi)
