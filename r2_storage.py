@@ -105,6 +105,28 @@ def upload_image_file(file_storage, folder: str = "attendance") -> Optional[str]
     return upload_image_bytes(data, folder=folder)
 
 
+def delete_file_by_url(public_url: str) -> bool:
+    """
+    Delete a file from R2 given its full public URL.
+    Extracts the object key from the URL and calls delete_object.
+    Returns True on success, False if URL doesn't belong to this bucket or on error.
+    """
+    if not public_url:
+        return False
+    base = R2_PUBLIC_URL.rstrip("/")
+    if not base or not public_url.startswith(base + "/"):
+        return False
+    key = public_url[len(base) + 1:]
+    if not key:
+        return False
+    try:
+        client = _get_s3_client()
+        client.delete_object(Bucket=R2_BUCKET_NAME, Key=key)
+        return True
+    except Exception:
+        return False
+
+
 def upload_pdf_file(file_storage, folder: str = "drivers/documents", max_retries: int = 3) -> Optional[str]:
     """
     Upload a PDF FileStorage object to R2 and return the public URL.

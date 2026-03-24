@@ -17,6 +17,54 @@
     .expired-bg { background-color: #fee2e2 !important; color: #991b1b !important; border-color: #fca5a5 !important; }
     .btn-lg { min-width: 180px; }
 
+    /* ── Document card: saved-file preview with delete X ── */
+    .doc-slot { display: inline-block; }
+    .doc-thumb-wrap { position: relative; display: inline-block; }
+    .doc-img-del-btn {
+        position: absolute; top: -9px; right: -9px;
+        width: 24px; height: 24px;
+        background: #dc3545; border: 2.5px solid #fff;
+        border-radius: 50%; color: #fff;
+        font-size: 10px; line-height: 1;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; padding: 0; z-index: 20;
+        box-shadow: 0 2px 8px rgba(0,0,0,.45);
+        transition: background .15s, transform .15s;
+    }
+    .doc-img-del-btn:hover { background: #a71d2a; transform: scale(1.2); }
+    .doc-pdf-del-btn { margin-top: 6px; font-size: .8rem; }
+    .doc-saved-badge { font-size: .75rem; color: #198754; margin-top: 5px; }
+    @keyframes doc-fade-out {
+        to { opacity: 0; transform: scale(.75); }
+    }
+    .doc-removing { animation: doc-fade-out .3s ease forwards; pointer-events: none; }
+    /* New-file live preview (appears after user picks a file) */
+    .doc-new-preview {
+        display: none; margin-top: 8px;
+        position: relative; text-align: center;
+    }
+    .doc-new-preview img {
+        max-height: 72px; max-width: 100%;
+        border-radius: 6px; border: 1px solid #dee2e6;
+        object-fit: cover;
+    }
+    .doc-clr-btn {
+        position: absolute; top: -7px; right: calc(50% - 36px - 7px);
+        width: 20px; height: 20px;
+        background: #6c757d; border: 2px solid #fff;
+        border-radius: 50%; color: #fff;
+        font-size: 9px; line-height: 1;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; padding: 0; z-index: 15;
+        box-shadow: 0 1px 4px rgba(0,0,0,.3);
+        transition: background .15s;
+    }
+    .doc-clr-btn:hover { background: #343a40; }
+    .doc-pdf-new-badge {
+        display: none; margin-top: 6px;
+        font-size: .78rem; color: #0d6efd;
+    }
+
     /* ── Processing Overlay ── */
     #processingOverlay {
         position: fixed !important;
@@ -479,41 +527,81 @@
             <div class="row g-3 align-items-start mb-3">
               <div class="col-md-4">
                 <label class="form-label fw-semibold"><i class="bi bi-person-circle me-1 text-primary"></i>Driver Photo</label>
-                {{ form.photo(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp") }}
+                {{ form.photo(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp", id="inp-photo") }}
                 <div class="form-text">JPG / PNG / WebP</div>
                 {% if driver and driver.photo_path %}
-                <div class="mt-2 text-center">
-                  <img src="{{ driver.photo_path | media_url }}" alt="Driver photo"
-                       class="img-thumbnail rounded" style="max-height:110px; max-width:100%;"
-                       onerror="this.style.display='none'">
+                <div class="mt-2 text-center doc-slot" id="doc-card-photo_path" data-field="photo_path">
+                  <div class="doc-thumb-wrap">
+                    <img src="{{ driver.photo_path | media_url }}" alt="Driver photo"
+                         class="img-thumbnail rounded" style="max-height:110px; max-width:100%;"
+                         onerror="this.style.display='none'">
+                    {% if driver.id %}
+                    <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                    {% endif %}
+                  </div>
+                  <div class="doc-saved-badge"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
                 </div>
                 {% endif %}
+                <div class="doc-new-preview" id="new-preview-photo">
+                  <img src="" alt="New photo preview">
+                  <button type="button" class="doc-clr-btn" data-target="inp-photo" data-preview="new-preview-photo" title="Clear selection">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
               </div>
               <div class="col-md-4">
                 <label class="form-label fw-semibold"><i class="bi bi-credit-card me-1 text-success"></i>CNIC Front Photo</label>
-                {{ form.cnic_front(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp") }}
+                {{ form.cnic_front(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp", id="inp-cnic_front") }}
                 <div class="form-text">CNIC ka agla hissa</div>
                 {% if driver and driver.cnic_front_path %}
-                <div class="mt-2 text-center">
-                  <img src="{{ driver.cnic_front_path | media_url }}" alt="CNIC Front"
-                       class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
-                       onerror="this.style.display='none'">
-                  <div class="small text-success mt-1"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
+                <div class="mt-2 text-center doc-slot" id="doc-card-cnic_front_path" data-field="cnic_front_path">
+                  <div class="doc-thumb-wrap">
+                    <img src="{{ driver.cnic_front_path | media_url }}" alt="CNIC Front"
+                         class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
+                         onerror="this.style.display='none'">
+                    {% if driver.id %}
+                    <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                    {% endif %}
+                  </div>
+                  <div class="doc-saved-badge"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
                 </div>
                 {% endif %}
+                <div class="doc-new-preview" id="new-preview-cnic_front">
+                  <img src="" alt="New CNIC front preview">
+                  <button type="button" class="doc-clr-btn" data-target="inp-cnic_front" data-preview="new-preview-cnic_front" title="Clear selection">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
               </div>
               <div class="col-md-4">
                 <label class="form-label fw-semibold"><i class="bi bi-credit-card-2-back me-1 text-success"></i>CNIC Back Photo</label>
-                {{ form.cnic_back(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp") }}
+                {{ form.cnic_back(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp", id="inp-cnic_back") }}
                 <div class="form-text">CNIC ka pichla hissa</div>
                 {% if driver and driver.cnic_back_path %}
-                <div class="mt-2 text-center">
-                  <img src="{{ driver.cnic_back_path | media_url }}" alt="CNIC Back"
-                       class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
-                       onerror="this.style.display='none'">
-                  <div class="small text-success mt-1"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
+                <div class="mt-2 text-center doc-slot" id="doc-card-cnic_back_path" data-field="cnic_back_path">
+                  <div class="doc-thumb-wrap">
+                    <img src="{{ driver.cnic_back_path | media_url }}" alt="CNIC Back"
+                         class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
+                         onerror="this.style.display='none'">
+                    {% if driver.id %}
+                    <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                    {% endif %}
+                  </div>
+                  <div class="doc-saved-badge"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
                 </div>
                 {% endif %}
+                <div class="doc-new-preview" id="new-preview-cnic_back">
+                  <img src="" alt="New CNIC back preview">
+                  <button type="button" class="doc-clr-btn" data-target="inp-cnic_back" data-preview="new-preview-cnic_back" title="Clear selection">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -521,41 +609,79 @@
             <div class="row g-3 align-items-start">
               <div class="col-md-4">
                 <label class="form-label fw-semibold"><i class="bi bi-card-image me-1 text-warning"></i>License Front Photo</label>
-                {{ form.license_front(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp") }}
+                {{ form.license_front(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp", id="inp-license_front") }}
                 <div class="form-text">License ka agla hissa</div>
                 {% if driver and driver.license_front_path %}
-                <div class="mt-2 text-center">
-                  <img src="{{ driver.license_front_path | media_url }}" alt="License Front"
-                       class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
-                       onerror="this.style.display='none'">
-                  <div class="small text-success mt-1"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
+                <div class="mt-2 text-center doc-slot" id="doc-card-license_front_path" data-field="license_front_path">
+                  <div class="doc-thumb-wrap">
+                    <img src="{{ driver.license_front_path | media_url }}" alt="License Front"
+                         class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
+                         onerror="this.style.display='none'">
+                    {% if driver.id %}
+                    <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                    {% endif %}
+                  </div>
+                  <div class="doc-saved-badge"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
                 </div>
                 {% endif %}
+                <div class="doc-new-preview" id="new-preview-license_front">
+                  <img src="" alt="New license front preview">
+                  <button type="button" class="doc-clr-btn" data-target="inp-license_front" data-preview="new-preview-license_front" title="Clear selection">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
               </div>
               <div class="col-md-4">
                 <label class="form-label fw-semibold"><i class="bi bi-card-image me-1 text-warning"></i>License Back Photo</label>
-                {{ form.license_back(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp") }}
+                {{ form.license_back(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp", id="inp-license_back") }}
                 <div class="form-text">License ka pichla hissa</div>
                 {% if driver and driver.license_back_path %}
-                <div class="mt-2 text-center">
-                  <img src="{{ driver.license_back_path | media_url }}" alt="License Back"
-                       class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
-                       onerror="this.style.display='none'">
-                  <div class="small text-success mt-1"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
+                <div class="mt-2 text-center doc-slot" id="doc-card-license_back_path" data-field="license_back_path">
+                  <div class="doc-thumb-wrap">
+                    <img src="{{ driver.license_back_path | media_url }}" alt="License Back"
+                         class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
+                         onerror="this.style.display='none'">
+                    {% if driver.id %}
+                    <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                    {% endif %}
+                  </div>
+                  <div class="doc-saved-badge"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
                 </div>
                 {% endif %}
+                <div class="doc-new-preview" id="new-preview-license_back">
+                  <img src="" alt="New license back preview">
+                  <button type="button" class="doc-clr-btn" data-target="inp-license_back" data-preview="new-preview-license_back" title="Clear selection">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
               </div>
               <div class="col-md-4">
                 <label class="form-label fw-semibold"><i class="bi bi-file-earmark-pdf me-1 text-danger"></i>Complete Driver File (PDF)</label>
-                {{ form.document(class="form-control", accept=".pdf") }}
+                {{ form.document(class="form-control", accept=".pdf", id="inp-document") }}
                 <div class="form-text">Mukammal file PDF mein</div>
                 {% if driver and driver.document_path %}
-                <div class="mt-2">
+                <div class="mt-2 doc-slot" id="doc-card-document_path" data-field="document_path">
                   <a href="{{ driver.document_path | media_url }}" target="_blank" class="btn btn-sm btn-outline-danger w-100">
                     <i class="bi bi-file-earmark-pdf me-1"></i>View Current PDF
                   </a>
+                  {% if driver.id %}
+                  <button type="button" class="btn btn-sm btn-outline-secondary w-100 doc-pdf-del-btn doc-img-del-btn-pdf" title="Yeh PDF delete karein">
+                    <i class="bi bi-trash3 me-1"></i>Remove PDF
+                  </button>
+                  {% endif %}
                 </div>
                 {% endif %}
+                <div class="doc-pdf-new-badge" id="new-preview-document">
+                  <i class="bi bi-file-earmark-check-fill me-1 text-success"></i>
+                  <span class="doc-pdf-fname"></span>
+                  <button type="button" class="btn btn-link btn-sm p-0 ms-2 text-danger doc-clr-btn-inline" data-target="inp-document" data-preview="new-preview-document" title="Clear">
+                    <i class="bi bi-x-circle"></i>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -847,6 +973,149 @@ document.addEventListener('DOMContentLoaded', function () {
       if (_ov) _ov.style.pointerEvents = 'all';
     }, false);
   });
+})();
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════
+   Document-slot: delete saved file  +  live new-file preview
+   ════════════════════════════════════════════════════════ */
+(function () {
+  var DRIVER_ID = '{{ driver.id if driver and driver.id else 0 }}';
+
+  /* ── CSRF token helper ── */
+  function csrf() {
+    var el = document.querySelector('meta[name="csrf-token"]') ||
+             document.querySelector('[name="csrf_token"]');
+    return el ? (el.getAttribute('content') || el.value || '') : '';
+  }
+
+  /* ── Fade + remove a .doc-slot card ── */
+  function removeSlot(slot) {
+    slot.classList.add('doc-removing');
+    setTimeout(function () { if (slot.parentNode) slot.parentNode.removeChild(slot); }, 340);
+  }
+
+  /* ══════════════════════════════════════════════════════
+     DELETE SAVED FILE (AJAX)
+     Works for both image X-buttons (.doc-img-del-btn)
+     and the PDF "Remove" button (.doc-img-del-btn-pdf)
+     ══════════════════════════════════════════════════════ */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.doc-img-del-btn, .doc-img-del-btn-pdf');
+    if (!btn) return;
+    if (!DRIVER_ID || DRIVER_ID === '0') return;
+
+    var slot = btn.closest('.doc-slot');
+    if (!slot) return;
+    var field = slot.dataset.field;
+    if (!field) return;
+
+    /* Human-friendly field label for confirm message */
+    var labels = {
+      photo_path:         'Driver Photo',
+      cnic_front_path:    'CNIC Front Photo',
+      cnic_back_path:     'CNIC Back Photo',
+      license_front_path: 'License Front Photo',
+      license_back_path:  'License Back Photo',
+      document_path:      'Complete Driver File (PDF)'
+    };
+    var label = labels[field] || field;
+
+    if (!confirm('Kya aap "' + label + '" permanently delete karna chahte hain?\n\nYeh R2 Cloud se bhi hata diya jayega aur waapis nahi aayega.')) return;
+
+    /* Show spinner on button while request is in-flight */
+    var origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+    fetch('/driver/' + DRIVER_ID + '/delete-document', {
+      method:  'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken':  csrf()
+      },
+      body: JSON.stringify({ field: field })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.ok) {
+        removeSlot(slot);
+      } else {
+        alert('Delete fail hua: ' + (data.error || 'Unknown error'));
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
+    })
+    .catch(function () {
+      alert('Network error aaya. Dobara try karein.');
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    });
+  });
+
+  /* ══════════════════════════════════════════════════════
+     CLEAR NEWLY-SELECTED FILE (before save)
+     Handles image inputs (.doc-clr-btn) and PDF (.doc-clr-btn-inline)
+     ══════════════════════════════════════════════════════ */
+  document.addEventListener('click', function (e) {
+    var clrBtn = e.target.closest('.doc-clr-btn, .doc-clr-btn-inline');
+    if (!clrBtn) return;
+    var inputId  = clrBtn.dataset.target;
+    var prevId   = clrBtn.dataset.preview;
+    var input    = inputId  ? document.getElementById(inputId)  : null;
+    var preview  = prevId   ? document.getElementById(prevId)   : null;
+    if (input)   input.value = '';
+    if (preview) {
+      preview.style.display = 'none';
+      var img = preview.querySelector('img');
+      if (img) img.src = '';
+      var fname = preview.querySelector('.doc-pdf-fname');
+      if (fname) fname.textContent = '';
+    }
+  });
+
+  /* ══════════════════════════════════════════════════════
+     LIVE PREVIEW – show thumbnail as soon as user picks a file
+     ══════════════════════════════════════════════════════ */
+  var IMG_INPUTS = [
+    { id: 'inp-photo',         prev: 'new-preview-photo'         },
+    { id: 'inp-cnic_front',    prev: 'new-preview-cnic_front'    },
+    { id: 'inp-cnic_back',     prev: 'new-preview-cnic_back'     },
+    { id: 'inp-license_front', prev: 'new-preview-license_front' },
+    { id: 'inp-license_back',  prev: 'new-preview-license_back'  }
+  ];
+
+  IMG_INPUTS.forEach(function (fi) {
+    var input   = document.getElementById(fi.id);
+    var prevDiv = document.getElementById(fi.prev);
+    if (!input || !prevDiv) return;
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      if (!file) { prevDiv.style.display = 'none'; return; }
+      if (!file.type.startsWith('image/')) { prevDiv.style.display = 'none'; return; }
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        var img = prevDiv.querySelector('img');
+        if (img) img.src = ev.target.result;
+        prevDiv.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+
+  /* PDF file: show filename badge instead of thumbnail */
+  var pdfInput = document.getElementById('inp-document');
+  var pdfPrev  = document.getElementById('new-preview-document');
+  if (pdfInput && pdfPrev) {
+    pdfInput.addEventListener('change', function () {
+      var file = pdfInput.files && pdfInput.files[0];
+      if (!file) { pdfPrev.style.display = 'none'; return; }
+      var fname = pdfPrev.querySelector('.doc-pdf-fname');
+      if (fname) fname.textContent = file.name;
+      pdfPrev.style.display = 'block';
+    });
+  }
 })();
 </script>
 {% endblock %}

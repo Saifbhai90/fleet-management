@@ -2518,6 +2518,31 @@ def handle_csrf_error(e):
 
 
 @app.route('/driver/add', methods=['GET', 'POST'])
+@app.route('/driver/<int:driver_id>/delete-document', methods=['POST'])
+@login_required
+def driver_delete_document(driver_id):
+    """AJAX: delete a single saved document/photo field from DB + R2."""
+    ALLOWED_FIELDS = {
+        'photo_path', 'cnic_front_path', 'cnic_back_path',
+        'license_front_path', 'license_back_path', 'document_path'
+    }
+    data = request.get_json(force=True) or {}
+    field = data.get('field', '').strip()
+    if field not in ALLOWED_FIELDS:
+        return jsonify({'ok': False, 'error': 'Invalid field'}), 400
+    driver = Driver.query.get_or_404(driver_id)
+    current_val = getattr(driver, field, None)
+    if current_val:
+        try:
+            from r2_storage import delete_file_by_url as _r2_del
+            _r2_del(current_val)
+        except Exception:
+            pass
+        setattr(driver, field, None)
+        db.session.commit()
+    return jsonify({'ok': True})
+
+
 @app.route('/driver/edit/<int:id>', methods=['GET', 'POST'])
 def driver_form(id=None):
     # Post dropdown: sirf Full Name (short name nahi)
