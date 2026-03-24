@@ -1576,13 +1576,17 @@ def vehicles_list():
 
     if search:
         like = f'%{search}%'
+        query = query.outerjoin(Project,  Vehicle.project_id  == Project.id) \
+                     .outerjoin(District, Vehicle.district_id == District.id)
         query = query.filter(
-            Vehicle.vehicle_no.ilike(like) |
-            Vehicle.model.ilike(like) |
-            Vehicle.vehicle_type.ilike(like) |
-            Vehicle.phone_no.ilike(like) |
-            Vehicle.engine_no.ilike(like) |
-            Vehicle.chassis_no.ilike(like)
+            Vehicle.vehicle_no.ilike(like)   |
+            Vehicle.model.ilike(like)         |
+            Vehicle.vehicle_type.ilike(like)  |
+            Vehicle.phone_no.ilike(like)      |
+            Vehicle.engine_no.ilike(like)     |
+            Vehicle.chassis_no.ilike(like)    |
+            Project.name.ilike(like)          |
+            District.name.ilike(like)
         )
     if from_date:
         query = query.filter(Vehicle.active_date >= from_date)
@@ -2193,17 +2197,24 @@ def drivers_list():
     
     if search:
         like = f"%{search}%"
+        query = query.outerjoin(Vehicle,  Driver.vehicle_id  == Vehicle.id) \
+                     .outerjoin(Project,  Driver.project_id  == Project.id) \
+                     .outerjoin(District, Driver.district_id == District.id)
         query = query.filter(
-            Driver.driver_id.ilike(like) |
-            Driver.name.ilike(like) |
-            Driver.cnic_no.ilike(like) |
-            Driver.cnic_status.ilike(like) |
-            Driver.license_no.ilike(like) |
+            Driver.driver_id.ilike(like)     |
+            Driver.name.ilike(like)           |
+            Driver.cnic_no.ilike(like)        |
+            Driver.cnic_status.ilike(like)    |
+            Driver.license_no.ilike(like)     |
             Driver.license_status.ilike(like) |
-            Driver.phone1.ilike(like) |
-            Driver.driver_district.ilike(like)
+            Driver.phone1.ilike(like)         |
+            Driver.driver_district.ilike(like)|
+            Driver.shift.ilike(like)          |
+            Vehicle.vehicle_no.ilike(like)    |
+            Project.name.ilike(like)          |
+            District.name.ilike(like)
         )
-    
+
     # Apply sorting based on sort_by column
     if sort_by == 'driver_id':
         order_col = Driver.driver_id.asc() if sort_order == 'asc' else Driver.driver_id.desc()
@@ -5644,32 +5655,50 @@ def _assign_vehicle_to_parking_data(search=None, project_id=None, district_id=No
         query = query.filter(Vehicle.parking_assign_date >= from_date)
     if to_date:
         query = query.filter(Vehicle.parking_assign_date <= to_date)
+
+    # Track which joins have already been applied to avoid duplicates
+    _joined_project  = False
+    _joined_district = False
+    _joined_parking  = False
+
     if search:
-        query = query.join(Project).join(ParkingStation).filter(
-            (Vehicle.vehicle_no.ilike(f'%{search}%')) |
-            (Project.name.ilike(f'%{search}%')) |
-            (ParkingStation.name.ilike(f'%{search}%'))
+        like = f'%{search}%'
+        # Use outerjoin so vehicles with NULL project_id / district_id are NOT excluded
+        query = query.outerjoin(Project,       Vehicle.project_id        == Project.id) \
+                     .outerjoin(District,      Vehicle.district_id       == District.id) \
+                     .outerjoin(ParkingStation, Vehicle.parking_station_id == ParkingStation.id)
+        _joined_project  = True
+        _joined_district = True
+        _joined_parking  = True
+        query = query.filter(
+            Vehicle.vehicle_no.ilike(like)      |
+            Vehicle.model.ilike(like)            |
+            Project.name.ilike(like)             |
+            District.name.ilike(like)            |
+            ParkingStation.name.ilike(like)
         )
-    
-    # Apply sorting - database level for performance
+
+    # Apply sorting — reuse existing joins if already present
     if sort_by == 'vehicle':
         order_col = Vehicle.vehicle_no
     elif sort_by == 'project':
-        query = query.join(Project, Vehicle.project_id == Project.id)
+        if not _joined_project:
+            query = query.outerjoin(Project, Vehicle.project_id == Project.id)
         order_col = Project.name
+    elif sort_by == 'district':
+        if not _joined_district:
+            query = query.outerjoin(District, Vehicle.district_id == District.id)
+        order_col = District.name
     elif sort_by == 'parking':
-        query = query.join(ParkingStation, Vehicle.parking_station_id == ParkingStation.id)
+        if not _joined_parking:
+            query = query.outerjoin(ParkingStation, Vehicle.parking_station_id == ParkingStation.id)
         order_col = ParkingStation.name
     elif sort_by == 'assign_date':
         order_col = Vehicle.parking_assign_date
     else:
         order_col = Vehicle.parking_assign_date
-    
-    if sort_order == 'asc':
-        query = query.order_by(order_col.asc())
-    else:
-        query = query.order_by(order_col.desc())
-    
+
+    query = query.order_by(order_col.asc() if sort_order == 'asc' else order_col.desc())
     return query.all()
 
 
@@ -6157,33 +6186,44 @@ def _assign_driver_to_vehicle_data(search=None, project_id=None, district_id=Non
         query = query.filter(Driver.project_id == project_id)
     if district_id:
         query = query.filter(Vehicle.district_id == district_id)
+
+    _joined_project  = False
+    _joined_district = False
+
     if search:
-        query = query.outerjoin(Project, Driver.project_id == Project.id).filter(
-            (Driver.name.ilike(f'%{search}%')) |
-            (Driver.driver_id.ilike(f'%{search}%')) |
-            (Vehicle.vehicle_no.ilike(f'%{search}%')) |
-            (Project.name.ilike(f'%{search}%'))
+        like = f'%{search}%'
+        query = query.outerjoin(Project,  Driver.project_id   == Project.id) \
+                     .outerjoin(District, Vehicle.district_id == District.id)
+        _joined_project  = True
+        _joined_district = True
+        query = query.filter(
+            Driver.name.ilike(like)       |
+            Driver.driver_id.ilike(like)  |
+            Driver.cnic_no.ilike(like)    |
+            Driver.shift.ilike(like)      |
+            Vehicle.vehicle_no.ilike(like)|
+            Vehicle.model.ilike(like)     |
+            Project.name.ilike(like)      |
+            District.name.ilike(like)
         )
-    
-    # Apply sorting - database level for performance
+
+    # Apply sorting — reuse joins already applied
     if sort_by == 'driver':
         order_col = Driver.name
     elif sort_by == 'vehicle':
         order_col = Vehicle.vehicle_no
     elif sort_by == 'project':
-        query = query.join(Project, Driver.project_id == Project.id)
+        if not _joined_project:
+            query = query.outerjoin(Project, Driver.project_id == Project.id)
         order_col = Project.name
     elif sort_by == 'district':
-        query = query.join(District, Vehicle.district_id == District.id)
+        if not _joined_district:
+            query = query.outerjoin(District, Vehicle.district_id == District.id)
         order_col = District.name
     else:
         order_col = Driver.name
-    
-    if sort_order == 'asc':
-        query = query.order_by(order_col.asc())
-    else:
-        query = query.order_by(order_col.desc())
-    
+
+    query = query.order_by(order_col.asc() if sort_order == 'asc' else order_col.desc())
     return query.all()
 
 
