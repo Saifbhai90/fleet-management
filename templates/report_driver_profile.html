@@ -887,34 +887,27 @@
   window.addEventListener('load', function() { _prefetchForPrint(); });
 
   /* ══════════════════════════════════════════════════════════════════════════
-     SHARED PDF RENDERER  —  v7 · Detached Slate
+     SHARED PDF RENDERER  —  v8 · Off-Screen Mirror
      ──────────────────────────────────────────────────────────────────────────
-     ROOT CAUSE (confirmed by reading base.html):
-       body { overflow-x: hidden }   ← clips at viewport edge
-       .main-content { margin-left: 300px; overflow-x: hidden }  ← double clip
-       #profile-content lives 3 levels inside this constrained chain.
+     v7 failure root cause:
+       scrollY: -(host.getBoundingClientRect().top)  computed  scrollY: -9999
+       Negative scrollY told html2canvas to render from BEFORE the document
+       start → entirely blank canvas.
 
-     WHY v1-v6 all failed:
-       v1-v4 : forced width on the LIVE element — parent overflow always clips it.
-       v5     : onclone modifies the clone, but html2canvas clones the ENTIRE
-                page DOM, so all CSS constraints on .main-content survive.
-       v6     : iframe works ONLY if html2canvas correctly uses the iframe's
-                ownerDocument.defaultView.  In html2pdf's bundled html2canvas
-                the element-to-window lookup can still read the PARENT window's
-                viewport — so the sidebar margin bleeds in.
-
-     v7 FIX — Detached Slate (zero parent constraints):
-     ─────────────────────────────────────────────────
-     1. Create a plain <div> as a DIRECT CHILD OF <body> (no sidebar chain).
-     2. Position it at top:9999px (positive Y = within document space,
-        html2canvas CAN reach it; vs. negative X = outside document = blank).
-     3. Deep-clone ONLY #profile-content into this host — no navbar, no sidebar,
-        no .main-content wrapper. Zero overflow/margin constraints ever apply.
-     4. Convert CSS Grid → float layout on the clone (floats are the most
-        reliable for html2canvas page-break detection).
-     5. Proxy R2 images → blob URLs (no CORS taint).
-     6. Render clone with html2pdf. width:1000px, windowWidth:1200 → full A4.
-     7. Remove host div. Live page untouched.
+     v8 FIX — position: fixed; top:0; left:-10000px
+     ────────────────────────────────────────────────
+     • Fixed position keeps the element at top:0 in VIEWPORT space.
+       getBoundingClientRect() = {left:-10000, top:0} → Y coordinate is 0.
+     • html2canvas with x:0, y:0, scrollX:0, scrollY:0 treats (0,0) as the
+       element's OWN top-left corner, so it renders from the element inward —
+       the left:-10000px offset doesn't affect the canvas content at all.
+     • visibility:visible + opacity:1 ensure html2canvas can paint it.
+     • setTimeout(150ms) after DOM insertion lets the browser finish the float
+       layout reflow before the canvas capture starts.
+     • d-none classes are removed from the clone so Bootstrap doesn't hide
+       any subsection (e.g. the watermark).
+     • Fixed-position children in the clone (watermark) are set to
+       position:relative so they don't escape the host container.
   ════════════════════════════════════════════════════════════════════════════ */
   function _renderToPdf(outputMode, filename) {
     return new Promise(function(resolve, reject) {
@@ -931,47 +924,64 @@
         wm.style.display = 'block';
       }
 
-      /* ── 2. Detached host — direct child of body, no sidebar ancestry ──
-         top:9999px keeps it below the visible viewport (user never sees it).
-         Positive Y means html2canvas can find and render it (negative X = blank). */
+      /* ── 2. Off-Screen Mirror host ──
+         position:fixed keeps top:0 in viewport space → Y=0, no scroll maths.
+         left:-10000px pushes it off the left edge of any realistic screen.
+         visibility:visible + opacity:1 are required for html2canvas to paint it. */
       var host = document.createElement('div');
       host.id  = '__pdfHost';
       host.style.cssText = [
-        'position:absolute',
-        'top:9999px',
-        'left:0',
+        'position:fixed',
+        'top:0',
+        'left:-10000px',
         'width:1000px',
+        'height:auto',
         'overflow:visible',
-        'background:#f0f2f5'
+        'visibility:visible',
+        'opacity:1',
+        'background:#f0f2f5',
+        'z-index:1'
       ].join(';');
       document.body.appendChild(host);
 
-      /* ── 3. Deep-clone only #profile-content ── */
+      /* ── 3. Deep-clone ONLY #profile-content ── */
       var clone = srcEl.cloneNode(true);
-      clone.removeAttribute('id');   /* prevent duplicate-ID confusion */
+      clone.removeAttribute('id');
       clone.style.cssText = [
         'width:1000px',
         'max-width:none',
         'overflow:visible',
         'background:#f0f2f5',
-        'display:block'
+        'display:block',
+        'visibility:visible',
+        'opacity:1'
       ].join(';');
+
+      /* Remove Bootstrap d-none so every subsection is visible to the engine */
+      clone.querySelectorAll('.d-none').forEach(function(el) {
+        el.classList.remove('d-none');
+      });
+
+      /* Fix any position:fixed children (e.g. watermark) → relative,
+         so they stay inside the host instead of escaping to the viewport */
+      clone.querySelectorAll('[style*="position:fixed"],[style*="position: fixed"]')
+        .forEach(function(el) {
+          el.style.setProperty('position', 'relative', 'important');
+        });
+
       host.appendChild(clone);
 
-      /* ── 4. Convert CSS Grid / Flex → float layout inside the clone ──
-         Floats have the most reliable break-inside support across all
-         print/canvas engines.  Grid is fine on screen but fragile in html2canvas. */
+      /* ── 4. Grid / Flex → float layout (float = most reliable in html2canvas) ── */
       function floatChildren(container, childSel, colWidth, gap) {
-        /* Use :scope > to target only DIRECT children */
         var kids = Array.from(container.querySelectorAll(':scope > ' + childSel));
         if (!kids.length) return;
-        container.style.setProperty('display',  'block',   'important');
-        container.style.setProperty('overflow', 'hidden',  'important');
+        container.style.setProperty('display',  'block',      'important');
+        container.style.setProperty('overflow', 'hidden',     'important');
         kids.forEach(function(k) {
-          k.style.setProperty('float',       'left',    'important');
-          k.style.setProperty('width',       colWidth,  'important');
-          k.style.setProperty('margin-right', gap,      'important');
-          k.style.setProperty('box-sizing',  'border-box', 'important');
+          k.style.setProperty('float',        'left',       'important');
+          k.style.setProperty('width',        colWidth,     'important');
+          k.style.setProperty('margin-right', gap,          'important');
+          k.style.setProperty('box-sizing',   'border-box', 'important');
         });
         var cf = document.createElement('div');
         cf.style.clear = 'both';
@@ -993,18 +1003,17 @@
       clone.querySelectorAll('.docs-photo-grid').forEach(function(r) {
         floatChildren(r, '.doc-photo-item', '30%',  '2.5%');
       });
-      /* All Bootstrap .row → block so page-break works */
       clone.querySelectorAll('.row').forEach(function(r) {
         r.style.setProperty('display', 'block', 'important');
       });
       clone.querySelectorAll('[class*="col-"]').forEach(function(c) {
-        c.style.setProperty('display',    'block',  'important');
-        c.style.setProperty('width',      '100%',   'important');
-        c.style.setProperty('max-width',  '100%',   'important');
-        c.style.setProperty('flex',       'none',   'important');
+        c.style.setProperty('display',   'block', 'important');
+        c.style.setProperty('width',     '100%',  'important');
+        c.style.setProperty('max-width', '100%',  'important');
+        c.style.setProperty('flex',      'none',  'important');
       });
 
-      /* ── 5. Proxy R2 cross-origin images → blob URLs ── */
+      /* ── 5. Proxy R2 images → blob URLs ── */
       var proxyJob = _proxyImages(clone);
 
       function cleanup() {
@@ -1014,24 +1023,25 @@
         if (wm) wm.style.display = 'none';
       }
 
-      /* ── 6. Wait for images, then one RAF for float layout to settle ── */
+      /* ── 6. Wait for images, then 150 ms for float reflow, then capture ── */
       Promise.all(proxyJob.waits).then(function() {
-        requestAnimationFrame(function() {
+        setTimeout(function() {
           var opt = {
             margin:   [10, 10, 10, 10],
             filename: filename || 'document.pdf',
             image:    { type: 'jpeg', quality: 0.96 },
             html2canvas: {
-              scale:           2.5,         /* Hi-DPI sharpness */
-              useCORS:         true,        /* blob URLs — no taint */
+              scale:           2,
+              useCORS:         true,
               allowTaint:      false,
               letterRendering: true,
               logging:         false,
-              width:           1000,        /* match clone width exactly */
-              windowWidth:     1200,        /* desktop viewport, no mobile breakpoints */
-              scrollX:         0,
-              scrollY:         -(host.getBoundingClientRect().top)
-                                           /* compensate: scroll to where host is */
+              width:           1000,   /* exact clone width */
+              windowWidth:     1200,   /* simulate desktop, no mobile breakpoints */
+              x:               0,      /* crop from element's own left edge */
+              y:               0,      /* crop from element's own top edge */
+              scrollX:         0,      /* fixed element → scroll irrelevant */
+              scrollY:         0
             },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
             pagebreak: {
@@ -1049,7 +1059,7 @@
           promise
             .then(function(result) { cleanup(); resolve(result); })
             .catch(function(err)   { cleanup(); reject(err);    });
-        });
+        }, 150);  /* wait for float layout paint */
       }).catch(function(err) { cleanup(); reject(err); });
     });
   }
