@@ -914,9 +914,8 @@
      Uses the same Executive theme palette so output matches screen design.
   ─────────────────────────────────────────────────────────────────────── */
   var _COMPACT_CSS = [
-    /* ── Width-lock: forces the captured element to a fixed 1000 px
-       so output is completely independent of browser zoom / screen size ── */
-    '#profile-content { font-size: 12.5px !important; width: 1000px !important; max-width: 1000px !important; padding-bottom: 0 !important; box-sizing: border-box !important; }',
+    /* ── Base font-size reduction for compact two-page output ── */
+    '#profile-content { font-size: 12.5px !important; padding-bottom: 0 !important; }',
 
     /* ── Page background & overall colours ── */
     'body { background: #fff !important; }',
@@ -1054,7 +1053,6 @@
           html2canvas(el, {
             scale: 2, useCORS: false, allowTaint: true,
             letterRendering: true, logging: false,
-            windowWidth: 1200, width: 1000,
             onclone: _onCloneHandler
           }).then(function(canvas) {
             job.restore();
@@ -1117,19 +1115,12 @@
     }).catch(function(e) { console.error('Proxy error:', e); cleanup(null, e); });
   }
 
-  /* ── html2pdf configuration
-     windowWidth: 1200 → ensures Bootstrap md/lg breakpoints fire (desktop layout)
-     width: 1000      → combined with #profile-content width-lock in _COMPACT_CSS
-                        makes every run render at exactly 1000 px regardless of
-                        the user's browser zoom or screen width.
-  ─────────────────────────────────────────────────────────────────────── */
   var _PDF_OPTS = {
     margin: [8, 8, 0, 8],
     image: { type: 'jpeg', quality: 0.95 },
     html2canvas: {
       scale: 2, useCORS: false, allowTaint: true,
       letterRendering: true, logging: false,
-      windowWidth: 1200, width: 1000,
       onclone: _onCloneHandler
     },
     pagebreak: { mode: 'css' },
