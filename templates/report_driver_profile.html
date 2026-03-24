@@ -907,7 +907,11 @@
     '#profile-content .timeline-body { padding: 0.25rem 0.45rem !important; font-size: 0.76rem !important; }',
 
     /* Watermark */
-    '#profile-content #pdfWatermark { margin-top: 0.25rem !important; padding: 0.15rem 0.45rem !important; font-size: 0.6rem !important; }'
+    '#profile-content #pdfWatermark { margin-top: 0.25rem !important; padding: 0.15rem 0.45rem !important; font-size: 0.6rem !important; }',
+
+    /* Kill bottom margin on last element so no blank trailing page is generated */
+    '#profile-content > *:last-child { margin-bottom: 0 !important; padding-bottom: 0 !important; }',
+    '#profile-content { padding-bottom: 0 !important; }'
   ].join('\n');
 
   function _injectCompactStyles() {
@@ -976,7 +980,7 @@
   }
 
   var _PDF_OPTS = {
-    margin: [8, 8, 8, 8],
+    margin: [8, 8, 0, 8],   /* bottom=0: prevents blank trailing page */
     image: { type: 'jpeg', quality: 0.95 },
     html2canvas: {
       scale: 2,
@@ -986,6 +990,9 @@
       logging: false,
       onclone: _onCloneHandler   /* compact CSS + watermark applied to clone only */
     },
+    /* 'css' mode only respects explicit CSS rules; disables the 'legacy' mode
+       that injects whitespace padding between sections to avoid page cuts */
+    pagebreak: { mode: 'css' },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
 
