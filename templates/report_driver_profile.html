@@ -89,17 +89,22 @@
   .stat-box {
     background: var(--bg-card);
     border: 1px solid var(--border);
+    border-top: 3px solid var(--brand-mid);
     border-radius: 10px;
     padding: 1rem 1.25rem;
     text-align: center;
     box-shadow: 0 1px 4px rgba(0,0,0,.06);
     break-inside: avoid; page-break-inside: avoid;
   }
-  .stat-box .stat-label {
-    font-size: .67rem; text-transform: uppercase; letter-spacing: .8px;
-    color: var(--text-light); font-weight: 600; margin-bottom: .35rem;
+  .stat-box .stat-icon {
+    font-size: 1.15rem; color: var(--brand-mid);
+    margin-bottom: .3rem; display: block;
   }
-  .stat-box .stat-value { font-size: 1.25rem; font-weight: 700; color: var(--brand); }
+  .stat-box .stat-label {
+    font-size: .65rem; text-transform: uppercase; letter-spacing: .8px;
+    color: var(--text-light); font-weight: 600; margin-bottom: .25rem;
+  }
+  .stat-box .stat-value { font-size: 1.2rem; font-weight: 700; color: var(--brand); }
 
   /* ── Section cards ── */
   .section-card {
@@ -111,13 +116,23 @@
     box-shadow: 0 1px 4px rgba(0,0,0,.06);
     break-inside: avoid; page-break-inside: avoid;
   }
+
+  /* ── Section header (icon badge + label + rule) ── */
   .section-title {
-    font-size: .72rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 1.2px;
-    color: var(--brand);
-    border-left: 3px solid var(--brand-mid);
-    padding-left: .6rem;
-    margin-bottom: 1.1rem;
+    display: flex; align-items: center; gap: .55rem;
+    font-size: .68rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.1px;
+    color: var(--text-dark);
+    border-bottom: 1.5px solid #eef2ff;
+    padding-bottom: .65rem;
+    margin-bottom: 1rem;
+  }
+  .section-icon {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand-mid) 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: .75rem; color: #fff; flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(30,58,138,.22);
   }
 
   /* ── Info grid ── */
@@ -157,46 +172,80 @@
   }
 
   /* ── Modern timeline ── */
-  .timeline { position: relative; padding-left: 1.75rem; }
+  .timeline { position: relative; padding-left: 1.5rem; }
   .timeline::before {
-    content: ''; position: absolute; left: 8px; top: 4px; bottom: 0;
+    content: ''; position: absolute; left: 7px; top: 6px; bottom: 0;
     width: 2px;
-    background: linear-gradient(to bottom, var(--brand-mid), var(--border));
+    background: linear-gradient(to bottom, var(--brand-mid) 0%, #c7d2fe 60%, var(--border) 100%);
   }
   .timeline-item {
-    position: relative; margin-bottom: 1.4rem;
+    position: relative; margin-bottom: 1rem;
     break-inside: avoid; page-break-inside: avoid;
   }
   .timeline-item:last-child { margin-bottom: 0; }
   .timeline-dot {
-    position: absolute; left: -1.75rem; top: 2px;
+    position: absolute; left: -1.5rem; top: 5px;
     width: 16px; height: 16px; border-radius: 50%;
-    background: var(--bg-card);
+    background: #fff;
     border: 2.5px solid var(--brand-mid);
-    box-shadow: 0 0 0 3px rgba(59,130,246,.14);
+    box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+    z-index: 1;
   }
-  .timeline-dot.transfer { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,.14); }
-  .timeline-dot.left-job { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.14); }
-  .timeline-dot.rejoin   { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.14); }
+  .timeline-dot.transfer { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,.12); }
+  .timeline-dot.left-job { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.12); }
+  .timeline-dot.rejoin   { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.12); }
 
-  .timeline-date { font-size: .78rem; font-weight: 700; color: var(--brand-mid); margin-bottom: .12rem; }
-  .timeline-date.transfer { color: #f59e0b; }
+  /* Event card */
+  .timeline-card {
+    background: #fff; border: 1px solid var(--border);
+    border-left: 3.5px solid var(--brand-mid);
+    border-radius: 0 8px 8px 0;
+    padding: .6rem .85rem .55rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  }
+  .timeline-card.transfer { border-left-color: #f59e0b; }
+  .timeline-card.left-job { border-left-color: #ef4444; }
+  .timeline-card.rejoin   { border-left-color: #10b981; }
+
+  /* Date + badge row */
+  .timeline-meta {
+    display: flex; align-items: center; gap: .55rem; margin-bottom: .35rem;
+  }
+  .timeline-date {
+    font-size: .75rem; font-weight: 700; color: var(--brand-mid);
+  }
+  .timeline-date.transfer { color: #d97706; }
   .timeline-date.left-job { color: #ef4444; }
   .timeline-date.rejoin   { color: #10b981; }
-  .timeline-type {
-    font-size: .68rem; font-weight: 800; letter-spacing: .8px;
-    text-transform: uppercase; color: var(--text-mid); margin-bottom: .3rem;
-  }
-  .timeline-body {
-    background: var(--bg-subtle); border: 1px solid var(--border);
-    border-radius: 6px; padding: .6rem .9rem;
-    font-size: .84rem; color: var(--text-mid);
-  }
-  .timeline-body strong { color: var(--text-dark); }
-  .timeline-body .remarks { font-style: italic; color: var(--text-light); margin-top: .25rem; font-size: .8rem; }
 
-  /* ── Photos grid ── */
-  .docs-photo-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; }
+  /* Event type pill badge */
+  .timeline-badge {
+    display: inline-flex; align-items: center; gap: .28rem;
+    padding: .12rem .55rem;
+    border-radius: 12px;
+    font-size: .63rem; font-weight: 700; letter-spacing: .3px;
+  }
+  .badge-assign   { background: #eff6ff; color: #1d4ed8; }
+  .badge-transfer { background: #fffbeb; color: #d97706; }
+  .badge-left     { background: #fff1f2; color: #e11d48; }
+  .badge-rejoin   { background: #f0fdf4; color: #16a34a; }
+
+  /* Old compat class (not shown on screen — replaced by .timeline-card) */
+  .timeline-type { display: none; }
+  .timeline-body { display: none; }  /* replaced by .timeline-card */
+
+  .timeline-detail {
+    font-size: .83rem; color: var(--text-mid); line-height: 1.55;
+  }
+  .timeline-detail strong { color: var(--text-dark); font-weight: 600; }
+  .timeline-detail .remarks {
+    font-style: italic; color: var(--text-light);
+    margin-top: .28rem; font-size: .79rem;
+    border-top: 1px dashed var(--border); padding-top: .28rem;
+  }
+
+  /* ── Photos grid — 2 columns for readability ── */
+  .docs-photo-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 1rem; }
   .doc-photo-item {
     border: 1px solid var(--border); border-radius: 8px;
     overflow: hidden; background: var(--bg-page);
@@ -209,7 +258,7 @@
     text-transform: uppercase; letter-spacing: .5px;
   }
   .doc-photo-thumb-wrap {
-    display: block; height: 130px; overflow: hidden;
+    display: block; height: 190px; overflow: hidden;
     cursor: pointer; position: relative;
     background: var(--border);
     touch-action: manipulation;
@@ -228,19 +277,18 @@
   }
   .doc-photo-thumb-wrap:hover .zoom-overlay i { opacity: 1; }
   .doc-photo-missing {
-    height: 130px; display: flex; flex-direction: column;
+    height: 190px; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     gap: .4rem; color: #9ca3af; font-size: .78rem;
   }
   .doc-photo-missing i { font-size: 1.8rem; }
   .doc-pdf-wrap {
-    height: 130px; display: flex; flex-direction: column;
+    height: 190px; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: .5rem;
   }
   .doc-pdf-wrap .pdf-icon { font-size: 2.5rem; color: #ef4444; }
   .doc-pdf-wrap a { font-size: .82rem; font-weight: 600; }
 
-  @media (max-width: 768px) { .docs-photo-grid { grid-template-columns: repeat(2,1fr); } }
   @media (max-width: 480px) { .docs-photo-grid { grid-template-columns: 1fr; } }
 
   /* ── Assignment tag ── */
@@ -337,7 +385,7 @@
       background: #f8fafc !important;
       -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }
-    .docs-photo-grid { display: grid !important; grid-template-columns: repeat(3,1fr) !important; gap: .25rem !important; }
+    .docs-photo-grid { display: grid !important; grid-template-columns: repeat(2,1fr) !important; gap: .3rem !important; }
     .doc-photo-item {
       display: block !important; background: #fff !important;
       border: 1px solid #e5e7eb !important; overflow: hidden !important;
@@ -346,28 +394,33 @@
     .doc-photo-label {
       display: block !important; background: #f3f4f6 !important;
       -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
-      font-size: .56rem !important; padding: .15rem .4rem !important;
+      font-size: .58rem !important; padding: .18rem .45rem !important;
     }
-    .doc-photo-thumb-wrap { display: block !important; height: 68px !important; overflow: hidden !important; }
+    .doc-photo-thumb-wrap { display: block !important; height: 90px !important; overflow: hidden !important; }
     .doc-photo-thumb-wrap img {
-      display: block !important; height: 68px !important; width: 100% !important;
+      display: block !important; height: 90px !important; width: 100% !important;
       object-fit: cover !important;
       -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }
-    .doc-photo-missing { display: flex !important; height: 48px !important; font-size: .56rem !important; }
-    .doc-pdf-wrap { display: flex !important; height: 48px !important; font-size: .56rem !important; }
+    .doc-photo-missing { display: flex !important; height: 60px !important; font-size: .58rem !important; }
+    .doc-pdf-wrap { display: flex !important; height: 60px !important; font-size: .58rem !important; }
     .timeline { padding-left: 1.1rem !important; }
     .timeline-item {
       margin-bottom: .3rem !important;
       page-break-inside: avoid !important; break-inside: avoid !important;
     }
     .timeline-date { font-size: .63rem !important; }
-    .timeline-type { font-size: .58rem !important; }
-    .timeline-body {
-      padding: .2rem .4rem !important; font-size: .7rem !important;
-      background: #f9fafb !important;
+    .timeline-type { display: none !important; }
+    .timeline-body { display: none !important; }
+    .timeline-card {
+      display: block !important; border-radius: 0 4px 4px 0 !important;
+      padding: .2rem .4rem !important;
+      background: #fff !important; border: 1px solid #e5e7eb !important;
       -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }
+    .timeline-meta { display: flex !important; align-items: center !important; gap: .35rem !important; margin-bottom: .18rem !important; }
+    .timeline-badge { font-size: .56rem !important; padding: .08rem .38rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .timeline-detail { font-size: .7rem !important; }
     #pdfWatermark { display: block !important; font-size: .58rem !important; padding: .2rem .5rem !important; margin-top: .2rem !important; }
   }
 </style>
@@ -430,14 +483,17 @@
   <!-- Stats Row -->
   <div class="stats-row">
     <div class="stat-box">
+      <i class="bi bi-activity stat-icon"></i>
       <div class="stat-label">Total Actions</div>
       <div class="stat-value">{{ total_actions }}</div>
     </div>
     <div class="stat-box">
+      <i class="bi bi-calendar-check stat-icon"></i>
       <div class="stat-label">Application Date</div>
       <div class="stat-value" style="font-size:1rem;">{{ driver.application_date|ddmmyyyy if driver.application_date else '—' }}</div>
     </div>
     <div class="stat-box">
+      <i class="bi bi-clock-history stat-icon"></i>
       <div class="stat-label">Last Action</div>
       <div class="stat-value" style="font-size:1rem;">{{ last_action|ddmmyyyy if last_action else '—' }}</div>
     </div>
@@ -445,7 +501,10 @@
 
   <!-- Personal Profile -->
   <div class="section-card">
-    <div class="section-title">Personal Profile</div>
+    <div class="section-title">
+      <span class="section-icon"><i class="bi bi-person-circle"></i></span>
+      <span>Personal Profile</span>
+    </div>
     <div class="info-grid">
       <div class="info-item">
         <div class="info-label">Father Name</div>
@@ -485,7 +544,10 @@
   <!-- Current Assignment -->
   {% if driver.vehicle or driver.project %}
   <div class="section-card">
-    <div class="section-title">Current Assignment</div>
+    <div class="section-title">
+      <span class="section-icon"><i class="bi bi-truck-front-fill"></i></span>
+      <span>Current Assignment</span>
+    </div>
     <div class="info-grid">
       <div class="info-item">
         <div class="info-label">Vehicle</div>
@@ -515,7 +577,10 @@
 
   <!-- Identification Documents -->
   <div class="section-card">
-    <div class="section-title">Identification Documents</div>
+    <div class="section-title">
+      <span class="section-icon"><i class="bi bi-shield-check"></i></span>
+      <span>Identification Documents</span>
+    </div>
     <div class="doc-grid">
       <!-- CNIC -->
       <div class="doc-card">
@@ -587,7 +652,10 @@
 
   <!-- Official Details -->
   <div class="section-card">
-    <div class="section-title">Official Details</div>
+    <div class="section-title">
+      <span class="section-icon"><i class="bi bi-bank2"></i></span>
+      <span>Official Details</span>
+    </div>
     <div class="info-grid">
       <div class="info-item">
         <div class="info-label">Bank Name</div>
@@ -617,7 +685,10 @@
   <!-- Photos & Documents -->
   {% set _has_any_doc = driver.photo_path or driver.cnic_front_path or driver.cnic_back_path or driver.license_front_path or driver.license_back_path or driver.document_path %}
   <div class="section-card" id="photos-docs-section">
-    <div class="section-title"><i class="bi bi-images me-1"></i>Photos &amp; Documents</div>
+    <div class="section-title">
+      <span class="section-icon"><i class="bi bi-images"></i></span>
+      <span>Photos &amp; Documents</span>
+    </div>
     {% if _has_any_doc %}
     <div class="docs-photo-grid">
 
@@ -957,17 +1028,26 @@
     /* ── Uniform box ── */
     '#profile-content .uniform-box { padding: 0.22rem 0.58rem !important; margin-top: 0.22rem !important; font-size: 0.74rem !important; background: #f8fafc !important; border: 1px solid #e5e7eb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
 
-    /* ── Photos & Documents — NO height compression; preserve readability ── */
-    '#profile-content .docs-photo-grid { gap: 0.5rem !important; }',
+    /* ── Section header compact ── */
+    '#profile-content .section-title { padding-bottom: 0.3rem !important; margin-bottom: 0.5rem !important; gap: 0.35rem !important; }',
+    '#profile-content .section-icon { width: 20px !important; height: 20px !important; font-size: 0.6rem !important; border-radius: 5px !important; }',
+
+    /* ── Stat boxes ── */
+    '#profile-content .stat-box .stat-icon { font-size: 0.82rem !important; margin-bottom: 0.1rem !important; }',
+
+    /* ── Photos & Documents — 2 cols, NO height compression ── */
+    '#profile-content .docs-photo-grid { grid-template-columns: repeat(2,1fr) !important; gap: 0.5rem !important; }',
     '#profile-content .doc-photo-label { background: #f3f4f6 !important; color: #374151 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
     '#profile-content .doc-photo-item { border: 1px solid #e5e7eb !important; background: #f9fafb !important; page-break-inside: avoid !important; break-inside: avoid !important; }',
 
-    /* ── Timeline ── */
+    /* ── Timeline — compact card style ── */
     '#profile-content .timeline { padding-left: 1.2rem !important; }',
     '#profile-content .timeline-item { margin-bottom: 0.3rem !important; page-break-inside: avoid !important; break-inside: avoid !important; }',
-    '#profile-content .timeline-date { font-size: 0.68rem !important; margin-bottom: 0.07rem !important; }',
-    '#profile-content .timeline-type { font-size: 0.64rem !important; margin-bottom: 0.11rem !important; color: #374151 !important; }',
-    '#profile-content .timeline-body { padding: 0.24rem 0.45rem !important; font-size: 0.74rem !important; background: #f9fafb !important; border: 1px solid #e5e7eb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .timeline-date { font-size: 0.65rem !important; }',
+    '#profile-content .timeline-card { padding: 0.25rem 0.45rem !important; border-radius: 0 5px 5px 0 !important; background: #fff !important; border: 1px solid #e5e7eb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .timeline-meta { gap: 0.3rem !important; margin-bottom: 0.15rem !important; }',
+    '#profile-content .timeline-badge { font-size: 0.58rem !important; padding: 0.08rem 0.38rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .timeline-detail { font-size: 0.71rem !important; }',
 
     /* ── Watermark ── */
     '#profile-content #pdfWatermark { margin-top: 0.22rem !important; padding: 0.14rem 0.44rem !important; font-size: 0.58rem !important; }',
@@ -1246,66 +1326,98 @@
 
   <!-- Job History Timeline -->
   <div class="section-card">
-    <div class="section-title">Job History (Oldest First)</div>
+    <div class="section-title">
+      <span class="section-icon"><i class="bi bi-journal-text"></i></span>
+      <span>Job History <span style="font-weight:400;opacity:.6;font-size:.85em;">(Oldest First)</span></span>
+    </div>
     {% if job_history %}
     <div class="timeline">
       {% for item in job_history %}
+
+        {# ── Assignment ── #}
         {% if item.type == 'assignment' %}
           {% set d = item.data %}
           <div class="timeline-item">
             <div class="timeline-dot"></div>
-            <div class="timeline-date">{{ item.date|ddmmyyyy }}</div>
-            <div class="timeline-type">Assignment</div>
-            <div class="timeline-body">
-              To Vehicle: <strong>{{ d.vehicle.vehicle_no if d.vehicle else '—' }}</strong>
-              {% if d.vehicle and d.vehicle.vehicle_type %} ({{ d.vehicle.vehicle_type }}){% endif %}<br>
-              {% if d.project %}Project: {{ d.project.name }}<br>{% endif %}
-              {% if d.district %}District: {{ d.district.name }} | {% endif %}Shift: {{ d.shift or '—' }}
-              {% if d.assign_remarks %}<div class="remarks">{{ d.assign_remarks }}</div>{% endif %}
+            <div class="timeline-card">
+              <div class="timeline-meta">
+                <span class="timeline-date">{{ item.date|ddmmyyyy }}</span>
+                <span class="timeline-badge badge-assign"><i class="bi bi-plus-circle-fill"></i> Assignment</span>
+              </div>
+              <div class="timeline-detail">
+                <i class="bi bi-truck-front text-primary me-1" style="font-size:.78rem;"></i>
+                Vehicle: <strong>{{ d.vehicle.vehicle_no if d.vehicle else '—' }}</strong>
+                {% if d.vehicle and d.vehicle.vehicle_type %}<span class="text-muted"> ({{ d.vehicle.vehicle_type }})</span>{% endif %}
+                {% if d.project %}<br><i class="bi bi-building text-muted me-1" style="font-size:.78rem;"></i>Project: <strong>{{ d.project.name }}</strong>{% endif %}
+                {% if d.district %}<br><i class="bi bi-geo-alt text-muted me-1" style="font-size:.78rem;"></i>District: {{ d.district.name }}{% endif %}
+                {% if d.shift %}&nbsp;&bull;&nbsp;<i class="bi bi-clock text-muted me-1" style="font-size:.78rem;"></i>Shift: {{ d.shift }}{% endif %}
+                {% if d.assign_remarks %}<div class="remarks"><i class="bi bi-chat-left-text me-1"></i>{{ d.assign_remarks }}</div>{% endif %}
+              </div>
             </div>
           </div>
+
+        {# ── Transfer ── #}
         {% elif item.type == 'transfer' %}
           {% set t = item.data %}
           <div class="timeline-item">
             <div class="timeline-dot transfer"></div>
-            <div class="timeline-date transfer">{{ item.date|ddmmyyyy }}</div>
-            <div class="timeline-type">Transfer</div>
-            <div class="timeline-body">
-              From: {{ t.old_vehicle.vehicle_no if t.old_vehicle else '—' }}
-              →&nbsp;To: <strong>{{ t.new_vehicle.vehicle_no if t.new_vehicle else '—' }}</strong>
-              {% if t.new_vehicle and t.new_vehicle.vehicle_type %} ({{ t.new_vehicle.vehicle_type }}){% endif %}
-              {% if t.new_project %}<br>Project: {{ t.new_project.name }}{% endif %}
-              {% if t.new_district %}<br>District: {{ t.new_district.name }}{% endif %}
-              {% if t.old_shift or t.new_shift %}<br>Shift: {{ t.old_shift or '—' }} → {{ t.new_shift or '—' }}{% endif %}
-              {% if t.remarks %}<div class="remarks">{{ t.remarks }}</div>{% endif %}
+            <div class="timeline-card transfer">
+              <div class="timeline-meta">
+                <span class="timeline-date transfer">{{ item.date|ddmmyyyy }}</span>
+                <span class="timeline-badge badge-transfer"><i class="bi bi-shuffle"></i> Transfer</span>
+              </div>
+              <div class="timeline-detail">
+                <i class="bi bi-arrow-left-right text-warning me-1" style="font-size:.78rem;"></i>
+                {{ t.old_vehicle.vehicle_no if t.old_vehicle else '—' }}
+                &nbsp;<i class="bi bi-arrow-right text-warning" style="font-size:.75rem;"></i>&nbsp;
+                <strong>{{ t.new_vehicle.vehicle_no if t.new_vehicle else '—' }}</strong>
+                {% if t.new_vehicle and t.new_vehicle.vehicle_type %}<span class="text-muted"> ({{ t.new_vehicle.vehicle_type }})</span>{% endif %}
+                {% if t.new_project %}<br><i class="bi bi-building text-muted me-1" style="font-size:.78rem;"></i>Project: <strong>{{ t.new_project.name }}</strong>{% endif %}
+                {% if t.new_district %}<br><i class="bi bi-geo-alt text-muted me-1" style="font-size:.78rem;"></i>District: {{ t.new_district.name }}{% endif %}
+                {% if t.old_shift or t.new_shift %}<br><i class="bi bi-clock text-muted me-1" style="font-size:.78rem;"></i>Shift: {{ t.old_shift or '—' }} &rarr; <strong>{{ t.new_shift or '—' }}</strong>{% endif %}
+                {% if t.remarks %}<div class="remarks"><i class="bi bi-chat-left-text me-1"></i>{{ t.remarks }}</div>{% endif %}
+              </div>
             </div>
           </div>
+
+        {# ── Status Change (Left / Rejoin) ── #}
         {% elif item.type == 'status' %}
           {% set s = item.data %}
           {% set is_left = s.action_type == 'left' %}
           <div class="timeline-item">
             <div class="timeline-dot {{ 'left-job' if is_left else 'rejoin' }}"></div>
-            <div class="timeline-date {{ 'left-job' if is_left else 'rejoin' }}">{{ item.date|ddmmyyyy }}</div>
-            <div class="timeline-type">{{ 'Job Left' if is_left else 'Rejoin' }}</div>
-            <div class="timeline-body">
-              {% if is_left %}
-                Left from: <strong>{{ s.left_vehicle.vehicle_no if s.left_vehicle else '—' }}</strong>
-                {% if s.left_project %}<br>Project: {{ s.left_project.name }}{% endif %}
-                {% if s.left_district %}<br>District: {{ s.left_district.name }}{% endif %}
-                {% if s.reason %}<br>Reason: {{ s.reason }}{% endif %}
-              {% else %}
-                Rejoined to: <strong>{{ s.new_vehicle.vehicle_no if s.new_vehicle else '—' }}</strong>
-                {% if s.new_project %}<br>Project: {{ s.new_project.name }}{% endif %}
-                {% if s.new_district %}<br>District: {{ s.new_district.name }}{% endif %}
-              {% endif %}
-              {% if s.remarks %}<div class="remarks">{{ s.remarks }}</div>{% endif %}
+            <div class="timeline-card {{ 'left-job' if is_left else 'rejoin' }}">
+              <div class="timeline-meta">
+                <span class="timeline-date {{ 'left-job' if is_left else 'rejoin' }}">{{ item.date|ddmmyyyy }}</span>
+                {% if is_left %}
+                  <span class="timeline-badge badge-left"><i class="bi bi-box-arrow-right"></i> Job Left</span>
+                {% else %}
+                  <span class="timeline-badge badge-rejoin"><i class="bi bi-arrow-return-left"></i> Rejoined</span>
+                {% endif %}
+              </div>
+              <div class="timeline-detail">
+                {% if is_left %}
+                  <i class="bi bi-door-open text-danger me-1" style="font-size:.78rem;"></i>
+                  Left from: <strong>{{ s.left_vehicle.vehicle_no if s.left_vehicle else '—' }}</strong>
+                  {% if s.left_project %}<br><i class="bi bi-building text-muted me-1" style="font-size:.78rem;"></i>Project: {{ s.left_project.name }}{% endif %}
+                  {% if s.left_district %}<br><i class="bi bi-geo-alt text-muted me-1" style="font-size:.78rem;"></i>District: {{ s.left_district.name }}{% endif %}
+                  {% if s.reason %}<br><i class="bi bi-exclamation-circle text-muted me-1" style="font-size:.78rem;"></i>Reason: {{ s.reason }}{% endif %}
+                {% else %}
+                  <i class="bi bi-person-check text-success me-1" style="font-size:.78rem;"></i>
+                  Rejoined to: <strong>{{ s.new_vehicle.vehicle_no if s.new_vehicle else '—' }}</strong>
+                  {% if s.new_project %}<br><i class="bi bi-building text-muted me-1" style="font-size:.78rem;"></i>Project: {{ s.new_project.name }}{% endif %}
+                  {% if s.new_district %}<br><i class="bi bi-geo-alt text-muted me-1" style="font-size:.78rem;"></i>District: {{ s.new_district.name }}{% endif %}
+                {% endif %}
+                {% if s.remarks %}<div class="remarks"><i class="bi bi-chat-left-text me-1"></i>{{ s.remarks }}</div>{% endif %}
+              </div>
             </div>
           </div>
+
         {% endif %}
       {% endfor %}
     </div>
     {% else %}
-    <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>No job history recorded yet.</p>
+    <p class="text-muted mb-0" style="font-size:.88rem;"><i class="bi bi-info-circle me-1"></i>No job history recorded yet.</p>
     {% endif %}
   </div>
 
