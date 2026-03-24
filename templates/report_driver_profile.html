@@ -1059,22 +1059,30 @@
     '#profile-content .timeline-badge { font-size: 0.54rem !important; padding: 0.07rem 0.35rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
     '#profile-content .timeline-detail { font-size: 0.68rem !important; line-height: 1.45 !important; }',
 
-    /* ── 10. Photos — 2 cols; LEVEL 2: avoid break on each photo item ── */
-    '#profile-content .docs-photo-grid { grid-template-columns: repeat(2,1fr) !important; gap: 0.45rem !important; }',
-    '#profile-content .doc-photo-label { background: #f3f4f6 !important; color: #374151 !important; font-size: 0.6rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
-    '#profile-content .doc-photo-item { border: 1px solid #e5e7eb !important; background: #f9fafb !important; break-inside: avoid !important; page-break-inside: avoid !important; }',
+    /* ── 10. Photos — inline-block wrapping so items flow across pages ──
+       Replacing CSS Grid with inline-block allows photos to wrap to the
+       next line / next page naturally.  No blank gap is ever left because
+       the items are treated as inline text that flows continuously.
+       break-inside: avoid on each item keeps individual photos whole.    */
+    '#profile-content .docs-photo-grid { display: block !important; font-size: 0 !important; }',
+    '#profile-content .doc-photo-item  { display: inline-block !important; width: 31% !important; margin: 0.8% !important; vertical-align: top !important; border: 1px solid #e5e7eb !important; background: #f9fafb !important; border-radius: 5px !important; overflow: hidden !important; break-inside: avoid !important; page-break-inside: avoid !important; font-size: 12px !important; }',
+    '#profile-content .doc-photo-label { display: block !important; background: #f3f4f6 !important; color: #374151 !important; font-size: 0.58rem !important; padding: 0.18rem 0.4rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .doc-photo-thumb-wrap { height: 110px !important; overflow: hidden !important; }',
+    '#profile-content .doc-photo-thumb-wrap img { width: 100% !important; height: 110px !important; object-fit: cover !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .doc-photo-missing { height: 80px !important; font-size: 0.62rem !important; }',
+    '#profile-content .doc-pdf-wrap { height: 80px !important; font-size: 0.62rem !important; }',
 
-    /* ── 11. Watermark ── */
+    /* ── 11. Photos section — NO forced page break; flow naturally ──
+       Removed page-break-before: always.  Photos will start wherever they
+       fall after Job History / Official Details.  Whatever fits on page 1
+       stays there; the rest wraps to page 2 without any blank gap.       */
+    '#photos-docs-section { break-inside: auto !important; page-break-inside: auto !important; margin-top: 0 !important; }',
+
+    /* ── 12. Watermark ── */
     '#profile-content #pdfWatermark { margin-top: 0.2rem !important; padding: 0.12rem 0.4rem !important; font-size: 0.55rem !important; }',
 
-    /* ── 12. Trailing margin guard ── */
-    '#profile-content > *:last-child { margin-bottom: 0 !important; padding-bottom: 0 !important; }',
-
-    /* ── 13. Photos section: ALWAYS start on a fresh page ──────────────
-       With section-cards set to break-inside:auto, html2pdf flows content
-       continuously.  This rule guarantees Photos & Documents always opens
-       on page 2 — no cutting, no blank gap below text sections.          */
-    '#photos-docs-section { page-break-before: always !important; break-before: always !important; margin-top: 0 !important; }'
+    /* ── 13. Trailing margin guard ── */
+    '#profile-content > *:last-child { margin-bottom: 0 !important; padding-bottom: 0 !important; }'
 
   ].join('\n');
 
