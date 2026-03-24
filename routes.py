@@ -2519,7 +2519,6 @@ def handle_csrf_error(e):
 
 @app.route('/driver/add', methods=['GET', 'POST'])
 @app.route('/r2-proxy')
-@login_required
 def r2_proxy():
     """Serve an R2 object through Flask so JS canvas can draw it without CORS taint."""
     from r2_storage import _get_s3_client, R2_BUCKET_NAME, R2_PUBLIC_URL as _r2_pub
@@ -2544,7 +2543,6 @@ def r2_proxy():
 
 
 @app.route('/driver/<int:driver_id>/delete-document', methods=['POST'])
-@login_required
 def driver_delete_document(driver_id):
     """AJAX: delete a single saved document/photo field from DB + R2."""
     ALLOWED_FIELDS = {
