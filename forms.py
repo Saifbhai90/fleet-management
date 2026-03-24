@@ -128,9 +128,41 @@ class DriverForm(FlaskForm):
     license_no = StringField('License No', validators=[DataRequired()])
     license_type = SelectField('License Type', choices=[
         ('', '-- Select License Type --'),
-        ('M/Car', 'M/Car'), ('LTV', 'LTV'), ('HTV', 'HTV'), ('PSV', 'PSV'),
-        ('M/Car, LTV', 'M/Car, LTV'), ('M/Car, HTV', 'M/Car, HTV'),
-        ('M/Car, LTV, HTV', 'M/Car, LTV, HTV'), ('M/Car, LTV, HTV, PSV', 'M/Car, LTV, HTV, PSV')
+        # ── Single categories ──────────────────────────────────────────
+        ('Motorcycle',           'Motorcycle'),
+        ('M/Car',                'M/Car'),
+        ('LTV',                  'LTV'),
+        ('HTV',                  'HTV'),
+        ('PSV',                  'PSV'),
+        # ── Two-category combinations ──────────────────────────────────
+        ('Motorcycle, M/Car',    'Motorcycle, M/Car'),
+        ('Motorcycle, LTV',      'Motorcycle, LTV'),
+        ('Motorcycle, HTV',      'Motorcycle, HTV'),
+        ('Motorcycle, PSV',      'Motorcycle, PSV'),
+        ('M/Car, LTV',           'M/Car, LTV'),
+        ('M/Car, HTV',           'M/Car, HTV'),
+        ('M/Car, PSV',           'M/Car, PSV'),
+        ('LTV, HTV',             'LTV, HTV'),
+        ('LTV, PSV',             'LTV, PSV'),
+        ('HTV, PSV',             'HTV, PSV'),
+        # ── Three-category combinations ────────────────────────────────
+        ('Motorcycle, M/Car, LTV',       'Motorcycle, M/Car, LTV'),
+        ('Motorcycle, M/Car, HTV',       'Motorcycle, M/Car, HTV'),
+        ('Motorcycle, LTV, HTV',         'Motorcycle, LTV, HTV'),
+        ('Motorcycle, LTV, PSV',         'Motorcycle, LTV, PSV'),
+        ('Motorcycle, HTV, PSV',         'Motorcycle, HTV, PSV'),
+        ('M/Car, LTV, HTV',              'M/Car, LTV, HTV'),
+        ('M/Car, LTV, PSV',              'M/Car, LTV, PSV'),
+        ('M/Car, HTV, PSV',              'M/Car, HTV, PSV'),
+        ('LTV, HTV, PSV',                'LTV, HTV, PSV'),
+        # ── Four-category combinations ─────────────────────────────────
+        ('Motorcycle, M/Car, LTV, HTV',      'Motorcycle, M/Car, LTV, HTV'),
+        ('Motorcycle, M/Car, LTV, PSV',      'Motorcycle, M/Car, LTV, PSV'),
+        ('Motorcycle, M/Car, HTV, PSV',      'Motorcycle, M/Car, HTV, PSV'),
+        ('Motorcycle, LTV, HTV, PSV',        'Motorcycle, LTV, HTV, PSV'),
+        ('M/Car, LTV, HTV, PSV',             'M/Car, LTV, HTV, PSV'),
+        # ── All categories ─────────────────────────────────────────────
+        ('Motorcycle, M/Car, LTV, HTV, PSV', 'Motorcycle, M/Car, LTV, HTV, PSV'),
     ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     issue_district = StringField('Issue District', validators=[DataRequired()])
     license_issue_date = DateField('License Issue Date', format='%d-%m-%Y', validators=[DataRequired()])
