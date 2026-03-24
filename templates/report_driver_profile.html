@@ -887,27 +887,26 @@
   window.addEventListener('load', function() { _prefetchForPrint(); });
 
   /* ══════════════════════════════════════════════════════════════════════════
-     SHARED PDF RENDERER  —  v8 · Off-Screen Mirror
+     SHARED PDF RENDERER  —  v9 · Zero-Origin Fixed Render
      ──────────────────────────────────────────────────────────────────────────
-     v7 failure root cause:
-       scrollY: -(host.getBoundingClientRect().top)  computed  scrollY: -9999
-       Negative scrollY told html2canvas to render from BEFORE the document
-       start → entirely blank canvas.
+     v8 remaining issue:
+       left:-10000px gives getBoundingClientRect().left = -10000.
+       html2canvas maps that negative X into the canvas coordinate system,
+       shifting the captured content away from (0,0) → still narrow / off-centre.
 
-     v8 FIX — position: fixed; top:0; left:-10000px
-     ────────────────────────────────────────────────
-     • Fixed position keeps the element at top:0 in VIEWPORT space.
-       getBoundingClientRect() = {left:-10000, top:0} → Y coordinate is 0.
-     • html2canvas with x:0, y:0, scrollX:0, scrollY:0 treats (0,0) as the
-       element's OWN top-left corner, so it renders from the element inward —
-       the left:-10000px offset doesn't affect the canvas content at all.
-     • visibility:visible + opacity:1 ensure html2canvas can paint it.
-     • setTimeout(150ms) after DOM insertion lets the browser finish the float
-       layout reflow before the canvas capture starts.
-     • d-none classes are removed from the clone so Bootstrap doesn't hide
-       any subsection (e.g. the watermark).
-     • Fixed-position children in the clone (watermark) are set to
-       position:relative so they don't escape the host container.
+     v9 FIX — position:fixed; top:0; left:0; z-index:-1
+     ────────────────────────────────────────────────────
+     • Element sits at the PERFECT (0,0) in viewport space.
+       getBoundingClientRect() = {left:0, top:0, width:1000}.
+       No coordinate maths. No offset. No shift.
+     • z-index:-1 puts the host BEHIND the entire page stack (sidebar, navbar,
+       content overlay). The user never sees it — no flash, no overlay needed.
+     • html2canvas renders only the target element's subtree regardless of
+       z-index, so navbar/sidebar never bleed into the canvas.
+     • visibility:visible + opacity:1 are required so html2canvas can paint it
+       (it skips visibility:hidden / opacity:0 elements).
+     • Float-based layout conversion is applied to the clone so that grid/flex
+       containers don't produce blank rows in the PDF canvas.
   ════════════════════════════════════════════════════════════════════════════ */
   function _renderToPdf(outputMode, filename) {
     return new Promise(function(resolve, reject) {
@@ -924,23 +923,24 @@
         wm.style.display = 'block';
       }
 
-      /* ── 2. Off-Screen Mirror host ──
-         position:fixed keeps top:0 in viewport space → Y=0, no scroll maths.
-         left:-10000px pushes it off the left edge of any realistic screen.
-         visibility:visible + opacity:1 are required for html2canvas to paint it. */
+      /* ── 2. Zero-origin host — at (0,0), hidden behind page via z-index:-1 ──
+         position:fixed; top:0; left:0  →  getBoundingClientRect() = {left:0, top:0}
+         html2canvas with x:0,y:0,scrollX:0,scrollY:0 captures from exact (0,0).
+         z-index:-1 puts the host BEHIND the page stack so the user never sees it.
+         visibility:visible + opacity:1 are required for html2canvas to render it. */
       var host = document.createElement('div');
       host.id  = '__pdfHost';
       host.style.cssText = [
         'position:fixed',
         'top:0',
-        'left:-10000px',
+        'left:0',
         'width:1000px',
         'height:auto',
         'overflow:visible',
         'visibility:visible',
         'opacity:1',
-        'background:#f0f2f5',
-        'z-index:1'
+        'background:#ffffff',   /* white → no gray bands between section cards */
+        'z-index:-1'
       ].join(';');
       document.body.appendChild(host);
 
@@ -951,69 +951,79 @@
         'width:1000px',
         'max-width:none',
         'overflow:visible',
-        'background:#f0f2f5',
+        'background:#ffffff',   /* white background throughout clone */
         'display:block',
         'visibility:visible',
-        'opacity:1'
+        'opacity:1',
+        'padding:0',
+        'margin:0'
       ].join(';');
 
-      /* Remove Bootstrap d-none so every subsection is visible to the engine */
-      clone.querySelectorAll('.d-none').forEach(function(el) {
-        el.classList.remove('d-none');
+      /* Remove any d-none / Bootstrap hidden classes from the clone */
+      clone.querySelectorAll('.d-none,.invisible').forEach(function(el) {
+        el.classList.remove('d-none','invisible');
+        el.style.removeProperty('display');
+        el.style.removeProperty('visibility');
       });
 
-      /* Fix any position:fixed children (e.g. watermark) → relative,
-         so they stay inside the host instead of escaping to the viewport */
+      /* Re-anchor any position:fixed children (e.g. watermark) to relative
+         so they stay inside the clone, not the viewport */
       clone.querySelectorAll('[style*="position:fixed"],[style*="position: fixed"]')
-        .forEach(function(el) {
-          el.style.setProperty('position', 'relative', 'important');
-        });
+           .forEach(function(el) {
+             el.style.setProperty('position', 'relative', 'important');
+           });
 
       host.appendChild(clone);
 
-      /* ── 4. Grid / Flex → float layout (float = most reliable in html2canvas) ── */
+      /* ── 4. Grid / Flex → Float layout ──
+         Float is the most reliable column model for html2canvas.
+         CSS Grid/Flex rows can produce zero-height gaps in the captured canvas.
+         Full-span items (grid-column:1/-1) are detected and given width:100%. */
       function floatChildren(container, childSel, colWidth, gap) {
         var kids = Array.from(container.querySelectorAll(':scope > ' + childSel));
         if (!kids.length) return;
-        container.style.setProperty('display',  'block',      'important');
-        container.style.setProperty('overflow', 'hidden',     'important');
+        container.style.setProperty('display',  'block',  'important');
+        container.style.setProperty('overflow', 'hidden', 'important');
         kids.forEach(function(k) {
-          k.style.setProperty('float',        'left',       'important');
-          k.style.setProperty('width',        colWidth,     'important');
-          k.style.setProperty('margin-right', gap,          'important');
-          k.style.setProperty('box-sizing',   'border-box', 'important');
+          /* Detect full-span grid items before removing grid-column */
+          var gcol = k.style.gridColumn || '';
+          var isSpan = gcol.indexOf('-1') !== -1 || gcol.indexOf('span 2') !== -1;
+          k.style.removeProperty('grid-column');
+          k.style.setProperty('float',        'left',                       'important');
+          k.style.setProperty('width',        isSpan ? '100%' : colWidth,   'important');
+          k.style.setProperty('margin-right', isSpan ? '0'    : gap,        'important');
+          k.style.setProperty('box-sizing',   'border-box',                 'important');
         });
         var cf = document.createElement('div');
-        cf.style.clear = 'both';
+        cf.style.cssText = 'clear:both;display:block;height:0;overflow:hidden;line-height:0;font-size:0;';
         container.appendChild(cf);
       }
 
-      clone.querySelectorAll('.stats-row').forEach(function(r) {
-        floatChildren(r, '.stat-box',       '32%',  '1.5%');
+      clone.querySelectorAll('.stats-row')      .forEach(function(r){ floatChildren(r,'.stat-box',      '32%', '1.5%'); });
+      clone.querySelectorAll('.info-grid')      .forEach(function(r){ floatChildren(r,'.info-item',     '48%', '2%');   });
+      clone.querySelectorAll('.doc-grid')       .forEach(function(r){ floatChildren(r,'.doc-card',      '48%', '2%');   });
+      clone.querySelectorAll('.doc-dates')      .forEach(function(r){ floatChildren(r,'.info-item',     '48%', '2%');   });
+      clone.querySelectorAll('.docs-photo-grid').forEach(function(r){ floatChildren(r,'.doc-photo-item','30%', '2.5%'); });
+
+      /* Bootstrap .row / .col → block, full width */
+      clone.querySelectorAll('.row').forEach(function(r){
+        r.style.setProperty('display','block','important');
       });
-      clone.querySelectorAll('.info-grid').forEach(function(r) {
-        floatChildren(r, '.info-item',      '48%',  '2%');
-      });
-      clone.querySelectorAll('.doc-grid').forEach(function(r) {
-        floatChildren(r, '.doc-card',       '48%',  '2%');
-      });
-      clone.querySelectorAll('.doc-dates').forEach(function(r) {
-        floatChildren(r, '.info-item',      '48%',  '2%');
-      });
-      clone.querySelectorAll('.docs-photo-grid').forEach(function(r) {
-        floatChildren(r, '.doc-photo-item', '30%',  '2.5%');
-      });
-      clone.querySelectorAll('.row').forEach(function(r) {
-        r.style.setProperty('display', 'block', 'important');
-      });
-      clone.querySelectorAll('[class*="col-"]').forEach(function(c) {
-        c.style.setProperty('display',   'block', 'important');
-        c.style.setProperty('width',     '100%',  'important');
-        c.style.setProperty('max-width', '100%',  'important');
-        c.style.setProperty('flex',      'none',  'important');
+      clone.querySelectorAll('[class*="col-"]').forEach(function(c){
+        c.style.setProperty('display',  'block','important');
+        c.style.setProperty('width',    '100%', 'important');
+        c.style.setProperty('max-width','100%', 'important');
+        c.style.setProperty('flex',     'none', 'important');
       });
 
-      /* ── 5. Proxy R2 images → blob URLs ── */
+      /* Tighten section-card gaps → smaller gray bands between cards in PDF */
+      clone.querySelectorAll('.section-card').forEach(function(card){
+        card.style.setProperty('margin-bottom', '0.6rem',    'important');
+        card.style.setProperty('box-shadow',    'none',       'important');
+        card.style.setProperty('border',        '1px solid #e0e0e0', 'important');
+      });
+
+      /* ── 5. Proxy R2 images → same-origin blob URLs ── */
       var proxyJob = _proxyImages(clone);
 
       function cleanup() {
@@ -1023,9 +1033,10 @@
         if (wm) wm.style.display = 'none';
       }
 
-      /* ── 6. Wait for images, then 150 ms for float reflow, then capture ── */
+      /* ── 6. Images done → 200ms reflow → capture ── */
       Promise.all(proxyJob.waits).then(function() {
         setTimeout(function() {
+
           var opt = {
             margin:   [10, 10, 10, 10],
             filename: filename || 'document.pdf',
@@ -1036,11 +1047,11 @@
               allowTaint:      false,
               letterRendering: true,
               logging:         false,
-              width:           1000,   /* exact clone width */
-              windowWidth:     1200,   /* simulate desktop, no mobile breakpoints */
-              x:               0,      /* crop from element's own left edge */
-              y:               0,      /* crop from element's own top edge */
-              scrollX:         0,      /* fixed element → scroll irrelevant */
+              width:           1000,  /* match clone width — fills A4 content area */
+              windowWidth:     1200,  /* desktop breakpoint — no mobile CSS fires */
+              x:               0,
+              y:               0,
+              scrollX:         0,
               scrollY:         0
             },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
@@ -1057,10 +1068,11 @@
           var worker  = html2pdf().set(opt).from(clone);
           var promise = (outputMode === 'save') ? worker.save() : worker.output('blob');
           promise
-            .then(function(result) { cleanup(); resolve(result); })
-            .catch(function(err)   { cleanup(); reject(err);    });
-        }, 150);  /* wait for float layout paint */
-      }).catch(function(err) { cleanup(); reject(err); });
+            .then(function(result){ cleanup(); resolve(result); })
+            .catch(function(err)  { cleanup(); reject(err);    });
+
+        }, 200);
+      }).catch(function(err){ cleanup(); reject(err); });
     });
   }
 
