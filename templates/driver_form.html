@@ -19,15 +19,27 @@
 
     /* ── Processing Overlay ── */
     #processingOverlay {
-        position: fixed; inset: 0; z-index: 99999;
+        position: fixed !important;
+        inset: 0 !important;
+        top: 0 !important; right: 0 !important;
+        bottom: 0 !important; left: 0 !important;
+        z-index: 99999 !important;
         background: rgba(0, 0, 0, 0.72);
-        display: flex; align-items: center; justify-content: center;
-        opacity: 0; visibility: hidden;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        opacity: 0;
+        visibility: hidden;
         transition: opacity 0.3s ease, visibility 0.3s ease;
         backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
+        /* Ensure this element never inherits a transform stacking context */
+        transform: none !important;
+        will-change: opacity;
     }
     #processingOverlay.active {
-        opacity: 1; visibility: visible;
+        opacity: 1 !important;
+        visibility: visible !important;
     }
     .processing-card {
         background: #ffffff;
@@ -780,10 +792,32 @@ document.addEventListener('DOMContentLoaded', function () {
   /* ── Show overlay ── */
   window.showProcessingOverlay = function () {
     var ov = document.getElementById('processingOverlay');
-    if (ov) {
+    if (!ov) return;
+
+    /*
+     * KEY FIX: move the overlay directly onto <body>.
+     * CSS `position:fixed` loses viewport-anchoring when any ancestor has a
+     * `transform` or `filter` (the sidebar wrapper in base.html uses one for
+     * its slide animation, creating a new stacking context).
+     * Reparenting onto <body> breaks out of that context completely.
+     */
+    if (ov.parentNode !== document.body) {
+      document.body.appendChild(ov);
+    }
+
+    /* Reset the card pop-in animation so it fires fresh after reparenting */
+    var card = ov.querySelector('.processing-card');
+    if (card) {
+      card.style.animation = 'none';
+      void card.offsetHeight;          /* force reflow */
+      card.style.animation = '';
+    }
+
+    /* Trigger fade-in on the very next paint (lets the CSS transition run) */
+    requestAnimationFrame(function () {
       ov.classList.add('active');
       _startStepTicker();
-    }
+    });
   };
 
   /* ── Attach to form submit ── */
@@ -804,9 +838,13 @@ document.addEventListener('DOMContentLoaded', function () {
       /* Show the overlay (smooth fade-in via CSS transition) */
       showProcessingOverlay();
 
-      /* Block accidental clicks on the rest of the page */
+      /* Block accidental clicks on the rest of the page.
+         showProcessingOverlay() re-parents the overlay onto <body>, so we
+         restore pointer-events on it after the call. */
       document.body.style.pointerEvents = 'none';
-      document.getElementById('processingOverlay').style.pointerEvents = 'all';
+      /* overlay is now a direct child of body — keep it interactive */
+      var _ov = document.getElementById('processingOverlay');
+      if (_ov) _ov.style.pointerEvents = 'all';
     }, false);
   });
 })();
