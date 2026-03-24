@@ -887,35 +887,41 @@
   window.addEventListener('load', function() { _prefetchForPrint(); });
 
   /* ══════════════════════════════════════════════════════════════════════════
-     SHARED PDF RENDERER  —  v6 · Hidden Iframe Sandbox
+     SHARED PDF RENDERER  —  v7 · Detached Slate
      ──────────────────────────────────────────────────────────────────────────
-     WHY every previous attempt failed
-     ───────────────────────────────────
-     v1-v4: We tried to force the live page's element to 800px.
-            base.html has body{overflow-x:hidden} + .main-content{margin-left:300px}.
-            The browser always clips the overflow before html2canvas measures it.
+     ROOT CAUSE (confirmed by reading base.html):
+       body { overflow-x: hidden }   ← clips at viewport edge
+       .main-content { margin-left: 300px; overflow-x: hidden }  ← double clip
+       #profile-content lives 3 levels inside this constrained chain.
 
-     v5 (onclone): We modify the cloned document inside html2canvas.
-            BUT html2canvas clones the ENTIRE page DOM (sidebar + nav + content).
-            Hiding the sidebar in the clone still leaves all its CSS selectors
-            active, and the remaining margin/overflow constraints persist on the
-            cloned .main-content, so the element still renders narrow.
+     WHY v1-v6 all failed:
+       v1-v4 : forced width on the LIVE element — parent overflow always clips it.
+       v5     : onclone modifies the clone, but html2canvas clones the ENTIRE
+                page DOM, so all CSS constraints on .main-content survive.
+       v6     : iframe works ONLY if html2canvas correctly uses the iframe's
+                ownerDocument.defaultView.  In html2pdf's bundled html2canvas
+                the element-to-window lookup can still read the PARENT window's
+                viewport — so the sidebar margin bleeds in.
 
-     v6 FIX — iframe sandbox (same technique used by Salesforce PDF, Notion export)
-     ─────────────────────────────────────────────────────────────────────────────
-     • Create a fresh, hidden <iframe> with NO sidebar, NO navbar, NO overflow.
-     • Write ONLY the #profile-content HTML + all page CSS into it.
-     • The iframe is a clean 1024px document. #profile-content starts at (0,0)
-       with width:800px — no parent constraints, no clipping, ever.
-     • html2canvas renders from (0,0) in the iframe's coordinate space → full A4.
-     • The live page is never modified. Zero flicker, zero side-effects.
+     v7 FIX — Detached Slate (zero parent constraints):
+     ─────────────────────────────────────────────────
+     1. Create a plain <div> as a DIRECT CHILD OF <body> (no sidebar chain).
+     2. Position it at top:9999px (positive Y = within document space,
+        html2canvas CAN reach it; vs. negative X = outside document = blank).
+     3. Deep-clone ONLY #profile-content into this host — no navbar, no sidebar,
+        no .main-content wrapper. Zero overflow/margin constraints ever apply.
+     4. Convert CSS Grid → float layout on the clone (floats are the most
+        reliable for html2canvas page-break detection).
+     5. Proxy R2 images → blob URLs (no CORS taint).
+     6. Render clone with html2pdf. width:1000px, windowWidth:1200 → full A4.
+     7. Remove host div. Live page untouched.
   ════════════════════════════════════════════════════════════════════════════ */
   function _renderToPdf(outputMode, filename) {
     return new Promise(function(resolve, reject) {
       var wm    = document.getElementById('pdfWatermark');
       var srcEl = document.getElementById('profile-content');
 
-      /* ── 1. Stamp watermark on the source element BEFORE cloning ── */
+      /* ── 1. Stamp watermark BEFORE cloning ── */
       if (wm) {
         var d  = new Date();
         var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
@@ -925,111 +931,111 @@
         wm.style.display = 'block';
       }
 
-      /* ── 2. Collect ALL page CSS (links + inline blocks) ── */
-      var cssLinks = '';
-      document.querySelectorAll('link[rel="stylesheet"]').forEach(function(l) {
-        cssLinks += l.outerHTML + '\n';
-      });
-      var inlineCSS = '';
-      document.querySelectorAll('style').forEach(function(s) {
-        inlineCSS += s.textContent + '\n';
-      });
-      /* Sandbox overrides — strip every layout constraint from the host app */
-      inlineCSS += [
-        'html,body{margin:0!important;padding:0!important;',
-        '  background:#f0f2f5!important;width:1024px!important;',
-        '  overflow:visible!important;}',
-        /* nuke sidebar / nav / anything outside the content */
-        '.sidebar,#sidebar,[id*="sidebar"],[class*="sidebar"],',
-        '.navbar,nav,.topbar,.top-header,footer,.footer{display:none!important}',
-        /* strip the main-content wrapper constraints */
-        '.main-content,.content-wrapper{',
-        '  margin-left:0!important;overflow:visible!important;',
-        '  width:auto!important;max-width:none!important;padding:0!important;}',
-        /* profile-page padding would add grey outside margins */
-        '.profile-page{padding:0!important;background:#f0f2f5!important;}',
-        /* THE critical rule — 800px matches A4 content area at 96dpi */
-        '#profile-content{',
-        '  width:800px!important;max-width:none!important;',
-        '  overflow:visible!important;display:block!important;}'
-      ].join('');
-
-      /* ── 3. Create hidden iframe ──
-         Positioned off-screen in the PARENT (left:-9999px), but the iframe's
-         OWN coordinate space starts at (0,0).  html2canvas renders iEl from
-         (0,0) inside the iframe — the parent's off-screen position is invisible
-         to html2canvas because it uses iEl.ownerDocument.defaultView (the iframe
-         window), not the parent window. ── */
-      var iframe = document.createElement('iframe');
-      iframe.id  = '__pdfSandbox';
-      iframe.setAttribute('scrolling', 'no');
-      iframe.style.cssText = [
-        'position:fixed', 'top:0', 'left:-9999px',
-        'width:1024px',   'height:30000px',
-        'border:none',    'pointer-events:none', 'z-index:-1'
+      /* ── 2. Detached host — direct child of body, no sidebar ancestry ──
+         top:9999px keeps it below the visible viewport (user never sees it).
+         Positive Y means html2canvas can find and render it (negative X = blank). */
+      var host = document.createElement('div');
+      host.id  = '__pdfHost';
+      host.style.cssText = [
+        'position:absolute',
+        'top:9999px',
+        'left:0',
+        'width:1000px',
+        'overflow:visible',
+        'background:#f0f2f5'
       ].join(';');
-      document.body.appendChild(iframe);
+      document.body.appendChild(host);
 
-      /* ── 4. Write sanitized content into iframe ── */
-      var iDoc = iframe.contentDocument || iframe.contentWindow.document;
-      iDoc.open();
-      iDoc.write(
-        '<!DOCTYPE html><html><head>' +
-        '<meta charset="UTF-8"><meta name="viewport" content="width=1024">' +
-        cssLinks +
-        '<style>' + inlineCSS + '</style>' +
-        '</head><body>' +
-        srcEl.outerHTML +   /* full stamped #profile-content clone */
-        '</body></html>'
-      );
-      iDoc.close();
+      /* ── 3. Deep-clone only #profile-content ── */
+      var clone = srcEl.cloneNode(true);
+      clone.removeAttribute('id');   /* prevent duplicate-ID confusion */
+      clone.style.cssText = [
+        'width:1000px',
+        'max-width:none',
+        'overflow:visible',
+        'background:#f0f2f5',
+        'display:block'
+      ].join(';');
+      host.appendChild(clone);
 
-      var proxyJob = null;
+      /* ── 4. Convert CSS Grid / Flex → float layout inside the clone ──
+         Floats have the most reliable break-inside support across all
+         print/canvas engines.  Grid is fine on screen but fragile in html2canvas. */
+      function floatChildren(container, childSel, colWidth, gap) {
+        /* Use :scope > to target only DIRECT children */
+        var kids = Array.from(container.querySelectorAll(':scope > ' + childSel));
+        if (!kids.length) return;
+        container.style.setProperty('display',  'block',   'important');
+        container.style.setProperty('overflow', 'hidden',  'important');
+        kids.forEach(function(k) {
+          k.style.setProperty('float',       'left',    'important');
+          k.style.setProperty('width',       colWidth,  'important');
+          k.style.setProperty('margin-right', gap,      'important');
+          k.style.setProperty('box-sizing',  'border-box', 'important');
+        });
+        var cf = document.createElement('div');
+        cf.style.clear = 'both';
+        container.appendChild(cf);
+      }
+
+      clone.querySelectorAll('.stats-row').forEach(function(r) {
+        floatChildren(r, '.stat-box',       '32%',  '1.5%');
+      });
+      clone.querySelectorAll('.info-grid').forEach(function(r) {
+        floatChildren(r, '.info-item',      '48%',  '2%');
+      });
+      clone.querySelectorAll('.doc-grid').forEach(function(r) {
+        floatChildren(r, '.doc-card',       '48%',  '2%');
+      });
+      clone.querySelectorAll('.doc-dates').forEach(function(r) {
+        floatChildren(r, '.info-item',      '48%',  '2%');
+      });
+      clone.querySelectorAll('.docs-photo-grid').forEach(function(r) {
+        floatChildren(r, '.doc-photo-item', '30%',  '2.5%');
+      });
+      /* All Bootstrap .row → block so page-break works */
+      clone.querySelectorAll('.row').forEach(function(r) {
+        r.style.setProperty('display', 'block', 'important');
+      });
+      clone.querySelectorAll('[class*="col-"]').forEach(function(c) {
+        c.style.setProperty('display',    'block',  'important');
+        c.style.setProperty('width',      '100%',   'important');
+        c.style.setProperty('max-width',  '100%',   'important');
+        c.style.setProperty('flex',       'none',   'important');
+      });
+
+      /* ── 5. Proxy R2 cross-origin images → blob URLs ── */
+      var proxyJob = _proxyImages(clone);
 
       function cleanup() {
         if (proxyJob) proxyJob.restore();
-        var f = document.getElementById('__pdfSandbox');
-        if (f && f.parentNode) f.parentNode.removeChild(f);
+        var h = document.getElementById('__pdfHost');
+        if (h && h.parentNode) h.parentNode.removeChild(h);
         if (wm) wm.style.display = 'none';
       }
 
-      /* ── 5. Wait for CDN fonts / stylesheets to paint inside the iframe ── */
-      setTimeout(function() {
-        var iEl = iDoc.getElementById('profile-content');
-        if (!iEl) {
-          cleanup();
-          reject(new Error('PDF sandbox: profile-content not found'));
-          return;
-        }
-
-        /* Ensure iframe is scrolled to top */
-        try { iframe.contentWindow.scrollTo(0, 0); } catch(e) {}
-
-        /* ── 6. Proxy cross-origin R2 images inside the iframe ── */
-        proxyJob = _proxyImages(iEl);
-
-        Promise.all(proxyJob.waits).then(function() {
-
-          /* ── 7. Generate PDF from iframe element ──
-             html2canvas uses iEl.ownerDocument.defaultView (the iframe window),
-             so windowWidth:1024 is the iframe's width — no sidebar, no margins. */
+      /* ── 6. Wait for images, then one RAF for float layout to settle ── */
+      Promise.all(proxyJob.waits).then(function() {
+        requestAnimationFrame(function() {
           var opt = {
             margin:   [10, 10, 10, 10],
             filename: filename || 'document.pdf',
             image:    { type: 'jpeg', quality: 0.96 },
             html2canvas: {
-              scale:           2,           /* Hi-DPI: 2× canvas pixels per CSS px */
-              useCORS:         true,        /* images are blob URLs — no taint */
+              scale:           2.5,         /* Hi-DPI sharpness */
+              useCORS:         true,        /* blob URLs — no taint */
               allowTaint:      false,
               letterRendering: true,
               logging:         false,
-              windowWidth:     1024,        /* iframe width → no responsive breakpoint fires */
+              width:           1000,        /* match clone width exactly */
+              windowWidth:     1200,        /* desktop viewport, no mobile breakpoints */
               scrollX:         0,
-              scrollY:         0
+              scrollY:         -(host.getBoundingClientRect().top)
+                                           /* compensate: scroll to where host is */
             },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
             pagebreak: {
-              mode:  ['css', 'legacy'],     /* reads break-inside from SCREEN CSS above */
+              mode:  ['css', 'legacy'],
               avoid: [
                 '.section-card', '.doc-card', '.doc-grid',
                 '.docs-photo-grid', '.doc-photo-item',
@@ -1038,15 +1044,13 @@
             }
           };
 
-          var worker  = html2pdf().set(opt).from(iEl);
+          var worker  = html2pdf().set(opt).from(clone);
           var promise = (outputMode === 'save') ? worker.save() : worker.output('blob');
           promise
             .then(function(result) { cleanup(); resolve(result); })
             .catch(function(err)   { cleanup(); reject(err);    });
-
-        }).catch(function(err) { cleanup(); reject(err); });
-
-      }, 600);  /* 600ms — enough for Google Fonts + Bootstrap Icons CDN */
+        });
+      }).catch(function(err) { cleanup(); reject(err); });
     });
   }
 
