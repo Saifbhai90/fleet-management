@@ -1995,26 +1995,55 @@
         {% endif %}
     {% endwith %}
     <style>
-    /* ── AJAX Live-Search: subtle inline spinner ── */
-    .ss-wrap { position: relative; display: inline-flex; align-items: center; width: 100%; }
-    .ss-wrap .ss-spinner {
-        position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-        width: 14px; height: 14px;
-        border: 2px solid #cbd5e1; border-top-color: #1e3a8a;
-        border-radius: 50%;
-        animation: ss-spin .6s linear infinite;
-        display: none; pointer-events: none;
+    /* ── AJAX Live-Search ─────────────────────────────────────────── */
+
+    /* Tight wrapper injected around the search INPUT only, not its siblings */
+    .ss-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        max-width: 320px;
+        width: 100%;
+        flex-shrink: 0;        /* keep it compact inside flex header rows  */
     }
-    .ss-wrap.ss-loading .ss-spinner { display: block; }
-    .ss-wrap.ss-loading input { padding-right: 28px; }
+    .ss-wrap input {
+        width: 100% !important;
+        min-width: 140px;
+        padding-right: 26px;   /* always reserve room so text never hides under spinner */
+    }
+
+    /* Spinner — absolutely inside the input, right edge */
+    .ss-wrap .ss-spinner {
+        position: absolute;
+        right: 7px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 13px;
+        height: 13px;
+        border: 2px solid #d1d5db;
+        border-top-color: #1e3a8a;
+        border-radius: 50%;
+        animation: ss-spin .55s linear infinite;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .15s ease;
+    }
+    .ss-wrap.ss-loading .ss-spinner { opacity: 1; }
+
     @keyframes ss-spin { to { transform: translateY(-50%) rotate(360deg); } }
 
-    /* Fade rows in after AJAX swap */
+    /* Per-Page select: never affected by search spinner state */
+    .heading-per-page-select,
+    select.heading-per-page-select { flex-shrink: 0; }
+
+    /* Subtle row fade-in after AJAX swap */
     @keyframes ss-fade-in {
-        from { opacity: 0; transform: translateY(4px); }
+        from { opacity: 0; transform: translateY(3px); }
         to   { opacity: 1; transform: translateY(0); }
     }
-    tbody.ss-updated tr { animation: ss-fade-in .18s ease forwards; }
+    tbody.ss-updated tr {
+        animation: ss-fade-in .16s ease forwards;
+    }
     </style>
     <script>
     /* ═══════════════════════════════════════════════════════════════════
@@ -2032,14 +2061,25 @@
         var curVal = new URLSearchParams(window.location.search).get(paramName) || '';
         if (curVal) input.value = curVal;
 
-        /* ── Wrap input in .ss-wrap and inject spinner ── */
-        var parent = input.parentElement;
-        if (parent && !parent.classList.contains('ss-wrap')) {
-            parent.classList.add('ss-wrap');
+        /* ── Build a DEDICATED wrapper around ONLY the input element.
+             Never pollute the flex row that also holds "Per Page" / other siblings. ── */
+        var wrapper;
+        if (input.parentElement && input.parentElement.classList.contains('ss-wrap')) {
+            wrapper = input.parentElement;           /* already wrapped — idempotent */
+        } else {
+            wrapper = document.createElement('div');
+            wrapper.className = 'ss-wrap';
+            /* Insert wrapper in place of input, then move input inside it */
+            input.parentNode.insertBefore(wrapper, input);
+            wrapper.appendChild(input);
+        }
+        /* Inject spinner once */
+        if (!wrapper.querySelector('.ss-spinner')) {
             var spinner = document.createElement('span');
             spinner.className = 'ss-spinner';
-            parent.appendChild(spinner);
+            wrapper.appendChild(spinner);
         }
+        var parent = wrapper;   /* all subsequent loading-class toggles target the wrapper */
 
         /* ── Build new search URL ── */
         function buildUrl(val) {
