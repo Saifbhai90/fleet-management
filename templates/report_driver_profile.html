@@ -896,14 +896,8 @@
     /* Uniform box */
     '#profile-content .uniform-box { padding: 0.3rem 0.7rem !important; margin-top: 0.35rem !important; font-size: 0.78rem !important; }',
 
-    /* Photos & Documents — photo height is the biggest single saving */
-    '#profile-content .docs-photo-grid { gap: 0.4rem !important; }',
-    '#profile-content .doc-photo-label { font-size: 0.65rem !important; padding: 0.28rem 0.55rem !important; }',
-    '#profile-content .doc-photo-thumb-wrap { height: 75px !important; }',
-    '#profile-content .doc-photo-thumb-wrap img { height: 75px !important; }',
-    '#profile-content .doc-photo-missing { height: 75px !important; font-size: 0.68rem !important; }',
-    '#profile-content .doc-photo-missing i { font-size: 1.3rem !important; }',
-    '#profile-content .doc-pdf-wrap { height: 75px !important; }',
+    /* Photos & Documents — keep photos at full height so CNIC/license text stays readable */
+    '#profile-content .docs-photo-grid { gap: 0.5rem !important; }',
 
     /* Job history timeline */
     '#profile-content .timeline { padding-left: 1.3rem !important; }',
@@ -985,26 +979,195 @@
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
 
-  /* ── Print button ── */
+  /* ── Print button — captures as canvas images, opens rich preview tab ── */
   function doPrint() {
     var pb = document.getElementById('printBtn');
     pb.disabled = true;
     pb.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing...';
-    var safeguard = setTimeout(function() { pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; _removeCompactStyles(); }, 90000);
-    _renderDoc(_PDF_OPTS, 'blob', function(blob) {
+
+    var safeguard = setTimeout(function() {
+      pb.disabled = false;
+      pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
+      _removeCompactStyles();
+    }, 90000);
+
+    function resetPrint() {
       clearTimeout(safeguard);
       pb.disabled = false;
       pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
-      if (!blob) return;
-      var url = URL.createObjectURL(blob);
-      var win = window.open(url, '_blank');
-      if (!win) {
-        alert('Pop-up blocked — please allow pop-ups for this site, then click Print again.');
-        URL.revokeObjectURL(url);
-      } else {
-        setTimeout(function() { try { URL.revokeObjectURL(url); } catch(e) {} }, 120000);
-      }
+    }
+
+    var wm  = document.getElementById('pdfWatermark');
+    var el  = document.getElementById('profile-content');
+
+    /* Stamp watermark */
+    if (wm) {
+      var d  = new Date();
+      var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
+               ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+      var pde = document.getElementById('pdfDate');
+      if (pde) pde.textContent = ds;
+      wm.style.display = 'block';
+    }
+
+    _injectCompactStyles();
+    var job = _proxyImages(el);
+
+    Promise.all(job.waits).then(function() {
+      requestAnimationFrame(function() {
+        setTimeout(function() {
+
+          html2canvas(el, {
+            scale: 1.8,
+            useCORS: false,
+            allowTaint: true,
+            letterRendering: true,
+            logging: false
+          }).then(function(canvas) {
+            _removeCompactStyles();
+            job.restore();
+            if (wm) wm.style.display = 'none';
+            resetPrint();
+
+            /* Split canvas into A4-proportioned page images */
+            var cw   = canvas.width;
+            var pgH  = Math.round(cw * 297 / 210);   /* A4 aspect ratio */
+            var pages = [];
+            var y = 0;
+            while (y < canvas.height) {
+              var h  = Math.min(pgH, canvas.height - y);
+              var pc = document.createElement('canvas');
+              pc.width  = cw;
+              pc.height = h;
+              var ctx = pc.getContext('2d');
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, cw, h);
+              ctx.drawImage(canvas, 0, -y);
+              pages.push(pc.toDataURL('image/jpeg', 0.93));
+              y += pgH;
+            }
+
+            _openPrintPreview(pages, 'Driver_Profile_{{ driver.driver_id }}');
+          }).catch(function(err) {
+            console.error('Canvas capture error:', err);
+            _removeCompactStyles();
+            job.restore();
+            if (wm) wm.style.display = 'none';
+            resetPrint();
+          });
+
+        }, 0);
+      });
+    }).catch(function(err) {
+      console.error('Image proxy error:', err);
+      _removeCompactStyles();
+      job.restore();
+      if (wm) wm.style.display = 'none';
+      resetPrint();
     });
+  }
+
+  /* ── Print preview tab — Print + Download PDF + Download page images ── */
+  function _openPrintPreview(pages, filename) {
+    var n = pages.length;
+
+    /* Build page image blocks */
+    var pageBlocks = '';
+    for (var i = 0; i < n; i++) {
+      pageBlocks +=
+        '<div class="page-wrap">' +
+          '<img src="' + pages[i] + '" alt="Page ' + (i+1) + '">' +
+          '<span class="pg-lbl">Page ' + (i+1) + ' / ' + n + '</span>' +
+        '</div>';
+    }
+
+    /* Build image download buttons */
+    var imgBtns = '';
+    for (var j = 0; j < n; j++) {
+      imgBtns +=
+        '<a class="btn btn-img" href="' + pages[j] + '" download="' + filename + '_page' + (j+1) + '.jpg">' +
+          '&#8613; Page&nbsp;' + (j+1) +
+        '</a>';
+    }
+
+    var html = '<!DOCTYPE html><html lang="en"><head>' +
+      '<meta charset="UTF-8">' +
+      '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>Driver Profile &mdash; Print Preview</title>' +
+      '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>' +
+      '<style>' +
+        '*{box-sizing:border-box;margin:0;padding:0}' +
+        'body{background:#2b2b2b;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}' +
+        '.bar{position:fixed;top:0;left:0;right:0;min-height:54px;background:#111;' +
+             'display:flex;align-items:center;flex-wrap:wrap;gap:6px;' +
+             'padding:8px 14px;z-index:999;border-bottom:2px solid #1565c0}' +
+        '.bar-title{flex:1;min-width:120px;color:#ccc;font-size:.82rem;font-weight:700;' +
+                   'overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+        '.btn{display:inline-flex;align-items:center;gap:4px;padding:7px 13px;' +
+             'border:none;border-radius:5px;cursor:pointer;font-size:.75rem;font-weight:600;' +
+             'text-decoration:none;color:#fff;white-space:nowrap;transition:filter .15s}' +
+        '.btn:hover{filter:brightness(1.18)}' +
+        '.btn-print{background:#1565c0}' +
+        '.btn-pdf{background:#b71c1c}' +
+        '.btn-img{background:#2e7d32;font-size:.7rem;padding:5px 10px}' +
+        '.btn-close{background:#444}' +
+        '.img-group{display:flex;align-items:center;gap:5px;flex-wrap:wrap}' +
+        '.img-label{color:#aaa;font-size:.7rem;font-weight:700;white-space:nowrap}' +
+        '.divider{color:#444;font-size:1.2rem;margin:0 2px}' +
+        '.pages{margin-top:68px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:14px}' +
+        '.page-wrap{position:relative;background:#fff;width:100%;max-width:840px;' +
+                   'box-shadow:0 6px 28px rgba(0,0,0,.6)}' +
+        '.page-wrap img{display:block;width:100%;height:auto}' +
+        '.pg-lbl{position:absolute;bottom:7px;right:10px;font-size:.6rem;color:rgba(0,0,0,.3)}' +
+        '@media print{' +
+          '.bar{display:none!important}' +
+          '.pages{margin:0;padding:0;gap:0}' +
+          '.page-wrap{max-width:100%;box-shadow:none;page-break-after:always}' +
+          '.page-wrap:last-child{page-break-after:auto}' +
+          '.pg-lbl{display:none}' +
+        '}' +
+      '</style></head><body>' +
+      '<div class="bar">' +
+        '<span class="bar-title">&#128438;&nbsp;Driver Profile &mdash; Print Preview</span>' +
+        '<button class="btn btn-print" onclick="window.print()">&#128438; Print</button>' +
+        '<span class="divider">|</span>' +
+        '<button class="btn btn-pdf" id="dlPdfBtn" onclick="dlPDF()">&#8613; Download PDF</button>' +
+        '<span class="divider">|</span>' +
+        '<div class="img-group"><span class="img-label">&#128247; Download Image:</span>' + imgBtns + '</div>' +
+        '<span class="divider">|</span>' +
+        '<button class="btn btn-close" onclick="window.close()">&#10005; Close</button>' +
+      '</div>' +
+      '<div class="pages">' + pageBlocks + '</div>' +
+      '<script>' +
+        'var _pages = ' + JSON.stringify(pages) + ';' +
+        'var _fn = "' + filename + '";' +
+        'function dlPDF() {' +
+        '  var btn = document.getElementById("dlPdfBtn");' +
+        '  btn.disabled = true; btn.textContent = "Generating...";' +
+        '  setTimeout(function() {' +
+        '    try {' +
+        '      var doc = new window.jspdf.jsPDF({unit:"mm",format:"a4",orientation:"portrait"});' +
+        '      _pages.forEach(function(src, i) {' +
+        '        if (i > 0) doc.addPage();' +
+        '        doc.addImage(src, "JPEG", 0, 0, 210, 297);' +
+        '      });' +
+        '      doc.save(_fn + ".pdf");' +
+        '    } catch(e) { alert("PDF error: " + e.message); }' +
+        '    btn.disabled = false; btn.innerHTML = "&#8613; Download PDF";' +
+        '  }, 100);' +
+        '}' +
+      '<\/script>' +
+      '</body></html>';
+
+    var blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+    var url  = URL.createObjectURL(blob);
+    var win  = window.open(url, '_blank');
+    if (!win) {
+      alert('Pop-up blocked — please allow pop-ups for this site.');
+      URL.revokeObjectURL(url);
+    } else {
+      setTimeout(function() { try { URL.revokeObjectURL(url); } catch(e) {} }, 300000);
+    }
   }
 
   /* ── Shared image proxy helper ── */
