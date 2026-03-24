@@ -268,6 +268,18 @@
     .profile-page { background: #fff !important; padding: 0 !important; }
     #profile-content { display: block !important; width: 100% !important; }
 
+    /* ── FIX: Bootstrap flex/grid containers prevent break-inside in most browsers.
+       Convert them to block so the print engine can honour break-inside: avoid.  ── */
+    .row                { display: block !important; }
+    .col, [class*="col-"] { display: block !important; width: 100% !important; max-width: 100% !important; padding: 0 !important; }
+    /* Step 1: turn ALL .d-flex to block */
+    .d-flex             { display: block !important; }
+    /* Step 2: restore header's own flex row (photo + name side-by-side) */
+    .profile-header > .d-flex { display: flex !important; }
+    /* Step 3: buttons — absolutely hidden, no orphan lines */
+    .action-bar, #profile-action-bar { display: none !important; }
+    .btn, a.btn, button, input[type="button"], input[type="submit"] { display: none !important; }
+
     /* ══════════════════════════════════════════════════════════
        ENTERPRISE PAGE-BREAK PROTECTION
        If a block doesn't fit at the bottom of the current page,
@@ -608,7 +620,7 @@
 
   <!-- Photos & Documents -->
   {% set _has_any_doc = driver.photo_path or driver.cnic_front_path or driver.cnic_back_path or driver.license_front_path or driver.license_back_path or driver.document_path %}
-  <div class="section-card pdf-page-break-before">
+  <div class="section-card">
     <div class="section-title"><i class="bi bi-images me-1"></i>Photos &amp; Documents</div>
     {% if _has_any_doc %}
     <div class="docs-photo-grid">
@@ -990,57 +1002,63 @@
     var btn = document.getElementById('pdfBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
-    var wm = document.getElementById('pdfWatermark');
+    var wm   = document.getElementById('pdfWatermark');
+    var el   = document.getElementById('profile-content');
     var globalTimer;
+
+    /* ── Restore everything back to original after PDF ── */
     function resetBtn() {
       clearTimeout(globalTimer);
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
       if (wm) wm.style.display = 'none';
+      /* Revert forced width */
+      el.style.width    = '';
+      el.style.maxWidth = '';
     }
-    /* Safety: always reset button within 90 s even if everything hangs */
+
     globalTimer = setTimeout(function() {
       console.warn('PDF timed out — resetting button');
       resetBtn();
     }, 90000);
+
     try {
+      /* ── Watermark timestamp ── */
       if (wm) {
-        var d = new Date();
+        var d  = new Date();
         var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
                  ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
         var pdfDateEl = document.getElementById('pdfDate');
         if (pdfDateEl) pdfDateEl.textContent = ds;
         wm.style.display = 'block';
       }
-      var el = document.getElementById('profile-content');
+
+      /* ── CRITICAL: force element to exactly 800 px wide so html2canvas
+         renders a full A4-width column regardless of sidebar or viewport ── */
+      el.style.width    = '800px';
+      el.style.maxWidth = '800px';
+
       var job = _proxyImages(el);
       Promise.all(job.waits).then(function() {
         var opt = {
-          /* ── Page margins: 15 mm top/bottom, 12 mm sides (matches @page rule) ── */
-          margin:   [15, 12, 15, 12],
+          /* 10 mm on all sides — comfortable breathing room */
+          margin:   [10, 10, 10, 10],
           filename: 'Driver_Profile_{{ driver.driver_id }}.pdf',
           image:    { type: 'jpeg', quality: 0.96 },
           html2canvas: {
-            scale:           2,
-            useCORS:         false,
-            allowTaint:      true,
+            scale:           2,          /* Hi-DPI sharpness */
+            useCORS:         true,       /* works fine — images are proxied blobs */
+            allowTaint:      false,
             letterRendering: true,
             logging:         false,
-            /* Prevent canvas from rendering at scroll offset */
-            scrollX:         0,
-            scrollY:         -window.scrollY,
-            /* Fixed render width for consistent A4 layout */
-            windowWidth:     1024
+            width:           800,        /* canvas pixel width = element forced width */
+            windowWidth:     800         /* media-query breakpoint matches element */
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          /* ── Enterprise page-break strategy ──
-             avoid-all  : html2pdf's own element-level break detection
-             css        : respects page-break-inside / break-inside CSS
-             legacy     : fallback pixel-height algorithm
-          ── */
+          /* ── Page-break: css + legacy only.
+             avoid-all is removed — it shifts content and causes half-page blanks. ── */
           pagebreak: {
-            mode:   ['avoid-all', 'css', 'legacy'],
-            before: '.pdf-page-break-before',
+            mode:   ['css', 'legacy'],
             avoid:  [
               '.section-card',
               '.doc-card',
@@ -1049,8 +1067,7 @@
               '.doc-photo-item',
               '.timeline-item',
               '.stat-box',
-              '.uniform-box',
-              '.validity-badge'
+              '.uniform-box'
             ]
           }
         };
