@@ -566,7 +566,7 @@
 
   <!-- Photos & Documents -->
   {% set _has_any_doc = driver.photo_path or driver.cnic_front_path or driver.cnic_back_path or driver.license_front_path or driver.license_back_path or driver.document_path %}
-  <div class="section-card">
+  <div class="section-card" id="photos-docs-section">
     <div class="section-title"><i class="bi bi-images me-1"></i>Photos &amp; Documents</div>
     {% if _has_any_doc %}
     <div class="docs-photo-grid">
@@ -911,7 +911,18 @@
 
     /* Kill bottom margin on last element so no blank trailing page is generated */
     '#profile-content > *:last-child { margin-bottom: 0 !important; padding-bottom: 0 !important; }',
-    '#profile-content { padding-bottom: 0 !important; }'
+    '#profile-content { padding-bottom: 0 !important; }',
+
+    /* Remove break-inside:avoid from ALL section cards so html2pdf no longer
+       injects whitespace padding between sections to avoid cuts — this eliminates
+       the large empty gap between sections on page 1 */
+    '#profile-content .section-card { break-inside: auto !important; page-break-inside: auto !important; }',
+    '#profile-content .stats-row    { break-inside: auto !important; page-break-inside: auto !important; }',
+    '#profile-content .stat-box     { break-inside: auto !important; page-break-inside: auto !important; }',
+
+    /* Force the Photos & Documents card to always start on a new page so it
+       is never cut in the middle — clean page 2 opening with no gap above it */
+    '#photos-docs-section { page-break-before: always !important; break-before: always !important; margin-top: 0 !important; }'
   ].join('\n');
 
   function _injectCompactStyles() {
