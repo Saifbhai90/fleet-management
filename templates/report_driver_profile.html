@@ -325,6 +325,7 @@
     #pdfWatermark { display: block !important; font-size: 0.6rem !important; padding: 0.2rem 0.5rem !important; margin-top: 0.2rem !important; }
   }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <div class="profile-page">
@@ -1008,28 +1009,23 @@
 
     var el  = document.getElementById('profile-content');
 
-    /* html2pdf().toCanvas() uses the bundled html2canvas internally — no global
-       html2canvas dependency needed. onclone applies compact CSS + watermark to
-       the invisible clone only; the live page is never touched. */
-    var printOpts = {
-      html2canvas: {
-        scale: 1.8,
-        useCORS: false,
-        allowTaint: true,
-        letterRendering: true,
-        logging: false,
-        onclone: _onCloneHandler
-      }
-    };
-
+    /* html2canvas is loaded as a dedicated CDN script (html2canvas.min.js) so it
+       is available globally. onclone applies compact CSS + watermark to the
+       invisible clone only; the live page is never touched. */
     var job = _proxyImages(el);
 
     Promise.all(job.waits).then(function() {
       requestAnimationFrame(function() {
         setTimeout(function() {
 
-          html2pdf().set(printOpts).from(el).toCanvas()
-            .then(function(canvas) {
+          html2canvas(el, {
+            scale: 1.8,
+            useCORS: false,
+            allowTaint: true,
+            letterRendering: true,
+            logging: false,
+            onclone: _onCloneHandler
+          }).then(function(canvas) {
               job.restore();
               resetPrint();
 
