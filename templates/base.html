@@ -157,33 +157,99 @@
             color: #adb5bd;
             font-style: italic;
         }
-        /* ── Section-heading inline search + per-page — visible on any bg color ── */
+        /* ── Section-heading: enterprise-grade bar ───────────────────────────── */
+        .section-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem !important;
+            /* Prevent any child from overflowing */
+            overflow: hidden;
+        }
+        /* Left title area */
+        .section-heading > span:first-child,
+        .section-heading > .sh-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-shrink: 1;
+            min-width: 0;
+        }
+        /* Right controls panel — never overflows the heading */
+        .section-heading .sh-controls,
+        .section-heading > div:last-child {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex-shrink: 0;
+            min-width: 0;
+        }
+
+        /* ── Search input inside heading ────────────────────────────────────── */
         .heading-search-input {
-            background: rgba(255,255,255,0.22) !important;
-            border: 1.5px solid rgba(255,255,255,0.65) !important;
+            background: rgba(255,255,255,0.18) !important;
+            border: 1px solid rgba(255,255,255,0.5) !important;
             color: #fff !important;
-            border-radius: 6px !important;
-            min-width: 170px;
-            font-size: 0.85rem;
+            border-radius: 20px !important;       /* pill shape — modern look    */
+            width: 175px !important;
+            max-width: 175px !important;
+            min-width: 0 !important;
+            font-size: 0.8rem !important;
+            height: 30px !important;
+            padding: 0 28px 0 10px !important;    /* right: spinner space        */
+            transition: width .2s ease, background .2s ease;
         }
-        .heading-search-input::placeholder { color: rgba(255,255,255,0.75) !important; }
         .heading-search-input:focus {
-            background: rgba(255,255,255,0.32) !important;
-            border-color: rgba(255,255,255,0.9) !important;
+            background: rgba(255,255,255,0.28) !important;
+            border-color: rgba(255,255,255,0.85) !important;
             outline: none !important;
-            box-shadow: none !important;
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.2) !important;
             color: #fff !important;
+            width: 210px !important;              /* expands on focus            */
         }
+        .heading-search-input::placeholder { color: rgba(255,255,255,0.65) !important; font-size: 0.78rem; }
+
+        /* ── Per-page label ─────────────────────────────────────────────────── */
+        .sh-per-page-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0.85;
+            flex-shrink: 0;
+        }
+
+        /* ── Per-page select ────────────────────────────────────────────────── */
         .heading-per-page-select {
-            width: 72px !important;
-            background: rgba(255,255,255,0.22) !important;
+            width: 62px !important;
+            min-width: 62px !important;
+            max-width: 62px !important;
+            flex-shrink: 0 !important;
+            background: rgba(255,255,255,0.18) !important;
             color: #fff !important;
-            border: 1.5px solid rgba(255,255,255,0.65) !important;
+            border: 1px solid rgba(255,255,255,0.5) !important;
             border-radius: 6px !important;
-            font-size: 0.85rem;
-            font-weight: 600;
+            font-size: 0.8rem !important;
+            font-weight: 600 !important;
+            height: 30px !important;
+            padding: 0 4px 0 6px !important;
+            cursor: pointer;
         }
-        .heading-per-page-select option { background: #fff; color: #333; }
+        .heading-per-page-select option { background: #1e3a5f; color: #fff; }
+        .heading-per-page-select:focus   { outline: none !important; box-shadow: none !important; }
+
+        /* ── "Per Page:" label — works for both class and inline-style variants ── */
+        .heading-per-page-label,
+        .section-heading span[style*="font-size"] {
+            font-size: 0.75rem !important;
+            font-weight: 500 !important;
+            white-space: nowrap;
+            flex-shrink: 0;
+            opacity: 0.9;
+        }
         /* ── Filter/funnel button — stable across ALL states ────────────────
            Same Bootstrap focus-visible fix as btn-success-compact above. ── */
         .btn-primary-compact {
@@ -1997,33 +2063,28 @@
     <style>
     /* ── AJAX Live-Search ─────────────────────────────────────────── */
 
-    /* Tight wrapper injected around the search INPUT only, not its siblings */
+    /* Tight wrapper injected around the search INPUT only — never touches siblings */
     .ss-wrap {
         position: relative;
         display: inline-flex;
         align-items: center;
-        max-width: 320px;
-        width: 100%;
-        flex-shrink: 0;        /* keep it compact inside flex header rows  */
-    }
-    .ss-wrap input {
-        width: 100% !important;
-        min-width: 140px;
-        padding-right: 26px;   /* always reserve room so text never hides under spinner */
+        flex-shrink: 0;
+        /* Width comes from the input itself; wrapper just hugs it */
+        width: auto;
     }
 
-    /* Spinner — absolutely inside the input, right edge */
+    /* Spinner pinned inside the right edge of the input */
     .ss-wrap .ss-spinner {
         position: absolute;
-        right: 7px;
+        right: 8px;
         top: 50%;
         transform: translateY(-50%);
-        width: 13px;
-        height: 13px;
-        border: 2px solid #d1d5db;
-        border-top-color: #1e3a8a;
+        width: 12px;
+        height: 12px;
+        border: 1.5px solid rgba(255,255,255,0.35);
+        border-top-color: #fff;
         border-radius: 50%;
-        animation: ss-spin .55s linear infinite;
+        animation: ss-spin .5s linear infinite;
         opacity: 0;
         pointer-events: none;
         transition: opacity .15s ease;
@@ -2032,18 +2093,12 @@
 
     @keyframes ss-spin { to { transform: translateY(-50%) rotate(360deg); } }
 
-    /* Per-Page select: never affected by search spinner state */
-    .heading-per-page-select,
-    select.heading-per-page-select { flex-shrink: 0; }
-
     /* Subtle row fade-in after AJAX swap */
     @keyframes ss-fade-in {
         from { opacity: 0; transform: translateY(3px); }
         to   { opacity: 1; transform: translateY(0); }
     }
-    tbody.ss-updated tr {
-        animation: ss-fade-in .16s ease forwards;
-    }
+    tbody.ss-updated tr { animation: ss-fade-in .15s ease forwards; }
     </style>
     <script>
     /* ═══════════════════════════════════════════════════════════════════
