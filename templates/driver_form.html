@@ -33,37 +33,68 @@
     }
     .doc-img-del-btn:hover { background: #a71d2a; transform: scale(1.2); }
     .doc-pdf-del-btn { margin-top: 6px; font-size: .8rem; }
-    .doc-saved-badge { font-size: .75rem; color: #198754; margin-top: 5px; }
+    .doc-saved-badge { font-size: .75rem; color: #198754; margin-top: 5px; transition: color .2s; }
     @keyframes doc-fade-out {
         to { opacity: 0; transform: scale(.75); }
     }
     .doc-removing { animation: doc-fade-out .3s ease forwards; pointer-events: none; }
-    /* New-file live preview (appears after user picks a file) */
+
+    /* ── Rotate button on saved thumbnails (top-left circle) ── */
+    .doc-rotate-btn {
+        position: absolute; top: -9px; left: -9px;
+        width: 24px; height: 24px;
+        background: #0d6efd; border: 2.5px solid #fff;
+        border-radius: 50%; color: #fff;
+        font-size: 11px; line-height: 1;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; padding: 0; z-index: 20;
+        box-shadow: 0 2px 8px rgba(13,110,253,.55);
+        transition: background .15s, transform .25s;
+    }
+    .doc-rotate-btn:hover:not(:disabled) { background: #0a58ca; transform: rotate(90deg); }
+
+    /* New-file live preview */
     .doc-new-preview {
-        display: none; margin-top: 8px;
-        position: relative; text-align: center;
+        display: none; margin-top: 8px; text-align: center;
     }
     .doc-new-preview img {
         max-height: 72px; max-width: 100%;
         border-radius: 6px; border: 1px solid #dee2e6;
-        object-fit: cover;
+        object-fit: cover; display: block; margin: 0 auto;
     }
-    .doc-clr-btn {
-        position: absolute; top: -7px; right: calc(50% - 36px - 7px);
-        width: 20px; height: 20px;
-        background: #6c757d; border: 2px solid #fff;
-        border-radius: 50%; color: #fff;
-        font-size: 9px; line-height: 1;
+    /* Action buttons row below new-preview thumbnail */
+    .doc-new-actions {
+        display: flex; justify-content: center; gap: 6px; margin-top: 5px;
+    }
+    .doc-new-actions button {
+        width: 24px; height: 24px; border-radius: 50%; border: none;
         display: flex; align-items: center; justify-content: center;
-        cursor: pointer; padding: 0; z-index: 15;
-        box-shadow: 0 1px 4px rgba(0,0,0,.3);
-        transition: background .15s;
+        cursor: pointer; font-size: 10px; color: #fff; padding: 0;
+        box-shadow: 0 1px 4px rgba(0,0,0,.3); transition: background .15s, transform .2s;
     }
-    .doc-clr-btn:hover { background: #343a40; }
+    .doc-new-rotate-btn { background: #0d6efd; }
+    .doc-new-rotate-btn:hover:not(:disabled) { background: #0a58ca; transform: rotate(90deg); }
+    .doc-new-clr-btn   { background: #6c757d; }
+    .doc-new-clr-btn:hover   { background: #343a40; }
+
     .doc-pdf-new-badge {
         display: none; margin-top: 6px;
         font-size: .78rem; color: #0d6efd;
     }
+
+    /* ── Rotate success toast ── */
+    #doc-rotate-toast {
+        position: fixed; bottom: 28px; right: 28px; z-index: 199999;
+        background: #1a6e3c; color: #fff;
+        padding: 11px 20px; border-radius: 10px;
+        font-size: .84rem; font-weight: 600;
+        display: flex; align-items: center; gap: 9px;
+        box-shadow: 0 6px 20px rgba(0,0,0,.35);
+        opacity: 0; transform: translateY(14px);
+        transition: opacity .22s ease, transform .22s ease;
+        pointer-events: none;
+    }
+    #doc-rotate-toast.show { opacity: 1; transform: translateY(0); }
 
     /* ── Processing Overlay ── */
     #processingOverlay {
@@ -530,12 +561,15 @@
                 {{ form.photo(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp", id="inp-photo") }}
                 <div class="form-text">JPG / PNG / WebP</div>
                 {% if driver and driver.photo_path %}
-                <div class="mt-2 text-center doc-slot" id="doc-card-photo_path" data-field="photo_path">
+                <div class="mt-2 text-center doc-slot" id="doc-card-photo_path" data-field="photo_path" data-r2url="{{ driver.photo_path | media_url }}">
                   <div class="doc-thumb-wrap">
                     <img src="{{ driver.photo_path | media_url }}" alt="Driver photo"
                          class="img-thumbnail rounded" style="max-height:110px; max-width:100%;"
                          onerror="this.style.display='none'">
                     {% if driver.id %}
+                    <button type="button" class="doc-rotate-btn" title="90° clockwise rotate karein">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
                     <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
                       <i class="bi bi-x-lg"></i>
                     </button>
@@ -546,9 +580,14 @@
                 {% endif %}
                 <div class="doc-new-preview" id="new-preview-photo">
                   <img src="" alt="New photo preview">
-                  <button type="button" class="doc-clr-btn" data-target="inp-photo" data-preview="new-preview-photo" title="Clear selection">
-                    <i class="bi bi-x-lg"></i>
-                  </button>
+                  <div class="doc-new-actions">
+                    <button type="button" class="doc-new-rotate-btn" data-target="inp-photo" data-preview="new-preview-photo" title="Rotate 90° clockwise">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button type="button" class="doc-new-clr-btn" data-target="inp-photo" data-preview="new-preview-photo" title="Clear selection">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="col-md-4">
@@ -556,12 +595,15 @@
                 {{ form.cnic_front(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp", id="inp-cnic_front") }}
                 <div class="form-text">CNIC ka agla hissa</div>
                 {% if driver and driver.cnic_front_path %}
-                <div class="mt-2 text-center doc-slot" id="doc-card-cnic_front_path" data-field="cnic_front_path">
+                <div class="mt-2 text-center doc-slot" id="doc-card-cnic_front_path" data-field="cnic_front_path" data-r2url="{{ driver.cnic_front_path | media_url }}">
                   <div class="doc-thumb-wrap">
                     <img src="{{ driver.cnic_front_path | media_url }}" alt="CNIC Front"
                          class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
                          onerror="this.style.display='none'">
                     {% if driver.id %}
+                    <button type="button" class="doc-rotate-btn" title="90° clockwise rotate karein">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
                     <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
                       <i class="bi bi-x-lg"></i>
                     </button>
@@ -572,9 +614,14 @@
                 {% endif %}
                 <div class="doc-new-preview" id="new-preview-cnic_front">
                   <img src="" alt="New CNIC front preview">
-                  <button type="button" class="doc-clr-btn" data-target="inp-cnic_front" data-preview="new-preview-cnic_front" title="Clear selection">
-                    <i class="bi bi-x-lg"></i>
-                  </button>
+                  <div class="doc-new-actions">
+                    <button type="button" class="doc-new-rotate-btn" data-target="inp-cnic_front" data-preview="new-preview-cnic_front" title="Rotate 90° clockwise">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button type="button" class="doc-new-clr-btn" data-target="inp-cnic_front" data-preview="new-preview-cnic_front" title="Clear selection">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="col-md-4">
@@ -582,12 +629,15 @@
                 {{ form.cnic_back(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp", id="inp-cnic_back") }}
                 <div class="form-text">CNIC ka pichla hissa</div>
                 {% if driver and driver.cnic_back_path %}
-                <div class="mt-2 text-center doc-slot" id="doc-card-cnic_back_path" data-field="cnic_back_path">
+                <div class="mt-2 text-center doc-slot" id="doc-card-cnic_back_path" data-field="cnic_back_path" data-r2url="{{ driver.cnic_back_path | media_url }}">
                   <div class="doc-thumb-wrap">
                     <img src="{{ driver.cnic_back_path | media_url }}" alt="CNIC Back"
                          class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
                          onerror="this.style.display='none'">
                     {% if driver.id %}
+                    <button type="button" class="doc-rotate-btn" title="90° clockwise rotate karein">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
                     <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
                       <i class="bi bi-x-lg"></i>
                     </button>
@@ -598,9 +648,14 @@
                 {% endif %}
                 <div class="doc-new-preview" id="new-preview-cnic_back">
                   <img src="" alt="New CNIC back preview">
-                  <button type="button" class="doc-clr-btn" data-target="inp-cnic_back" data-preview="new-preview-cnic_back" title="Clear selection">
-                    <i class="bi bi-x-lg"></i>
-                  </button>
+                  <div class="doc-new-actions">
+                    <button type="button" class="doc-new-rotate-btn" data-target="inp-cnic_back" data-preview="new-preview-cnic_back" title="Rotate 90° clockwise">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button type="button" class="doc-new-clr-btn" data-target="inp-cnic_back" data-preview="new-preview-cnic_back" title="Clear selection">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -612,12 +667,15 @@
                 {{ form.license_front(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp", id="inp-license_front") }}
                 <div class="form-text">License ka agla hissa</div>
                 {% if driver and driver.license_front_path %}
-                <div class="mt-2 text-center doc-slot" id="doc-card-license_front_path" data-field="license_front_path">
+                <div class="mt-2 text-center doc-slot" id="doc-card-license_front_path" data-field="license_front_path" data-r2url="{{ driver.license_front_path | media_url }}">
                   <div class="doc-thumb-wrap">
                     <img src="{{ driver.license_front_path | media_url }}" alt="License Front"
                          class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
                          onerror="this.style.display='none'">
                     {% if driver.id %}
+                    <button type="button" class="doc-rotate-btn" title="90° clockwise rotate karein">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
                     <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
                       <i class="bi bi-x-lg"></i>
                     </button>
@@ -628,9 +686,14 @@
                 {% endif %}
                 <div class="doc-new-preview" id="new-preview-license_front">
                   <img src="" alt="New license front preview">
-                  <button type="button" class="doc-clr-btn" data-target="inp-license_front" data-preview="new-preview-license_front" title="Clear selection">
-                    <i class="bi bi-x-lg"></i>
-                  </button>
+                  <div class="doc-new-actions">
+                    <button type="button" class="doc-new-rotate-btn" data-target="inp-license_front" data-preview="new-preview-license_front" title="Rotate 90° clockwise">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button type="button" class="doc-new-clr-btn" data-target="inp-license_front" data-preview="new-preview-license_front" title="Clear selection">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="col-md-4">
@@ -638,12 +701,15 @@
                 {{ form.license_back(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp", id="inp-license_back") }}
                 <div class="form-text">License ka pichla hissa</div>
                 {% if driver and driver.license_back_path %}
-                <div class="mt-2 text-center doc-slot" id="doc-card-license_back_path" data-field="license_back_path">
+                <div class="mt-2 text-center doc-slot" id="doc-card-license_back_path" data-field="license_back_path" data-r2url="{{ driver.license_back_path | media_url }}">
                   <div class="doc-thumb-wrap">
                     <img src="{{ driver.license_back_path | media_url }}" alt="License Back"
                          class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
                          onerror="this.style.display='none'">
                     {% if driver.id %}
+                    <button type="button" class="doc-rotate-btn" title="90° clockwise rotate karein">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
                     <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
                       <i class="bi bi-x-lg"></i>
                     </button>
@@ -654,9 +720,14 @@
                 {% endif %}
                 <div class="doc-new-preview" id="new-preview-license_back">
                   <img src="" alt="New license back preview">
-                  <button type="button" class="doc-clr-btn" data-target="inp-license_back" data-preview="new-preview-license_back" title="Clear selection">
-                    <i class="bi bi-x-lg"></i>
-                  </button>
+                  <div class="doc-new-actions">
+                    <button type="button" class="doc-new-rotate-btn" data-target="inp-license_back" data-preview="new-preview-license_back" title="Rotate 90° clockwise">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button type="button" class="doc-new-clr-btn" data-target="inp-license_back" data-preview="new-preview-license_back" title="Clear selection">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="col-md-4">
@@ -1056,10 +1127,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
   /* ══════════════════════════════════════════════════════
      CLEAR NEWLY-SELECTED FILE (before save)
-     Handles image inputs (.doc-clr-btn) and PDF (.doc-clr-btn-inline)
+     Handles .doc-new-clr-btn (image) and .doc-clr-btn-inline (PDF)
      ══════════════════════════════════════════════════════ */
   document.addEventListener('click', function (e) {
-    var clrBtn = e.target.closest('.doc-clr-btn, .doc-clr-btn-inline');
+    var clrBtn = e.target.closest('.doc-new-clr-btn, .doc-clr-btn-inline');
     if (!clrBtn) return;
     var inputId  = clrBtn.dataset.target;
     var prevId   = clrBtn.dataset.preview;
@@ -1116,6 +1187,196 @@ document.addEventListener('DOMContentLoaded', function () {
       pdfPrev.style.display = 'block';
     });
   }
+})();
+</script>
+
+<!-- ── Rotate Success Toast ── -->
+<div id="doc-rotate-toast" role="status" aria-live="polite">
+  <i class="bi bi-arrow-repeat" style="font-size:1.1rem;"></i>
+  <span class="toast-msg">Rotated! Save karo to permanently apply.</span>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   IMAGE ROTATION  –  90° clockwise, Canvas-based
+   Supports:  ① saved R2 images (fetch via /r2-proxy → canvas)
+              ② newly-selected file (dataURL already in preview img)
+   On success: preview updates instantly + File staged in input field
+   ════════════════════════════════════════════════════════════════════ */
+(function () {
+
+  /* field-name → file-input id */
+  var FIELD_MAP = {
+    'photo_path':         'inp-photo',
+    'cnic_front_path':    'inp-cnic_front',
+    'cnic_back_path':     'inp-cnic_back',
+    'license_front_path': 'inp-license_front',
+    'license_back_path':  'inp-license_back'
+  };
+
+  /* ── Toast helper ── */
+  function showToast(msg) {
+    var t = document.getElementById('doc-rotate-toast');
+    if (!t) return;
+    t.querySelector('.toast-msg').textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._tid);
+    t._tid = setTimeout(function () { t.classList.remove('show'); }, 2500);
+  }
+
+  /* ── Canvas: rotate image src 90° CW → {blob, dataURL} ── */
+  function rotate90(src) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () {
+        var c = document.createElement('canvas');
+        /* Swap width/height for 90° rotation */
+        c.width  = img.naturalHeight;
+        c.height = img.naturalWidth;
+        var ctx = c.getContext('2d');
+        ctx.translate(c.width / 2, c.height / 2);
+        ctx.rotate(Math.PI / 2);           /* 90° clockwise */
+        ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+        c.toBlob(function (blob) {
+          resolve({ blob: blob, dataURL: c.toDataURL('image/jpeg', 0.92) });
+        }, 'image/jpeg', 0.92);
+      };
+      img.onerror = function () { reject(new Error('Image load failed')); };
+      img.src = src;
+    });
+  }
+
+  /* ── Inject rotated Blob as a File into a file input ── */
+  function patchInput(inputEl, blob, fname) {
+    if (!inputEl) return;
+    try {
+      var dt = new DataTransfer();
+      dt.items.add(new File([blob], fname || 'rotated.jpg', { type: 'image/jpeg' }));
+      inputEl.files = dt.files;
+    } catch (e) { /* DataTransfer not supported (old browsers) – silently skip */ }
+  }
+
+  /* ── Set spinner on a button, return restore function ── */
+  function btnSpinner(btn) {
+    btn.disabled = true;
+    var orig = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border" style="width:11px;height:11px;border-width:1.5px;" role="status"></span>';
+    return function restore() { btn.disabled = false; btn.innerHTML = orig; };
+  }
+
+  /* ────────────────────────────────────────────────────────────
+     HANDLER A – Rotate button on SAVED doc card (.doc-rotate-btn)
+     Strategy:
+       1. If a new file is already staged in the input → use that blob
+       2. Otherwise fetch the R2 URL through /r2-proxy (same-origin,
+          so the canvas won't be tainted by cross-origin data)
+          Fallback: try the R2 URL directly (works when R2 has CORS *)
+     ──────────────────────────────────────────────────────────── */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.doc-rotate-btn');
+    if (!btn) return;
+
+    var slot     = btn.closest('.doc-slot');
+    if (!slot) return;
+    var field    = slot.dataset.field;
+    var r2Url    = slot.dataset.r2url;
+    var inputId  = FIELD_MAP[field];
+    var inputEl  = inputId ? document.getElementById(inputId) : null;
+    var thumbImg = slot.querySelector('.doc-thumb-wrap img');
+    if (!thumbImg) return;
+
+    var restore = btnSpinner(btn);
+
+    /* ① Already staged file in input? Read it. */
+    if (inputEl && inputEl.files && inputEl.files.length > 0) {
+      var fr = new FileReader();
+      fr.onload = function (ev) { execRotate(ev.target.result, null); };
+      fr.readAsDataURL(inputEl.files[0]);
+      return;
+    }
+
+    /* ② Fetch via proxy → CORS-safe blob URL */
+    if (r2Url) {
+      var proxyUrl = '/r2-proxy?url=' + encodeURIComponent(r2Url);
+      fetch(proxyUrl)
+        .then(function (r) {
+          if (!r.ok) throw new Error('proxy ' + r.status);
+          return r.blob();
+        })
+        .then(function (blob) {
+          var objUrl = URL.createObjectURL(blob);
+          execRotate(objUrl, function () { URL.revokeObjectURL(objUrl); });
+        })
+        .catch(function () {
+          /* Fallback: try R2 URL directly (requires CORS * on bucket) */
+          execRotate(r2Url, null);
+        });
+    } else {
+      restore();
+    }
+
+    function execRotate(src, cleanup) {
+      rotate90(src)
+        .then(function (res) {
+          if (cleanup) cleanup();
+
+          /* Update visible thumbnail */
+          thumbImg.src = res.dataURL;
+
+          /* Stage rotated file in input → it will upload on form save */
+          var fname = (r2Url || field).split('/').pop().replace(/\.\w+$/, '') + '_rot.jpg';
+          patchInput(inputEl, res.blob, fname);
+
+          /* Update badge */
+          var badge = slot.querySelector('.doc-saved-badge');
+          if (badge) {
+            badge.innerHTML = '<i class="bi bi-arrow-repeat me-1 text-primary"></i><span style="color:#0d6efd;">Rotated &mdash; save to apply</span>';
+          }
+
+          showToast('✓ Rotated! Save karein to permanently upload.');
+          restore();
+        })
+        .catch(function (err) {
+          console.error('Rotate error:', err);
+          alert('Rotate nahi hua. Dobara try karein.');
+          restore();
+        });
+    }
+  });
+
+  /* ────────────────────────────────────────────────────────────
+     HANDLER B – Rotate button on NEW-PREVIEW (.doc-new-rotate-btn)
+     The preview <img> already has a dataURL from FileReader, so no
+     CORS issue at all.
+     ──────────────────────────────────────────────────────────── */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.doc-new-rotate-btn');
+    if (!btn) return;
+
+    var inputId  = btn.dataset.target;
+    var prevId   = btn.dataset.preview;
+    var inputEl  = inputId ? document.getElementById(inputId) : null;
+    var prevDiv  = prevId  ? document.getElementById(prevId)  : null;
+    if (!prevDiv) return;
+    var previewImg = prevDiv.querySelector('img');
+    if (!previewImg || !previewImg.src || previewImg.src === window.location.href) return;
+
+    var restore = btnSpinner(btn);
+
+    rotate90(previewImg.src)
+      .then(function (res) {
+        previewImg.src = res.dataURL;
+        var fname = (inputId || 'file').replace('inp-', '') + '_rot.jpg';
+        patchInput(inputEl, res.blob, fname);
+        showToast('✓ Rotated!');
+        restore();
+      })
+      .catch(function () {
+        alert('Rotate nahi hua.');
+        restore();
+      });
+  });
+
 })();
 </script>
 {% endblock %}

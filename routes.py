@@ -1,5 +1,5 @@
 # Force Rebuild — all syntax verified clean, pushing to unblock Render deploy queue
-from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session, send_file, abort
+from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session, send_file, abort, make_response
 from app import app, db, csrf
 from models import (
     Company, Project, Vehicle, Driver, ParkingStation, District, EmployeePost, Employee, EmployeeDocument,
@@ -2518,6 +2518,31 @@ def handle_csrf_error(e):
 
 
 @app.route('/driver/add', methods=['GET', 'POST'])
+@app.route('/r2-proxy')
+@login_required
+def r2_proxy():
+    """Serve an R2 object through Flask so JS canvas can draw it without CORS taint."""
+    from r2_storage import _get_s3_client, R2_BUCKET_NAME, R2_PUBLIC_URL as _r2_pub
+    url = request.args.get('url', '').strip()
+    base = (_r2_pub or '').rstrip('/')
+    if not url or not base or not url.startswith(base + '/'):
+        abort(400)
+    key = url[len(base) + 1:]
+    if not key:
+        abort(400)
+    try:
+        client = _get_s3_client()
+        obj = client.get_object(Bucket=R2_BUCKET_NAME, Key=key)
+        data = obj['Body'].read()
+        ct = obj.get('ContentType', 'image/jpeg')
+        resp = make_response(data)
+        resp.headers['Content-Type'] = ct
+        resp.headers['Cache-Control'] = 'private, max-age=3600'
+        return resp
+    except Exception:
+        abort(404)
+
+
 @app.route('/driver/<int:driver_id>/delete-document', methods=['POST'])
 @login_required
 def driver_delete_document(driver_id):
