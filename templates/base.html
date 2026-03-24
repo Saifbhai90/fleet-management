@@ -1994,24 +1994,133 @@
             </div>
         {% endif %}
     {% endwith %}
+    <style>
+    /* ── AJAX Live-Search: subtle inline spinner ── */
+    .ss-wrap { position: relative; display: inline-flex; align-items: center; width: 100%; }
+    .ss-wrap .ss-spinner {
+        position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+        width: 14px; height: 14px;
+        border: 2px solid #cbd5e1; border-top-color: #1e3a8a;
+        border-radius: 50%;
+        animation: ss-spin .6s linear infinite;
+        display: none; pointer-events: none;
+    }
+    .ss-wrap.ss-loading .ss-spinner { display: block; }
+    .ss-wrap.ss-loading input { padding-right: 28px; }
+    @keyframes ss-spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+    /* Fade rows in after AJAX swap */
+    @keyframes ss-fade-in {
+        from { opacity: 0; transform: translateY(4px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    tbody.ss-updated tr { animation: ss-fade-in .18s ease forwards; }
+    </style>
     <script>
-    /* initServerSearch — defined here so all template scripts can call it */
+    /* ═══════════════════════════════════════════════════════════════════
+       initServerSearch  — HTML-over-the-wire AJAX live search
+       Strategy: fetch full page, DOMParser to extract tbody +
+       .table-footer, swap in-place, keep cursor focus.
+       No backend changes required.
+       ═══════════════════════════════════════════════════════════════════ */
     window.initServerSearch = function(elOrId, paramName) {
-        var el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId;
-        if (!el) return;
+        var input = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId;
+        if (!input) return;
         paramName = paramName || 'q';
-        var cur = new URLSearchParams(window.location.search).get(paramName);
-        if (cur) el.value = cur;
-        var timer;
-        el.addEventListener('input', function() {
-            clearTimeout(timer);
+
+        /* ── Pre-fill from current URL ── */
+        var curVal = new URLSearchParams(window.location.search).get(paramName) || '';
+        if (curVal) input.value = curVal;
+
+        /* ── Wrap input in .ss-wrap and inject spinner ── */
+        var parent = input.parentElement;
+        if (parent && !parent.classList.contains('ss-wrap')) {
+            parent.classList.add('ss-wrap');
+            var spinner = document.createElement('span');
+            spinner.className = 'ss-spinner';
+            parent.appendChild(spinner);
+        }
+
+        /* ── Build new search URL ── */
+        function buildUrl(val) {
+            var p = new URLSearchParams(window.location.search);
+            if (val) { p.set(paramName, val); } else { p.delete(paramName); }
+            p.set('page', '1');
+            return window.location.pathname + '?' + p.toString();
+        }
+
+        /* ── AJAX swap: fetch → DOMParser → replace tbody + footer ── */
+        var inFlight = null;
+        function doSearch(val) {
+            var url = buildUrl(val);
+
+            /* Show spinner */
+            if (parent) parent.classList.add('ss-loading');
+
+            /* Abort previous in-flight fetch if still pending */
+            if (inFlight) inFlight.abort();
+            var ctrl = new AbortController();
+            inFlight = ctrl;
+
+            fetch(url, {
+                signal: ctrl.signal,
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' }
+            })
+            .then(function(r) { return r.text(); })
+            .then(function(html) {
+                inFlight = null;
+
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+
+                /* ── Replace <tbody> ── */
+                var newTbody = doc.querySelector('table.table tbody, table tbody');
+                var curTbody = document.querySelector('table.table tbody, table tbody');
+                if (newTbody && curTbody) {
+                    curTbody.innerHTML = newTbody.innerHTML;
+                    /* Tiny fade-in on fresh rows */
+                    curTbody.classList.remove('ss-updated');
+                    void curTbody.offsetWidth;   /* force reflow */
+                    curTbody.classList.add('ss-updated');
+                }
+
+                /* ── Replace .table-footer (pagination + count) ── */
+                var newFoot = doc.querySelector('.table-footer');
+                var curFoot = document.querySelector('.table-footer');
+                if (newFoot && curFoot) {
+                    curFoot.outerHTML = newFoot.outerHTML;
+                }
+
+                /* ── Push URL without reload ── */
+                history.pushState({ ssVal: val, ssParam: paramName }, '', url);
+
+                /* ── Restore focus + cursor at end ── */
+                if (parent) parent.classList.remove('ss-loading');
+                input.focus();
+                var len = input.value.length;
+                try { input.setSelectionRange(len, len); } catch(e) {}
+            })
+            .catch(function(err) {
+                if (err && err.name === 'AbortError') return;  /* intentional abort */
+                /* Network error or parse failure — fall back to normal navigation */
+                if (parent) parent.classList.remove('ss-loading');
+                window.location.href = url;
+            });
+        }
+
+        /* ── Debounced input listener (300 ms) ── */
+        var debounceTimer;
+        input.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
             var val = this.value.trim();
-            timer = setTimeout(function() {
-                var u = new URLSearchParams(window.location.search);
-                if (val) { u.set(paramName, val); } else { u.delete(paramName); }
-                u.set('page', 1);
-                window.location.search = u.toString();
-            }, 400);
+            debounceTimer = setTimeout(function() { doSearch(val); }, 300);
+        });
+
+        /* ── Browser back/forward: restore search state ── */
+        window.addEventListener('popstate', function(e) {
+            if (e.state && e.state.ssParam === paramName) {
+                input.value = e.state.ssVal || '';
+                doSearch(e.state.ssVal || '');
+            }
         });
     };
     </script>
