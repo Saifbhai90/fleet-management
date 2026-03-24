@@ -48,13 +48,15 @@
   }
 
   /* ── Stats row ── */
-  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.25rem; }
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.25rem; break-inside: avoid; page-break-inside: avoid; }
   .stat-box {
     background: #fff;
     border-radius: 10px;
     padding: 1rem 1.25rem;
     text-align: center;
     box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .stat-box .stat-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: #9e9e9e; font-weight: 600; margin-bottom: 0.4rem; }
   .stat-box .stat-value { font-size: 1.3rem; font-weight: 700; color: #1565c0; }
@@ -66,6 +68,9 @@
     padding: 1.5rem;
     margin-bottom: 1.25rem;
     box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    /* html2pdf reads break-inside from SCREEN computed style, not @media print */
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .section-title {
     font-size: 0.8rem;
@@ -89,6 +94,8 @@
     border: 1px solid #e8e8e8;
     border-radius: 8px;
     padding: 1rem 1.2rem;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .doc-card-title { font-size: 0.8rem; font-weight: 700; color: #555; margin-bottom: 0.85rem; }
   .doc-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem; }
@@ -113,6 +120,8 @@
     font-size: 0.875rem;
     color: #444;
     margin-top: 0.75rem;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   /* ── Timeline ── */
@@ -122,7 +131,7 @@
     position: absolute; left: 8px; top: 0; bottom: 0;
     width: 2px; background: #e0e0e0;
   }
-  .timeline-item { position: relative; margin-bottom: 1.5rem; }
+  .timeline-item { position: relative; margin-bottom: 1.5rem; break-inside: avoid; page-break-inside: avoid; }
   .timeline-item:last-child { margin-bottom: 0; }
   .timeline-dot {
     position: absolute; left: -1.5rem; top: 2px;
@@ -160,6 +169,8 @@
     border-radius: 8px;
     overflow: hidden;
     background: #fafafa;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .doc-photo-label {
     font-size: 0.75rem;
@@ -245,138 +256,107 @@
   }
 
   @media print {
-    /* ══════════════════════════════════════════════════════════
-       A4 PAGE SETUP — 15 mm top/bottom breathing room
-       ══════════════════════════════════════════════════════════ */
-    @page {
-      size: A4 portrait;
-      margin: 15mm 12mm 16mm 12mm;
-    }
+    /* ══════════════════════════════════════════════════════
+       A4 PAGE SETUP
+       ══════════════════════════════════════════════════════ */
+    @page { size: A4 portrait; margin: 12mm 10mm 12mm 10mm; }
 
-    /* ── Hide navigation / chrome ── */
-    nav, .navbar, .sidebar, #sidebar, aside,
-    .top-header, .topbar, .page-header, .header-bar,
-    .footer, footer, #footer, .pull-to-refresh, #pull-to-refresh,
-    .action-bar, #profile-action-bar,
-    .toast, .modal-backdrop, button.btn, a.btn,
-    .zoom-overlay, [style*="position:fixed"], [style*="position: fixed"],
+    /* ── Hide all UI chrome ── */
+    nav,.navbar,.sidebar,#sidebar,aside,
+    .top-header,.topbar,.page-header,.header-bar,
+    .footer,footer,#footer,.pull-to-refresh,#pull-to-refresh,
+    .action-bar,#profile-action-bar,
+    .toast,.modal-backdrop,.btn,a.btn,button,
+    input[type="button"],input[type="submit"],
+    .zoom-overlay,[style*="position:fixed"],[style*="position: fixed"],
     #docViewer { display: none !important; }
 
-    /* ── Page / body reset ── */
-    html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; font-size: 9pt !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    body > div, .main-content, .content-wrapper, .wrapper, main { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; margin-left: 0 !important; box-shadow: none !important; }
-    .profile-page { background: #fff !important; padding: 0 !important; }
-    #profile-content { display: block !important; width: 100% !important; }
+    /* ── Base reset ── */
+    html,body { background:#fff !important; margin:0 !important; padding:0 !important; font-size:9pt !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+    body>div,.main-content,.content-wrapper,.wrapper,main { margin:0 !important; padding:0 !important; width:100% !important; max-width:100% !important; margin-left:0 !important; box-shadow:none !important; }
+    .profile-page { background:#fff !important; padding:0 !important; }
+    #profile-content { display:block !important; width:100% !important; }
 
-    /* ── FIX: Bootstrap flex/grid containers prevent break-inside in most browsers.
-       Convert them to block so the print engine can honour break-inside: avoid.  ── */
-    .row                { display: block !important; }
-    .col, [class*="col-"] { display: block !important; width: 100% !important; max-width: 100% !important; padding: 0 !important; }
-    /* Step 1: turn ALL .d-flex to block */
-    .d-flex             { display: block !important; }
-    /* Step 2: restore header's own flex row (photo + name side-by-side) */
-    .profile-header > .d-flex { display: flex !important; }
-    /* Step 3: buttons — absolutely hidden, no orphan lines */
-    .action-bar, #profile-action-bar { display: none !important; }
-    .btn, a.btn, button, input[type="button"], input[type="submit"] { display: none !important; }
+    /* ── Bootstrap overrides: convert flex/grid to block.
+       Chrome's print engine only honours break-inside:avoid on BLOCK boxes.
+       Grid and flex containers silently ignore it.
+       EXCEPTION: the header's inner flex row (photo + name) stays flex. ── */
+    .row,[class*="col-"] { display:block !important; width:100% !important; max-width:100% !important; padding:0 !important; }
+    .d-flex,.gap-2 { display:block !important; }
+    .profile-header>.d-flex { display:flex !important; align-items:center !important; }
 
-    /* ══════════════════════════════════════════════════════════
-       ENTERPRISE PAGE-BREAK PROTECTION
-       If a block doesn't fit at the bottom of the current page,
-       the WHOLE block moves to the top of the next page.
-       Nothing ever gets sliced in the middle.
-       ══════════════════════════════════════════════════════════ */
-    .profile-header,
-    .stats-row,
-    .stat-box,
-    .section-card,
-    .doc-grid,
-    .doc-card,
-    .doc-photo-item,
-    .timeline-item,
-    .timeline-body,
-    .uniform-box,
-    .validity-badge,
-    .doc-dates,
-    .info-item {
+    /* ══════════════════════════════════════════════════════
+       PAGE-BREAK PROTECTION
+       Break-inside:avoid works reliably ONLY on block boxes
+       (or float boxes). Everything important is now block.
+       ══════════════════════════════════════════════════════ */
+    .profile-header,.section-card,.doc-card,.doc-photo-item,
+    .timeline-item,.timeline-body,.stat-box,.uniform-box,
+    .validity-badge,.info-item,.doc-dates {
       page-break-inside: avoid !important;
       break-inside:      avoid !important;
     }
-
-    /* Section titles always stay glued to their content */
-    .section-title {
+    .section-title,.profile-header,.stats-row {
       page-break-after: avoid !important;
       break-after:      avoid !important;
     }
+    .timeline { page-break-inside:auto !important; break-inside:auto !important; }
 
-    /* Header glued to the stats row below it */
-    .profile-header {
-      page-break-after: avoid !important;
-      break-after:      avoid !important;
-    }
+    /* ── Header ── */
+    .profile-header { background:#1565c0 !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; padding:0.55rem 0.8rem !important; margin-bottom:0.35rem !important; border-radius:6px !important; box-shadow:none !important; }
+    .profile-header h2 { font-size:1.05rem !important; }
+    .photo-circle { width:50px !important; height:50px !important; }
+    .status-badge { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
 
-    /* Stats row glued to the first section below */
-    .stats-row {
-      page-break-after: avoid !important;
-      break-after:      avoid !important;
-    }
-
-    /* Photos grid: keep all 6 thumbnails together on one page */
-    .docs-photo-grid {
-      page-break-inside: avoid !important;
-      break-inside:      avoid !important;
-    }
-
-    /* Timeline may span pages — but each event must stay intact */
-    .timeline {
-      page-break-inside: auto !important;
-      break-inside:      auto !important;
-    }
-
-    /* ── Header – colour-printing ── */
-    .profile-header { background: #1565c0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; padding: 0.6rem 0.9rem !important; margin-bottom: 0.4rem !important; border-radius: 6px !important; box-shadow: none !important; }
-    .profile-header h2 { font-size: 1.1rem !important; }
-    .status-badge { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    .photo-circle { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-
-    /* ── Stats ── */
-    .stats-row { display: grid !important; grid-template-columns: repeat(3,1fr) !important; gap: 0.4rem !important; margin-bottom: 0.4rem !important; }
-    .stat-box { display: block !important; box-shadow: none !important; background: #fff !important; border: 1px solid #ccc !important; padding: 0.4rem !important; }
-    .stat-box .stat-value { font-size: 1rem !important; }
+    /* ── Stats row: float 3-column (floats respect break-inside) ── */
+    .stats-row { display:block !important; overflow:hidden !important; margin-bottom:0.4rem !important; }
+    .stat-box  { float:left !important; width:32% !important; margin-right:1.3% !important; box-sizing:border-box !important; box-shadow:none !important; background:#fff !important; border:1px solid #ccc !important; padding:0.35rem 0.5rem !important; }
+    .stat-box .stat-value { font-size:1rem !important; }
+    .stats-row::after { content:'' !important; display:block !important; clear:both !important; }
 
     /* ── Section cards ── */
-    .section-card { display: block !important; box-shadow: none !important; background: #fff !important; border: 1px solid #ddd !important; border-radius: 4px !important; padding: 0.5rem 0.6rem !important; margin-bottom: 0.4rem !important; }
-    .section-title { margin-bottom: 0.4rem !important; font-size: 0.7rem !important; }
-    .info-item .info-label { font-size: 0.62rem !important; }
-    .info-item .info-value { font-size: 0.8rem !important; }
-    .info-grid { display: grid !important; gap: 0.25rem 1.2rem !important; }
+    .section-card { display:block !important; box-shadow:none !important; background:#fff !important; border:1px solid #ddd !important; border-radius:4px !important; padding:0.45rem 0.6rem !important; margin-bottom:0.4rem !important; overflow:hidden !important; }
+    .section-title { margin-bottom:0.35rem !important; font-size:0.7rem !important; }
+    .info-item .info-label { font-size:0.62rem !important; }
+    .info-item .info-value { font-size:0.8rem !important; }
 
-    /* ── Identification Documents (doc-grid) ── */
-    .doc-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0.5rem !important; }
+    /* ── Info grid: float 2-column ── */
+    .info-grid { display:block !important; overflow:hidden !important; }
+    .info-item { float:left !important; width:48% !important; margin-right:2% !important; box-sizing:border-box !important; }
+    .info-grid::after { content:'' !important; display:block !important; clear:both !important; }
+    /* Full-span items */
+    .info-item.full-width { float:none !important; width:100% !important; margin-right:0 !important; }
 
-    /* ── Photos & Documents ── */
-    .docs-photo-grid { display: grid !important; grid-template-columns: repeat(3,1fr) !important; gap: 0.4rem !important; }
-    .doc-photo-item { display: block !important; background: #fff !important; border: 1px solid #ddd !important; box-shadow: none !important; overflow: visible !important; }
-    .doc-photo-label { display: block !important; background: #f0f2f5 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    .doc-photo-thumb-wrap { display: block !important; height: 90px !important; overflow: hidden !important; }
-    .doc-photo-thumb-wrap img { display: block !important; height: 90px !important; width: 100% !important; object-fit: cover !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    .doc-photo-missing { display: flex !important; height: 60px !important; font-size: 0.65rem !important; }
-    .doc-pdf-wrap { display: flex !important; height: 60px !important; font-size: 0.65rem !important; }
+    /* ── ID Documents (doc-grid): float 2-column ── */
+    .doc-grid { display:block !important; overflow:hidden !important; }
+    .doc-card  { float:left !important; width:48% !important; margin-right:2% !important; box-sizing:border-box !important; border:1px solid #e0e0e0 !important; border-radius:4px !important; padding:0.5rem !important; }
+    .doc-grid::after { content:'' !important; display:block !important; clear:both !important; }
+    .doc-dates { display:block !important; overflow:hidden !important; }
+    .doc-dates>.info-item { float:left !important; width:48% !important; margin-right:2% !important; }
+    .doc-dates::after { content:'' !important; display:block !important; clear:both !important; }
+
+    /* ── Photos & Documents: float 3-column ── */
+    .docs-photo-grid { display:block !important; overflow:hidden !important; }
+    .doc-photo-item  { float:left !important; width:30% !important; margin-right:3% !important; box-sizing:border-box !important; background:#fff !important; border:1px solid #ddd !important; border-radius:4px !important; overflow:hidden !important; }
+    .docs-photo-grid::after { content:'' !important; display:block !important; clear:both !important; }
+    .doc-photo-label { display:block !important; background:#f0f2f5 !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; font-size:0.65rem !important; padding:0.3rem 0.5rem !important; }
+    .doc-photo-thumb-wrap { display:block !important; height:72px !important; overflow:hidden !important; }
+    .doc-photo-thumb-wrap img { display:block !important; height:72px !important; width:100% !important; object-fit:cover !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+    .doc-photo-missing { display:flex !important; height:52px !important; font-size:0.62rem !important; }
+    .doc-pdf-wrap { display:flex !important; height:52px !important; font-size:0.62rem !important; }
+    .zoom-overlay { display:none !important; }
 
     /* ── Timeline ── */
-    .timeline-item { margin-bottom: 0.5rem !important; }
-    .timeline-body { padding: 0.3rem 0.5rem !important; font-size: 0.78rem !important; background: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-shadow: none !important; }
-    .timeline-date, .timeline-type { font-size: 0.72rem !important; }
-    .uniform-box { padding: 0.3rem 0.6rem !important; font-size: 0.78rem !important; background: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .timeline-item { margin-bottom:0.5rem !important; overflow:hidden !important; }
+    .timeline-body { padding:0.3rem 0.5rem !important; font-size:0.78rem !important; background:#f8f9fa !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; box-shadow:none !important; }
+    .timeline-date,.timeline-type { font-size:0.72rem !important; }
+    .uniform-box { padding:0.3rem 0.6rem !important; font-size:0.78rem !important; background:#f8f9fa !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
 
-    /* ── Explicit page-break hints for large sections ── */
-    .pdf-page-break-before {
-      page-break-before: always !important;
-      break-before:      page    !important;
-    }
+    /* ── Strategic page breaks ── */
+    .pdf-page-break-before { page-break-before:always !important; break-before:page !important; }
 
-    /* ── Watermark visible in print ── */
-    #pdfWatermark { display: block !important; }
+    /* ── Watermark ── */
+    #pdfWatermark { display:block !important; }
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -906,21 +886,28 @@
   /* Start pre-fetching in background as soon as page loads */
   window.addEventListener('load', function() { _prefetchForPrint(); });
 
-  /* Print button: same pipeline as PDF — renders via html2canvas, opens PDF blob in new tab */
-  function doPrint() {
-    var pb = document.getElementById('printBtn');
-    pb.disabled = true;
-    pb.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing...';
-    var wm = document.getElementById('pdfWatermark');
-    var globalTimer;
-    function resetBtn() {
-      clearTimeout(globalTimer);
-      pb.disabled = false;
-      pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
-      if (wm) wm.style.display = 'none';
-    }
-    globalTimer = setTimeout(function() { console.warn('Print timed out'); resetBtn(); }, 90000);
-    try {
+  /* ══════════════════════════════════════════════════════════════════════════
+     SHARED PDF RENDERER
+     ──────────────────────────────────────────────────────────────────────────
+     ROOT CAUSE FIX (half-page PDF):
+       Setting el.style.width='800px' is NOT enough — the element's parent
+       container (sidebar layout) still clips html2canvas at its own boundary.
+       The only reliable solution: temporarily move #profile-content to <body>
+       as a direct child, position it off-screen, and render it there.
+       This removes every parent overflow/clip/margin constraint.
+
+     ROOT CAUSE FIX (page cuts):
+       @media print CSS is INVISIBLE to html2canvas (screen mode only).
+       break-inside:avoid must be in SCREEN CSS so html2pdf's css mode reads it.
+       That fix is already applied above in the screen styles.
+  ════════════════════════════════════════════════════════════════════════════ */
+  function _renderToPdf(outputMode, filename) {
+    /* outputMode: 'save' → download; 'blob' → return Promise<Blob> */
+    return new Promise(function(resolve, reject) {
+      var wm = document.getElementById('pdfWatermark');
+      var el = document.getElementById('profile-content');
+
+      /* Stamp watermark */
       if (wm) {
         var d = new Date();
         var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
@@ -929,31 +916,96 @@
         if (pdfDateEl) pdfDateEl.textContent = ds;
         wm.style.display = 'block';
       }
-      var el = document.getElementById('profile-content');
+
+      /* ── Save original DOM position ── */
+      var origParent = el.parentNode;
+      var origNext   = el.nextSibling;
+      var origStyle  = el.getAttribute('style') || '';
+
+      /* ── Move element to <body>, off-screen, at exactly 800 px ──
+         This breaks free from the sidebar layout entirely so html2canvas
+         captures the full 800 px width with no clipping from any ancestor. */
+      el.style.cssText = [
+        'position:absolute',
+        'top:0',
+        'left:-2000px',
+        'width:800px',
+        'max-width:none',
+        'overflow:visible',
+        'background:#f0f2f5',
+        'z-index:-1'
+      ].join(';');
+      document.body.appendChild(el);
+
+      function restoreEl() {
+        /* Move back to original DOM position */
+        if (origNext) origParent.insertBefore(el, origNext);
+        else          origParent.appendChild(el);
+        /* Restore original inline style (usually empty) */
+        if (origStyle) el.setAttribute('style', origStyle);
+        else           el.removeAttribute('style');
+        if (wm) wm.style.display = 'none';
+      }
+
       var job = _proxyImages(el);
       Promise.all(job.waits).then(function() {
         var opt = {
-          margin: [10, 10, 10, 10],
-          image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: false, allowTaint: true, letterRendering: true, logging: false },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          margin:   [10, 10, 10, 10],
+          filename: filename || 'document.pdf',
+          image:    { type: 'jpeg', quality: 0.96 },
+          html2canvas: {
+            scale:           2,
+            useCORS:         true,
+            allowTaint:      false,
+            letterRendering: true,
+            logging:         false
+            /* NO width / windowWidth — element is already 800 px in <body>,
+               let html2canvas measure it naturally at its real width */
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: {
+            mode:  ['css', 'legacy'],
+            avoid: [
+              '.section-card', '.doc-card', '.doc-grid',
+              '.docs-photo-grid', '.doc-photo-item',
+              '.timeline-item', '.stat-box', '.uniform-box'
+            ]
+          }
         };
-        html2pdf().set(opt).from(el).output('blob')
-          .then(function(blob) {
-            job.restore();
-            resetBtn();
-            var pdfUrl = URL.createObjectURL(blob);
-            var win = window.open(pdfUrl, '_blank');
-            if (!win) {
-              alert('Pop-up blocked — please allow pop-ups for this site, then click Print again.');
-              URL.revokeObjectURL(pdfUrl);
-            } else {
-              setTimeout(function() { try { URL.revokeObjectURL(pdfUrl); } catch(e) {} }, 120000);
-            }
-          })
-          .catch(function(err) { console.error('Print render error:', err); job.restore(); resetBtn(); });
-      }).catch(function(err) { console.error('Proxy error:', err); job.restore(); resetBtn(); });
-    } catch(err) { console.error('Print exception:', err); resetBtn(); }
+
+        var worker = html2pdf().set(opt).from(el);
+        var promise = (outputMode === 'save') ? worker.save() : worker.output('blob');
+        promise
+          .then(function(result) { job.restore(); restoreEl(); resolve(result); })
+          .catch(function(err)   { job.restore(); restoreEl(); reject(err); });
+      }).catch(function(err) { job.restore(); restoreEl(); reject(err); });
+    });
+  }
+
+  /* ── Print button: render → blob → open in new tab ── */
+  function doPrint() {
+    var pb = document.getElementById('printBtn');
+    pb.disabled = true;
+    pb.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing...';
+    var timer = setTimeout(function() { resetPrintBtn(); }, 90000);
+    function resetPrintBtn() {
+      clearTimeout(timer);
+      pb.disabled = false;
+      pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
+    }
+    _renderToPdf('blob', 'Driver_Profile_{{ driver.driver_id }}.pdf')
+      .then(function(blob) {
+        resetPrintBtn();
+        var url = URL.createObjectURL(blob);
+        var win = window.open(url, '_blank');
+        if (!win) {
+          alert('Pop-up blocked — please allow pop-ups, then click Print again.');
+          URL.revokeObjectURL(url);
+        } else {
+          setTimeout(function() { try { URL.revokeObjectURL(url); } catch(e) {} }, 120000);
+        }
+      })
+      .catch(function(err) { console.error('Print error:', err); resetPrintBtn(); });
   }
 
   /* ── Shared proxy helper (used by PDF) ── */
@@ -997,91 +1049,20 @@
     return { waits: waits, restore: restore };
   }
 
-  /* ── PDF generation ── */
+  /* ── PDF Download button ── */
   function downloadPDF() {
     var btn = document.getElementById('pdfBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
-    var wm   = document.getElementById('pdfWatermark');
-    var el   = document.getElementById('profile-content');
-    var globalTimer;
-
-    /* ── Restore everything back to original after PDF ── */
-    function resetBtn() {
-      clearTimeout(globalTimer);
+    var timer = setTimeout(function() { resetPdfBtn(); }, 90000);
+    function resetPdfBtn() {
+      clearTimeout(timer);
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
-      if (wm) wm.style.display = 'none';
-      /* Revert forced width */
-      el.style.width    = '';
-      el.style.maxWidth = '';
     }
-
-    globalTimer = setTimeout(function() {
-      console.warn('PDF timed out — resetting button');
-      resetBtn();
-    }, 90000);
-
-    try {
-      /* ── Watermark timestamp ── */
-      if (wm) {
-        var d  = new Date();
-        var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
-                 ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
-        var pdfDateEl = document.getElementById('pdfDate');
-        if (pdfDateEl) pdfDateEl.textContent = ds;
-        wm.style.display = 'block';
-      }
-
-      /* ── CRITICAL: force element to exactly 800 px wide so html2canvas
-         renders a full A4-width column regardless of sidebar or viewport ── */
-      el.style.width    = '800px';
-      el.style.maxWidth = '800px';
-
-      var job = _proxyImages(el);
-      Promise.all(job.waits).then(function() {
-        var opt = {
-          /* 10 mm on all sides — comfortable breathing room */
-          margin:   [10, 10, 10, 10],
-          filename: 'Driver_Profile_{{ driver.driver_id }}.pdf',
-          image:    { type: 'jpeg', quality: 0.96 },
-          html2canvas: {
-            scale:           2,          /* Hi-DPI sharpness */
-            useCORS:         true,       /* works fine — images are proxied blobs */
-            allowTaint:      false,
-            letterRendering: true,
-            logging:         false,
-            width:           800,        /* canvas pixel width = element forced width */
-            windowWidth:     800         /* media-query breakpoint matches element */
-          },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          /* ── Page-break: css + legacy only.
-             avoid-all is removed — it shifts content and causes half-page blanks. ── */
-          pagebreak: {
-            mode:   ['css', 'legacy'],
-            avoid:  [
-              '.section-card',
-              '.doc-card',
-              '.doc-grid',
-              '.docs-photo-grid',
-              '.doc-photo-item',
-              '.timeline-item',
-              '.stat-box',
-              '.uniform-box'
-            ]
-          }
-        };
-        html2pdf().set(opt).from(el).save()
-          .then(function() { job.restore(); resetBtn(); })
-          .catch(function(err) { console.error('PDF error:', err); job.restore(); resetBtn(); });
-      }).catch(function(err) {
-        console.error('Image proxy error:', err);
-        job.restore(); resetBtn();
-      });
-    } catch(err) {
-      console.error('PDF exception:', err);
-      resetBtn();
-    }
+    _renderToPdf('save', 'Driver_Profile_{{ driver.driver_id }}.pdf')
+      .then(function() { resetPdfBtn(); })
+      .catch(function(err) { console.error('PDF error:', err); resetPdfBtn(); });
   }
   </script>
 
