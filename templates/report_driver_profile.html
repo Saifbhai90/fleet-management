@@ -984,79 +984,98 @@
      Rules here apply ONLY during PDF/Print/Image capture, not on-screen.
      Uses the same Executive theme palette so output matches screen design.
   ─────────────────────────────────────────────────────────────────────── */
-  var _COMPACT_CSS = [
-    /* ── Base font-size reduction for compact two-page output ── */
-    '#profile-content { font-size: 12.5px !important; padding-bottom: 0 !important; }',
+  /* ════════════════════════════════════════════════════════════════════════
+     _COMPACT_CSS  — injected ONLY into the invisible html2canvas/html2pdf
+     clone via _onCloneHandler.  Never touches the live on-screen page.
 
-    /* ── Page background & overall colours ── */
+     Two-level break strategy
+     ────────────────────────
+     LEVEL 1 · Section cards  → break-inside: AUTO
+       html2pdf will NOT add blank padding before a section card that
+       doesn't fit.  Sections can span a page boundary (acceptable for thin
+       sections like Personal Profile, Current Assignment, Official Details).
+
+     LEVEL 2 · Sub-elements  → break-inside: AVOID
+       Individual doc-cards, timeline items, and photo items are kept whole.
+       These are small enough that pushing one to the next page never causes
+       a large blank gap.
+
+     Photos & Documents  → page-break-before: ALWAYS
+       Forces this large section to always open on a fresh page, so it is
+       never cut and no blank space is left at the bottom of page 1.
+  ════════════════════════════════════════════════════════════════════════ */
+  var _COMPACT_CSS = [
+
+    /* ── 1. Base reset ── */
+    '#profile-content { font-size: 12px !important; padding-bottom: 0 !important; line-height: 1.4 !important; }',
     'body { background: #fff !important; }',
     '.profile-page { background: #fff !important; padding: 0 !important; }',
-
-    /* ── Hide everything outside the capture container ── */
     '#profile-action-bar, .action-bar, nav, .navbar, .sidebar, #sidebar, aside, footer { display: none !important; }',
 
-    /* ── Profile header — slim but premium ── */
-    '#profile-content .profile-header { padding: 0.32rem 0.7rem !important; margin-bottom: 0.22rem !important; border-radius: 7px !important; box-shadow: none !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
-    '#profile-content .profile-header h2 { font-size: 1rem !important; margin: 0 0 0.05rem !important; line-height: 1.2 !important; }',
-    '#profile-content .profile-header .sub { font-size: 0.66rem !important; margin: 0 !important; line-height: 1.25 !important; }',
-    '#profile-content .photo-circle, #profile-content .photo-placeholder { width: 46px !important; height: 46px !important; font-size: 1.3rem !important; margin-right: 0.65rem !important; }',
-    '#profile-content .status-badge { font-size: 0.58rem !important; padding: 0.12rem 0.48rem !important; }',
+    /* ── 2. Profile header ── */
+    '#profile-content .profile-header { padding: 0.28rem 0.65rem !important; margin-bottom: 0.18rem !important; border-radius: 6px !important; box-shadow: none !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .profile-header h2 { font-size: 0.95rem !important; margin: 0 0 0.04rem !important; line-height: 1.2 !important; }',
+    '#profile-content .profile-header .sub { font-size: 0.63rem !important; margin: 0 !important; line-height: 1.2 !important; }',
+    '#profile-content .photo-circle, #profile-content .photo-placeholder { width: 42px !important; height: 42px !important; font-size: 1.2rem !important; margin-right: 0.6rem !important; }',
+    '#profile-content .status-badge { font-size: 0.55rem !important; padding: 0.1rem 0.42rem !important; top: 0.8rem !important; right: 0.8rem !important; }',
 
-    /* ── Stats row ── */
-    '#profile-content .stats-row { gap: 0.28rem !important; margin-bottom: 0.28rem !important; }',
-    '#profile-content .stat-box { padding: 0.28rem 0.5rem !important; box-shadow: none !important; border-radius: 5px !important; border: 1px solid #e5e7eb !important; background: #fff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
-    '#profile-content .stat-box .stat-label { font-size: 0.57rem !important; margin-bottom: 0.05rem !important; color: #6b7280 !important; }',
-    '#profile-content .stat-box .stat-value { font-size: 0.88rem !important; color: #1d4ed8 !important; }',
+    /* ── 3. Stats row ── */
+    '#profile-content .stats-row { gap: 0.25rem !important; margin-bottom: 0.25rem !important; }',
+    '#profile-content .stat-box { padding: 0.25rem 0.45rem !important; box-shadow: none !important; border-radius: 5px !important; border: 1px solid #e5e7eb !important; border-top: 2px solid #3b82f6 !important; background: #fff !important; break-inside: auto !important; page-break-inside: auto !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .stat-box .stat-icon { font-size: 0.75rem !important; margin-bottom: 0.08rem !important; }',
+    '#profile-content .stat-box .stat-label { font-size: 0.54rem !important; margin-bottom: 0.04rem !important; color: #6b7280 !important; }',
+    '#profile-content .stat-box .stat-value { font-size: 0.82rem !important; color: #1d4ed8 !important; }',
+    '#profile-content .stats-row { break-inside: auto !important; page-break-inside: auto !important; }',
 
-    /* ── Section cards — compact but zero data cuts ── */
-    '#profile-content .section-card { padding: 0.35rem 0.55rem !important; margin-bottom: 0.22rem !important; box-shadow: none !important; border-radius: 5px !important; border: 1px solid #e5e7eb !important; background: #fff !important; page-break-inside: avoid !important; break-inside: avoid !important; }',
-    '#profile-content .section-title { font-size: 0.67rem !important; margin-bottom: 0.22rem !important; padding-left: 0.4rem !important; color: #1d4ed8 !important; }',
+    /* ── 4. Section cards — LEVEL 1: auto break so no blank gaps ── */
+    '#profile-content .section-card { padding: 0.3rem 0.5rem !important; margin-bottom: 0.18rem !important; box-shadow: none !important; border-radius: 5px !important; border: 1px solid #e5e7eb !important; background: #fff !important; break-inside: auto !important; page-break-inside: auto !important; }',
 
-    /* ── Info grid ── */
-    '#profile-content .info-grid { gap: 0.16rem 1.1rem !important; }',
+    /* ── 5. Section header compact ── */
+    '#profile-content .section-title { padding-bottom: 0.25rem !important; margin-bottom: 0.3rem !important; gap: 0.3rem !important; font-size: 0.62rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .section-icon { width: 18px !important; height: 18px !important; font-size: 0.55rem !important; border-radius: 4px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+
+    /* ── 6. Info grid ── */
+    '#profile-content .info-grid { gap: 0.13rem 1rem !important; }',
     '#profile-content .info-item { margin-bottom: 0 !important; }',
-    '#profile-content .info-item .info-label { font-size: 0.6rem !important; margin-bottom: 0.02rem !important; color: #6b7280 !important; }',
-    '#profile-content .info-item .info-value { font-size: 0.77rem !important; color: #111827 !important; font-weight: 600 !important; }',
+    '#profile-content .info-item .info-label { font-size: 0.56rem !important; margin-bottom: 0.01rem !important; color: #6b7280 !important; }',
+    '#profile-content .info-item .info-value { font-size: 0.74rem !important; color: #111827 !important; font-weight: 600 !important; }',
 
-    /* ── ID document cards ── */
-    '#profile-content .doc-grid { gap: 0.4rem !important; }',
-    '#profile-content .doc-card { padding: 0.32rem 0.5rem !important; border-radius: 5px !important; border: 1px solid #e5e7eb !important; background: #fafafa !important; page-break-inside: avoid !important; break-inside: avoid !important; }',
-    '#profile-content .doc-card-title { font-size: 0.68rem !important; margin-bottom: 0.22rem !important; color: #374151 !important; }',
-    '#profile-content .doc-dates { margin-top: 0.18rem !important; gap: 0.14rem 0.4rem !important; }',
-    '#profile-content .validity-badge { margin-top: 0.18rem !important; padding: 0.1rem 0.44rem !important; font-size: 0.6rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    /* ── 7. ID doc cards — LEVEL 2: avoid break on each card ── */
+    '#profile-content .doc-grid { gap: 0.35rem !important; }',
+    '#profile-content .doc-card { padding: 0.28rem 0.45rem !important; border-radius: 4px !important; border: 1px solid #e5e7eb !important; background: #fafafa !important; break-inside: avoid !important; page-break-inside: avoid !important; }',
+    '#profile-content .doc-card-title { font-size: 0.63rem !important; margin-bottom: 0.18rem !important; color: #374151 !important; }',
+    '#profile-content .doc-dates { margin-top: 0.15rem !important; gap: 0.1rem 0.38rem !important; }',
+    '#profile-content .validity-badge { margin-top: 0.14rem !important; padding: 0.08rem 0.4rem !important; font-size: 0.56rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
 
-    /* ── Uniform box ── */
-    '#profile-content .uniform-box { padding: 0.22rem 0.58rem !important; margin-top: 0.22rem !important; font-size: 0.74rem !important; background: #f8fafc !important; border: 1px solid #e5e7eb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    /* ── 8. Uniform box ── */
+    '#profile-content .uniform-box { padding: 0.18rem 0.5rem !important; margin-top: 0.18rem !important; font-size: 0.7rem !important; background: #f8fafc !important; border: 1px solid #e5e7eb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
 
-    /* ── Section header compact ── */
-    '#profile-content .section-title { padding-bottom: 0.3rem !important; margin-bottom: 0.5rem !important; gap: 0.35rem !important; }',
-    '#profile-content .section-icon { width: 20px !important; height: 20px !important; font-size: 0.6rem !important; border-radius: 5px !important; }',
+    /* ── 9. Timeline — LEVEL 2: avoid break on each item ── */
+    '#profile-content .timeline { padding-left: 1.1rem !important; }',
+    '#profile-content .timeline-item { margin-bottom: 0.25rem !important; break-inside: avoid !important; page-break-inside: avoid !important; }',
+    '#profile-content .timeline-date { font-size: 0.62rem !important; }',
+    '#profile-content .timeline-card { padding: 0.22rem 0.4rem !important; border-radius: 0 4px 4px 0 !important; background: #fff !important; border: 1px solid #e5e7eb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .timeline-meta { gap: 0.28rem !important; margin-bottom: 0.12rem !important; }',
+    '#profile-content .timeline-badge { font-size: 0.54rem !important; padding: 0.07rem 0.35rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .timeline-detail { font-size: 0.68rem !important; line-height: 1.45 !important; }',
 
-    /* ── Stat boxes ── */
-    '#profile-content .stat-box .stat-icon { font-size: 0.82rem !important; margin-bottom: 0.1rem !important; }',
+    /* ── 10. Photos — 2 cols; LEVEL 2: avoid break on each photo item ── */
+    '#profile-content .docs-photo-grid { grid-template-columns: repeat(2,1fr) !important; gap: 0.45rem !important; }',
+    '#profile-content .doc-photo-label { background: #f3f4f6 !important; color: #374151 !important; font-size: 0.6rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .doc-photo-item { border: 1px solid #e5e7eb !important; background: #f9fafb !important; break-inside: avoid !important; page-break-inside: avoid !important; }',
 
-    /* ── Photos & Documents — 2 cols, NO height compression ── */
-    '#profile-content .docs-photo-grid { grid-template-columns: repeat(2,1fr) !important; gap: 0.5rem !important; }',
-    '#profile-content .doc-photo-label { background: #f3f4f6 !important; color: #374151 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
-    '#profile-content .doc-photo-item { border: 1px solid #e5e7eb !important; background: #f9fafb !important; page-break-inside: avoid !important; break-inside: avoid !important; }',
+    /* ── 11. Watermark ── */
+    '#profile-content #pdfWatermark { margin-top: 0.2rem !important; padding: 0.12rem 0.4rem !important; font-size: 0.55rem !important; }',
 
-    /* ── Timeline — compact card style ── */
-    '#profile-content .timeline { padding-left: 1.2rem !important; }',
-    '#profile-content .timeline-item { margin-bottom: 0.3rem !important; page-break-inside: avoid !important; break-inside: avoid !important; }',
-    '#profile-content .timeline-date { font-size: 0.65rem !important; }',
-    '#profile-content .timeline-card { padding: 0.25rem 0.45rem !important; border-radius: 0 5px 5px 0 !important; background: #fff !important; border: 1px solid #e5e7eb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
-    '#profile-content .timeline-meta { gap: 0.3rem !important; margin-bottom: 0.15rem !important; }',
-    '#profile-content .timeline-badge { font-size: 0.58rem !important; padding: 0.08rem 0.38rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
-    '#profile-content .timeline-detail { font-size: 0.71rem !important; }',
+    /* ── 12. Trailing margin guard ── */
+    '#profile-content > *:last-child { margin-bottom: 0 !important; padding-bottom: 0 !important; }',
 
-    /* ── Watermark ── */
-    '#profile-content #pdfWatermark { margin-top: 0.22rem !important; padding: 0.14rem 0.44rem !important; font-size: 0.58rem !important; }',
+    /* ── 13. Photos section: ALWAYS start on a fresh page ──────────────
+       With section-cards set to break-inside:auto, html2pdf flows content
+       continuously.  This rule guarantees Photos & Documents always opens
+       on page 2 — no cutting, no blank gap below text sections.          */
+    '#photos-docs-section { page-break-before: always !important; break-before: always !important; margin-top: 0 !important; }'
 
-    /* ── Photos & Documents: keep whole, don't split across pages ── */
-    '#photos-docs-section { break-inside: avoid !important; page-break-inside: avoid !important; margin-top: 0 !important; }',
-
-    /* ── Trailing margin guard — prevents blank last page ── */
-    '#profile-content > *:last-child { margin-bottom: 0 !important; padding-bottom: 0 !important; }'
   ].join('\n');
 
   /* ── onclone handler — injects compact CSS + watermark into the html2canvas
@@ -1195,6 +1214,12 @@
     }).catch(function(e) { console.error('Proxy error:', e); cleanup(null, e); });
   }
 
+  /* ── PDF options
+     pagebreak.mode 'avoid-all' — html2pdf scans EVERY element and avoids
+     breaks only where the compact CSS says avoid (doc-card, timeline-item,
+     doc-photo-item).  Section-cards have break-inside:auto so they don't
+     produce blank whitespace.  Bottom margin 0 prevents a blank last page.
+  ── */
   var _PDF_OPTS = {
     margin: [8, 8, 0, 8],
     image: { type: 'jpeg', quality: 0.95 },
@@ -1203,7 +1228,7 @@
       letterRendering: true, logging: false,
       onclone: _onCloneHandler
     },
-    pagebreak: { mode: 'css' },
+    pagebreak: { mode: ['avoid-all', 'css'] },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
 
