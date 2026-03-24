@@ -256,7 +256,7 @@
   }
 
   @media print {
-    @page { size: A4 portrait; margin: 12mm 10mm 12mm 10mm; }
+    @page { size: A4 portrait; margin: 8mm 8mm 8mm 8mm; }
 
     /* ── Hide navigation / chrome ── */
     nav, .navbar, .sidebar, #sidebar, aside,
@@ -268,53 +268,61 @@
     #docViewer { display: none !important; }
 
     /* ── Page/body reset ── */
-    html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; font-size: 9pt !important; }
+    html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; font-size: 8.5pt !important; }
     body > div, .main-content, .content-wrapper, .wrapper, main { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; margin-left: 0 !important; box-shadow: none !important; }
     .profile-page { background: #fff !important; padding: 0 !important; }
     #profile-content { display: block !important; width: 100% !important; }
 
     /* ── Header ── */
-    .profile-header { background: #1565c0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; padding: 0.6rem 0.9rem !important; margin-bottom: 0.4rem !important; border-radius: 6px !important; box-shadow: none !important; }
-    .profile-header h2 { font-size: 1.1rem !important; }
-    .status-badge { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    .photo-circle { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .profile-header { background: #1565c0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; padding: 0.4rem 0.7rem !important; margin-bottom: 0.25rem !important; border-radius: 5px !important; box-shadow: none !important; }
+    .profile-header h2 { font-size: 1rem !important; margin-bottom: 0.1rem !important; }
+    .profile-header .sub { font-size: 0.72rem !important; margin-bottom: 0.05rem !important; }
+    .photo-circle { width: 46px !important; height: 46px !important; margin-right: 0.6rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .photo-placeholder { width: 46px !important; height: 46px !important; margin-right: 0.6rem !important; font-size: 1.1rem !important; }
+    .status-badge { font-size: 0.6rem !important; padding: 0.15rem 0.5rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
     /* ── Stats ── */
-    .stats-row { display: grid !important; grid-template-columns: repeat(3,1fr) !important; gap: 0.4rem !important; margin-bottom: 0.4rem !important; }
-    .stat-box { display: block !important; box-shadow: none !important; background: #fff !important; border: 1px solid #ccc !important; padding: 0.4rem !important; }
-    .stat-box .stat-value { font-size: 1rem !important; }
+    .stats-row { display: grid !important; grid-template-columns: repeat(3,1fr) !important; gap: 0.25rem !important; margin-bottom: 0.25rem !important; }
+    .stat-box { display: block !important; box-shadow: none !important; background: #fff !important; border: 1px solid #ccc !important; padding: 0.25rem 0.4rem !important; }
+    .stat-box .stat-label { font-size: 0.6rem !important; margin-bottom: 0.1rem !important; }
+    .stat-box .stat-value { font-size: 0.85rem !important; }
 
-    /* ── Section cards ── */
-    .section-card { display: block !important; box-shadow: none !important; background: #fff !important; border: 1px solid #ddd !important; border-radius: 4px !important; padding: 0.5rem 0.6rem !important; margin-bottom: 0.4rem !important; page-break-inside: avoid; break-inside: avoid; }
-    .section-title { margin-bottom: 0.4rem !important; font-size: 0.7rem !important; }
-    .info-item .info-label { font-size: 0.62rem !important; }
-    .info-item .info-value { font-size: 0.8rem !important; }
-    .info-grid { display: grid !important; gap: 0.25rem 1.2rem !important; }
+    /* ── Section cards — compact, no forced breaks except explicit ones ── */
+    .section-card { display: block !important; box-shadow: none !important; background: #fff !important; border: 1px solid #ddd !important; border-radius: 3px !important; padding: 0.3rem 0.5rem !important; margin-bottom: 0.2rem !important; page-break-inside: avoid; break-inside: avoid; }
+    .section-title { margin-bottom: 0.25rem !important; font-size: 0.65rem !important; padding-left: 0.4rem !important; }
+    .info-item { margin-bottom: 0 !important; }
+    .info-item .info-label { font-size: 0.58rem !important; margin-bottom: 0.05rem !important; }
+    .info-item .info-value { font-size: 0.75rem !important; }
+    .info-grid { display: grid !important; gap: 0.15rem 1rem !important; }
 
     /* ── Doc cards side-by-side ── */
-    .doc-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0.5rem !important; }
-    .doc-card { page-break-inside: avoid; break-inside: avoid; }
+    .doc-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0.3rem !important; }
+    .doc-card { border: 1px solid #e0e0e0 !important; border-radius: 3px !important; padding: 0.3rem 0.4rem !important; page-break-inside: avoid; break-inside: avoid; }
+    .doc-card-title { font-size: 0.65rem !important; margin-bottom: 0.3rem !important; }
+    .doc-dates { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0.15rem 0.5rem !important; margin-top: 0.25rem !important; }
+    .validity-badge { font-size: 0.6rem !important; padding: 0.1rem 0.4rem !important; margin-top: 0.25rem !important; }
+
+    /* ── Uniform box ── */
+    .uniform-box { padding: 0.2rem 0.5rem !important; font-size: 0.7rem !important; margin-top: 0.2rem !important; background: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
     /* ── Photos & Documents ── */
-    .docs-photo-grid { display: grid !important; grid-template-columns: repeat(3,1fr) !important; gap: 0.4rem !important; }
-    .doc-photo-item { display: block !important; background: #fff !important; border: 1px solid #ddd !important; box-shadow: none !important; overflow: visible !important; page-break-inside: avoid; break-inside: avoid; }
-    .doc-photo-label { display: block !important; background: #f0f2f5 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    .doc-photo-thumb-wrap { display: block !important; height: 90px !important; overflow: hidden !important; }
-    .doc-photo-thumb-wrap img { display: block !important; height: 90px !important; width: 100% !important; object-fit: cover !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    .doc-photo-missing { display: flex !important; height: 60px !important; font-size: 0.65rem !important; }
-    .doc-pdf-wrap { display: flex !important; height: 60px !important; font-size: 0.65rem !important; }
+    .docs-photo-grid { display: grid !important; grid-template-columns: repeat(3,1fr) !important; gap: 0.25rem !important; }
+    .doc-photo-item { display: block !important; background: #fff !important; border: 1px solid #ddd !important; box-shadow: none !important; overflow: hidden !important; page-break-inside: avoid; break-inside: avoid; }
+    .doc-photo-label { display: block !important; background: #f0f2f5 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; font-size: 0.58rem !important; padding: 0.15rem 0.4rem !important; }
+    .doc-photo-thumb-wrap { display: block !important; height: 68px !important; overflow: hidden !important; }
+    .doc-photo-thumb-wrap img { display: block !important; height: 68px !important; width: 100% !important; object-fit: cover !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .doc-photo-missing { display: flex !important; height: 48px !important; font-size: 0.58rem !important; }
+    .doc-pdf-wrap { display: flex !important; height: 48px !important; font-size: 0.58rem !important; }
 
     /* ── Timeline ── */
-    .timeline-item { margin-bottom: 0.5rem !important; page-break-inside: avoid; break-inside: avoid; }
-    .timeline-body { padding: 0.3rem 0.5rem !important; font-size: 0.78rem !important; background: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-shadow: none !important; }
-    .timeline-date, .timeline-type { font-size: 0.72rem !important; }
-    .uniform-box { padding: 0.3rem 0.6rem !important; font-size: 0.78rem !important; background: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-
-    /* ── Page breaks ── */
-    .pdf-page-break-before { page-break-before: always !important; break-before: page !important; }
+    .timeline { padding-left: 1.1rem !important; }
+    .timeline-item { margin-bottom: 0.3rem !important; page-break-inside: avoid; break-inside: avoid; }
+    .timeline-date { font-size: 0.65rem !important; }
+    .timeline-type { font-size: 0.6rem !important; }
+    .timeline-body { padding: 0.2rem 0.4rem !important; font-size: 0.72rem !important; background: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-shadow: none !important; }
 
     /* ── Watermark ── */
-    #pdfWatermark { display: block !important; }
+    #pdfWatermark { display: block !important; font-size: 0.6rem !important; padding: 0.2rem 0.5rem !important; margin-top: 0.2rem !important; }
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -982,7 +990,7 @@
   </script>
 
   <!-- Job History Timeline -->
-  <div class="section-card pdf-page-break-before">
+  <div class="section-card">
     <div class="section-title">Job History (Oldest First)</div>
     {% if job_history %}
     <div class="timeline">
