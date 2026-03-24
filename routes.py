@@ -49,7 +49,7 @@ import csv
 from io import StringIO, BytesIO
 import io
 import xlsxwriter
-from sqlalchemy import func, text, inspect, or_, cast
+from sqlalchemy import func, text, inspect, or_, cast, and_
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone
@@ -60,6 +60,19 @@ import re
 import os
 from werkzeug.utils import secure_filename
 from r2_storage import upload_image_file, upload_image_bytes
+
+
+def _multi_word_filter(search_str, *columns):
+    """Multi-word AND search: each space-separated token must appear in at least one column.
+    
+    Example: "COW 395" → (any_col ILIKE '%COW%') AND (any_col ILIKE '%395%')
+    This lets users narrow results by typing multiple keywords from different columns.
+    Returns a SQLAlchemy clause or None if no tokens found.
+    """
+    tokens = [t for t in search_str.split() if t]
+    if not tokens:
+        return None
+    return and_(*(or_(*(col.ilike(f'%{tok}%') for col in columns)) for tok in tokens))
 
 
 class SimplePagination:
@@ -1258,16 +1271,12 @@ def companies():
 
     query = Company.query
     if search:
-        like = f'%{search}%'
-        query = query.filter(
-            Company.name.ilike(like) |
-            Company.email.ilike(like) |
-            Company.mobile.ilike(like) |
-            Company.phone.ilike(like) |
-            Company.office_address.ilike(like) |
-            Company.district.ilike(like) |
-            Company.state.ilike(like)
-        )
+        flt = _multi_word_filter(search,
+            Company.name, Company.email, Company.mobile,
+            Company.phone, Company.office_address,
+            Company.district, Company.state)
+        if flt is not None:
+            query = query.filter(flt)
 
     order_col = Company.id.asc() if (sort_by == 'id' and sort_order == 'asc') else \
                 Company.id.desc() if sort_by == 'id' else \
@@ -1318,11 +1327,10 @@ def companies_print():
     search = request.args.get('search', '').strip()
     query = Company.query
     if search:
-        like = f'%{search}%'
-        query = query.filter(
-            Company.name.ilike(like) | Company.email.ilike(like) |
-            Company.mobile.ilike(like) | Company.office_address.ilike(like)
-        )
+        flt = _multi_word_filter(search,
+            Company.name, Company.email, Company.mobile, Company.office_address)
+        if flt is not None:
+            query = query.filter(flt)
     companies_list = query.order_by(Company.name).all()
     return render_template('companies_print.html', companies=companies_list, search=search)
 
@@ -1575,19 +1583,14 @@ def vehicles_list():
             query = query.filter(Vehicle.district_id.in_(list(allowed_districts)))
 
     if search:
-        like = f'%{search}%'
         query = query.outerjoin(Project,  Vehicle.project_id  == Project.id) \
                      .outerjoin(District, Vehicle.district_id == District.id)
-        query = query.filter(
-            Vehicle.vehicle_no.ilike(like)   |
-            Vehicle.model.ilike(like)         |
-            Vehicle.vehicle_type.ilike(like)  |
-            Vehicle.phone_no.ilike(like)      |
-            Vehicle.engine_no.ilike(like)     |
-            Vehicle.chassis_no.ilike(like)    |
-            Project.name.ilike(like)          |
-            District.name.ilike(like)
-        )
+        flt = _multi_word_filter(search,
+            Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type,
+            Vehicle.phone_no, Vehicle.engine_no, Vehicle.chassis_no,
+            Project.name, District.name)
+        if flt is not None:
+            query = query.filter(flt)
     if from_date:
         query = query.filter(Vehicle.active_date >= from_date)
     if to_date:
@@ -2196,24 +2199,16 @@ def drivers_list():
             query = query.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
     
     if search:
-        like = f"%{search}%"
         query = query.outerjoin(Vehicle,  Driver.vehicle_id  == Vehicle.id) \
                      .outerjoin(Project,  Driver.project_id  == Project.id) \
                      .outerjoin(District, Driver.district_id == District.id)
-        query = query.filter(
-            Driver.driver_id.ilike(like)     |
-            Driver.name.ilike(like)           |
-            Driver.cnic_no.ilike(like)        |
-            Driver.cnic_status.ilike(like)    |
-            Driver.license_no.ilike(like)     |
-            Driver.license_status.ilike(like) |
-            Driver.phone1.ilike(like)         |
-            Driver.driver_district.ilike(like)|
-            Driver.shift.ilike(like)          |
-            Vehicle.vehicle_no.ilike(like)    |
-            Project.name.ilike(like)          |
-            District.name.ilike(like)
-        )
+        flt = _multi_word_filter(search,
+            Driver.driver_id, Driver.name, Driver.cnic_no,
+            Driver.cnic_status, Driver.license_no, Driver.license_status,
+            Driver.phone1, Driver.driver_district, Driver.shift,
+            Vehicle.vehicle_no, Project.name, District.name)
+        if flt is not None:
+            query = query.filter(flt)
 
     # Apply sorting based on sort_by column
     if sort_by == 'driver_id':
@@ -2689,15 +2684,11 @@ def employees_list():
                 query = query.filter(or_(*filters))
 
     if search:
-        like = f"%{search}%"
-        query = query.filter(
-            Employee.name.ilike(like) |
-            Employee.code.ilike(like) |
-            Employee.department.ilike(like) |
-            Employee.cnic_no.ilike(like) |
-            Employee.phone1.ilike(like) |
-            Employee.father_name.ilike(like)
-        )
+        flt = _multi_word_filter(search,
+            Employee.name, Employee.code, Employee.department,
+            Employee.cnic_no, Employee.phone1, Employee.father_name)
+        if flt is not None:
+            query = query.filter(flt)
     if from_date:
         query = query.filter(Employee.joining_date >= from_date)
     if to_date:
@@ -4505,10 +4496,9 @@ def districts_list():
 
     query = District.query
     if search:
-        query = query.filter(
-            District.name.ilike(f'%{search}%') |
-            District.province.ilike(f'%{search}%')
-        )
+        flt = _multi_word_filter(search, District.name, District.province)
+        if flt is not None:
+            query = query.filter(flt)
     if from_date:
         query = query.filter(District.created_at >= from_date)
     if to_date:
@@ -4539,10 +4529,9 @@ def districts_export():
     search = request.args.get('search', '').strip()
     query = District.query
     if search:
-        query = query.filter(
-            District.name.ilike(f'%{search}%') |
-            District.province.ilike(f'%{search}%')
-        )
+        flt = _multi_word_filter(search, District.name, District.province)
+        if flt is not None:
+            query = query.filter(flt)
     districts = query.order_by(District.name.asc()).all()
     headers = ['ID', 'District Name', 'Province/Region', 'Remarks', 'Created']
     rows = []
@@ -4563,10 +4552,9 @@ def districts_print():
     search = request.args.get('search', '').strip()
     query = District.query
     if search:
-        query = query.filter(
-            District.name.ilike(f'%{search}%') |
-            District.province.ilike(f'%{search}%')
-        )
+        flt = _multi_word_filter(search, District.name, District.province)
+        if flt is not None:
+            query = query.filter(flt)
     districts = query.order_by(District.id).all()
     return render_template('districts_print.html', districts=districts, search=search)
 
@@ -4680,10 +4668,10 @@ def assign_project_to_company():
 
     q = Project.query.filter(Project.company_id.isnot(None))
     if search:
-        like = f'%{search}%'
-        q = q.outerjoin(Company, Project.company_id == Company.id).filter(
-            or_(Project.name.ilike(like), Company.name.ilike(like))
-        )
+        q = q.outerjoin(Company, Project.company_id == Company.id)
+        flt = _multi_word_filter(search, Project.name, Company.name)
+        if flt is not None:
+            q = q.filter(flt)
     if from_date:
         q = q.filter(Project.assign_date >= from_date)
     if to_date:
@@ -4999,13 +4987,12 @@ def _assign_project_to_district_data(search=None, project_id=None, district_id=N
     if district_id:
         query = query.filter(District.id == district_id)
     if search:
-        like = f'%{search}%'
-        query = query.filter(or_(
-            Project.name.ilike(like),
-            District.name.ilike(like),
-            project_district.c.remarks.ilike(like),
-            cast(project_district.c.assign_date, SAString).ilike(like)
-        ))
+        flt = _multi_word_filter(search,
+            Project.name, District.name,
+            project_district.c.remarks,
+            cast(project_district.c.assign_date, SAString))
+        if flt is not None:
+            query = query.filter(flt)
     results = query.order_by(Project.name).all()
     assigned_structured = []
     for proj, dist, a_date, a_remarks in results:
@@ -5175,13 +5162,11 @@ def _assign_vehicle_to_district_data(search=None, project_id=None, district_id=N
     if district_id:
         query = query.filter(Vehicle.district_id == district_id)
     if search:
-        query = query.outerjoin(Project, Vehicle.project_id == Project.id).outerjoin(
-            District, Vehicle.district_id == District.id
-        ).filter(
-            (Vehicle.vehicle_no.ilike(f'%{search}%')) |
-            (Project.name.ilike(f'%{search}%')) |
-            (District.name.ilike(f'%{search}%'))
-        )
+        query = query.outerjoin(Project,  Vehicle.project_id  == Project.id) \
+                     .outerjoin(District, Vehicle.district_id == District.id)
+        flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.model, Project.name, District.name)
+        if flt is not None:
+            query = query.filter(flt)
     
     # Apply sorting - database level for performance
     if sort_by == 'vehicle':
@@ -5662,21 +5647,18 @@ def _assign_vehicle_to_parking_data(search=None, project_id=None, district_id=No
     _joined_parking  = False
 
     if search:
-        like = f'%{search}%'
         # Use outerjoin so vehicles with NULL project_id / district_id are NOT excluded
-        query = query.outerjoin(Project,       Vehicle.project_id        == Project.id) \
-                     .outerjoin(District,      Vehicle.district_id       == District.id) \
+        query = query.outerjoin(Project,        Vehicle.project_id         == Project.id) \
+                     .outerjoin(District,       Vehicle.district_id        == District.id) \
                      .outerjoin(ParkingStation, Vehicle.parking_station_id == ParkingStation.id)
         _joined_project  = True
         _joined_district = True
         _joined_parking  = True
-        query = query.filter(
-            Vehicle.vehicle_no.ilike(like)      |
-            Vehicle.model.ilike(like)            |
-            Project.name.ilike(like)             |
-            District.name.ilike(like)            |
-            ParkingStation.name.ilike(like)
-        )
+        flt = _multi_word_filter(search,
+            Vehicle.vehicle_no, Vehicle.model,
+            Project.name, District.name, ParkingStation.name)
+        if flt is not None:
+            query = query.filter(flt)
 
     # Apply sorting — reuse existing joins if already present
     if sort_by == 'vehicle':
@@ -6191,21 +6173,16 @@ def _assign_driver_to_vehicle_data(search=None, project_id=None, district_id=Non
     _joined_district = False
 
     if search:
-        like = f'%{search}%'
         query = query.outerjoin(Project,  Driver.project_id   == Project.id) \
                      .outerjoin(District, Vehicle.district_id == District.id)
         _joined_project  = True
         _joined_district = True
-        query = query.filter(
-            Driver.name.ilike(like)       |
-            Driver.driver_id.ilike(like)  |
-            Driver.cnic_no.ilike(like)    |
-            Driver.shift.ilike(like)      |
-            Vehicle.vehicle_no.ilike(like)|
-            Vehicle.model.ilike(like)     |
-            Project.name.ilike(like)      |
-            District.name.ilike(like)
-        )
+        flt = _multi_word_filter(search,
+            Driver.name, Driver.driver_id, Driver.cnic_no, Driver.shift,
+            Vehicle.vehicle_no, Vehicle.model,
+            Project.name, District.name)
+        if flt is not None:
+            query = query.filter(flt)
 
     # Apply sorting — reuse joins already applied
     if sort_by == 'driver':
@@ -6605,16 +6582,14 @@ def vehicle_transfers():
     if district_id:
         query = query.filter(VehicleTransfer.new_district_id == district_id)
     if q:
-        like = f'%{q}%'
-        query = query.join(Vehicle).outerjoin(Project, VehicleTransfer.new_project_id == Project.id).outerjoin(
-            District, VehicleTransfer.new_district_id == District.id
-        ).filter(or_(
-            Vehicle.vehicle_no.ilike(like),
-            Project.name.ilike(like),
-            District.name.ilike(like),
-            VehicleTransfer.remarks.ilike(like),
-            cast(VehicleTransfer.transfer_date, SAString).ilike(like),
-        ))
+        query = query.join(Vehicle) \
+                     .outerjoin(Project,  VehicleTransfer.new_project_id  == Project.id) \
+                     .outerjoin(District, VehicleTransfer.new_district_id == District.id)
+        flt = _multi_word_filter(q,
+            Vehicle.vehicle_no, Project.name, District.name,
+            VehicleTransfer.remarks, cast(VehicleTransfer.transfer_date, SAString))
+        if flt is not None:
+            query = query.filter(flt)
 
     # Apply sorting
     if sort_by == 'vehicle':
@@ -6870,19 +6845,17 @@ def vehicle_transfers_export():
     if district_id:
         query = query.filter(VehicleTransfer.new_district_id == district_id)
     if q:
-        like = f'%{q}%'
-        query = query.join(Vehicle).outerjoin(Project, VehicleTransfer.new_project_id == Project.id).outerjoin(
-            District, VehicleTransfer.new_district_id == District.id
-        ).filter(or_(
-            Vehicle.vehicle_no.ilike(like),
-            Project.name.ilike(like),
-            District.name.ilike(like),
-            VehicleTransfer.remarks.ilike(like),
-            cast(VehicleTransfer.transfer_date, SAString).ilike(like),
-        ))
-    
+        query = query.join(Vehicle) \
+                     .outerjoin(Project,  VehicleTransfer.new_project_id  == Project.id) \
+                     .outerjoin(District, VehicleTransfer.new_district_id == District.id)
+        flt = _multi_word_filter(q,
+            Vehicle.vehicle_no, Project.name, District.name,
+            VehicleTransfer.remarks, cast(VehicleTransfer.transfer_date, SAString))
+        if flt is not None:
+            query = query.filter(flt)
+
     transfers = query.order_by(VehicleTransfer.transfer_date.desc()).all()
-    
+
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output)
     worksheet = workbook.add_worksheet('Vehicle Transfers')
@@ -7068,26 +7041,20 @@ def driver_transfers():
     if to_date_val:
         query = query.filter(DriverTransfer.transfer_date <= to_date_val)
     if q:
-        like = f'%{q}%'
         if not joined_driver:
             query = query.join(Driver)
             joined_driver = True
         if not joined_vehicle:
             query = query.join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id)
             joined_vehicle = True
-        query = query.outerjoin(
-            Project, DriverTransfer.new_project_id == Project.id
-        ).outerjoin(
-            District, Vehicle.district_id == District.id
-        ).filter(or_(
-            Driver.name.ilike(like),
-            Driver.driver_id.ilike(like),
-            Vehicle.vehicle_no.ilike(like),
-            Project.name.ilike(like),
-            District.name.ilike(like),
-            DriverTransfer.remarks.ilike(like),
-            cast(DriverTransfer.transfer_date, SAString).ilike(like),
-        ))
+        query = query.outerjoin(Project,  DriverTransfer.new_project_id == Project.id) \
+                     .outerjoin(District, Vehicle.district_id            == District.id)
+        flt = _multi_word_filter(q,
+            Driver.name, Driver.driver_id,
+            Vehicle.vehicle_no, Project.name, District.name,
+            DriverTransfer.remarks, cast(DriverTransfer.transfer_date, SAString))
+        if flt is not None:
+            query = query.filter(flt)
 
     # Apply sorting (avoid duplicate joins)
     if sort_by == 'driver':
@@ -8121,18 +8088,15 @@ def driver_job_left_list():
     if to_date:
         query = query.filter(DriverStatusChange.change_date <= to_date)
     if q:
-        like = f"%{q}%"
-        query = query.join(Driver).outerjoin(Project, DriverStatusChange.left_project_id == Project.id) \
-                     .outerjoin(District, DriverStatusChange.left_district_id == District.id) \
-                     .filter(or_(
-                         Driver.name.ilike(like),
-                         Driver.driver_id.ilike(like),
-                         Project.name.ilike(like),
-                         District.name.ilike(like),
-                         DriverStatusChange.reason.ilike(like),
-                         DriverStatusChange.remarks.ilike(like),
-                         cast(DriverStatusChange.change_date, SAString).ilike(like),
-                     ))
+        query = query.join(Driver) \
+                     .outerjoin(Project,  DriverStatusChange.left_project_id  == Project.id) \
+                     .outerjoin(District, DriverStatusChange.left_district_id == District.id)
+        flt = _multi_word_filter(q,
+            Driver.name, Driver.driver_id, Project.name, District.name,
+            DriverStatusChange.reason, DriverStatusChange.remarks,
+            cast(DriverStatusChange.change_date, SAString))
+        if flt is not None:
+            query = query.filter(flt)
 
     left_records = query.order_by(DriverStatusChange.change_date.desc()).all()
 
@@ -8391,16 +8355,11 @@ def driver_rejoin_list():
     if to_date:
         query = query.filter(DriverStatusChange.change_date <= to_date)
     if search:
-        like = f'%{search}%'
-        query = query.filter(
-            or_(
-                Driver.name.ilike(like),
-                Driver.driver_id.ilike(like),
-                Project.name.ilike(like),
-                District.name.ilike(like),
-                Vehicle.vehicle_no.ilike(like)
-            )
-        )
+        flt = _multi_word_filter(search,
+            Driver.name, Driver.driver_id,
+            Project.name, District.name, Vehicle.vehicle_no)
+        if flt is not None:
+            query = query.filter(flt)
 
     rejoin_records = query.order_by(DriverStatusChange.change_date.desc()).all()
 
