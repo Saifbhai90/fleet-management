@@ -326,7 +326,7 @@
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <div class="profile-page">
   <!-- Action Bar — excluded from PDF/Print capture -->
@@ -347,7 +347,7 @@
       <button onclick="downloadPDF()" class="btn btn-outline-success btn-action" id="pdfBtn">
         <i class="bi bi-file-earmark-pdf me-1"></i>PDF
       </button>
-      <button onclick="downloadAsImages()" class="btn btn-outline-secondary btn-action" id="imagesBtn">
+      <button onclick="downloadAsImages()" class="btn btn-outline-info btn-action" id="imagesBtn">
         <i class="bi bi-images me-1"></i>Download Images
       </button>
       {% if driver.document_path %}
@@ -1044,18 +1044,40 @@
     }).catch(function(err) { job.restore(); onDone(null, err); });
   }
 
-  /* ── Shared jsPDF builder from canvas page array ───────────────────── */
-  function _pagesToPDF(pages) {
-    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-    pages.forEach(function(pc, i) {
-      if (i > 0) doc.addPage();
-      var h = Math.min(297, Math.round(210 * pc.height / pc.width));
-      doc.addImage(pc.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 210, h);
-    });
-    return doc;
+  /* ── Common html2pdf render helper ─────────────────────────────────────
+     mode: 'save'  → downloads PDF file
+     mode: 'blob'  → returns blob via onDone(blob, err)
+  ─────────────────────────────────────────────────────────────────────── */
+  function _renderDoc(opts, mode, onDone) {
+    var el  = document.getElementById('profile-content');
+    var job = _proxyImages(el);
+    function cleanup(result, err) { job.restore(); if (onDone) onDone(result, err); }
+    Promise.all(job.waits).then(function() {
+      requestAnimationFrame(function() {
+        setTimeout(function() {
+          var worker  = html2pdf().set(opts).from(el);
+          var promise = (mode === 'blob') ? worker.output('blob') : worker.save();
+          promise
+            .then(function(r) { cleanup(r, null); })
+            .catch(function(e) { console.error('PDF error:', e); cleanup(null, e); });
+        }, 0);
+      });
+    }).catch(function(e) { console.error('Proxy error:', e); cleanup(null, e); });
   }
 
-  /* ── Print button — builds PDF, opens in browser's native PDF viewer ── */
+  var _PDF_OPTS = {
+    margin: [8, 8, 0, 8],
+    image: { type: 'jpeg', quality: 0.95 },
+    html2canvas: {
+      scale: 2, useCORS: false, allowTaint: true,
+      letterRendering: true, logging: false,
+      onclone: _onCloneHandler
+    },
+    pagebreak: { mode: 'css' },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  /* ── Print button — html2pdf → blob → browser's native PDF viewer ─── */
   function doPrint() {
     var pb = document.getElementById('printBtn');
     pb.disabled = true;
@@ -1063,16 +1085,15 @@
     var sg = setTimeout(function() {
       pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
     }, 90000);
-
-    _capturePages(function(pages, err) {
+    var opts = Object.assign({}, _PDF_OPTS, { filename: 'Driver_Profile_{{ driver.driver_id }}.pdf' });
+    _renderDoc(opts, 'blob', function(blob, err) {
       clearTimeout(sg);
       pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
-      if (err || !pages || !pages.length) return;
-      var blob = _pagesToPDF(pages).output('blob');
-      var url  = URL.createObjectURL(blob);
-      var win  = window.open(url, '_blank');
+      if (err || !blob) return;
+      var url = URL.createObjectURL(blob);
+      var win = window.open(url, '_blank');
       if (!win) {
-        alert('Pop-up blocked — please allow pop-ups for this site.');
+        alert('Pop-up blocked — please allow pop-ups for this site, then try again.');
         URL.revokeObjectURL(url);
       } else {
         setTimeout(function() { try { URL.revokeObjectURL(url); } catch(e){} }, 120000);
@@ -1120,7 +1141,7 @@
     return { waits: waits, restore: restore };
   }
 
-  /* ── PDF Download button ── */
+  /* ── PDF Download button — html2pdf → save file ─────────────────── */
   function downloadPDF() {
     var btn = document.getElementById('pdfBtn');
     btn.disabled = true;
@@ -1128,12 +1149,10 @@
     var sg = setTimeout(function() {
       btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
     }, 90000);
-
-    _capturePages(function(pages, err) {
+    var opts = Object.assign({}, _PDF_OPTS, { filename: 'Driver_Profile_{{ driver.driver_id }}.pdf' });
+    _renderDoc(opts, 'save', function() {
       clearTimeout(sg);
       btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
-      if (err || !pages || !pages.length) return;
-      _pagesToPDF(pages).save('Driver_Profile_{{ driver.driver_id }}.pdf');
     });
   }
 
