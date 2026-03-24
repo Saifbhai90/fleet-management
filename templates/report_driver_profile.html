@@ -852,54 +852,159 @@
   /* Start pre-fetching in background as soon as page loads */
   window.addEventListener('load', function() { _prefetchForPrint(); });
 
-  /* ── Print button: proxy R2 images → render via html2canvas → open blob in new tab ── */
+  /* ── Compact style injection ──────────────────────────────────────────────
+     html2canvas captures the SCREEN rendering, so @media print CSS has no
+     effect on PDF output. We temporarily inject compact styles scoped to
+     #profile-content, wait one animation frame for the browser to reflow,
+     then capture. After capture we remove the injected styles so the page
+     returns to its normal look instantly.
+  ─────────────────────────────────────────────────────────────────────────── */
+  var _COMPACT_CSS = [
+    /* Base font size reduction for the whole profile block */
+    '#profile-content { font-size: 13px !important; }',
+
+    /* Profile header */
+    '#profile-content .profile-header { padding: 0.45rem 0.75rem !important; margin-bottom: 0.3rem !important; }',
+    '#profile-content .profile-header h2 { font-size: 1.05rem !important; margin: 0 0 0.05rem !important; line-height: 1.2 !important; }',
+    '#profile-content .profile-header .sub { font-size: 0.68rem !important; margin: 0 !important; line-height: 1.3 !important; }',
+    '#profile-content .photo-circle, #profile-content .photo-placeholder { width: 50px !important; height: 50px !important; font-size: 1.4rem !important; margin-right: 0.75rem !important; }',
+    '#profile-content .status-badge { font-size: 0.62rem !important; padding: 0.15rem 0.5rem !important; }',
+
+    /* Stats row */
+    '#profile-content .stats-row { gap: 0.4rem !important; margin-bottom: 0.4rem !important; }',
+    '#profile-content .stat-box { padding: 0.4rem 0.6rem !important; box-shadow: none !important; border-radius: 6px !important; }',
+    '#profile-content .stat-box .stat-label { font-size: 0.6rem !important; margin-bottom: 0.08rem !important; }',
+    '#profile-content .stat-box .stat-value { font-size: 0.95rem !important; }',
+
+    /* Section cards — biggest space savers */
+    '#profile-content .section-card { padding: 0.5rem 0.7rem !important; margin-bottom: 0.35rem !important; box-shadow: none !important; border-radius: 6px !important; }',
+    '#profile-content .section-title { font-size: 0.7rem !important; margin-bottom: 0.35rem !important; padding-left: 0.45rem !important; }',
+
+    /* Info grid */
+    '#profile-content .info-grid { gap: 0.25rem 1.5rem !important; }',
+    '#profile-content .info-item { margin-bottom: 0 !important; }',
+    '#profile-content .info-item .info-label { font-size: 0.63rem !important; margin-bottom: 0.03rem !important; }',
+    '#profile-content .info-item .info-value { font-size: 0.8rem !important; }',
+
+    /* ID document cards */
+    '#profile-content .doc-grid { gap: 0.5rem !important; }',
+    '#profile-content .doc-card { padding: 0.45rem 0.65rem !important; border-radius: 5px !important; }',
+    '#profile-content .doc-card-title { font-size: 0.72rem !important; margin-bottom: 0.35rem !important; }',
+    '#profile-content .doc-dates { margin-top: 0.3rem !important; gap: 0.2rem 0.5rem !important; }',
+    '#profile-content .validity-badge { margin-top: 0.3rem !important; padding: 0.12rem 0.5rem !important; font-size: 0.65rem !important; }',
+
+    /* Uniform box */
+    '#profile-content .uniform-box { padding: 0.3rem 0.7rem !important; margin-top: 0.35rem !important; font-size: 0.78rem !important; }',
+
+    /* Photos & Documents — photo height is the biggest single saving */
+    '#profile-content .docs-photo-grid { gap: 0.4rem !important; }',
+    '#profile-content .doc-photo-label { font-size: 0.65rem !important; padding: 0.28rem 0.55rem !important; }',
+    '#profile-content .doc-photo-thumb-wrap { height: 75px !important; }',
+    '#profile-content .doc-photo-thumb-wrap img { height: 75px !important; }',
+    '#profile-content .doc-photo-missing { height: 75px !important; font-size: 0.68rem !important; }',
+    '#profile-content .doc-photo-missing i { font-size: 1.3rem !important; }',
+    '#profile-content .doc-pdf-wrap { height: 75px !important; }',
+
+    /* Job history timeline */
+    '#profile-content .timeline { padding-left: 1.3rem !important; }',
+    '#profile-content .timeline-item { margin-bottom: 0.4rem !important; }',
+    '#profile-content .timeline-date { font-size: 0.72rem !important; margin-bottom: 0.1rem !important; }',
+    '#profile-content .timeline-type { font-size: 0.68rem !important; margin-bottom: 0.15rem !important; }',
+    '#profile-content .timeline-body { padding: 0.3rem 0.5rem !important; font-size: 0.78rem !important; }',
+
+    /* Watermark */
+    '#profile-content #pdfWatermark { margin-top: 0.3rem !important; padding: 0.2rem 0.5rem !important; font-size: 0.62rem !important; }'
+  ].join('\n');
+
+  function _injectCompactStyles() {
+    var el = document.getElementById('__pdfCompact');
+    if (el) return el;
+    var s = document.createElement('style');
+    s.id = '__pdfCompact';
+    s.textContent = _COMPACT_CSS;
+    document.head.appendChild(s);
+    return s;
+  }
+
+  function _removeCompactStyles() {
+    var el = document.getElementById('__pdfCompact');
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  /* ── Common render function ─────────────────────────────────────────────
+     mode: 'save' → download PDF file
+     mode: 'blob' → return blob via onDone(blob)
+     onDone(result, err) called after completion either way
+  ─────────────────────────────────────────────────────────────────────── */
+  function _renderDoc(opts, mode, onDone) {
+    var wm = document.getElementById('pdfWatermark');
+    if (wm) {
+      var d  = new Date();
+      var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
+               ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+      var pdfDateEl = document.getElementById('pdfDate');
+      if (pdfDateEl) pdfDateEl.textContent = ds;
+      wm.style.display = 'block';
+    }
+
+    var el  = document.getElementById('profile-content');
+
+    /* Inject compact styles before starting image proxy so both happen concurrently */
+    _injectCompactStyles();
+
+    var job = _proxyImages(el);
+
+    function cleanup(result, err) {
+      _removeCompactStyles();
+      job.restore();
+      if (wm) wm.style.display = 'none';
+      if (onDone) onDone(result, err);
+    }
+
+    Promise.all(job.waits).then(function() {
+      /* rAF + zero-timeout: ensures browser applies compact CSS and reflows before capture */
+      requestAnimationFrame(function() {
+        setTimeout(function() {
+          var worker  = html2pdf().set(opts).from(el);
+          var promise = (mode === 'blob') ? worker.output('blob') : worker.save();
+          promise
+            .then(function(result) { cleanup(result, null); })
+            .catch(function(err)   { console.error('PDF error:', err); cleanup(null, err); });
+        }, 0);
+      });
+    }).catch(function(err) {
+      console.error('Image proxy error:', err);
+      cleanup(null, err);
+    });
+  }
+
+  var _PDF_OPTS = {
+    margin: [8, 8, 8, 8],
+    image: { type: 'jpeg', quality: 0.95 },
+    html2canvas: { scale: 2, useCORS: false, allowTaint: true, letterRendering: true, logging: false },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  /* ── Print button ── */
   function doPrint() {
     var pb = document.getElementById('printBtn');
     pb.disabled = true;
     pb.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing...';
-    var wm = document.getElementById('pdfWatermark');
-    var globalTimer;
-    function resetBtn() {
-      clearTimeout(globalTimer);
+    var safeguard = setTimeout(function() { pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; _removeCompactStyles(); }, 90000);
+    _renderDoc(_PDF_OPTS, 'blob', function(blob) {
+      clearTimeout(safeguard);
       pb.disabled = false;
       pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
-      if (wm) wm.style.display = 'none';
-    }
-    globalTimer = setTimeout(function() { console.warn('Print timed out'); resetBtn(); }, 90000);
-    try {
-      if (wm) {
-        var d = new Date();
-        var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
-                 ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
-        var pdfDateEl = document.getElementById('pdfDate');
-        if (pdfDateEl) pdfDateEl.textContent = ds;
-        wm.style.display = 'block';
+      if (!blob) return;
+      var url = URL.createObjectURL(blob);
+      var win = window.open(url, '_blank');
+      if (!win) {
+        alert('Pop-up blocked — please allow pop-ups for this site, then click Print again.');
+        URL.revokeObjectURL(url);
+      } else {
+        setTimeout(function() { try { URL.revokeObjectURL(url); } catch(e) {} }, 120000);
       }
-      var el = document.getElementById('profile-content');
-      var job = _proxyImages(el);
-      Promise.all(job.waits).then(function() {
-        var opt = {
-          margin: [10, 10, 10, 10],
-          image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: false, allowTaint: true, letterRendering: true, logging: false },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-        html2pdf().set(opt).from(el).output('blob')
-          .then(function(blob) {
-            job.restore();
-            resetBtn();
-            var pdfUrl = URL.createObjectURL(blob);
-            var win = window.open(pdfUrl, '_blank');
-            if (!win) {
-              alert('Pop-up blocked — please allow pop-ups for this site, then click Print again.');
-              URL.revokeObjectURL(pdfUrl);
-            } else {
-              setTimeout(function() { try { URL.revokeObjectURL(pdfUrl); } catch(e) {} }, 120000);
-            }
-          })
-          .catch(function(err) { console.error('Print render error:', err); job.restore(); resetBtn(); });
-      }).catch(function(err) { console.error('Proxy error:', err); job.restore(); resetBtn(); });
-    } catch(err) { console.error('Print exception:', err); resetBtn(); }
+    });
   }
 
   /* ── Shared image proxy helper ── */
@@ -947,45 +1052,13 @@
     var btn = document.getElementById('pdfBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
-    var wm = document.getElementById('pdfWatermark');
-    var globalTimer;
-    function resetBtn() {
-      clearTimeout(globalTimer);
+    var safeguard = setTimeout(function() { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF'; _removeCompactStyles(); }, 90000);
+    var opts = Object.assign({}, _PDF_OPTS, { filename: 'Driver_Profile_{{ driver.driver_id }}.pdf' });
+    _renderDoc(opts, 'save', function() {
+      clearTimeout(safeguard);
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
-      if (wm) wm.style.display = 'none';
-    }
-    globalTimer = setTimeout(function() { console.warn('PDF timed out'); resetBtn(); }, 90000);
-    try {
-      if (wm) {
-        var d = new Date();
-        var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
-                 ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
-        var pdfDateEl = document.getElementById('pdfDate');
-        if (pdfDateEl) pdfDateEl.textContent = ds;
-        wm.style.display = 'block';
-      }
-      var el = document.getElementById('profile-content');
-      var job = _proxyImages(el);
-      Promise.all(job.waits).then(function() {
-        var opt = {
-          margin: [10, 10, 10, 10],
-          filename: 'Driver_Profile_{{ driver.driver_id }}.pdf',
-          image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: false, allowTaint: true, letterRendering: true, logging: false },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-        html2pdf().set(opt).from(el).save()
-          .then(function() { job.restore(); resetBtn(); })
-          .catch(function(err) { console.error('PDF error:', err); job.restore(); resetBtn(); });
-      }).catch(function(err) {
-        console.error('Image proxy error:', err);
-        job.restore(); resetBtn();
-      });
-    } catch(err) {
-      console.error('PDF exception:', err);
-      resetBtn();
-    }
+    });
   }
   </script>
 
