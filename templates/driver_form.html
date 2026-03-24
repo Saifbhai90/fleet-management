@@ -16,6 +16,83 @@
     .valid-bg { background-color: #dcfce7 !important; color: #166534 !important; border-color: #86efac !important; }
     .expired-bg { background-color: #fee2e2 !important; color: #991b1b !important; border-color: #fca5a5 !important; }
     .btn-lg { min-width: 180px; }
+
+    /* ── Processing Overlay ── */
+    #processingOverlay {
+        position: fixed; inset: 0; z-index: 99999;
+        background: rgba(0, 0, 0, 0.72);
+        display: flex; align-items: center; justify-content: center;
+        opacity: 0; visibility: hidden;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+        backdrop-filter: blur(3px);
+    }
+    #processingOverlay.active {
+        opacity: 1; visibility: visible;
+    }
+    .processing-card {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 2.8rem 3rem;
+        text-align: center;
+        max-width: 420px; width: 90%;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+        animation: cardPop 0.3s ease forwards;
+    }
+    @keyframes cardPop {
+        from { transform: scale(0.92); opacity: 0; }
+        to   { transform: scale(1);    opacity: 1; }
+    }
+    .processing-spinner-wrap {
+        position: relative; width: 72px; height: 72px;
+        margin: 0 auto 1.5rem;
+    }
+    .processing-spinner-wrap .spinner-border {
+        width: 72px; height: 72px;
+        border-width: 5px;
+        color: #1e3a8a;
+    }
+    .processing-spinner-wrap .spinner-inner-icon {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.6rem; color: #1e3a8a;
+    }
+    .processing-title {
+        font-size: 1.25rem; font-weight: 700;
+        color: #1e293b; margin-bottom: 0.5rem;
+    }
+    .processing-subtitle {
+        font-size: 0.875rem; color: #64748b;
+        line-height: 1.6; margin-bottom: 1.4rem;
+        animation: pulse-hint 2s ease-in-out infinite;
+    }
+    @keyframes pulse-hint {
+        0%, 100% { opacity: 1; }
+        50%       { opacity: 0.5; }
+    }
+    .processing-steps {
+        display: flex; flex-direction: column; gap: 0.45rem;
+        text-align: left;
+    }
+    .processing-step {
+        display: flex; align-items: center; gap: 0.55rem;
+        font-size: 0.8rem; color: #94a3b8;
+        transition: color 0.4s ease;
+    }
+    .processing-step.done   { color: #16a34a; }
+    .processing-step.active { color: #1e3a8a; font-weight: 600; }
+    .processing-step i { font-size: 0.9rem; min-width: 16px; }
+    .processing-step.done   i { color: #22c55e; }
+    .processing-step.active i { color: #1e3a8a; animation: spin-icon 1s linear infinite; }
+    @keyframes spin-icon {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+    }
+    .processing-warning {
+        margin-top: 1.4rem; padding: 0.55rem 0.85rem;
+        background: #fef9c3; border: 1px solid #fde047;
+        border-radius: 8px; font-size: 0.78rem; color: #854d0e;
+        display: flex; align-items: center; gap: 0.4rem;
+    }
 </style>
 {% endblock %}
 
@@ -623,5 +700,115 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
 });
+</script>
+
+<!-- ═══════════════════════════════════════════
+     PROCESSING OVERLAY  —  shown on form submit
+     ═══════════════════════════════════════════ -->
+<div id="processingOverlay" role="status" aria-live="assertive" aria-label="Processing">
+  <div class="processing-card">
+
+    <!-- Spinner with centred icon -->
+    <div class="processing-spinner-wrap">
+      <div class="spinner-border" role="status"></div>
+      <div class="spinner-inner-icon"><i class="bi bi-cloud-upload"></i></div>
+    </div>
+
+    <!-- Headline -->
+    <div class="processing-title">Processing Driver Profile&hellip;</div>
+
+    <!-- Pulsating hint -->
+    <div class="processing-subtitle">
+      Uploading documents and finalizing records.<br>
+      Please do not refresh or close the page.
+    </div>
+
+    <!-- Step indicators -->
+    <div class="processing-steps">
+      <div class="processing-step active" id="pStep1">
+        <i class="bi bi-arrow-repeat"></i> Validating form data
+      </div>
+      <div class="processing-step" id="pStep2">
+        <i class="bi bi-circle"></i> Uploading documents to cloud
+      </div>
+      <div class="processing-step" id="pStep3">
+        <i class="bi bi-circle"></i> Saving driver record
+      </div>
+    </div>
+
+    <!-- Warning bar -->
+    <div class="processing-warning">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      Do not press Back or reload &mdash; this may take a few seconds.
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  /* ── Step ticker: auto-advance visual steps every ~2 s ── */
+  var _stepTimer = null;
+  function _startStepTicker() {
+    var steps  = ['pStep1', 'pStep2', 'pStep3'];
+    var icons  = ['bi-arrow-repeat', 'bi-circle', 'bi-circle'];
+    var active = 0;
+    function advance() {
+      steps.forEach(function(id, i) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var icon = el.querySelector('i');
+        if (i < active) {
+          el.className = 'processing-step done';
+          icon.className = 'bi bi-check-circle-fill';
+        } else if (i === active) {
+          el.className = 'processing-step active';
+          icon.className = 'bi bi-arrow-repeat';
+        } else {
+          el.className = 'processing-step';
+          icon.className = 'bi ' + icons[i];
+        }
+      });
+      if (active < steps.length - 1) {
+        active++;
+        _stepTimer = setTimeout(advance, 2200);
+      }
+    }
+    advance();
+  }
+
+  /* ── Show overlay ── */
+  window.showProcessingOverlay = function () {
+    var ov = document.getElementById('processingOverlay');
+    if (ov) {
+      ov.classList.add('active');
+      _startStepTicker();
+    }
+  };
+
+  /* ── Attach to form submit ── */
+  document.addEventListener('DOMContentLoaded', function () {
+    var form    = document.getElementById('driverForm');
+    var saveBtn = form ? form.querySelector('button[type="submit"]') : null;
+    if (!form || !saveBtn) return;
+
+    form.addEventListener('submit', function (e) {
+      /* Validation already runs in the earlier listener;
+         if the form is still invalid, bail out immediately */
+      if (!form.checkValidity()) return;
+
+      /* Disable button to prevent double-submit */
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving&hellip;';
+
+      /* Show the overlay (smooth fade-in via CSS transition) */
+      showProcessingOverlay();
+
+      /* Block accidental clicks on the rest of the page */
+      document.body.style.pointerEvents = 'none';
+      document.getElementById('processingOverlay').style.pointerEvents = 'all';
+    }, false);
+  });
+})();
 </script>
 {% endblock %}
