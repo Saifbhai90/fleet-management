@@ -325,7 +325,8 @@
     #pdfWatermark { display: block !important; font-size: 0.6rem !important; padding: 0.2rem 0.5rem !important; margin-top: 0.2rem !important; }
   }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <div class="profile-page">
   <!-- Action Bar — excluded from PDF/Print capture -->
@@ -345,6 +346,9 @@
       </button>
       <button onclick="downloadPDF()" class="btn btn-outline-success btn-action" id="pdfBtn">
         <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+      </button>
+      <button onclick="downloadAsImages()" class="btn btn-outline-secondary btn-action" id="imagesBtn">
+        <i class="bi bi-images me-1"></i>Download Images
       </button>
       {% if driver.document_path %}
       <a href="{{ driver.document_path | media_url }}" target="_blank" class="btn btn-outline-danger btn-action">
@@ -925,38 +929,15 @@
     '#photos-docs-section { page-break-before: always !important; break-before: always !important; margin-top: 0 !important; }'
   ].join('\n');
 
-  function _injectCompactStyles() {
-    var el = document.getElementById('__pdfCompact');
-    if (el) return el;
-    var s = document.createElement('style');
-    s.id = '__pdfCompact';
-    s.textContent = _COMPACT_CSS;
-    document.head.appendChild(s);
-    return s;
-  }
-
-  function _removeCompactStyles() {
-    var el = document.getElementById('__pdfCompact');
-    if (el && el.parentNode) el.parentNode.removeChild(el);
-  }
-
-  /* ── Common render function ─────────────────────────────────────────────
-     mode: 'save' → download PDF file
-     mode: 'blob' → return blob via onDone(blob)
-     onDone(result, err) called after completion either way
-  ─────────────────────────────────────────────────────────────────────── */
-  /* Shared onclone handler — injects compact CSS + stamps watermark into the
-     html2canvas invisible clone only. The LIVE page is never modified, so the
-     user sees no flash or compression while the PDF/Print is being prepared. */
+  /* ── onclone handler — injects compact CSS + watermark into the html2canvas
+     invisible clone only; the LIVE page is never touched ─────────────────── */
   function _onCloneHandler(clonedDoc) {
-    /* Compact styles */
     var s = clonedDoc.createElement('style');
     s.textContent = _COMPACT_CSS;
     clonedDoc.head.appendChild(s);
-    /* Watermark */
-    var d   = new Date();
-    var ds  = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
-              ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+    var d  = new Date();
+    var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
+             ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
     var wmC = clonedDoc.getElementById('pdfWatermark');
     if (wmC) {
       var pde = clonedDoc.getElementById('pdfDate');
@@ -965,74 +946,136 @@
     }
   }
 
-  function _renderDoc(opts, mode, onDone) {
-    var el  = document.getElementById('profile-content');
-    var job = _proxyImages(el);
-
-    function cleanup(result, err) {
-      job.restore();
-      if (onDone) onDone(result, err);
+  /* ── Find the row with the lowest pixel variance (= gap between section
+     cards) near targetY.  Uses every 8th pixel for speed. ─────────────── */
+  function _findPageSplit(canvas, targetY, searchFrac) {
+    var ctx   = canvas.getContext('2d');
+    var range = Math.round(canvas.height * (searchFrac || 0.10));
+    var from  = Math.max(0, targetY - range);
+    var to    = Math.min(canvas.height - 1, targetY + range);
+    var best  = targetY, bestVar = Infinity, step = 8;
+    for (var y = from; y <= to; y++) {
+      var d = ctx.getImageData(0, y, canvas.width, 1).data;
+      var sum = 0, cnt = 0;
+      for (var i = 0; i < d.length; i += 4 * step) { sum += (d[i]+d[i+1]+d[i+2])/3; cnt++; }
+      if (!cnt) continue;
+      var mean = sum / cnt, v = 0;
+      for (var i = 0; i < d.length; i += 4 * step) {
+        var diff = (d[i]+d[i+1]+d[i+2])/3 - mean; v += diff*diff;
+      }
+      v /= cnt;
+      if (v < bestVar) { bestVar = v; best = y; }
     }
+    return best;
+  }
+
+  /* ── Create a canvas slice from sourceCanvas ────────────────────────── */
+  function _makeSlice(src, startY, height) {
+    var c = document.createElement('canvas');
+    c.width = src.width; c.height = Math.max(1, height);
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(src, 0, -startY);
+    return c;
+  }
+
+  /* ── Shared capture helper — proxies images, captures #profile-content
+     with compact CSS via onclone, then splits into A4 page canvases.
+     Split point is found by scanning for the lowest-variance row (= the
+     white/grey gap between section cards) near the A4 boundary. ──────── */
+  function _capturePages(onDone) {
+    var el       = document.getElementById('profile-content');
+    var photosEl = document.getElementById('photos-docs-section');
+
+    /* Measure the relative position of the Photos section in the LIVE DOM
+       (without compact CSS).  This fraction is used as the search target in
+       the canvas (compact CSS shrinks all sections proportionally). */
+    var photosFrac = (photosEl && el.scrollHeight > 0)
+                   ? Math.min(0.90, photosEl.offsetTop / el.scrollHeight)
+                   : 0.55;
+
+    var job = _proxyImages(el);
 
     Promise.all(job.waits).then(function() {
       requestAnimationFrame(function() {
         setTimeout(function() {
-          var worker  = html2pdf().set(opts).from(el);
-          var promise = (mode === 'blob') ? worker.output('blob') : worker.save();
-          promise
-            .then(function(result) { cleanup(result, null); })
-            .catch(function(err)   { console.error('PDF error:', err); cleanup(null, err); });
+          html2canvas(el, {
+            scale: 2, useCORS: false, allowTaint: true,
+            letterRendering: true, logging: false,
+            onclone: _onCloneHandler
+          }).then(function(canvas) {
+            job.restore();
+
+            var cw   = canvas.width;
+            var a4H  = Math.round(cw * 297 / 210);   /* A4 height in pixels */
+            var pages = [];
+
+            if (canvas.height <= a4H * 1.15) {
+              /* Fits in a single page */
+              pages.push(canvas);
+            } else {
+              /* Find the cleanest split near the Photos section boundary */
+              var targetY = Math.round(photosFrac * canvas.height);
+              var split1  = _findPageSplit(canvas, targetY, 0.13);
+              pages.push(_makeSlice(canvas, 0, split1));
+
+              var rem = canvas.height - split1;
+              if (rem > 20) {
+                if (rem <= a4H * 1.15) {
+                  pages.push(_makeSlice(canvas, split1, rem));
+                } else {
+                  /* More than 2 pages needed */
+                  var y = split1;
+                  while (y < canvas.height) {
+                    var nxt = (y + a4H < canvas.height - 20)
+                              ? _findPageSplit(canvas, y + a4H, 0.12)
+                              : canvas.height;
+                    pages.push(_makeSlice(canvas, y, nxt - y));
+                    y = nxt;
+                  }
+                }
+              }
+            }
+            onDone(pages, null);
+          }).catch(function(err) { job.restore(); onDone(null, err); });
         }, 0);
       });
-    }).catch(function(err) {
-      console.error('Image proxy error:', err);
-      cleanup(null, err);
-    });
+    }).catch(function(err) { job.restore(); onDone(null, err); });
   }
 
-  var _PDF_OPTS = {
-    margin: [8, 8, 0, 8],   /* bottom=0: prevents blank trailing page */
-    image: { type: 'jpeg', quality: 0.95 },
-    html2canvas: {
-      scale: 2,
-      useCORS: false,
-      allowTaint: true,
-      letterRendering: true,
-      logging: false,
-      onclone: _onCloneHandler   /* compact CSS + watermark applied to clone only */
-    },
-    /* 'css' mode only respects explicit CSS rules; disables the 'legacy' mode
-       that injects whitespace padding between sections to avoid page cuts */
-    pagebreak: { mode: 'css' },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
+  /* ── Shared jsPDF builder from canvas page array ───────────────────── */
+  function _pagesToPDF(pages) {
+    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    pages.forEach(function(pc, i) {
+      if (i > 0) doc.addPage();
+      var h = Math.min(297, Math.round(210 * pc.height / pc.width));
+      doc.addImage(pc.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 210, h);
+    });
+    return doc;
+  }
 
-  /* ── Print button — generates PDF blob, opens in browser's native PDF viewer ── */
+  /* ── Print button — builds PDF, opens in browser's native PDF viewer ── */
   function doPrint() {
     var pb = document.getElementById('printBtn');
     pb.disabled = true;
     pb.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing...';
-
-    var safeguard = setTimeout(function() {
-      pb.disabled = false;
-      pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
+    var sg = setTimeout(function() {
+      pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
     }, 90000);
 
-    var opts = Object.assign({}, _PDF_OPTS, { filename: 'Driver_Profile_{{ driver.driver_id }}.pdf' });
-
-    _renderDoc(opts, 'blob', function(blob, err) {
-      clearTimeout(safeguard);
-      pb.disabled = false;
-      pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
-      if (err || !blob) return;
-      var url = URL.createObjectURL(blob);
-      var win = window.open(url, '_blank');
+    _capturePages(function(pages, err) {
+      clearTimeout(sg);
+      pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
+      if (err || !pages || !pages.length) return;
+      var blob = _pagesToPDF(pages).output('blob');
+      var url  = URL.createObjectURL(blob);
+      var win  = window.open(url, '_blank');
       if (!win) {
-        alert('Pop-up blocked — please allow pop-ups for this site, then try again.');
+        alert('Pop-up blocked — please allow pop-ups for this site.');
         URL.revokeObjectURL(url);
       } else {
-        /* Revoke after 2 min; the browser will have rendered it by then */
-        setTimeout(function() { try { URL.revokeObjectURL(url); } catch(e) {} }, 120000);
+        setTimeout(function() { try { URL.revokeObjectURL(url); } catch(e){} }, 120000);
       }
     });
   }
@@ -1082,12 +1125,52 @@
     var btn = document.getElementById('pdfBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
-    var safeguard = setTimeout(function() { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF'; }, 90000);
-    var opts = Object.assign({}, _PDF_OPTS, { filename: 'Driver_Profile_{{ driver.driver_id }}.pdf' });
-    _renderDoc(opts, 'save', function() {
-      clearTimeout(safeguard);
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
+    var sg = setTimeout(function() {
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
+    }, 90000);
+
+    _capturePages(function(pages, err) {
+      clearTimeout(sg);
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
+      if (err || !pages || !pages.length) return;
+      _pagesToPDF(pages).save('Driver_Profile_{{ driver.driver_id }}.pdf');
+    });
+  }
+
+  /* ── Download Images button — one PNG per page ── */
+  function downloadAsImages() {
+    var btn = document.getElementById('imagesBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating Images...';
+    var sg = setTimeout(function() {
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-images me-1"></i>Download Images';
+    }, 90000);
+
+    _capturePages(function(pages, err) {
+      clearTimeout(sg);
+      if (err || !pages || !pages.length) {
+        btn.disabled = false; btn.innerHTML = '<i class="bi bi-images me-1"></i>Download Images';
+        return;
+      }
+      var n  = pages.length;
+      var id = '{{ driver.driver_id }}';
+      function next(idx) {
+        if (idx >= n) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-images me-1"></i>Download Images';
+          return;
+        }
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' +
+                        'Page ' + (idx + 1) + ' / ' + n + '...';
+        var a = document.createElement('a');
+        a.href     = pages[idx].toDataURL('image/png');
+        a.download = 'Driver_Profile_' + id + '_Page_' + (idx + 1) + '.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { next(idx + 1); }, 250);
+      }
+      next(0);
     });
   }
   </script>
