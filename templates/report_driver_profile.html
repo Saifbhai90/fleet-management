@@ -862,53 +862,53 @@
   ─────────────────────────────────────────────────────────────────────────── */
   var _COMPACT_CSS = [
     /* Base font size reduction for the whole profile block */
-    '#profile-content { font-size: 13px !important; }',
+    '#profile-content { font-size: 12.5px !important; }',
 
-    /* Profile header */
-    '#profile-content .profile-header { padding: 0.45rem 0.75rem !important; margin-bottom: 0.3rem !important; }',
-    '#profile-content .profile-header h2 { font-size: 1.05rem !important; margin: 0 0 0.05rem !important; line-height: 1.2 !important; }',
-    '#profile-content .profile-header .sub { font-size: 0.68rem !important; margin: 0 !important; line-height: 1.3 !important; }',
-    '#profile-content .photo-circle, #profile-content .photo-placeholder { width: 50px !important; height: 50px !important; font-size: 1.4rem !important; margin-right: 0.75rem !important; }',
-    '#profile-content .status-badge { font-size: 0.62rem !important; padding: 0.15rem 0.5rem !important; }',
+    /* Profile header — slim down */
+    '#profile-content .profile-header { padding: 0.3rem 0.65rem !important; margin-bottom: 0.2rem !important; }',
+    '#profile-content .profile-header h2 { font-size: 1rem !important; margin: 0 0 0.04rem !important; line-height: 1.2 !important; }',
+    '#profile-content .profile-header .sub { font-size: 0.66rem !important; margin: 0 !important; line-height: 1.25 !important; }',
+    '#profile-content .photo-circle, #profile-content .photo-placeholder { width: 46px !important; height: 46px !important; font-size: 1.3rem !important; margin-right: 0.6rem !important; }',
+    '#profile-content .status-badge { font-size: 0.6rem !important; padding: 0.12rem 0.45rem !important; }',
 
     /* Stats row */
-    '#profile-content .stats-row { gap: 0.4rem !important; margin-bottom: 0.4rem !important; }',
-    '#profile-content .stat-box { padding: 0.4rem 0.6rem !important; box-shadow: none !important; border-radius: 6px !important; }',
-    '#profile-content .stat-box .stat-label { font-size: 0.6rem !important; margin-bottom: 0.08rem !important; }',
-    '#profile-content .stat-box .stat-value { font-size: 0.95rem !important; }',
+    '#profile-content .stats-row { gap: 0.3rem !important; margin-bottom: 0.3rem !important; }',
+    '#profile-content .stat-box { padding: 0.3rem 0.5rem !important; box-shadow: none !important; border-radius: 5px !important; }',
+    '#profile-content .stat-box .stat-label { font-size: 0.58rem !important; margin-bottom: 0.05rem !important; }',
+    '#profile-content .stat-box .stat-value { font-size: 0.9rem !important; }',
 
     /* Section cards — biggest space savers */
-    '#profile-content .section-card { padding: 0.5rem 0.7rem !important; margin-bottom: 0.35rem !important; box-shadow: none !important; border-radius: 6px !important; }',
-    '#profile-content .section-title { font-size: 0.7rem !important; margin-bottom: 0.35rem !important; padding-left: 0.45rem !important; }',
+    '#profile-content .section-card { padding: 0.35rem 0.55rem !important; margin-bottom: 0.2rem !important; box-shadow: none !important; border-radius: 5px !important; }',
+    '#profile-content .section-title { font-size: 0.68rem !important; margin-bottom: 0.25rem !important; padding-left: 0.4rem !important; }',
 
     /* Info grid */
-    '#profile-content .info-grid { gap: 0.25rem 1.5rem !important; }',
+    '#profile-content .info-grid { gap: 0.18rem 1.2rem !important; }',
     '#profile-content .info-item { margin-bottom: 0 !important; }',
-    '#profile-content .info-item .info-label { font-size: 0.63rem !important; margin-bottom: 0.03rem !important; }',
-    '#profile-content .info-item .info-value { font-size: 0.8rem !important; }',
+    '#profile-content .info-item .info-label { font-size: 0.61rem !important; margin-bottom: 0.02rem !important; }',
+    '#profile-content .info-item .info-value { font-size: 0.78rem !important; }',
 
     /* ID document cards */
-    '#profile-content .doc-grid { gap: 0.5rem !important; }',
-    '#profile-content .doc-card { padding: 0.45rem 0.65rem !important; border-radius: 5px !important; }',
-    '#profile-content .doc-card-title { font-size: 0.72rem !important; margin-bottom: 0.35rem !important; }',
-    '#profile-content .doc-dates { margin-top: 0.3rem !important; gap: 0.2rem 0.5rem !important; }',
-    '#profile-content .validity-badge { margin-top: 0.3rem !important; padding: 0.12rem 0.5rem !important; font-size: 0.65rem !important; }',
+    '#profile-content .doc-grid { gap: 0.4rem !important; }',
+    '#profile-content .doc-card { padding: 0.35rem 0.55rem !important; border-radius: 5px !important; }',
+    '#profile-content .doc-card-title { font-size: 0.7rem !important; margin-bottom: 0.25rem !important; }',
+    '#profile-content .doc-dates { margin-top: 0.2rem !important; gap: 0.15rem 0.4rem !important; }',
+    '#profile-content .validity-badge { margin-top: 0.2rem !important; padding: 0.1rem 0.45rem !important; font-size: 0.62rem !important; }',
 
     /* Uniform box */
-    '#profile-content .uniform-box { padding: 0.3rem 0.7rem !important; margin-top: 0.35rem !important; font-size: 0.78rem !important; }',
+    '#profile-content .uniform-box { padding: 0.25rem 0.6rem !important; margin-top: 0.25rem !important; font-size: 0.76rem !important; }',
 
-    /* Photos & Documents — keep photos at full height so CNIC/license text stays readable */
+    /* Photos & Documents — NO compression; keep full height so CNIC/license text stays readable */
     '#profile-content .docs-photo-grid { gap: 0.5rem !important; }',
 
     /* Job history timeline */
-    '#profile-content .timeline { padding-left: 1.3rem !important; }',
-    '#profile-content .timeline-item { margin-bottom: 0.4rem !important; }',
-    '#profile-content .timeline-date { font-size: 0.72rem !important; margin-bottom: 0.1rem !important; }',
-    '#profile-content .timeline-type { font-size: 0.68rem !important; margin-bottom: 0.15rem !important; }',
-    '#profile-content .timeline-body { padding: 0.3rem 0.5rem !important; font-size: 0.78rem !important; }',
+    '#profile-content .timeline { padding-left: 1.2rem !important; }',
+    '#profile-content .timeline-item { margin-bottom: 0.3rem !important; }',
+    '#profile-content .timeline-date { font-size: 0.7rem !important; margin-bottom: 0.08rem !important; }',
+    '#profile-content .timeline-type { font-size: 0.66rem !important; margin-bottom: 0.12rem !important; }',
+    '#profile-content .timeline-body { padding: 0.25rem 0.45rem !important; font-size: 0.76rem !important; }',
 
     /* Watermark */
-    '#profile-content #pdfWatermark { margin-top: 0.3rem !important; padding: 0.2rem 0.5rem !important; font-size: 0.62rem !important; }'
+    '#profile-content #pdfWatermark { margin-top: 0.25rem !important; padding: 0.15rem 0.45rem !important; font-size: 0.6rem !important; }'
   ].join('\n');
 
   function _injectCompactStyles() {
@@ -1093,44 +1093,51 @@
       '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>' +
       '<style>' +
         '*{box-sizing:border-box;margin:0;padding:0}' +
-        'body{background:#2b2b2b;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}' +
-        '.bar{position:fixed;top:0;left:0;right:0;min-height:54px;background:#111;' +
-             'display:flex;align-items:center;flex-wrap:wrap;gap:6px;' +
-             'padding:8px 14px;z-index:999;border-bottom:2px solid #1565c0}' +
-        '.bar-title{flex:1;min-width:120px;color:#ccc;font-size:.82rem;font-weight:700;' +
-                   'overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-        '.btn{display:inline-flex;align-items:center;gap:4px;padding:7px 13px;' +
-             'border:none;border-radius:5px;cursor:pointer;font-size:.75rem;font-weight:600;' +
-             'text-decoration:none;color:#fff;white-space:nowrap;transition:filter .15s}' +
-        '.btn:hover{filter:brightness(1.18)}' +
+        'body{background:#e8ecf0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#333}' +
+        /* ─── Toolbar ─── */
+        '.bar{position:fixed;top:0;left:0;right:0;min-height:52px;' +
+             'background:#ffffff;border-bottom:1px solid #d0d7de;' +
+             'box-shadow:0 2px 8px rgba(0,0,0,.12);' +
+             'display:flex;align-items:center;flex-wrap:wrap;gap:8px;' +
+             'padding:8px 18px;z-index:999}' +
+        '.bar-title{flex:1;min-width:120px;color:#1a1a2e;font-size:.82rem;font-weight:700;' +
+                   'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.01em}' +
+        '.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;' +
+             'border:none;border-radius:6px;cursor:pointer;font-size:.75rem;font-weight:600;' +
+             'text-decoration:none;color:#fff;white-space:nowrap;transition:opacity .15s,transform .1s}' +
+        '.btn:hover{opacity:.88;transform:translateY(-1px)}' +
+        '.btn:active{transform:translateY(0)}' +
         '.btn-print{background:#1565c0}' +
-        '.btn-pdf{background:#b71c1c}' +
+        '.btn-pdf{background:#c62828}' +
         '.btn-img{background:#2e7d32;font-size:.7rem;padding:5px 10px}' +
-        '.btn-close{background:#444}' +
+        '.btn-close{background:#546e7a}' +
         '.img-group{display:flex;align-items:center;gap:5px;flex-wrap:wrap}' +
-        '.img-label{color:#aaa;font-size:.7rem;font-weight:700;white-space:nowrap}' +
-        '.divider{color:#444;font-size:1.2rem;margin:0 2px}' +
-        '.pages{margin-top:68px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:14px}' +
-        '.page-wrap{position:relative;background:#fff;width:100%;max-width:840px;' +
-                   'box-shadow:0 6px 28px rgba(0,0,0,.6)}' +
+        '.img-label{color:#555;font-size:.7rem;font-weight:700;white-space:nowrap}' +
+        '.sep{width:1px;height:28px;background:#d0d7de;margin:0 4px;flex-shrink:0}' +
+        /* ─── Page area ─── */
+        '.pages{margin-top:72px;padding:24px 16px 32px;display:flex;flex-direction:column;align-items:center;gap:20px}' +
+        '.page-wrap{position:relative;background:#fff;width:100%;max-width:860px;' +
+                   'border-radius:2px;' +
+                   'box-shadow:0 2px 12px rgba(0,0,0,.15),0 0 0 1px rgba(0,0,0,.06)}' +
         '.page-wrap img{display:block;width:100%;height:auto}' +
-        '.pg-lbl{position:absolute;bottom:7px;right:10px;font-size:.6rem;color:rgba(0,0,0,.3)}' +
+        '.pg-lbl{position:absolute;bottom:8px;right:12px;font-size:.58rem;color:rgba(0,0,0,.25);' +
+                'background:rgba(255,255,255,.7);padding:1px 5px;border-radius:3px}' +
         '@media print{' +
           '.bar{display:none!important}' +
-          '.pages{margin:0;padding:0;gap:0}' +
-          '.page-wrap{max-width:100%;box-shadow:none;page-break-after:always}' +
+          '.pages{margin:0;padding:0;gap:0;background:#fff}' +
+          '.page-wrap{max-width:100%;box-shadow:none;border-radius:0;border:none;page-break-after:always}' +
           '.page-wrap:last-child{page-break-after:auto}' +
           '.pg-lbl{display:none}' +
         '}' +
       '</style></head><body>' +
       '<div class="bar">' +
         '<span class="bar-title">&#128438;&nbsp;Driver Profile &mdash; Print Preview</span>' +
+        '<div class="sep"></div>' +
         '<button class="btn btn-print" onclick="window.print()">&#128438; Print</button>' +
-        '<span class="divider">|</span>' +
-        '<button class="btn btn-pdf" id="dlPdfBtn" onclick="dlPDF()">&#8613; Download PDF</button>' +
-        '<span class="divider">|</span>' +
-        '<div class="img-group"><span class="img-label">&#128247; Download Image:</span>' + imgBtns + '</div>' +
-        '<span class="divider">|</span>' +
+        '<button class="btn btn-pdf" id="dlPdfBtn" onclick="dlPDF()">&#8681; Download PDF</button>' +
+        '<div class="sep"></div>' +
+        '<div class="img-group"><span class="img-label">&#128247; Image:</span>' + imgBtns + '</div>' +
+        '<div class="sep"></div>' +
         '<button class="btn btn-close" onclick="window.close()">&#10005; Close</button>' +
       '</div>' +
       '<div class="pages">' + pageBlocks + '</div>' +
