@@ -88,7 +88,7 @@
         <span><i class="bi bi-calendar3 me-1"></i>Generated: {{ now }}</span>
         {% if project_label %}<span><i class="bi bi-folder2 me-1"></i>Project: <strong>{{ project_label }}</strong></span>{% endif %}
         {% if district_label %}<span><i class="bi bi-geo-alt me-1"></i>District: <strong>{{ district_label }}</strong></span>{% endif %}
-        {% if doc_filter_label %}<span><i class="bi bi-file-earmark me-1"></i>Filter: <strong>{{ doc_filter_label }}</strong></span>{% endif %}
+        {% if doc_filter_labels %}<span><i class="bi bi-file-earmark me-1"></i>Filter: <strong>{{ doc_filter_labels | join(', ') }}</strong></span>{% endif %}
     </div>
 
     <div class="d-flex align-items-center gap-2 mb-3">

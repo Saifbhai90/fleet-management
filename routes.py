@@ -7929,7 +7929,7 @@ def missing_documents_report():
 
     project_id  = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
-    doc_filter  = request.args.get('doc_filter', '').strip()
+    doc_filters = request.args.getlist('doc_filter')
 
     query = Driver.query.filter(Driver.status != 'Left')
 
@@ -7953,12 +7953,16 @@ def missing_documents_report():
         ('driver_file',   'document_path',        'Complete Driver File'),
     ]
 
-    if doc_filter:
+    if doc_filters:
         field_map = {k: v for k, v, _ in DOC_FIELDS}
-        col_name = field_map.get(doc_filter)
-        if col_name:
-            col = getattr(Driver, col_name)
-            query = query.filter(or_(col.is_(None), col == ''))
+        conditions = []
+        for df in doc_filters:
+            col_name = field_map.get(df)
+            if col_name:
+                col = getattr(Driver, col_name)
+                conditions.append(or_(col.is_(None), col == ''))
+        if conditions:
+            query = query.filter(db.and_(*conditions))
 
     all_drivers = query.options(
         db.joinedload(Driver.vehicle),
@@ -7997,7 +8001,7 @@ def missing_documents_report():
         'missing_docs_report.html',
         rows=rows, total=len(rows),
         project_id=project_id, district_id=district_id,
-        doc_filter=doc_filter,
+        doc_filters=doc_filters,
         project_choices=project_choices,
         district_choices=district_choices,
         doc_fields=DOC_FIELDS,
@@ -8017,7 +8021,7 @@ def missing_documents_report_print():
 
     project_id  = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
-    doc_filter  = request.args.get('doc_filter', '').strip()
+    doc_filters = request.args.getlist('doc_filter')
 
     query = Driver.query.filter(Driver.status != 'Left')
 
@@ -8041,12 +8045,16 @@ def missing_documents_report_print():
         ('driver_file',   'document_path',        'Complete Driver File'),
     ]
 
-    if doc_filter:
+    if doc_filters:
         field_map = {k: v for k, v, _ in DOC_FIELDS}
-        col_name = field_map.get(doc_filter)
-        if col_name:
-            col = getattr(Driver, col_name)
-            query = query.filter(or_(col.is_(None), col == ''))
+        conditions = []
+        for df in doc_filters:
+            col_name = field_map.get(df)
+            if col_name:
+                col = getattr(Driver, col_name)
+                conditions.append(or_(col.is_(None), col == ''))
+        if conditions:
+            query = query.filter(db.and_(*conditions))
 
     all_drivers = query.options(
         db.joinedload(Driver.vehicle),
@@ -8071,29 +8079,26 @@ def missing_documents_report_print():
                 'vehicle_no':    d.vehicle.vehicle_no if d.vehicle else '-',
             })
 
-    # Labels for meta display
     project_label = None
     district_label = None
-    doc_filter_label = None
-
     if project_id:
         project_label = project_map.get(project_id)
     if district_id:
         dist = District.query.get(district_id)
         district_label = dist.name if dist else None
-    if doc_filter:
-        lbl_map = {k: lbl for k, _, lbl in DOC_FIELDS}
-        doc_filter_label = lbl_map.get(doc_filter)
+
+    lbl_map = {k: lbl for k, _, lbl in DOC_FIELDS}
+    doc_filter_labels = [lbl_map[df] for df in doc_filters if df in lbl_map]
 
     return render_template(
         'missing_docs_report_print.html',
         rows=rows, total=len(rows),
         project_id=project_id, district_id=district_id,
-        doc_filter=doc_filter,
+        doc_filters=doc_filters,
         doc_fields=DOC_FIELDS,
         project_label=project_label,
         district_label=district_label,
-        doc_filter_label=doc_filter_label,
+        doc_filter_labels=doc_filter_labels,
         now=_dt.now().strftime('%d %b %Y, %I:%M %p'),
     )
 

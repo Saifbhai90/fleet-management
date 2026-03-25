@@ -31,6 +31,23 @@
     div.dataTables_wrapper div.dataTables_length select { border: 1px solid #ddd; border-radius: 5px; padding: 0.28rem 0.5rem; font-size: 0.84rem; }
     div.dataTables_wrapper div.dataTables_paginate .paginate_button.current { background: #b71c1c !important; border-color: #b71c1c !important; color: #fff !important; border-radius: 4px; }
     @media (max-width: 767px) { .filter-card .row > div { margin-bottom: 0.45rem; } }
+
+    /* Checkbox filter styles */
+    .doc-check-group { display: flex; flex-wrap: wrap; gap: 0.35rem 0.6rem; padding-top: 0.2rem; }
+    .doc-check { display: flex; align-items: center; gap: 0.3rem; cursor: pointer; user-select: none; }
+    .doc-check input[type="checkbox"] {
+        width: 15px; height: 15px; accent-color: #b71c1c; cursor: pointer;
+        border: 1.5px solid #b71c1c; border-radius: 3px; flex-shrink: 0;
+    }
+    .doc-check label {
+        font-size: 0.8rem; font-weight: 600; color: #37474f; cursor: pointer;
+        margin: 0; white-space: nowrap;
+    }
+    .doc-check input[type="checkbox"]:checked + label { color: #b71c1c; }
+    .doc-filter-section-label { font-size: 0.78rem; font-weight: 600; color: #455a64; margin-bottom: 0.15rem; }
+    .doc-quick-links { font-size: 0.73rem; }
+    .doc-quick-links a { color: #b71c1c; text-decoration: none; font-weight: 600; cursor: pointer; }
+    .doc-quick-links a:hover { text-decoration: underline; }
 </style>
 
 <div class="container-fluid py-3 px-3 px-md-4">
@@ -44,7 +61,7 @@
                 </div>
             </div>
             <div>
-                <a href="{{ url_for('missing_documents_report_print', project_id=project_id, district_id=district_id, doc_filter=doc_filter) }}"
+                <a id="printBtn"
                    target="_blank"
                    class="btn btn-sm"
                    style="background:rgba(255,255,255,0.18);color:#fff;border:1px solid rgba(255,255,255,0.5);border-radius:6px;font-size:0.83rem;font-weight:600;padding:0.38rem 0.9rem;">
@@ -56,7 +73,7 @@
 
     <!-- Filter Bar -->
     <div class="filter-card">
-        <form method="GET" action="{{ url_for('missing_documents_report') }}">
+        <form id="filterForm" method="GET" action="{{ url_for('missing_documents_report') }}">
             <div class="row g-2 align-items-end">
                 <div class="col-6 col-md-3">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Project</label>
@@ -74,29 +91,42 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Missing Document</label>
-                    <select name="doc_filter" class="form-select filter-input search-select">
-                        <option value="" {% if not doc_filter %}selected{% endif %}>-- All Missing --</option>
+                <div class="col-12 col-md-4">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="doc-filter-section-label">Missing Documents</span>
+                        <span class="doc-quick-links">
+                            <a id="checkAll">Select All</a> · <a id="uncheckAll">Clear</a>
+                        </span>
+                    </div>
+                    <div class="doc-check-group">
                         {% for key, attr, label in doc_fields %}
-                        <option value="{{ key }}" {% if doc_filter == key %}selected{% endif %}>{{ label }}</option>
+                        <span class="doc-check">
+                            <input type="checkbox" name="doc_filter" value="{{ key }}" id="chk_{{ key }}"
+                                   {% if key in doc_filters %}checked{% endif %}>
+                            <label for="chk_{{ key }}">{{ label }}</label>
+                        </span>
                         {% endfor %}
-                    </select>
+                    </div>
                 </div>
-                <div class="col-6 col-md-1 d-flex gap-1">
+                <div class="col-6 col-md-2 d-flex gap-1">
                     <button type="submit" class="btn btn-filter w-100">
                         <i class="bi bi-funnel-fill"></i> Filter
                     </button>
                 </div>
-                {% if project_id or district_id or doc_filter %}
-                <div class="col-12">
-                    <a href="{{ url_for('missing_documents_report') }}" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-x-circle me-1"></i>Clear Filters
-                    </a>
-                    <span class="total-badge ms-2">{{ total }} driver{{ 's' if total != 1 else '' }} found</span>
-                </div>
+            </div>
+            {% if project_id or district_id or doc_filters %}
+            <div class="mt-2">
+                <a href="{{ url_for('missing_documents_report') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x-circle me-1"></i>Clear Filters
+                </a>
+                <span class="total-badge ms-2">{{ total }} driver{{ 's' if total != 1 else '' }} found</span>
+                {% if doc_filters %}
+                <span class="ms-2" style="font-size:0.78rem;color:#78909c;">
+                    Filtered: {{ doc_filters|length }} document type{{ 's' if doc_filters|length != 1 else '' }}
+                </span>
                 {% endif %}
             </div>
+            {% endif %}
         </form>
     </div>
 
@@ -187,6 +217,21 @@ $(document).ready(function() {
     });
     $('#dtSearchInput').on('keyup', function() { table.search(this.value).draw(); });
     $('#dtLengthSelect').on('change', function() { table.page.len($(this).val()).draw(); });
+
+    $('#checkAll').on('click', function(e) {
+        e.preventDefault();
+        $('input[name="doc_filter"]').prop('checked', true);
+    });
+    $('#uncheckAll').on('click', function(e) {
+        e.preventDefault();
+        $('input[name="doc_filter"]').prop('checked', false);
+    });
+
+    $('#printBtn').on('click', function(e) {
+        e.preventDefault();
+        var params = new URLSearchParams($('#filterForm').serialize());
+        window.open('{{ url_for("missing_documents_report_print") }}?' + params.toString(), '_blank');
+    });
 });
 </script>
 {% endblock %}
