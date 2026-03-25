@@ -7929,7 +7929,21 @@ def missing_documents_report():
 
     project_id  = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
+
+    DOC_FIELDS = [
+        ('photo',         'photo_path',         'Driver Photo'),
+        ('cnic_front',    'cnic_front_path',     'CNIC Front'),
+        ('cnic_back',     'cnic_back_path',       'CNIC Back'),
+        ('license_front', 'license_front_path',   'License Front'),
+        ('license_back',  'license_back_path',    'License Back'),
+        ('driver_file',   'document_path',        'Complete Driver File'),
+    ]
+    all_doc_keys = [k for k, _, _ in DOC_FIELDS]
+
     doc_filters = request.args.getlist('doc_filter')
+    is_first_load = 'doc_filter' not in request.args and 'project_id' not in request.args
+    if is_first_load:
+        doc_filters = list(all_doc_keys)
 
     query = Driver.query.filter(Driver.status != 'Left')
 
@@ -7944,15 +7958,6 @@ def missing_documents_report():
     if district_id:
         query = query.filter(Driver.district_id == district_id)
 
-    DOC_FIELDS = [
-        ('photo',         'photo_path',         'Driver Photo'),
-        ('cnic_front',    'cnic_front_path',     'CNIC Front'),
-        ('cnic_back',     'cnic_back_path',       'CNIC Back'),
-        ('license_front', 'license_front_path',   'License Front'),
-        ('license_back',  'license_back_path',    'License Back'),
-        ('driver_file',   'document_path',        'Complete Driver File'),
-    ]
-
     if doc_filters:
         field_map = {k: v for k, v, _ in DOC_FIELDS}
         conditions = []
@@ -7962,7 +7967,7 @@ def missing_documents_report():
                 col = getattr(Driver, col_name)
                 conditions.append(or_(col.is_(None), col == ''))
         if conditions:
-            query = query.filter(db.and_(*conditions))
+            query = query.filter(db.or_(*conditions))
 
     all_drivers = query.options(
         db.joinedload(Driver.vehicle),
@@ -7981,6 +7986,14 @@ def missing_documents_report():
         dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
     district_choices = [(0, '-- All Districts --')] + [(d2.id, d2.name) for d2 in dist_q.all()]
 
+    selected_attrs = set()
+    if doc_filters:
+        field_map = {k: v for k, v, _ in DOC_FIELDS}
+        for df in doc_filters:
+            a = field_map.get(df)
+            if a:
+                selected_attrs.add(a)
+
     rows = []
     for d in all_drivers:
         missing = []
@@ -7988,14 +8001,23 @@ def missing_documents_report():
             val = getattr(d, attr, None)
             if not val:
                 missing.append(label)
-        if missing:
-            rows.append({
-                'driver':       d,
-                'missing':      missing,
-                'project_name': project_map.get(d.project_id, '-') if d.project_id else '-',
-                'district_name': d.district.name if d.district else '-',
-                'vehicle_no':   d.vehicle.vehicle_no if d.vehicle else '-',
-            })
+        if not missing:
+            continue
+        if selected_attrs:
+            has_selected_missing = False
+            for key, attr, label in DOC_FIELDS:
+                if attr in selected_attrs and not getattr(d, attr, None):
+                    has_selected_missing = True
+                    break
+            if not has_selected_missing:
+                continue
+        rows.append({
+            'driver':       d,
+            'missing':      missing,
+            'project_name': project_map.get(d.project_id, '-') if d.project_id else '-',
+            'district_name': d.district.name if d.district else '-',
+            'vehicle_no':   d.vehicle.vehicle_no if d.vehicle else '-',
+        })
 
     return render_template(
         'missing_docs_report.html',
@@ -8021,7 +8043,20 @@ def missing_documents_report_print():
 
     project_id  = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
+
+    DOC_FIELDS = [
+        ('photo',         'photo_path',         'Driver Photo'),
+        ('cnic_front',    'cnic_front_path',     'CNIC Front'),
+        ('cnic_back',     'cnic_back_path',       'CNIC Back'),
+        ('license_front', 'license_front_path',   'License Front'),
+        ('license_back',  'license_back_path',    'License Back'),
+        ('driver_file',   'document_path',        'Complete Driver File'),
+    ]
+    all_doc_keys = [k for k, _, _ in DOC_FIELDS]
+
     doc_filters = request.args.getlist('doc_filter')
+    if not doc_filters:
+        doc_filters = list(all_doc_keys)
 
     query = Driver.query.filter(Driver.status != 'Left')
 
@@ -8036,15 +8071,6 @@ def missing_documents_report_print():
     if district_id:
         query = query.filter(Driver.district_id == district_id)
 
-    DOC_FIELDS = [
-        ('photo',         'photo_path',         'Driver Photo'),
-        ('cnic_front',    'cnic_front_path',     'CNIC Front'),
-        ('cnic_back',     'cnic_back_path',       'CNIC Back'),
-        ('license_front', 'license_front_path',   'License Front'),
-        ('license_back',  'license_back_path',    'License Back'),
-        ('driver_file',   'document_path',        'Complete Driver File'),
-    ]
-
     if doc_filters:
         field_map = {k: v for k, v, _ in DOC_FIELDS}
         conditions = []
@@ -8054,7 +8080,7 @@ def missing_documents_report_print():
                 col = getattr(Driver, col_name)
                 conditions.append(or_(col.is_(None), col == ''))
         if conditions:
-            query = query.filter(db.and_(*conditions))
+            query = query.filter(db.or_(*conditions))
 
     all_drivers = query.options(
         db.joinedload(Driver.vehicle),
@@ -8063,6 +8089,14 @@ def missing_documents_report_print():
 
     project_map = {p.id: p.name for p in Project.query.all()}
 
+    selected_attrs = set()
+    if doc_filters:
+        fm = {k: v for k, v, _ in DOC_FIELDS}
+        for df in doc_filters:
+            a = fm.get(df)
+            if a:
+                selected_attrs.add(a)
+
     rows = []
     for d in all_drivers:
         missing = []
@@ -8070,14 +8104,23 @@ def missing_documents_report_print():
             val = getattr(d, attr, None)
             if not val:
                 missing.append(label)
-        if missing:
-            rows.append({
-                'driver':        d,
-                'missing':       missing,
-                'project_name':  project_map.get(d.project_id, '-') if d.project_id else '-',
-                'district_name': d.district.name if d.district else '-',
-                'vehicle_no':    d.vehicle.vehicle_no if d.vehicle else '-',
-            })
+        if not missing:
+            continue
+        if selected_attrs:
+            has_selected_missing = False
+            for key, attr, label in DOC_FIELDS:
+                if attr in selected_attrs and not getattr(d, attr, None):
+                    has_selected_missing = True
+                    break
+            if not has_selected_missing:
+                continue
+        rows.append({
+            'driver':        d,
+            'missing':       missing,
+            'project_name':  project_map.get(d.project_id, '-') if d.project_id else '-',
+            'district_name': d.district.name if d.district else '-',
+            'vehicle_no':    d.vehicle.vehicle_no if d.vehicle else '-',
+        })
 
     project_label = None
     district_label = None

@@ -227,8 +227,19 @@ $(document).ready(function() {
         $('input[name="doc_filter"]').prop('checked', false);
     });
 
+    $('#filterForm').on('submit', function(e) {
+        if ($('input[name="doc_filter"]:checked').length === 0) {
+            e.preventDefault();
+            alert('Please select at least one document type to filter.');
+        }
+    });
+
     $('#printBtn').on('click', function(e) {
         e.preventDefault();
+        if ($('input[name="doc_filter"]:checked').length === 0) {
+            alert('Please select at least one document type to filter.');
+            return;
+        }
         var params = new URLSearchParams($('#filterForm').serialize());
         window.open('{{ url_for("missing_documents_report_print") }}?' + params.toString(), '_blank');
     });
