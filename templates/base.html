@@ -1566,7 +1566,9 @@
         {% set expenses_endpoints = ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form', 'employee_expense_list', 'employee_expense_form'] %}
         {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai', 'active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print'] %}
         {% set accounts_endpoints = ['accounts_quick_payment', 'accounts_quick_receipt', 'accounts_bank_entry', 'accounts_jv', 'accounts_future_entry', 'accounts_balance_sheet', 'accounts_account_ledger'] %}
-        {% set master_open = (request.endpoint in master_endpoints and not (request.endpoint == 'companies' and request.args.get('mode') == 'report')) %}
+        {% set _came_from_master = (request.endpoint == 'report_driver_profile' and request.args.get('from') == 'master') %}
+        {% set _came_from_missing_docs = (request.endpoint == 'report_driver_profile' and (request.args.get('from') == 'missing_docs' or 'missing-documents-report' in (request.args.get('ref') or ''))) %}
+        {% set master_open = (request.endpoint in master_endpoints and not (request.endpoint == 'companies' and request.args.get('mode') == 'report')) or _came_from_master %}
         {% set assignment_open = request.endpoint in assignment_endpoints or (request.endpoint and 'assign_vehicle_to_parking' in request.endpoint) or (request.endpoint and 'assign_driver_to_vehicle' in request.endpoint) %}
         {% set transfer_open = request.endpoint in transfer_endpoints or (request.endpoint and 'driver_transfer' in request.endpoint) %}
         {% set driver_status_open = request.endpoint in driver_status_endpoints %}
@@ -1574,7 +1576,7 @@
         {% set workforce_open = request.endpoint in workforce_endpoints %}
         {% set task_report_open = request.endpoint in task_report_endpoints %}
         {% set expenses_open = request.endpoint in expenses_endpoints %}
-        {% set reports_open = request.endpoint in reports_endpoints or (request.endpoint == 'companies' and request.args.get('mode') == 'report') %}
+        {% set reports_open = (request.endpoint in reports_endpoints and not _came_from_master) or (request.endpoint == 'companies' and request.args.get('mode') == 'report') %}
         {% set accounts_open = request.endpoint in accounts_endpoints %}
         {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit', 'form_control'] %}
         {% set users_open = request.endpoint in users_manage_endpoints %}
@@ -1630,7 +1632,7 @@
                 </a>
                 {% endif %}
                 {% if can_see_page('drivers') %}
-                <a href="{{ url_for('drivers_list') }}" class="collapse-item {% if request.endpoint == 'drivers_list' %}active-link{% endif %}">
+                <a href="{{ url_for('drivers_list') }}" class="collapse-item {% if request.endpoint == 'drivers_list' or _came_from_master %}active-link{% endif %}">
                     <i class="bi bi-person-badge"></i><span>Drivers</span>
                 </a>
                 {% endif %}
@@ -1936,7 +1938,7 @@
                 </a>
                 {% endif %}
                 {% if can_see_page('missing_documents_report') %}
-                <a href="{{ url_for('missing_documents_report') }}" class="collapse-item {% if request.endpoint == 'missing_documents_report' %}active-link{% endif %}">
+                <a href="{{ url_for('missing_documents_report') }}" class="collapse-item {% if request.endpoint == 'missing_documents_report' or _came_from_missing_docs %}active-link{% endif %}">
                     <i class="bi bi-file-earmark-x text-danger"></i><span>Missing Documents</span>
                 </a>
                 {% endif %}

@@ -238,10 +238,15 @@
     border-top: 1px dashed var(--border); padding-top: .28rem;
   }
 
-  /* ── Photos grid — 2 columns for readability ── */
-  .docs-photo-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 1rem; }
-  /* photo-row is transparent to grid on screen — items participate directly in parent grid */
-  .docs-photo-grid .photo-row { display: contents; }
+  /* ── Photos grid — 3 columns per row ── */
+  .docs-photo-grid { display: block; }
+  /* photo-row is a REAL block on screen so html2pdf can detect its bounding box
+     break-inside:avoid here is READ by html2pdf's pre-processor before cloning */
+  .docs-photo-grid .photo-row {
+    display: grid; grid-template-columns: repeat(3,1fr); gap: .75rem;
+    margin-bottom: .75rem;
+    break-inside: avoid; page-break-inside: avoid;
+  }
   .doc-photo-item {
     border: 1px solid var(--border); border-radius: 8px;
     overflow: hidden; background: var(--bg-page);
@@ -380,7 +385,8 @@
       background: #f8fafc !important;
       -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }
-    .docs-photo-grid { display: grid !important; grid-template-columns: repeat(2,1fr) !important; gap: .3rem !important; }
+    .docs-photo-grid { display: block !important; }
+    .docs-photo-grid .photo-row { display: grid !important; grid-template-columns: repeat(3,1fr) !important; gap: .3rem !important; margin-bottom: .3rem !important; break-inside: avoid !important; page-break-inside: avoid !important; }
     .doc-photo-item {
       display: block !important; background: #fff !important;
       border: 1px solid #e5e7eb !important; overflow: hidden !important;
@@ -430,7 +436,7 @@
       <a href="{{ ref if ref else url_for('drivers_list') }}" class="btn btn-outline-secondary btn-action">
         <i class="bi bi-arrow-left me-1"></i>Back
       </a>
-      {% if not ref %}
+      {% if not hide_edit %}
       <a href="{{ url_for('driver_form', id=driver.id) }}" class="btn btn-outline-warning btn-action">
         <i class="bi bi-pencil me-1"></i>Edit
       </a>
@@ -1070,14 +1076,11 @@
     /* ── 10. Photos section — LARGE container → auto split ── */
     '#photos-docs-section { display: block !important; margin-top: 0 !important; padding-top: 0 !important; break-inside: auto !important; page-break-inside: auto !important; }',
 
-    /* ── 11. Photos — inline-block, 3-per-row; each item → avoid ── */
-    /* Photo grid: plain block, no BFC */
+    /* ── 11. Photos — 3-per-row floats; each ROW is the keep-together unit ── */
     '#profile-content .docs-photo-grid { display: block !important; margin: 0 !important; padding: 0 !important; }',
-    /* Each photo-row is a REAL block with overflow:hidden (BFC) + break-inside:avoid
-       html2pdf sees photo-row as a normal block element — its bounding box is correct
-       and break-inside:avoid reliably prevents the row from being cut across pages */
-    '#profile-content .photo-row { display: block !important; overflow: hidden !important; margin-bottom: 4px !important; break-inside: avoid !important; page-break-inside: avoid !important; }',
-    /* Items float inside each row — contained by row's BFC */
+    /* photo-row: block BFC (contains floats) + break protection so html2pdf inserts spacer */
+    '#profile-content .photo-row { display: block !important; overflow: hidden !important; margin-bottom: 6px !important; break-inside: avoid !important; page-break-inside: avoid !important; }',
+    /* Items float inside each row (3-per-row), contained by row BFC */
     '#profile-content .doc-photo-item { float: left !important; width: 31% !important; margin: 0 0.8% 0 0 !important; border: 1px solid #e5e7eb !important; background: #f9fafb !important; border-radius: 4px !important; overflow: hidden !important; font-size: 12px !important; }',
     '#profile-content .doc-photo-label { display: block !important; background: #f3f4f6 !important; color: #374151 !important; font-size: 0.56rem !important; padding: 3px 5px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
     '#profile-content .doc-photo-thumb-wrap { display: block !important; height: 110px !important; overflow: hidden !important; }',
@@ -1153,12 +1156,56 @@
     var el       = document.getElementById('profile-content');
     var photosEl = document.getElementById('photos-docs-section');
 
-    /* Measure the relative position of the Photos section in the LIVE DOM
-       (without compact CSS).  This fraction is used as the search target in
-       the canvas (compact CSS shrinks all sections proportionally). */
+    /* ── Show loading overlay (same as _renderDoc) ── */
+    var overlay = document.createElement('div');
+    overlay.id  = '_pdf_gen_overlay';
+    overlay.innerHTML =
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:14px;">' +
+        '<div style="width:48px;height:48px;border:4px solid rgba(255,255,255,.3);' +
+             'border-top-color:#fff;border-radius:50%;animation:_pdf_spin .8s linear infinite;"></div>' +
+        '<div style="color:#fff;font-size:15px;font-weight:600;letter-spacing:.3px;">Preparing Images…</div>' +
+        '<div style="color:rgba(255,255,255,.7);font-size:12px;">Please wait, do not close this page.</div>' +
+      '</div>';
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:99998;' +
+      'background:rgba(30,58,138,.82);backdrop-filter:blur(3px);' +
+      'display:flex;align-items:center;justify-content:center;' +
+      'animation:_pdf_fadein .2s ease;';
+    if (!document.getElementById('_pdf_keyframes')) {
+      var kf = document.createElement('style');
+      kf.id = '_pdf_keyframes';
+      kf.textContent =
+        '@keyframes _pdf_spin{to{transform:rotate(360deg)}}' +
+        '@keyframes _pdf_fadein{from{opacity:0}to{opacity:1}}';
+      document.head.appendChild(kf);
+    }
+    document.body.appendChild(overlay);
+
+    /* ── Apply compact CSS + force same render width as html2pdf (194mm @ 96dpi = 733px) ──
+       html2pdf internally constrains the element to ~733px content width so content
+       wraps the same as in the PDF.  We must do the same here so the canvas height
+       and page-count match the PDF output exactly.                                    ── */
+    var PDF_RENDER_W = 733; /* 194mm * 96dpi / 25.4 */
+
+    var liveCompact = document.createElement('style');
+    liveCompact.id  = '_pdf_live_compact';
+    liveCompact.textContent = _COMPACT_CSS +
+      /* Force element to PDF render width */
+      '\n#profile-content{width:' + PDF_RENDER_W + 'px!important;max-width:' + PDF_RENDER_W + 'px!important;}';
+    document.head.appendChild(liveCompact);
+    el.offsetHeight; /* force synchronous reflow */
+
+    /* Measure Photos section position WITH compact CSS + forced width active */
     var photosFrac = (photosEl && el.scrollHeight > 0)
                    ? Math.min(0.90, photosEl.offsetTop / el.scrollHeight)
                    : 0.55;
+
+    function cleanupCapture() {
+      var lc = document.getElementById('_pdf_live_compact');
+      if (lc) lc.parentNode.removeChild(lc);
+      var ov = document.getElementById('_pdf_gen_overlay');
+      if (ov) ov.parentNode.removeChild(ov);
+    }
 
     var job = _proxyImages(el);
 
@@ -1168,45 +1215,38 @@
           html2canvas(el, {
             scale: 2, useCORS: false, allowTaint: true,
             letterRendering: true, logging: false,
+            width: PDF_RENDER_W,
+            windowWidth: PDF_RENDER_W,
             onclone: _onCloneHandler
           }).then(function(canvas) {
             job.restore();
+            cleanupCapture();
 
-            var cw   = canvas.width;
-            var a4H  = Math.round(cw * 297 / 210);   /* A4 height in pixels */
+            /* A4 page height in canvas pixels.
+               _PDF_OPTS margins [8,8,0,8]mm → content 194mm wide, 289mm tall.
+               canvas.width = PDF_RENDER_W * scale = 733*2 = 1466px
+               one A4 page  = 1466 * 289/194 ≈ 2182px                          */
+            var cw  = canvas.width;                       /* 1466 at scale:2   */
+            var a4H = Math.round(cw * 289 / 194);         /* ≈ 2182px          */
             var pages = [];
 
-            if (canvas.height <= a4H * 1.15) {
-              /* Fits in a single page */
-              pages.push(canvas);
-            } else {
-              /* Find the cleanest split near the Photos section boundary */
-              var targetY = Math.round(photosFrac * canvas.height);
-              var split1  = _findPageSplit(canvas, targetY, 0.13);
-              pages.push(_makeSlice(canvas, 0, split1));
-
-              var rem = canvas.height - split1;
-              if (rem > 20) {
-                if (rem <= a4H * 1.15) {
-                  pages.push(_makeSlice(canvas, split1, rem));
-                } else {
-                  /* More than 2 pages needed */
-                  var y = split1;
-                  while (y < canvas.height) {
-                    var nxt = (y + a4H < canvas.height - 20)
-                              ? _findPageSplit(canvas, y + a4H, 0.12)
-                              : canvas.height;
-                    pages.push(_makeSlice(canvas, y, nxt - y));
-                    y = nxt;
-                  }
-                }
+            var y = 0;
+            while (y < canvas.height) {
+              var targetY = y + a4H;
+              if (targetY >= canvas.height - 30) {
+                if (canvas.height - y > 30) pages.push(_makeSlice(canvas, y, canvas.height - y));
+                break;
               }
+              var splitY = _findPageSplit(canvas, targetY, 0.12);
+              pages.push(_makeSlice(canvas, y, splitY - y));
+              y = splitY;
             }
+            if (!pages.length) pages.push(canvas);
             onDone(pages, null);
-          }).catch(function(err) { job.restore(); onDone(null, err); });
+          }).catch(function(err) { job.restore(); cleanupCapture(); onDone(null, err); });
         }, 0);
       });
-    }).catch(function(err) { job.restore(); onDone(null, err); });
+    }).catch(function(err) { job.restore(); cleanupCapture(); onDone(null, err); });
   }
 
   /* ── Common html2pdf render helper ─────────────────────────────────────
@@ -1216,8 +1256,54 @@
   function _renderDoc(opts, mode, onDone) {
     var el  = document.getElementById('profile-content');
     var job = _proxyImages(el);
-    function cleanup(result, err) { job.restore(); if (onDone) onDone(result, err); }
+
+    function cleanup(result, err) {
+      job.restore();
+      /* Remove live-compact style and white overlay */
+      var lc = document.getElementById('_pdf_live_compact');
+      if (lc) lc.parentNode.removeChild(lc);
+      var ov = document.getElementById('_pdf_gen_overlay');
+      if (ov) ov.parentNode.removeChild(ov);
+      if (onDone) onDone(result, err);
+    }
+
     Promise.all(job.waits).then(function() {
+      /* ── Loading overlay — hides compact-CSS flash, shows progress ── */
+      var overlay = document.createElement('div');
+      overlay.id  = '_pdf_gen_overlay';
+      overlay.innerHTML =
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:14px;">' +
+          '<div style="width:48px;height:48px;border:4px solid rgba(255,255,255,.3);' +
+               'border-top-color:#fff;border-radius:50%;animation:_pdf_spin .8s linear infinite;"></div>' +
+          '<div style="color:#fff;font-size:15px;font-weight:600;letter-spacing:.3px;">Preparing Document…</div>' +
+          '<div style="color:rgba(255,255,255,.7);font-size:12px;">Please wait, do not close this page.</div>' +
+        '</div>';
+      overlay.style.cssText =
+        'position:fixed;inset:0;z-index:99998;' +
+        'background:rgba(30,58,138,.82);backdrop-filter:blur(3px);' +
+        'display:flex;align-items:center;justify-content:center;' +
+        'animation:_pdf_fadein .2s ease;';
+      /* Inject keyframes once */
+      if (!document.getElementById('_pdf_keyframes')) {
+        var kf = document.createElement('style');
+        kf.id = '_pdf_keyframes';
+        kf.textContent =
+          '@keyframes _pdf_spin{to{transform:rotate(360deg)}}' +
+          '@keyframes _pdf_fadein{from{opacity:0}to{opacity:1}}';
+        document.head.appendChild(kf);
+      }
+      document.body.appendChild(overlay);
+
+      /* ── KEY FIX: apply compact CSS to the LIVE page BEFORE html2pdf
+         measures element positions for spacer insertion.  Without this,
+         html2pdf sees full-size positions but renders compact content —
+         causing page-break spacers to land at wrong Y coordinates.    ── */
+      var liveCompact = document.createElement('style');
+      liveCompact.id  = '_pdf_live_compact';
+      liveCompact.textContent = _COMPACT_CSS;
+      document.head.appendChild(liveCompact);
+      el.offsetHeight; /* force synchronous reflow */
+
       requestAnimationFrame(function() {
         setTimeout(function() {
           var worker  = html2pdf().set(opts).from(el);
@@ -1244,7 +1330,7 @@
       letterRendering: true, logging: false,
       onclone: _onCloneHandler
     },
-    pagebreak: { mode: 'css' },
+    pagebreak: { mode: ['css', 'legacy'] },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
 
@@ -1327,40 +1413,120 @@
     });
   }
 
-  /* ── Download Images button — one PNG per page ── */
+  /* ── Image-format choice modal ── */
+  function _showImageChoiceModal(onChoice) {
+    var m = document.createElement('div');
+    m.id = '_img_choice_modal';
+    m.style.cssText =
+      'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;' +
+      'background:rgba(15,23,42,.55);backdrop-filter:blur(4px);animation:_pdf_fadein .18s ease;';
+    m.innerHTML =
+      '<div style="background:#fff;border-radius:16px;padding:32px 28px;max-width:420px;width:90%;' +
+           'box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center;">' +
+        '<div style="font-size:1.25rem;font-weight:700;color:#111827;margin-bottom:6px;">Choose Image Format</div>' +
+        '<div style="font-size:.85rem;color:#6b7280;margin-bottom:24px;">Select how you want to download the driver profile.</div>' +
+        '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">' +
+
+          /* Option A — Per Page */
+          '<button id="_img_opt_pages" style="flex:1;min-width:150px;border:2px solid #e5e7eb;border-radius:12px;' +
+            'padding:18px 12px;background:#f9fafb;cursor:pointer;transition:all .15s;" ' +
+            'onmouseover="this.style.borderColor=\'#3b82f6\';this.style.background=\'#eff6ff\'" ' +
+            'onmouseout="this.style.borderColor=\'#e5e7eb\';this.style.background=\'#f9fafb\'">' +
+            '<div style="font-size:1.6rem;margin-bottom:8px;">🖼️🖼️</div>' +
+            '<div style="font-weight:600;color:#111827;font-size:.9rem;">Per-Page Images</div>' +
+            '<div style="font-size:.75rem;color:#6b7280;margin-top:4px;">Separate PNG for each page<br>Matches PDF layout exactly</div>' +
+          '</button>' +
+
+          /* Option B — Long Image */
+          '<button id="_img_opt_long" style="flex:1;min-width:150px;border:2px solid #e5e7eb;border-radius:12px;' +
+            'padding:18px 12px;background:#f9fafb;cursor:pointer;transition:all .15s;" ' +
+            'onmouseover="this.style.borderColor=\'#3b82f6\';this.style.background=\'#eff6ff\'" ' +
+            'onmouseout="this.style.borderColor=\'#e5e7eb\';this.style.background=\'#f9fafb\'">' +
+            '<div style="font-size:1.6rem;margin-bottom:8px;">📜</div>' +
+            '<div style="font-weight:600;color:#111827;font-size:.9rem;">Single Long Image</div>' +
+            '<div style="font-size:.75rem;color:#6b7280;margin-top:4px;">One tall PNG — full profile<br>Easy to scroll &amp; share</div>' +
+          '</button>' +
+
+        '</div>' +
+        '<button id="_img_opt_cancel" style="margin-top:18px;border:none;background:none;' +
+          'color:#9ca3af;font-size:.82rem;cursor:pointer;text-decoration:underline;">Cancel</button>' +
+      '</div>';
+    document.body.appendChild(m);
+
+    function close(choice) {
+      m.parentNode && m.parentNode.removeChild(m);
+      onChoice(choice);
+    }
+    document.getElementById('_img_opt_pages').onclick  = function() { close('pages'); };
+    document.getElementById('_img_opt_long').onclick   = function() { close('long');  };
+    document.getElementById('_img_opt_cancel').onclick = function() { close(null);    };
+  }
+
+  /* ── Stitch multiple canvases into one tall canvas ── */
+  function _stitchCanvases(pages) {
+    var totalH = 0;
+    pages.forEach(function(c) { totalH += c.height; });
+    var out = document.createElement('canvas');
+    out.width  = pages[0].width;
+    out.height = totalH;
+    var ctx = out.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, out.width, out.height);
+    var y = 0;
+    pages.forEach(function(c) { ctx.drawImage(c, 0, y); y += c.height; });
+    return out;
+  }
+
+  /* ── Download Images button ── */
   function downloadAsImages() {
     var btn = document.getElementById('imagesBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating Images...';
-    var sg = setTimeout(function() {
-      btn.disabled = false; btn.innerHTML = '<i class="bi bi-images me-1"></i>Download Images';
-    }, 90000);
 
-    _capturePages(function(pages, err) {
-      clearTimeout(sg);
-      if (err || !pages || !pages.length) {
+    _showImageChoiceModal(function(choice) {
+      if (!choice) return; /* cancelled */
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
+      var sg = setTimeout(function() {
         btn.disabled = false; btn.innerHTML = '<i class="bi bi-images me-1"></i>Download Images';
-        return;
-      }
-      var n  = pages.length;
+      }, 90000);
       var id = '{{ driver.driver_id }}';
-      function next(idx) {
-        if (idx >= n) {
-          btn.disabled = false;
-          btn.innerHTML = '<i class="bi bi-images me-1"></i>Download Images';
+
+      _capturePages(function(pages, err) {
+        clearTimeout(sg);
+        if (err || !pages || !pages.length) {
+          btn.disabled = false; btn.innerHTML = '<i class="bi bi-images me-1"></i>Download Images';
           return;
         }
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' +
-                        'Page ' + (idx + 1) + ' / ' + n + '...';
-        var a = document.createElement('a');
-        a.href     = pages[idx].toDataURL('image/png');
-        a.download = 'Driver_Profile_' + id + '_Page_' + (idx + 1) + '.png';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(function() { next(idx + 1); }, 250);
-      }
-      next(0);
+
+        if (choice === 'long') {
+          /* Single long image */
+          btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+          var longCanvas = _stitchCanvases(pages);
+          var a = document.createElement('a');
+          a.href     = longCanvas.toDataURL('image/png');
+          a.download = 'Driver_Profile_' + id + '_Full.png';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          btn.disabled = false; btn.innerHTML = '<i class="bi bi-images me-1"></i>Download Images';
+
+        } else {
+          /* Per-page images */
+          var n = pages.length;
+          function next(idx) {
+            if (idx >= n) {
+              btn.disabled = false; btn.innerHTML = '<i class="bi bi-images me-1"></i>Download Images';
+              return;
+            }
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' +
+                            'Page ' + (idx + 1) + ' / ' + n + '...';
+            var a = document.createElement('a');
+            a.href     = pages[idx].toDataURL('image/png');
+            a.download = 'Driver_Profile_' + id + '_Page_' + (idx + 1) + '.png';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(function() { next(idx + 1); }, 250);
+          }
+          next(0);
+        }
+      });
     });
   }
   </script>

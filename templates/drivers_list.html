@@ -185,7 +185,7 @@
             <td>{{ driver.phone1|phone_fmt or '-' }}</td>
             <td>{{ driver.driver_district or '-' }}</td>
             <td class="text-end pe-4">
-              <a href="{{ url_for('report_driver_profile', driver_id=driver.id) }}" class="btn btn-sm btn-info-compact me-1" title="Profile Report">
+              <a href="{{ url_for('report_driver_profile', driver_id=driver.id) }}?from=master" class="btn btn-sm btn-info-compact me-1" title="Profile Report">
                 <i class="bi bi-file-text"></i>
               </a>
               {% if can_see_page('drivers_edit') %}

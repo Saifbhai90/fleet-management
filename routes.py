@@ -13330,11 +13330,19 @@ def report_driver_profile(driver_id):
     last_action = job_history[-1]['date'] if job_history else None
 
     from datetime import date as _date
-    ref = request.args.get('ref', '').strip()
+    _from = request.args.get('from', '').strip()
+    _ref  = request.args.get('ref',  '').strip()
+    _back_map = {
+        'master': url_for('drivers_list'),
+    }
+    ref       = _back_map.get(_from) or _ref or ''
+    # Show Edit only when opened directly from Drivers List (master section)
+    hide_edit = (_from != 'master')
+    came_from = _from
     return render_template('report_driver_profile.html', driver=driver,
                            job_history=job_history, total_actions=total_actions,
                            last_action=last_action, today=_date.today(),
-                           ref=ref)
+                           ref=ref, came_from=came_from, hide_edit=hide_edit)
 
 
 @app.route('/reports/vehicle-profile/<int:vehicle_id>')
