@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payslip – {{ payroll.person_name }} – {{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][payroll.month] }} {{ payroll.year }}</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293b;line-height:1.6;}
+.action-bar{position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#1e293b 0%,#334155 100%);padding:12px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 2px 12px rgba(0,0,0,0.2);}
+.action-bar .ab-btn{border:none;border-radius:8px;padding:8px 18px;font-size:0.84rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.2s;}
+.ab-close{background:#475569;color:#e2e8f0;}.ab-close:hover{background:#64748b;}
+.ab-print{background:#2563eb;color:#fff;box-shadow:0 2px 8px rgba(37,99,235,0.3);}.ab-print:hover{background:#1d4ed8;}
+.ab-pdf{background:#dc2626;color:#fff;box-shadow:0 2px 8px rgba(220,38,38,0.3);}.ab-pdf:hover{background:#b91c1c;}
+.ab-img{background:#059669;color:#fff;box-shadow:0 2px 8px rgba(5,150,105,0.3);}.ab-img:hover{background:#047857;}
+.ab-hint{margin-left:auto;color:#94a3b8;font-size:0.76rem;}
+
+.payslip-wrap{max-width:800px;margin:24px auto;padding:0 16px;}
+#payslip-content{background:#fff;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.08);overflow:hidden;}
+
+.ps-header{background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);color:#fff;padding:28px 32px;position:relative;}
+.ps-header h4{font-weight:800;margin-bottom:2px;}
+.ps-header .ps-period{font-size:1.1rem;opacity:0.85;font-weight:600;}
+.ps-header .ps-badge{position:absolute;top:20px;right:24px;padding:6px 16px;border-radius:20px;font-size:0.78rem;font-weight:700;letter-spacing:0.5px;}
+.ps-badge-draft{background:rgba(255,255,255,0.2);color:#fff;}
+.ps-badge-finalized{background:#fbbf24;color:#78350f;}
+.ps-badge-paid{background:#34d399;color:#064e3b;}
+
+.ps-body{padding:24px 32px 32px;}
+.ps-section{margin-bottom:20px;}
+.ps-section-title{font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#6b7280;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #e5e7eb;}
+
+.ps-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;}
+.ps-info-item .ps-label{font-size:0.72rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.04em;}
+.ps-info-item .ps-value{font-weight:600;color:#111827;font-size:0.9rem;}
+
+.ps-table{width:100%;border-collapse:collapse;font-size:0.85rem;}
+.ps-table th{background:#f8fafc;color:#6b7280;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:8px 12px;border-bottom:2px solid #e5e7eb;}
+.ps-table td{padding:8px 12px;border-bottom:1px solid #f1f5f9;color:#374151;}
+.ps-table .text-end{text-align:right;}
+.ps-table .total-row td{font-weight:700;border-top:2px solid #e5e7eb;font-size:0.9rem;}
+.ps-table .total-row.earning td{color:#059669;background:#f0fdf4;}
+.ps-table .total-row.deduction td{color:#dc2626;background:#fef2f2;}
+
+.ps-net-box{background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);border-radius:10px;padding:20px;text-align:center;margin-top:16px;}
+.ps-net-box .ps-net-label{color:rgba(255,255,255,0.7);font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;}
+.ps-net-box .ps-net-amount{color:#fff;font-size:1.8rem;font-weight:800;}
+.ps-net-box .ps-net-words{color:rgba(255,255,255,0.6);font-size:0.75rem;font-style:italic;margin-top:2px;}
+
+.ps-attendance{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:4px;}
+.ps-att-item{text-align:center;padding:8px 4px;border-radius:8px;background:#f8fafc;}
+.ps-att-item .ps-att-val{font-weight:700;font-size:1.1rem;}
+.ps-att-item .ps-att-lbl{font-size:0.68rem;color:#6b7280;text-transform:uppercase;}
+
+.ps-footer{text-align:center;padding:16px;color:#9ca3af;font-size:0.72rem;border-top:1px solid #f1f5f9;}
+
+.ps-payment-info{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin-top:12px;}
+.ps-payment-info .ps-pi-row{display:flex;justify-content:space-between;font-size:0.82rem;}
+.ps-payment-info .ps-pi-label{color:#6b7280;}
+.ps-payment-info .ps-pi-value{font-weight:600;color:#111827;}
+
+@media print{
+  .action-bar{display:none!important;}
+  body{background:#fff;margin:0;padding:0;}
+  .payslip-wrap{margin:0;padding:0;max-width:none;}
+  #payslip-content{box-shadow:none;border-radius:0;}
+  .ps-header,.ps-net-box,.ps-att-item,.ps-payment-info{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+}
+@page{size:A4 portrait;margin:10mm;}
+</style>
+</head>
+<body>
+
+<div class="action-bar no-print">
+  <button onclick="window.history.back()" class="ab-btn ab-close"><i class="bi bi-arrow-left"></i> Close</button>
+  <button onclick="doPrint()" class="ab-btn ab-print"><i class="bi bi-printer"></i> Print</button>
+  <button onclick="downloadPDF()" class="ab-btn ab-pdf" id="pdfBtn"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
+  <button onclick="downloadImage()" class="ab-btn ab-img" id="imgBtn"><i class="bi bi-image"></i> Image</button>
+  <span class="ab-hint"><i class="bi bi-info-circle"></i> Use Ctrl+P for system print dialog</span>
+</div>
+
+<div class="payslip-wrap">
+  <div id="payslip-content">
+
+    <!-- Header -->
+    <div class="ps-header">
+      <div style="font-size:0.75rem;opacity:0.7;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">
+        <i class="bi bi-building me-1"></i>Fleet Management System – Payslip
+      </div>
+      <h4>{{ payroll.person_name }}</h4>
+      <div class="ps-period">
+        {{ ['','January','February','March','April','May','June','July','August','September','October','November','December'][payroll.month] }} {{ payroll.year }}
+      </div>
+      <span class="ps-badge {% if payroll.status == 'Draft' %}ps-badge-draft{% elif payroll.status == 'Finalized' %}ps-badge-finalized{% else %}ps-badge-paid{% endif %}">
+        {{ payroll.status|upper }}
+      </span>
+    </div>
+
+    <div class="ps-body">
+
+      <!-- Person Info -->
+      <div class="ps-section">
+        <div class="ps-section-title"><i class="bi bi-person me-1"></i>{{ payroll.person_type }} Information</div>
+        <div class="ps-info-grid">
+          <div class="ps-info-item">
+            <div class="ps-label">{{ payroll.person_type }} Code</div>
+            <div class="ps-value">{{ payroll.person_code }}</div>
+          </div>
+          {% if payroll.employee %}
+          <div class="ps-info-item">
+            <div class="ps-label">Department</div>
+            <div class="ps-value">{{ payroll.employee.department or '–' }}</div>
+          </div>
+          <div class="ps-info-item">
+            <div class="ps-label">Designation</div>
+            <div class="ps-value">{{ payroll.employee.post.full_name if payroll.employee.post else '–' }}</div>
+          </div>
+          <div class="ps-info-item">
+            <div class="ps-label">CNIC</div>
+            <div class="ps-value">{{ payroll.employee.cnic_no or '–' }}</div>
+          </div>
+          {% if payroll.employee.bank_name %}
+          <div class="ps-info-item">
+            <div class="ps-label">Bank / Account</div>
+            <div class="ps-value">{{ payroll.employee.bank_name }} – {{ payroll.employee.account_no or '' }}</div>
+          </div>
+          {% endif %}
+          {% elif payroll.driver %}
+          <div class="ps-info-item">
+            <div class="ps-label">CNIC</div>
+            <div class="ps-value">{{ payroll.driver.cnic_no or '–' }}</div>
+          </div>
+          <div class="ps-info-item">
+            <div class="ps-label">Phone</div>
+            <div class="ps-value">{{ payroll.driver.phone1 or '–' }}</div>
+          </div>
+          {% if payroll.driver.bank_name %}
+          <div class="ps-info-item">
+            <div class="ps-label">Bank / Account</div>
+            <div class="ps-value">{{ payroll.driver.bank_name }} – {{ payroll.driver.account_no or '' }}</div>
+          </div>
+          {% endif %}
+          {% endif %}
+          <div class="ps-info-item">
+            <div class="ps-label">Generated</div>
+            <div class="ps-value">{{ generated_at }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Attendance -->
+      <div class="ps-section">
+        <div class="ps-section-title"><i class="bi bi-calendar-check me-1"></i>Attendance Summary</div>
+        <div class="ps-attendance">
+          <div class="ps-att-item" style="background:#f0fdf4;"><div class="ps-att-val" style="color:#059669;">{{ payroll.present_days }}</div><div class="ps-att-lbl">Present</div></div>
+          <div class="ps-att-item" style="background:#fef2f2;"><div class="ps-att-val" style="color:#dc2626;">{{ payroll.absent_days }}</div><div class="ps-att-lbl">Absent</div></div>
+          <div class="ps-att-item" style="background:#eff6ff;"><div class="ps-att-val" style="color:#2563eb;">{{ payroll.extra_working_days }}</div><div class="ps-att-lbl">Extra Days</div></div>
+          <div class="ps-att-item"><div class="ps-att-val">{{ payroll.total_days }}</div><div class="ps-att-lbl">Total Days</div></div>
+          <div class="ps-att-item" style="background:#fefce8;"><div class="ps-att-val" style="color:#ca8a04;">{{ payroll.leave_days }}</div><div class="ps-att-lbl">Leave</div></div>
+          <div class="ps-att-item" style="background:#fef3c7;"><div class="ps-att-val" style="color:#92400e;">{{ payroll.late_days }}</div><div class="ps-att-lbl">Late</div></div>
+          <div class="ps-att-item" style="background:#fce7f3;"><div class="ps-att-val" style="color:#9d174d;">{{ payroll.half_days }}</div><div class="ps-att-lbl">Half Day</div></div>
+          <div class="ps-att-item"><div class="ps-att-val">{{ payroll.off_days }}</div><div class="ps-att-lbl">Off Days</div></div>
+        </div>
+      </div>
+
+      <!-- Earnings & Deductions side by side -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="ps-section">
+          <div class="ps-section-title" style="color:#059669;"><i class="bi bi-arrow-up-circle me-1"></i>Earnings</div>
+          <table class="ps-table">
+            <tr><td>Basic Salary</td><td class="text-end">Rs. {{ '{:,.2f}'.format(payroll.calculated_basic) }}</td></tr>
+            <tr><td>Extra Working Pay <small style="color:#9ca3af;">({{ payroll.extra_working_days }}d)</small></td><td class="text-end">Rs. {{ '{:,.2f}'.format(payroll.extra_working_pay) }}</td></tr>
+            {% if payroll.bonus > 0 %}
+            <tr><td>Bonus</td><td class="text-end">Rs. {{ '{:,.2f}'.format(payroll.bonus) }}</td></tr>
+            {% endif %}
+            <tr class="total-row earning"><td>Gross Pay</td><td class="text-end">Rs. {{ '{:,.2f}'.format(payroll.gross_pay) }}</td></tr>
+          </table>
+        </div>
+
+        <div class="ps-section">
+          <div class="ps-section-title" style="color:#dc2626;"><i class="bi bi-arrow-down-circle me-1"></i>Deductions</div>
+          <table class="ps-table">
+            {% if payroll.absent_fine > 0 %}
+            <tr><td>Absent Fine <small style="color:#9ca3af;">({{ payroll.absent_days }}d)</small></td><td class="text-end">Rs. {{ '{:,.2f}'.format(payroll.absent_fine) }}</td></tr>
+            {% endif %}
+            {% if payroll.manual_fine > 0 %}
+            <tr><td>Manual Fine</td><td class="text-end">Rs. {{ '{:,.2f}'.format(payroll.manual_fine) }}</td></tr>
+            {% endif %}
+            {% if payroll.mpg_fine > 0 %}
+            <tr><td>MPG Fine</td><td class="text-end">Rs. {{ '{:,.2f}'.format(payroll.mpg_fine) }}</td></tr>
+            {% endif %}
+            {% if payroll.loan_deduction > 0 %}
+            <tr><td>Loan Deduction</td><td class="text-end">Rs. {{ '{:,.2f}'.format(payroll.loan_deduction) }}</td></tr>
+            {% endif %}
+            {% if payroll.other_deduction > 0 %}
+            <tr><td>Other Deduction</td><td class="text-end">Rs. {{ '{:,.2f}'.format(payroll.other_deduction) }}</td></tr>
+            {% endif %}
+            {% if payroll.total_deductions == 0 %}
+            <tr><td colspan="2" class="text-center" style="color:#9ca3af;">No deductions</td></tr>
+            {% endif %}
+            <tr class="total-row deduction"><td>Total Deductions</td><td class="text-end">Rs. {{ '{:,.2f}'.format(payroll.total_deductions) }}</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- Net Payable -->
+      <div class="ps-net-box">
+        <div class="ps-net-label">Net Payable</div>
+        <div class="ps-net-amount">Rs. {{ '{:,.2f}'.format(payroll.net_payable) }}</div>
+      </div>
+
+      {% if payroll.status == 'Paid' and payroll.payment_date %}
+      <div class="ps-payment-info">
+        <div class="ps-section-title" style="color:#059669;border-color:#bbf7d0;"><i class="bi bi-credit-card me-1"></i>Payment Details</div>
+        <div class="ps-pi-row"><span class="ps-pi-label">Payment Date</span><span class="ps-pi-value">{{ payroll.payment_date.strftime('%d %b %Y') }}</span></div>
+        <div class="ps-pi-row"><span class="ps-pi-label">Method</span><span class="ps-pi-value">{{ payroll.payment_method or '–' }}</span></div>
+        <div class="ps-pi-row"><span class="ps-pi-label">Source</span><span class="ps-pi-value">{{ payroll.payment_account.name if payroll.payment_account else '–' }}</span></div>
+        {% if payroll.journal_entry %}
+        <div class="ps-pi-row"><span class="ps-pi-label">Journal Entry</span><span class="ps-pi-value">{{ payroll.journal_entry.entry_number }}</span></div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if payroll.remarks %}
+      <div class="ps-section" style="margin-top:16px;">
+        <div class="ps-section-title"><i class="bi bi-chat-left-text me-1"></i>Remarks</div>
+        <p style="font-size:0.82rem;color:#6b7280;white-space:pre-line;margin:0;">{{ payroll.remarks }}</p>
+      </div>
+      {% endif %}
+
+    </div>
+
+    <div class="ps-footer">
+      Fleet Management System &middot; Payslip generated on {{ generated_at }}
+      <br>This is a computer-generated document and does not require a signature.
+    </div>
+
+  </div>
+</div>
+
+<script>
+var _COMPACT_CSS = '\
+  *{margin:0;padding:0;box-sizing:border-box;}\
+  body{font-family:Inter,Segoe UI,system-ui,sans-serif;}\
+  .action-bar,.no-print{display:none!important;}\
+  .payslip-wrap{margin:0;padding:0;max-width:none;}\
+  #payslip-content{box-shadow:none;border-radius:0;}\
+  .ps-header,.ps-net-box,.ps-att-item,.ps-payment-info,.ps-table .total-row.earning td,.ps-table .total-row.deduction td{-webkit-print-color-adjust:exact;print-color-adjust:exact;}\
+';
+
+function _captureEngine(callback){
+  var el = document.getElementById('payslip-content');
+  var host = document.createElement('div');
+  host.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;visibility:visible;opacity:1;z-index:-1;';
+  document.body.appendChild(host);
+  var clone = el.cloneNode(true);
+  var sty = document.createElement('style');
+  sty.textContent = _COMPACT_CSS;
+  clone.prepend(sty);
+  host.appendChild(clone);
+  requestAnimationFrame(function(){
+    setTimeout(function(){ callback(clone, host); }, 150);
+  });
+}
+
+function downloadPDF(){
+  var btn = document.getElementById('pdfBtn');
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
+  btn.disabled = true;
+  _captureEngine(function(clone, host){
+    var empName = '{{ payroll.person_name }}'.replace(/[^a-zA-Z0-9 ]/g,'');
+    var fname = 'Payslip_'+empName+'_{{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][payroll.month] }}_{{ payroll.year }}.pdf';
+    html2pdf().set({
+      margin: 8,
+      filename: fname,
+      image: {type:'jpeg',quality:0.95},
+      html2canvas: {scale:2,useCORS:true,width:800,windowWidth:800,y:0,x:0,scrollX:0,scrollY:0},
+      jsPDF: {unit:'mm',format:'a4',orientation:'portrait'},
+      pagebreak: {mode:['css','legacy']}
+    }).from(clone).save().then(function(){
+      document.body.removeChild(host);
+      btn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> PDF';
+      btn.disabled = false;
+    });
+  });
+}
+
+function doPrint(){
+  _captureEngine(function(clone, host){
+    html2pdf().set({
+      margin: 8,
+      image: {type:'jpeg',quality:0.95},
+      html2canvas: {scale:2,useCORS:true,width:800,windowWidth:800,y:0,x:0,scrollX:0,scrollY:0},
+      jsPDF: {unit:'mm',format:'a4',orientation:'portrait'},
+      pagebreak: {mode:['css','legacy']}
+    }).from(clone).outputPdf('bloburl').then(function(url){
+      document.body.removeChild(host);
+      window.open(url, '_blank');
+    });
+  });
+}
+
+function downloadImage(){
+  var btn = document.getElementById('imgBtn');
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
+  btn.disabled = true;
+  _captureEngine(function(clone, host){
+    html2canvas(clone, {scale:2,useCORS:true,width:800,windowWidth:800,y:0,x:0,scrollX:0,scrollY:0}).then(function(canvas){
+      document.body.removeChild(host);
+      var link = document.createElement('a');
+      var empName = '{{ payroll.person_name }}'.replace(/[^a-zA-Z0-9 ]/g,'');
+      link.download = 'Payslip_'+empName+'_{{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][payroll.month] }}_{{ payroll.year }}.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      btn.innerHTML = '<i class="bi bi-image"></i> Image';
+      btn.disabled = false;
+    });
+  });
+}
+</script>
+</body>
+</html>

@@ -275,6 +275,15 @@ from routes_finance import (
     employee_expense_form, employee_expense_list, employee_expense_delete
 )  # noqa: E402
 
+from routes_payroll import (
+    payroll_salary_config_list, payroll_salary_config_form, payroll_salary_config_delete,
+    payroll_list, payroll_generate, payroll_view, payroll_edit, payroll_recalc_attendance,
+    payroll_finalize, payroll_pay, payroll_revert, payroll_delete,
+    payroll_pending, payroll_bulk_generate,
+    api_payroll_attendance_preview, payroll_payslip,
+    payroll_driver_bulk_salary, api_driver_bulk_preview,
+)  # noqa: E402
+
 # Register finance routes
 app.add_url_rule('/accounts/payment-voucher', 'accounts_quick_payment', accounts_quick_payment, methods=['GET', 'POST'])
 app.add_url_rule('/accounts/payment-vouchers', 'payment_vouchers_list', payment_vouchers_list)
@@ -294,6 +303,27 @@ app.add_url_rule('/accounts/employee-expense/add', 'employee_expense_form', empl
 app.add_url_rule('/accounts/employee-expense/<int:pk>/edit', 'employee_expense_form_edit', employee_expense_form, methods=['GET', 'POST'])
 app.add_url_rule('/accounts/employee-expenses', 'employee_expense_list', employee_expense_list)
 app.add_url_rule('/accounts/employee-expense/<int:pk>/delete', 'employee_expense_delete', employee_expense_delete, methods=['POST'])
+
+# ── Payroll Module ──────────────────────────────────────────────────────────
+app.add_url_rule('/payroll/salary-config', 'payroll_salary_config_list', payroll_salary_config_list)
+app.add_url_rule('/payroll/salary-config/new', 'payroll_salary_config_form', payroll_salary_config_form, methods=['GET', 'POST'])
+app.add_url_rule('/payroll/salary-config/<int:pk>/edit', 'payroll_salary_config_edit', payroll_salary_config_form, methods=['GET', 'POST'])
+app.add_url_rule('/payroll/salary-config/<int:pk>/delete', 'payroll_salary_config_delete', payroll_salary_config_delete, methods=['POST'])
+app.add_url_rule('/payroll', 'payroll_list', payroll_list)
+app.add_url_rule('/payroll/generate', 'payroll_generate', payroll_generate, methods=['GET', 'POST'])
+app.add_url_rule('/payroll/bulk-generate', 'payroll_bulk_generate', payroll_bulk_generate, methods=['GET', 'POST'])
+app.add_url_rule('/payroll/<int:pk>', 'payroll_view', payroll_view)
+app.add_url_rule('/payroll/<int:pk>/edit', 'payroll_edit', payroll_edit, methods=['GET', 'POST'])
+app.add_url_rule('/payroll/<int:pk>/recalc', 'payroll_recalc_attendance', payroll_recalc_attendance, methods=['POST'])
+app.add_url_rule('/payroll/<int:pk>/finalize', 'payroll_finalize', payroll_finalize, methods=['POST'])
+app.add_url_rule('/payroll/<int:pk>/pay', 'payroll_pay', payroll_pay, methods=['GET', 'POST'])
+app.add_url_rule('/payroll/<int:pk>/revert', 'payroll_revert', payroll_revert, methods=['POST'])
+app.add_url_rule('/payroll/<int:pk>/delete', 'payroll_delete', payroll_delete, methods=['POST'])
+app.add_url_rule('/payroll/pending', 'payroll_pending', payroll_pending)
+app.add_url_rule('/payroll/<int:pk>/payslip', 'payroll_payslip', payroll_payslip)
+app.add_url_rule('/payroll/driver-bulk-salary', 'payroll_driver_bulk_salary', payroll_driver_bulk_salary, methods=['GET', 'POST'])
+app.add_url_rule('/api/payroll/driver-bulk-preview', 'api_driver_bulk_preview', api_driver_bulk_preview)
+app.add_url_rule('/api/payroll/attendance-preview', 'api_payroll_attendance_preview', api_payroll_attendance_preview)
 
 # Register Mobile API Blueprint
 from api import api_bp  # noqa: E402

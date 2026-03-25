@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Edit Payroll – {{ payroll.person_name }}{% endblock %}
+{% block content %}
+<div class="container-fluid px-3 py-3">
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-9 col-xl-8">
+
+      <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+        <div class="card-header py-3 px-4 d-flex align-items-center justify-content-between"
+             style="background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);color:#fff;">
+          <div>
+            <h6 class="mb-0 fw-bold"><i class="bi bi-pencil-square me-2"></i>Edit Payroll</h6>
+            <small class="opacity-75">{{ payroll.person_name }} – {{ ['','January','February','March','April','May','June','July','August','September','October','November','December'][payroll.month] }} {{ payroll.year }}</small>
+          </div>
+          <a href="{{ url_for('payroll_view', pk=payroll.id) }}" class="btn btn-sm btn-light opacity-90">
+            <i class="bi bi-arrow-left me-1"></i>Back
+          </a>
+        </div>
+
+        <div class="card-body px-4 py-4">
+          <!-- Attendance (read-only) -->
+          <div class="mb-4">
+            <h6 class="fw-bold text-dark"><i class="bi bi-calendar-check me-1 text-primary"></i>Attendance (Read-only)</h6>
+            <div class="row g-2 text-center">
+              <div class="col-4 col-md-2"><div class="p-2 bg-light rounded-2"><div class="fw-bold">{{ payroll.total_days }}</div><small class="text-muted">Total</small></div></div>
+              <div class="col-4 col-md-2"><div class="p-2 bg-success-subtle rounded-2"><div class="fw-bold text-success">{{ payroll.present_days }}</div><small class="text-muted">Present</small></div></div>
+              <div class="col-4 col-md-2"><div class="p-2 bg-danger-subtle rounded-2"><div class="fw-bold text-danger">{{ payroll.absent_days }}</div><small class="text-muted">Absent</small></div></div>
+              <div class="col-4 col-md-2"><div class="p-2 bg-warning-subtle rounded-2"><div class="fw-bold text-warning">{{ payroll.leave_days }}</div><small class="text-muted">Leave</small></div></div>
+              <div class="col-4 col-md-2"><div class="p-2 bg-info-subtle rounded-2"><div class="fw-bold text-info">{{ payroll.extra_working_days }}</div><small class="text-muted">Extra</small></div></div>
+              <div class="col-4 col-md-2"><div class="p-2 bg-secondary-subtle rounded-2"><div class="fw-bold text-secondary">{{ payroll.off_days }}</div><small class="text-muted">Off</small></div></div>
+            </div>
+            <form method="post" action="{{ url_for('payroll_recalc_attendance', pk=payroll.id) }}" class="mt-2">
+              <button type="submit" class="btn btn-sm btn-outline-info">
+                <i class="bi bi-arrow-repeat me-1"></i>Refresh Attendance from System
+              </button>
+            </form>
+          </div>
+
+          <hr>
+
+          <form method="post" autocomplete="off">
+            {{ form.hidden_tag() }}
+
+            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-sliders me-1"></i>Manual Adjustments</h6>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">Bonus</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-success-subtle text-success">+</span>
+                  {{ form.bonus(class="form-control") }}
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Manual Fine</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-danger-subtle text-danger">–</span>
+                  {{ form.manual_fine(class="form-control") }}
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">MPG Fine</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-danger-subtle text-danger">–</span>
+                  {{ form.mpg_fine(class="form-control") }}
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Loan Deduction</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-warning-subtle text-warning">–</span>
+                  {{ form.loan_deduction(class="form-control") }}
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Other Deduction</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-warning-subtle text-warning">–</span>
+                  {{ form.other_deduction(class="form-control") }}
+                </div>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Remarks</label>
+                {{ form.remarks(class="form-control") }}
+              </div>
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+              <button type="submit" class="btn btn-primary px-4">
+                <i class="bi bi-save me-1"></i>Update Payroll
+              </button>
+              <a href="{{ url_for('payroll_view', pk=payroll.id) }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

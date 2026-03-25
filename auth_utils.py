@@ -17,6 +17,7 @@ PERMISSION_TASK_REPORT = 'task_report'
 PERMISSION_EXPENSES = 'expenses'
 PERMISSION_ACCOUNTS = 'accounts'
 PERMISSION_REPORTS = 'reports'
+PERMISSION_PAYROLL = 'payroll'
 PERMISSION_BACKUP = 'backup'
 PERMISSION_USERS_MANAGE = 'users_manage'
 
@@ -31,6 +32,7 @@ ALL_PERMISSION_CODES = [
     (PERMISSION_EXPENSES, 'Expenses (Fuel, Oil, Maintenance, Employee)', 'Expenses'),
     (PERMISSION_ACCOUNTS, 'Accounts', 'Accounts'),
     (PERMISSION_REPORTS, 'Reports', 'Reports'),
+    (PERMISSION_PAYROLL, 'Payroll (Salary & Wages)', 'Payroll'),
     (PERMISSION_BACKUP, 'Backup', 'General'),
     (PERMISSION_USERS_MANAGE, 'User & Role Management', 'Admin'),
     ('role_delete', 'Roles – Delete', 'Admin'),
@@ -215,6 +217,25 @@ ENDPOINT_PERMISSION_MAP = [
     ('active_drivers_report', 'active_drivers_report'),
     ('activity_log_report', 'activity_log_report'),
     ('activity_logs_geo_report', 'activity_logs_geo_report'),
+    # Payroll Module
+    ('payroll_salary_config_list', 'payroll_config_list'),
+    ('payroll_salary_config_form', 'payroll_config_add'),
+    ('payroll_salary_config_edit', 'payroll_config_edit'),
+    ('payroll_salary_config_delete', 'payroll_config_delete'),
+    ('payroll_driver_bulk_salary', 'payroll_config_add'),
+    ('payroll_list', 'payroll_list'),
+    ('payroll_generate', 'payroll_generate'),
+    ('payroll_bulk_generate', 'payroll_generate'),
+    ('payroll_view', 'payroll_list'),
+    ('payroll_edit', 'payroll_edit'),
+    ('payroll_recalc_attendance', 'payroll_edit'),
+    ('payroll_finalize', 'payroll_finalize'),
+    ('payroll_pay', 'payroll_pay'),
+    ('payroll_revert', 'payroll_finalize'),
+    ('payroll_delete', 'payroll_delete'),
+    ('payroll_pending', 'payroll_pending'),
+    ('payroll_payslip', 'payroll_list'),
+    ('api_payroll_attendance_preview', 'payroll_generate'),
     ('backup', PERMISSION_BACKUP),
     ('whats_new', 'whats_new'),
     ('user_list', 'user_list'),
@@ -405,12 +426,13 @@ def seed_auth_tables(app):
 
         all_perms = Permission.query.all()
 
-        # Create Master role (Developer) with all permissions if missing
+        # Create or update Master role (Developer) – always gets ALL permissions
         master_role = Role.query.filter_by(name='Master').first()
         if not master_role:
             master_role = Role(name='Master', description='Developer only – full access; only Master can assign Admin role to users')
             db.session.add(master_role)
             db.session.commit()
+        if set(p.id for p in master_role.permissions) != set(p.id for p in all_perms):
             master_role.permissions = all_perms
             db.session.commit()
 

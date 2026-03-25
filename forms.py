@@ -1178,3 +1178,99 @@ class BalanceSheetFilterForm(FlaskForm):
     as_of_date = DateField('As of Date', format='%d-%m-%Y', validators=[Optional()],
                           render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
     submit = SubmitField('Generate Balance Sheet')
+
+
+# ────────────────────────────────────────────────────
+# Payroll Module Forms
+# ────────────────────────────────────────────────────
+
+class SalaryConfigForm(FlaskForm):
+    """Employee salary configuration form."""
+    person_id = SelectField('Employee', coerce=str, validators=[DataRequired()],
+                            choices=[], render_kw={'class': 'form-select search-select'})
+    basic_salary = DecimalField('Basic Salary (Monthly)', validators=[DataRequired()],
+                                render_kw={"class": "form-control", "placeholder": "e.g. 25000"})
+    extra_day_rate = DecimalField('Extra Day Rate (Per Day)', validators=[DataRequired()],
+                                  render_kw={"class": "form-control", "placeholder": "e.g. 1000"})
+    absent_penalty_rate = DecimalField('Absent Penalty Rate (Per Day)', validators=[DataRequired()],
+                                       render_kw={"class": "form-control", "placeholder": "e.g. 500"})
+    payment_mode = SelectField('Default Payment Mode', choices=[
+        ('Cash', 'Cash'),
+        ('Bank Transfer', 'Bank Transfer'),
+        ('Cheque', 'Cheque'),
+    ], default='Cash', render_kw={'class': 'form-select search-select'})
+    is_active = BooleanField('Active', default=True)
+    remarks = TextAreaField('Remarks', validators=[Optional()],
+                            render_kw={"rows": 2, "placeholder": "Any notes about this salary configuration"})
+    submit = SubmitField('Save Configuration')
+
+
+class PayrollGenerateForm(FlaskForm):
+    """Monthly payroll generation form."""
+    person_id = SelectField('Employee / Driver', coerce=str, validators=[DataRequired()],
+                            choices=[], render_kw={'class': 'form-select search-select'})
+    month = SelectField('Month', coerce=int, validators=[DataRequired()], choices=[
+        (1, 'January'), (2, 'February'), (3, 'March'), (4, 'April'),
+        (5, 'May'), (6, 'June'), (7, 'July'), (8, 'August'),
+        (9, 'September'), (10, 'October'), (11, 'November'), (12, 'December'),
+    ], render_kw={'class': 'form-select search-select'})
+    year = SelectField('Year', coerce=int, validators=[DataRequired()],
+                       choices=[], render_kw={'class': 'form-select search-select'})
+    bonus = DecimalField('Bonus', default=0, validators=[Optional()],
+                         render_kw={"class": "form-control", "placeholder": "0"})
+    manual_fine = DecimalField('Manual Fine', default=0, validators=[Optional()],
+                               render_kw={"class": "form-control", "placeholder": "0"})
+    mpg_fine = DecimalField('MPG Fine', default=0, validators=[Optional()],
+                            render_kw={"class": "form-control", "placeholder": "0"})
+    loan_deduction = DecimalField('Loan Deduction', default=0, validators=[Optional()],
+                                  render_kw={"class": "form-control", "placeholder": "0"})
+    other_deduction = DecimalField('Other Deduction', default=0, validators=[Optional()],
+                                   render_kw={"class": "form-control", "placeholder": "0"})
+    remarks = TextAreaField('Remarks', validators=[Optional()],
+                            render_kw={"rows": 2, "placeholder": "Notes for this payroll record"})
+    submit = SubmitField('Generate Payroll')
+
+
+class DriverBulkSalaryForm(FlaskForm):
+    """Assign salary config to multiple drivers at once (by Project/District or individual)."""
+    assignment_mode = SelectField('Assignment Mode', validators=[DataRequired()], choices=[
+        ('project', 'By Project'),
+        ('district', 'By District'),
+        ('both', 'By Project + District'),
+        ('individual', 'Individual Driver'),
+    ], render_kw={'class': 'form-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()],
+                             choices=[], render_kw={'class': 'form-select search-select'})
+    district_id = SelectField('District', coerce=int, validators=[Optional()],
+                              choices=[], render_kw={'class': 'form-select search-select'})
+    driver_id = SelectField('Driver', coerce=int, validators=[Optional()],
+                            choices=[], render_kw={'class': 'form-select search-select'})
+    basic_salary = DecimalField('Basic Salary (Monthly)', validators=[DataRequired(), NumberRange(min=0)],
+                                render_kw={"placeholder": "e.g. 42000"})
+    extra_day_rate = DecimalField('Extra Day Rate', validators=[DataRequired(), NumberRange(min=0)],
+                                  render_kw={"placeholder": "e.g. 500"})
+    absent_penalty_rate = DecimalField('Absent Penalty Rate', validators=[DataRequired(), NumberRange(min=0)],
+                                       render_kw={"placeholder": "e.g. 5000"})
+    payment_mode = SelectField('Default Payment Mode', choices=[
+        ('Cash', 'Cash'), ('Bank Transfer', 'Bank Transfer'), ('Cheque', 'Cheque'),
+    ], render_kw={'class': 'form-select search-select'})
+    overwrite_existing = BooleanField('Overwrite existing configurations', default=False)
+    remarks = TextAreaField('Remarks', validators=[Optional()],
+                            render_kw={"rows": 2, "placeholder": "Optional notes"})
+
+
+class PayrollPaymentForm(FlaskForm):
+    """Mark a finalized payroll as paid."""
+    payment_date = DateField('Payment Date', format='%d-%m-%Y', validators=[DataRequired()],
+                             render_kw={"class": "form-control datepicker", "placeholder": "dd-mm-yyyy"})
+    payment_method = SelectField('Payment Method', validators=[DataRequired()], choices=[
+        ('Cash', 'Cash'),
+        ('Bank Transfer', 'Bank Transfer'),
+        ('Cheque', 'Cheque'),
+    ], render_kw={'class': 'form-select search-select'})
+    payment_account_id = SelectField('Source Account (Cash/Bank)', coerce=int,
+                                     validators=[DataRequired()], choices=[],
+                                     render_kw={'class': 'form-select search-select'})
+    remarks = TextAreaField('Payment Notes', validators=[Optional()],
+                            render_kw={"rows": 2, "placeholder": "Payment reference / cheque number"})
+    submit = SubmitField('Confirm Payment')

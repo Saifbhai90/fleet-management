@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}Driver Salary Assignment{% endblock %}
+{% block content %}
+<div class="container-fluid px-3 py-3">
+  <div class="row justify-content-center">
+    <div class="col-12 col-xl-10">
+
+      <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+        <div class="card-header py-3 px-4 d-flex align-items-center justify-content-between"
+             style="background:linear-gradient(135deg,#1e40af 0%,#3b82f6 100%);color:#fff;">
+          <div>
+            <h6 class="mb-0 fw-bold"><i class="bi bi-people-fill me-2"></i>Driver Salary Assignment</h6>
+            <small class="opacity-75">Assign salary configuration to multiple drivers at once</small>
+          </div>
+          <a href="{{ url_for('payroll_salary_config_list') }}" class="btn btn-sm btn-light opacity-90">
+            <i class="bi bi-arrow-left me-1"></i>Back to Salary Config
+          </a>
+        </div>
+
+        <div class="card-body px-4 py-4">
+          <form method="post" autocomplete="off" id="bulkForm">
+            {{ form.hidden_tag() }}
+
+            <div class="row g-3">
+              <!-- Assignment Mode -->
+              <div class="col-12">
+                <label class="form-label fw-bold text-primary"><i class="bi bi-filter me-1"></i>Step 1: Select Assignment Mode</label>
+                <div class="d-flex flex-wrap gap-2" id="modeButtons">
+                  <button type="button" class="btn btn-outline-primary mode-btn active" data-mode="project">
+                    <i class="bi bi-building me-1"></i>By Project
+                  </button>
+                  <button type="button" class="btn btn-outline-primary mode-btn" data-mode="district">
+                    <i class="bi bi-geo-alt me-1"></i>By District
+                  </button>
+                  <button type="button" class="btn btn-outline-primary mode-btn" data-mode="both">
+                    <i class="bi bi-funnel me-1"></i>Project + District
+                  </button>
+                  <button type="button" class="btn btn-outline-primary mode-btn" data-mode="individual">
+                    <i class="bi bi-person me-1"></i>Individual Driver
+                  </button>
+                </div>
+                <input type="hidden" name="assignment_mode" id="assignmentMode" value="project">
+              </div>
+
+              <!-- Selection Fields -->
+              <div class="col-md-6" id="projectGroup">
+                <label class="form-label fw-semibold">Project <span class="text-danger">*</span></label>
+                {{ form.project_id(class="form-select search-select", id="selProject") }}
+              </div>
+              <div class="col-md-6" id="districtGroup" style="display:none;">
+                <label class="form-label fw-semibold">District <span class="text-danger">*</span></label>
+                {{ form.district_id(class="form-select search-select", id="selDistrict") }}
+              </div>
+              <div class="col-md-6" id="driverGroup" style="display:none;">
+                <label class="form-label fw-semibold">Driver <span class="text-danger">*</span></label>
+                {{ form.driver_id(class="form-select search-select", id="selDriver") }}
+              </div>
+
+              <!-- Preview Panel -->
+              <div class="col-12" id="previewPanel" style="display:none;">
+                <div class="card bg-light border-0 rounded-3">
+                  <div class="card-body py-3 px-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <h6 class="mb-0 fw-bold text-primary"><i class="bi bi-eye me-1"></i>Driver Preview</h6>
+                      <div>
+                        <span class="badge bg-primary-subtle text-primary" id="prevTotal">0 Drivers</span>
+                        <span class="badge bg-warning-subtle text-warning" id="prevConfigured">0 Already Configured</span>
+                        <span class="badge bg-success-subtle text-success" id="prevNew">0 New</span>
+                      </div>
+                    </div>
+                    <div id="previewList" class="small" style="max-height:200px;overflow-y:auto;"></div>
+                    <div id="previewLoading" class="text-center py-2" style="display:none;">
+                      <div class="spinner-border spinner-border-sm text-primary me-1"></div>Loading...
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Salary Fields -->
+              <div class="col-12 mt-4">
+                <label class="form-label fw-bold text-primary"><i class="bi bi-currency-exchange me-1"></i>Step 2: Salary Details</label>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Basic Salary (Monthly) <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light">Rs.</span>
+                  {{ form.basic_salary(class="form-control") }}
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Extra Day Rate <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light">Rs.</span>
+                  {{ form.extra_day_rate(class="form-control") }}
+                </div>
+                <small class="text-muted">Per extra working day</small>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Absent Penalty Rate <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light">Rs.</span>
+                  {{ form.absent_penalty_rate(class="form-control") }}
+                </div>
+                <small class="text-muted">Deduction per absent day</small>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Payment Mode</label>
+                {{ form.payment_mode(class="form-select search-select") }}
+              </div>
+              <div class="col-md-8">
+                <label class="form-label fw-semibold">Remarks</label>
+                {{ form.remarks(class="form-control") }}
+              </div>
+
+              <div class="col-12">
+                <div class="form-check">
+                  {{ form.overwrite_existing(class="form-check-input", id="overwriteCheck") }}
+                  <label class="form-check-label" for="overwriteCheck">
+                    <strong>Overwrite existing</strong> – Update salary for drivers who already have a configuration
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-top d-flex gap-2 align-items-center">
+              <button type="submit" class="btn btn-primary px-4" id="submitBtn">
+                <i class="bi bi-check-circle me-1"></i>Assign Salary Configuration
+              </button>
+              <a href="{{ url_for('payroll_salary_config_list') }}" class="btn btn-outline-secondary">Cancel</a>
+              <span class="text-muted small ms-auto" id="submitHint"></span>
+            </div>
+          </form>
+
+          {% if result %}
+          <div class="alert alert-success mt-4 rounded-3 border-0 shadow-sm">
+            <h6 class="fw-bold mb-2"><i class="bi bi-check-circle-fill me-1"></i>Assignment Complete</h6>
+            <div class="d-flex gap-4 flex-wrap">
+              <div><strong>{{ result.total }}</strong> drivers found</div>
+              <div class="text-success"><strong>{{ result.created }}</strong> newly created</div>
+              <div class="text-warning"><strong>{{ result.updated }}</strong> updated</div>
+              <div class="text-muted"><strong>{{ result.skipped }}</strong> skipped</div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const modeInput = document.getElementById('assignmentMode');
+  const projectGrp = document.getElementById('projectGroup');
+  const districtGrp = document.getElementById('districtGroup');
+  const driverGrp = document.getElementById('driverGroup');
+  const previewPanel = document.getElementById('previewPanel');
+  const previewList = document.getElementById('previewList');
+  const prevLoading = document.getElementById('previewLoading');
+  const prevTotal = document.getElementById('prevTotal');
+  const prevConfigured = document.getElementById('prevConfigured');
+  const prevNew = document.getElementById('prevNew');
+  const submitHint = document.getElementById('submitHint');
+
+  function showFields(mode) {
+    projectGrp.style.display = (mode === 'project' || mode === 'both') ? '' : 'none';
+    districtGrp.style.display = (mode === 'district' || mode === 'both') ? '' : 'none';
+    driverGrp.style.display = (mode === 'individual') ? '' : 'none';
+    modeInput.value = mode;
+    fetchPreview();
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.mode-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      showFields(btn.dataset.mode);
+    });
+  });
+
+  let debounceTimer;
+  function fetchPreview() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(doFetch, 300);
+  }
+
+  function doFetch() {
+    const mode = modeInput.value;
+    const projectEl = document.getElementById('selProject');
+    const districtEl = document.getElementById('selDistrict');
+    const driverEl = document.getElementById('selDriver');
+
+    const projectId = projectEl ? projectEl.value : 0;
+    const districtId = districtEl ? districtEl.value : 0;
+    const driverId = driverEl ? driverEl.value : 0;
+
+    const params = new URLSearchParams({mode, project_id: projectId, district_id: districtId, driver_id: driverId});
+
+    previewPanel.style.display = '';
+    prevLoading.style.display = '';
+    previewList.innerHTML = '';
+
+    fetch('/api/payroll/driver-bulk-preview?' + params)
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        prevLoading.style.display = 'none';
+        prevTotal.textContent = data.total + ' Driver' + (data.total !== 1 ? 's' : '');
+        prevConfigured.textContent = data.already_configured + ' Already Configured';
+        prevNew.textContent = (data.total - data.already_configured) + ' New';
+        submitHint.textContent = data.total > 0 ? 'Will process ' + data.total + ' driver(s)' : '';
+
+        if (data.drivers.length === 0) {
+          previewList.innerHTML = '<div class="text-muted text-center py-2">No drivers found for this selection</div>';
+          return;
+        }
+        let html = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>#</th><th>ID</th><th>Name</th><th>Status</th></tr></thead><tbody>';
+        data.drivers.forEach(function(d, i){
+          var badge = d.has_config
+            ? '<span class="badge bg-warning-subtle text-warning">Configured</span>'
+            : '<span class="badge bg-success-subtle text-success">New</span>';
+          html += '<tr><td>'+(i+1)+'</td><td>'+d.driver_id+'</td><td>'+d.name+'</td><td>'+badge+'</td></tr>';
+        });
+        html += '</tbody></table>';
+        previewList.innerHTML = html;
+      })
+      .catch(function(){
+        prevLoading.style.display = 'none';
+        previewList.innerHTML = '<div class="text-danger text-center py-2">Error loading preview</div>';
+      });
+  }
+
+  ['selProject', 'selDistrict', 'selDriver'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', fetchPreview);
+      if (el.tomselect) el.tomselect.on('change', fetchPreview);
+    }
+  });
+
+  setTimeout(function(){
+    ['selProject', 'selDistrict', 'selDriver'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el && el.tomselect) el.tomselect.on('change', fetchPreview);
+    });
+  }, 1000);
+
+  showFields('project');
+})();
+</script>
+
+{% endblock %}

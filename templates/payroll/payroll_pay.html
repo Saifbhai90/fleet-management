@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Record Payment – {{ payroll.person_name }}{% endblock %}
+{% block content %}
+<div class="container-fluid px-3 py-3">
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-7">
+
+      <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+        <div class="card-header py-3 px-4"
+             style="background:linear-gradient(135deg,#065f46 0%,#10b981 100%);color:#fff;">
+          <h6 class="mb-0 fw-bold"><i class="bi bi-cash-coin me-2"></i>Record Payment</h6>
+          <small class="opacity-75">{{ payroll.person_name }} – {{ ['','January','February','March','April','May','June','July','August','September','October','November','December'][payroll.month] }} {{ payroll.year }}</small>
+        </div>
+
+        <div class="card-body px-4 py-4">
+          <!-- Payroll Summary -->
+          <div class="rounded-3 p-3 mb-4" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+            <div class="row g-2 align-items-center">
+              <div class="col-md-4">
+                <small class="text-muted d-block">Gross Pay</small>
+                <span class="fw-bold fs-5">Rs. {{ '{:,.2f}'.format(payroll.gross_pay) }}</span>
+              </div>
+              <div class="col-md-4">
+                <small class="text-muted d-block">Total Deductions</small>
+                <span class="fw-bold fs-5 text-danger">Rs. {{ '{:,.2f}'.format(payroll.total_deductions) }}</span>
+              </div>
+              <div class="col-md-4">
+                <small class="text-muted d-block">Net Payable</small>
+                <span class="fw-bold fs-4 text-success">Rs. {{ '{:,.2f}'.format(payroll.net_payable) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <form method="post" autocomplete="off">
+            {{ form.hidden_tag() }}
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Payment Date <span class="text-danger">*</span></label>
+                {{ form.payment_date(class="form-control datepicker " + ("is-invalid" if form.payment_date.errors else "")) }}
+                {% for e in form.payment_date.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Payment Method <span class="text-danger">*</span></label>
+                {{ form.payment_method(class="form-select search-select " + ("is-invalid" if form.payment_method.errors else "")) }}
+                {% for e in form.payment_method.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold">Source Account (Cash/Bank) <span class="text-danger">*</span></label>
+                {{ form.payment_account_id(class="form-select search-select " + ("is-invalid" if form.payment_account_id.errors else "")) }}
+                {% for e in form.payment_account_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                <small class="text-muted">This account will be credited. A Journal Entry will be auto-created.</small>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold">Payment Notes</label>
+                {{ form.remarks(class="form-control") }}
+              </div>
+            </div>
+
+            <div class="alert alert-info mt-3 py-2">
+              <i class="bi bi-info-circle me-1"></i>
+              <strong>Finance Integration:</strong> A balanced Journal Entry will be auto-created:
+              <br>• <strong>Debit:</strong> Salary & Wages (5300) – Rs. {{ '{:,.2f}'.format(payroll.net_payable) }}
+              <br>• <strong>Credit:</strong> Selected Source Account – Rs. {{ '{:,.2f}'.format(payroll.net_payable) }}
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+              <button type="submit" class="btn btn-success px-4"
+                      onclick="return confirm('Confirm payment of Rs. {{ '{:,.2f}'.format(payroll.net_payable) }}?')">
+                <i class="bi bi-check-circle me-1"></i>Confirm Payment
+              </button>
+              <a href="{{ url_for('payroll_view', pk=payroll.id) }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

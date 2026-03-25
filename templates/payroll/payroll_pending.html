@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Pending Salaries{% endblock %}
+{% block content %}
+<div class="container-fluid px-3 py-3">
+  <div class="row justify-content-center">
+    <div class="col-12 col-xl-11">
+
+      <!-- Summary Header -->
+      <div class="card shadow-sm border-0 rounded-3 overflow-hidden mb-3">
+        <div class="card-body p-4" style="background:linear-gradient(135deg,#7c2d12 0%,#ea580c 100%);color:#fff;">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+              <h5 class="fw-bold mb-1"><i class="bi bi-hourglass-split me-2"></i>Pending Salaries</h5>
+              <small class="opacity-75">Finalized but unpaid payroll records awaiting payment</small>
+            </div>
+            <div class="text-end">
+              <small class="d-block opacity-75">Total Pending</small>
+              <span class="fw-bold" style="font-size:1.8rem;">Rs. {{ '{:,.0f}'.format(total_pending) }}</span>
+              <small class="d-block opacity-75">{{ pending|length }} record{{ 's' if pending|length != 1 }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if not pending %}
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-body text-center py-5">
+          <i class="bi bi-check-circle text-success" style="font-size:3rem;"></i>
+          <h5 class="mt-3 text-muted">All Clear!</h5>
+          <p class="text-muted">No pending salaries. All finalized payrolls have been paid.</p>
+          <a href="{{ url_for('payroll_list') }}" class="btn btn-outline-primary">Go to Payroll Records</a>
+        </div>
+      </div>
+      {% endif %}
+
+      {% for month_label, data in by_month.items() %}
+      <div class="card shadow-sm border-0 rounded-3 overflow-hidden mb-3">
+        <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center border-bottom">
+          <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-calendar3 me-2 text-primary"></i>{{ month_label }}</h6>
+          <span class="badge bg-warning text-dark fs-6 px-3">Rs. {{ '{:,.0f}'.format(data.total) }}</span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 small">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-4">#</th>
+                  <th>Employee</th>
+                  <th class="text-center">Present / Absent</th>
+                  <th class="text-end">Gross</th>
+                  <th class="text-end">Deductions</th>
+                  <th class="text-end">Net Payable</th>
+                  <th class="text-center">Finalized</th>
+                  <th class="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in data.records %}
+                <tr>
+                  <td class="ps-4 text-muted">{{ loop.index }}</td>
+                  <td>
+                    <div class="fw-semibold">{{ p.person_name }}</div>
+                    <small class="text-muted">{{ p.person_code }}</small>
+                  </td>
+                  <td class="text-center">
+                    <span class="badge bg-success-subtle text-success">{{ p.present_days }}P</span>
+                    <span class="badge bg-danger-subtle text-danger">{{ p.absent_days }}A</span>
+                  </td>
+                  <td class="text-end">Rs. {{ '{:,.0f}'.format(p.gross_pay) }}</td>
+                  <td class="text-end text-danger">Rs. {{ '{:,.0f}'.format(p.total_deductions) }}</td>
+                  <td class="text-end fw-bold">Rs. {{ '{:,.0f}'.format(p.net_payable) }}</td>
+                  <td class="text-center">
+                    <small class="text-muted">{{ p.finalized_at.strftime('%d %b %Y') if p.finalized_at else '–' }}</small>
+                  </td>
+                  <td class="text-center">
+                    {% if can_see_page('payroll_pay') %}
+                    <a href="{{ url_for('payroll_pay', pk=p.id) }}" class="btn btn-sm btn-success" title="Pay Now">
+                      <i class="bi bi-cash-coin me-1"></i>Pay
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('payroll_view', pk=p.id) }}" class="btn btn-sm btn-outline-primary" title="View">
+                      <i class="bi bi-eye"></i>
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="container-fluid px-3 py-3">
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-7">
+
+      <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+        <div class="card-header py-3 px-4 d-flex align-items-center justify-content-between"
+             style="background:linear-gradient(135deg,#0f766e 0%,#14b8a6 100%);color:#fff;">
+          <h6 class="mb-0 fw-bold"><i class="bi bi-gear-wide-connected me-2"></i>{{ title }}</h6>
+          <a href="{{ url_for('payroll_salary_config_list') }}" class="btn btn-sm btn-light opacity-90">
+            <i class="bi bi-arrow-left me-1"></i>Back to List
+          </a>
+        </div>
+
+        <div class="card-body px-4 py-4">
+          <form method="post" autocomplete="off">
+            {{ form.hidden_tag() }}
+
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label fw-semibold">Employee <span class="text-danger">*</span></label>
+                {{ form.person_id(class="form-select search-select " + ("is-invalid" if form.person_id.errors else "")) }}
+                {% for e in form.person_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Basic Salary (Monthly) <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light">Rs.</span>
+                  {{ form.basic_salary(class="form-control " + ("is-invalid" if form.basic_salary.errors else "")) }}
+                </div>
+                {% for e in form.basic_salary.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Extra Day Rate <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light">Rs.</span>
+                  {{ form.extra_day_rate(class="form-control " + ("is-invalid" if form.extra_day_rate.errors else "")) }}
+                </div>
+                <small class="text-muted">Amount per extra working day</small>
+                {% for e in form.extra_day_rate.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Absent Penalty Rate <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light">Rs.</span>
+                  {{ form.absent_penalty_rate(class="form-control " + ("is-invalid" if form.absent_penalty_rate.errors else "")) }}
+                </div>
+                <small class="text-muted">Deduction per absent day</small>
+                {% for e in form.absent_penalty_rate.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Default Payment Mode</label>
+                {{ form.payment_mode(class="form-select search-select") }}
+              </div>
+
+              <div class="col-12">
+                <div class="form-check">
+                  {{ form.is_active(class="form-check-input") }}
+                  <label class="form-check-label fw-semibold" for="is_active">Active Configuration</label>
+                </div>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold">Remarks</label>
+                {{ form.remarks(class="form-control") }}
+              </div>
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+              <button type="submit" class="btn btn-primary px-4">
+                <i class="bi bi-save me-1"></i>{{ 'Update' if config else 'Save' }} Configuration
+              </button>
+              <a href="{{ url_for('payroll_salary_config_list') }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

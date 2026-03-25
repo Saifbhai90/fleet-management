@@ -1583,6 +1583,8 @@
         {% set expenses_open = request.endpoint in expenses_endpoints %}
         {% set reports_open = (request.endpoint in reports_endpoints and not _came_from_master) or _came_from_reports or (request.endpoint == 'companies' and request.args.get('mode') == 'report') %}
         {% set accounts_open = request.endpoint in accounts_endpoints %}
+        {% set payroll_endpoints = ['payroll_salary_config_list', 'payroll_salary_config_form', 'payroll_salary_config_edit', 'payroll_driver_bulk_salary', 'payroll_list', 'payroll_generate', 'payroll_bulk_generate', 'payroll_view', 'payroll_edit', 'payroll_pay', 'payroll_pending', 'payroll_payslip'] %}
+        {% set payroll_open = request.endpoint in payroll_endpoints %}
         {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit', 'form_control'] %}
         {% set users_open = request.endpoint in users_manage_endpoints %}
 
@@ -1871,6 +1873,43 @@
                 {% if can_see_page('accounts_account_ledger') %}
                 <a href="{{ url_for('accounts_account_ledger') }}" class="collapse-item {% if request.endpoint == 'accounts_account_ledger' %}active-link{% endif %}">
                     <i class="bi bi-journal-bookmark-fill text-warning"></i><span>Account Ledger</span>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Payroll -->
+        {% if can_see_section('payroll') %}
+        <div>
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#payrollMenu" role="button" aria-expanded="{{ 'true' if payroll_open else 'false' }}">
+                <i class="bi bi-cash-stack"></i><span>Payroll</span>
+            </a>
+            <div class="collapse collapse-item-container {% if payroll_open %}show{% endif %}"
+                 id="payrollMenu" data-bs-parent="#sidebarAccordion">
+                {% if can_see_page('payroll_config_list') %}
+                <a href="{{ url_for('payroll_salary_config_list') }}" class="collapse-item {% if request.endpoint in ['payroll_salary_config_list', 'payroll_salary_config_form', 'payroll_salary_config_edit', 'payroll_driver_bulk_salary'] %}active-link{% endif %}">
+                    <i class="bi bi-gear-wide-connected text-teal"></i><span>Salary Config</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('payroll_list') %}
+                <a href="{{ url_for('payroll_list') }}" class="collapse-item {% if request.endpoint in ['payroll_list', 'payroll_view', 'payroll_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-journal-text text-primary"></i><span>Payroll Records</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('payroll_generate') %}
+                <a href="{{ url_for('payroll_generate') }}" class="collapse-item {% if request.endpoint == 'payroll_generate' %}active-link{% endif %}">
+                    <i class="bi bi-calculator text-info"></i><span>Generate Payroll</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('payroll_generate') %}
+                <a href="{{ url_for('payroll_bulk_generate') }}" class="collapse-item {% if request.endpoint == 'payroll_bulk_generate' %}active-link{% endif %}">
+                    <i class="bi bi-lightning text-warning"></i><span>Bulk Generate</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('payroll_pending') %}
+                <a href="{{ url_for('payroll_pending') }}" class="collapse-item {% if request.endpoint == 'payroll_pending' %}active-link{% endif %}">
+                    <i class="bi bi-hourglass-split text-danger"></i><span>Pending Salaries</span>
                 </a>
                 {% endif %}
             </div>

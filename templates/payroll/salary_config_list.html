@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Salary Configuration{% endblock %}
+{% block content %}
+<div class="container-fluid px-3 py-3">
+  <div class="row justify-content-center">
+    <div class="col-12 col-xl-11">
+
+      <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+        <div class="card-header py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2"
+             style="background:linear-gradient(135deg,#0f766e 0%,#14b8a6 100%);color:#fff;">
+          <div>
+            <h6 class="mb-0 fw-bold"><i class="bi bi-gear-wide-connected me-2"></i>Salary Configuration</h6>
+            <small class="opacity-75">{{ pagination.total if pagination else 0 }} record{{ 's' if (pagination and pagination.total != 1) }} configured</small>
+          </div>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <form method="get" class="d-flex align-items-center gap-2 mb-0">
+              <div class="position-relative">
+                <i class="bi bi-search position-absolute" style="left:10px;top:50%;transform:translateY(-50%);color:#6b7280;font-size:0.8rem;"></i>
+                <input type="text" name="search" value="{{ search }}" class="form-control form-control-sm bg-white text-dark"
+                       placeholder="Search..." style="max-width:260px;padding-left:32px;" autocomplete="off">
+              </div>
+            </form>
+            {% if can_see_page('payroll_config_add') %}
+            <a href="{{ url_for('payroll_driver_bulk_salary') }}" class="btn btn-sm btn-info fw-semibold text-white">
+              <i class="bi bi-people-fill me-1"></i>Driver Bulk Assign
+            </a>
+            <a href="{{ url_for('payroll_salary_config_form') }}" class="btn btn-sm btn-light fw-semibold">
+              <i class="bi bi-plus-circle me-1"></i>Add Employee
+            </a>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 small">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-4">#</th>
+                  <th>Name</th>
+                  <th>Type / Code</th>
+                  <th class="text-end">Basic Salary</th>
+                  <th class="text-end">Extra Day Rate</th>
+                  <th class="text-end">Absent Penalty</th>
+                  <th>Payment Mode</th>
+                  <th class="text-center">Status</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for c in configs %}
+                <tr>
+                  <td class="ps-4 text-muted">{{ loop.index + (page - 1) * per_page }}</td>
+                  <td class="fw-semibold">{{ c.person_name }}</td>
+                  <td>
+                    <span class="badge bg-{{ 'primary' if c.person_type == 'Employee' else 'info' }}-subtle text-{{ 'primary' if c.person_type == 'Employee' else 'info' }} border">{{ c.person_type }}</span>
+                    <span class="badge bg-light text-dark border">{{ c.person_code }}</span>
+                  </td>
+                  <td class="text-end fw-semibold">Rs. {{ '{:,.0f}'.format(c.basic_salary) }}</td>
+                  <td class="text-end">Rs. {{ '{:,.0f}'.format(c.extra_day_rate) }}</td>
+                  <td class="text-end">Rs. {{ '{:,.0f}'.format(c.absent_penalty_rate) }}</td>
+                  <td>
+                    {% if c.payment_mode == 'Bank Transfer' %}
+                    <span class="badge bg-info-subtle text-info"><i class="bi bi-bank me-1"></i>{{ c.payment_mode }}</span>
+                    {% elif c.payment_mode == 'Cheque' %}
+                    <span class="badge bg-warning-subtle text-warning"><i class="bi bi-file-text me-1"></i>{{ c.payment_mode }}</span>
+                    {% else %}
+                    <span class="badge bg-success-subtle text-success"><i class="bi bi-cash me-1"></i>{{ c.payment_mode }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    {% if c.is_active %}
+                    <span class="badge bg-success">Active</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Inactive</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    {% if can_see_page('payroll_config_edit') %}
+                    <a href="{{ url_for('payroll_salary_config_edit', pk=c.id) }}" class="btn btn-sm btn-outline-primary" title="Edit">
+                      <i class="bi bi-pencil-square"></i>
+                    </a>
+                    {% endif %}
+                    {% if can_see_page('payroll_config_delete') %}
+                    <form method="post" action="{{ url_for('payroll_salary_config_delete', pk=c.id) }}" class="d-inline"
+                          onsubmit="return confirm('Delete salary config for {{ c.person_name }}?')">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="9" class="text-center text-muted py-4">
+                    <i class="bi bi-inbox" style="font-size:2rem;"></i>
+                    <div class="mt-1">No salary configurations found</div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {% if pagination and pagination.pages > 1 %}
+        <div class="card-footer bg-white border-top py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <small class="text-muted">
+            Showing {{ ((pagination.page - 1) * per_page) + 1 }}–{{ [pagination.page * per_page, pagination.total] | min }} of {{ pagination.total }}
+          </small>
+          <div class="d-flex align-items-center gap-2">
+            <select class="form-select form-select-sm" style="width:auto;"
+                    onchange="window.location.href='{{ url_for('payroll_salary_config_list', search=search, page=1) }}&per_page='+this.value">
+              {% for n in [25, 50, 100] %}
+              <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }} / page</option>
+              {% endfor %}
+            </select>
+            <nav>
+              <ul class="pagination pagination-sm mb-0">
+                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                  <a class="page-link" href="{{ url_for('payroll_salary_config_list', page=pagination.prev_num, per_page=per_page, search=search) }}">‹</a>
+                </li>
+                {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                  {% if p %}
+                  <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('payroll_salary_config_list', page=p, per_page=per_page, search=search) }}">{{ p }}</a>
+                  </li>
+                  {% else %}
+                  <li class="page-item disabled"><span class="page-link">…</span></li>
+                  {% endif %}
+                {% endfor %}
+                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                  <a class="page-link" href="{{ url_for('payroll_salary_config_list', page=pagination.next_num, per_page=per_page, search=search) }}">›</a>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

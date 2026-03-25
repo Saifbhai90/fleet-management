@@ -1287,3 +1287,172 @@ class VoucherSequence(db.Model):
 
     def __repr__(self):
         return f'<VoucherSequence {self.prefix}-{self.year:04d}-{self.month:02d} seq={self.last_seq}>'
+
+
+# ────────────────────────────────────────────────────
+# Payroll Module
+# ────────────────────────────────────────────────────
+
+class EmployeeSalaryConfig(db.Model):
+    """Salary configuration for an Employee OR a Driver."""
+    __tablename__ = 'employee_salary_config'
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), unique=True, nullable=True, index=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id', ondelete='CASCADE'), unique=True, nullable=True, index=True)
+
+    basic_salary = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    extra_day_rate = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    absent_penalty_rate = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+
+    payment_mode = db.Column(db.String(20), default='Cash')  # Cash, Bank Transfer, Cheque
+    remarks = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    employee = db.relationship('Employee', backref=db.backref('salary_config', uselist=False, lazy='select'))
+    driver = db.relationship('Driver', backref=db.backref('salary_config', uselist=False, lazy='select'))
+
+    @property
+    def person_name(self):
+        if self.employee:
+            return self.employee.name
+        if self.driver:
+            return self.driver.name
+        return '–'
+
+    @property
+    def person_code(self):
+        if self.employee:
+            return self.employee.code
+        if self.driver:
+            return self.driver.driver_id
+        return '–'
+
+    @property
+    def person_type(self):
+        if self.employee_id:
+            return 'Employee'
+        if self.driver_id:
+            return 'Driver'
+        return '–'
+
+    def __repr__(self):
+        return f'<SalaryConfig {self.person_type}#{self.employee_id or self.driver_id} Basic={self.basic_salary}>'
+
+
+class MonthlyPayroll(db.Model):
+    """Monthly payroll record per employee/driver with attendance-based calculations."""
+    __tablename__ = 'monthly_payroll'
+    __table_args__ = (
+        db.UniqueConstraint('employee_id', 'driver_id', 'month', 'year', name='uq_payroll_person_month_year'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=True, index=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id', ondelete='CASCADE'), nullable=True, index=True)
+    month = db.Column(db.Integer, nullable=False)  # 1-12
+    year = db.Column(db.Integer, nullable=False)
+
+    # Attendance stats (synced from driver_attendance)
+    total_days = db.Column(db.Integer, default=0, nullable=False)
+    present_days = db.Column(db.Integer, default=0, nullable=False)
+    absent_days = db.Column(db.Integer, default=0, nullable=False)
+    leave_days = db.Column(db.Integer, default=0, nullable=False)
+    late_days = db.Column(db.Integer, default=0, nullable=False)
+    half_days = db.Column(db.Integer, default=0, nullable=False)
+    off_days = db.Column(db.Integer, default=0, nullable=False)
+    extra_working_days = db.Column(db.Integer, default=0, nullable=False)
+
+    # Earnings
+    basic_salary = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    calculated_basic = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    extra_working_pay = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    bonus = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+
+    # Deductions
+    absent_fine = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    manual_fine = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    mpg_fine = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    loan_deduction = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    other_deduction = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+
+    # Totals
+    gross_pay = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    total_deductions = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    net_payable = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+
+    # Workflow
+    status = db.Column(db.String(20), default='Draft', nullable=False)  # Draft, Finalized, Paid
+    finalized_at = db.Column(db.DateTime, nullable=True)
+    finalized_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    # Payment tracking
+    payment_date = db.Column(db.Date, nullable=True)
+    payment_method = db.Column(db.String(30), nullable=True)  # Cash, Bank Transfer, Cheque
+    payment_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=True)
+    paid_at = db.Column(db.DateTime, nullable=True)
+    paid_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    # Finance link
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
+
+    remarks = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    employee = db.relationship('Employee', backref='payroll_records', lazy='select')
+    driver = db.relationship('Driver', backref='payroll_records', lazy='select')
+    finalized_by = db.relationship('User', foreign_keys=[finalized_by_user_id], backref='finalized_payrolls', lazy='select')
+    paid_by = db.relationship('User', foreign_keys=[paid_by_user_id], backref='paid_payrolls', lazy='select')
+    payment_account = db.relationship('Account', foreign_keys=[payment_account_id], backref='payroll_payments', lazy='select')
+    journal_entry = db.relationship('JournalEntry', backref='payroll_record', lazy='select')
+
+    @property
+    def person_name(self):
+        if self.employee:
+            return self.employee.name
+        if self.driver:
+            return self.driver.name
+        return '–'
+
+    @property
+    def person_code(self):
+        if self.employee:
+            return self.employee.code
+        if self.driver:
+            return self.driver.driver_id
+        return '–'
+
+    @property
+    def person_type(self):
+        if self.employee_id:
+            return 'Employee'
+        if self.driver_id:
+            return 'Driver'
+        return '–'
+
+    @property
+    def salary_config(self):
+        if self.employee and self.employee.salary_config:
+            return self.employee.salary_config
+        if self.driver and self.driver.salary_config:
+            return self.driver.salary_config
+        return None
+
+    def __repr__(self):
+        pid = self.employee_id or self.driver_id
+        return f'<MonthlyPayroll {self.person_type}#{pid} {self.month}/{self.year} {self.status} Net={self.net_payable}>'
+
+    def calculate(self):
+        """Recalculate all totals from component values."""
+        cfg = self.salary_config
+        self.calculated_basic = self.basic_salary
+        self.extra_working_pay = self.extra_working_days * (cfg.extra_day_rate if cfg else 0)
+        self.absent_fine = self.absent_days * (cfg.absent_penalty_rate if cfg else 0)
+        self.gross_pay = self.calculated_basic + self.extra_working_pay + self.bonus
+        self.total_deductions = self.absent_fine + self.manual_fine + self.mpg_fine + self.loan_deduction + self.other_deduction
+        self.net_payable = self.gross_pay - self.total_deductions
