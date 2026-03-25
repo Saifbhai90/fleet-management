@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Pending Book Returns{% endblock %}
+{% block content %}
+<div class="container-fluid px-3 py-3">
+  <div class="row justify-content-center">
+    <div class="col-12 col-xl-11">
+
+      <!-- Summary -->
+      <div class="row g-2 mb-3">
+        <div class="col-md-4">
+          <div class="card border-0 shadow-sm rounded-3 text-center py-3">
+            <div class="fw-bold fs-4 text-danger">{{ total }}</div>
+            <small class="text-muted">Total Pending Returns</small>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card border-0 shadow-sm rounded-3 text-center py-3">
+            <div class="fw-bold fs-4 text-primary">{{ logbooks|length }}</div>
+            <small class="text-muted">Logbooks Pending</small>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card border-0 shadow-sm rounded-3 text-center py-3">
+            <div class="fw-bold fs-4 text-info">{{ maint_books|length }}</div>
+            <small class="text-muted">Maintenance Books Pending</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+        <div class="card-header py-3 px-4"
+             style="background:linear-gradient(135deg,#dc2626 0%,#f87171 100%);color:#fff;">
+          <h6 class="mb-0 fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>Pending Book Returns</h6>
+          <small class="opacity-75">Books that have been issued but not yet returned</small>
+        </div>
+
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 small">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-4">#</th>
+                  <th>Book Serial</th>
+                  <th>Type</th>
+                  <th>Vehicle</th>
+                  <th>Issued To Driver</th>
+                  <th>Issue Date</th>
+                  <th>Days Since Issue</th>
+                  <th class="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in pending %}
+                {% set days_ago = (today - a.issue_date).days if a.issue_date else 0 %}
+                <tr>
+                  <td class="ps-4 text-muted">{{ loop.index }}</td>
+                  <td class="fw-semibold">{{ a.book.serial_no }}</td>
+                  <td>
+                    {% if a.book.book_type == 'Logbook' %}
+                    <span class="badge bg-primary-subtle text-primary">Logbook</span>
+                    {% else %}
+                    <span class="badge bg-info-subtle text-info">Maintenance</span>
+                    {% endif %}
+                  </td>
+                  <td class="fw-semibold">{{ a.vehicle.vehicle_no if a.vehicle else '–' }}</td>
+                  <td>{{ a.issued_to_driver.name if a.issued_to_driver else '–' }}</td>
+                  <td>{{ a.issue_date.strftime('%d-%m-%Y') if a.issue_date else '–' }}</td>
+                  <td>
+                    {% if days_ago > 90 %}
+                    <span class="badge bg-danger">{{ days_ago }} days</span>
+                    {% elif days_ago > 30 %}
+                    <span class="badge bg-warning text-dark">{{ days_ago }} days</span>
+                    {% else %}
+                    <span class="badge bg-success">{{ days_ago }} days</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    {% if can_see_page('book_return') %}
+                    <a href="{{ url_for('book_return', pk=a.id) }}" class="btn btn-sm btn-outline-warning">
+                      <i class="bi bi-box-arrow-in-left me-1"></i>Return
+                    </a>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-check-circle" style="font-size:2rem;color:#10b981;"></i><div class="mt-1">All books are returned! No pending items.</div></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

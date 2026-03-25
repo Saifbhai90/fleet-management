@@ -310,6 +310,43 @@
     </div>
   </div>
 
+  <!-- Book History -->
+  {% if book_assignments %}
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-book"></i>Book History</div>
+    <div style="padding:0;">
+      <table class="history-table">
+        <thead><tr><th>Serial No</th><th>Type</th><th>Pages</th><th>Issued To</th><th>Issue Date</th><th>Return Date</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for ba in book_assignments %}
+          <tr>
+            <td><strong>{{ ba.book.serial_no }}</strong></td>
+            <td>
+              {% if ba.book.book_type == 'Logbook' %}
+              <span style="color:#3b82f6;font-weight:600;">Logbook</span>
+              {% else %}
+              <span style="color:#06b6d4;font-weight:600;">Maintenance</span>
+              {% endif %}
+            </td>
+            <td>{{ ba.book.start_page }}–{{ ba.book.end_page }}</td>
+            <td>{{ ba.issued_to_driver.name if ba.issued_to_driver else '–' }}</td>
+            <td>{{ ba.issue_date.strftime('%d %b %Y') if ba.issue_date else '–' }}</td>
+            <td>{{ ba.return_date.strftime('%d %b %Y') if ba.return_date else '–' }}</td>
+            <td>
+              {% if ba.status == 'Active' %}
+              <span style="color:#10b981;font-weight:600;">Active</span>
+              {% else %}
+              <span style="color:#6b7280;">Closed</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Remarks -->
   {% if vehicle.remarks %}
   <div class="section-card">

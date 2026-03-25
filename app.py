@@ -266,6 +266,10 @@ if _run_startup_tasks:
 # Import routes after app & db are ready
 from routes import *  # noqa: E402,F401
 
+# Book management: explicit registration so endpoints always exist (avoids BuildError if routes.py tail not loaded)
+from routes_books import register_book_routes  # noqa: E402
+register_book_routes(app)
+
 # Import and register finance routes
 from routes_finance import (
     accounts_quick_payment, payment_vouchers_list, payment_voucher_edit, payment_voucher_delete,

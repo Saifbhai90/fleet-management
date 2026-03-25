@@ -13,6 +13,7 @@ from models import (
     LoginLog, ActivityLog, ClientActivityLog,
     Reminder,
     AttendanceTimeControl,
+    PhysicalBook, BookAssignment,
 )
 from forms import (
     CompanyForm, ProjectForm, VehicleForm, VehicleImportForm, DriverForm, DriverImportForm, EmployeeImportForm, ParkingForm, DistrictForm,
@@ -13394,7 +13395,12 @@ def report_vehicle_profile(vehicle_id):
     driver_history = DriverTransfer.query.filter(
         (DriverTransfer.old_vehicle_id == vehicle_id) | (DriverTransfer.new_vehicle_id == vehicle_id)
     ).order_by(DriverTransfer.transfer_date.desc()).all()
-    return render_template('report_vehicle_profile.html', vehicle=vehicle, transfers=transfers, driver_history=driver_history, generated_at=datetime.now().strftime('%d %b %Y, %I:%M %p'))
+    book_assignments = db.session.query(BookAssignment).filter(
+        BookAssignment.vehicle_id == vehicle_id
+    ).join(PhysicalBook, BookAssignment.book_id == PhysicalBook.id).order_by(
+        BookAssignment.issue_date.desc()
+    ).all()
+    return render_template('report_vehicle_profile.html', vehicle=vehicle, transfers=transfers, driver_history=driver_history, book_assignments=book_assignments, generated_at=datetime.now().strftime('%d %b %Y, %I:%M %p'))
 
 
 @app.route('/reports/expiry')

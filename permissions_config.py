@@ -5,8 +5,8 @@ Used for Role form display and for sidebar/link visibility.
 from auth_utils import (
     PERMISSION_MASTER, PERMISSION_ASSIGNMENT, PERMISSION_TRANSFER,
     PERMISSION_DRIVER_STATUS, PERMISSION_ATTENDANCE, PERMISSION_TASK_REPORT,
-    PERMISSION_EXPENSES, PERMISSION_ACCOUNTS, PERMISSION_PAYROLL, PERMISSION_REPORTS,
-    PERMISSION_BACKUP, PERMISSION_USERS_MANAGE, PERMISSION_DASHBOARD,
+    PERMISSION_EXPENSES, PERMISSION_ACCOUNTS, PERMISSION_PAYROLL, PERMISSION_BOOKS,
+    PERMISSION_REPORTS, PERMISSION_BACKUP, PERMISSION_USERS_MANAGE, PERMISSION_DASHBOARD,
 )
 
 # Section code -> list of (permission_code, display_name)
@@ -229,6 +229,16 @@ PERMISSION_TREE = {
         ('payroll_delete', 'Payroll – Delete'),
         ('payroll_pending', 'Pending Salaries – View'),
     ],
+    PERMISSION_BOOKS: [
+        ('books', 'Book Management (full)'),
+        ('book_inventory_list', 'Book Inventory – List / View'),
+        ('book_stock_add', 'Book Inventory – Add / Edit / Mark Lost'),
+        ('book_stock_delete', 'Book Inventory – Delete'),
+        ('book_issue', 'Issue Book to Vehicle'),
+        ('book_assignment_list', 'Book Assignments – List / View'),
+        ('book_return', 'Mark Book as Returned'),
+        ('book_pending_returns', 'Pending Returns – Report'),
+    ],
     PERMISSION_REPORTS: [
         ('reports', 'Reports (full)'),
         ('reports_index', 'Report Centre'),
@@ -278,6 +288,7 @@ SECTION_LABELS = {
     PERMISSION_EXPENSES: 'Expense Management',
     PERMISSION_ACCOUNTS: 'Finance',
     PERMISSION_PAYROLL: 'Payroll',
+    PERMISSION_BOOKS: 'Book Management',
     PERMISSION_REPORTS: 'Reports & Analytics',
     PERMISSION_BACKUP: 'Backup',
     PERMISSION_USERS_MANAGE: 'Administration',
@@ -294,6 +305,7 @@ SECTION_FULL_TO_GROUP = {
     'expenses': PERMISSION_EXPENSES,
     'accounts': PERMISSION_ACCOUNTS,
     'payroll': PERMISSION_PAYROLL,
+    'books': PERMISSION_BOOKS,
     'reports': PERMISSION_REPORTS,
     'backup': PERMISSION_BACKUP,
     'users_manage': PERMISSION_USERS_MANAGE,
@@ -777,6 +789,22 @@ SECTION_PAGE_GROUPS = {
             ('payroll_pending', 'View Pending'),
         ]),
     ],
+    PERMISSION_BOOKS: [
+        ('Book Management (full)', [('books', 'Book Management (full)')]),
+        ('Book Inventory', [
+            ('book_inventory_list', 'List / View'),
+            ('book_stock_add', 'Add / Edit / Mark Lost'),
+            ('book_stock_delete', 'Delete'),
+        ]),
+        ('Book Issuance', [
+            ('book_issue', 'Issue Book to Vehicle'),
+            ('book_assignment_list', 'Assignments – List / View'),
+            ('book_return', 'Mark as Returned'),
+        ]),
+        ('Pending Returns', [
+            ('book_pending_returns', 'Pending Returns Report'),
+        ]),
+    ],
     PERMISSION_REPORTS: [
         ('Reports (full)', [('reports', 'Reports (full)')]),
         ('Report Centre', [('reports_index', 'Report Centre')]),
@@ -953,6 +981,14 @@ PAGE_VISIBLE = {
     'payroll_pay': ['payroll', 'payroll_pay'],
     'payroll_delete': ['payroll', 'payroll_delete'],
     'payroll_pending': ['payroll', 'payroll_pending'],
+    # Book Management
+    'book_inventory_list': ['books', 'book_inventory_list'],
+    'book_stock_add': ['books', 'book_stock_add'],
+    'book_stock_delete': ['books', 'book_stock_delete'],
+    'book_issue': ['books', 'book_issue'],
+    'book_assignment_list': ['books', 'book_assignment_list'],
+    'book_return': ['books', 'book_return'],
+    'book_pending_returns': ['books', 'book_pending_returns'],
     # Finance
     'accounts_quick_payment': ['accounts', 'accounts_quick_payment'],
     'accounts_quick_receipt': ['accounts', 'accounts_quick_receipt'],

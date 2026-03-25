@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Return Book{% endblock %}
+{% block content %}
+<div class="container-fluid px-3 py-3">
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-7 col-xl-6">
+
+      <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+        <div class="card-header py-3 px-4 d-flex align-items-center justify-content-between"
+             style="background:linear-gradient(135deg,#d97706 0%,#fbbf24 100%);color:#fff;">
+          <h6 class="mb-0 fw-bold"><i class="bi bi-box-arrow-in-left me-2"></i>Return Book</h6>
+          <a href="{{ url_for('book_assignment_list') }}" class="btn btn-sm btn-light opacity-90">
+            <i class="bi bi-arrow-left me-1"></i>Back
+          </a>
+        </div>
+
+        <div class="card-body px-4 py-4">
+          <!-- Assignment Summary -->
+          <div class="card bg-light border-0 rounded-3 mb-4">
+            <div class="card-body py-3">
+              <div class="row g-2 small">
+                <div class="col-6"><span class="text-muted">Book:</span> <strong>{{ assignment.book.serial_no }}</strong></div>
+                <div class="col-6"><span class="text-muted">Type:</span> <strong>{{ assignment.book.book_type }}</strong></div>
+                <div class="col-6"><span class="text-muted">Vehicle:</span> <strong>{{ assignment.vehicle.vehicle_no if assignment.vehicle else '–' }}</strong></div>
+                <div class="col-6"><span class="text-muted">Issued To:</span> <strong>{{ assignment.issued_to_driver.name if assignment.issued_to_driver else '–' }}</strong></div>
+                <div class="col-6"><span class="text-muted">Issue Date:</span> <strong>{{ assignment.issue_date.strftime('%d-%m-%Y') if assignment.issue_date else '–' }}</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <form method="post" autocomplete="off">
+            {{ form.hidden_tag() }}
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Return Date <span class="text-danger">*</span></label>
+                {{ form.return_date(class="form-control datepicker " + ("is-invalid" if form.return_date.errors else "")) }}
+                {% for e in form.return_date.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Returned By Driver <span class="text-danger">*</span></label>
+                {{ form.returned_by_driver_id(class="form-select search-select " + ("is-invalid" if form.returned_by_driver_id.errors else "")) }}
+                {% for e in form.returned_by_driver_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-semibold">Remarks</label>
+                {{ form.remarks(class="form-control") }}
+              </div>
+            </div>
+            <div class="mt-4 d-flex gap-2">
+              <button type="submit" class="btn btn-warning px-4 text-white">
+                <i class="bi bi-box-arrow-in-left me-1"></i>Confirm Return
+              </button>
+              <a href="{{ url_for('book_assignment_list') }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

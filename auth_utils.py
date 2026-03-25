@@ -18,6 +18,7 @@ PERMISSION_EXPENSES = 'expenses'
 PERMISSION_ACCOUNTS = 'accounts'
 PERMISSION_REPORTS = 'reports'
 PERMISSION_PAYROLL = 'payroll'
+PERMISSION_BOOKS = 'books'
 PERMISSION_BACKUP = 'backup'
 PERMISSION_USERS_MANAGE = 'users_manage'
 
@@ -33,6 +34,7 @@ ALL_PERMISSION_CODES = [
     (PERMISSION_ACCOUNTS, 'Accounts', 'Accounts'),
     (PERMISSION_REPORTS, 'Reports', 'Reports'),
     (PERMISSION_PAYROLL, 'Payroll (Salary & Wages)', 'Payroll'),
+    (PERMISSION_BOOKS, 'Book Management', 'Books'),
     (PERMISSION_BACKUP, 'Backup', 'General'),
     (PERMISSION_USERS_MANAGE, 'User & Role Management', 'Admin'),
     ('role_delete', 'Roles – Delete', 'Admin'),
@@ -223,6 +225,15 @@ ENDPOINT_PERMISSION_MAP = [
     ('payroll_salary_config_edit', 'payroll_config_edit'),
     ('payroll_salary_config_delete', 'payroll_config_delete'),
     ('payroll_driver_bulk_salary', 'payroll_config_add'),
+    ('book_inventory_list', 'book_inventory_list'),
+    ('book_stock_entry', 'book_stock_add'),
+    ('book_stock_edit', 'book_stock_add'),
+    ('book_stock_delete', 'book_stock_delete'),
+    ('book_mark_lost', 'book_stock_add'),
+    ('book_issue', 'book_issue'),
+    ('book_assignment_list', 'book_assignment_list'),
+    ('book_return', 'book_return'),
+    ('book_pending_returns', 'book_pending_returns'),
     ('payroll_list', 'payroll_list'),
     ('payroll_generate', 'payroll_generate'),
     ('payroll_bulk_generate', 'payroll_generate'),

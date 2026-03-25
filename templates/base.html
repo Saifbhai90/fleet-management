@@ -1585,6 +1585,8 @@
         {% set accounts_open = request.endpoint in accounts_endpoints %}
         {% set payroll_endpoints = ['payroll_salary_config_list', 'payroll_salary_config_form', 'payroll_salary_config_edit', 'payroll_driver_bulk_salary', 'payroll_list', 'payroll_generate', 'payroll_bulk_generate', 'payroll_view', 'payroll_edit', 'payroll_pay', 'payroll_pending', 'payroll_payslip'] %}
         {% set payroll_open = request.endpoint in payroll_endpoints %}
+        {% set books_endpoints = ['book_inventory_list', 'book_stock_entry', 'book_stock_edit', 'book_issue', 'book_assignment_list', 'book_return', 'book_pending_returns'] %}
+        {% set books_open = request.endpoint in books_endpoints %}
         {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit', 'form_control'] %}
         {% set users_open = request.endpoint in users_manage_endpoints %}
 
@@ -1910,6 +1912,37 @@
                 {% if can_see_page('payroll_pending') %}
                 <a href="{{ url_for('payroll_pending') }}" class="collapse-item {% if request.endpoint == 'payroll_pending' %}active-link{% endif %}">
                     <i class="bi bi-hourglass-split text-danger"></i><span>Pending Salaries</span>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Book Management -->
+        {% if can_see_section('books') %}
+        <div>
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#booksMenu" role="button" aria-expanded="{{ 'true' if books_open else 'false' }}">
+                <i class="bi bi-book"></i><span>Book Management</span>
+            </a>
+            <div class="collapse {% if books_open %}show{% endif %}" id="booksMenu">
+                {% if can_see_page('book_inventory_list') %}
+                <a href="{{ url_for('book_inventory_list') }}" class="collapse-item {% if request.endpoint in ['book_inventory_list', 'book_stock_entry', 'book_stock_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-archive text-purple"></i><span>Book Inventory</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('book_issue') %}
+                <a href="{{ url_for('book_issue') }}" class="collapse-item {% if request.endpoint == 'book_issue' %}active-link{% endif %}">
+                    <i class="bi bi-box-arrow-right text-success"></i><span>Issue Book</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('book_assignment_list') %}
+                <a href="{{ url_for('book_assignment_list') }}" class="collapse-item {% if request.endpoint in ['book_assignment_list', 'book_return'] %}active-link{% endif %}">
+                    <i class="bi bi-arrow-left-right text-info"></i><span>Assignments</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('book_pending_returns') %}
+                <a href="{{ url_for('book_pending_returns') }}" class="collapse-item {% if request.endpoint == 'book_pending_returns' %}active-link{% endif %}">
+                    <i class="bi bi-exclamation-triangle text-danger"></i><span>Pending Returns</span>
                 </a>
                 {% endif %}
             </div>

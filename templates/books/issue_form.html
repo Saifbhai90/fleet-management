@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Issue Book{% endblock %}
+{% block content %}
+<div class="container-fluid px-3 py-3">
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-7">
+
+      <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+        <div class="card-header py-3 px-4 d-flex align-items-center justify-content-between"
+             style="background:linear-gradient(135deg,#059669 0%,#34d399 100%);color:#fff;">
+          <h6 class="mb-0 fw-bold"><i class="bi bi-box-arrow-right me-2"></i>Issue Book to Vehicle</h6>
+          <a href="{{ url_for('book_assignment_list') }}" class="btn btn-sm btn-light opacity-90">
+            <i class="bi bi-arrow-left me-1"></i>Back to Assignments
+          </a>
+        </div>
+
+        <div class="card-body px-4 py-4">
+          <div class="alert alert-info border-0 rounded-3 small mb-4">
+            <i class="bi bi-info-circle me-1"></i>
+            <strong>Rule:</strong> A vehicle can only have one active Logbook and one active Maintenance Book at a time.
+            Only <strong>In-Stock</strong> books are shown.
+          </div>
+
+          <form method="post" autocomplete="off">
+            {{ form.hidden_tag() }}
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label fw-semibold">Select Book (In-Stock) <span class="text-danger">*</span></label>
+                {{ form.book_id(class="form-select search-select " + ("is-invalid" if form.book_id.errors else "")) }}
+                {% for e in form.book_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Vehicle <span class="text-danger">*</span></label>
+                {{ form.vehicle_id(class="form-select search-select " + ("is-invalid" if form.vehicle_id.errors else "")) }}
+                {% for e in form.vehicle_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Issue to Driver <span class="text-danger">*</span></label>
+                {{ form.issued_to_driver_id(class="form-select search-select " + ("is-invalid" if form.issued_to_driver_id.errors else "")) }}
+                {% for e in form.issued_to_driver_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Issue Date <span class="text-danger">*</span></label>
+                {{ form.issue_date(class="form-control datepicker " + ("is-invalid" if form.issue_date.errors else "")) }}
+                {% for e in form.issue_date.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Remarks</label>
+                {{ form.remarks(class="form-control") }}
+              </div>
+            </div>
+            <div class="mt-4 d-flex gap-2">
+              <button type="submit" class="btn btn-success px-4">
+                <i class="bi bi-box-arrow-right me-1"></i>Issue Book
+              </button>
+              <a href="{{ url_for('book_assignment_list') }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

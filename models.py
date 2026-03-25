@@ -1456,3 +1456,61 @@ class MonthlyPayroll(db.Model):
         self.gross_pay = self.calculated_basic + self.extra_working_pay + self.bonus
         self.total_deductions = self.absent_fine + self.manual_fine + self.mpg_fine + self.loan_deduction + self.other_deduction
         self.net_payable = self.gross_pay - self.total_deductions
+
+
+# ────────────────────────────────────────────────────
+# Physical Book Management
+# ────────────────────────────────────────────────────
+
+class PhysicalBook(db.Model):
+    """Inventory of physical logbooks and maintenance books."""
+    __tablename__ = 'physical_book'
+
+    id = db.Column(db.Integer, primary_key=True)
+    serial_no = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    book_type = db.Column(db.String(30), nullable=False)  # Logbook, Maintenance Book
+    start_page = db.Column(db.Integer, nullable=False, default=1)
+    end_page = db.Column(db.Integer, nullable=False, default=100)
+    status = db.Column(db.String(20), nullable=False, default='In-Stock')  # In-Stock, Issued, Returned-Full, Lost
+    remarks = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    assignments = db.relationship('BookAssignment', backref='book', lazy='dynamic', order_by='BookAssignment.issue_date.desc()')
+
+    @property
+    def total_pages(self):
+        return self.end_page - self.start_page + 1
+
+    @property
+    def current_assignment(self):
+        return BookAssignment.query.filter_by(book_id=self.id, status='Active').first()
+
+    def __repr__(self):
+        return f'<PhysicalBook {self.serial_no} ({self.book_type}) [{self.status}]>'
+
+
+class BookAssignment(db.Model):
+    """Tracks issuance and return of physical books to vehicles/drivers."""
+    __tablename__ = 'book_assignment'
+
+    id = db.Column(db.Integer, primary_key=True)
+    book_id = db.Column(db.Integer, db.ForeignKey('physical_book.id', ondelete='CASCADE'), nullable=False, index=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id', ondelete='SET NULL'), nullable=True, index=True)
+    issued_to_driver_id = db.Column(db.Integer, db.ForeignKey('driver.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    issue_date = db.Column(db.Date, nullable=False)
+    return_date = db.Column(db.Date, nullable=True)
+    returned_by_driver_id = db.Column(db.Integer, db.ForeignKey('driver.id', ondelete='SET NULL'), nullable=True)
+
+    status = db.Column(db.String(20), nullable=False, default='Active')  # Active, Closed
+    remarks = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    vehicle = db.relationship('Vehicle', backref=db.backref('book_assignments', lazy='dynamic'))
+    issued_to_driver = db.relationship('Driver', foreign_keys=[issued_to_driver_id], backref='books_issued', lazy='select')
+    returned_by_driver = db.relationship('Driver', foreign_keys=[returned_by_driver_id], backref='books_returned', lazy='select')
+
+    def __repr__(self):
+        return f'<BookAssignment Book#{self.book_id} Vehicle#{self.vehicle_id} [{self.status}]>'

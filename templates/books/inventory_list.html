@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Book Inventory{% endblock %}
+{% block content %}
+<div class="container-fluid px-3 py-3">
+  <div class="row justify-content-center">
+    <div class="col-12 col-xl-11">
+
+      <!-- Stats Cards -->
+      <div class="row g-2 mb-3">
+        <div class="col-6 col-md">
+          <div class="card border-0 shadow-sm rounded-3 text-center py-2">
+            <div class="fw-bold fs-5 text-primary">{{ stats.total }}</div>
+            <small class="text-muted">Total Books</small>
+          </div>
+        </div>
+        <div class="col-6 col-md">
+          <div class="card border-0 shadow-sm rounded-3 text-center py-2">
+            <div class="fw-bold fs-5 text-success">{{ stats.in_stock }}</div>
+            <small class="text-muted">In Stock</small>
+          </div>
+        </div>
+        <div class="col-6 col-md">
+          <div class="card border-0 shadow-sm rounded-3 text-center py-2">
+            <div class="fw-bold fs-5 text-warning">{{ stats.issued }}</div>
+            <small class="text-muted">Issued</small>
+          </div>
+        </div>
+        <div class="col-6 col-md">
+          <div class="card border-0 shadow-sm rounded-3 text-center py-2">
+            <div class="fw-bold fs-5 text-info">{{ stats.returned }}</div>
+            <small class="text-muted">Returned</small>
+          </div>
+        </div>
+        <div class="col-6 col-md">
+          <div class="card border-0 shadow-sm rounded-3 text-center py-2">
+            <div class="fw-bold fs-5 text-danger">{{ stats.lost }}</div>
+            <small class="text-muted">Lost</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+        <div class="card-header py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2"
+             style="background:linear-gradient(135deg,#7c3aed 0%,#a78bfa 100%);color:#fff;">
+          <div>
+            <h6 class="mb-0 fw-bold"><i class="bi bi-book me-2"></i>Book Inventory</h6>
+            <small class="opacity-75">{{ pagination.total }} book{{ 's' if pagination.total != 1 }}</small>
+          </div>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <form method="get" class="d-flex align-items-center gap-2 mb-0">
+              <div class="position-relative">
+                <i class="bi bi-search position-absolute" style="left:10px;top:50%;transform:translateY(-50%);color:#6b7280;font-size:0.8rem;"></i>
+                <input type="text" name="search" value="{{ search }}" class="form-control form-control-sm bg-white text-dark"
+                       placeholder="Search serial..." style="max-width:220px;padding-left:32px;" autocomplete="off">
+              </div>
+              <select name="book_type" class="form-select form-select-sm bg-white text-dark" style="width:auto;" onchange="this.form.submit()">
+                <option value="">All Types</option>
+                <option value="Logbook" {% if type_filter == 'Logbook' %}selected{% endif %}>Logbook</option>
+                <option value="Maintenance Book" {% if type_filter == 'Maintenance Book' %}selected{% endif %}>Maintenance Book</option>
+              </select>
+              <select name="status" class="form-select form-select-sm bg-white text-dark" style="width:auto;" onchange="this.form.submit()">
+                <option value="">All Status</option>
+                <option value="In-Stock" {% if status_filter == 'In-Stock' %}selected{% endif %}>In-Stock</option>
+                <option value="Issued" {% if status_filter == 'Issued' %}selected{% endif %}>Issued</option>
+                <option value="Returned-Full" {% if status_filter == 'Returned-Full' %}selected{% endif %}>Returned</option>
+                <option value="Lost" {% if status_filter == 'Lost' %}selected{% endif %}>Lost</option>
+              </select>
+            </form>
+            {% if can_see_page('book_stock_add') %}
+            <a href="{{ url_for('book_stock_entry') }}" class="btn btn-sm btn-light fw-semibold">
+              <i class="bi bi-plus-circle me-1"></i>Add Book
+            </a>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 small">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-4">#</th>
+                  <th>Serial No</th>
+                  <th>Type</th>
+                  <th class="text-center">Pages</th>
+                  <th class="text-center">Status</th>
+                  <th>Current Vehicle</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for b in books %}
+                <tr>
+                  <td class="ps-4 text-muted">{{ loop.index + (page - 1) * per_page }}</td>
+                  <td class="fw-semibold">{{ b.serial_no }}</td>
+                  <td>
+                    {% if b.book_type == 'Logbook' %}
+                    <span class="badge bg-primary-subtle text-primary"><i class="bi bi-journal-text me-1"></i>Logbook</span>
+                    {% else %}
+                    <span class="badge bg-info-subtle text-info"><i class="bi bi-tools me-1"></i>Maintenance</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">{{ b.start_page }}–{{ b.end_page }} <small class="text-muted">({{ b.total_pages }}p)</small></td>
+                  <td class="text-center">
+                    {% if b.status == 'In-Stock' %}
+                    <span class="badge bg-success">In-Stock</span>
+                    {% elif b.status == 'Issued' %}
+                    <span class="badge bg-warning text-dark">Issued</span>
+                    {% elif b.status == 'Returned-Full' %}
+                    <span class="badge bg-info">Returned</span>
+                    {% else %}
+                    <span class="badge bg-danger">Lost</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if b.status == 'Issued' and b.current_assignment %}
+                    <span class="fw-semibold">{{ b.current_assignment.vehicle.vehicle_no if b.current_assignment.vehicle else '–' }}</span>
+                    {% else %}
+                    <span class="text-muted">–</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    <div class="d-flex gap-1 justify-content-center">
+                      {% if can_see_page('book_stock_add') %}
+                      <a href="{{ url_for('book_stock_edit', pk=b.id) }}" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil-square"></i></a>
+                      {% endif %}
+                      {% if b.status != 'Lost' and can_see_page('book_stock_add') %}
+                      <form method="post" action="{{ url_for('book_mark_lost', pk=b.id) }}" class="d-inline" onsubmit="return confirm('Mark this book as Lost?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-warning" title="Mark Lost"><i class="bi bi-exclamation-triangle"></i></button>
+                      </form>
+                      {% endif %}
+                      {% if can_see_page('book_stock_delete') and b.status != 'Issued' %}
+                      <form method="post" action="{{ url_for('book_stock_delete', pk=b.id) }}" class="d-inline" onsubmit="return confirm('Delete book {{ b.serial_no }}?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
+                      </form>
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox" style="font-size:2rem;"></i><div class="mt-1">No books found</div></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {% if pagination and pagination.pages > 0 %}
+        <div class="card-footer bg-white border-top py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <small class="text-muted">Showing {{ ((pagination.page - 1) * per_page) + 1 }}–{{ [pagination.page * per_page, pagination.total] | min }} of {{ pagination.total }}</small>
+          <div class="d-flex align-items-center gap-2">
+            <select class="form-select form-select-sm" style="width:auto;"
+                    onchange="window.location.href='{{ url_for('book_inventory_list', search=search, status=status_filter, book_type=type_filter, page=1) }}&per_page='+this.value">
+              {% for n in [25, 50, 100] %}
+              <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }} / page</option>
+              {% endfor %}
+            </select>
+            <nav>
+              <ul class="pagination pagination-sm mb-0">
+                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                  <a class="page-link" href="{{ url_for('book_inventory_list', page=pagination.prev_num, per_page=per_page, search=search, status=status_filter, book_type=type_filter) }}">‹</a>
+                </li>
+                {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                  {% if p %}
+                  <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('book_inventory_list', page=p, per_page=per_page, search=search, status=status_filter, book_type=type_filter) }}">{{ p }}</a>
+                  </li>
+                  {% else %}
+                  <li class="page-item disabled"><span class="page-link">…</span></li>
+                  {% endif %}
+                {% endfor %}
+                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                  <a class="page-link" href="{{ url_for('book_inventory_list', page=pagination.next_num, per_page=per_page, search=search, status=status_filter, book_type=type_filter) }}">›</a>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

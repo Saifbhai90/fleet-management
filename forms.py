@@ -1274,3 +1274,47 @@ class PayrollPaymentForm(FlaskForm):
     remarks = TextAreaField('Payment Notes', validators=[Optional()],
                             render_kw={"rows": 2, "placeholder": "Payment reference / cheque number"})
     submit = SubmitField('Confirm Payment')
+
+
+# ────────────────────────────────────────────────────
+# Physical Book Management Forms
+# ────────────────────────────────────────────────────
+
+class BookStockEntryForm(FlaskForm):
+    """Add a new physical book to inventory."""
+    serial_no = StringField('Serial Number', validators=[DataRequired(), Length(max=50)],
+                            render_kw={"placeholder": "e.g. LB-0001"})
+    book_type = SelectField('Book Type', validators=[DataRequired()], choices=[
+        ('Logbook', 'Logbook'),
+        ('Maintenance Book', 'Maintenance Book'),
+    ], render_kw={'class': 'form-select search-select'})
+    start_page = IntegerField('Start Page', validators=[DataRequired(), NumberRange(min=1)],
+                              render_kw={"placeholder": "1"}, default=1)
+    end_page = IntegerField('End Page', validators=[DataRequired(), NumberRange(min=1)],
+                            render_kw={"placeholder": "100"}, default=100)
+    remarks = TextAreaField('Remarks', validators=[Optional(), Length(max=500)],
+                            render_kw={"rows": 2, "placeholder": "Optional notes about this book"})
+
+
+class BookIssueForm(FlaskForm):
+    """Issue a book to a vehicle/driver."""
+    book_id = SelectField('Book (In-Stock)', coerce=int, validators=[DataRequired()],
+                          choices=[], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle', coerce=int, validators=[DataRequired()],
+                             choices=[], render_kw={'class': 'form-select search-select'})
+    issued_to_driver_id = SelectField('Issue to Driver', coerce=int, validators=[DataRequired()],
+                                      choices=[], render_kw={'class': 'form-select search-select'})
+    issue_date = DateField('Issue Date', format='%d-%m-%Y', validators=[DataRequired()],
+                           render_kw={"class": "form-control datepicker", "placeholder": "dd-mm-yyyy"})
+    remarks = TextAreaField('Remarks', validators=[Optional(), Length(max=500)],
+                            render_kw={"rows": 2, "placeholder": "Optional notes"})
+
+
+class BookReturnForm(FlaskForm):
+    """Mark a book as returned."""
+    return_date = DateField('Return Date', format='%d-%m-%Y', validators=[DataRequired()],
+                            render_kw={"class": "form-control datepicker", "placeholder": "dd-mm-yyyy"})
+    returned_by_driver_id = SelectField('Returned By Driver', coerce=int, validators=[DataRequired()],
+                                        choices=[], render_kw={'class': 'form-select search-select'})
+    remarks = TextAreaField('Remarks', validators=[Optional(), Length(max=500)],
+                            render_kw={"rows": 2, "placeholder": "Reason for return / condition"})
