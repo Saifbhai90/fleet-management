@@ -392,8 +392,10 @@
       document.querySelectorAll('#missingCoTable tbody tr').forEach(function(row) {
         if (row.cells.length < 2) return;
         var text = row.innerText.toLowerCase();
-        row.style.display = text.indexOf(q) > -1 ? '' : 'none';
+        row.dataset.searchHidden = text.indexOf(q) > -1 ? '0' : '1';
       });
+      var tbl = document.getElementById('missingCoTable');
+      if (tbl) tbl.dataset.curPage = '1';
       attPaginate('missingCoTable','missingPerPage','missingPagNav','missingCount');
     });
   }
@@ -407,8 +409,9 @@ function attPaginate(tableId, perPageId, navId, countId) {
   if (!table || !navEl) return;
   var perPage   = perPageEl ? parseInt(perPageEl.value) : 20;
   var allRows   = Array.from(table.querySelectorAll('tbody tr'));
-  var visRows   = allRows.filter(function(r){ return r.dataset.pagHidden !== '1'; });
+  var visRows   = allRows.filter(function(r){ return r.dataset.searchHidden !== '1'; });
   var total     = visRows.length;
+  allRows.forEach(function(r){ r.style.display = 'none'; });
   var curPage   = parseInt(table.dataset.curPage || '1');
   var totalPages = Math.max(1, Math.ceil(total / perPage));
   if (curPage > totalPages) curPage = 1;
@@ -430,7 +433,7 @@ function attGoPage(tableId, perPageId, navId, countId, p) {
   if (!table) return;
   var perPageEl = document.getElementById(perPageId);
   var perPage = perPageEl ? parseInt(perPageEl.value) : 20;
-  var total = Array.from(table.querySelectorAll('tbody tr')).filter(function(r){return r.dataset.pagHidden!=='1';}).length;
+  var total = Array.from(table.querySelectorAll('tbody tr')).filter(function(r){return r.dataset.searchHidden!=='1';}).length;
   var totalPages = Math.max(1, Math.ceil(total/perPage));
   table.dataset.curPage = Math.max(1, Math.min(p, totalPages));
   attPaginate(tableId, perPageId, navId, countId);

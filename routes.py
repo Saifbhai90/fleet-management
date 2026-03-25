@@ -8953,7 +8953,13 @@ def driver_attendance_list():
     else:
         need_vehicle_join = bool(district_id or search)
         if need_vehicle_join:
-            drivers_query = Driver.query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
+            drivers_query = Driver.query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).outerjoin(
+                Project, Driver.project_id == Project.id
+            ).outerjoin(
+                District, Vehicle.district_id == District.id
+            ).outerjoin(
+                ParkingStation, Vehicle.parking_station_id == ParkingStation.id
+            ).filter(
                 Driver.id.in_(driver_ids)
             )
             drivers_query = drivers_query.options(
@@ -8987,7 +8993,12 @@ def driver_attendance_list():
                 or_(
                     Driver.name.ilike(q),
                     Driver.driver_id.ilike(q),
+                    Driver.shift.ilike(q),
                     Vehicle.vehicle_no.ilike(q),
+                    Vehicle.vehicle_type.ilike(q),
+                    Project.name.ilike(q),
+                    District.name.ilike(q),
+                    ParkingStation.name.ilike(q),
                 )
             )
         drivers = drivers_query.order_by(Driver.name).all()
