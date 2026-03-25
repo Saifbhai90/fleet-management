@@ -1564,10 +1564,15 @@
         {% set workforce_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
         {% set task_report_endpoints = ['task_report_upload', 'task_report_list', 'red_task_list', 'red_task_new', 'red_task_edit', 'without_task_list', 'without_task_new', 'without_task_edit', 'task_report_logbook_cover', 'task_report_logbook_view', 'task_report_logbook_view_all'] %}
         {% set expenses_endpoints = ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form', 'employee_expense_list', 'employee_expense_form'] %}
-        {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai', 'active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print'] %}
+        {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai', 'active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print', 'missing_documents_report', 'missing_documents_report_print'] %}
         {% set accounts_endpoints = ['accounts_quick_payment', 'accounts_quick_receipt', 'accounts_bank_entry', 'accounts_jv', 'accounts_future_entry', 'accounts_balance_sheet', 'accounts_account_ledger'] %}
-        {% set _came_from_master = (request.endpoint == 'report_driver_profile' and request.args.get('from') == 'master') %}
-        {% set _came_from_missing_docs = (request.endpoint == 'report_driver_profile' and (request.args.get('from') == 'missing_docs' or 'missing-documents-report' in (request.args.get('ref') or ''))) %}
+        {% set _req_from = request.args.get('from', '') %}
+        {% set _req_ref = request.args.get('ref', '') %}
+        {% set _profile_endpoints = ['report_driver_profile', 'report_vehicle_profile', 'employee_profile_print'] %}
+        {% set _came_from_master = (request.endpoint in _profile_endpoints and _req_from == 'master') %}
+        {% set _came_from_missing_docs = (request.endpoint == 'report_driver_profile' and (_req_from == 'missing_docs' or 'missing-documents-report' in _req_ref)) %}
+        {% set _came_from_active_drivers = (request.endpoint == 'report_driver_profile' and (_req_from == 'active_drivers' or 'active-drivers' in _req_ref)) %}
+        {% set _came_from_reports = (_came_from_missing_docs or _came_from_active_drivers or (request.endpoint in _profile_endpoints and _req_from == 'reports')) %}
         {% set master_open = (request.endpoint in master_endpoints and not (request.endpoint == 'companies' and request.args.get('mode') == 'report')) or _came_from_master %}
         {% set assignment_open = request.endpoint in assignment_endpoints or (request.endpoint and 'assign_vehicle_to_parking' in request.endpoint) or (request.endpoint and 'assign_driver_to_vehicle' in request.endpoint) %}
         {% set transfer_open = request.endpoint in transfer_endpoints or (request.endpoint and 'driver_transfer' in request.endpoint) %}
@@ -1576,7 +1581,7 @@
         {% set workforce_open = request.endpoint in workforce_endpoints %}
         {% set task_report_open = request.endpoint in task_report_endpoints %}
         {% set expenses_open = request.endpoint in expenses_endpoints %}
-        {% set reports_open = (request.endpoint in reports_endpoints and not _came_from_master) or (request.endpoint == 'companies' and request.args.get('mode') == 'report') %}
+        {% set reports_open = (request.endpoint in reports_endpoints and not _came_from_master) or _came_from_reports or (request.endpoint == 'companies' and request.args.get('mode') == 'report') %}
         {% set accounts_open = request.endpoint in accounts_endpoints %}
         {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit', 'form_control'] %}
         {% set users_open = request.endpoint in users_manage_endpoints %}
@@ -1612,7 +1617,7 @@
                 </a>
                 {% endif %}
                 {% if can_see_page('vehicles') %}
-                <a href="{{ url_for('vehicles_list') }}" class="collapse-item {% if request.endpoint == 'vehicles_list' %}active-link{% endif %}">
+                <a href="{{ url_for('vehicles_list') }}" class="collapse-item {% if request.endpoint == 'vehicles_list' or (request.endpoint == 'report_vehicle_profile' and _came_from_master) %}active-link{% endif %}">
                     <i class="bi bi-truck"></i><span>Vehicles</span>
                 </a>
                 {% endif %}
@@ -1627,12 +1632,12 @@
                 </a>
                 {% endif %}
                 {% if can_see_page('employees') %}
-                <a href="{{ url_for('employees_list') }}" class="collapse-item {% if request.endpoint in ['employees_list', 'employee_form'] %}active-link{% endif %}">
+                <a href="{{ url_for('employees_list') }}" class="collapse-item {% if request.endpoint in ['employees_list', 'employee_form'] or (request.endpoint == 'employee_profile_print' and _came_from_master) %}active-link{% endif %}">
                     <i class="bi bi-people-fill"></i><span>Employees</span>
                 </a>
                 {% endif %}
                 {% if can_see_page('drivers') %}
-                <a href="{{ url_for('drivers_list') }}" class="collapse-item {% if request.endpoint == 'drivers_list' or _came_from_master %}active-link{% endif %}">
+                <a href="{{ url_for('drivers_list') }}" class="collapse-item {% if request.endpoint == 'drivers_list' or (request.endpoint == 'report_driver_profile' and _came_from_master) %}active-link{% endif %}">
                     <i class="bi bi-person-badge"></i><span>Drivers</span>
                 </a>
                 {% endif %}
@@ -1933,7 +1938,7 @@
                 </a>
                 {% endif %}
                 {% if can_see_page('active_drivers_report') %}
-                <a href="{{ url_for('active_drivers_report') }}" class="collapse-item {% if request.endpoint in ['active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print'] %}active-link{% endif %}">
+                <a href="{{ url_for('active_drivers_report') }}" class="collapse-item {% if request.endpoint in ['active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print'] or _came_from_active_drivers %}active-link{% endif %}">
                     <i class="bi bi-person-lines-fill text-primary"></i><span>Active Driver Summary</span>
                 </a>
                 {% endif %}
@@ -5612,6 +5617,43 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 {% endif %}
+
+<script>
+window._dtPrintCustomize = function(title, color, icon) {
+  return function(win) {
+    var doc = win.document;
+    var $b = $(doc.body);
+    $b.css({'font-family':'Inter,Segoe UI,system-ui,sans-serif','background':'#f8fafc','padding':'0','margin':'0'});
+    var hdr = '<div style="background:linear-gradient(135deg,'+color+' 0%,'+color+'cc 100%);color:#fff;padding:16px 24px;border-radius:0 0 12px 12px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">'
+      +'<i class="bi bi-'+icon+'" style="font-size:1.4rem;opacity:0.9;"></i>'
+      +'<div><div style="font-size:1.15rem;font-weight:700;">'+title+'</div>'
+      +'<div style="font-size:0.78rem;opacity:0.85;">Generated: '+new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})+'</div></div></div>';
+    var toolbar = '<div style="display:flex;gap:8px;padding:0 24px 12px;align-items:center;" class="dt-print-toolbar">'
+      +'<button onclick="window.close()" style="background:#334155;color:#e2e8f0;border:none;border-radius:8px;padding:8px 18px;font-size:0.84rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;"><i class="bi bi-arrow-left"></i> Close</button>'
+      +'<button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:0.84rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(37,99,235,0.3);"><i class="bi bi-printer"></i> Print</button>'
+      +'<button onclick="window.print()" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:0.84rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(220,38,38,0.3);"><i class="bi bi-file-earmark-pdf"></i> Save as PDF</button>'
+      +'<span style="margin-left:auto;color:#94a3b8;font-size:0.76rem;"><i class="bi bi-info-circle"></i> Use Ctrl+P → Save as PDF</span></div>';
+    $b.prepend(toolbar);
+    $b.prepend(hdr);
+    var lnk = doc.createElement('link');
+    lnk.rel='stylesheet'; lnk.href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css';
+    doc.head.appendChild(lnk);
+    var lnk2 = doc.createElement('link');
+    lnk2.rel='stylesheet'; lnk2.href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap';
+    doc.head.appendChild(lnk2);
+    var sty = doc.createElement('style');
+    sty.textContent = '@page{size:landscape;margin:6mm;}@media print{.dt-print-toolbar{display:none!important;}div[style*="border-radius"]{-webkit-print-color-adjust:exact;print-color-adjust:exact;}table{font-size:9px!important;margin:0!important;max-width:100%!important;width:100%!important;}table thead th{font-size:8px!important;padding:3px 5px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}table tbody td{padding:3px 5px!important;font-size:9px!important;}table tbody tr:nth-child(even){-webkit-print-color-adjust:exact;print-color-adjust:exact;}}';
+    doc.head.appendChild(sty);
+    var $t = $b.find('table');
+    $t.css({'width':'100%','border-collapse':'separate','border-spacing':'0','font-size':'0.78rem','margin':'0 24px','max-width':'calc(100% - 48px)','background':'#fff','border-radius':'10px','overflow':'hidden','box-shadow':'0 1px 4px rgba(0,0,0,0.06)','table-layout':'auto','word-break':'break-word'});
+    $t.find('thead th').css({'background':color+'18','color':color,'font-size':'0.68rem','font-weight':'700','text-transform':'uppercase','letter-spacing':'0.04em','padding':'0.4rem 0.55rem','border-bottom':'2px solid '+color+'44','white-space':'nowrap'});
+    $t.find('tbody td').css({'padding':'0.35rem 0.55rem','border-bottom':'1px solid #f1f5f9','color':'#374151','vertical-align':'middle','font-size':'0.76rem'});
+    $t.find('tbody tr:nth-child(even)').css({'background':'#f8fafc'});
+    var ftr = '<div style="text-align:center;padding:12px 24px;color:#94a3b8;font-size:0.72rem;border-top:1px solid #e5e7eb;margin-top:12px;">'+title+' · Fleet Management System</div>';
+    $b.append(ftr);
+  };
+};
+</script>
 
 </body>
 </html>

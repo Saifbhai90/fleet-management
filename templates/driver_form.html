@@ -4,6 +4,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
 <style>
     :root { --navy: #1e3a8a; --light-bg: #f8fafc; }
     .form-panel { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,0.08); overflow: hidden; }
@@ -52,6 +53,18 @@
         transition: background .15s, transform .25s;
     }
     .doc-rotate-btn:hover:not(:disabled) { background: #0a58ca; transform: rotate(90deg); }
+    .doc-crop-btn {
+        position: absolute; left: -9px; bottom: -9px;
+        min-width: 52px; height: 24px; padding: 0 8px;
+        background: #6f42c1; border: 2px solid #fff;
+        border-radius: 999px; color: #fff;
+        font-size: 11px; font-weight: 700; line-height: 1;
+        display: flex; align-items: center; justify-content: center; gap: 3px;
+        cursor: pointer; z-index: 20;
+        box-shadow: 0 2px 8px rgba(111,66,193,.55);
+        transition: background .15s;
+    }
+    .doc-crop-btn:hover:not(:disabled) { background: #5a32a3; }
 
     /* New-file live preview */
     .doc-new-preview {
@@ -72,6 +85,8 @@
         cursor: pointer; font-size: 10px; color: #fff; padding: 0;
         box-shadow: 0 1px 4px rgba(0,0,0,.3); transition: background .15s, transform .2s;
     }
+    .doc-new-crop-btn   { background: #6f42c1; width: auto !important; min-width: 52px !important; border-radius: 999px !important; padding: 0 8px !important; font-size: 11px !important; font-weight: 700; }
+    .doc-new-crop-btn:hover:not(:disabled)   { background: #5a32a3; }
     .doc-new-rotate-btn { background: #0d6efd; }
     .doc-new-rotate-btn:hover:not(:disabled) { background: #0a58ca; transform: rotate(90deg); }
     .doc-new-clr-btn   { background: #6c757d; }
@@ -109,6 +124,7 @@
         justify-content: center !important;
         opacity: 0;
         visibility: hidden;
+        pointer-events: none;
         transition: opacity 0.3s ease, visibility 0.3s ease;
         backdrop-filter: blur(3px);
         -webkit-backdrop-filter: blur(3px);
@@ -119,6 +135,7 @@
     #processingOverlay.active {
         opacity: 1 !important;
         visibility: visible !important;
+        pointer-events: all !important;
     }
     .processing-card {
         background: #ffffff;
@@ -183,6 +200,154 @@
         background: #fef9c3; border: 1px solid #fde047;
         border-radius: 8px; font-size: 0.78rem; color: #854d0e;
         display: flex; align-items: center; gap: 0.4rem;
+    }
+    /* ── Professional Image Editor ── */
+    #imageEditorModal { z-index: 200000 !important; }
+    .modal-backdrop { z-index: 199999 !important; }
+    #imageEditorModal .modal-dialog { max-width: 960px; }
+    #imageEditorModal .modal-content { background: #0c1222; border: none; border-radius: 16px; overflow: hidden; }
+    #imageEditorModal .modal-header {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        padding: 14px 20px;
+    }
+    #imageEditorModal .modal-title { color: #e2e8f0; font-size: 0.95rem; font-weight: 600; }
+    #imageEditorModal .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+    #imageEditorModal .modal-body { padding: 0; background: #0c1222; }
+    #imageEditorModal .modal-footer { background: #0f172a; border-top: 1px solid rgba(255,255,255,0.06); padding: 12px 20px; }
+
+    #imageEditorWrap {
+        width: 100%;
+        min-height: 52vh;
+        max-height: 72vh;
+        background: #000;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+    #imageEditorSource { max-width: 100%; display: block; }
+
+    .editor-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 16px;
+        background: #111827;
+        border-top: 1px solid rgba(255,255,255,0.05);
+        flex-wrap: wrap;
+    }
+    .editor-toolbar .tool-group {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0 8px;
+        border-right: 1px solid rgba(255,255,255,0.08);
+    }
+    .editor-toolbar .tool-group:last-child { border-right: none; }
+    .editor-toolbar .tool-group-label {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        font-weight: 700;
+        margin-right: 4px;
+        white-space: nowrap;
+    }
+    .ed-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        min-width: 36px;
+        height: 34px;
+        padding: 0 10px;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        background: rgba(255,255,255,0.04);
+        color: #cbd5e1;
+        font-size: 0.78rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+    }
+    .ed-btn:hover { background: rgba(255,255,255,0.1); color: #f1f5f9; border-color: rgba(255,255,255,0.2); transform: none !important; }
+    .ed-btn:active { background: rgba(59,130,246,0.2); }
+    .ed-btn.ed-active { background: rgba(59,130,246,0.25); border-color: #3b82f6; color: #93c5fd; }
+    .ed-btn i { font-size: 1rem; }
+    .ed-btn .ed-label { display: inline; }
+
+    .editor-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        background: #0f172a;
+        justify-content: space-between;
+    }
+    .editor-hint {
+        font-size: 0.72rem;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .editor-hint i { font-size: 0.85rem; color: #475569; }
+    .ed-btn-cancel {
+        height: 36px;
+        padding: 0 20px;
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 8px;
+        background: transparent;
+        color: #94a3b8;
+        font-size: 0.82rem;
+        font-weight: 500;
+        cursor: pointer;
+    }
+    .ed-btn-cancel:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; transform: none !important; }
+    .ed-btn-apply {
+        height: 36px;
+        padding: 0 24px;
+        border: none;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #2563eb, #3b82f6);
+        color: #fff;
+        font-size: 0.82rem;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 2px 12px rgba(37,99,235,0.3);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .ed-btn-apply:hover { background: linear-gradient(135deg, #1d4ed8, #2563eb); box-shadow: 0 4px 16px rgba(37,99,235,0.45); transform: none !important; }
+    .ed-btn-apply:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .crop-ratio-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 10px;
+        border-radius: 20px;
+        background: rgba(59,130,246,0.15);
+        color: #93c5fd;
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+    }
+
+    @media (max-width: 576px) {
+        #imageEditorModal .modal-dialog { margin: 0; }
+        #imageEditorWrap { min-height: 45vh; max-height: 60vh; }
+        .editor-toolbar { padding: 8px 10px; gap: 4px; }
+        .tool-group { padding: 0 4px !important; }
+        .ed-btn { min-width: 32px; height: 30px; padding: 0 7px; font-size: 0.72rem; }
+        .ed-btn .ed-label { display: none; }
+        .tool-group-label { display: none; }
+        .editor-actions { flex-wrap: wrap; gap: 6px; }
+        .editor-hint { width: 100%; justify-content: center; }
     }
 </style>
 {% endblock %}
@@ -331,7 +496,7 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Application Date</label>
-                {{ form.application_date(class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
+                {{ form.application_date(type="text", class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.application_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -353,7 +518,7 @@
               </div>
               <div class="col-md-2">
                 <label class="form-label required">Date of Birth</label>
-                {{ form.dob(class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
+                {{ form.dob(type="text", class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.dob.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -437,14 +602,14 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">CNIC Issue Date</label>
-                {{ form.cnic_issue_date(class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
+                {{ form.cnic_issue_date(type="text", class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.cnic_issue_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label required">CNIC Expiry Date</label>
-                {{ form.cnic_expiry_date(class="form-control datepicker expiry-trigger", data_target="cnic_status_display", data_hidden="cnic_status_hidden", required=True, placeholder="dd-mm-yyyy") }}
+                {{ form.cnic_expiry_date(type="text", class="form-control datepicker expiry-trigger", data_target="cnic_status_display", data_hidden="cnic_status_hidden", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.cnic_expiry_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -481,14 +646,14 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">License Issue Date</label>
-                {{ form.license_issue_date(class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
+                {{ form.license_issue_date(type="text", class="form-control datepicker", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.license_issue_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
               </div>
               <div class="col-md-3">
                 <label class="form-label required">License Expiry Date</label>
-                {{ form.license_expiry_date(class="form-control datepicker expiry-trigger", data_target="license_status_display", data_hidden="license_status_hidden", required=True, placeholder="dd-mm-yyyy") }}
+                {{ form.license_expiry_date(type="text", class="form-control datepicker expiry-trigger", data_target="license_status_display", data_hidden="license_status_hidden", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.license_expiry_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -570,6 +735,9 @@
                     <button type="button" class="doc-rotate-btn" title="90° clockwise rotate karein">
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
+                    <button type="button" class="doc-crop-btn" title="Crop image">
+                      <i class="bi bi-crop"></i>Crop
+                    </button>
                     <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
                       <i class="bi bi-x-lg"></i>
                     </button>
@@ -581,6 +749,9 @@
                 <div class="doc-new-preview" id="new-preview-photo">
                   <img src="" alt="New photo preview">
                   <div class="doc-new-actions">
+                    <button type="button" class="doc-new-crop-btn" data-target="inp-photo" data-preview="new-preview-photo" title="Crop image">
+                      <i class="bi bi-crop"></i>
+                    </button>
                     <button type="button" class="doc-new-rotate-btn" data-target="inp-photo" data-preview="new-preview-photo" title="Rotate 90° clockwise">
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
@@ -604,6 +775,9 @@
                     <button type="button" class="doc-rotate-btn" title="90° clockwise rotate karein">
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
+                    <button type="button" class="doc-crop-btn" title="Crop image">
+                      <i class="bi bi-crop"></i>Crop
+                    </button>
                     <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
                       <i class="bi bi-x-lg"></i>
                     </button>
@@ -615,6 +789,9 @@
                 <div class="doc-new-preview" id="new-preview-cnic_front">
                   <img src="" alt="New CNIC front preview">
                   <div class="doc-new-actions">
+                    <button type="button" class="doc-new-crop-btn" data-target="inp-cnic_front" data-preview="new-preview-cnic_front" title="Crop image">
+                      <i class="bi bi-crop"></i>
+                    </button>
                     <button type="button" class="doc-new-rotate-btn" data-target="inp-cnic_front" data-preview="new-preview-cnic_front" title="Rotate 90° clockwise">
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
@@ -638,6 +815,9 @@
                     <button type="button" class="doc-rotate-btn" title="90° clockwise rotate karein">
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
+                    <button type="button" class="doc-crop-btn" title="Crop image">
+                      <i class="bi bi-crop"></i>Crop
+                    </button>
                     <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
                       <i class="bi bi-x-lg"></i>
                     </button>
@@ -649,6 +829,9 @@
                 <div class="doc-new-preview" id="new-preview-cnic_back">
                   <img src="" alt="New CNIC back preview">
                   <div class="doc-new-actions">
+                    <button type="button" class="doc-new-crop-btn" data-target="inp-cnic_back" data-preview="new-preview-cnic_back" title="Crop image">
+                      <i class="bi bi-crop"></i>
+                    </button>
                     <button type="button" class="doc-new-rotate-btn" data-target="inp-cnic_back" data-preview="new-preview-cnic_back" title="Rotate 90° clockwise">
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
@@ -676,6 +859,9 @@
                     <button type="button" class="doc-rotate-btn" title="90° clockwise rotate karein">
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
+                    <button type="button" class="doc-crop-btn" title="Crop image">
+                      <i class="bi bi-crop"></i>Crop
+                    </button>
                     <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
                       <i class="bi bi-x-lg"></i>
                     </button>
@@ -687,6 +873,9 @@
                 <div class="doc-new-preview" id="new-preview-license_front">
                   <img src="" alt="New license front preview">
                   <div class="doc-new-actions">
+                    <button type="button" class="doc-new-crop-btn" data-target="inp-license_front" data-preview="new-preview-license_front" title="Crop image">
+                      <i class="bi bi-crop"></i>
+                    </button>
                     <button type="button" class="doc-new-rotate-btn" data-target="inp-license_front" data-preview="new-preview-license_front" title="Rotate 90° clockwise">
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
@@ -710,6 +899,9 @@
                     <button type="button" class="doc-rotate-btn" title="90° clockwise rotate karein">
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
+                    <button type="button" class="doc-crop-btn" title="Crop image">
+                      <i class="bi bi-crop"></i>Crop
+                    </button>
                     <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
                       <i class="bi bi-x-lg"></i>
                     </button>
@@ -721,6 +913,9 @@
                 <div class="doc-new-preview" id="new-preview-license_back">
                   <img src="" alt="New license back preview">
                   <div class="doc-new-actions">
+                    <button type="button" class="doc-new-crop-btn" data-target="inp-license_back" data-preview="new-preview-license_back" title="Crop image">
+                      <i class="bi bi-crop"></i>
+                    </button>
                     <button type="button" class="doc-new-rotate-btn" data-target="inp-license_back" data-preview="new-preview-license_back" title="Rotate 90° clockwise">
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
@@ -773,8 +968,87 @@
   </div>
 </div>
 
+<!-- Professional Image Editor Modal -->
+<div class="modal fade" id="imageEditorModal" tabindex="-1" aria-labelledby="imageEditorTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="imageEditorTitle">
+          <i class="bi bi-pencil-square me-2" style="color:#60a5fa;"></i>Image Editor
+          <span class="crop-ratio-badge ms-2" id="editorRatioBadge">1 : 1</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="imageEditorWrap">
+          <img id="imageEditorSource" alt="Image editor preview">
+        </div>
+
+        <!-- Professional Toolbar -->
+        <div class="editor-toolbar">
+          <div class="tool-group">
+            <span class="tool-group-label">Rotate</span>
+            <button type="button" class="ed-btn" id="editorRotateCCW" title="Rotate 90° Left">
+              <i class="bi bi-arrow-counterclockwise"></i><span class="ed-label">Left</span>
+            </button>
+            <button type="button" class="ed-btn" id="editorRotateBtn" title="Rotate 90° Right">
+              <i class="bi bi-arrow-clockwise"></i><span class="ed-label">Right</span>
+            </button>
+          </div>
+          <div class="tool-group">
+            <span class="tool-group-label">Zoom</span>
+            <button type="button" class="ed-btn" id="editorZoomOutBtn" title="Zoom Out">
+              <i class="bi bi-dash-lg"></i>
+            </button>
+            <button type="button" class="ed-btn" id="editorZoomInBtn" title="Zoom In">
+              <i class="bi bi-plus-lg"></i>
+            </button>
+            <button type="button" class="ed-btn" id="editorFitBtn" title="Fit to Frame">
+              <i class="bi bi-arrows-fullscreen"></i><span class="ed-label">Fit</span>
+            </button>
+          </div>
+          <div class="tool-group">
+            <span class="tool-group-label">Flip</span>
+            <button type="button" class="ed-btn" id="editorFlipH" title="Flip Horizontal">
+              <i class="bi bi-symmetry-vertical"></i><span class="ed-label">H</span>
+            </button>
+            <button type="button" class="ed-btn" id="editorFlipV" title="Flip Vertical">
+              <i class="bi bi-symmetry-horizontal"></i><span class="ed-label">V</span>
+            </button>
+          </div>
+          <div class="tool-group">
+            <span class="tool-group-label">Crop</span>
+            <button type="button" class="ed-btn" id="editorFreeBtn" title="Toggle Free / Fixed Ratio">
+              <i class="bi bi-bounding-box"></i><span class="ed-label">Free</span>
+            </button>
+            <button type="button" class="ed-btn" id="editorResetBtn" title="Reset All">
+              <i class="bi bi-arrow-repeat"></i><span class="ed-label">Reset</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Actions Row -->
+        <div class="editor-actions">
+          <div class="editor-hint">
+            <i class="bi bi-info-circle"></i>
+            Drag to move — Scroll to zoom — Drag corners to crop
+          </div>
+          <div class="d-flex gap-2">
+            <button type="button" class="ed-btn-cancel" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="ed-btn-apply" id="editorApplyBtn">
+              <i class="bi bi-check2-circle"></i>Apply Crop
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  /* Safety: ensure old pointer-lock never persists */
+  document.body.style.pointerEvents = '';
 
   // 1. Auto Generate Driver ID
   var driverIdField = document.getElementById('driver_id_field');
@@ -1035,18 +1309,14 @@ document.addEventListener('DOMContentLoaded', function () {
       /* Show the overlay (smooth fade-in via CSS transition) */
       showProcessingOverlay();
 
-      /* Block accidental clicks on the rest of the page.
-         showProcessingOverlay() re-parents the overlay onto <body>, so we
-         restore pointer-events on it after the call. */
-      document.body.style.pointerEvents = 'none';
-      /* overlay is now a direct child of body — keep it interactive */
-      var _ov = document.getElementById('processingOverlay');
-      if (_ov) _ov.style.pointerEvents = 'all';
+      /* No global body lock here.
+         Overlay itself already blocks clicks when active. */
     }, false);
   });
 })();
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════
    Document-slot: delete saved file  +  live new-file preview
@@ -1187,6 +1457,508 @@ document.addEventListener('DOMContentLoaded', function () {
       pdfPrev.style.display = 'block';
     });
   }
+})();
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════
+   CROP WORKFLOW — modal editor on select + existing images
+   Driver Photo: 1:1
+   CNIC/License: 3:2
+   ════════════════════════════════════════════════════════ */
+(function () {
+  var imageInputs = ['inp-photo', 'inp-cnic_front', 'inp-cnic_back', 'inp-license_front', 'inp-license_back'];
+  var previewMap = {
+    'inp-photo': 'new-preview-photo',
+    'inp-cnic_front': 'new-preview-cnic_front',
+    'inp-cnic_back': 'new-preview-cnic_back',
+    'inp-license_front': 'new-preview-license_front',
+    'inp-license_back': 'new-preview-license_back'
+  };
+  var aspectMap = {
+    'inp-photo': 1 / 1,
+    'inp-cnic_front': 3 / 2,
+    'inp-cnic_back': 3 / 2,
+    'inp-license_front': 3 / 2,
+    'inp-license_back': 3 / 2
+  };
+  var outputMap = {
+    'inp-photo': { w: 800,  h: 800  },
+    'inp-cnic_front': { w: 1200, h: 800 },
+    'inp-cnic_back':  { w: 1200, h: 800 },
+    'inp-license_front': { w: 1200, h: 800 },
+    'inp-license_back':  { w: 1200, h: 800 }
+  };
+
+  var modalEl = document.getElementById('imageEditorModal');
+  if (!modalEl) return;
+  if (modalEl.parentNode !== document.body) {
+    document.body.appendChild(modalEl);
+  }
+  var cropAvailable = (typeof Cropper !== 'undefined');
+  var modal = null;
+  var hasBootstrapModal = (window.bootstrap && typeof window.bootstrap.Modal === 'function');
+  if (hasBootstrapModal) {
+    modal = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false });
+  }
+  var editorImg = document.getElementById('imageEditorSource');
+  var btnApply = document.getElementById('editorApplyBtn');
+  var btnRotate = document.getElementById('editorRotateBtn');
+  var btnRotateCCW = document.getElementById('editorRotateCCW');
+  var btnZoomIn = document.getElementById('editorZoomInBtn');
+  var btnZoomOut = document.getElementById('editorZoomOutBtn');
+  var btnReset = document.getElementById('editorResetBtn');
+  var btnFlipH = document.getElementById('editorFlipH');
+  var btnFlipV = document.getElementById('editorFlipV');
+  var btnFree = document.getElementById('editorFreeBtn');
+  var btnFit = document.getElementById('editorFitBtn');
+  var ratioBadge = document.getElementById('editorRatioBadge');
+  var closeBtns = modalEl.querySelectorAll('[data-bs-dismiss="modal"], .btn-close');
+
+  var cropper = null;
+  var activeInput = null;
+  var activeAspect = 1;
+  var activeOutW = 1200;
+  var activeOutH = 800;
+  var selectedName = '';
+  var objectUrl = '';
+  var applied = false;
+  var activeSavedThumb = null;
+  var activeSavedBadge = null;
+  var flipH = 1;
+  var flipV = 1;
+  var isFreeMode = false;
+
+  function showToast(msg) {
+    var t = document.getElementById('doc-rotate-toast');
+    if (!t) return;
+    var msgEl = t.querySelector('.toast-msg');
+    if (msgEl) msgEl.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._tid);
+    t._tid = setTimeout(function () { t.classList.remove('show'); }, 2500);
+  }
+
+  function clearPreview(inputId) {
+    var prevId = previewMap[inputId];
+    if (!prevId) return;
+    var prevDiv = document.getElementById(prevId);
+    if (!prevDiv) return;
+    var img = prevDiv.querySelector('img');
+    if (img) img.src = '';
+    prevDiv.style.display = 'none';
+  }
+
+  function updatePreview(inputId, src) {
+    var prevId = previewMap[inputId];
+    if (!prevId) return;
+    var prevDiv = document.getElementById(prevId);
+    if (!prevDiv) return;
+    var img = prevDiv.querySelector('img');
+    if (img) img.src = src;
+    prevDiv.style.display = 'block';
+  }
+
+  function setInputFile(inputEl, fileObj) {
+    if (!inputEl || !fileObj) return;
+    var dt = new DataTransfer();
+    dt.items.add(fileObj);
+    inputEl.files = dt.files;
+  }
+
+  function makeWebpName(name) {
+    var base = (name || 'image').replace(/\.[^/.]+$/, '');
+    return base + '_crop.webp';
+  }
+
+  function setupForInput(input) {
+    if (!input) return;
+    var id = input.id;
+    activeInput = input;
+    activeAspect = aspectMap[id] || (3 / 2);
+    var out = outputMap[id] || { w: 1200, h: 800 };
+    activeOutW = out.w;
+    activeOutH = out.h;
+    flipH = 1; flipV = 1; isFreeMode = false;
+    if (btnFlipH) btnFlipH.classList.remove('ed-active');
+    if (btnFlipV) btnFlipV.classList.remove('ed-active');
+    if (btnFree) { btnFree.classList.remove('ed-active'); btnFree.querySelector('.ed-label').textContent = 'Free'; }
+    updateRatioBadge();
+  }
+
+  function updateRatioBadge() {
+    if (!ratioBadge) return;
+    if (isFreeMode) { ratioBadge.textContent = 'Free Crop'; return; }
+    if (activeAspect === 1) ratioBadge.textContent = '1 : 1';
+    else if (Math.abs(activeAspect - 1.5) < 0.01) ratioBadge.textContent = '3 : 2';
+    else ratioBadge.textContent = activeOutW + ' × ' + activeOutH;
+  }
+
+  function openEditorFromSource(inputEl, src, filename, savedThumb, savedBadge) {
+    if (!cropAvailable) {
+      alert('Image editor load nahi hua. Page hard refresh (Ctrl+Shift+R) karke dobara try karein.');
+      return;
+    }
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        objectUrl = '';
+      }
+    setupForInput(inputEl);
+    selectedName = filename || 'image';
+    applied = false;
+    activeSavedThumb = savedThumb || null;
+    activeSavedBadge = savedBadge || null;
+    /* Hard unlock: even if a previous submit overlay got stuck */
+    document.documentElement.style.pointerEvents = '';
+    document.body.style.pointerEvents = '';
+    var po = document.getElementById('processingOverlay');
+    if (po) {
+      po.classList.remove('active');
+      po.style.pointerEvents = 'none';
+      po.style.visibility = 'hidden';
+      po.style.opacity = '0';
+    }
+      var isBlobOrData = src.startsWith('blob:') || src.startsWith('data:');
+      editorImg.removeAttribute('crossorigin');
+      if (!isBlobOrData) editorImg.crossOrigin = 'anonymous';
+      editorImg.onerror = function () {
+        console.error('Editor image failed to load:', src);
+        alert('Image load nahi ho saki. Please try again.');
+        try { hideEditorModal(); } catch(e) {}
+        document.body.classList.remove('modal-open');
+        document.querySelectorAll('.modal-backdrop').forEach(function(b){ b.parentNode && b.parentNode.removeChild(b); });
+        document.documentElement.style.pointerEvents = '';
+        document.body.style.pointerEvents = '';
+      };
+      editorImg.src = src;
+    if (modal) {
+      modal.show();
+    } else {
+      /* Fallback if Bootstrap modal API is unavailable */
+      modalEl.classList.add('show');
+      modalEl.style.display = 'block';
+      modalEl.removeAttribute('aria-hidden');
+      document.body.classList.add('modal-open');
+      if (!document.getElementById('_crop_backdrop')) {
+        var bd = document.createElement('div');
+        bd.className = 'modal-backdrop fade show';
+        bd.id = '_crop_backdrop';
+        bd.style.zIndex = '199999';
+        document.body.appendChild(bd);
+      }
+      modalEl.dispatchEvent(new Event('shown.bs.modal'));
+    }
+  }
+
+  imageInputs.forEach(function (id) {
+    var input = document.getElementById(id);
+    if (!input) return;
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      if (!file || !file.type || !file.type.startsWith('image/')) return;
+      var fr = new FileReader();
+      fr.onload = function() {
+        openEditorFromSource(input, fr.result, file.name, null, null);
+      };
+      fr.readAsDataURL(file);
+    });
+  });
+
+  /* Crop button injection for NEW previews */
+  imageInputs.forEach(function(id){
+    var prev = document.getElementById(previewMap[id]);
+    if (!prev) return;
+    var actions = prev.querySelector('.doc-new-actions');
+    if (!actions || actions.querySelector('.doc-new-crop-btn')) return;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'doc-new-crop-btn';
+    b.setAttribute('data-target', id);
+    b.setAttribute('data-preview', previewMap[id]);
+    b.title = 'Crop image';
+    b.innerHTML = '<i class="bi bi-crop me-1"></i>Crop';
+    actions.insertBefore(b, actions.firstChild);
+  });
+
+  /* Crop button injection for SAVED thumbnails */
+  document.querySelectorAll('.doc-slot[data-field] .doc-thumb-wrap').forEach(function(wrap){
+    if (wrap.querySelector('.doc-crop-btn')) return;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'doc-crop-btn';
+    b.title = 'Crop image';
+    b.style.cssText = 'position:absolute;left:6px;bottom:6px;min-width:48px;height:24px;padding:0 8px;border:none;border-radius:999px;background:#6f42c1;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.18);';
+    b.innerHTML = '<i class="bi bi-crop me-1"></i>Crop';
+    wrap.appendChild(b);
+  });
+
+  document.addEventListener('click', function(e){
+    var btnNew = e.target.closest('.doc-new-crop-btn');
+    if (btnNew) {
+      var input = document.getElementById(btnNew.dataset.target || '');
+      var prev = document.getElementById(btnNew.dataset.preview || '');
+      var img = prev ? prev.querySelector('img') : null;
+      if (!input || !img || !img.src) return;
+      openEditorFromSource(input, img.src, (input.files && input.files[0] && input.files[0].name) || input.id, null, null);
+      return;
+    }
+    var btnSaved = e.target.closest('.doc-crop-btn');
+    if (btnSaved) {
+      var slot = btnSaved.closest('.doc-slot');
+      if (!slot) return;
+      var field = slot.dataset.field || '';
+      var map = {
+        photo_path: 'inp-photo',
+        cnic_front_path: 'inp-cnic_front',
+        cnic_back_path: 'inp-cnic_back',
+        license_front_path: 'inp-license_front',
+        license_back_path: 'inp-license_back'
+      };
+      var inputId = map[field];
+      var inputEl = inputId ? document.getElementById(inputId) : null;
+      var thumb = slot.querySelector('.doc-thumb-wrap img');
+      if (!inputEl || !thumb) return;
+      var badge = slot.querySelector('.doc-saved-badge');
+      var staged = inputEl.files && inputEl.files[0];
+      if (staged) {
+        var fr = new FileReader();
+        fr.onload = function(ev){ openEditorFromSource(inputEl, ev.target.result, staged.name, thumb, badge); };
+        fr.readAsDataURL(staged);
+      } else {
+        var src = (slot.dataset && slot.dataset.r2url) ? slot.dataset.r2url : (thumb.getAttribute('src') || '');
+        if (!src) return;
+
+        function toAbs(u) {
+          if (!u) return u;
+          if (u.startsWith('//')) return window.location.protocol + u;
+          if (u.startsWith('/')) return window.location.origin + u;
+          return u;
+        }
+        var abs = toAbs(src);
+        var isSameOrigin = false;
+        try { isSameOrigin = (new URL(abs, window.location.href)).origin === window.location.origin; } catch(e) { isSameOrigin = false; }
+
+        function fetchBlob(urlToFetch) {
+          return fetch(urlToFetch, { credentials: 'same-origin' }).then(function(r){
+            if (!r.ok) throw new Error('fetch ' + r.status);
+            return r.blob();
+          });
+        }
+
+        var p = isSameOrigin
+          ? fetchBlob(abs)
+          : fetch('/r2-proxy?url=' + encodeURIComponent(abs)).then(function(r){
+              if(!r.ok) {
+                return r.text().then(function(t){
+                  throw new Error('proxy ' + r.status + ' — ' + (t || '').slice(0, 180));
+                });
+              }
+              return r.blob();
+            });
+
+        p.then(function(blob){
+          if (!blob || blob.size === 0) throw new Error('Empty response from server');
+          if (blob.type && blob.type.startsWith('text/')) throw new Error('Server returned text instead of image. File may be missing.');
+          var reader = new FileReader();
+          reader.onload = function() {
+            openEditorFromSource(inputEl, reader.result, abs.split('/').pop() || inputId, thumb, badge);
+          };
+          reader.onerror = function() { throw new Error('Failed to read image blob'); };
+          reader.readAsDataURL(blob);
+        }).catch(function(err){
+          console.error('Crop load failed for:', abs, err && err.message);
+          alert('Image load nahi ho saki: ' + (err.message || 'Unknown error') + '. Pehle image re-upload karein, phir crop karein.');
+          try { hideEditorModal(); } catch(e) {}
+          document.body.classList.remove('modal-open');
+          document.querySelectorAll('.modal-backdrop').forEach(function(b){ b.parentNode && b.parentNode.removeChild(b); });
+          document.documentElement.style.pointerEvents = '';
+          document.body.style.pointerEvents = '';
+        });
+      }
+    }
+  });
+
+  modalEl.addEventListener('shown.bs.modal', function () {
+    if (!editorImg.src) return;
+    if (cropper) cropper.destroy();
+    cropper = new Cropper(editorImg, {
+      aspectRatio: isFreeMode ? NaN : activeAspect,
+      viewMode: 1,
+      autoCropArea: 0.92,
+      dragMode: 'move',
+      responsive: true,
+      restore: true,
+      checkCrossOrigin: false,
+      checkOrientation: false,
+      background: false,
+      guides: true,
+      center: true,
+      highlight: true,
+      cropBoxMovable: true,
+      cropBoxResizable: true,
+      toggleDragModeOnDblclick: true,
+      minCropBoxWidth: 50,
+      minCropBoxHeight: 50
+    });
+  });
+
+  modalEl.addEventListener('hidden.bs.modal', function () {
+    if (cropper) { cropper.destroy(); cropper = null; }
+    if (!applied && activeInput) {
+      activeInput.value = '';
+      clearPreview(activeInput.id);
+    }
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      objectUrl = '';
+    }
+    editorImg.onerror = null;
+    editorImg.removeAttribute('src');
+    activeInput = null;
+    activeSavedThumb = null;
+    activeSavedBadge = null;
+    flipH = 1; flipV = 1; isFreeMode = false;
+  });
+
+  function hideEditorModal() {
+    if (modal) {
+      modal.hide();
+    } else {
+      modalEl.classList.remove('show');
+      modalEl.style.display = 'none';
+      modalEl.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('modal-open');
+      var bd = document.getElementById('_crop_backdrop');
+      if (bd && bd.parentNode) bd.parentNode.removeChild(bd);
+      modalEl.dispatchEvent(new Event('hidden.bs.modal'));
+    }
+  }
+
+  closeBtns.forEach(function (b) {
+    b.addEventListener('click', function () { if (!modal) hideEditorModal(); });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && modalEl.classList.contains('show')) hideEditorModal();
+  });
+
+  btnRotate.addEventListener('click', function () { if (cropper) cropper.rotate(90); });
+  btnRotateCCW.addEventListener('click', function () { if (cropper) cropper.rotate(-90); });
+  btnZoomIn.addEventListener('click', function () { if (cropper) cropper.zoom(0.1); });
+  btnZoomOut.addEventListener('click', function () { if (cropper) cropper.zoom(-0.1); });
+  btnFit.addEventListener('click', function () {
+    if (!cropper) return;
+    var containerData = cropper.getContainerData();
+    var canvasData = cropper.getCanvasData();
+    var ratio = Math.min(containerData.width / canvasData.naturalWidth, containerData.height / canvasData.naturalHeight);
+    cropper.zoomTo(ratio * 0.9);
+    cropper.moveTo(containerData.width / 2, containerData.height / 2);
+  });
+  btnFlipH.addEventListener('click', function () {
+    if (!cropper) return;
+    flipH = flipH * -1;
+    cropper.scaleX(flipH);
+    btnFlipH.classList.toggle('ed-active', flipH === -1);
+  });
+  btnFlipV.addEventListener('click', function () {
+    if (!cropper) return;
+    flipV = flipV * -1;
+    cropper.scaleY(flipV);
+    btnFlipV.classList.toggle('ed-active', flipV === -1);
+  });
+  btnFree.addEventListener('click', function () {
+    if (!cropper) return;
+    isFreeMode = !isFreeMode;
+    btnFree.classList.toggle('ed-active', isFreeMode);
+    btnFree.querySelector('.ed-label').textContent = isFreeMode ? 'Fixed' : 'Free';
+    cropper.setAspectRatio(isFreeMode ? NaN : activeAspect);
+    updateRatioBadge();
+  });
+  btnReset.addEventListener('click', function () {
+    if (!cropper) return;
+    flipH = 1; flipV = 1; isFreeMode = false;
+    btnFlipH.classList.remove('ed-active');
+    btnFlipV.classList.remove('ed-active');
+    btnFree.classList.remove('ed-active');
+    btnFree.querySelector('.ed-label').textContent = 'Free';
+    cropper.reset();
+    cropper.setAspectRatio(activeAspect);
+    updateRatioBadge();
+  });
+
+  function finalizeCrop(canvas) {
+    canvas.toBlob(function (blob) {
+      btnApply.disabled = false;
+      btnApply.innerHTML = btnApplyOrigHtml;
+      if (!blob) {
+        alert('Crop apply nahi ho saka. Dobara try karein.');
+        return;
+      }
+
+      var webpFile = new File([blob], makeWebpName(selectedName), { type: 'image/webp' });
+      setInputFile(activeInput, webpFile);
+
+      var prevUrl = URL.createObjectURL(blob);
+      updatePreview(activeInput.id, prevUrl);
+      if (activeSavedThumb) activeSavedThumb.src = prevUrl;
+      if (activeSavedBadge) {
+        activeSavedBadge.innerHTML = '<i class="bi bi-crop me-1 text-primary"></i><span style="color:#0d6efd;">Cropped — save to apply</span>';
+      }
+      setTimeout(function () { try { URL.revokeObjectURL(prevUrl); } catch (e) {} }, 120000);
+
+      applied = true;
+      showToast('✓ Crop applied! Save karein to upload cropped image.');
+      hideEditorModal();
+    }, 'image/webp', 0.85);
+  }
+
+  var btnApplyOrigHtml = btnApply.innerHTML;
+
+  btnApply.addEventListener('click', function () {
+    if (!cropper || !activeInput) return;
+    btnApply.disabled = true;
+    btnApply.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Applying...';
+
+    try {
+      var canvas = cropper.getCroppedCanvas({
+        fillColor: '#ffffff',
+        width: activeOutW,
+        height: activeOutH,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high'
+      });
+      if (!canvas) throw new Error('Canvas is null');
+      finalizeCrop(canvas);
+    } catch (err) {
+      if (err.name === 'SecurityError' || (err.message && err.message.indexOf('tainted') !== -1)) {
+        console.warn('Tainted canvas detected, retrying with manual draw...');
+        try {
+          var cropData = cropper.getData(true);
+          var tmpCanvas = document.createElement('canvas');
+          tmpCanvas.width = activeOutW;
+          tmpCanvas.height = activeOutH;
+          var ctx = tmpCanvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, activeOutW, activeOutH);
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(editorImg, cropData.x, cropData.y, cropData.width, cropData.height, 0, 0, activeOutW, activeOutH);
+          finalizeCrop(tmpCanvas);
+        } catch (retryErr) {
+          console.error('Manual crop also failed:', retryErr);
+          btnApply.disabled = false;
+          btnApply.innerHTML = btnApplyOrigHtml;
+          alert('Image crop nahi ho saka. Naya file select karke dobara try karein.');
+          hideEditorModal();
+        }
+      } else {
+        console.error('Crop error:', err);
+        btnApply.disabled = false;
+        btnApply.innerHTML = btnApplyOrigHtml;
+        alert('Image process nahi ho saki. Please try again.');
+        hideEditorModal();
+      }
+    }
+  });
 })();
 </script>
 

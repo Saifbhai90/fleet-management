@@ -2520,25 +2520,58 @@ def handle_csrf_error(e):
 @app.route('/r2-proxy')
 def r2_proxy():
     """Serve an R2 object through Flask so JS canvas can draw it without CORS taint."""
-    from r2_storage import _get_s3_client, R2_BUCKET_NAME, R2_PUBLIC_URL as _r2_pub
+    from urllib.parse import urlparse
+    import urllib.request
+    import urllib.error
+    from r2_storage import R2_PUBLIC_URL as _r2_pub
+
     url = request.args.get('url', '').strip()
-    base = (_r2_pub or '').rstrip('/')
-    if not url or not base or not url.startswith(base + '/'):
-        abort(400)
-    key = url[len(base) + 1:]
-    if not key:
-        abort(400)
+    if not url:
+        return make_response('Missing url', 400)
+
+    p = urlparse(url)
+    if p.scheme not in ('http', 'https') or not p.netloc:
+        return make_response('Invalid url', 400)
+
+    allow_hosts = set()
+    if _r2_pub:
+        try:
+            allow_hosts.add(urlparse(_r2_pub).netloc.lower())
+        except Exception:
+            pass
+    host = (p.netloc or '').lower()
+    if not (host.endswith('.r2.dev') or host.endswith('.r2.cloudflarestorage.com') or host in allow_hosts):
+        return make_response(f'Host not allowed: {host}', 400)
+
     try:
-        client = _get_s3_client()
-        obj = client.get_object(Bucket=R2_BUCKET_NAME, Key=key)
-        data = obj['Body'].read()
-        ct = obj.get('ContentType', 'image/jpeg')
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        })
+        with urllib.request.urlopen(req, timeout=25) as r:
+            data = r.read()
+            ct = r.headers.get('Content-Type') or 'application/octet-stream'
+
+        if not data:
+            return make_response('Upstream returned empty response', 502)
+        if ct.lower().startswith('text/html'):
+            return make_response('Upstream returned HTML, not an image. File may be missing on R2.', 502)
+
         resp = make_response(data)
         resp.headers['Content-Type'] = ct
         resp.headers['Cache-Control'] = 'private, max-age=3600'
+        resp.headers['Access-Control-Allow-Origin'] = '*'
         return resp
-    except Exception:
-        abort(404)
+    except urllib.error.HTTPError as e:
+        code = e.code or 502
+        body = ''
+        try:
+            body = e.read(500).decode('utf-8', errors='ignore')
+        except Exception:
+            pass
+        return make_response(f'Upstream {code}: {body[:200]}', code)
+    except Exception as e:
+        return make_response(f'Proxy failed: {str(e)}', 502)
 
 
 @app.route('/driver/<int:driver_id>/delete-document', methods=['POST'])
@@ -2606,13 +2639,17 @@ def driver_form(id=None):
                 db.session.add(driver)
             db.session.commit()
             from r2_storage import upload_image_file as _r2_img, upload_pdf_file as _r2_pdf, R2_PUBLIC_URL as _r2_url
-            _use_r2 = bool(_r2_url)
+            from r2_storage import R2_ACCESS_KEY_ID as _r2_key, R2_ENDPOINT_URL as _r2_ep, R2_BUCKET_NAME as _r2_bkt
+            _use_r2 = bool(_r2_url and _r2_key and _r2_ep and _r2_bkt)
             _any_upload = False
+
+            _r2_warnings = []
 
             def _save_image(file_storage, field_attr, r2_folder, local_fname):
                 nonlocal _any_upload
                 if not (file_storage and file_storage.filename):
                     return
+                file_storage.seek(0)
                 if _use_r2:
                     try:
                         url = _r2_img(file_storage, folder=r2_folder)
@@ -2620,23 +2657,19 @@ def driver_form(id=None):
                             setattr(driver, field_attr, url)
                             _any_upload = True
                             return
-                    except Exception:
-                        pass
-                subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'drivers', str(driver.id))
-                os.makedirs(subdir, exist_ok=True)
-                ext = os.path.splitext(secure_filename(file_storage.filename))[1].lower() or '.jpg'
-                if ext not in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
-                    ext = '.jpg'
-                filepath = os.path.join(subdir, local_fname + ext)
-                file_storage.seek(0)
-                file_storage.save(filepath)
-                setattr(driver, field_attr, os.path.join('drivers', str(driver.id), local_fname + ext).replace('\\', '/'))
-                _any_upload = True
+                    except Exception as e:
+                        app.logger.error('R2 upload failed for %s: %s', field_attr, e)
+                        _r2_warnings.append(field_attr)
+                        return
+                else:
+                    _r2_warnings.append(field_attr)
+                    return
 
             def _save_pdf(file_storage, field_attr, r2_folder, local_fname):
                 nonlocal _any_upload
                 if not (file_storage and file_storage.filename):
                     return
+                file_storage.seek(0)
                 if _use_r2:
                     try:
                         url = _r2_pdf(file_storage, folder=r2_folder)
@@ -2644,15 +2677,13 @@ def driver_form(id=None):
                             setattr(driver, field_attr, url)
                             _any_upload = True
                             return
-                    except Exception:
-                        pass
-                subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'drivers', str(driver.id))
-                os.makedirs(subdir, exist_ok=True)
-                filepath = os.path.join(subdir, local_fname + '.pdf')
-                file_storage.seek(0)
-                file_storage.save(filepath)
-                setattr(driver, field_attr, os.path.join('drivers', str(driver.id), local_fname + '.pdf').replace('\\', '/'))
-                _any_upload = True
+                    except Exception as e:
+                        app.logger.error('R2 PDF upload failed for %s: %s', field_attr, e)
+                        _r2_warnings.append(field_attr)
+                        return
+                else:
+                    _r2_warnings.append(field_attr)
+                    return
 
             _save_image(request.files.get('photo'),         'photo_path',         'drivers/photos',   'photo')
             _save_image(request.files.get('cnic_front'),    'cnic_front_path',    'drivers/cnic',     'cnic_front')
@@ -2663,6 +2694,8 @@ def driver_form(id=None):
 
             if _any_upload:
                 db.session.commit()
+            if _r2_warnings:
+                flash(f"Warning: {len(_r2_warnings)} file(s) could not be uploaded — Cloudflare R2 is not configured. Files skipped: {', '.join(_r2_warnings)}. Please set R2 environment variables.", 'warning')
             if not id and driver.cnic_no and (driver.cnic_no or '').strip() and driver.vehicle_id:
                 post_id, role_id = None, None
                 if driver.post and (driver.post or '').strip():
@@ -2978,9 +3011,8 @@ def employee_form(id=None):
 
 @app.route('/employee/<int:id>/print')
 def employee_profile_print(id):
-    """Print/PDF: employee complete profile (all tabs + documents list)."""
+    """Professional employee profile view with PDF/Print/Image export."""
     emp = Employee.query.get_or_404(id)
-    # Ensure relationships are loaded for print view
     projects = list(emp.projects)
     districts = list(emp.districts)
     documents = list(emp.documents)
@@ -2990,6 +3022,7 @@ def employee_profile_print(id):
         projects=projects,
         districts=districts,
         documents=documents,
+        now=datetime.now,
     )
 
 
@@ -7683,6 +7716,13 @@ def active_drivers_report_print():
         shift=shift, from_date_val=from_date_val, to_date_val=to_date_val,
         allowed_vehicles=allowed_vehicles, allowed_projects=allowed_projects,
         allowed_districts=allowed_districts, is_master_or_admin=is_master_or_admin,
+    )
+
+    return render_template(
+        'active_driver_summary_print.html',
+        results=results, total=len(results),
+        from_date=from_date_str, to_date=to_date_str,
+        now=datetime.now,
     )
 
 
@@ -13334,6 +13374,8 @@ def report_driver_profile(driver_id):
     _ref  = request.args.get('ref',  '').strip()
     _back_map = {
         'master': url_for('drivers_list'),
+        'missing_docs': url_for('missing_documents_report'),
+        'active_drivers': url_for('active_drivers_report'),
     }
     ref       = _back_map.get(_from) or _ref or ''
     # Show Edit only when opened directly from Drivers List (master section)
@@ -13352,7 +13394,7 @@ def report_vehicle_profile(vehicle_id):
     driver_history = DriverTransfer.query.filter(
         (DriverTransfer.old_vehicle_id == vehicle_id) | (DriverTransfer.new_vehicle_id == vehicle_id)
     ).order_by(DriverTransfer.transfer_date.desc()).all()
-    return render_template('report_vehicle_profile.html', vehicle=vehicle, transfers=transfers, driver_history=driver_history)
+    return render_template('report_vehicle_profile.html', vehicle=vehicle, transfers=transfers, driver_history=driver_history, generated_at=datetime.now().strftime('%d %b %Y, %I:%M %p'))
 
 
 @app.route('/reports/expiry')

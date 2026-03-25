@@ -1,100 +1,103 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Active Driver Summary – Print</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; font-size: 11px; color: #000; background: #fff; }
-        .page { max-width: 1100px; margin: 0 auto; padding: 14px 16px; }
+{% extends "base_print.html" %}
+{% block title %}Print – Active Driver Summary Report{% endblock %}
 
-        /* Header */
-        .print-header { border-bottom: 3px solid #1565c0; padding-bottom: 8px; margin-bottom: 10px; }
-        .print-header h1 { font-size: 16px; font-weight: 700; color: #1565c0; }
-        .print-header .meta { font-size: 10px; color: #555; margin-top: 3px; }
+{% block extra_head %}
+<style>
+    .rpt-header {
+        background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+        color: #fff;
+        border-radius: 10px;
+        padding: 1rem 1.4rem;
+        margin-bottom: 1rem;
+    }
+    .rpt-header h2 { margin: 0; font-size: 1.25rem; font-weight: 700; }
+    .rpt-header .sub { font-size: 0.82rem; opacity: 0.85; margin-top: 0.2rem; }
+    .rpt-meta { font-size: 0.78rem; color: #546e7a; margin-bottom: 0.75rem; }
+    .total-badge {
+        display: inline-block;
+        background: #e3f2fd;
+        color: #0d47a1;
+        font-size: 0.82rem;
+        font-weight: 700;
+        padding: 0.2rem 0.75rem;
+        border-radius: 20px;
+    }
+    .rpt-table { font-size: 0.82rem; }
+    .rpt-table thead th {
+        background: #e3f2fd;
+        color: #0d47a1;
+        font-weight: 700;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        border-bottom: 2px solid #1565c0;
+        white-space: nowrap;
+        padding: 0.45rem 0.65rem;
+    }
+    .rpt-table tbody td { vertical-align: middle; padding: 0.4rem 0.65rem; }
+    .rpt-table tbody tr:nth-child(even) { background: #f5f9ff; }
+    .sr-badge { background: #1565c0; color: #fff; border-radius: 4px; padding: 0.1rem 0.4rem; font-size: 0.73rem; font-weight: 700; }
+    .veh-no { font-weight: 700; }
+    .veh-meta { font-size: 0.72rem; color: #78909c; }
+    .driver-name { font-weight: 600; color: #1a237e; }
+    .driver-sub { font-size: 0.72rem; color: #607d8b; }
+    .shift-m { background: #e3f2fd; color: #1565c0; padding: 1px 6px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; }
+    .shift-n { background: #1a237e; color: #fff; padding: 1px 6px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; }
+    .rejoin-badge { background: #e8f5e9; color: #2e7d32; padding: 1px 6px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; }
+    .rpt-footer { margin-top: 1rem; border-top: 1px solid #cfd8dc; padding-top: 0.5rem; font-size: 0.72rem; color: #888; display: flex; justify-content: space-between; }
+    @media print {
+        .rpt-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .rpt-table thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .rpt-table tbody tr:nth-child(even) { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .sr-badge, .shift-m, .shift-n, .rejoin-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+</style>
+{% endblock %}
 
-        /* Summary badges */
-        .summary-row { display: flex; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
-        .summary-item { background: #e3f2fd; border: 1px solid #90caf9; border-radius: 4px;
-                        padding: 4px 10px; font-size: 10px; font-weight: 700; color: #1565c0; }
+{% block content %}
+<div class="print-container">
 
-        /* Table */
-        table { width: 100%; border-collapse: collapse; }
-        thead th { background: #1565c0; color: #fff; font-size: 9.5px; text-transform: uppercase;
-                   letter-spacing: 0.3px; padding: 5px 6px; border: 1px solid #0d47a1; text-align: left; }
-        tbody td { padding: 4px 6px; border: 1px solid #cfd8dc; font-size: 10px; vertical-align: middle; }
-        tbody tr:nth-child(even) { background: #f5f9ff; }
-        tbody tr:hover { background: #e3f2fd; }
-        .sr-cell { text-align: center; font-weight: 700; color: #1565c0; width: 30px; }
-        .veh-no { font-weight: 700; }
-        .veh-meta { font-size: 9px; color: #78909c; }
-        .driver-name { font-weight: 600; }
-        .driver-id { font-size: 9px; color: #607d8b; }
-        .shift-m { background: #e3f2fd; color: #1565c0; padding: 1px 5px; border-radius: 8px; font-size: 9px; font-weight: 700; }
-        .shift-n { background: #1a237e; color: #fff; padding: 1px 5px; border-radius: 8px; font-size: 9px; font-weight: 700; }
-        .rejoin-badge { background: #e8f5e9; color: #2e7d32; padding: 1px 5px; border-radius: 8px; font-size: 9px; font-weight: 700; }
-        .no-data { text-align: center; color: #888; padding: 16px; font-style: italic; }
-
-        /* Footer */
-        .print-footer { margin-top: 12px; border-top: 1px solid #cfd8dc; padding-top: 6px;
-                        font-size: 9px; color: #888; display: flex; justify-content: space-between; }
-
-        @media print {
-            body { font-size: 10px; }
-            .no-print { display: none !important; }
-            .page { padding: 4px 6px; }
-            thead th { background: #1565c0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .shift-m, .shift-n, .rejoin-badge, .summary-item { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        }
-    </style>
-</head>
-<body>
-<div class="page">
-
-    <div class="no-print" style="margin-bottom:10px;display:flex;gap:8px;">
-        <button onclick="window.print()" style="background:#1565c0;color:#fff;border:none;border-radius:4px;padding:6px 16px;font-size:12px;cursor:pointer;">
-            🖨 Print
-        </button>
-        <button onclick="window.close()" style="background:#607d8b;color:#fff;border:none;border-radius:4px;padding:6px 14px;font-size:12px;cursor:pointer;">
-            ✕ Close
-        </button>
-    </div>
-
-    <div class="print-header">
-        <h1>Active Driver Summary Report</h1>
-        <div class="meta">
-            Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined else '' }}
-            {% if from_date or to_date %}
-            &nbsp;·&nbsp; Assign Date Filter:
-            {% if from_date %}{{ from_date }}{% endif %}
-            {% if from_date and to_date %} to {% endif %}
-            {% if to_date %}{{ to_date }}{% endif %}
-            {% endif %}
+    <div class="rpt-header">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="me-auto">
+                <h2><i class="bi bi-person-lines-fill me-2"></i>Active Driver Summary Report</h2>
+                <div class="sub"><i class="bi bi-info-circle me-1"></i>All active drivers currently assigned to vehicles</div>
+            </div>
         </div>
     </div>
 
-    <div class="summary-row">
-        <div class="summary-item">Total Active Drivers: {{ total }}</div>
+    <div class="rpt-meta d-flex flex-wrap gap-3 mb-2">
+        <span><i class="bi bi-calendar3 me-1"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
+        {% if from_date or to_date %}
+        <span><i class="bi bi-funnel me-1"></i>Assign Date:
+            {% if from_date %}{{ from_date }}{% endif %}
+            {% if from_date and to_date %} to {% endif %}
+            {% if to_date %}{{ to_date }}{% endif %}
+        </span>
+        {% endif %}
     </div>
 
-    <table>
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="total-badge"><i class="bi bi-people-fill me-1"></i>Total Active Drivers: {{ total }}</span>
+    </div>
+
+    <table class="table table-sm table-bordered rpt-table w-100">
         <thead>
             <tr>
-                <th>Sr No</th>
+                <th style="width:4%">Sr No</th>
                 <th>Project</th>
                 <th>District</th>
                 <th>Vehicle No (Model) (Type)</th>
-                <th>Driver Name (ID)</th>
-                <th>Shift</th>
-                <th>Assign Date</th>
-                <th>Rejoin Date</th>
+                <th>Driver Name (ID) / CNIC</th>
+                <th style="width:7%">Shift</th>
+                <th style="width:10%">Assign Date</th>
+                <th style="width:10%">Rejoin Date</th>
             </tr>
         </thead>
         <tbody>
             {% for driver, vehicle, project, district, rejoin_date in results %}
             <tr>
-                <td class="sr-cell">{{ loop.index }}</td>
+                <td class="text-center"><span class="sr-badge">{{ loop.index }}</span></td>
                 <td>{{ project.name if project else '-' }}</td>
                 <td>{{ district.name if district else '-' }}</td>
                 <td>
@@ -109,10 +112,10 @@
                 </td>
                 <td>
                     <div class="driver-name">{{ driver.name }}</div>
-                    <div class="driver-id">{{ driver.driver_id or '-' }}</div>
-                    <div class="driver-id">{{ driver.cnic_no or '-' }}</div>
+                    <div class="driver-sub">{{ driver.driver_id or '-' }}</div>
+                    <div class="driver-sub"><i class="bi bi-person-vcard me-1"></i>{{ driver.cnic_no or '-' }}</div>
                 </td>
-                <td style="text-align:center;">
+                <td class="text-center">
                     {% if driver.shift == 'Morning' %}
                     <span class="shift-m">Morning</span>
                     {% elif driver.shift == 'Night' %}
@@ -127,15 +130,15 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="no-data">No active drivers found.</td></tr>
+            <tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-info-circle me-2"></i>No active drivers found.</td></tr>
             {% endfor %}
         </tbody>
     </table>
 
-    <div class="print-footer">
+    <div class="rpt-footer">
         <span>Active Driver Summary Report</span>
         <span>Total Records: {{ total }}</span>
     </div>
+
 </div>
-</body>
-</html>
+{% endblock %}

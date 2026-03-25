@@ -2,21 +2,29 @@
 
 {% block title %}Print - Driver Attendance{% endblock %}
 
+{% block extra_head %}
+<style>
+    .att-header {
+        background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
+        color: #fff; border-radius: 10px; padding: 1rem 1.4rem; margin-bottom: 1rem;
+    }
+    .att-header h2 { margin: 0; font-size: 1.2rem; font-weight: 700; }
+    .att-header .sub { font-size: 0.82rem; opacity: 0.85; margin-top: 0.2rem; }
+    .att-meta { font-size: 0.78rem; color: #546e7a; margin-bottom: 0.75rem; }
+    @media print {
+        .att-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid mt-2">
-  <div class="d-flex justify-content-between align-items-center mb-3 no-print">
-    <h3 class="mb-0"><i class="bi bi-calendar-check me-2"></i>Driver Attendance (Marked) — {{ view_date.strftime('%d-%m-%Y') }}</h3>
-    <div>
-      {% if project_id or district_id or search %}
-      <span class="badge bg-secondary me-2">Filtered</span>
-      {% endif %}
-      <button class="btn btn-outline-primary" onclick="window.print()">
-        <i class="bi bi-printer me-1"></i>Print / Save as PDF
-      </button>
-    </div>
+<div class="print-container">
+  <div class="att-header">
+    <h2><i class="bi bi-calendar-check me-2"></i>Driver Attendance Report</h2>
+    <div class="sub">{{ view_date.strftime('%d %B %Y') }}{% if project_id or district_id or search %} · Filtered{% endif %}</div>
   </div>
 
-  <div class="card shadow-sm">
+  <div class="card shadow-sm border-0">
     <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table table-bordered table-sm mb-0">

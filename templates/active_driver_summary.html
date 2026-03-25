@@ -228,7 +228,7 @@
                             {% endif %}
                         </td>
                         <td class="text-center">
-                            <a href="{{ url_for('report_driver_profile', driver_id=driver.id) }}?ref={{ request.full_path | url_quote }}"
+                            <a href="{{ url_for('report_driver_profile', driver_id=driver.id) }}?from=active_drivers&ref={{ request.full_path | url_quote }}"
                                class="btn btn-sm" style="background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;font-size:0.72rem;padding:0.2rem 0.55rem;">
                                <i class="bi bi-eye-fill me-1"></i>View Profile</a>
                         </td>

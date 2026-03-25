@@ -1,65 +1,64 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Project Transfers - Print View</title>
-    <style>
-        @media print {
-            .no-print { display: none; }
-            @page { margin: 1cm; }
-        }
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { text-align: center; color: #ff5722; margin-bottom: 10px; }
-        .subtitle { text-align: center; color: #666; margin-bottom: 20px; font-size: 14px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { background: #ff5722; color: white; padding: 10px; text-align: left; font-size: 12px; }
-        td { padding: 8px; border-bottom: 1px solid #ddd; font-size: 11px; }
-        tr:hover { background: #f5f5f5; }
-        .transition-arrow { color: #ff9800; font-weight: bold; }
-        .print-btn { background: #4caf50; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px; margin-bottom: 20px; }
-        .print-btn:hover { background: #388e3c; }
-    </style>
-</head>
-<body>
-    <button onclick="window.print()" class="print-btn no-print">🖨️ Print</button>
-    
-    <h1>📋 Project Transfer History</h1>
-    <div class="subtitle">Transfer Management Report{% if search %} - Search: "{{ search }}"{% endif %}</div>
-    
-    <table>
+{% extends "base_print.html" %}
+{% block title %}Print – Project Transfers{% endblock %}
+
+{% block extra_head %}
+<style>
+    .rpt-header { background: linear-gradient(135deg, #e65100 0%, #ff5722 100%); color: #fff; border-radius: 10px; padding: 1rem 1.4rem; margin-bottom: 1rem; }
+    .rpt-header h2 { margin: 0; font-size: 1.2rem; font-weight: 700; }
+    .rpt-header .sub { font-size: 0.82rem; opacity: 0.85; margin-top: 0.2rem; }
+    .rpt-table { font-size: 0.82rem; }
+    .rpt-table thead th { background: #fff3e0; color: #bf360c; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 2px solid #ff5722; padding: 0.45rem 0.65rem; white-space: nowrap; }
+    .rpt-table tbody td { vertical-align: middle; padding: 0.4rem 0.65rem; }
+    .rpt-table tbody tr:nth-child(even) { background: #fff8f0; }
+    .sr-badge { background: #e65100; color: #fff; border-radius: 4px; padding: 0.1rem 0.4rem; font-size: 0.73rem; font-weight: 700; }
+    .transfer-arrow { color: #e65100; font-weight: 700; font-size: 1rem; }
+    .rpt-footer { margin-top: 1rem; border-top: 1px solid #cfd8dc; padding-top: 0.5rem; font-size: 0.72rem; color: #888; display: flex; justify-content: space-between; }
+    @media print {
+        .rpt-header, .rpt-table thead th, .sr-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .rpt-table tbody tr:nth-child(even) { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="print-container">
+    <div class="rpt-header">
+        <h2><i class="bi bi-briefcase me-2"></i>Project Transfer History</h2>
+        <div class="sub">Transfer Management Report{% if search %} · Search: "{{ search }}"{% endif %}</div>
+    </div>
+
+    <table class="table table-sm table-bordered rpt-table w-100">
         <thead>
             <tr>
-                <th width="5%">Sr No</th>
-                <th width="25%">Project Name</th>
-                <th width="30%">Company Transition</th>
-                <th width="15%">Transfer Date</th>
-                <th width="25%">Remarks</th>
+                <th style="width:4%">Sr No</th>
+                <th style="width:22%">Project Name</th>
+                <th style="width:35%">Company Transition</th>
+                <th style="width:14%">Transfer Date</th>
+                <th>Remarks</th>
             </tr>
         </thead>
         <tbody>
             {% for t in transfers %}
             <tr>
-                <td>{{ loop.index }}</td>
+                <td class="text-center"><span class="sr-badge">{{ loop.index }}</span></td>
                 <td><strong>{{ t.project.name if t.project else '-' }}</strong></td>
                 <td>
-                    {{ t.old_company.name if t.old_company else 'Initial' }} 
-                    <span class="transition-arrow">→</span> 
+                    {{ t.old_company.name if t.old_company else 'Initial' }}
+                    <span class="transfer-arrow mx-1">→</span>
                     <strong>{{ t.new_company.name if t.new_company else '-' }}</strong>
                 </td>
-                <td>{{ t.transfer_date.strftime('%d %b, %Y') if t.transfer_date else '-' }}</td>
-                <td>{{ t.remarks or '-' }}</td>
+                <td>{{ t.transfer_date.strftime('%d %b %Y') if t.transfer_date else '-' }}</td>
+                <td style="font-size:0.78rem;color:#546e7a;">{{ t.remarks or '-' }}</td>
             </tr>
             {% else %}
-            <tr>
-                <td colspan="5" style="text-align: center; padding: 20px; color: #999;">
-                    No transfer records found.
-                </td>
-            </tr>
+            <tr><td colspan="5" class="text-center py-4 text-muted"><i class="bi bi-info-circle me-2"></i>No transfer records found.</td></tr>
             {% endfor %}
         </tbody>
     </table>
-    
-    <div style="margin-top: 30px; text-align: center; color: #999; font-size: 11px;">
-        Total Records: {{ transfers|length }}
+
+    <div class="rpt-footer">
+        <span>Project Transfer History</span>
+        <span>Total Records: {{ transfers|length }}</span>
     </div>
-</body>
-</html>
+</div>
+{% endblock %}

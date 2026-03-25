@@ -226,29 +226,7 @@
           text: '<i class="bi bi-printer me-1"></i> Print / Preview',
           className: 'btn btn-secondary btn-sm',
           autoPrint: false,
-          customize: function (win) {
-            var $body = $(win.document.body);
-            $body.css('font-family', '"Segoe UI", Tahoma, sans-serif');
-            $body.css('padding', '20px');
-
-            var $toolbar = $('<div style="display:flex; justify-content:flex-end; margin-bottom:10px;"></div>');
-            var $printBtn = $('<button style="padding:6px 12px; border-radius:4px; border:1px solid #333; background:#333; color:white; font-size:12px;">Print</button>');
-            $printBtn.on('click', function () { win.print(); });
-            $toolbar.append($printBtn);
-            $body.prepend($toolbar);
-
-            var $table = $body.find('table');
-            $table.addClass('table table-sm');
-            $table.css({
-              'border-collapse': 'collapse',
-              'width': '100%',
-              'font-size': '12px'
-            });
-            $table.find('th, td').css({
-              'border': '1px solid #ccc',
-              'padding': '4px 6px'
-            });
-          }
+          customize: window._dtPrintCustomize('License / CNIC Expiry Report', '#dc2626', 'calendar-x')
         }
       ]
     });

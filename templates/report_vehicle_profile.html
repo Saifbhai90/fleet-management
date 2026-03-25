@@ -1,132 +1,423 @@
 {% extends "base.html" %}
-{% block title %}Vehicle Profile - {{ vehicle.vehicle_no }}{% endblock %}
+{% block title %}Vehicle Profile – {{ vehicle.vehicle_no }}{% endblock %}
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-4">
-    <h2 class="mb-0"><i class="bi bi-truck me-2 text-primary"></i>Vehicle Profile Report</h2>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('vehicle_form', id=vehicle.id) }}" class="btn btn-outline-primary btn-sm">Edit Vehicle</a>
-      <a href="{{ url_for('reports_index') }}" class="btn btn-outline-secondary btn-sm">All Reports</a>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand:      #1e40af;
+    --brand-dark: #1e3a5f;
+    --brand-mid:  #3b82f6;
+    --accent:     #2563eb;
+    --text-dark:  #111827;
+    --text-mid:   #374151;
+    --text-light: #6b7280;
+    --border:     #e5e7eb;
+    --bg-page:    #f8fafc;
+    --bg-card:    #ffffff;
+    --bg-subtle:  #f1f5f9;
+  }
+
+  .profile-page {
+    background: var(--bg-page);
+    min-height: 100vh;
+    padding: 1.5rem;
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+    color: var(--text-dark);
+  }
+
+  .action-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; flex-wrap:wrap; gap:0.5rem; }
+  .action-bar h4 { margin:0; font-weight:700; color:var(--text-dark); font-size:1.05rem; }
+  .btn-action { padding:0.42rem 1.1rem; font-size:0.82rem; border-radius:8px; font-weight:500; display:inline-flex; align-items:center; gap:6px; border:none; cursor:pointer; transition:all 0.15s ease; text-decoration:none; }
+  .btn-back { background:#f1f5f9; color:#475569; }
+  .btn-back:hover { background:#e2e8f0; color:#1e293b; transform:none!important; }
+  .btn-edit { background:linear-gradient(135deg,#059669,#10b981); color:#fff; box-shadow:0 2px 8px rgba(5,150,105,0.2); }
+  .btn-edit:hover { box-shadow:0 4px 14px rgba(5,150,105,0.35); color:#fff; transform:none!important; }
+  .btn-print { background:linear-gradient(135deg,var(--brand-dark),var(--accent)); color:#fff; box-shadow:0 2px 8px rgba(30,64,175,0.2); }
+  .btn-print:hover { box-shadow:0 4px 14px rgba(30,64,175,0.35); color:#fff; transform:none!important; }
+  .btn-pdf { background:linear-gradient(135deg,#b91c1c,#dc2626); color:#fff; box-shadow:0 2px 8px rgba(185,28,28,0.2); }
+  .btn-pdf:hover { box-shadow:0 4px 14px rgba(185,28,28,0.35); color:#fff; transform:none!important; }
+
+  .profile-header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
+    border-radius:14px; padding:1.5rem 1.75rem; color:#fff;
+    margin-bottom:0.85rem; position:relative;
+    box-shadow:0 6px 22px rgba(30,58,95,0.25);
+    display:flex; align-items:center;
+  }
+  .profile-header .header-icon {
+    width:72px; height:72px; border-radius:16px;
+    background:rgba(255,255,255,0.12); border:2.5px solid rgba(255,255,255,0.4);
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.8rem; color:rgba(255,255,255,0.9); margin-right:1.25rem; flex-shrink:0;
+  }
+  .profile-header .header-info { flex:1; }
+  .profile-header h2 { font-size:1.55rem; font-weight:700; margin:0 0 0.15rem; letter-spacing:-0.01em; }
+  .profile-header .sub { font-size:0.85rem; opacity:0.85; margin:0; }
+  .vehicle-type-badge {
+    position:absolute; top:1.25rem; right:1.5rem;
+    padding:0.3rem 1rem; border-radius:20px; font-size:0.73rem;
+    font-weight:700; letter-spacing:1.2px; text-transform:uppercase;
+    background:rgba(255,255,255,0.14); border:1.5px solid rgba(255,255,255,0.38);
+    color:#fff; backdrop-filter:blur(6px);
+  }
+
+  .stats-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:0.6rem; margin-bottom:0.85rem; }
+  .stat-box { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:0.85rem 1rem; text-align:center; box-shadow:0 1px 4px rgba(0,0,0,0.04); }
+  .stat-box .stat-value { font-size:1rem; font-weight:700; color:var(--text-dark); margin-bottom:0.1rem; }
+  .stat-box .stat-label { font-size:0.68rem; color:var(--text-light); text-transform:uppercase; letter-spacing:0.06em; font-weight:600; }
+  .stat-icon { font-size:1.15rem; margin-bottom:0.2rem; display:block; }
+
+  .section-card { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:0; margin-bottom:0.85rem; box-shadow:0 1px 4px rgba(0,0,0,0.04); overflow:hidden; }
+  .section-title { display:flex; align-items:center; gap:0.5rem; padding:0.75rem 1.25rem; font-size:0.82rem; font-weight:700; color:var(--brand-dark); background:var(--bg-subtle); border-bottom:1px solid var(--border); text-transform:uppercase; letter-spacing:0.06em; }
+  .section-title i { font-size:1rem; opacity:0.7; }
+  .section-body { padding:1rem 1.25rem; }
+
+  .info-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:0.15rem 1.5rem; }
+  .info-item { padding:0.5rem 0; border-bottom:1px solid #f3f4f6; }
+  .info-item:last-child { border-bottom:none; }
+  .info-label { font-size:0.68rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-light); margin-bottom:0.1rem; }
+  .info-value { font-size:0.88rem; font-weight:600; color:var(--text-dark); word-break:break-word; }
+  .info-value.muted { color:var(--text-light); font-weight:400; font-style:italic; }
+
+  .driver-card { display:flex; align-items:center; gap:0.75rem; padding:0.65rem 0.85rem; border:1px solid var(--border); border-radius:10px; background:#fafbfc; margin-bottom:0.5rem; }
+  .driver-card:last-child { margin-bottom:0; }
+  .driver-avatar { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#dbeafe,#bfdbfe); display:flex; align-items:center; justify-content:center; color:#2563eb; font-size:1rem; flex-shrink:0; }
+  .driver-info { flex:1; }
+  .driver-name { font-size:0.85rem; font-weight:600; color:var(--text-dark); }
+  .driver-meta { font-size:0.72rem; color:var(--text-light); }
+  .driver-shift { display:inline-flex; align-items:center; padding:0.15rem 0.55rem; border-radius:12px; font-size:0.65rem; font-weight:600; background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; }
+
+  .history-table { width:100%; border-collapse:separate; border-spacing:0; font-size:0.8rem; }
+  .history-table thead th { background:var(--bg-subtle); padding:0.55rem 0.85rem; font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-light); border-bottom:1px solid var(--border); }
+  .history-table tbody td { padding:0.55rem 0.85rem; border-bottom:1px solid #f3f4f6; color:var(--text-mid); vertical-align:top; }
+  .history-table tbody tr:last-child td { border-bottom:none; }
+  .history-table tbody tr:hover { background:#fafbfc; }
+
+  .transfer-arrow { color:var(--accent); font-weight:700; margin:0 0.25rem; }
+
+  .empty-state { text-align:center; padding:1.5rem; color:var(--text-light); font-size:0.85rem; }
+  .empty-state i { font-size:1.5rem; display:block; margin-bottom:0.4rem; opacity:0.4; }
+
+  .remarks-text { background:#fffbeb; border-left:3px solid #f59e0b; padding:0.65rem 1rem; border-radius:0 8px 8px 0; font-size:0.84rem; color:#92400e; line-height:1.6; }
+
+  .profile-footer { text-align:center; padding:1rem; color:var(--text-light); font-size:0.7rem; border-top:1px solid var(--border); margin-top:0.5rem; }
+
+  .tag-loc { display:inline-flex; align-items:center; gap:4px; padding:0.22rem 0.65rem; border-radius:20px; font-size:0.72rem; font-weight:600; }
+  .tag-project { background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; }
+  .tag-district { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; }
+  .tag-parking { background:#fef3c7; color:#92400e; border:1px solid #fde68a; }
+
+  @media print {
+    .action-bar, .no-print { display:none!important; }
+    .profile-page { padding:0; background:#fff; }
+    .section-card { box-shadow:none; break-inside:avoid; }
+    .profile-header { box-shadow:none; }
+  }
+  @media (max-width:576px) {
+    .profile-header { flex-direction:column; text-align:center; padding:1.25rem; }
+    .profile-header .header-icon { margin:0 auto 0.75rem; }
+    .vehicle-type-badge { position:static; margin-top:0.5rem; }
+    .stats-row { grid-template-columns:repeat(2,1fr); }
+    .info-grid { grid-template-columns:1fr; }
+  }
+</style>
+
+<div class="profile-page" id="profile-content">
+
+  <!-- Action Bar -->
+  <div class="action-bar no-print">
+    <h4><i class="bi bi-truck me-2"></i>Vehicle Profile</h4>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('vehicles_list') if request.args.get('from') == 'master' else url_for('reports_index') }}" class="btn-action btn-back"><i class="bi bi-arrow-left"></i>Back</a>
+      <a href="{{ url_for('vehicle_form', id=vehicle.id) }}" class="btn-action btn-edit"><i class="bi bi-pencil-square"></i>Edit</a>
+      <button class="btn-action btn-print" onclick="doPrint()"><i class="bi bi-printer"></i>Print</button>
+      <button class="btn-action btn-pdf" onclick="downloadPDF()"><i class="bi bi-file-earmark-pdf"></i>PDF</button>
     </div>
   </div>
 
-  <!-- Basic Info -->
-  <div class="card shadow border-0 mb-4">
-    <div class="card-header bg-light"><strong>{{ vehicle.vehicle_no }}</strong> — {{ vehicle.model }}</div>
-    <div class="card-body">
-      <div class="row">
-        <div class="col-md-6">
-          <p class="mb-1"><strong>Model:</strong> {{ vehicle.model }}</p>
-          <p class="mb-1"><strong>Vehicle Type:</strong> {{ vehicle.vehicle_type or '-' }}</p>
-          <p class="mb-1"><strong>Engine No:</strong> {{ vehicle.engine_no or '-' }}</p>
-          <p class="mb-1"><strong>Chassis No:</strong> {{ vehicle.chassis_no or '-' }}</p>
-        </div>
-        <div class="col-md-6">
-          <p class="mb-1"><strong>Phone (vehicle):</strong> {{ vehicle.phone_no|phone_fmt if vehicle.phone_no else '-' }}</p>
-          <p class="mb-1"><strong>Active Date:</strong> {{ vehicle.active_date|ddmmyyyy if vehicle.active_date else '-' }}</p>
-          <p class="mb-1"><strong>Driver Capacity:</strong> {{ vehicle.driver_capacity or 1 }}</p>
-          {% if vehicle.document_path %}
-          <p class="mb-1"><a href="{{ url_for('uploaded_file', filename=vehicle.document_path) }}" target="_blank" class="text-primary"><i class="bi bi-file-earmark-pdf me-1"></i>View Vehicle Document</a></p>
-          {% endif %}
-        </div>
+  <!-- Header -->
+  <div class="profile-header">
+    <div class="header-icon"><i class="bi bi-truck"></i></div>
+    <div class="header-info">
+      <h2>{{ vehicle.vehicle_no }}</h2>
+      <p class="sub"><i class="bi bi-car-front me-1"></i>{{ vehicle.model }}{% if vehicle.engine_no %} · Engine: {{ vehicle.engine_no }}{% endif %}</p>
+      {% if vehicle.chassis_no %}<p class="sub" style="opacity:0.7;font-size:0.78rem;margin-top:0.1rem;"><i class="bi bi-upc-scan me-1"></i>Chassis: {{ vehicle.chassis_no }}</p>{% endif %}
+    </div>
+    {% if vehicle.vehicle_type %}
+    <span class="vehicle-type-badge">{{ vehicle.vehicle_type }}</span>
+    {% endif %}
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#2563eb;"><i class="bi bi-calendar-check"></i></span>
+      <div class="stat-value">{{ vehicle.active_date.strftime('%d %b %Y') if vehicle.active_date else '—' }}</div>
+      <div class="stat-label">Active Since</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#059669;"><i class="bi bi-people"></i></span>
+      <div class="stat-value">{{ vehicle.drivers|list|length }} / {{ vehicle.driver_capacity or 1 }}</div>
+      <div class="stat-label">Drivers</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#d97706;"><i class="bi bi-arrow-left-right"></i></span>
+      <div class="stat-value">{{ transfers|length }}</div>
+      <div class="stat-label">Transfers</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#7c3aed;"><i class="bi bi-person-lines-fill"></i></span>
+      <div class="stat-value">{{ driver_history|length }}</div>
+      <div class="stat-label">Driver Changes</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#0891b2;"><i class="bi bi-telephone"></i></span>
+      <div class="stat-value">{{ vehicle.phone_no if vehicle.phone_no else '—' }}</div>
+      <div class="stat-label">Vehicle Phone</div>
+    </div>
+  </div>
+
+  <!-- Vehicle Details -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-info-circle"></i>Vehicle Details</div>
+    <div class="section-body">
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Vehicle Number</div><div class="info-value">{{ vehicle.vehicle_no }}</div></div>
+        <div class="info-item"><div class="info-label">Model</div><div class="info-value">{{ vehicle.model }}</div></div>
+        <div class="info-item"><div class="info-label">Vehicle Type</div><div class="info-value {% if not vehicle.vehicle_type %}muted{% endif %}">{{ vehicle.vehicle_type or 'Not specified' }}</div></div>
+        <div class="info-item"><div class="info-label">Engine Number</div><div class="info-value {% if not vehicle.engine_no %}muted{% endif %}">{{ vehicle.engine_no or 'Not provided' }}</div></div>
+        <div class="info-item"><div class="info-label">Chassis Number</div><div class="info-value {% if not vehicle.chassis_no %}muted{% endif %}">{{ vehicle.chassis_no or 'Not provided' }}</div></div>
+        <div class="info-item"><div class="info-label">Active Date</div><div class="info-value {% if not vehicle.active_date %}muted{% endif %}">{{ vehicle.active_date.strftime('%d %b %Y') if vehicle.active_date else 'Not set' }}</div></div>
+        <div class="info-item"><div class="info-label">Driver Capacity</div><div class="info-value">{{ vehicle.driver_capacity or 1 }}</div></div>
+        <div class="info-item"><div class="info-label">Phone</div><div class="info-value {% if not vehicle.phone_no %}muted{% endif %}">{{ vehicle.phone_no or 'Not provided' }}</div></div>
       </div>
+      {% if vehicle.document_path %}
+      <div style="margin-top:0.75rem;">
+        <a href="{{ vehicle.document_path | media_url }}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:0.4rem 0.85rem;border-radius:8px;background:#fef2f2;color:#dc2626;font-size:0.8rem;font-weight:600;text-decoration:none;border:1px solid #fecaca;">
+          <i class="bi bi-file-earmark-pdf"></i>View Vehicle Document (PDF)
+        </a>
+      </div>
+      {% endif %}
     </div>
   </div>
 
   <!-- Current Assignment -->
-  <div class="card shadow border-0 mb-4">
-    <div class="card-header bg-light">Current Assignment</div>
-    <div class="card-body">
-      <p class="mb-1"><strong>Project:</strong> {{ vehicle.project.name if vehicle.project else '-' }}</p>
-      <p class="mb-1"><strong>District:</strong> {{ vehicle.district.name if vehicle.district else '-' }}</p>
-      <p class="mb-1"><strong>Parking Station:</strong> {{ vehicle.parking_station.name if vehicle.parking_station else '-' }}</p>
-      <p class="mb-2"><strong>Assigned to district since:</strong> {{ vehicle.assign_to_district_date|ddmmyyyy if vehicle.assign_to_district_date else '-' }}</p>
-      <p class="mb-1"><strong>Current Driver(s):</strong></p>
-      <ul class="mb-0">
-        {% for d in vehicle.drivers %}
-        <li>
-          <a href="{{ url_for('report_driver_profile', driver_id=d.id) }}">{{ d.name }}</a> ({{ d.driver_id }}) — {{ d.shift or '-' }} shift
-          {% if d.assign_date %} — since {{ d.assign_date|ddmmyyyy }}{% endif %}
-        </li>
-        {% else %}
-        <li class="text-muted">No driver assigned.</li>
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-geo-alt"></i>Current Assignment</div>
+    <div class="section-body">
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.85rem;">
+        {% if vehicle.project %}
+        <span class="tag-loc tag-project"><i class="bi bi-folder2-open"></i>{{ vehicle.project.name }}</span>
+        {% endif %}
+        {% if vehicle.district %}
+        <span class="tag-loc tag-district"><i class="bi bi-pin-map"></i>{{ vehicle.district.name }}</span>
+        {% endif %}
+        {% if vehicle.parking_station %}
+        <span class="tag-loc tag-parking"><i class="bi bi-p-circle"></i>{{ vehicle.parking_station.name }}</span>
+        {% endif %}
+        {% if not vehicle.project and not vehicle.district and not vehicle.parking_station %}
+        <span class="info-value muted">No assignment</span>
+        {% endif %}
+      </div>
+      {% if vehicle.assign_to_district_date %}
+      <div style="font-size:0.78rem;color:var(--text-light);margin-bottom:0.5rem;">
+        <i class="bi bi-calendar3 me-1"></i>Assigned to district since: <strong style="color:var(--text-dark);">{{ vehicle.assign_to_district_date.strftime('%d %b %Y') }}</strong>
+      </div>
+      {% endif %}
+
+      <div class="info-label" style="margin-bottom:0.5rem;margin-top:0.5rem;">Current Driver(s)</div>
+      {% set driver_list = vehicle.drivers|list %}
+      {% if driver_list %}
+        {% for d in driver_list %}
+        <div class="driver-card">
+          <div class="driver-avatar"><i class="bi bi-person-fill"></i></div>
+          <div class="driver-info">
+            <div class="driver-name">{{ d.name }}</div>
+            <div class="driver-meta">{{ d.driver_id }} · {{ d.phone1 or '—' }}{% if d.assign_date %} · Since {{ d.assign_date.strftime('%d %b %Y') }}{% endif %}</div>
+          </div>
+          {% if d.shift %}<span class="driver-shift"><i class="bi bi-clock me-1"></i>{{ d.shift }}</span>{% endif %}
+        </div>
         {% endfor %}
-      </ul>
+      {% else %}
+      <div class="empty-state" style="padding:0.75rem;"><i class="bi bi-person-x"></i>No driver assigned</div>
+      {% endif %}
     </div>
   </div>
 
   <!-- Vehicle Transfer History -->
-  <div class="card shadow border-0 mb-4">
-    <div class="card-header bg-light">Vehicle Transfer History</div>
-    <div class="table-responsive">
-      <table class="table table-sm mb-0">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>From (Project / District / Parking)</th>
-            <th>To (Project / District / Parking)</th>
-            <th>Remarks</th>
-          </tr>
-        </thead>
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-arrow-left-right"></i>Vehicle Transfer History</div>
+    <div style="padding:0;">
+      {% if transfers %}
+      <table class="history-table">
+        <thead><tr><th style="width:15%;">Date</th><th>From</th><th style="width:3%;"></th><th>To</th><th style="width:20%;">Remarks</th></tr></thead>
         <tbody>
           {% for t in transfers %}
           <tr>
-            <td>{{ t.transfer_date|ddmmyyyy }}</td>
+            <td><strong>{{ t.transfer_date.strftime('%d %b %Y') if t.transfer_date else '—' }}</strong></td>
             <td>
-              {{ t.old_project.name if t.old_project else '-' }} /
-              {{ t.old_district.name if t.old_district else '-' }} /
-              {{ t.old_parking.name if t.old_parking else '-' }}
+              {% if t.old_project %}{{ t.old_project.name }}{% endif %}
+              {% if t.old_district %}<span style="color:var(--text-light);"> / </span>{{ t.old_district.name }}{% endif %}
+              {% if t.old_parking %}<span style="color:var(--text-light);"> / </span>{{ t.old_parking.name }}{% endif %}
+              {% if not t.old_project and not t.old_district and not t.old_parking %}—{% endif %}
             </td>
+            <td class="transfer-arrow text-center">→</td>
             <td>
-              {{ t.new_project.name if t.new_project else '-' }} /
-              {{ t.new_district.name if t.new_district else '-' }} /
-              {{ t.new_parking.name if t.new_parking else '-' }}
+              {% if t.new_project %}{{ t.new_project.name }}{% endif %}
+              {% if t.new_district %}<span style="color:var(--text-light);"> / </span>{{ t.new_district.name }}{% endif %}
+              {% if t.new_parking %}<span style="color:var(--text-light);"> / </span>{{ t.new_parking.name }}{% endif %}
+              {% if not t.new_project and not t.new_district and not t.new_parking %}—{% endif %}
             </td>
-            <td class="small">{{ t.remarks or '-' }}</td>
+            <td style="font-size:0.75rem;color:var(--text-light);">{{ t.remarks or '—' }}</td>
           </tr>
-          {% else %}
-          <tr><td colspan="4" class="text-muted">No transfers.</td></tr>
           {% endfor %}
         </tbody>
       </table>
+      {% else %}
+      <div class="empty-state"><i class="bi bi-arrow-left-right"></i>No transfer history</div>
+      {% endif %}
     </div>
   </div>
 
-  <!-- Driver Assignment History (drivers who were assigned to this vehicle) -->
-  <div class="card shadow border-0">
-    <div class="card-header bg-light">Driver Assignment History</div>
-    <div class="table-responsive">
-      <table class="table table-sm mb-0">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Driver</th>
-            <th>From (Vehicle / Shift)</th>
-            <th>To (Vehicle / Shift)</th>
-            <th>Remarks</th>
-          </tr>
-        </thead>
+  <!-- Driver Assignment History -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-person-lines-fill"></i>Driver Assignment History</div>
+    <div style="padding:0;">
+      {% if driver_history %}
+      <table class="history-table">
+        <thead><tr><th style="width:14%;">Date</th><th>Driver</th><th>From</th><th style="width:3%;"></th><th>To</th><th style="width:18%;">Remarks</th></tr></thead>
         <tbody>
           {% for h in driver_history %}
           <tr>
-            <td>{{ h.transfer_date|ddmmyyyy }}</td>
+            <td><strong>{{ h.transfer_date.strftime('%d %b %Y') if h.transfer_date else '—' }}</strong></td>
             <td>
-              <a href="{{ url_for('report_driver_profile', driver_id=h.driver_id) }}">{{ h.driver.name }}</a> ({{ h.driver.driver_id }})
+              <span style="font-weight:600;">{{ h.driver.name }}</span>
+              <span style="font-size:0.7rem;color:var(--text-light);display:block;">{{ h.driver.driver_id }}</span>
             </td>
-            <td>
-              {{ h.old_vehicle.vehicle_no if h.old_vehicle else '-' }} ({{ h.old_shift or '-' }})
-            </td>
-            <td>
-              {{ h.new_vehicle.vehicle_no if h.new_vehicle else '-' }} ({{ h.new_shift or '-' }})
-            </td>
-            <td class="small">{{ h.remarks or '-' }}</td>
+            <td>{{ h.old_vehicle.vehicle_no if h.old_vehicle else '—' }} {% if h.old_shift %}<span class="driver-shift" style="font-size:0.6rem;">{{ h.old_shift }}</span>{% endif %}</td>
+            <td class="transfer-arrow text-center">→</td>
+            <td>{{ h.new_vehicle.vehicle_no if h.new_vehicle else '—' }} {% if h.new_shift %}<span class="driver-shift" style="font-size:0.6rem;">{{ h.new_shift }}</span>{% endif %}</td>
+            <td style="font-size:0.75rem;color:var(--text-light);">{{ h.remarks or '—' }}</td>
           </tr>
-          {% else %}
-          <tr><td colspan="5" class="text-muted">No driver assignment history.</td></tr>
           {% endfor %}
         </tbody>
       </table>
+      {% else %}
+      <div class="empty-state"><i class="bi bi-person-x"></i>No driver assignment history</div>
+      {% endif %}
     </div>
   </div>
+
+  <!-- Remarks -->
+  {% if vehicle.remarks %}
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-chat-square-text"></i>Remarks</div>
+    <div class="section-body"><div class="remarks-text">{{ vehicle.remarks }}</div></div>
+  </div>
+  {% endif %}
+
+  <!-- Footer -->
+  <div class="profile-footer">Generated on {{ generated_at }} · Fleet Management System</div>
 </div>
+
+<!-- ── PDF / Print Engine (proven system) ── -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+(function(){
+  var vehNo = '{{ vehicle.vehicle_no | e }}'.replace(/[^a-zA-Z0-9_\- ]/g,'').trim() || 'Vehicle';
+
+  var _COMPACT_CSS = [
+    '#profile-content { padding:0.5rem!important; background:#fff!important; }',
+    '.profile-page { background:#fff!important; }',
+    '.action-bar, .no-print { display:none!important; }',
+    '.profile-header { padding:1rem 1.25rem; margin-bottom:0.5rem; border-radius:10px; }',
+    '.profile-header h2 { font-size:1.3rem; }',
+    '.section-card { margin-bottom:0.5rem; break-inside:avoid; page-break-inside:avoid; }',
+    '.section-body { padding:0.7rem 1rem; }',
+    '.info-grid { gap:0 1.25rem; }',
+    '.info-item { padding:0.35rem 0; }',
+    '.info-label { font-size:0.64rem; }',
+    '.info-value { font-size:0.82rem; }',
+    '.stats-row { gap:0.4rem; margin-bottom:0.5rem; }',
+    '.stat-box { padding:0.55rem 0.65rem; break-inside:avoid; }',
+    '.stat-value { font-size:0.9rem; }',
+    '.stat-label { font-size:0.62rem; }',
+    '.stat-icon { font-size:0.95rem; }',
+    '.profile-footer { padding:0.5rem; font-size:0.64rem; margin-top:0.25rem; }',
+    '.section-title { padding:0.55rem 1rem; font-size:0.76rem; }',
+    '.history-table { font-size:0.72rem; }',
+    '.history-table thead th { font-size:0.62rem; padding:0.4rem 0.65rem; }',
+    '.history-table tbody td { padding:0.4rem 0.65rem; }',
+    '.driver-card { padding:0.4rem 0.65rem; margin-bottom:0.3rem; }',
+    '.driver-name { font-size:0.78rem; }',
+    '.driver-meta { font-size:0.66rem; }',
+    '.tag-loc { font-size:0.66rem; }',
+    '.remarks-text { font-size:0.78rem; }'
+  ].join('\n');
+
+  function _onCloneHandler(clonedDoc) {
+    var s = clonedDoc.createElement('style');
+    s.textContent = _COMPACT_CSS;
+    clonedDoc.head.appendChild(s);
+  }
+
+  var _PDF_OPTS = {
+    margin: [8, 8, 0, 8],
+    image: { type:'jpeg', quality:0.95 },
+    html2canvas: { scale:2, useCORS:true, allowTaint:true, letterRendering:true, logging:false, onclone:_onCloneHandler },
+    pagebreak: { mode:['css','legacy'] },
+    jsPDF: { unit:'mm', format:'a4', orientation:'portrait' }
+  };
+
+  function _showOverlay(msg) {
+    if (document.getElementById('_pdf_gen_overlay')) return;
+    if (!document.getElementById('_pdf_keyframes')) {
+      var kf = document.createElement('style'); kf.id='_pdf_keyframes';
+      kf.textContent='@keyframes _pdf_spin{to{transform:rotate(360deg)}}@keyframes _pdf_fadein{from{opacity:0}to{opacity:1}}';
+      document.head.appendChild(kf);
+    }
+    var ov = document.createElement('div'); ov.id='_pdf_gen_overlay';
+    ov.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:14px;"><div style="width:48px;height:48px;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:_pdf_spin .8s linear infinite;"></div><div style="color:#fff;font-size:15px;font-weight:600;">'+(msg||'Preparing…')+'</div><div style="color:rgba(255,255,255,.7);font-size:12px;">Please wait.</div></div>';
+    ov.style.cssText='position:fixed;inset:0;z-index:99998;background:rgba(30,58,95,.85);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;animation:_pdf_fadein .2s ease;';
+    document.body.appendChild(ov);
+  }
+  function _hideOverlay() { var ov=document.getElementById('_pdf_gen_overlay'); if(ov)ov.parentNode.removeChild(ov); }
+
+  function _renderDoc(opts, mode, onDone) {
+    var el = document.getElementById('profile-content');
+    function cleanup(r,e) {
+      var lc=document.getElementById('_veh_live_compact'); if(lc)lc.parentNode.removeChild(lc);
+      _hideOverlay(); if(onDone)onDone(r,e);
+    }
+    _showOverlay(mode==='blob'?'Preparing Print Preview…':'Generating PDF…');
+    var lc = document.createElement('style'); lc.id='_veh_live_compact';
+    lc.textContent = _COMPACT_CSS;
+    document.head.appendChild(lc);
+    el.offsetHeight;
+    requestAnimationFrame(function(){
+      setTimeout(function(){
+        var w = html2pdf().set(opts).from(el);
+        var p = (mode==='blob') ? w.output('blob') : w.save();
+        p.then(function(r){cleanup(r,null);}).catch(function(e){console.error(e);cleanup(null,e);});
+      },0);
+    });
+  }
+
+  window.doPrint = function(){
+    var opts = Object.assign({}, _PDF_OPTS, { filename: vehNo+'_Profile.pdf' });
+    _renderDoc(opts,'blob',function(blob,err){
+      if(err||!blob)return;
+      var url=URL.createObjectURL(blob);
+      window.open(url,'_blank');
+      setTimeout(function(){URL.revokeObjectURL(url);},60000);
+    });
+  };
+  window.downloadPDF = function(){
+    var opts = Object.assign({}, _PDF_OPTS, { filename: vehNo+'_Profile.pdf' });
+    _renderDoc(opts,'save',function(){});
+  };
+})();
+</script>
 {% endblock %}

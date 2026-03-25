@@ -191,7 +191,7 @@
               </td>
               <td class="text-center">
                 <div class="btn-group btn-group-sm" role="group">
-                  <a href="{{ url_for('employee_profile_print', id=emp.id) }}" class="btn btn-info-compact" title="View Profile" target="_blank">
+                  <a href="{{ url_for('employee_profile_print', id=emp.id, from='master') }}" class="btn btn-info-compact" title="View Profile">
                     <i class="bi bi-eye"></i>
                   </a>
                   {% if can_see_page('employees_edit') %}

@@ -1,107 +1,751 @@
-{% extends "base_print.html" %}
-
-{% block title %}Employee Profile - {{ employee.name }}{% endblock %}
-
+{% extends "base.html" %}
+{% block title %}Employee Profile – {{ employee.name }}{% endblock %}
 {% block content %}
-<div class="container-fluid mt-2">
-  <div class="d-flex justify-content-between align-items-center mb-3 no-print">
-    <h4 class="mb-0"><i class="bi bi-person-badge me-2"></i>Employee Profile - {{ employee.name }}</h4>
-    <button class="btn btn-primary" onclick="window.print()">
-      <i class="bi bi-printer me-1"></i>Print / Save as PDF
-    </button>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand:      #0f766e;
+    --brand-dark: #134e4a;
+    --brand-mid:  #14b8a6;
+    --accent:     #0d9488;
+    --text-dark:  #111827;
+    --text-mid:   #374151;
+    --text-light: #6b7280;
+    --border:     #e5e7eb;
+    --bg-page:    #f8fafb;
+    --bg-card:    #ffffff;
+    --bg-subtle:  #f1f5f4;
+  }
+
+  .profile-page {
+    background: var(--bg-page);
+    min-height: 100vh;
+    padding: 1.5rem;
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+    color: var(--text-dark);
+  }
+
+  /* ── Action Bar ── */
+  .action-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .action-bar h4 { margin: 0; font-weight: 700; color: var(--text-dark); font-size: 1.05rem; }
+  .btn-action {
+    padding: 0.42rem 1.1rem;
+    font-size: 0.82rem;
+    border-radius: 8px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-back { background: #f1f5f9; color: #475569; }
+  .btn-back:hover { background: #e2e8f0; color: #1e293b; transform: none !important; }
+  .btn-print { background: linear-gradient(135deg, var(--brand-dark), var(--accent)); color: #fff; box-shadow: 0 2px 8px rgba(15,118,110,0.2); }
+  .btn-print:hover { box-shadow: 0 4px 14px rgba(15,118,110,0.35); transform: none !important; }
+  .btn-pdf { background: linear-gradient(135deg, #b91c1c, #dc2626); color: #fff; box-shadow: 0 2px 8px rgba(185,28,28,0.2); }
+  .btn-pdf:hover { box-shadow: 0 4px 14px rgba(185,28,28,0.35); transform: none !important; }
+  .btn-img { background: linear-gradient(135deg, #6d28d9, #7c3aed); color: #fff; box-shadow: 0 2px 8px rgba(109,40,217,0.2); }
+  .btn-img:hover { box-shadow: 0 4px 14px rgba(109,40,217,0.35); transform: none !important; }
+
+  /* ── Header ── */
+  .profile-header {
+    background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand-mid) 100%);
+    border-radius: 14px;
+    padding: 1.5rem 1.75rem;
+    color: #fff;
+    margin-bottom: 0.85rem;
+    position: relative;
+    box-shadow: 0 6px 22px rgba(19,78,74,0.25);
+    display: flex;
+    align-items: center;
+  }
+  .profile-header .header-icon {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    border: 2.5px solid rgba(255,255,255,0.5);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.75rem; color: rgba(255,255,255,0.9);
+    margin-right: 1.25rem;
+    flex-shrink: 0;
+  }
+  .profile-header .header-info { flex: 1; }
+  .profile-header h2 {
+    font-size: 1.55rem; font-weight: 700; margin: 0 0 0.15rem;
+    letter-spacing: -0.01em;
+  }
+  .profile-header .sub { font-size: 0.85rem; opacity: 0.85; margin: 0; }
+  .status-badge {
+    position: absolute; top: 1.25rem; right: 1.5rem;
+    padding: 0.3rem 1rem;
+    border-radius: 20px;
+    font-size: 0.73rem; font-weight: 700; letter-spacing: 1.2px;
+    text-transform: uppercase;
+    backdrop-filter: blur(6px);
+  }
+  .status-active { background: rgba(16,185,129,0.2); border: 1.5px solid rgba(16,185,129,0.5); color: #d1fae5; box-shadow: 0 0 12px rgba(16,185,129,0.15); }
+  .status-inactive { background: rgba(239,68,68,0.2); border: 1.5px solid rgba(239,68,68,0.5); color: #fecaca; }
+  .status-left { background: rgba(245,158,11,0.2); border: 1.5px solid rgba(245,158,11,0.5); color: #fef3c7; }
+
+  /* ── Stats Row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 0.85rem;
+  }
+  .stat-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  .stat-box .stat-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 0.1rem;
+  }
+  .stat-box .stat-label {
+    font-size: 0.68rem;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+  .stat-icon {
+    font-size: 1.15rem;
+    margin-bottom: 0.2rem;
+    display: block;
+  }
+
+  /* ── Section Cards ── */
+  .section-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0;
+    margin-bottom: 0.85rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    overflow: hidden;
+  }
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--brand-dark);
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .section-title i { font-size: 1rem; opacity: 0.7; }
+  .section-body { padding: 1rem 1.25rem; }
+
+  /* ── Data Grid ── */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.15rem 1.5rem;
+  }
+  .info-item {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .info-item:last-child { border-bottom: none; }
+  .info-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-light);
+    margin-bottom: 0.1rem;
+  }
+  .info-value {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    word-break: break-word;
+  }
+  .info-value.muted { color: var(--text-light); font-weight: 400; font-style: italic; }
+
+  /* ── Assignment Tags ── */
+  .tag-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.35rem; }
+  .tag-item {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 0.28rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem; font-weight: 600;
+  }
+  .tag-project { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+  .tag-district { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+  .tag-item i { font-size: 0.7rem; }
+
+  /* ── Documents Table ── */
+  .doc-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.82rem;
+  }
+  .doc-table thead th {
+    background: var(--bg-subtle);
+    padding: 0.5rem 0.85rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-light);
+    border-bottom: 1px solid var(--border);
+  }
+  .doc-table tbody td {
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid #f3f4f6;
+    color: var(--text-mid);
+  }
+  .doc-table tbody tr:last-child td { border-bottom: none; }
+  .doc-table tbody tr:hover { background: #fafbfc; }
+  .doc-icon { color: #dc2626; font-size: 1.1rem; }
+
+  /* ── Empty State ── */
+  .empty-state {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--text-light);
+    font-size: 0.85rem;
+  }
+  .empty-state i { font-size: 1.5rem; display: block; margin-bottom: 0.4rem; opacity: 0.4; }
+
+  /* ── Remarks ── */
+  .remarks-text {
+    background: #fffbeb;
+    border-left: 3px solid #f59e0b;
+    padding: 0.65rem 1rem;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.84rem;
+    color: #92400e;
+    line-height: 1.6;
+  }
+
+  /* ── Footer ── */
+  .profile-footer {
+    text-align: center;
+    padding: 1rem;
+    color: var(--text-light);
+    font-size: 0.7rem;
+    border-top: 1px solid var(--border);
+    margin-top: 0.5rem;
+  }
+
+  /* ── Print ── */
+  @media print {
+    .action-bar, .no-print { display: none !important; }
+    .profile-page { padding: 0; background: #fff; }
+    .section-card { box-shadow: none; break-inside: avoid; }
+    .profile-header { box-shadow: none; }
+    .stat-box { box-shadow: none; }
+  }
+
+  @media (max-width: 576px) {
+    .profile-header { flex-direction: column; text-align: center; padding: 1.25rem; }
+    .profile-header .header-icon { margin: 0 auto 0.75rem; }
+    .status-badge { position: static; margin-top: 0.5rem; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .info-grid { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="profile-page" id="profile-content">
+
+  <!-- Action Bar -->
+  <div class="action-bar no-print">
+    <h4><i class="bi bi-person-badge me-2"></i>Employee Profile</h4>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('employees_list') if request.args.get('from') == 'master' else url_for('reports_index') }}" class="btn-action btn-back">
+        <i class="bi bi-arrow-left"></i>Back
+      </a>
+      <button class="btn-action btn-print" onclick="doPrint()">
+        <i class="bi bi-printer"></i>Print
+      </button>
+      <button class="btn-action btn-pdf" onclick="downloadPDF()">
+        <i class="bi bi-file-earmark-pdf"></i>PDF
+      </button>
+      <button class="btn-action btn-img" onclick="downloadImages()">
+        <i class="bi bi-images"></i>Images
+      </button>
+    </div>
   </div>
 
-  <div class="card shadow-sm mb-3">
-    <div class="card-header bg-primary text-white py-2">
-      <h5 class="mb-0">Employee Complete Profile</h5>
-      <small>{{ employee.code }} — {{ employee.name }}</small>
+  <!-- Premium Header -->
+  <div class="profile-header">
+    <div class="header-icon">
+      <i class="bi bi-person-fill"></i>
     </div>
-    <div class="card-body p-3">
-      <!-- Tab 1: Basic & Personal -->
-      <section class="mb-4">
-        <h6 class="border-bottom pb-1 mb-2 text-primary"><i class="bi bi-person me-1"></i>1. Basic & Personal</h6>
-        <div class="row g-2 small">
-          <div class="col-6 col-md-4"><strong>Code</strong></div><div class="col-6 col-md-8">{{ employee.code or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Name</strong></div><div class="col-6 col-md-8">{{ employee.name or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Father Name</strong></div><div class="col-6 col-md-8">{{ employee.father_name or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Post</strong></div><div class="col-6 col-md-8">{% if employee.post %}{{ employee.post.full_name }}{% if employee.post.short_name %} ({{ employee.post.short_name }}){% endif %}{% else %}-{% endif %}</div>
-          <div class="col-6 col-md-4"><strong>Department</strong></div><div class="col-6 col-md-8">{{ employee.department or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Place of Birth</strong></div><div class="col-6 col-md-8">{{ employee.place_of_birth or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>DOB</strong></div><div class="col-6 col-md-8">{{ employee.dob.strftime('%d-%b-%Y') if employee.dob else '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Education</strong></div><div class="col-6 col-md-8">{{ employee.education or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Marital Status</strong></div><div class="col-6 col-md-8">{{ employee.marital_status or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>CNIC No</strong></div><div class="col-6 col-md-8">{{ employee.cnic_no or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>District</strong></div><div class="col-6 col-md-8">{{ employee.district or '-' }}</div>
-          <div class="col-12"><strong>Address</strong></div><div class="col-12">{{ employee.address or '-' }}</div>
-        </div>
-      </section>
+    <div class="header-info">
+      <h2>{{ employee.name }}</h2>
+      <p class="sub">
+        <i class="bi bi-hash me-1"></i>{{ employee.code }}
+        {% if employee.post %} · <i class="bi bi-briefcase me-1"></i>{{ employee.post.full_name }}{% endif %}
+        {% if employee.department %} · {{ employee.department }}{% endif %}
+      </p>
+      {% if employee.cnic_no %}
+      <p class="sub" style="opacity:0.7;font-size:0.78rem;margin-top:0.15rem;">
+        <i class="bi bi-credit-card me-1"></i>CNIC: {{ employee.cnic_no }}
+      </p>
+      {% endif %}
+    </div>
+    {% set s = (employee.status or 'Active')|lower %}
+    <span class="status-badge {% if s == 'active' %}status-active{% elif s == 'left' %}status-left{% else %}status-inactive{% endif %}">
+      {{ employee.status or 'Active' }}
+    </span>
+  </div>
 
-      <!-- Tab 2: Contact & Job -->
-      <section class="mb-4">
-        <h6 class="border-bottom pb-1 mb-2 text-primary"><i class="bi bi-telephone me-1"></i>2. Contact & Job</h6>
-        <div class="row g-2 small">
-          <div class="col-6 col-md-4"><strong>Phone 1</strong></div><div class="col-6 col-md-8">{{ employee.phone1 or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Phone 2</strong></div><div class="col-6 col-md-8">{{ employee.phone2 or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Email</strong></div><div class="col-6 col-md-8">{{ employee.email or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Joining Date</strong></div><div class="col-6 col-md-8">{{ employee.joining_date.strftime('%d-%b-%Y') if employee.joining_date else '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Status</strong></div><div class="col-6 col-md-8">{{ employee.status or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Bank Name</strong></div><div class="col-6 col-md-8">{{ employee.bank_name or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Account No</strong></div><div class="col-6 col-md-8">{{ employee.account_no or '-' }}</div>
-          <div class="col-6 col-md-4"><strong>Account Title</strong></div><div class="col-6 col-md-8">{{ employee.account_title or '-' }}</div>
-          <div class="col-12"><strong>Remarks</strong></div><div class="col-12">{{ employee.remarks or '-' }}</div>
-        </div>
-      </section>
+  <!-- Stats Row -->
+  <div class="stats-row">
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#0d9488;"><i class="bi bi-calendar-check"></i></span>
+      <div class="stat-value">{{ employee.joining_date.strftime('%d %b %Y') if employee.joining_date else '—' }}</div>
+      <div class="stat-label">Joining Date</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#6366f1;"><i class="bi bi-diagram-3"></i></span>
+      <div class="stat-value">{{ projects|length }}</div>
+      <div class="stat-label">Projects</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#d97706;"><i class="bi bi-geo-alt"></i></span>
+      <div class="stat-value">{{ districts|length }}</div>
+      <div class="stat-label">Districts</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#dc2626;"><i class="bi bi-file-earmark-text"></i></span>
+      <div class="stat-value">{{ documents|length }}</div>
+      <div class="stat-label">Documents</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#059669;"><i class="bi bi-clock-history"></i></span>
+      <div class="stat-value">
+        {% if employee.joining_date %}
+          {% set diff = (now().date() - employee.joining_date).days %}
+          {% if diff < 0 %}
+            {% set remaining = diff|abs %}
+            {% if remaining >= 30 %}In {{ (remaining // 30) }}m {{ (remaining % 30) }}d
+            {% else %}In {{ remaining }}d{% endif %}
+          {% elif diff >= 365 %}{{ (diff // 365) }}y {{ ((diff % 365) // 30) }}m
+          {% elif diff >= 30 %}{{ (diff // 30) }}m {{ (diff % 30) }}d
+          {% elif diff == 0 %}Today
+          {% else %}{{ diff }}d{% endif %}
+        {% else %}—{% endif %}
+      </div>
+      <div class="stat-label">{% if employee.joining_date and (now().date() - employee.joining_date).days < 0 %}Starts In{% else %}Tenure{% endif %}</div>
+    </div>
+  </div>
 
-      <!-- Tab 3: Assignment (Projects & Districts) -->
-      <section class="mb-4">
-        <h6 class="border-bottom pb-1 mb-2 text-primary"><i class="bi bi-geo-alt me-1"></i>3. Assignment</h6>
-        <div class="row g-2 small">
-          <div class="col-12 col-md-6">
-            <strong>Assigned Projects</strong>
-            {% if projects %}
-            <ul class="mb-0 ps-3">
-              {% for p in projects %}
-              <li>{{ p.name }}</li>
-              {% endfor %}
-            </ul>
-            {% else %}
-            <p class="mb-0 text-muted">—</p>
-            {% endif %}
+  <!-- Personal Information -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-person"></i>Personal Information</div>
+    <div class="section-body">
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">Full Name</div>
+          <div class="info-value">{{ employee.name or '—' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Father's Name</div>
+          <div class="info-value {% if not employee.father_name %}muted{% endif %}">{{ employee.father_name or 'Not provided' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Date of Birth</div>
+          <div class="info-value {% if not employee.dob %}muted{% endif %}">{{ employee.dob.strftime('%d %b %Y') if employee.dob else 'Not provided' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Place of Birth</div>
+          <div class="info-value {% if not employee.place_of_birth %}muted{% endif %}">{{ employee.place_of_birth or 'Not provided' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Education</div>
+          <div class="info-value {% if not employee.education %}muted{% endif %}">{{ employee.education or 'Not provided' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Marital Status</div>
+          <div class="info-value {% if not employee.marital_status %}muted{% endif %}">{{ employee.marital_status or 'Not provided' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">CNIC Number</div>
+          <div class="info-value {% if not employee.cnic_no %}muted{% endif %}">{{ employee.cnic_no or 'Not provided' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">District</div>
+          <div class="info-value {% if not employee.district %}muted{% endif %}">{{ employee.district or 'Not provided' }}</div>
+        </div>
+      </div>
+      {% if employee.address %}
+      <div style="margin-top:0.75rem;">
+        <div class="info-label">Address</div>
+        <div class="info-value" style="font-size:0.84rem;">{{ employee.address }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Contact & Job Details -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-briefcase"></i>Contact & Job Details</div>
+    <div class="section-body">
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">Post / Designation</div>
+          <div class="info-value {% if not employee.post %}muted{% endif %}">
+            {% if employee.post %}{{ employee.post.full_name }}{% if employee.post.short_name %} <span style="color:var(--text-light);font-weight:400;">({{ employee.post.short_name }})</span>{% endif %}{% else %}Not assigned{% endif %}
           </div>
-          <div class="col-12 col-md-6">
-            <strong>Assigned Districts</strong>
-            {% if districts %}
-            <ul class="mb-0 ps-3">
-              {% for d in districts %}
-              <li>{{ d.name }}</li>
-              {% endfor %}
-            </ul>
-            {% else %}
-            <p class="mb-0 text-muted">—</p>
-            {% endif %}
+        </div>
+        <div class="info-item">
+          <div class="info-label">Department</div>
+          <div class="info-value {% if not employee.department %}muted{% endif %}">{{ employee.department or 'Not specified' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Phone 1</div>
+          <div class="info-value {% if not employee.phone1 %}muted{% endif %}">{{ employee.phone1 or 'Not provided' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Phone 2</div>
+          <div class="info-value {% if not employee.phone2 %}muted{% endif %}">{{ employee.phone2 or 'Not provided' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Email</div>
+          <div class="info-value {% if not employee.email %}muted{% endif %}">{{ employee.email or 'Not provided' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Joining Date</div>
+          <div class="info-value">{{ employee.joining_date.strftime('%d %b %Y') if employee.joining_date else '—' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Status</div>
+          <div class="info-value">
+            {% set s = (employee.status or 'Active')|lower %}
+            <span style="display:inline-flex;align-items:center;gap:5px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:{% if s == 'active' %}#10b981{% elif s == 'left' %}#f59e0b{% else %}#ef4444{% endif %};"></span>
+              {{ employee.status or 'Active' }}
+            </span>
           </div>
         </div>
-      </section>
+        <div class="info-item">
+          <div class="info-label">Employee Code</div>
+          <div class="info-value">{{ employee.code }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-      <!-- Tab 4: Documents -->
-      <section>
-        <h6 class="border-bottom pb-1 mb-2 text-primary"><i class="bi bi-file-earmark-pdf me-1"></i>4. Documents</h6>
-        {% if documents %}
-        <ul class="list-group list-group-flush">
+  <!-- Banking Details -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-bank"></i>Banking Details</div>
+    <div class="section-body">
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">Bank Name</div>
+          <div class="info-value {% if not employee.bank_name %}muted{% endif %}">{{ employee.bank_name or 'Not provided' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Account Number</div>
+          <div class="info-value {% if not employee.account_no %}muted{% endif %}">{{ employee.account_no or 'Not provided' }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Account Title</div>
+          <div class="info-value {% if not employee.account_title %}muted{% endif %}">{{ employee.account_title or 'Not provided' }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assignment -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-diagram-3"></i>Assignment</div>
+    <div class="section-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="info-label" style="margin-bottom:0.4rem;">Assigned Projects</div>
+          {% if projects %}
+          <div class="tag-list">
+            {% for p in projects %}
+            <span class="tag-item tag-project"><i class="bi bi-folder2-open"></i>{{ p.name }}</span>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="info-value muted">No projects assigned</div>
+          {% endif %}
+        </div>
+        <div class="col-md-6">
+          <div class="info-label" style="margin-bottom:0.4rem;">Assigned Districts</div>
+          {% if districts %}
+          <div class="tag-list">
+            {% for d in districts %}
+            <span class="tag-item tag-district"><i class="bi bi-pin-map"></i>{{ d.name }}</span>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="info-value muted">No districts assigned</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Documents -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-file-earmark-text"></i>Documents</div>
+    <div class="section-body" style="padding:0;">
+      {% if documents %}
+      <table class="doc-table">
+        <thead>
+          <tr>
+            <th style="width:5%;">#</th>
+            <th>Document Title</th>
+            <th style="width:20%;">Upload Date</th>
+          </tr>
+        </thead>
+        <tbody>
           {% for doc in documents %}
-          <li class="list-group-item py-2 px-0 d-flex align-items-center">
-            <i class="bi bi-file-earmark me-2 text-secondary"></i>
-            <span>{{ doc.title or doc.file_path }}</span>
-            <span class="ms-2 text-muted small">({{ doc.created_at.strftime('%d-%b-%Y') if doc.created_at else '' }})</span>
-          </li>
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>
+              <span style="display:inline-flex;align-items:center;gap:6px;">
+                <i class="bi bi-file-earmark-pdf doc-icon"></i>
+                {{ doc.title or doc.file_path.split('/')|last }}
+              </span>
+            </td>
+            <td>{{ doc.created_at.strftime('%d %b %Y') if doc.created_at else '—' }}</td>
+          </tr>
           {% endfor %}
-        </ul>
-        <p class="small text-muted mt-2 mb-0">Documents ko open karne ke liye employee form se Documents tab use karein.</p>
-        {% else %}
-        <p class="mb-0 text-muted">Koi document upload nahi.</p>
-        {% endif %}
-      </section>
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state">
+        <i class="bi bi-folder2-open"></i>
+        No documents uploaded yet
+      </div>
+      {% endif %}
     </div>
   </div>
+
+  <!-- Remarks -->
+  {% if employee.remarks %}
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-chat-square-text"></i>Remarks</div>
+    <div class="section-body">
+      <div class="remarks-text">{{ employee.remarks }}</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Footer -->
+  <div class="profile-footer">
+    Generated on {{ now().strftime('%d %b %Y, %I:%M %p') }} · Fleet Management System
+  </div>
+
 </div>
+
+<!-- ── PDF / Print / Image Engine (same as Driver Profile) ── -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+(function(){
+  var empName = '{{ employee.name | e }}'.replace(/[^a-zA-Z0-9_\- ]/g,'').trim() || 'Employee';
+
+  /* ── Compact CSS — injected into the html2pdf clone via onclone.
+     Live page is NEVER visually affected. ────────────────────── */
+  var _COMPACT_CSS = [
+    '#profile-content { padding:0.5rem !important; background:#fff !important; }',
+    '.profile-page { background:#fff !important; }',
+    '.action-bar, .no-print { display:none !important; }',
+    '.profile-header { padding:1rem 1.25rem; margin-bottom:0.5rem; border-radius:10px; }',
+    '.profile-header h2 { font-size:1.3rem; }',
+    '.section-card { margin-bottom:0.5rem; break-inside:avoid; page-break-inside:avoid; }',
+    '.section-body { padding:0.7rem 1rem; }',
+    '.info-grid { gap:0 1.25rem; }',
+    '.info-item { padding:0.35rem 0; }',
+    '.info-label { font-size:0.64rem; }',
+    '.info-value { font-size:0.82rem; }',
+    '.stats-row { gap:0.4rem; margin-bottom:0.5rem; }',
+    '.stat-box { padding:0.55rem 0.65rem; break-inside:avoid; }',
+    '.stat-value { font-size:0.9rem; }',
+    '.stat-label { font-size:0.62rem; }',
+    '.stat-icon { font-size:0.95rem; }',
+    '.profile-footer { padding:0.5rem; font-size:0.64rem; margin-top:0.25rem; }',
+    '.section-title { padding:0.55rem 1rem; font-size:0.76rem; }',
+    '.doc-table { font-size:0.76rem; }',
+    '.tag-item { font-size:0.7rem; padding:0.22rem 0.65rem; }',
+    '.remarks-text { font-size:0.8rem; }'
+  ].join('\n');
+
+  /* ── onclone — injects compact CSS into the invisible capture clone only ── */
+  function _onCloneHandler(clonedDoc) {
+    var s = clonedDoc.createElement('style');
+    s.textContent = _COMPACT_CSS;
+    clonedDoc.head.appendChild(s);
+  }
+
+  /* ── PDF options — zoom-independent, fixed A4 ── */
+  var _PDF_OPTS = {
+    margin: [8, 8, 0, 8],
+    image: { type: 'jpeg', quality: 0.95 },
+    html2canvas: {
+      scale: 2, useCORS: true, allowTaint: true,
+      letterRendering: true, logging: false,
+      onclone: _onCloneHandler
+    },
+    pagebreak: { mode: ['css', 'legacy'] },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  /* ── Loading overlay ── */
+  function _showOverlay(msg) {
+    if (document.getElementById('_pdf_gen_overlay')) return;
+    if (!document.getElementById('_pdf_keyframes')) {
+      var kf = document.createElement('style');
+      kf.id = '_pdf_keyframes';
+      kf.textContent = '@keyframes _pdf_spin{to{transform:rotate(360deg)}}@keyframes _pdf_fadein{from{opacity:0}to{opacity:1}}';
+      document.head.appendChild(kf);
+    }
+    var ov = document.createElement('div');
+    ov.id = '_pdf_gen_overlay';
+    ov.innerHTML =
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:14px;">' +
+        '<div style="width:48px;height:48px;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:_pdf_spin .8s linear infinite;"></div>' +
+        '<div style="color:#fff;font-size:15px;font-weight:600;letter-spacing:.3px;">' + (msg || 'Preparing Document…') + '</div>' +
+        '<div style="color:rgba(255,255,255,.7);font-size:12px;">Please wait, do not close this page.</div>' +
+      '</div>';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(19,78,74,.85);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;animation:_pdf_fadein .2s ease;';
+    document.body.appendChild(ov);
+  }
+  function _hideOverlay() {
+    var ov = document.getElementById('_pdf_gen_overlay');
+    if (ov) ov.parentNode.removeChild(ov);
+  }
+
+  /* ── Core renderer (matches Driver Profile proven system) ── */
+  function _renderDoc(opts, mode, onDone) {
+    var el = document.getElementById('profile-content');
+
+    function cleanup(result, err) {
+      var lc = document.getElementById('_emp_live_compact');
+      if (lc) lc.parentNode.removeChild(lc);
+      _hideOverlay();
+      if (onDone) onDone(result, err);
+    }
+
+    _showOverlay(mode === 'print' ? 'Preparing Print Preview…' : mode === 'images' ? 'Generating Images…' : 'Generating PDF…');
+
+    var liveCompact = document.createElement('style');
+    liveCompact.id = '_emp_live_compact';
+    liveCompact.textContent = _COMPACT_CSS;
+    document.head.appendChild(liveCompact);
+    el.offsetHeight;
+
+    requestAnimationFrame(function() {
+      setTimeout(function() {
+        var worker = html2pdf().set(opts).from(el);
+        var promise = (mode === 'blob') ? worker.output('blob') : worker.save();
+        promise
+          .then(function(r) { cleanup(r, null); })
+          .catch(function(e) { console.error('PDF error:', e); cleanup(null, e); });
+      }, 0);
+    });
+  }
+
+  /* ── Print → blob → native PDF viewer ── */
+  window.doPrint = function() {
+    var opts = Object.assign({}, _PDF_OPTS, { filename: empName + '_Profile.pdf' });
+    _renderDoc(opts, 'blob', function(blob, err) {
+      if (err || !blob) return;
+      var url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+    });
+  };
+
+  /* ── PDF → direct download ── */
+  window.downloadPDF = function() {
+    var opts = Object.assign({}, _PDF_OPTS, { filename: empName + '_Profile.pdf' });
+    _renderDoc(opts, 'save', function() {});
+  };
+
+  /* ── Images → per-page PNG download ── */
+  window.downloadImages = function() {
+    _showOverlay('Generating Images…');
+
+    var el = document.getElementById('profile-content');
+    var liveCompact = document.createElement('style');
+    liveCompact.id = '_emp_live_compact';
+    liveCompact.textContent = _COMPACT_CSS;
+    document.head.appendChild(liveCompact);
+    el.offsetHeight;
+
+    var PDF_W = 733;
+    html2canvas(el, {
+      scale: 2, useCORS: true, allowTaint: true,
+      letterRendering: true, logging: false,
+      width: PDF_W, windowWidth: PDF_W,
+      onclone: _onCloneHandler
+    }).then(function(canvas) {
+      var lc = document.getElementById('_emp_live_compact');
+      if (lc) lc.parentNode.removeChild(lc);
+
+      var cw = canvas.width;
+      var a4H = Math.round(cw * 289 / 194);
+      var y = 0, pages = [];
+      while (y < canvas.height) {
+        var targetY = y + a4H;
+        if (targetY >= canvas.height - 30) {
+          if (canvas.height - y > 30) pages.push({ y: y, h: canvas.height - y });
+          break;
+        }
+        pages.push({ y: y, h: a4H });
+        y += a4H;
+      }
+      if (!pages.length && canvas.height > 0) pages.push({ y: 0, h: canvas.height });
+
+      var delay = 0;
+      pages.forEach(function(pg, idx) {
+        setTimeout(function() {
+          var pc = document.createElement('canvas');
+          pc.width = cw; pc.height = pg.h;
+          var ctx = pc.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, cw, pg.h);
+          ctx.drawImage(canvas, 0, pg.y, cw, pg.h, 0, 0, cw, pg.h);
+          var link = document.createElement('a');
+          link.download = empName + '_Page_' + (idx + 1) + '.png';
+          link.href = pc.toDataURL('image/png');
+          link.click();
+          if (idx === pages.length - 1) _hideOverlay();
+        }, delay);
+        delay += 350;
+      });
+      if (!pages.length) _hideOverlay();
+    }).catch(function(e) {
+      console.error(e);
+      var lc = document.getElementById('_emp_live_compact');
+      if (lc) lc.parentNode.removeChild(lc);
+      _hideOverlay();
+    });
+  };
+})();
+</script>
 {% endblock %}

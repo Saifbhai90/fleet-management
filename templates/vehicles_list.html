@@ -203,7 +203,7 @@
             <td>{{ vehicle.active_date.strftime('%d-%m-%Y') if vehicle.active_date else '-' }}</td>
             <td class="text-center pe-4">
               <div class="btn-group btn-group-sm" role="group">
-                <a href="{{ url_for('report_vehicle_profile', vehicle_id=vehicle.id) }}" class="btn btn-info-compact" title="Vehicle Profile Report">
+                <a href="{{ url_for('report_vehicle_profile', vehicle_id=vehicle.id, from='master') }}" class="btn btn-info-compact" title="Vehicle Profile Report">
                   <i class="bi bi-file-text"></i>
                 </a>
                 {% if can_see_page('vehicles_edit') %}
