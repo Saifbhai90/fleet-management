@@ -217,6 +217,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('report_ai', 'report_ai'),
     ('driver_attendance_report', 'driver_attendance_report'),
     ('active_drivers_report', 'active_drivers_report'),
+    ('driver_seat_available_report', 'driver_seat_available_report'),
     ('activity_log_report', 'activity_log_report'),
     ('activity_logs_geo_report', 'activity_logs_geo_report'),
     # Payroll Module

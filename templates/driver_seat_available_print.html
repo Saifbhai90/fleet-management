@@ -1,0 +1,127 @@
+{% extends "base_print.html" %}
+{% block title %}Print – Driver Seat Available Report{% endblock %}
+
+{% block extra_head %}
+<style>
+    .rpt-header {
+        background: linear-gradient(135deg, #e65100 0%, #bf360c 100%);
+        color: #fff;
+        border-radius: 10px;
+        padding: 1rem 1.4rem;
+        margin-bottom: 1rem;
+    }
+    .rpt-header h2 { margin: 0; font-size: 1.25rem; font-weight: 700; }
+    .rpt-header .sub { font-size: 0.82rem; opacity: 0.85; margin-top: 0.2rem; }
+    .rpt-meta { font-size: 0.78rem; color: #546e7a; margin-bottom: 0.75rem; }
+    .total-badge {
+        display: inline-block;
+        background: #fff3e0;
+        color: #e65100;
+        font-size: 0.82rem;
+        font-weight: 700;
+        padding: 0.2rem 0.75rem;
+        border-radius: 20px;
+    }
+    .vacant-badge {
+        display: inline-block;
+        background: #fbe9e7;
+        color: #bf360c;
+        font-size: 0.82rem;
+        font-weight: 700;
+        padding: 0.2rem 0.75rem;
+        border-radius: 20px;
+    }
+    .rpt-table { font-size: 0.82rem; }
+    .rpt-table thead th {
+        background: #fff3e0;
+        color: #bf360c;
+        font-weight: 700;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        border-bottom: 2px solid #e65100;
+        white-space: nowrap;
+        padding: 0.45rem 0.65rem;
+    }
+    .rpt-table tbody td { vertical-align: middle; padding: 0.4rem 0.65rem; }
+    .rpt-table tbody tr:nth-child(even) { background: #fffaf5; }
+    .sr-badge { background: #e65100; color: #fff; border-radius: 4px; padding: 0.1rem 0.4rem; font-size: 0.73rem; font-weight: 700; }
+    .veh-no { font-weight: 700; }
+    .veh-meta { font-size: 0.72rem; color: #78909c; }
+    .badge-cap { background: #e3f2fd; color: #1565c0; padding: 1px 6px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; }
+    .badge-assigned { background: #e8f5e9; color: #2e7d32; padding: 1px 6px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; }
+    .badge-vacant { background: #fbe9e7; color: #bf360c; padding: 1px 6px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; }
+    .rpt-footer { margin-top: 1rem; border-top: 1px solid #cfd8dc; padding-top: 0.5rem; font-size: 0.72rem; color: #888; display: flex; justify-content: space-between; }
+    @media print {
+        .rpt-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .rpt-table thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .rpt-table tbody tr:nth-child(even) { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .sr-badge, .badge-cap, .badge-assigned, .badge-vacant { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="print-container">
+
+    <div class="rpt-header">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="me-auto">
+                <h2><i class="bi bi-car-front-fill me-2"></i>Driver Seat Available Report</h2>
+                <div class="sub"><i class="bi bi-info-circle me-1"></i>Vehicles with vacant driver seats requiring assignment</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="rpt-meta d-flex flex-wrap gap-3 mb-2">
+        <span><i class="bi bi-calendar3 me-1"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
+    </div>
+
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="total-badge"><i class="bi bi-truck me-1"></i>Vehicles: {{ total }}</span>
+        <span class="vacant-badge"><i class="bi bi-person-x me-1"></i>Vacant Seats: {{ total_vacant }}</span>
+    </div>
+
+    <table class="table table-sm table-bordered rpt-table w-100">
+        <thead>
+            <tr>
+                <th style="width:4%">Sr No</th>
+                <th>Project</th>
+                <th>District</th>
+                <th>Vehicle No (Model) (Type)</th>
+                <th class="text-center" style="width:9%">Capacity</th>
+                <th class="text-center" style="width:9%">Assigned</th>
+                <th class="text-center" style="width:9%">Vacant</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for vehicle, project, district, cap, asgn, vacant in results %}
+            <tr>
+                <td class="text-center"><span class="sr-badge">{{ loop.index }}</span></td>
+                <td>{{ project.name if project else '-' }}</td>
+                <td>{{ district.name if district else '-' }}</td>
+                <td>
+                    <div class="veh-no">{{ vehicle.vehicle_no }}</div>
+                    <div class="veh-meta">
+                        {% if vehicle.model %}{{ vehicle.model }}{% endif %}
+                        {% if vehicle.model and vehicle.vehicle_type %} · {% endif %}
+                        {% if vehicle.vehicle_type %}{{ vehicle.vehicle_type }}{% endif %}
+                    </div>
+                </td>
+                <td class="text-center"><span class="badge-cap">{{ cap }}</span></td>
+                <td class="text-center"><span class="badge-assigned">{{ asgn }}</span></td>
+                <td class="text-center"><span class="badge-vacant">{{ vacant }}</span></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="text-center py-4 text-muted"><i class="bi bi-check-circle me-2" style="color:#2e7d32;"></i>All vehicles have their seats filled!</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="rpt-footer">
+        <span>Driver Seat Available Report</span>
+        <span>Vehicles: {{ total }} · Vacant Seats: {{ total_vacant }}</span>
+    </div>
+
+</div>
+{% endblock %}

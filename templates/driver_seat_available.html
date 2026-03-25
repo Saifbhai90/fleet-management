@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}Driver Seat Available{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<style>
+    .report-header { background: linear-gradient(135deg, #e65100 0%, #bf360c 100%); color: #fff; border-radius: 10px; padding: 1.1rem 1.4rem; margin-bottom: 1rem; }
+    .report-header h2 { margin: 0; font-size: 1.35rem; font-weight: 700; letter-spacing: 0.3px; }
+    .report-header .subtitle { font-size: 0.85rem; opacity: 0.85; margin-top: 0.2rem; }
+    .filter-card { background: #fff; border-radius: 8px; padding: 0.9rem 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .filter-input { border: 1px solid #ddd; border-radius: 5px; padding: 0.38rem 0.7rem; font-size: 0.855rem; }
+    .filter-input:focus { border-color: #e65100; box-shadow: 0 0 0 2px rgba(230,81,0,0.12); outline: none; }
+    .btn-filter { background: #e65100; color: #fff; border: none; border-radius: 5px; padding: 0.4rem 1rem; font-size: 0.855rem; font-weight: 600; }
+    .btn-filter:hover { background: #bf360c; color: #fff; }
+    .btn-export { background: #2e7d32; color: #fff; border: none; border-radius: 5px; padding: 0.4rem 0.85rem; font-size: 0.84rem; font-weight: 600; }
+    .btn-export:hover { background: #1b5e20; color: #fff; }
+    .btn-print { background: #1565c0; color: #fff; border: none; border-radius: 5px; padding: 0.4rem 0.85rem; font-size: 0.84rem; font-weight: 600; }
+    .btn-print:hover { background: #0d47a1; color: #fff; }
+    .table-wrap { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; padding: 1rem; }
+    #seatTable { font-size: 0.855rem; }
+    #seatTable thead th { background: #fff3e0; color: #bf360c; font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 2px solid #e65100; white-space: nowrap; }
+    #seatTable tbody tr:hover { background: #fff8f0; }
+    #seatTable td { vertical-align: middle; padding: 0.45rem 0.7rem; }
+    .sr-badge { background: #e65100; color: #fff; border-radius: 4px; padding: 0.12rem 0.45rem; font-size: 0.75rem; font-weight: 700; }
+    .veh-no { font-weight: 700; color: #263238; }
+    .veh-meta { color: #78909c; font-size: 0.77rem; }
+    .badge-cap { background: #e3f2fd; color: #1565c0; padding: 0.18rem 0.55rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+    .badge-assigned { background: #e8f5e9; color: #2e7d32; padding: 0.18rem 0.55rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+    .badge-vacant { background: #fbe9e7; color: #bf360c; padding: 0.22rem 0.6rem; border-radius: 12px; font-size: 0.78rem; font-weight: 700; }
+    .total-badge { background: #fff3e0; color: #e65100; font-size: 0.82rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 20px; }
+    .total-vacant-badge { background: #fbe9e7; color: #bf360c; font-size: 0.82rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 20px; }
+
+    .stat-card { background: #fff; border-radius: 8px; padding: 0.65rem 0.9rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); text-align: center; }
+    .stat-card .stat-val { font-size: 1.5rem; font-weight: 800; }
+    .stat-card .stat-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #78909c; font-weight: 600; }
+
+    div.dataTables_wrapper div.dataTables_filter input { border: 1px solid #ddd; border-radius: 5px; padding: 0.32rem 0.65rem; font-size: 0.84rem; margin-left: 6px; }
+    div.dataTables_wrapper div.dataTables_filter input:focus { border-color: #e65100; box-shadow: 0 0 0 2px rgba(230,81,0,0.12); outline: none; }
+    div.dataTables_wrapper div.dataTables_filter label { font-size: 0.84rem; color: #455a64; }
+    div.dataTables_wrapper div.dataTables_length select { border: 1px solid #ddd; border-radius: 5px; padding: 0.28rem 0.5rem; font-size: 0.84rem; }
+    div.dataTables_wrapper div.dataTables_length label { font-size: 0.84rem; color: #455a64; }
+    div.dataTables_wrapper div.dataTables_info { font-size: 0.82rem; color: #607d8b; padding-top: 0.75rem; }
+    div.dataTables_wrapper div.dataTables_paginate { padding-top: 0.55rem; }
+    div.dataTables_wrapper div.dataTables_paginate .paginate_button { font-size: 0.82rem; padding: 0.28rem 0.6rem; }
+    div.dataTables_wrapper div.dataTables_paginate .paginate_button.current { background: #e65100 !important; border-color: #e65100 !important; color: #fff !important; border-radius: 4px; }
+    div.dataTables_wrapper div.dataTables_paginate .paginate_button:hover:not(.disabled):not(.current) { background: #fff3e0 !important; border-color: #ffcc80 !important; color: #e65100 !important; }
+    table.dataTable.no-footer { border-bottom: 1px solid #e0e0e0; }
+    @media (max-width: 767px) {
+        .filter-card .row > div { margin-bottom: 0.45rem; }
+        .report-header h2 { font-size: 1.1rem; }
+    }
+</style>
+
+<div class="container-fluid py-3 px-3 px-md-4">
+
+    <!-- Report Header -->
+    <div class="report-header">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="me-auto">
+                <h2 class="mb-0"><i class="bi bi-car-front-fill me-2"></i>Driver Seat Available Report</h2>
+                <div class="subtitle mt-1">
+                    <i class="bi bi-info-circle me-1"></i>Vehicles with vacant driver seats requiring assignment
+                </div>
+            </div>
+            {% if can_see_page('driver_seat_available_report') %}
+            <a href="{{ url_for('driver_seat_available_export',
+                        project_id=project_id, district_id=district_id,
+                        vehicle_type=vehicle_type or '') }}"
+               class="btn btn-export btn-sm">
+                <i class="bi bi-file-earmark-excel me-1"></i>Export
+            </a>
+            <a href="{{ url_for('driver_seat_available_print',
+                        project_id=project_id, district_id=district_id,
+                        vehicle_type=vehicle_type or '') }}"
+               target="_blank" class="btn btn-print btn-sm">
+                <i class="bi bi-printer me-1"></i>Print
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-val" style="color:#e65100;">{{ total }}</div>
+                <div class="stat-label">Vehicles with Vacant Seats</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-val" style="color:#bf360c;">{{ total_vacant }}</div>
+                <div class="stat-label">Total Vacant Seats</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-val" style="color:#2e7d32;">{{ results | map(attribute=4) | sum }}</div>
+                <div class="stat-label">Currently Assigned</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-val" style="color:#1565c0;">{{ results | map(attribute=3) | sum }}</div>
+                <div class="stat-label">Total Capacity</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-card">
+        <form method="GET" action="{{ url_for('driver_seat_available_report') }}">
+            <div class="row g-2 align-items-end">
+                <div class="col-6 col-md-3">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Project</label>
+                    <select name="project_id" id="projectSelect" class="form-select filter-input search-select" {% if disable_project %}disabled{% endif %}>
+                        {% for val, label in project_choices %}
+                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">District</label>
+                    <select name="district_id" id="districtSelect" class="form-select filter-input search-select" {% if disable_district %}disabled{% endif %}>
+                        {% for val, label in district_choices %}
+                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Vehicle Type</label>
+                    <select name="vehicle_type" id="vehicleTypeSelect" class="form-select filter-input search-select">
+                        {% for val, label in vehicle_type_choices %}
+                        <option value="{{ val }}" {% if vehicle_type == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-3 d-flex gap-1">
+                    <button type="submit" class="btn btn-filter w-100">
+                        <i class="bi bi-funnel-fill"></i> Filter
+                    </button>
+                </div>
+            </div>
+            {% if project_id or district_id or vehicle_type %}
+            <div class="mt-2">
+                <a href="{{ url_for('driver_seat_available_report') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x-circle me-1"></i>Clear Filters
+                </a>
+                <span class="total-badge ms-2">{{ total }} vehicle{{ 's' if total != 1 else '' }} found</span>
+                <span class="total-vacant-badge ms-1">{{ total_vacant }} vacant seat{{ 's' if total_vacant != 1 else '' }}</span>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+            <div class="d-flex gap-2 flex-wrap">
+                <span class="total-badge"><i class="bi bi-truck me-1"></i>Vehicles: {{ total }}</span>
+                <span class="total-vacant-badge"><i class="bi bi-person-x me-1"></i>Vacant Seats: {{ total_vacant }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <input type="text" id="dtSearchInput" class="form-control form-control-sm"
+                       placeholder="🔍 Search..." autocomplete="off"
+                       style="width:200px;border:1px solid #ddd;border-radius:5px;font-size:0.82rem;">
+                <select id="dtLengthSelect" class="form-select form-select-sm" style="width:auto;font-size:0.82rem;">
+                    <option value="10">10 / page</option>
+                    <option value="25" selected>25 / page</option>
+                    <option value="50">50 / page</option>
+                    <option value="100">100 / page</option>
+                    <option value="-1">All</option>
+                </select>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table id="seatTable" class="table table-sm table-bordered table-hover align-middle w-100">
+                <thead>
+                    <tr>
+                        <th style="width:4%">Sr No</th>
+                        <th>Project</th>
+                        <th>District</th>
+                        <th>Vehicle No (Model) (Type)</th>
+                        <th class="text-center">Capacity</th>
+                        <th class="text-center">Assigned</th>
+                        <th class="text-center">Vacant</th>
+                        <th style="width:8%">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vehicle, project, district, cap, asgn, vacant in results %}
+                    <tr>
+                        <td class="text-center"><span class="sr-badge">{{ loop.index }}</span></td>
+                        <td>{{ project.name if project else '-' }}</td>
+                        <td>{{ district.name if district else '-' }}</td>
+                        <td>
+                            <div class="veh-no">{{ vehicle.vehicle_no }}</div>
+                            <div class="veh-meta">
+                                {% if vehicle.model %}{{ vehicle.model }}{% endif %}
+                                {% if vehicle.model and vehicle.vehicle_type %} · {% endif %}
+                                {% if vehicle.vehicle_type %}{{ vehicle.vehicle_type }}{% endif %}
+                            </div>
+                        </td>
+                        <td class="text-center"><span class="badge-cap">{{ cap }}</span></td>
+                        <td class="text-center"><span class="badge-assigned">{{ asgn }}</span></td>
+                        <td class="text-center"><span class="badge-vacant">{{ vacant }}</span></td>
+                        <td class="text-center">
+                            <a href="{{ url_for('report_vehicle_profile', vehicle_id=vehicle.id) }}"
+                               class="btn btn-sm" style="background:#fff3e0;color:#e65100;border:1px solid #ffcc80;font-size:0.72rem;padding:0.2rem 0.55rem;">
+                               <i class="bi bi-eye-fill me-1"></i>View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script>
+$(document).ready(function () {
+    var table = $('#seatTable').DataTable({
+        dom: "<'row'<'col-12'tr>><'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>",
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+        order: [],
+        columnDefs: [{ orderable: false, targets: [0, 7] }],
+        language: {
+            info: 'Showing _START_ to _END_ of _TOTAL_ records',
+            infoEmpty: 'No records to show',
+            infoFiltered: '(filtered from _MAX_ total)',
+            emptyTable: '<div class="py-4 text-center text-muted"><i class="bi bi-check-circle" style="font-size:2rem;color:#2e7d32;"></i><div class="mt-2">All vehicles have their seats filled!</div></div>',
+            paginate: { first: '«', last: '»', next: '›', previous: '‹' }
+        },
+        drawCallback: function () {
+            var api = this.api();
+            var start = api.page.info().start;
+            api.rows({ page: 'current' }).every(function (rowIdx) {
+                $('td:first-child', this.node()).html(
+                    '<span class="sr-badge">' + (start + rowIdx + 1) + '</span>'
+                );
+            });
+        }
+    });
+
+    $('#dtSearchInput').on('keyup input', function () { table.search(this.value).draw(); });
+    $('#dtLengthSelect').on('change', function () { table.page.len(parseInt(this.value)).draw(); });
+    $('#dtSearchInput').on('focus', function () { $(this).css('border-color', '#e65100'); });
+    $('#dtSearchInput').on('blur',  function () { $(this).css('border-color', '#ddd'); });
+});
+
+(function () {
+    var $proj = $('#projectSelect');
+    var $dist = $('#districtSelect');
+
+    $proj.on('change', function () {
+        var pid = parseInt($(this).val()) || 0;
+        if ($dist.prop('disabled')) return;
+        $dist.html('<option value="0">-- All Districts --</option>');
+        if (!pid) return;
+        $.getJSON('/api/filter/districts-by-project', { project_id: pid }, function (data) {
+            $.each(data, function (_, d) {
+                $dist.append($('<option>').val(d.id).text(d.name));
+            });
+        });
+    });
+})();
+</script>
+{% endblock %}

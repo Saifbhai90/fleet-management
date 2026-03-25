@@ -254,6 +254,7 @@ PERMISSION_TREE = {
         ('activity_log_report', 'Activity Log'),
         ('activity_logs_geo_report', 'Activity Logs Geo'),
         ('active_drivers_report', 'Active Driver Summary'),
+        ('driver_seat_available_report', 'Driver Seat Available'),
         ('missing_documents_report', 'Missing Documents Report'),
     ],
     PERMISSION_BACKUP: [
@@ -818,6 +819,7 @@ SECTION_PAGE_GROUPS = {
         ('Create Report with AI', [('report_ai', 'Create Report with AI')]),
         ('Attendance Report', [('driver_attendance_report', 'Attendance Report')]),
         ('Active Driver Summary', [('active_drivers_report', 'Active Driver Summary')]),
+        ('Driver Seat Available', [('driver_seat_available_report', 'Driver Seat Available')]),
         ('Missing Documents Report', [('missing_documents_report', 'Missing Documents Report')]),
         ('Activity Log', [('activity_log_report', 'Activity Log')]),
         ('Activity Logs Geo', [('activity_logs_geo_report', 'Activity Logs Geo')]),
@@ -1012,6 +1014,7 @@ PAGE_VISIBLE = {
     'report_vehicle_profile': ['reports', 'report_vehicle_profile'],
     'report_driver_profile': ['reports', 'report_driver_profile'],
     'active_drivers_report': ['reports', 'active_drivers_report'],
+    'driver_seat_available_report': ['reports', 'driver_seat_available_report'],
     'missing_documents_report': ['reports', 'missing_documents_report'],
     # Administration
     'user_list': ['users_manage', 'user_list', 'user_add', 'user_edit'],

@@ -7727,6 +7727,196 @@ def active_drivers_report_print():
     )
 
 
+# ── Driver Seat Available Report ───────────────────────────────────────────
+
+def _seat_available_data(project_id=0, district_id=0, vehicle_type='',
+                         allowed_vehicles=None, allowed_projects=None,
+                         allowed_districts=None, is_master_or_admin=True):
+    """
+    Vehicles where assigned_driver_count < driver_capacity.
+    Returns list of (Vehicle, Project, District, capacity, assigned, vacant).
+    """
+    assigned_sub = db.session.query(
+        Driver.vehicle_id,
+        func.count(Driver.id).label('assigned_count')
+    ).filter(
+        Driver.vehicle_id.isnot(None),
+        Driver.status != 'Left'
+    ).group_by(Driver.vehicle_id).subquery()
+
+    query = db.session.query(
+        Vehicle, Project, District,
+        Vehicle.driver_capacity,
+        func.coalesce(assigned_sub.c.assigned_count, 0).label('assigned_count')
+    ).outerjoin(
+        Project, Vehicle.project_id == Project.id
+    ).outerjoin(
+        District, Vehicle.district_id == District.id
+    ).outerjoin(
+        assigned_sub, Vehicle.id == assigned_sub.c.vehicle_id
+    ).filter(
+        func.coalesce(Vehicle.driver_capacity, 1) > func.coalesce(assigned_sub.c.assigned_count, 0)
+    )
+
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(Vehicle.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(Vehicle.id.in_(list(allowed_vehicles)))
+
+    if project_id:
+        query = query.filter(Vehicle.project_id == project_id)
+    if district_id:
+        query = query.filter(Vehicle.district_id == district_id)
+    if vehicle_type:
+        query = query.filter(Vehicle.vehicle_type == vehicle_type)
+
+    rows = query.order_by(Project.name, District.name, Vehicle.vehicle_no).all()
+
+    results = []
+    for vehicle, project, district, capacity, assigned in rows:
+        cap = capacity if capacity and capacity > 0 else 1
+        asgn = assigned or 0
+        vacant = cap - asgn
+        if vacant > 0:
+            results.append((vehicle, project, district, cap, asgn, vacant))
+    return results
+
+
+@app.route('/driver-seat-available-report')
+def driver_seat_available_report():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects  = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles  = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    project_id  = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_type = (request.args.get('vehicle_type') or '').strip()
+
+    results = _seat_available_data(
+        project_id=project_id, district_id=district_id, vehicle_type=vehicle_type,
+        allowed_vehicles=allowed_vehicles, allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts, is_master_or_admin=is_master_or_admin,
+    )
+
+    disable_project  = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+
+    proj_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_q.all()]
+
+    dist_q = District.query.order_by(District.name)
+    if not is_master_or_admin and allowed_districts:
+        dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
+    if project_id:
+        dist_q = dist_q.join(project_district).filter(project_district.c.project_id == project_id)
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.all()]
+
+    veh_types = db.session.query(Vehicle.vehicle_type).filter(
+        Vehicle.vehicle_type.isnot(None), Vehicle.vehicle_type != ''
+    ).distinct().order_by(Vehicle.vehicle_type).all()
+    vehicle_type_choices = [('', '-- All Types --')] + [(vt[0], vt[0]) for vt in veh_types]
+
+    total_vacant = sum(r[5] for r in results)
+
+    return render_template(
+        'driver_seat_available.html',
+        results=results,
+        project_id=project_id, district_id=district_id,
+        vehicle_type=vehicle_type,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        vehicle_type_choices=vehicle_type_choices,
+        total=len(results), total_vacant=total_vacant,
+        disable_project=disable_project,
+        disable_district=disable_district,
+    )
+
+
+@app.route('/driver-seat-available-report/export')
+def driver_seat_available_export():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects  = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles  = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    project_id  = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_type = (request.args.get('vehicle_type') or '').strip()
+
+    results = _seat_available_data(
+        project_id=project_id, district_id=district_id, vehicle_type=vehicle_type,
+        allowed_vehicles=allowed_vehicles, allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts, is_master_or_admin=is_master_or_admin,
+    )
+
+    headers = ['Sr No', 'Project', 'District', 'Vehicle No', 'Model', 'Type', 'Capacity', 'Assigned', 'Vacant Seats']
+    rows = []
+    for i, (vehicle, project, district, cap, asgn, vacant) in enumerate(results, 1):
+        rows.append([
+            i,
+            project.name if project else '-',
+            district.name if district else '-',
+            vehicle.vehicle_no,
+            vehicle.model or '-',
+            vehicle.vehicle_type or '-',
+            cap, asgn, vacant,
+        ])
+    return generate_excel_template(
+        headers, rows, required_columns=[],
+        filename=f'driver_seat_available_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+
+@app.route('/driver-seat-available-report/print')
+def driver_seat_available_print():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects  = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles  = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    project_id  = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_type = (request.args.get('vehicle_type') or '').strip()
+
+    results = _seat_available_data(
+        project_id=project_id, district_id=district_id, vehicle_type=vehicle_type,
+        allowed_vehicles=allowed_vehicles, allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts, is_master_or_admin=is_master_or_admin,
+    )
+
+    total_vacant = sum(r[5] for r in results)
+
+    return render_template(
+        'driver_seat_available_print.html',
+        results=results, total=len(results), total_vacant=total_vacant,
+        now=datetime.now,
+    )
+
+
 # ── Driver Missing Documents Report ───────────────────────────────────────
 @app.route('/missing-documents-report')
 def missing_documents_report():
