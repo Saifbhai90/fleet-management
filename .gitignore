@@ -19,6 +19,9 @@ build/
 # Uploads (optional: remove this line if you want to backup uploads)
 uploads/
 
+# Node
+node_modules/
+
 # IDE / OS
 .idea/
 .vscode/

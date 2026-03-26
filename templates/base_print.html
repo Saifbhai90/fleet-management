@@ -131,7 +131,7 @@
         if (ov.parentNode) ov.parentNode.removeChild(ov);
         btn.disabled = false;
         btn.innerHTML = origHtml;
-        _uploadAndDownload(blob, fname);
+        _saveBlobNative(blob, fname);
       }).catch(function(e) {
         console.error('PDF generation error:', e);
         if (ov.parentNode) ov.parentNode.removeChild(ov);
@@ -149,19 +149,53 @@
     document.head.appendChild(scr);
   }
 
-  function _uploadAndDownload(blob, fname) {
-    var fd = new FormData();
-    fd.append('file', blob, fname);
-    fd.append('filename', fname);
-    fetch('/upload-blob', { method: 'POST', body: fd })
-      .then(function(r) { return r.json(); })
-      .then(function(j) {
-        if (j.token) window.location.href = '/download-blob/' + j.token;
-      })
-      .catch(function(e) {
-        console.error('Upload failed:', e);
-        alert('Download failed. Please try again.');
+  function _blobToBase64(blob) {
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onloadend = function() {
+        var result = reader.result;
+        resolve(result.substring(result.indexOf(',') + 1));
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function _saveBlobNative(blob, fname) {
+    var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+    var Share = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+    if (!Filesystem) {
+      alert('Download not available. Please update app.');
+      return;
+    }
+    _blobToBase64(blob).then(function(b64) {
+      return Filesystem.writeFile({
+        path: 'Download/' + fname, data: b64, directory: 'EXTERNAL', recursive: true
       });
+    }).then(function(result) {
+      if (Share) {
+        Share.share({
+          title: fname, text: 'File saved: ' + fname, url: result.uri, dialogTitle: 'Open ' + fname
+        }).catch(function() { alert('Saved to Downloads: ' + fname); });
+      } else {
+        alert('Saved to Downloads: ' + fname);
+      }
+    }).catch(function(err) {
+      console.error('EXTERNAL save failed, trying DATA:', err);
+      _blobToBase64(blob).then(function(b64) {
+        return Filesystem.writeFile({
+          path: fname, data: b64, directory: 'DATA', recursive: true
+        });
+      }).then(function(result) {
+        if (Share) {
+          Share.share({ title: fname, url: result.uri, dialogTitle: 'Open ' + fname }).catch(function() {});
+        }
+        alert('File saved: ' + fname);
+      }).catch(function(err2) {
+        console.error('All save failed:', err2);
+        alert('Save failed: ' + (err2.message || 'Unknown error'));
+      });
+    });
   }
 
   if (_bpIsNative) {

@@ -3861,12 +3861,24 @@
             }
         }
 
+        function _blobToBase64(blob) {
+            return new Promise(function(resolve, reject) {
+                var reader = new FileReader();
+                reader.onloadend = function() {
+                    var result = reader.result;
+                    var base64 = result.substring(result.indexOf(',') + 1);
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
+
         /**
          * Download a Blob reliably in Capacitor WebView + all browsers.
          * Desktop: normal <a download> click.
-         * Mobile/WebView: upload blob to /upload-blob, get token, navigate
-         * to /download-blob/<token> which returns Content-Disposition: attachment
-         * that Android/iOS WebView download managers handle natively.
+         * Mobile/WebView: Capacitor Filesystem plugin writes file to Downloads,
+         * then shows a toast notification.
          */
         function downloadBlob(blob, filename) {
             var fname = filename || 'download';
@@ -3880,22 +3892,58 @@
                 return Promise.resolve();
             }
 
-            _toast('Preparing download...');
-            var fd = new FormData();
-            fd.append('file', blob, fname);
-            fd.append('filename', fname);
-            return fetch('/upload-blob', { method: 'POST', body: fd })
-                .then(function(r) { return r.json(); })
-                .then(function(j) {
-                    if (j.token) {
-                        window.location.href = '/download-blob/' + j.token;
-                        _toast('Downloading: ' + fname);
-                    }
-                })
-                .catch(function(err) {
-                    console.error('Download failed:', err);
-                    _toast('Download failed. Try again.');
+            _toast('Saving file...');
+            var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+            var Share = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+            if (!Filesystem) {
+                console.error('Filesystem plugin not available');
+                _toast('Download not available. Please update the app.');
+                return Promise.resolve();
+            }
+
+            return _blobToBase64(blob).then(function(base64data) {
+                return Filesystem.writeFile({
+                    path: 'Download/' + fname,
+                    data: base64data,
+                    directory: 'EXTERNAL',
+                    recursive: true
                 });
+            }).then(function(result) {
+                console.log('File saved to:', result.uri);
+                if (Share) {
+                    return Share.share({
+                        title: fname,
+                        text: 'File saved: ' + fname,
+                        url: result.uri,
+                        dialogTitle: 'Open ' + fname
+                    }).catch(function() {
+                        _toast('Saved to Downloads: ' + fname);
+                    });
+                } else {
+                    _toast('Saved to Downloads: ' + fname);
+                }
+            }).catch(function(err) {
+                console.error('Filesystem write failed:', err);
+                _toast('Trying alternative save...');
+                return _blobToBase64(blob).then(function(b64) {
+                    return Filesystem.writeFile({
+                        path: fname,
+                        data: b64,
+                        directory: 'DATA',
+                        recursive: true
+                    });
+                }).then(function(result) {
+                    _toast('File saved: ' + fname);
+                    if (Share) {
+                        return Share.share({
+                            title: fname, url: result.uri, dialogTitle: 'Open ' + fname
+                        }).catch(function() {});
+                    }
+                });
+            }).catch(function(err2) {
+                console.error('All save attempts failed:', err2);
+                _toast('Save failed. Please try again.');
+            });
         }
 
         /**
@@ -3920,16 +3968,51 @@
             isNative: _isNative, getGPS: getGPS, takeSelfie: takeSelfie,
             requestPushPermission: requestPushPermission, initPermissions: initPermissions,
             showPermissionAlert: _showPermissionAlert,
-            downloadBlob: downloadBlob, openBlobUrl: openBlobUrl
+            downloadBlob: downloadBlob, openBlobUrl: openBlobUrl, _toast: _toast
         };
     })();
 
-    // ── Native: fix target=_blank, window.open, window.print for Capacitor WebView ──
+    // ── Native: fix target=_blank, window.open, window.print, download links ──
     if (window.FleetBridge && window.FleetBridge.isNative) {
         document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('a[target="_blank"]').forEach(function(a) {
                 a.removeAttribute('target');
             });
+            document.addEventListener('click', function(e) {
+                var link = e.target.closest('a[href]');
+                if (!link) return;
+                var href = link.getAttribute('href') || '';
+                var isExport = /export|\.xlsx|\.csv|\.xls/i.test(href);
+                var isDownload = link.hasAttribute('download');
+                if (!isExport && !isDownload) return;
+                if (!href.startsWith('/') && !href.startsWith(window.location.origin)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                var fullUrl = href.startsWith('/') ? window.location.origin + href : href;
+                var guessName = href.split('/').pop().split('?')[0] || 'export.xlsx';
+                if (!/\.\w+$/.test(guessName)) guessName += '.xlsx';
+                link.style.opacity = '0.6';
+                link.style.pointerEvents = 'none';
+                window.FleetBridge._toast('Downloading export...');
+                fetch(fullUrl, { credentials: 'include' })
+                    .then(function(r) {
+                        var cd = r.headers.get('Content-Disposition') || '';
+                        var m = cd.match(/filename[^;=\n]*=\s*["']?([^"';\n]+)/);
+                        if (m) guessName = m[1];
+                        return r.blob();
+                    })
+                    .then(function(blob) {
+                        link.style.opacity = '';
+                        link.style.pointerEvents = '';
+                        return window.FleetBridge.downloadBlob(blob, guessName);
+                    })
+                    .catch(function(err) {
+                        link.style.opacity = '';
+                        link.style.pointerEvents = '';
+                        console.error('Export download failed:', err);
+                        alert('Export failed. Please try again.');
+                    });
+            }, true);
         });
         var _origWindowOpen = window.open;
         window.open = function(url, target, features) {
@@ -5813,12 +5896,9 @@ function _dtPrintOrPdf(btn) {
     }).from(el).output('blob').then(function(blob) {
       if (toolbar) toolbar.style.display = '';
       btn.disabled = false; btn.innerHTML = origHtml;
-      var fd = new FormData();
-      fd.append('file', blob, 'Report.pdf');
-      fd.append('filename', 'Report.pdf');
-      fetch('/upload-blob', {method:'POST',body:fd})
-        .then(function(r){return r.json();})
-        .then(function(j){ if(j.token) window.location.href='/download-blob/'+j.token; });
+      if (window.FleetBridge && window.FleetBridge.downloadBlob) {
+        window.FleetBridge.downloadBlob(blob, 'Report.pdf');
+      }
     }).catch(function() {
       if (toolbar) toolbar.style.display = '';
       btn.disabled = false; btn.innerHTML = origHtml;
