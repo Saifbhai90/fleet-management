@@ -1060,48 +1060,7 @@
         .skeleton-line.w-80{width:80%;} .skeleton-line.w-60{width:60%;} .skeleton-line.w-40{width:40%;}
         @keyframes skelShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
-        /* ── Mobile Data Cards (table replacement) ── */
-        .mobile-card-list { display: none; }
-        @media (max-width: 767.98px) {
-            .mobile-card-list { display: block; }
-            .table-to-hide { display: none !important; }
-
-            /* Table hiding handled by JS card converter below */
-        }
-        .mobile-data-card {
-            background: #fff; border-radius: 16px; padding: 16px 16px 12px; margin-bottom: 12px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.07); border-left: 4px solid #3b82f6;
-        }
-        .mobile-data-card:active { background: #f8fafc; }
-        .mobile-card-row { display:flex; justify-content:space-between; align-items:flex-start; padding:6px 0; border-bottom:1px solid #f1f5f9; gap:8px; }
-        .mobile-card-row:last-of-type { border-bottom:none; }
-        .mobile-card-label { font-size:0.68rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; min-width:80px; flex-shrink:0; padding-top:2px; }
-        .mobile-card-value { font-size:0.87rem; color:#0f172a; font-weight:500; text-align:right; flex:1; word-break:break-word; }
-        .mobile-card-value .badge { font-size:0.72rem !important; }
-        .mobile-card-actions { display:flex; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid #f1f5f9; flex-wrap:wrap; }
-        .mobile-card-actions .btn { flex:1; min-width:80px; font-size:0.8rem !important; min-height:40px !important; border-radius:10px !important; }
-        /* ── Card status-accent borders ── */
-        .mobile-data-card[data-status="active"] { border-left-color: #10b981; }
-        .mobile-data-card[data-status="inactive"] { border-left-color: #94a3b8; }
-        .mobile-data-card[data-status="present"] { border-left-color: #10b981; }
-        .mobile-data-card[data-status="absent"] { border-left-color: #ef4444; }
-        .mobile-data-card[data-status="late"] { border-left-color: #f59e0b; }
-        .mobile-data-card[data-status="leave"] { border-left-color: #8b5cf6; }
-        .mobile-data-card[data-status="left"] { border-left-color: #ef4444; }
-        .mobile-data-card[data-status="warning"] { border-left-color: #f59e0b; }
-        /* ── Card header row: bold + slightly larger ── */
-        .mobile-data-card .mc-title-row {
-            font-size: 1rem; font-weight: 700; color: #0f172a;
-            padding-bottom: 10px; margin-bottom: 4px;
-            border-bottom: 2px solid #e0eaff;
-        }
-        /* ── Status badge inside card ── */
-        .mobile-data-card .badge-active { background:#dcfce7; color:#166534; }
-        .mobile-data-card .badge-inactive { background:#f1f5f9; color:#475569; }
-        .mobile-data-card .badge-present { background:#dcfce7; color:#166534; }
-        .mobile-data-card .badge-absent { background:#fee2e2; color:#991b1b; }
-        .mobile-data-card .badge-late { background:#fef3c7; color:#92400e; }
-        .mobile-data-card .badge-leave { background:#ede9fe; color:#5b21b6; }
+        /* ── Mobile Data Cards: handled by mobile_perfect.css + JS below ── */
 
         /* ══════════════════════════════════════════════════════════════
            NATIVE MOBILE FEATURES
@@ -4069,71 +4028,7 @@
         window.addEventListener('pageshow', function() { bar.classList.remove('active'); });
     })();
 
-    // ── Table → Mobile Cards Converter ─────────────────────────────────────
-    // Automatically converts every .table-responsive table into tap-friendly
-    // cards on screens <= 767px. Tables are hidden; cards replace them.
-    (function() {
-        if (window.innerWidth > 767) return;
-        function isActionCol(label, td) {
-            var l = (label || '').toLowerCase().trim();
-            return (l === 'action' || l === 'actions' || l === '' || l === '#') ||
-                   !!(td && td.querySelector('a.btn, button.btn, .btn-group, .dropdown'));
-        }
-        document.querySelectorAll('.table-responsive').forEach(function(wrapper) {
-            if (wrapper.dataset.cardsConverted) return;
-            var table = wrapper.querySelector('table');
-            if (!table || !table.querySelector('tbody tr')) return;
-            var headers = [];
-            table.querySelectorAll('thead th').forEach(function(th) {
-                headers.push(th.textContent.trim());
-            });
-            var cardList = document.createElement('div');
-            cardList.className = 'mobile-card-list';
-            table.querySelectorAll('tbody tr').forEach(function(tr) {
-                var card = document.createElement('div');
-                card.className = 'mobile-data-card';
-                var rowsHtml = '';
-                var actionsHtml = '';
-                // Detect status from row text for accent color
-                var rowText = tr.textContent.toLowerCase();
-                var statusMap = [
-                    [/\bpresent\b/, 'present'], [/\babsent\b/, 'absent'],
-                    [/\b(late|late arrival)\b/, 'late'], [/\b(leave|on leave)\b/, 'leave'],
-                    [/\bactive\b/, 'active'], [/\binactive\b/, 'inactive'],
-                    [/\bjob left\b|\bresigned\b/, 'left']
-                ];
-                for (var s = 0; s < statusMap.length; s++) {
-                    if (statusMap[s][0].test(rowText)) { card.dataset.status = statusMap[s][1]; break; }
-                }
-                tr.querySelectorAll('td').forEach(function(td, idx) {
-                    var hdr = headers[idx] || '';
-                    if (isActionCol(hdr, td)) {
-                        actionsHtml = td.innerHTML;
-                    } else {
-                        var val = td.innerHTML.trim();
-                        if (idx === 0) {
-                            rowsHtml += '<div class="mobile-card-row mc-title-row">' +
-                                '<span style="font-size:0.97rem;font-weight:700;color:#0f172a;">' + val + '</span></div>';
-                        } else if (hdr) {
-                            rowsHtml += '<div class="mobile-card-row"><span class="mobile-card-label">' +
-                                hdr + '</span><span class="mobile-card-value">' + val + '</span></div>';
-                        }
-                    }
-                });
-                card.innerHTML = rowsHtml;
-                if (actionsHtml) {
-                    var actDiv = document.createElement('div');
-                    actDiv.className = 'mobile-card-actions';
-                    actDiv.innerHTML = actionsHtml;
-                    card.appendChild(actDiv);
-                }
-                cardList.appendChild(card);
-            });
-            wrapper.classList.add('table-to-hide');
-            wrapper.parentNode.insertBefore(cardList, wrapper.nextSibling);
-            wrapper.dataset.cardsConverted = '1';
-        });
-    })();
+    // Table → Mobile Cards: handled by "MOBILE PERFECT" script + mobile_perfect.css below
 
     // ── FAB Speed-Dial Toggle (with backdrop) ─────────────────────────────
     (function() {
