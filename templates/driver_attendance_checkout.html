@@ -139,18 +139,18 @@
         <h5 class="modal-title" id="cameraModalLabel"><i class="bi bi-camera-fill me-2"></i>Take selfie (Check-out)</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" id="cameraModalClose"></button>
       </div>
-      <div class="modal-body text-center p-4">
-        <div id="cameraLoading" class="py-4">
+      <div class="modal-body text-center p-4" style="position:relative; min-height:200px;">
+        <div id="cameraLoading" class="py-4" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;">
           <div class="spinner-border text-danger mb-2" role="status" style="width: 2.5rem; height: 2.5rem;"></div>
           <p class="mb-0 text-muted small">Camera loading...</p>
         </div>
-        <video id="cameraVideo" autoplay playsinline class="w-100 rounded-3 d-none" style="max-height: 360px; background: #111;"></video>
-        <canvas id="cameraCanvas" class="d-none"></canvas>
-        <div id="cameraError" class="alert alert-danger d-none mt-3 mb-0">
+        <video id="cameraVideo" autoplay playsinline muted class="w-100 rounded-3" style="max-height: 360px; background: #111;"></video>
+        <canvas id="cameraCanvas" style="display:none;"></canvas>
+        <div id="cameraError" class="alert alert-danger mt-3 mb-0" style="display:none;">
           <i class="bi bi-exclamation-triangle me-2"></i><span id="cameraErrorText"></span>
           <button type="button" class="btn btn-outline-danger btn-sm ms-2" id="btnRetryCamera"><i class="bi bi-arrow-clockwise me-1"></i>Retry</button>
         </div>
-        <button type="button" id="btnCapture" class="btn btn-danger btn-lg mt-3 rounded-pill px-4 d-none">
+        <button type="button" id="btnCapture" class="btn btn-danger btn-lg mt-3 rounded-pill px-4" style="display:none;">
           <i class="bi bi-camera me-2"></i>Capture
         </button>
       </div>
@@ -556,18 +556,25 @@
     cameraVideo.srcObject = null;
   }
 
+  function showEl(el) { el.style.display = ''; }
+  function hideEl(el) { el.style.display = 'none'; }
+
   function resetCameraUI() {
-    cameraLoading.classList.remove('d-none');
-    cameraVideo.classList.add('d-none');
-    btnCapture.classList.add('d-none');
-    cameraError.classList.add('d-none');
+    showEl(cameraLoading);
+    hideEl(btnCapture);
+    hideEl(cameraError);
+  }
+
+  function showCameraReady() {
+    hideEl(cameraLoading);
+    showEl(btnCapture);
+    hideEl(cameraError);
   }
 
   function showCameraError(msg) {
-    cameraLoading.classList.add('d-none');
-    cameraVideo.classList.add('d-none');
-    btnCapture.classList.add('d-none');
-    cameraError.classList.remove('d-none');
+    hideEl(cameraLoading);
+    hideEl(btnCapture);
+    showEl(cameraError);
     cameraErrorText.textContent = msg;
   }
 
@@ -582,24 +589,22 @@
       .then(function(s) {
         stream = s;
         cameraVideo.srcObject = s;
+
+        var shown = false;
+        function onReady() {
+          if (shown) return;
+          shown = true;
+          showCameraReady();
+        }
+
         cameraVideo.onloadedmetadata = function() {
-          cameraVideo.play().then(function() {
-            cameraLoading.classList.add('d-none');
-            cameraVideo.classList.remove('d-none');
-            btnCapture.classList.remove('d-none');
-          }).catch(function() {
-            cameraLoading.classList.add('d-none');
-            cameraVideo.classList.remove('d-none');
-            btnCapture.classList.remove('d-none');
-          });
+          cameraVideo.play().then(onReady).catch(onReady);
         };
+        cameraVideo.onplaying = onReady;
+
         setTimeout(function() {
-          if (cameraVideo.classList.contains('d-none') && !cameraError.classList.contains('d-none') === false) {
-            cameraLoading.classList.add('d-none');
-            cameraVideo.classList.remove('d-none');
-            btnCapture.classList.remove('d-none');
-          }
-        }, 3000);
+          if (!shown && stream) onReady();
+        }, 2000);
       })
       .catch(function(err) {
         showCameraError('Camera failed: ' + (err.message || 'Permission denied'));
@@ -629,21 +634,7 @@
   });
 
   btnCapture.addEventListener('click', function() {
-    if (!cameraVideo.srcObject) return;
-    if (cameraVideo.readyState < 2) {
-      btnCapture.disabled = true;
-      btnCapture.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Wait...';
-      var waitCheck = setInterval(function() {
-        if (cameraVideo.readyState >= 2) {
-          clearInterval(waitCheck);
-          btnCapture.disabled = false;
-          btnCapture.innerHTML = '<i class="bi bi-camera me-2"></i>Capture';
-          btnCapture.click();
-        }
-      }, 200);
-      setTimeout(function() { clearInterval(waitCheck); btnCapture.disabled = false; btnCapture.innerHTML = '<i class="bi bi-camera me-2"></i>Capture'; }, 5000);
-      return;
-    }
+    if (!cameraVideo.srcObject || !stream) return;
     var w = cameraVideo.videoWidth;
     var h = cameraVideo.videoHeight;
     cameraCanvas.width = w;
