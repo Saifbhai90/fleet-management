@@ -523,22 +523,7 @@
       .then(function(s) {
         stream = s;
         cameraVideo.srcObject = s;
-
-        var shown = false;
-        function onReady() {
-          if (shown) return;
-          shown = true;
-          showCameraReady();
-        }
-
-        cameraVideo.onloadedmetadata = function() {
-          cameraVideo.play().then(onReady).catch(onReady);
-        };
-        cameraVideo.onplaying = onReady;
-
-        setTimeout(function() {
-          if (!shown && stream) onReady();
-        }, 2000);
+        showCameraReady();
       })
       .catch(function(err) {
         showCameraError('Camera failed: ' + (err.message || 'Permission denied'));
@@ -571,6 +556,10 @@
     if (!cameraVideo.srcObject || !stream) return;
     var w = cameraVideo.videoWidth;
     var h = cameraVideo.videoHeight;
+    if (!w || !h) {
+      alert('Camera abhi tayyar ho raha hai. 1-2 second ruk kar dobara Capture karein.');
+      return;
+    }
     cameraCanvas.width = w;
     cameraCanvas.height = h;
     var ctx = cameraCanvas.getContext('2d');
