@@ -134,23 +134,25 @@
 <!-- Camera modal -->
 <div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true" data-bs-backdrop="static">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content rounded-3 overflow-hidden">
-      <div class="modal-header bg-dark text-white">
+    <div class="modal-content rounded-3">
+      <div class="modal-header bg-dark text-white py-2">
         <h5 class="modal-title" id="cameraModalLabel"><i class="bi bi-camera-fill me-2"></i>Take selfie (Check-out)</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" id="cameraModalClose"></button>
       </div>
-      <div class="modal-body text-center p-4" style="position:relative; min-height:200px;">
-        <div id="cameraLoading" class="py-4" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;">
+      <div class="modal-body text-center p-2 pb-0">
+        <video id="cameraVideo" autoplay playsinline muted class="w-100 rounded-3" style="max-height:55vh; background:#111; display:block;"></video>
+        <canvas id="cameraCanvas" style="display:none;"></canvas>
+        <div id="cameraLoading" class="py-4">
           <div class="spinner-border text-danger mb-2" role="status" style="width: 2.5rem; height: 2.5rem;"></div>
           <p class="mb-0 text-muted small">Camera loading...</p>
         </div>
-        <video id="cameraVideo" autoplay playsinline muted class="w-100 rounded-3" style="max-height: 360px; background: #111;"></video>
-        <canvas id="cameraCanvas" style="display:none;"></canvas>
-        <div id="cameraError" class="alert alert-danger mt-3 mb-0" style="display:none;">
+        <div id="cameraError" class="alert alert-danger mt-2 mb-0" style="display:none;">
           <i class="bi bi-exclamation-triangle me-2"></i><span id="cameraErrorText"></span>
           <button type="button" class="btn btn-outline-danger btn-sm ms-2" id="btnRetryCamera"><i class="bi bi-arrow-clockwise me-1"></i>Retry</button>
         </div>
-        <button type="button" id="btnCapture" class="btn btn-danger btn-lg mt-3 rounded-pill px-4" style="display:none;">
+      </div>
+      <div class="modal-footer justify-content-center border-0 pt-2 pb-3">
+        <button type="button" id="btnCapture" class="btn btn-danger btn-lg rounded-pill px-5" style="display:none;">
           <i class="bi bi-camera me-2"></i>Capture
         </button>
       </div>
