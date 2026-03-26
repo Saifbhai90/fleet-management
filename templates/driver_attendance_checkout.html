@@ -132,27 +132,27 @@
 </div>
 
 <!-- Camera modal -->
-<div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true" data-bs-backdrop="static">
+<div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content rounded-3">
       <div class="modal-header bg-dark text-white py-2">
         <h5 class="modal-title" id="cameraModalLabel"><i class="bi bi-camera-fill me-2"></i>Take selfie (Check-out)</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" id="cameraModalClose"></button>
+        <button type="button" class="btn-close btn-close-white" id="cameraModalClose" aria-label="Close"></button>
       </div>
       <div class="modal-body text-center p-2 pb-0">
-        <video id="cameraVideo" autoplay playsinline muted class="w-100 rounded-3" style="max-height:55vh; background:#111; display:block;"></video>
-        <canvas id="cameraCanvas" style="display:none;"></canvas>
-        <div id="cameraLoading" class="py-4">
-          <div class="spinner-border text-danger mb-2" role="status" style="width: 2.5rem; height: 2.5rem;"></div>
+        <video id="cameraVideo" autoplay playsinline muted class="w-100 rounded-3" style="max-height:55vh;background:#111;"></video>
+        <canvas id="cameraCanvas" class="d-none"></canvas>
+      </div>
+      <div class="modal-footer justify-content-center border-0 pt-2 pb-3">
+        <div id="cameraLoading" class="text-center w-100">
+          <div class="spinner-border text-danger mb-1" role="status" style="width:1.5rem;height:1.5rem;"></div>
           <p class="mb-0 text-muted small">Camera loading...</p>
         </div>
-        <div id="cameraError" class="alert alert-danger mt-2 mb-0" style="display:none;">
+        <div id="cameraError" class="alert alert-danger mb-0 w-100 d-none">
           <i class="bi bi-exclamation-triangle me-2"></i><span id="cameraErrorText"></span>
           <button type="button" class="btn btn-outline-danger btn-sm ms-2" id="btnRetryCamera"><i class="bi bi-arrow-clockwise me-1"></i>Retry</button>
         </div>
-      </div>
-      <div class="modal-footer justify-content-center border-0 pt-2 pb-3">
-        <button type="button" id="btnCapture" class="btn btn-danger btn-lg rounded-pill px-5" style="display:none;">
+        <button type="button" id="btnCapture" class="btn btn-danger btn-lg rounded-pill px-5 d-none">
           <i class="bi bi-camera me-2"></i>Capture
         </button>
       </div>
@@ -558,31 +558,28 @@
     cameraVideo.srcObject = null;
   }
 
-  function showEl(el) { el.style.display = ''; }
-  function hideEl(el) { el.style.display = 'none'; }
-
-  function resetCameraUI() {
-    showEl(cameraLoading);
-    hideEl(btnCapture);
-    hideEl(cameraError);
+  function showCameraReady() {
+    cameraLoading.className = 'text-center w-100 d-none';
+    cameraError.className = 'alert alert-danger mb-0 w-100 d-none';
+    btnCapture.className = 'btn btn-danger btn-lg rounded-pill px-5';
   }
 
-  function showCameraReady() {
-    hideEl(cameraLoading);
-    showEl(btnCapture);
-    hideEl(cameraError);
+  function showCameraLoading() {
+    cameraLoading.className = 'text-center w-100';
+    cameraError.className = 'alert alert-danger mb-0 w-100 d-none';
+    btnCapture.className = 'btn btn-danger btn-lg rounded-pill px-5 d-none';
   }
 
   function showCameraError(msg) {
-    hideEl(cameraLoading);
-    hideEl(btnCapture);
-    showEl(cameraError);
+    cameraLoading.className = 'text-center w-100 d-none';
+    cameraError.className = 'alert alert-danger mb-0 w-100';
+    btnCapture.className = 'btn btn-danger btn-lg rounded-pill px-5 d-none';
     cameraErrorText.textContent = msg;
   }
 
   function startCamera() {
     stopCamera();
-    resetCameraUI();
+    showCameraLoading();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       showCameraError('Camera not supported in this browser.');
       return;
