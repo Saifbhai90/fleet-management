@@ -25,31 +25,55 @@
           <form method="post" action="{{ url_for('form_control') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="save_global">
+            <p class="text-muted small mb-2"><strong><i class="bi bi-box-arrow-in-right me-1"></i>Check-IN Time Windows:</strong></p>
             <div class="row g-3">
-              <div class="col-12">
-                <p class="text-muted small mb-1"><i class="bi bi-sunrise me-1"></i> Morning shift time window:</p>
+              <div class="col-12 col-md-auto">
+                <p class="text-muted small mb-1"><i class="bi bi-sunrise me-1"></i> Morning Check-In:</p>
               </div>
-              <div class="col-md-3">
-                <label class="form-label fw-semibold">Start</label>
-                {{ global_form.morning_start(class="form-control") }}
+              <div class="col-6 col-md-2">
+                <label class="form-label fw-semibold small">Start</label>
+                {{ global_form.morning_start(class="form-control form-control-sm") }}
               </div>
-              <div class="col-md-3">
-                <label class="form-label fw-semibold">End</label>
-                {{ global_form.morning_end(class="form-control") }}
-              </div>
-              <div class="col-md-1 d-flex align-items-end pb-2">
-                <span class="text-muted">|</span>
+              <div class="col-6 col-md-2">
+                <label class="form-label fw-semibold small">End</label>
+                {{ global_form.morning_end(class="form-control form-control-sm") }}
               </div>
               <div class="col-12 col-md-auto">
-                <p class="text-muted small mb-1 mt-2 mt-md-0"><i class="bi bi-moon-stars me-1"></i> Night shift time window:</p>
+                <p class="text-muted small mb-1 mt-2 mt-md-0"><i class="bi bi-moon-stars me-1"></i> Night Check-In:</p>
               </div>
-              <div class="col-md-3 col-6" style="margin-top: -0.5rem;">
-                <label class="form-label fw-semibold">Start</label>
-                {{ global_form.night_start(class="form-control") }}
+              <div class="col-6 col-md-2">
+                <label class="form-label fw-semibold small">Start</label>
+                {{ global_form.night_start(class="form-control form-control-sm") }}
               </div>
-              <div class="col-md-3 col-6" style="margin-top: -0.5rem;">
-                <label class="form-label fw-semibold">End</label>
-                {{ global_form.night_end(class="form-control") }}
+              <div class="col-6 col-md-2">
+                <label class="form-label fw-semibold small">End</label>
+                {{ global_form.night_end(class="form-control form-control-sm") }}
+              </div>
+            </div>
+            <hr class="my-3">
+            <p class="text-muted small mb-2"><strong><i class="bi bi-box-arrow-right me-1"></i>Check-OUT Time Windows:</strong> <span class="text-info">(Blank = opposite shift check-in time use hoga)</span></p>
+            <div class="row g-3">
+              <div class="col-12 col-md-auto">
+                <p class="text-muted small mb-1"><i class="bi bi-sunrise me-1"></i> Morning Check-Out:</p>
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label fw-semibold small">Start</label>
+                <input type="time" name="morning_checkout_start" class="form-control form-control-sm" value="{{ global_override.morning_checkout_start.strftime('%H:%M') if global_override and global_override.morning_checkout_start else '' }}">
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label fw-semibold small">End</label>
+                <input type="time" name="morning_checkout_end" class="form-control form-control-sm" value="{{ global_override.morning_checkout_end.strftime('%H:%M') if global_override and global_override.morning_checkout_end else '' }}">
+              </div>
+              <div class="col-12 col-md-auto">
+                <p class="text-muted small mb-1 mt-2 mt-md-0"><i class="bi bi-moon-stars me-1"></i> Night Check-Out:</p>
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label fw-semibold small">Start</label>
+                <input type="time" name="night_checkout_start" class="form-control form-control-sm" value="{{ global_override.night_checkout_start.strftime('%H:%M') if global_override and global_override.night_checkout_start else '' }}">
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label fw-semibold small">End</label>
+                <input type="time" name="night_checkout_end" class="form-control form-control-sm" value="{{ global_override.night_checkout_end.strftime('%H:%M') if global_override and global_override.night_checkout_end else '' }}">
               </div>
             </div>
             <div class="row mt-3">
@@ -99,28 +123,48 @@
                   {{ override_form.vehicle_id(class="form-select search-select", id="ov_vehicle_id") }}
                 </div>
               </div>
-              <div class="row g-3 mt-2">
+              <p class="small text-muted mt-3 mb-1"><strong><i class="bi bi-box-arrow-in-right me-1"></i>Check-IN:</strong></p>
+              <div class="row g-2">
                 <div class="col-6 col-md-3">
-                  <label class="form-label small">Morning Start</label>
-                  <input type="time" name="morning_start" class="form-control">
+                  <label class="form-label small">Morning IN Start</label>
+                  <input type="time" name="morning_start" class="form-control form-control-sm">
                 </div>
                 <div class="col-6 col-md-3">
-                  <label class="form-label small">Morning End</label>
-                  <input type="time" name="morning_end" class="form-control">
+                  <label class="form-label small">Morning IN End</label>
+                  <input type="time" name="morning_end" class="form-control form-control-sm">
                 </div>
                 <div class="col-6 col-md-3">
-                  <label class="form-label small">Night Start</label>
-                  <input type="time" name="night_start" class="form-control">
+                  <label class="form-label small">Night IN Start</label>
+                  <input type="time" name="night_start" class="form-control form-control-sm">
                 </div>
                 <div class="col-6 col-md-3">
-                  <label class="form-label small">Night End</label>
-                  <input type="time" name="night_end" class="form-control">
+                  <label class="form-label small">Night IN End</label>
+                  <input type="time" name="night_end" class="form-control form-control-sm">
+                </div>
+              </div>
+              <p class="small text-muted mt-3 mb-1"><strong><i class="bi bi-box-arrow-right me-1"></i>Check-OUT:</strong> <span class="text-info">(Blank = opposite shift IN time)</span></p>
+              <div class="row g-2">
+                <div class="col-6 col-md-3">
+                  <label class="form-label small">Morning OUT Start</label>
+                  <input type="time" name="morning_checkout_start" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small">Morning OUT End</label>
+                  <input type="time" name="morning_checkout_end" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small">Night OUT Start</label>
+                  <input type="time" name="night_checkout_start" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small">Night OUT End</label>
+                  <input type="time" name="night_checkout_end" class="form-control form-control-sm">
                 </div>
               </div>
               <div class="row g-3 mt-2">
                 <div class="col-md-6">
                   <label class="form-label small">Remarks</label>
-                  {{ override_form.remarks(class="form-control", rows="1") }}
+                  {{ override_form.remarks(class="form-control form-control-sm", rows="1") }}
                 </div>
                 <div class="col-md-6 d-flex align-items-end">
                   <button type="submit" class="btn btn-success"><i class="bi bi-plus-circle me-1"></i>Add Override</button>
@@ -137,13 +181,15 @@
             <table class="table table-hover mb-0 align-middle">
               <thead class="table-light">
                 <tr>
-                  <th style="width:5%">#</th>
+                  <th style="width:4%">#</th>
                   <th>Type</th>
                   <th>Scope</th>
-                  <th>Morning</th>
-                  <th>Night</th>
+                  <th>Check-IN (Morning)</th>
+                  <th>Check-IN (Night)</th>
+                  <th>Check-OUT (Morning)</th>
+                  <th>Check-OUT (Night)</th>
                   <th>Remarks</th>
-                  <th style="width:18%">Actions</th>
+                  <th style="width:12%">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -160,15 +206,25 @@
                     {% endif %}
                   </td>
                   <td>{{ ov.scope_label }}</td>
-                  <td>
+                  <td class="small">
                     {{ ov.morning_start.strftime('%H:%M') if ov.morning_start else '–' }}
                     <span class="text-muted">→</span>
                     {{ ov.morning_end.strftime('%H:%M') if ov.morning_end else '–' }}
                   </td>
-                  <td>
+                  <td class="small">
                     {{ ov.night_start.strftime('%H:%M') if ov.night_start else '–' }}
                     <span class="text-muted">→</span>
                     {{ ov.night_end.strftime('%H:%M') if ov.night_end else '–' }}
+                  </td>
+                  <td class="small">
+                    {{ ov.morning_checkout_start.strftime('%H:%M') if ov.morning_checkout_start else '–' }}
+                    <span class="text-muted">→</span>
+                    {{ ov.morning_checkout_end.strftime('%H:%M') if ov.morning_checkout_end else '–' }}
+                  </td>
+                  <td class="small">
+                    {{ ov.night_checkout_start.strftime('%H:%M') if ov.night_checkout_start else '–' }}
+                    <span class="text-muted">→</span>
+                    {{ ov.night_checkout_end.strftime('%H:%M') if ov.night_checkout_end else '–' }}
                   </td>
                   <td class="small text-muted">{{ ov.remarks or '' }}</td>
                   <td>
@@ -181,29 +237,50 @@
                     </form>
                   </td>
                 </tr>
-                <!-- INLINE EDIT ROW -->
                 <tr class="collapse" id="editOv{{ ov.id }}">
-                  <td colspan="7" class="bg-light">
+                  <td colspan="9" class="bg-light">
                     <form method="post" action="{{ url_for('form_control_edit_override', ov_id=ov.id) }}">
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <p class="small text-muted mb-1"><strong>Check-IN:</strong></p>
                       <div class="row g-2 align-items-end">
                         <div class="col-6 col-md-2">
-                          <label class="form-label small mb-0">Morning Start</label>
+                          <label class="form-label small mb-0">Morning IN Start</label>
                           <input type="time" name="morning_start" class="form-control form-control-sm" value="{{ ov.morning_start.strftime('%H:%M') if ov.morning_start else '' }}">
                         </div>
                         <div class="col-6 col-md-2">
-                          <label class="form-label small mb-0">Morning End</label>
+                          <label class="form-label small mb-0">Morning IN End</label>
                           <input type="time" name="morning_end" class="form-control form-control-sm" value="{{ ov.morning_end.strftime('%H:%M') if ov.morning_end else '' }}">
                         </div>
                         <div class="col-6 col-md-2">
-                          <label class="form-label small mb-0">Night Start</label>
+                          <label class="form-label small mb-0">Night IN Start</label>
                           <input type="time" name="night_start" class="form-control form-control-sm" value="{{ ov.night_start.strftime('%H:%M') if ov.night_start else '' }}">
                         </div>
                         <div class="col-6 col-md-2">
-                          <label class="form-label small mb-0">Night End</label>
+                          <label class="form-label small mb-0">Night IN End</label>
                           <input type="time" name="night_end" class="form-control form-control-sm" value="{{ ov.night_end.strftime('%H:%M') if ov.night_end else '' }}">
                         </div>
-                        <div class="col-8 col-md-2">
+                      </div>
+                      <p class="small text-muted mb-1 mt-2"><strong>Check-OUT:</strong> <span class="text-info">(Blank = opposite shift IN time)</span></p>
+                      <div class="row g-2 align-items-end">
+                        <div class="col-6 col-md-2">
+                          <label class="form-label small mb-0">Morning OUT Start</label>
+                          <input type="time" name="morning_checkout_start" class="form-control form-control-sm" value="{{ ov.morning_checkout_start.strftime('%H:%M') if ov.morning_checkout_start else '' }}">
+                        </div>
+                        <div class="col-6 col-md-2">
+                          <label class="form-label small mb-0">Morning OUT End</label>
+                          <input type="time" name="morning_checkout_end" class="form-control form-control-sm" value="{{ ov.morning_checkout_end.strftime('%H:%M') if ov.morning_checkout_end else '' }}">
+                        </div>
+                        <div class="col-6 col-md-2">
+                          <label class="form-label small mb-0">Night OUT Start</label>
+                          <input type="time" name="night_checkout_start" class="form-control form-control-sm" value="{{ ov.night_checkout_start.strftime('%H:%M') if ov.night_checkout_start else '' }}">
+                        </div>
+                        <div class="col-6 col-md-2">
+                          <label class="form-label small mb-0">Night OUT End</label>
+                          <input type="time" name="night_checkout_end" class="form-control form-control-sm" value="{{ ov.night_checkout_end.strftime('%H:%M') if ov.night_checkout_end else '' }}">
+                        </div>
+                      </div>
+                      <div class="row g-2 mt-2 align-items-end">
+                        <div class="col-8 col-md-3">
                           <label class="form-label small mb-0">Remarks</label>
                           <input type="text" name="remarks" class="form-control form-control-sm" value="{{ ov.remarks or '' }}">
                         </div>

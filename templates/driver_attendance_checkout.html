@@ -157,6 +157,8 @@
   <input type="hidden" name="latitude" id="formLat">
   <input type="hidden" name="longitude" id="formLng">
   <input type="hidden" name="photo_base64" id="formPhotoBase64">
+  <input type="hidden" name="vehicle_id" id="formVehicleId">
+  <input type="hidden" name="project_id" id="formProjectId">
 </form>
 
 <div id="savingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-center justify-content-center" style="z-index: 9999; background: rgba(255,255,255,0.9);">
@@ -199,6 +201,8 @@
   var formLat = document.getElementById('formLat');
   var formLng = document.getElementById('formLng');
   var formPhotoBase64 = document.getElementById('formPhotoBase64');
+  var formVehicleId = document.getElementById('formVehicleId');
+  var formProjectId = document.getElementById('formProjectId');
 
   var currentPosition = null;
   var parkingCoords = null;
@@ -260,15 +264,24 @@
     return { inWindow: inWindow, label: label };
   }
 
-  /** Check-out sirf Night shift ke time window mein allowed (Morning shift wala bhi night window mein hi checkout karega). */
-  function isInCheckoutTimeWindow(win) {
-    var start = win.night_start ? minutesFromMidnight(win.night_start) : null;
-    var end = win.night_end ? minutesFromMidnight(win.night_end) : null;
+  function isInCheckoutTimeWindow(shift, win) {
+    var shiftLower = (shift || '').toLowerCase();
+    var startKey, endKey, label;
+    if (shiftLower === 'morning') {
+      startKey = win.morning_checkout_start;
+      endKey = win.morning_checkout_end;
+      label = 'Morning Check-out: ' + (startKey || '–') + ' – ' + (endKey || '–');
+    } else {
+      startKey = win.night_checkout_start;
+      endKey = win.night_checkout_end;
+      label = 'Night Check-out: ' + (startKey || '–') + ' – ' + (endKey || '–');
+    }
+    var start = startKey ? minutesFromMidnight(startKey) : null;
+    var end = endKey ? minutesFromMidnight(endKey) : null;
     if (start === null && end === null) return { inWindow: true, label: '' };
     var now = new Date();
     var current = now.getHours() * 60 + now.getMinutes();
     var inWindow = false;
-    var label = 'Check-out: Night window ' + (win.night_start || '') + ' – ' + (win.night_end || '');
     if (start !== null && end !== null) {
       inWindow = (end >= start) ? (current >= start && current <= end) : (current >= start || current <= end);
     } else { inWindow = true; }
@@ -315,10 +328,10 @@
     noCheckinMessage.classList.add('d-none');
     var opt = driverSelect.options[driverSelect.selectedIndex];
     var shift = (opt && opt.dataset.shift) ? opt.dataset.shift : shiftSelect.value;
-    var timeCheck = isInCheckoutTimeWindow(timeWindow);
+    var timeCheck = isInCheckoutTimeWindow(shift, timeWindow);
     if (!timeCheck.inWindow) {
       btnMarkCheckout.disabled = true;
-      timeWindowText.textContent = 'Check-out sirf Night shift ke time window mein. ' + (timeCheck.label || '') + ' ke dauran karein.';
+      timeWindowText.textContent = 'Check-out abhi allowed nahi. ' + (timeCheck.label || '') + ' ke dauran karein.';
       timeWindowMessage.classList.remove('d-none');
       return;
     }
@@ -380,6 +393,7 @@
     parkingCoords = null; vehiclesData = []; parkingNotSetMessage.classList.add('d-none');
     resetField(shiftSelect, SHIFT_OPTS, true);
     resetField(driverSelect, [], true);
+    fetchTimeWindow();
     if (!id) { resetField(vehicleSelect, [], true); return; }
     var cached = allVehiclesByProject[id];
     if (cached) {
@@ -416,6 +430,7 @@
     if (!serverAutoShift) {
       syncTS(shiftSelect, SHIFT_OPTS, false);
     }
+    fetchTimeWindow();
     updateDistanceUI();
     loadDrivers();
   }
@@ -456,8 +471,14 @@
   driverSelect.addEventListener('change', function() { onDriverChange(); });
 
   function fetchTimeWindow() {
+    var params = [];
     var dId = driverSelect.value || '';
-    var url = '{{ url_for("api_attendance_time_window") }}' + (dId ? '?driver_id=' + dId : '');
+    var vId = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
+    var pId = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
+    if (dId) params.push('driver_id=' + dId);
+    if (vId) params.push('vehicle_id=' + vId);
+    if (pId) params.push('project_id=' + pId);
+    var url = '{{ url_for("api_attendance_time_window") }}' + (params.length ? '?' + params.join('&') : '');
     fetch(url).then(function(r) { return r.json(); }).then(function(data) {
       timeWindow = data || {};
       if (currentPosition) updateDistanceUI();
@@ -587,6 +608,8 @@
     formLat.value = currentPosition.coords.latitude;
     formLng.value = currentPosition.coords.longitude;
     formPhotoBase64.value = dataUrl;
+    formVehicleId.value = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
+    formProjectId.value = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
     document.getElementById('savingOverlay').classList.remove('d-none');
     checkoutForm.submit();
   });

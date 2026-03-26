@@ -4137,7 +4137,7 @@ def form_control():
             global_form.morning_end.data = glob.morning_end.strftime('%H:%M') if glob.morning_end else ''
             global_form.night_start.data = glob.night_start.strftime('%H:%M') if glob.night_start else ''
             global_form.night_end.data = glob.night_end.strftime('%H:%M') if glob.night_end else ''
-        return render_template('control_form.html', global_form=global_form, override_form=override_form, overrides=overrides)
+        return render_template('control_form.html', global_form=global_form, override_form=override_form, overrides=overrides, global_override=glob)
 
     action = request.form.get('action', '')
     def parse_time(s):
@@ -4156,6 +4156,10 @@ def form_control():
         glob.morning_end = parse_time(global_form.morning_end.data)
         glob.night_start = parse_time(global_form.night_start.data)
         glob.night_end = parse_time(global_form.night_end.data)
+        glob.morning_checkout_start = parse_time(request.form.get('morning_checkout_start'))
+        glob.morning_checkout_end = parse_time(request.form.get('morning_checkout_end'))
+        glob.night_checkout_start = parse_time(request.form.get('night_checkout_start'))
+        glob.night_checkout_end = parse_time(request.form.get('night_checkout_end'))
         db.session.commit()
         flash('Global default time saved.', 'success')
         return redirect(url_for('form_control'))
@@ -4197,6 +4201,10 @@ def form_control():
             morning_end=parse_time(request.form.get('morning_end')),
             night_start=parse_time(request.form.get('night_start')),
             night_end=parse_time(request.form.get('night_end')),
+            morning_checkout_start=parse_time(request.form.get('morning_checkout_start')),
+            morning_checkout_end=parse_time(request.form.get('morning_checkout_end')),
+            night_checkout_start=parse_time(request.form.get('night_checkout_start')),
+            night_checkout_end=parse_time(request.form.get('night_checkout_end')),
             remarks=override_form.remarks.data,
         )
         db.session.add(ov)
@@ -4204,7 +4212,7 @@ def form_control():
         flash(f'{scope.title()} override added.', 'success')
         return redirect(url_for('form_control'))
 
-    return render_template('control_form.html', global_form=global_form, override_form=override_form, overrides=overrides)
+    return render_template('control_form.html', global_form=global_form, override_form=override_form, overrides=overrides, global_override=glob)
 
 
 @app.route('/form-control/override/<int:ov_id>/delete', methods=['POST'])
@@ -4234,6 +4242,10 @@ def form_control_edit_override(ov_id):
     ov.morning_end = parse_time(request.form.get('morning_end'))
     ov.night_start = parse_time(request.form.get('night_start'))
     ov.night_end = parse_time(request.form.get('night_end'))
+    ov.morning_checkout_start = parse_time(request.form.get('morning_checkout_start'))
+    ov.morning_checkout_end = parse_time(request.form.get('morning_checkout_end'))
+    ov.night_checkout_start = parse_time(request.form.get('night_checkout_start'))
+    ov.night_checkout_end = parse_time(request.form.get('night_checkout_end'))
     ov.remarks = request.form.get('remarks', '')
     db.session.commit()
     flash(f'Override "{ov.scope_label}" updated.', 'success')
@@ -10137,56 +10149,100 @@ def api_attendance_drivers():
     return jsonify([{'id': d.id, 'name': d.name, 'driver_id': d.driver_id, 'shift': d.shift or ''} for d in drivers])
 
 
-def _get_effective_time_window(driver=None):
+def _ov_to_dict(ov, source_label=None):
+    """Convert an AttendanceTimeOverride row to a time-window dict."""
+    d = {
+        'morning_start': ov.morning_start, 'morning_end': ov.morning_end,
+        'night_start': ov.night_start, 'night_end': ov.night_end,
+        'source': source_label or getattr(ov, 'scope_label', ''),
+    }
+    for f in ('morning_checkout_start', 'morning_checkout_end', 'night_checkout_start', 'night_checkout_end'):
+        d[f] = getattr(ov, f, None)
+    return d
+
+def _get_effective_time_window(driver=None, vehicle_id=None, project_id=None):
     """Hierarchical time lookup: Vehicle > District > Project > Global.
-    Returns dict with morning_start/end, night_start/end (time objects or None)."""
+    Accepts driver object OR explicit vehicle_id/project_id for early lookup
+    before a driver is selected."""
+    _vehicle = None
+    _project_id = project_id
+    _district_id = None
+
     if driver:
-        vehicle = driver.vehicle if driver.vehicle_id else None
-        if vehicle:
-            ov = AttendanceTimeOverride.query.filter_by(scope='vehicle', vehicle_id=vehicle.id).first()
-            if ov:
-                return {'morning_start': ov.morning_start, 'morning_end': ov.morning_end,
-                        'night_start': ov.night_start, 'night_end': ov.night_end, 'source': ov.scope_label}
-        district_id = None
-        project_id = driver.project_id
-        if vehicle:
-            district_id = vehicle.district_id
-            if not project_id:
-                project_id = vehicle.project_id
-        if district_id and project_id:
-            ov = AttendanceTimeOverride.query.filter_by(scope='district', project_id=project_id, district_id=district_id).first()
-            if ov:
-                return {'morning_start': ov.morning_start, 'morning_end': ov.morning_end,
-                        'night_start': ov.night_start, 'night_end': ov.night_end, 'source': ov.scope_label}
-        if project_id:
-            ov = AttendanceTimeOverride.query.filter_by(scope='project', project_id=project_id).first()
-            if ov:
-                return {'morning_start': ov.morning_start, 'morning_end': ov.morning_end,
-                        'night_start': ov.night_start, 'night_end': ov.night_end, 'source': ov.scope_label}
+        _vehicle = driver.vehicle if driver.vehicle_id else None
+        if not _project_id:
+            _project_id = driver.project_id
+    if vehicle_id and not _vehicle:
+        _vehicle = Vehicle.query.get(vehicle_id)
+    if _vehicle:
+        if not _project_id:
+            _project_id = _vehicle.project_id
+        _district_id = _vehicle.district_id
+
+    if _vehicle:
+        ov = AttendanceTimeOverride.query.filter_by(scope='vehicle', vehicle_id=_vehicle.id).first()
+        if ov:
+            return _ov_to_dict(ov)
+    if _district_id and _project_id:
+        ov = AttendanceTimeOverride.query.filter_by(scope='district', project_id=_project_id, district_id=_district_id).first()
+        if ov:
+            return _ov_to_dict(ov)
+    if _project_id:
+        ov = AttendanceTimeOverride.query.filter_by(scope='project', project_id=_project_id).first()
+        if ov:
+            return _ov_to_dict(ov)
+
     glob = AttendanceTimeOverride.query.filter_by(scope='global').first()
     if glob:
-        return {'morning_start': glob.morning_start, 'morning_end': glob.morning_end,
-                'night_start': glob.night_start, 'night_end': glob.night_end, 'source': 'Global Default'}
+        return _ov_to_dict(glob, 'Global Default')
     ctrl = AttendanceTimeControl.query.first()
     if ctrl:
-        return {'morning_start': ctrl.morning_start, 'morning_end': ctrl.morning_end,
-                'night_start': ctrl.night_start, 'night_end': ctrl.night_end, 'source': 'Global Default (Legacy)'}
-    return {'morning_start': None, 'morning_end': None, 'night_start': None, 'night_end': None, 'source': 'None'}
+        return {
+            'morning_start': ctrl.morning_start, 'morning_end': ctrl.morning_end,
+            'night_start': ctrl.night_start, 'night_end': ctrl.night_end,
+            'morning_checkout_start': None, 'morning_checkout_end': None,
+            'night_checkout_start': None, 'night_checkout_end': None,
+            'source': 'Global Default (Legacy)',
+        }
+    return {
+        'morning_start': None, 'morning_end': None,
+        'night_start': None, 'night_end': None,
+        'morning_checkout_start': None, 'morning_checkout_end': None,
+        'night_checkout_start': None, 'night_checkout_end': None,
+        'source': 'None',
+    }
 
 
 @app.route('/api/attendance-time-window')
 def api_attendance_time_window():
-    """Return configured attendance time window. If driver_id provided, uses hierarchical lookup."""
+    """Return configured attendance time window.
+    Accepts driver_id, vehicle_id, or project_id for hierarchical lookup."""
     driver_id = request.args.get('driver_id', type=int)
+    vehicle_id_param = request.args.get('vehicle_id', type=int)
+    project_id_param = request.args.get('project_id', type=int)
     driver = Driver.query.get(driver_id) if driver_id else None
-    w = _get_effective_time_window(driver)
+    w = _get_effective_time_window(driver=driver, vehicle_id=vehicle_id_param, project_id=project_id_param)
     def t_str(t):
         return t.strftime('%H:%M') if t else None
+    mco_s = w.get('morning_checkout_start')
+    mco_e = w.get('morning_checkout_end')
+    nco_s = w.get('night_checkout_start')
+    nco_e = w.get('night_checkout_end')
+    if not mco_s and not mco_e:
+        mco_s = w.get('night_start')
+        mco_e = w.get('night_end')
+    if not nco_s and not nco_e:
+        nco_s = w.get('morning_start')
+        nco_e = w.get('morning_end')
     return jsonify({
         'morning_start': t_str(w['morning_start']),
         'morning_end': t_str(w['morning_end']),
         'night_start': t_str(w['night_start']),
         'night_end': t_str(w['night_end']),
+        'morning_checkout_start': t_str(mco_s),
+        'morning_checkout_end': t_str(mco_e),
+        'night_checkout_start': t_str(nco_s),
+        'night_checkout_end': t_str(nco_e),
         'source': w.get('source', ''),
     })
 
@@ -10291,7 +10347,9 @@ def driver_attendance_checkin():
             return redirect(url_for('driver_attendance_checkin'))
         now = datetime.utcnow()
         now_time = _attendance_local_time()
-        tw = _get_effective_time_window(driver)
+        _ci_vehicle_id = request.form.get('vehicle_id', type=int)
+        _ci_project_id = request.form.get('project_id', type=int)
+        tw = _get_effective_time_window(driver=driver, vehicle_id=_ci_vehicle_id, project_id=_ci_project_id)
         def _in_window(t, start_t, end_t):
             if start_t is None or end_t is None:
                 return True
@@ -10485,7 +10543,19 @@ def driver_attendance_checkout():
             return redirect(url_for('driver_attendance_checkout'))
         now = datetime.utcnow()
         now_time = _attendance_local_time()
-        tw = _get_effective_time_window(driver)
+        _co_vehicle_id = request.form.get('vehicle_id', type=int)
+        _co_project_id = request.form.get('project_id', type=int)
+        tw = _get_effective_time_window(driver=driver, vehicle_id=_co_vehicle_id, project_id=_co_project_id)
+        mco_s = tw.get('morning_checkout_start')
+        mco_e = tw.get('morning_checkout_end')
+        nco_s = tw.get('night_checkout_start')
+        nco_e = tw.get('night_checkout_end')
+        if not mco_s and not mco_e:
+            mco_s = tw.get('night_start')
+            mco_e = tw.get('night_end')
+        if not nco_s and not nco_e:
+            nco_s = tw.get('morning_start')
+            nco_e = tw.get('morning_end')
         def _in_window(t, start_t, end_t):
             if start_t is None or end_t is None:
                 return True
@@ -10494,14 +10564,14 @@ def driver_attendance_checkout():
             return start_t <= t <= end_t
         shift = (driver.shift or '').strip()
         if shift and shift.lower() == 'morning':
-            if not _in_window(now_time, tw['night_start'], tw['night_end']):
+            if not _in_window(now_time, mco_s, mco_e):
                 src = tw.get('source', '')
-                flash(f'Morning shift ka check-out sirf Night shift ke time window mein ho sakta hai ({src}). Abhi allowed nahi.', 'danger')
+                flash(f'Morning shift ka check-out abhi allowed nahi hai. Allowed window: {mco_s.strftime("%H:%M") if mco_s else "–"} – {mco_e.strftime("%H:%M") if mco_e else "–"} ({src}).', 'danger')
                 return redirect(url_for('driver_attendance_checkout'))
         elif shift and shift.lower() == 'night':
-            if not _in_window(now_time, tw['night_start'], tw['night_end']):
+            if not _in_window(now_time, nco_s, nco_e):
                 src = tw.get('source', '')
-                flash(f'Night shift ka check-out sirf configured time window mein ho sakta hai ({src}).', 'danger')
+                flash(f'Night shift ka check-out abhi allowed nahi hai. Allowed window: {nco_s.strftime("%H:%M") if nco_s else "–"} – {nco_e.strftime("%H:%M") if nco_e else "–"} ({src}).', 'danger')
                 return redirect(url_for('driver_attendance_checkout'))
         photo_path = None
         photo = request.files.get('photo')
