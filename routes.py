@@ -4160,6 +4160,7 @@ def form_control():
         glob.morning_checkout_end = parse_time(request.form.get('morning_checkout_end'))
         glob.night_checkout_start = parse_time(request.form.get('night_checkout_start'))
         glob.night_checkout_end = parse_time(request.form.get('night_checkout_end'))
+        glob.allow_future_checkout = bool(request.form.get('allow_future_checkout'))
         db.session.commit()
         flash('Global default time saved.', 'success')
         return redirect(url_for('form_control'))
@@ -10017,7 +10018,9 @@ def driver_attendance_manual_checkout():
         flash('Is driver ka check-out pehle hi lag chuka hai.', 'info')
         return redirect(back_url)
 
-    tpl_kwargs = dict(driver=driver, rec=rec, view_date=view_date, back_url=back_url, back_params=back_params)
+    _glob_setting = AttendanceTimeOverride.query.filter_by(scope='global').first()
+    allow_future = _glob_setting.allow_future_checkout if _glob_setting else False
+    tpl_kwargs = dict(driver=driver, rec=rec, view_date=view_date, back_url=back_url, back_params=back_params, allow_future_checkout=allow_future)
 
     if request.method == 'POST':
         time_str = (request.form.get('check_out_time') or '').strip()
@@ -10048,6 +10051,9 @@ def driver_attendance_manual_checkout():
             return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
         if check_out_d > max_allowed_date:
             flash('Check-out date zyada se zyada attendance date ke agle din tak ho sakti hai.', 'danger')
+            return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
+        if not allow_future and check_out_d > date.today():
+            flash('Check-out date future mein nahi ho sakti. Admin Settings se "Allow Future Manual Check-out" ON karein agar night shift ke liye zaroorat hai.', 'danger')
             return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
         if check_out_d == view_date and rec.check_in and check_out_t < rec.check_in:
             flash('Check-out time check-in time se pehle hai — kya ye night shift hai? Agar haan to Check-out Date ko agle din par set karein.', 'warning')

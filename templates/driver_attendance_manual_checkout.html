@@ -76,6 +76,8 @@
 (function() {
   var attendanceDateStr = '{{ view_date.strftime("%Y-%m-%d") }}';
   var checkInTimeStr = '{{ rec.check_in.strftime("%H:%M") if rec and rec.check_in else "" }}';
+  var allowFuture = {{ 'true' if allow_future_checkout else 'false' }};
+  var todayStr = new Date().toISOString().slice(0, 10);
 
   var timeInput = document.getElementById('checkOutTime');
   var dateInput = document.getElementById('checkOutDate');
@@ -87,7 +89,12 @@
   var nextDayStr = nextDayDate.toISOString().slice(0, 10);
 
   dateInput.setAttribute('min', attendanceDateStr);
-  dateInput.setAttribute('max', nextDayStr);
+  if (allowFuture) {
+    dateInput.setAttribute('max', nextDayStr);
+  } else {
+    var maxStr = nextDayStr <= todayStr ? nextDayStr : todayStr;
+    dateInput.setAttribute('max', maxStr);
+  }
 
   var userManuallySetDate = false;
 
@@ -102,8 +109,11 @@
 
     var coTime = timeInput.value;
     if (coTime < checkInTimeStr) {
-      dateInput.value = nextDayStr;
-      hint.classList.remove('d-none');
+      var canSetNextDay = allowFuture || nextDayStr <= todayStr;
+      if (canSetNextDay) {
+        dateInput.value = nextDayStr;
+        hint.classList.remove('d-none');
+      }
     } else {
       dateInput.value = attendanceDateStr;
       hint.classList.add('d-none');

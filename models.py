@@ -1036,6 +1036,7 @@ class AttendanceTimeOverride(db.Model):
     morning_checkout_end = db.Column(db.Time, nullable=True)
     night_checkout_start = db.Column(db.Time, nullable=True)
     night_checkout_end = db.Column(db.Time, nullable=True)
+    allow_future_checkout = db.Column(db.Boolean, nullable=False, server_default='0')
     remarks = db.Column(db.Text, nullable=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
