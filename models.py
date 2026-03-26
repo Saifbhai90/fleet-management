@@ -1015,6 +1015,48 @@ class AttendanceTimeControl(db.Model):
         return f'<AttendanceTimeControl Morning {self.morning_start}-{self.morning_end} Night {self.night_start}-{self.night_end}>'
 
 
+# ────────────────────────────────────────────────
+# Hierarchical Attendance Time Override
+# Priority: Vehicle > District > Project > Global
+# ────────────────────────────────────────────────
+class AttendanceTimeOverride(db.Model):
+    """Per-scope attendance time windows. Most specific scope wins."""
+    __tablename__ = 'attendance_time_override'
+    id = db.Column(db.Integer, primary_key=True)
+    scope = db.Column(db.String(20), nullable=False, default='global')  # global / project / district / vehicle
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=True)
+    morning_start = db.Column(db.Time, nullable=True)
+    morning_end = db.Column(db.Time, nullable=True)
+    night_start = db.Column(db.Time, nullable=True)
+    night_end = db.Column(db.Time, nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    project = db.relationship('Project', foreign_keys=[project_id], lazy='joined')
+    district_rel = db.relationship('District', foreign_keys=[district_id], lazy='joined')
+    vehicle = db.relationship('Vehicle', foreign_keys=[vehicle_id], lazy='joined')
+
+    __table_args__ = (
+        db.UniqueConstraint('scope', 'project_id', 'district_id', 'vehicle_id', name='uq_time_override_scope'),
+    )
+
+    @property
+    def scope_label(self):
+        if self.scope == 'vehicle' and self.vehicle:
+            return f"Vehicle: {self.vehicle.vehicle_no}"
+        if self.scope == 'district' and self.district_rel:
+            proj = self.project.name if self.project else '–'
+            return f"{proj} → {self.district_rel.name}"
+        if self.scope == 'project' and self.project:
+            return f"Project: {self.project.name}"
+        return "Global Default"
+
+    def __repr__(self):
+        return f'<AttendanceTimeOverride scope={self.scope} id={self.id}>'
+
+
 # ════════════════════════════════════════════════════════════════════════════════
 # FINANCE & ACCOUNTING SYSTEM (Double-Entry Bookkeeping)
 # ════════════════════════════════════════════════════════════════════════════════

@@ -3,7 +3,7 @@
 
 {% block content %}
 <style>
-  .gps-attendance-page { padding: 0.5rem 0; max-height: calc(100vh - 70px); overflow: auto; }
+  .gps-attendance-page { padding: 0.5rem 0; }
   .gps-attendance-page .page-header { margin-bottom: 0.6rem; }
   .gps-attendance-page .page-header h2 { font-size: 1.35rem; font-weight: 700; }
   .gps-attendance-page .hint { font-size: 0.8rem; margin-bottom: 0.75rem; line-height: 1.35; }
@@ -11,6 +11,8 @@
   .gps-attendance-page .card-body { padding: 1rem 1.25rem; }
   .gps-attendance-page .form-label { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.25rem; color: #475569; }
   .gps-attendance-page .form-select, .gps-attendance-page .form-control { font-size: 0.875rem; min-height: 38px; }
+  .gps-attendance-page .ts-dropdown .ts-dropdown-content { max-height: 180px; overflow-y: auto; }
+  .gps-attendance-page .ts-dropdown { overflow: hidden; }
   .gps-attendance-page .field-row { margin-bottom: 0.5rem; }
   .gps-attendance-page .status-box { font-size: 0.8rem; padding: 0.5rem 0.75rem; border-radius: 8px; min-height: 2.5rem; }
   .gps-attendance-page .status-box.success { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
@@ -199,13 +201,29 @@
   var parkingCoords = null;
   var stream = null;
   var vehiclesData = {{ pre_vehicles_data | tojson }};
+  var allVehiclesByProject = {{ all_vehicles_by_project | tojson }};
   var serverAutoShift = {{ auto_shift | tojson }};
   var timeWindow = {};
 
-  function reinitDropdown(el, placeholder) {
-    if (!el) return;
-    if (el.tomselect) el.tomselect.destroy();
-    initSearchableDropdowns(el.parentNode);
+  function syncTS(el, opts, disabled) {
+    var ts = el.tomselect;
+    if (!ts) {
+      el.innerHTML = '<option value="">--</option>';
+      el.disabled = !!disabled;
+      el.classList.add('search-select');
+      initSearchableDropdowns(el.parentNode);
+      ts = el.tomselect;
+      if (!ts) return;
+    }
+    ts.clear(true);
+    ts.clearOptions();
+    var batch = new Array(opts.length);
+    for (var i = 0; i < opts.length; i++) {
+      batch[i] = { value: String(opts[i].value), text: opts[i].text, $order: i + 1 };
+    }
+    ts.addOptions(batch);
+    ts.refreshOptions(false);
+    if (disabled) { ts.disable(); } else { ts.enable(); }
   }
 
   function minutesFromMidnight(hhmm) {
@@ -280,25 +298,23 @@
     btnMarkAttendance.disabled = false;
   }
 
+  var SHIFT_OPTS = [{value:'Morning', text:'Morning'}, {value:'Night', text:'Night'}];
+
+  function resetField(el, opts, disabled) {
+    syncTS(el, opts || [], disabled !== false);
+  }
+
   function onDistrictChange(optionalId) {
-    var id = optionalId !== undefined && optionalId !== null ? String(optionalId) : districtSelect.value;
-    if (projectSelect.tomselect) projectSelect.tomselect.destroy();
-    projectSelect.innerHTML = '<option value="">-- Select Project --</option>';
-    projectSelect.disabled = !id;
-    if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
-    vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
-    vehicleSelect.disabled = true;
-    if (shiftSelect.tomselect) shiftSelect.tomselect.destroy();
-    shiftSelect.value = ''; shiftSelect.disabled = true;
-    if (driverSelect.tomselect) driverSelect.tomselect.destroy();
-    driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
-    driverSelect.disabled = true;
+    var id = optionalId !== undefined && optionalId !== null ? String(optionalId) : (districtSelect.tomselect ? districtSelect.tomselect.getValue() : districtSelect.value);
     parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
     parkingCoords = null; vehiclesData = []; parkingNotSetMessage.classList.add('d-none');
-    if (!id) { reinitDropdown(projectSelect, 'Search project...'); return; }
+    resetField(vehicleSelect, [], true);
+    resetField(shiftSelect, SHIFT_OPTS, true);
+    resetField(driverSelect, [], true);
+    if (!id) { resetField(projectSelect, [], true); return; }
     fetch('{{ url_for("api_attendance_projects") }}?district_id=' + id).then(function(r) { return r.json(); }).then(function(arr) {
-      arr.forEach(function(p) { var o = document.createElement('option'); o.value = p.id; o.textContent = p.name; projectSelect.appendChild(o); });
-      reinitDropdown(projectSelect, 'Search project...');
+      var opts = arr.map(function(p) { return {value: String(p.id), text: p.name}; });
+      syncTS(projectSelect, opts, false);
     });
   }
 
@@ -306,47 +322,43 @@
     districtSelect.addEventListener('change', function() { onDistrictChange(); });
     projectSelect.addEventListener('change', function() { onProjectChange(); });
     setTimeout(function() {
-      if (vehicleSelect.value) { onVehicleChange(); }
+      if (vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value) { onVehicleChange(); }
     }, 0);
   }
   attachDistrictProjectHandlers();
 
   function onProjectChange() {
-    var id = projectSelect.value;
-    if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
-    vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
-    vehicleSelect.disabled = !id;
-    if (shiftSelect.tomselect) shiftSelect.tomselect.destroy();
-    shiftSelect.value = ''; shiftSelect.disabled = true;
-    if (driverSelect.tomselect) driverSelect.tomselect.destroy();
-    driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
-    driverSelect.disabled = true;
+    var id = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
     parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
     parkingCoords = null; vehiclesData = []; parkingNotSetMessage.classList.add('d-none');
-    if (!id) return;
-    fetch('{{ url_for("api_attendance_vehicles") }}?project_id=' + id + '&district_id=' + encodeURIComponent(districtSelect.value || '')).then(function(r) { return r.json(); }).then(function(arr) {
-      vehiclesData = arr;
-      arr.forEach(function(v) {
-        var o = document.createElement('option');
-        o.value = v.id;
-        o.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
-        o.dataset.index = arr.indexOf(v).toString();
-        vehicleSelect.appendChild(o);
+    resetField(shiftSelect, SHIFT_OPTS, true);
+    resetField(driverSelect, [], true);
+    if (!id) { resetField(vehicleSelect, [], true); return; }
+    var cached = allVehiclesByProject[id];
+    if (cached) {
+      vehiclesData = cached;
+      var opts = cached.map(function(v) { return {value: String(v.id), text: v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '')}; });
+      syncTS(vehicleSelect, opts, false);
+    } else {
+      if (vehicleSelect.tomselect) { vehicleSelect.tomselect.disable(); vehicleSelect.tomselect.clear(true); }
+      fetch('{{ url_for("api_attendance_vehicles") }}?project_id=' + id + '&district_id=' + encodeURIComponent(districtSelect.tomselect ? districtSelect.tomselect.getValue() : districtSelect.value || '')).then(function(r) { return r.json(); }).then(function(arr) {
+        vehiclesData = arr;
+        allVehiclesByProject[id] = arr;
+        var opts = arr.map(function(v) { return {value: String(v.id), text: v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '')}; });
+        syncTS(vehicleSelect, opts, false);
       });
-      shiftSelect.disabled = false;
-      reinitDropdown(vehicleSelect, 'Search vehicle...');
-      reinitDropdown(shiftSelect, 'Shift');
-    });
+    }
   }
 
   vehicleSelect.addEventListener('change', function() { onVehicleChange(); });
 
   function onVehicleChange() {
-    var opt = vehicleSelect.options[vehicleSelect.selectedIndex];
+    var val = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
     parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
     parkingCoords = null; parkingNotSetMessage.classList.add('d-none');
-    if (!opt || !opt.value) return;
-    var v = vehiclesData[parseInt(opt.dataset.index, 10)];
+    if (!val) return;
+    var v = null;
+    for (var i = 0; i < vehiclesData.length; i++) { if (String(vehiclesData[i].id) === val) { v = vehiclesData[i]; break; } }
     if (!v) return;
     parkingDisplay.value = v.parking_name || '—';
     parkingId.value = v.parking_station_id || '';
@@ -355,8 +367,7 @@
       parkingCoords = { lat: v.latitude, lng: v.longitude };
     } else { parkingNotSetMessage.classList.remove('d-none'); }
     if (!serverAutoShift) {
-      shiftSelect.disabled = false;
-      reinitDropdown(shiftSelect, 'Search shift...');
+      syncTS(shiftSelect, SHIFT_OPTS, false);
     }
     updateDistanceUI();
     loadDrivers();
@@ -370,39 +381,41 @@
   }
 
   function loadDrivers() {
-    var projectId = projectSelect.value, vehicleId = vehicleSelect.value, shift = shiftSelect.value;
-    if (driverSelect.tomselect) driverSelect.tomselect.destroy();
-    driverSelect.innerHTML = '<option value="">-- Select Driver --</option>';
-    driverSelect.disabled = !projectId || !vehicleId || !shift;
-    if (!projectId || !vehicleId || !shift) return;
+    var projectId = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
+    var vehicleId = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
+    var shift = shiftSelect.tomselect ? shiftSelect.tomselect.getValue() : shiftSelect.value;
+    if (!projectId || !vehicleId || !shift) { resetField(driverSelect, [], true); return; }
+    if (driverSelect.tomselect) { driverSelect.tomselect.disable(); driverSelect.tomselect.clear(true); }
     fetch('{{ url_for("api_attendance_drivers") }}?project_id=' + projectId + '&vehicle_id=' + encodeURIComponent(vehicleId) + '&shift=' + encodeURIComponent(shift)).then(function(r) { return r.json(); }).then(function(arr) {
       var vehicleDriverId = null;
-      var vOpt = vehicleSelect.options[vehicleSelect.selectedIndex];
-      if (vOpt && vOpt.value && vehiclesData[parseInt(vOpt.dataset.index, 10)]) vehicleDriverId = vehiclesData[parseInt(vOpt.dataset.index, 10)].driver_id;
-      arr.forEach(function(d, idx) {
-        var o = document.createElement('option');
-        o.value = d.id;
-        o.textContent = d.name + ' (' + d.driver_id + ')';
-        o.dataset.shift = (d.shift || shift || '').trim();
-        if (d.id === vehicleDriverId) o.selected = true;
-        driverSelect.appendChild(o);
+      for (var i = 0; i < vehiclesData.length; i++) { if (String(vehiclesData[i].id) === vehicleId) { vehicleDriverId = vehiclesData[i].driver_id; break; } }
+      var autoVal = null;
+      var opts = arr.map(function(d) {
+        var o = {value: String(d.id), text: d.name + ' (' + d.driver_id + ')'};
+        if (d.id === vehicleDriverId) autoVal = String(d.id);
+        return o;
       });
-      // Agar abhi tak driver select nahi hua aur kam az kam 1 hai to first ko auto select karein
-      if (!driverSelect.value && arr.length > 0) {
-        driverSelect.value = String(arr[0].id);
-      }
+      if (!autoVal && arr.length > 0) autoVal = String(arr[0].id);
       var isAutoLocked = districtSelect.disabled && projectSelect.disabled && vehicleSelect.disabled;
-      if (isAutoLocked) {
-        driverSelect.disabled = true;
-      }
-      reinitDropdown(driverSelect, 'Search driver...');
-      if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
+      syncTS(driverSelect, opts, isAutoLocked);
+      if (autoVal && driverSelect.tomselect) driverSelect.tomselect.setValue(autoVal, true);
+      if ((driverSelect.tomselect ? driverSelect.tomselect.getValue() : driverSelect.value) && parkingLat.value && parkingLng.value) fetchLocation();
     });
   }
 
   driverSelect.addEventListener('change', function() { onDriverChange(); });
 
+  function fetchTimeWindow() {
+    var dId = driverSelect.value || '';
+    var url = '{{ url_for("api_attendance_time_window") }}' + (dId ? '?driver_id=' + dId : '');
+    fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+      timeWindow = data || {};
+      if (currentPosition) updateDistanceUI();
+    }).catch(function() { timeWindow = {}; });
+  }
+
   function onDriverChange() {
+    fetchTimeWindow();
     if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
   }
 
@@ -445,7 +458,7 @@
   }
 
   btnRetryLocation.addEventListener('click', fetchLocation);
-  fetch('{{ url_for("api_attendance_time_window") }}').then(function(r) { return r.json(); }).then(function(data) { timeWindow = data || {}; }).catch(function() { timeWindow = {}; });
+  fetchTimeWindow();
 
   function stopCamera() {
     if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }

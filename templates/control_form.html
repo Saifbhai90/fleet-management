@@ -1,62 +1,270 @@
 {% extends "base.html" %}
-{% block title %}Form Control{% endblock %}
+{% block title %}Attendance Time Control{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-sliders me-2 text-primary"></i>Form Control</h2>
+    <h2 class="mb-0"><i class="bi bi-sliders me-2 text-primary"></i>Attendance Time Control</h2>
     <a href="{{ url_for('user_list') }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left me-1"></i>User & Access</a>
   </div>
 
-  <p class="text-muted">Yahan different forms ke control set kiye jaate hain. Abi Attendance time window set karein — Morning / Night shift kis time se kis time tak attendance lag sakti hai.</p>
+  <p class="text-muted mb-4">
+    Yahan attendance time windows set karein. <strong>Global Default</strong> sab par apply hota hai.
+    Kisi <strong>Project / District / Vehicle</strong> ka alag time chahiye to override add karein.
+    <br><span class="text-info"><i class="bi bi-info-circle me-1"></i>Priority: Vehicle > District > Project > Global</span>
+  </p>
 
-  <div class="row">
-    <div class="col-lg-8">
+  <!-- ═══════════════ GLOBAL DEFAULT ═══════════════ -->
+  <div class="row mb-4">
+    <div class="col-lg-10">
       <div class="card shadow-sm border-0 rounded-3">
-        <div class="card-header bg-light py-3">
-          <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Attendance Time Control</h5>
+        <div class="card-header bg-primary text-white py-3">
+          <h5 class="mb-0"><i class="bi bi-globe me-2"></i>Global Default Time</h5>
         </div>
         <div class="card-body">
           <form method="post" action="{{ url_for('form_control') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="save_global">
             <div class="row g-3">
               <div class="col-12">
-                <p class="text-muted small mb-2">Morning shift walay driver kis time se kis time tak attendance laga sakte hain:</p>
+                <p class="text-muted small mb-1"><i class="bi bi-sunrise me-1"></i> Morning shift time window:</p>
               </div>
-              <div class="col-md-6">
-                <label class="form-label fw-semibold">Morning shift: Start time</label>
-                {{ form.morning_start(class="form-control") }}
+              <div class="col-md-3">
+                <label class="form-label fw-semibold">Start</label>
+                {{ global_form.morning_start(class="form-control") }}
               </div>
-              <div class="col-md-6">
-                <label class="form-label fw-semibold">Morning shift: End time</label>
-                {{ form.morning_end(class="form-control") }}
+              <div class="col-md-3">
+                <label class="form-label fw-semibold">End</label>
+                {{ global_form.morning_end(class="form-control") }}
               </div>
-              <div class="col-12 mt-3">
-                <p class="text-muted small mb-2">Night shift walay driver kis time se kis time tak attendance laga sakte hain:</p>
+              <div class="col-md-1 d-flex align-items-end pb-2">
+                <span class="text-muted">|</span>
               </div>
-              <div class="col-md-6">
-                <label class="form-label fw-semibold">Night shift: Start time</label>
-                {{ form.night_start(class="form-control") }}
+              <div class="col-12 col-md-auto">
+                <p class="text-muted small mb-1 mt-2 mt-md-0"><i class="bi bi-moon-stars me-1"></i> Night shift time window:</p>
               </div>
-              <div class="col-md-6">
-                <label class="form-label fw-semibold">Night shift: End time</label>
-                {{ form.night_end(class="form-control") }}
+              <div class="col-md-3 col-6" style="margin-top: -0.5rem;">
+                <label class="form-label fw-semibold">Start</label>
+                {{ global_form.night_start(class="form-control") }}
               </div>
-              <div class="col-12 mt-3">
-                <button type="submit" class="btn btn-primary">
-                  <i class="bi bi-check2-circle me-1"></i>Save
-                </button>
+              <div class="col-md-3 col-6" style="margin-top: -0.5rem;">
+                <label class="form-label fw-semibold">End</label>
+                {{ global_form.night_end(class="form-control") }}
+              </div>
+            </div>
+            <div class="row mt-3">
+              <div class="col-12">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i>Save Global Default</button>
+                <span class="text-muted small ms-3">Blank = koi time restriction nahi. Overnight window bhi supported hai (e.g. 22:00 – 06:00).</span>
               </div>
             </div>
           </form>
-          <p class="text-muted small mt-3 mb-0">
-            Agar koi time blank chhod diya to us shift ke liye time check nahi lagega (koi bhi time allowed).<br>
-            <strong>Night shift overnight:</strong> Agar night window midnight cross kare (e.g. 22:00 – 06:00) to bhi sahi se check hota hai.<br>
-            Ye control sirf <strong>Mark At Attendance (GPS + Camera)</strong> wale flow par apply hota hai.
-          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ OVERRIDES TABLE ═══════════════ -->
+  <div class="row mb-4">
+    <div class="col-lg-10">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="bi bi-layers me-2"></i>Time Overrides (Project / District / Vehicle)</h5>
+          <button class="btn btn-sm btn-success" data-bs-toggle="collapse" data-bs-target="#addOverrideForm">
+            <i class="bi bi-plus-lg me-1"></i>Add Override
+          </button>
+        </div>
+
+        <!-- ──── ADD OVERRIDE FORM (collapsible) ──── -->
+        <div class="collapse" id="addOverrideForm">
+          <div class="card-body bg-light border-bottom">
+            <form method="post" action="{{ url_for('form_control') }}" id="overrideFormEl">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="add_override">
+              <div class="row g-3">
+                <div class="col-md-3">
+                  <label class="form-label fw-semibold">Override Type</label>
+                  {{ override_form.scope(class="form-select", id="ov_scope") }}
+                </div>
+                <div class="col-md-3" id="ov_project_wrap">
+                  <label class="form-label fw-semibold">Project</label>
+                  {{ override_form.project_id(class="form-select search-select", id="ov_project_id") }}
+                </div>
+                <div class="col-md-3" id="ov_district_wrap" style="display:none;">
+                  <label class="form-label fw-semibold">District</label>
+                  {{ override_form.district_id(class="form-select search-select", id="ov_district_id") }}
+                </div>
+                <div class="col-md-3" id="ov_vehicle_wrap" style="display:none;">
+                  <label class="form-label fw-semibold">Vehicle</label>
+                  {{ override_form.vehicle_id(class="form-select search-select", id="ov_vehicle_id") }}
+                </div>
+              </div>
+              <div class="row g-3 mt-2">
+                <div class="col-6 col-md-3">
+                  <label class="form-label small">Morning Start</label>
+                  <input type="time" name="morning_start" class="form-control">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small">Morning End</label>
+                  <input type="time" name="morning_end" class="form-control">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small">Night Start</label>
+                  <input type="time" name="night_start" class="form-control">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small">Night End</label>
+                  <input type="time" name="night_end" class="form-control">
+                </div>
+              </div>
+              <div class="row g-3 mt-2">
+                <div class="col-md-6">
+                  <label class="form-label small">Remarks</label>
+                  {{ override_form.remarks(class="form-control", rows="1") }}
+                </div>
+                <div class="col-md-6 d-flex align-items-end">
+                  <button type="submit" class="btn btn-success"><i class="bi bi-plus-circle me-1"></i>Add Override</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- ──── OVERRIDES LIST ──── -->
+        <div class="card-body p-0">
+          {% if overrides %}
+          <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th style="width:5%">#</th>
+                  <th>Type</th>
+                  <th>Scope</th>
+                  <th>Morning</th>
+                  <th>Night</th>
+                  <th>Remarks</th>
+                  <th style="width:18%">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+              {% for ov in overrides %}
+                <tr>
+                  <td>{{ loop.index }}</td>
+                  <td>
+                    {% if ov.scope == 'project' %}
+                      <span class="badge bg-info text-dark">Project</span>
+                    {% elif ov.scope == 'district' %}
+                      <span class="badge bg-warning text-dark">District</span>
+                    {% elif ov.scope == 'vehicle' %}
+                      <span class="badge bg-danger">Vehicle</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ ov.scope_label }}</td>
+                  <td>
+                    {{ ov.morning_start.strftime('%H:%M') if ov.morning_start else '–' }}
+                    <span class="text-muted">→</span>
+                    {{ ov.morning_end.strftime('%H:%M') if ov.morning_end else '–' }}
+                  </td>
+                  <td>
+                    {{ ov.night_start.strftime('%H:%M') if ov.night_start else '–' }}
+                    <span class="text-muted">→</span>
+                    {{ ov.night_end.strftime('%H:%M') if ov.night_end else '–' }}
+                  </td>
+                  <td class="small text-muted">{{ ov.remarks or '' }}</td>
+                  <td>
+                    <button class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="collapse" data-bs-target="#editOv{{ ov.id }}">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <form method="post" action="{{ url_for('form_control_delete_override', ov_id=ov.id) }}" class="d-inline" onsubmit="return confirm('Delete this override?')">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                    </form>
+                  </td>
+                </tr>
+                <!-- INLINE EDIT ROW -->
+                <tr class="collapse" id="editOv{{ ov.id }}">
+                  <td colspan="7" class="bg-light">
+                    <form method="post" action="{{ url_for('form_control_edit_override', ov_id=ov.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <div class="row g-2 align-items-end">
+                        <div class="col-6 col-md-2">
+                          <label class="form-label small mb-0">Morning Start</label>
+                          <input type="time" name="morning_start" class="form-control form-control-sm" value="{{ ov.morning_start.strftime('%H:%M') if ov.morning_start else '' }}">
+                        </div>
+                        <div class="col-6 col-md-2">
+                          <label class="form-label small mb-0">Morning End</label>
+                          <input type="time" name="morning_end" class="form-control form-control-sm" value="{{ ov.morning_end.strftime('%H:%M') if ov.morning_end else '' }}">
+                        </div>
+                        <div class="col-6 col-md-2">
+                          <label class="form-label small mb-0">Night Start</label>
+                          <input type="time" name="night_start" class="form-control form-control-sm" value="{{ ov.night_start.strftime('%H:%M') if ov.night_start else '' }}">
+                        </div>
+                        <div class="col-6 col-md-2">
+                          <label class="form-label small mb-0">Night End</label>
+                          <input type="time" name="night_end" class="form-control form-control-sm" value="{{ ov.night_end.strftime('%H:%M') if ov.night_end else '' }}">
+                        </div>
+                        <div class="col-8 col-md-2">
+                          <label class="form-label small mb-0">Remarks</label>
+                          <input type="text" name="remarks" class="form-control form-control-sm" value="{{ ov.remarks or '' }}">
+                        </div>
+                        <div class="col-4 col-md-2">
+                          <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-check-lg"></i> Save</button>
+                        </div>
+                      </div>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="text-center text-muted py-4">
+            <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+            Koi override nahi hai. Sab drivers Global Default time use karein ge.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ HELP CARD ═══════════════ -->
+  <div class="row">
+    <div class="col-lg-10">
+      <div class="card border-0 bg-light">
+        <div class="card-body small text-muted">
+          <strong><i class="bi bi-lightbulb me-1"></i>Kaise kaam karta hai:</strong>
+          <ul class="mb-0 mt-1">
+            <li><strong>Global Default</strong> sab par apply hota hai jab tak koi specific override na ho.</li>
+            <li><strong>Project Override</strong> us project ke sab vehicles/drivers par lagta hai.</li>
+            <li><strong>District Override</strong> us project+district ke sab vehicles/drivers par lagta hai.</li>
+            <li><strong>Vehicle Override</strong> sirf us ek vehicle ke driver(s) par lagta hai (Special Duty etc).</li>
+            <li>Agar Vehicle override hai to wo sabse pehle check hota hai (highest priority).</li>
+            <li>Blank time = koi restriction nahi (anytime attendance allowed).</li>
+            <li>Ye control sirf <strong>Mark At Attendance (GPS + Camera)</strong> wale flow par apply hota hai.</li>
+          </ul>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const scopeSel = document.getElementById('ov_scope');
+  const projWrap = document.getElementById('ov_project_wrap');
+  const distWrap = document.getElementById('ov_district_wrap');
+  const vehWrap  = document.getElementById('ov_vehicle_wrap');
+
+  function toggleFields() {
+    const v = scopeSel.value;
+    projWrap.style.display = (v === 'project' || v === 'district') ? '' : 'none';
+    distWrap.style.display = (v === 'district') ? '' : 'none';
+    vehWrap.style.display  = (v === 'vehicle') ? '' : 'none';
+  }
+  scopeSel.addEventListener('change', toggleFields);
+  toggleFields();
+});
+</script>
 {% endblock %}

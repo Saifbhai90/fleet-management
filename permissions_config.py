@@ -955,10 +955,10 @@ PAGE_VISIBLE = {
     # Attendance
     'driver_attendance_checkin': ['attendance', 'driver_attendance', 'driver_attendance_checkin'],
     'driver_attendance_checkout': ['attendance', 'driver_attendance', 'driver_attendance_checkout'],
-    'driver_attendance_pending': ['attendance', 'driver_attendance', 'driver_attendance_list'],
-    'driver_attendance_missing_checkout': ['attendance', 'driver_attendance', 'driver_attendance_list'],
-    'driver_attendance_mark': ['attendance', 'driver_attendance', 'driver_attendance_list'],
-    'driver_attendance_bulk_off': ['attendance', 'driver_attendance', 'driver_attendance_list'],
+    'driver_attendance_pending': ['attendance', 'driver_attendance', 'driver_attendance_pending'],
+    'driver_attendance_missing_checkout': ['attendance', 'driver_attendance', 'driver_attendance_missing_checkout'],
+    'driver_attendance_mark': ['attendance', 'driver_attendance', 'driver_attendance_mark'],
+    'driver_attendance_bulk_off': ['attendance', 'driver_attendance', 'driver_attendance_bulk_off'],
     'driver_attendance_list': ['attendance', 'driver_attendance', 'driver_attendance_list'],
     # Task & Logbook
     'task_report_upload': ['task_report', 'task_report_upload'],

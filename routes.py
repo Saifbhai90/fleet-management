@@ -12,7 +12,7 @@ from models import (
     User, Role, Permission,
     LoginLog, ActivityLog, ClientActivityLog,
     Reminder,
-    AttendanceTimeControl,
+    AttendanceTimeControl, AttendanceTimeOverride,
     PhysicalBook, BookAssignment,
 )
 from forms import (
@@ -43,6 +43,7 @@ from forms import (
     ChangePasswordForm,
     SetNewPasswordForm,
     AttendanceTimeControlForm,
+    AttendanceTimeOverrideForm,
 )
 from datetime import datetime, date, time, timezone
 from datetime import timedelta
@@ -53,6 +54,7 @@ import xlsxwriter
 from sqlalchemy import func, text, inspect, or_, cast, and_
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError
+from sqlalchemy.orm import joinedload
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
 from flask_wtf.csrf import CSRFError
@@ -134,21 +136,25 @@ def require_login():
     if endpoint in ('login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init'):
         return
     if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
-        return  # First-time password set flow (no full login yet)
+        return
     if not session.get('user'):
         return redirect(url_for('login'))
-    # Remember Me revocation: permanent sessions bypass timeout, so verify user is still active in DB
     if getattr(session, 'permanent', False):
-        try:
-            _uid = session.get('user_id')
-            if _uid:
-                _u = User.query.get(_uid)
-                if not _u or not _u.is_active:
-                    session.clear()
-                    flash('Your account has been deactivated. Please contact administrator.', 'danger')
-                    return redirect(url_for('login'))
-        except Exception:
-            pass
+        _uid = session.get('user_id')
+        if _uid:
+            _cached_ts = session.get('_user_active_ts')
+            import time as _tm
+            _now_ts = _tm.time()
+            if not _cached_ts or (_now_ts - _cached_ts) > 300:
+                try:
+                    _u = User.query.get(_uid)
+                    if not _u or not _u.is_active:
+                        session.clear()
+                        flash('Your account has been deactivated. Please contact administrator.', 'danger')
+                        return redirect(url_for('login'))
+                    session['_user_active_ts'] = _now_ts
+                except Exception:
+                    pass
     # Session timeout (unless "remember me" made session permanent)
     timeout_mins = app.config.get('SESSION_TIMEOUT_MINUTES', 60)
     last = session.get('last_activity')
@@ -610,58 +616,80 @@ def dashboard():
 
     today_dt = date.today()
 
+    allowed_shifts = user_context.get('allowed_shifts', set())
+    allowed_parking = user_context.get('allowed_parking', set())
+
+    def _scope_vehicle_q(q):
+        if is_master_or_admin:
+            return q
+        if allowed_vehicles:
+            return q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+        if allowed_projects:
+            q = q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            q = q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+        return q
+
+    def _scope_driver_q(q):
+        if is_master_or_admin:
+            return q
+        if allowed_vehicles:
+            return q.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+        if allowed_projects:
+            q = q.filter(Driver.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            q = q.filter(Driver.district_id.in_(list(allowed_districts)))
+        if allowed_shifts:
+            q = q.filter(Driver.shift.in_(list(allowed_shifts)))
+        return q
+
     # ── Bento KPI cards (only query what the user can see) ────────────────
-    # Apply data scoping to all queries
-    total_companies  = Company.query.count()        if _can('dashboard_card_companies')   else 0
-    
-    # Projects: filter by user scope
+    total_companies  = Company.query.count() if _can('dashboard_card_companies') else 0
+
     project_q = Project.query
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
     total_projects = project_q.count() if _can('dashboard_card_projects') else 0
-    
-    # Vehicles: filter by user scope
-    vehicle_q = Vehicle.query
+
+    total_vehicles = _scope_vehicle_q(Vehicle.query).count() if (_can('dashboard_card_vehicles') or _can('dashboard_card_utilization')) else 0
+
+    total_drivers = _scope_driver_q(Driver.query).count() if (_can('dashboard_card_drivers') or _can('active_drivers_report')) else 0
+
+    parking_q = ParkingStation.query
     if not is_master_or_admin:
-        if allowed_projects:
-            vehicle_q = vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
-        if allowed_districts:
-            vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
-    total_vehicles = vehicle_q.count() if (_can('dashboard_card_vehicles') or _can('dashboard_card_utilization')) else 0
-    
-    # Drivers: filter by project scope only (district is on Vehicle, not Driver)
-    driver_q = Driver.query
-    if not is_master_or_admin and allowed_projects:
-        driver_q = driver_q.filter(Driver.project_id.in_(list(allowed_projects)))
-    total_drivers = driver_q.count() if (_can('dashboard_card_drivers') or _can('active_drivers_report')) else 0
-    total_parking    = ParkingStation.query.count() if _can('dashboard_card_parking')     else 0
-    total_districts  = District.query.count()       if _can('dashboard_card_districts')   else 0
-    
-    # Active drivers: use vehicle-based scope (district is on Vehicle, not Driver — matches active_drivers_report)
-    active_driver_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
-    if not is_master_or_admin:
-        if allowed_vehicles:
-            active_driver_q = active_driver_q.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+        if allowed_parking:
+            parking_q = parking_q.filter(ParkingStation.id.in_(list(allowed_parking)))
         elif allowed_projects:
-            active_driver_q = active_driver_q.filter(Driver.project_id.in_(list(allowed_projects)))
-    active_drivers = active_driver_q.count() if (_can('dashboard_card_drivers') or _can('active_drivers_report')) else 0
-    
-    # Assigned vehicles: filter by user scope
-    assigned_vehicle_q = Vehicle.query.filter(Vehicle.district_id.isnot(None))
-    if not is_master_or_admin:
-        if allowed_projects:
-            assigned_vehicle_q = assigned_vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
-        if allowed_districts:
-            assigned_vehicle_q = assigned_vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
-    assigned_vehicles = assigned_vehicle_q.count() if _can('dashboard_card_vehicles') else 0
-    
-    # Today attendance: filter by user scope
+            parking_q = parking_q.filter(ParkingStation.project_id.in_(list(allowed_projects)))
+    total_parking = parking_q.count() if _can('dashboard_card_parking') else 0
+
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    total_districts = district_q.count() if _can('dashboard_card_districts') else 0
+
+    active_drivers = _scope_driver_q(
+        Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
+    ).count() if (_can('dashboard_card_drivers') or _can('active_drivers_report')) else 0
+
+    assigned_vehicles = _scope_vehicle_q(
+        Vehicle.query.filter(Vehicle.district_id.isnot(None))
+    ).count() if _can('dashboard_card_vehicles') else 0
+
     attendance_q = DriverAttendance.query.filter_by(attendance_date=today_dt)
     if not is_master_or_admin and allowed_projects:
         attendance_q = attendance_q.filter(DriverAttendance.project_id.in_(list(allowed_projects)))
     today_attendance = attendance_q.count() if _can('dashboard_card_attendance') else 0
-    
-    today_transfers  = DriverTransfer.query.filter_by(transfer_date=today_dt).count()                      if _can('dashboard_card_transfers')   else 0
+
+    transfer_q = DriverTransfer.query.filter_by(transfer_date=today_dt)
+    if not is_master_or_admin and allowed_projects:
+        transfer_q = transfer_q.filter(
+            db.or_(
+                DriverTransfer.old_project_id.in_(list(allowed_projects)),
+                DriverTransfer.new_project_id.in_(list(allowed_projects))
+            )
+        )
+    today_transfers = transfer_q.count() if _can('dashboard_card_transfers') else 0
 
     # Monthly fuel cost + 30-day trend (only if user can see fuel expense)
     monthly_fuel = 0.0
@@ -712,22 +740,9 @@ def dashboard():
     vehicle_util_data = [0, 0, 0]
     if _can('dashboard_card_utilization'):
         try:
-            # Apply user data scope to vehicle utilization queries
-            v_active_q = Vehicle.query.filter(Vehicle.driver_id.isnot(None))
-            v_deployed_q = Vehicle.query.filter(Vehicle.project_id.isnot(None), Vehicle.driver_id.is_(None))
-            v_idle_q = Vehicle.query.filter(Vehicle.project_id.is_(None), Vehicle.driver_id.is_(None))
-            
-            if not is_master_or_admin:
-                if allowed_projects:
-                    v_active_q = v_active_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
-                    v_deployed_q = v_deployed_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
-                if allowed_districts:
-                    v_active_q = v_active_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
-                    v_deployed_q = v_deployed_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
-            
-            v_active = v_active_q.count()
-            v_deployed = v_deployed_q.count()
-            v_idle = v_idle_q.count()
+            v_active = _scope_vehicle_q(Vehicle.query.filter(Vehicle.driver_id.isnot(None))).count()
+            v_deployed = _scope_vehicle_q(Vehicle.query.filter(Vehicle.project_id.isnot(None), Vehicle.driver_id.is_(None))).count()
+            v_idle = _scope_vehicle_q(Vehicle.query.filter(Vehicle.project_id.is_(None), Vehicle.driver_id.is_(None))).count()
             vehicle_util_data = [v_active, v_deployed, v_idle]
         except Exception:
             vehicle_util_data = [0, 0, 0]
@@ -787,7 +802,8 @@ def dashboard():
         try:
             from datetime import timedelta as _td
             _cutoff15 = today_dt + _td(days=15)
-            for _drv in Driver.query.filter(Driver.status == 'Active').all():
+            _exp_q = _scope_driver_q(Driver.query.filter(Driver.status == 'Active'))
+            for _drv in _exp_q.all():
                 _lic, _cn = _drv.license_expiry_date, _drv.cnic_expiry_date
                 if (_lic and today_dt <= _lic <= _cutoff15) or (_cn and today_dt <= _cn <= _cutoff15):
                     expiry_soon += 1
@@ -4047,35 +4063,137 @@ def role_list():
 # ────────────────────────────────────────────────
 @app.route('/control', methods=['GET', 'POST'])
 def form_control():
-    """Control form: Attendance time windows (Morning / Night shift). Single row settings."""
-    form = AttendanceTimeControlForm()
-    row = AttendanceTimeControl.query.first()
+    """Attendance time windows: Global + hierarchical overrides (Project / District / Vehicle)."""
+    global_form = AttendanceTimeControlForm()
+    override_form = AttendanceTimeOverrideForm()
+
+    projects = Project.query.order_by(Project.name).all()
+    districts = District.query.order_by(District.name).all()
+    vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
+    override_form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in projects]
+    override_form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
+    override_form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, f"{v.vehicle_no} ({v.vehicle_type or ''})") for v in vehicles]
+
+    glob = AttendanceTimeOverride.query.filter_by(scope='global').first()
+    if not glob:
+        old = AttendanceTimeControl.query.first()
+        if old:
+            glob = AttendanceTimeOverride(scope='global',
+                morning_start=old.morning_start, morning_end=old.morning_end,
+                night_start=old.night_start, night_end=old.night_end)
+            db.session.add(glob)
+            db.session.commit()
+
+    overrides = AttendanceTimeOverride.query.filter(AttendanceTimeOverride.scope != 'global')\
+        .order_by(AttendanceTimeOverride.scope, AttendanceTimeOverride.updated_at.desc()).all()
+
     if request.method == 'GET':
-        if row:
-            form.morning_start.data = row.morning_start.strftime('%H:%M') if row.morning_start else ''
-            form.morning_end.data = row.morning_end.strftime('%H:%M') if row.morning_end else ''
-            form.night_start.data = row.night_start.strftime('%H:%M') if row.night_start else ''
-            form.night_end.data = row.night_end.strftime('%H:%M') if row.night_end else ''
-        return render_template('control_form.html', form=form)
-    if form.validate_on_submit():
-        def parse_time(s):
-            if not s or not str(s).strip():
-                return None
-            try:
-                return datetime.strptime(str(s).strip()[:5], '%H:%M').time()
-            except ValueError:
-                return None
-        if not row:
-            row = AttendanceTimeControl()
-            db.session.add(row)
-        row.morning_start = parse_time(form.morning_start.data)
-        row.morning_end = parse_time(form.morning_end.data)
-        row.night_start = parse_time(form.night_start.data)
-        row.night_end = parse_time(form.night_end.data)
+        if glob:
+            global_form.morning_start.data = glob.morning_start.strftime('%H:%M') if glob.morning_start else ''
+            global_form.morning_end.data = glob.morning_end.strftime('%H:%M') if glob.morning_end else ''
+            global_form.night_start.data = glob.night_start.strftime('%H:%M') if glob.night_start else ''
+            global_form.night_end.data = glob.night_end.strftime('%H:%M') if glob.night_end else ''
+        return render_template('control_form.html', global_form=global_form, override_form=override_form, overrides=overrides)
+
+    action = request.form.get('action', '')
+    def parse_time(s):
+        if not s or not str(s).strip():
+            return None
+        try:
+            return datetime.strptime(str(s).strip()[:5], '%H:%M').time()
+        except ValueError:
+            return None
+
+    if action == 'save_global':
+        if not glob:
+            glob = AttendanceTimeOverride(scope='global')
+            db.session.add(glob)
+        glob.morning_start = parse_time(global_form.morning_start.data)
+        glob.morning_end = parse_time(global_form.morning_end.data)
+        glob.night_start = parse_time(global_form.night_start.data)
+        glob.night_end = parse_time(global_form.night_end.data)
         db.session.commit()
-        flash('Control settings saved.', 'success')
+        flash('Global default time saved.', 'success')
         return redirect(url_for('form_control'))
-    return render_template('control_form.html', form=form)
+
+    if action == 'add_override':
+        scope = override_form.scope.data
+        proj = override_form.project_id.data if override_form.project_id.data else None
+        dist = override_form.district_id.data if override_form.district_id.data else None
+        veh = override_form.vehicle_id.data if override_form.vehicle_id.data else None
+        if proj == 0: proj = None
+        if dist == 0: dist = None
+        if veh == 0: veh = None
+
+        if scope == 'project' and not proj:
+            flash('Project select karein.', 'danger')
+            return redirect(url_for('form_control'))
+        if scope == 'district' and (not proj or not dist):
+            flash('Project aur District dono select karein.', 'danger')
+            return redirect(url_for('form_control'))
+        if scope == 'vehicle' and not veh:
+            flash('Vehicle select karein.', 'danger')
+            return redirect(url_for('form_control'))
+
+        if scope == 'project':
+            dist = None; veh = None
+        elif scope == 'district':
+            veh = None
+        elif scope == 'vehicle':
+            proj = None; dist = None
+
+        existing = AttendanceTimeOverride.query.filter_by(scope=scope, project_id=proj, district_id=dist, vehicle_id=veh).first()
+        if existing:
+            flash('Is scope ka override pehle se exist karta hai. Us ko edit karein ya delete kar ke naya banayein.', 'warning')
+            return redirect(url_for('form_control'))
+
+        ov = AttendanceTimeOverride(
+            scope=scope, project_id=proj, district_id=dist, vehicle_id=veh,
+            morning_start=parse_time(request.form.get('morning_start')),
+            morning_end=parse_time(request.form.get('morning_end')),
+            night_start=parse_time(request.form.get('night_start')),
+            night_end=parse_time(request.form.get('night_end')),
+            remarks=override_form.remarks.data,
+        )
+        db.session.add(ov)
+        db.session.commit()
+        flash(f'{scope.title()} override added.', 'success')
+        return redirect(url_for('form_control'))
+
+    return render_template('control_form.html', global_form=global_form, override_form=override_form, overrides=overrides)
+
+
+@app.route('/form-control/override/<int:ov_id>/delete', methods=['POST'])
+def form_control_delete_override(ov_id):
+    ov = AttendanceTimeOverride.query.get_or_404(ov_id)
+    if ov.scope == 'global':
+        flash('Global default delete nahi kar saktay.', 'danger')
+        return redirect(url_for('form_control'))
+    label = ov.scope_label
+    db.session.delete(ov)
+    db.session.commit()
+    flash(f'Override "{label}" delete ho gaya.', 'success')
+    return redirect(url_for('form_control'))
+
+
+@app.route('/form-control/override/<int:ov_id>/edit', methods=['POST'])
+def form_control_edit_override(ov_id):
+    ov = AttendanceTimeOverride.query.get_or_404(ov_id)
+    def parse_time(s):
+        if not s or not str(s).strip():
+            return None
+        try:
+            return datetime.strptime(str(s).strip()[:5], '%H:%M').time()
+        except ValueError:
+            return None
+    ov.morning_start = parse_time(request.form.get('morning_start'))
+    ov.morning_end = parse_time(request.form.get('morning_end'))
+    ov.night_start = parse_time(request.form.get('night_start'))
+    ov.night_end = parse_time(request.form.get('night_end'))
+    ov.remarks = request.form.get('remarks', '')
+    db.session.commit()
+    flash(f'Override "{ov.scope_label}" updated.', 'success')
+    return redirect(url_for('form_control'))
 
 
 @app.route('/roles/new', methods=['GET', 'POST'])
@@ -7926,6 +8044,8 @@ def missing_documents_report():
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     allowed_projects   = user_context.get('allowed_projects', set())
     allowed_districts  = user_context.get('allowed_districts', set())
+    allowed_vehicles   = user_context.get('allowed_vehicles', set())
+    allowed_shifts     = user_context.get('allowed_shifts', set())
 
     project_id  = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
@@ -7948,10 +8068,15 @@ def missing_documents_report():
     query = Driver.query.filter(Driver.status != 'Left')
 
     if not is_master_or_admin:
-        if allowed_projects:
-            query = query.filter(Driver.project_id.in_(list(allowed_projects)))
-        if allowed_districts:
-            query = query.filter(Driver.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+        elif allowed_projects or allowed_districts:
+            if allowed_projects:
+                query = query.filter(Driver.project_id.in_(list(allowed_projects)))
+            if allowed_districts:
+                query = query.filter(Driver.district_id.in_(list(allowed_districts)))
+        if allowed_shifts:
+            query = query.filter(Driver.shift.in_(list(allowed_shifts)))
 
     if project_id:
         query = query.filter(Driver.project_id == project_id)
@@ -7979,12 +8104,29 @@ def missing_documents_report():
         proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
     all_projects = proj_q.all()
     project_map = {p.id: p.name for p in all_projects}
+
+    auto_project_id = 0
+    auto_district_id = 0
+    if not is_master_or_admin:
+        if len(all_projects) == 1:
+            auto_project_id = all_projects[0].id
+    if is_first_load and auto_project_id and not project_id:
+        project_id = auto_project_id
+
     project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in all_projects]
 
     dist_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
-    district_choices = [(0, '-- All Districts --')] + [(d2.id, d2.name) for d2 in dist_q.all()]
+    all_districts_list = dist_q.all()
+
+    if not is_master_or_admin:
+        if len(all_districts_list) == 1:
+            auto_district_id = all_districts_list[0].id
+    if is_first_load and auto_district_id and not district_id:
+        district_id = auto_district_id
+
+    district_choices = [(0, '-- All Districts --')] + [(d2.id, d2.name) for d2 in all_districts_list]
 
     selected_attrs = set()
     if doc_filters:
@@ -8027,6 +8169,9 @@ def missing_documents_report():
         project_choices=project_choices,
         district_choices=district_choices,
         doc_fields=DOC_FIELDS,
+        auto_project_id=auto_project_id,
+        auto_district_id=auto_district_id,
+        is_master_or_admin=is_master_or_admin,
     )
 
 
@@ -8040,6 +8185,8 @@ def missing_documents_report_print():
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     allowed_projects   = user_context.get('allowed_projects', set())
     allowed_districts  = user_context.get('allowed_districts', set())
+    allowed_vehicles   = user_context.get('allowed_vehicles', set())
+    allowed_shifts     = user_context.get('allowed_shifts', set())
 
     project_id  = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
@@ -8061,10 +8208,15 @@ def missing_documents_report_print():
     query = Driver.query.filter(Driver.status != 'Left')
 
     if not is_master_or_admin:
-        if allowed_projects:
-            query = query.filter(Driver.project_id.in_(list(allowed_projects)))
-        if allowed_districts:
-            query = query.filter(Driver.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+        elif allowed_projects or allowed_districts:
+            if allowed_projects:
+                query = query.filter(Driver.project_id.in_(list(allowed_projects)))
+            if allowed_districts:
+                query = query.filter(Driver.district_id.in_(list(allowed_districts)))
+        if allowed_shifts:
+            query = query.filter(Driver.shift.in_(list(allowed_shifts)))
 
     if project_id:
         query = query.filter(Driver.project_id == project_id)
@@ -9975,10 +10127,9 @@ def api_attendance_vehicles():
     district_id = request.args.get('district_id', type=int)
     if not project_id:
         return jsonify([])
-    query = Vehicle.query.filter(Vehicle.project_id == project_id)
+    query = Vehicle.query.options(joinedload(Vehicle.parking_station)).filter(Vehicle.project_id == project_id)
     if district_id:
         query = query.filter(Vehicle.district_id == district_id)
-    # Scope: vehicles/projects allowed for this user
     scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
     if scope_projects:
         query = query.filter(Vehicle.project_id.in_(scope_projects))
@@ -10027,19 +10178,57 @@ def api_attendance_drivers():
     return jsonify([{'id': d.id, 'name': d.name, 'driver_id': d.driver_id, 'shift': d.shift or ''} for d in drivers])
 
 
+def _get_effective_time_window(driver=None):
+    """Hierarchical time lookup: Vehicle > District > Project > Global.
+    Returns dict with morning_start/end, night_start/end (time objects or None)."""
+    if driver:
+        vehicle = driver.vehicle if driver.vehicle_id else None
+        if vehicle:
+            ov = AttendanceTimeOverride.query.filter_by(scope='vehicle', vehicle_id=vehicle.id).first()
+            if ov:
+                return {'morning_start': ov.morning_start, 'morning_end': ov.morning_end,
+                        'night_start': ov.night_start, 'night_end': ov.night_end, 'source': ov.scope_label}
+        district_id = None
+        project_id = driver.project_id
+        if vehicle:
+            district_id = vehicle.district_id
+            if not project_id:
+                project_id = vehicle.project_id
+        if district_id and project_id:
+            ov = AttendanceTimeOverride.query.filter_by(scope='district', project_id=project_id, district_id=district_id).first()
+            if ov:
+                return {'morning_start': ov.morning_start, 'morning_end': ov.morning_end,
+                        'night_start': ov.night_start, 'night_end': ov.night_end, 'source': ov.scope_label}
+        if project_id:
+            ov = AttendanceTimeOverride.query.filter_by(scope='project', project_id=project_id).first()
+            if ov:
+                return {'morning_start': ov.morning_start, 'morning_end': ov.morning_end,
+                        'night_start': ov.night_start, 'night_end': ov.night_end, 'source': ov.scope_label}
+    glob = AttendanceTimeOverride.query.filter_by(scope='global').first()
+    if glob:
+        return {'morning_start': glob.morning_start, 'morning_end': glob.morning_end,
+                'night_start': glob.night_start, 'night_end': glob.night_end, 'source': 'Global Default'}
+    ctrl = AttendanceTimeControl.query.first()
+    if ctrl:
+        return {'morning_start': ctrl.morning_start, 'morning_end': ctrl.morning_end,
+                'night_start': ctrl.night_start, 'night_end': ctrl.night_end, 'source': 'Global Default (Legacy)'}
+    return {'morning_start': None, 'morning_end': None, 'night_start': None, 'night_end': None, 'source': 'None'}
+
+
 @app.route('/api/attendance-time-window')
 def api_attendance_time_window():
-    """Return configured attendance time window for Morning/Night (for frontend check)."""
-    ctrl = AttendanceTimeControl.query.first()
-    if not ctrl:
-        return jsonify({})
+    """Return configured attendance time window. If driver_id provided, uses hierarchical lookup."""
+    driver_id = request.args.get('driver_id', type=int)
+    driver = Driver.query.get(driver_id) if driver_id else None
+    w = _get_effective_time_window(driver)
     def t_str(t):
         return t.strftime('%H:%M') if t else None
     return jsonify({
-        'morning_start': t_str(ctrl.morning_start),
-        'morning_end': t_str(ctrl.morning_end),
-        'night_start': t_str(ctrl.night_start),
-        'night_end': t_str(ctrl.night_end),
+        'morning_start': t_str(w['morning_start']),
+        'morning_end': t_str(w['morning_end']),
+        'night_start': t_str(w['night_start']),
+        'night_end': t_str(w['night_end']),
+        'source': w.get('source', ''),
     })
 
 
@@ -10062,26 +10251,17 @@ def api_attendance_has_gps_checkin():
 def driver_attendance_checkin():
     """Geofenced check-in: District → Project → Vehicle → Parking (auto) → Shift → Driver. Then location + selfie."""
     scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
-    # Effective scope: enrich project/district from vehicle when driver has no direct assignment
     _eff_projects = list(scope_projects) if scope_projects else []
     _eff_districts = list(scope_districts) if scope_districts else []
     if scope_vehicles:
-        for _v in Vehicle.query.filter(Vehicle.id.in_(scope_vehicles)).all():
+        _scope_vehs = Vehicle.query.options(joinedload(Vehicle.parking_station)).filter(Vehicle.id.in_(scope_vehicles)).all()
+        for _v in _scope_vehs:
             if _v.district_id and _v.district_id not in _eff_districts:
                 _eff_districts.append(_v.district_id)
             if not _eff_projects and _v.project_id:
                 _eff_projects.append(_v.project_id)
-            if not _eff_districts:
-                _ps = _v.parking_station
-                if _ps:
-                    if not _eff_projects and _ps.project_id:
-                        _eff_projects.append(_ps.project_id)
-                    if not _eff_districts and (_ps.district or '').strip():
-                        _pd = District.query.filter(
-                            func.lower(District.name) == _ps.district.strip().lower()
-                        ).first()
-                        if _pd and _pd.id not in _eff_districts:
-                            _eff_districts.append(_pd.id)
+    else:
+        _scope_vehs = []
     districts_query = District.query.join(project_district, District.id == project_district.c.district_id)
     if _eff_districts:
         districts_query = districts_query.filter(District.id.in_(_eff_districts))
@@ -10089,7 +10269,6 @@ def driver_attendance_checkin():
         districts_query = districts_query.filter(project_district.c.project_id.in_(_eff_projects))
     districts = districts_query.distinct().order_by(District.name).all()
 
-    # ── Server-side auto-selection for single-scope users ─────────────────────
     auto_district_id = districts[0].id if len(districts) == 1 else None
     pre_projects = []
     auto_project_id = None
@@ -10113,13 +10292,12 @@ def driver_attendance_checkin():
             'driver_id': v.driver_id,
         }
     if scope_vehicles and len(scope_vehicles) == 1:
-        # Single assigned vehicle – fetch directly by ID (vehicle.district_id may be NULL)
-        sv = Vehicle.query.get(scope_vehicles[0])
+        sv = _scope_vehs[0] if _scope_vehs else None
         if sv:
             pre_vehicles_data = [_build_vehicle_dict(sv)]
             auto_vehicle_id = sv.id
     elif auto_project_id:
-        vq = Vehicle.query.filter(Vehicle.project_id == auto_project_id)
+        vq = Vehicle.query.options(joinedload(Vehicle.parking_station)).filter(Vehicle.project_id == auto_project_id)
         if auto_district_id:
             vq = vq.filter(Vehicle.district_id == auto_district_id)
         if scope_vehicles:
@@ -10130,7 +10308,6 @@ def driver_attendance_checkin():
             auto_vehicle_id = pre_vehicles_data[0]['id']
     scope_shifts_list = sorted(scope_shifts) if scope_shifts else []
     auto_shift = scope_shifts_list[0] if len(scope_shifts_list) == 1 else None
-    # ─────────────────────────────────────────────────────────────────────────
 
     today = _attendance_local_date()
     if request.method == 'POST':
@@ -10155,24 +10332,24 @@ def driver_attendance_checkin():
             return redirect(url_for('driver_attendance_checkin'))
         now = datetime.utcnow()
         now_time = _attendance_local_time()
-        # Attendance time control: allow only within configured window for driver's shift (times in local timezone)
-        ctrl = AttendanceTimeControl.query.first()
-        if ctrl:
-            shift = (driver.shift or '').strip()
-            def in_window(t, start_t, end_t):
-                if start_t is None or end_t is None:
-                    return True
-                if end_t < start_t:  # overnight window
-                    return t >= start_t or t <= end_t
-                return start_t <= t <= end_t
-            if shift and shift.lower() == 'morning':
-                if not in_window(now_time, ctrl.morning_start, ctrl.morning_end):
-                    flash('Morning shift ki attendance sirf configured time window mein lag sakti hai. User & Access → Control mein time check karein.', 'danger')
-                    return redirect(url_for('driver_attendance_checkin'))
-            elif shift and shift.lower() == 'night':
-                if not in_window(now_time, ctrl.night_start, ctrl.night_end):
-                    flash('Night shift ki attendance sirf configured time window mein lag sakti hai. User & Access → Control mein time check karein.', 'danger')
-                    return redirect(url_for('driver_attendance_checkin'))
+        tw = _get_effective_time_window(driver)
+        def _in_window(t, start_t, end_t):
+            if start_t is None or end_t is None:
+                return True
+            if end_t < start_t:
+                return t >= start_t or t <= end_t
+            return start_t <= t <= end_t
+        shift = (driver.shift or '').strip()
+        if shift and shift.lower() == 'morning':
+            if not _in_window(now_time, tw['morning_start'], tw['morning_end']):
+                src = tw.get('source', '')
+                flash(f'Morning shift ki attendance sirf configured time window mein lag sakti hai ({src}). Control mein time check karein.', 'danger')
+                return redirect(url_for('driver_attendance_checkin'))
+        elif shift and shift.lower() == 'night':
+            if not _in_window(now_time, tw['night_start'], tw['night_end']):
+                src = tw.get('source', '')
+                flash(f'Night shift ki attendance sirf configured time window mein lag sakti hai ({src}). Control mein time check karein.', 'danger')
+                return redirect(url_for('driver_attendance_checkin'))
         # Photo: multipart file or base64
         photo_path = None
         photo = request.files.get('photo')
@@ -10228,12 +10405,26 @@ def driver_attendance_checkin():
         except Exception as e:
             db.session.rollback()
             flash(f'Error saving: {str(e)}', 'danger')
+    all_vehicles_by_project = {}
+    _avq = Vehicle.query.options(joinedload(Vehicle.parking_station))
+    if _eff_districts:
+        _avq = _avq.filter(Vehicle.district_id.in_(_eff_districts))
+    elif _eff_projects:
+        _avq = _avq.filter(Vehicle.project_id.in_(_eff_projects))
+    if scope_vehicles:
+        _avq = _avq.filter(Vehicle.id.in_(scope_vehicles))
+    for _av in _avq.order_by(Vehicle.vehicle_no).all():
+        _pk = str(_av.project_id or 0)
+        if _pk not in all_vehicles_by_project:
+            all_vehicles_by_project[_pk] = []
+        all_vehicles_by_project[_pk].append(_build_vehicle_dict(_av))
     return render_template('driver_attendance_checkin.html',
         districts=districts, drivers=[], parking_stations=[],
         pre_projects=pre_projects, pre_vehicles_data=pre_vehicles_data,
         auto_district_id=auto_district_id, auto_project_id=auto_project_id,
         auto_vehicle_id=auto_vehicle_id, auto_shift=auto_shift,
-        scope_shifts_list=scope_shifts_list)
+        scope_shifts_list=scope_shifts_list,
+        all_vehicles_by_project=all_vehicles_by_project)
 
 
 @app.route('/driver-attendance/checkout', methods=['GET', 'POST'])
@@ -10243,22 +10434,14 @@ def driver_attendance_checkout():
     _eff_projects = list(scope_projects) if scope_projects else []
     _eff_districts = list(scope_districts) if scope_districts else []
     if scope_vehicles:
-        for _v in Vehicle.query.filter(Vehicle.id.in_(scope_vehicles)).all():
+        _scope_vehs = Vehicle.query.options(joinedload(Vehicle.parking_station)).filter(Vehicle.id.in_(scope_vehicles)).all()
+        for _v in _scope_vehs:
             if _v.district_id and _v.district_id not in _eff_districts:
                 _eff_districts.append(_v.district_id)
             if not _eff_projects and _v.project_id:
                 _eff_projects.append(_v.project_id)
-            if not _eff_districts:
-                _ps = _v.parking_station
-                if _ps:
-                    if not _eff_projects and _ps.project_id:
-                        _eff_projects.append(_ps.project_id)
-                    if not _eff_districts and (_ps.district or '').strip():
-                        _pd = District.query.filter(
-                            func.lower(District.name) == _ps.district.strip().lower()
-                        ).first()
-                        if _pd and _pd.id not in _eff_districts:
-                            _eff_districts.append(_pd.id)
+    else:
+        _scope_vehs = []
     districts_q = District.query.join(project_district, District.id == project_district.c.district_id)
     if _eff_districts:
         districts_q = districts_q.filter(District.id.in_(_eff_districts))
@@ -10288,12 +10471,12 @@ def driver_attendance_checkout():
             'driver_id': v.driver_id,
         }
     if scope_vehicles and len(scope_vehicles) == 1:
-        sv = Vehicle.query.get(scope_vehicles[0])
+        sv = _scope_vehs[0] if _scope_vehs else None
         if sv:
             pre_vehicles_data = [_build_vehicle_dict(sv)]
             auto_vehicle_id = sv.id
     elif auto_project_id:
-        vq = Vehicle.query.filter(Vehicle.project_id == auto_project_id)
+        vq = Vehicle.query.options(joinedload(Vehicle.parking_station)).filter(Vehicle.project_id == auto_project_id)
         if auto_district_id:
             vq = vq.filter(Vehicle.district_id == auto_district_id)
         if scope_vehicles:
@@ -10304,7 +10487,6 @@ def driver_attendance_checkout():
             auto_vehicle_id = pre_vehicles_data[0]['id']
     scope_shifts_list = sorted(scope_shifts) if scope_shifts else []
     auto_shift = scope_shifts_list[0] if len(scope_shifts_list) == 1 else None
-    # ─────────────────────────────────────────────────────────────────────────
 
     today = _attendance_local_date()
     if request.method == 'POST':
@@ -10344,25 +10526,24 @@ def driver_attendance_checkout():
             return redirect(url_for('driver_attendance_checkout'))
         now = datetime.utcnow()
         now_time = _attendance_local_time()
-        ctrl = AttendanceTimeControl.query.first()
-        if ctrl:
-            shift = (driver.shift or '').strip()
-            def in_window(t, start_t, end_t):
-                if start_t is None or end_t is None:
-                    return True
-                if end_t < start_t:
-                    return t >= start_t or t <= end_t
-                return start_t <= t <= end_t
-            # Check-out: Morning shift driver sirf Night window mein checkout kar sakta (jab night shift time start ho).
-            # Night shift driver bhi night window mein hi checkout karega.
-            if shift and shift.lower() == 'morning':
-                if not in_window(now_time, ctrl.night_start, ctrl.night_end):
-                    flash('Morning shift ka check-out sirf Night shift ke time window mein ho sakta hai (jab night attendance ka time start ho). Abhi allowed nahi.', 'danger')
-                    return redirect(url_for('driver_attendance_checkout'))
-            elif shift and shift.lower() == 'night':
-                if not in_window(now_time, ctrl.night_start, ctrl.night_end):
-                    flash('Night shift ka check-out sirf configured time window mein ho sakta hai.', 'danger')
-                    return redirect(url_for('driver_attendance_checkout'))
+        tw = _get_effective_time_window(driver)
+        def _in_window(t, start_t, end_t):
+            if start_t is None or end_t is None:
+                return True
+            if end_t < start_t:
+                return t >= start_t or t <= end_t
+            return start_t <= t <= end_t
+        shift = (driver.shift or '').strip()
+        if shift and shift.lower() == 'morning':
+            if not _in_window(now_time, tw['night_start'], tw['night_end']):
+                src = tw.get('source', '')
+                flash(f'Morning shift ka check-out sirf Night shift ke time window mein ho sakta hai ({src}). Abhi allowed nahi.', 'danger')
+                return redirect(url_for('driver_attendance_checkout'))
+        elif shift and shift.lower() == 'night':
+            if not _in_window(now_time, tw['night_start'], tw['night_end']):
+                src = tw.get('source', '')
+                flash(f'Night shift ka check-out sirf configured time window mein ho sakta hai ({src}).', 'danger')
+                return redirect(url_for('driver_attendance_checkout'))
         photo_path = None
         photo = request.files.get('photo')
         if photo and photo.filename:
@@ -10408,12 +10589,26 @@ def driver_attendance_checkout():
         except Exception as e:
             db.session.rollback()
             flash(f'Error saving: {str(e)}', 'danger')
+    all_vehicles_by_project = {}
+    _avq = Vehicle.query.options(joinedload(Vehicle.parking_station))
+    if _eff_districts:
+        _avq = _avq.filter(Vehicle.district_id.in_(_eff_districts))
+    elif _eff_projects:
+        _avq = _avq.filter(Vehicle.project_id.in_(_eff_projects))
+    if scope_vehicles:
+        _avq = _avq.filter(Vehicle.id.in_(scope_vehicles))
+    for _av in _avq.order_by(Vehicle.vehicle_no).all():
+        _pk = str(_av.project_id or 0)
+        if _pk not in all_vehicles_by_project:
+            all_vehicles_by_project[_pk] = []
+        all_vehicles_by_project[_pk].append(_build_vehicle_dict(_av))
     return render_template('driver_attendance_checkout.html',
         districts=districts, drivers=[], parking_stations=[],
         pre_projects=pre_projects, pre_vehicles_data=pre_vehicles_data,
         auto_district_id=auto_district_id, auto_project_id=auto_project_id,
         auto_vehicle_id=auto_vehicle_id, auto_shift=auto_shift,
-        scope_shifts_list=scope_shifts_list)
+        scope_shifts_list=scope_shifts_list,
+        all_vehicles_by_project=all_vehicles_by_project)
 
 
 @app.route('/driver-attendance/report', methods=['GET', 'POST'])
@@ -13920,8 +14115,12 @@ def _sh_before_request():
 def _sh_after_request(response):
     import time as _t
     from flask import g
-    if request.path.startswith('/api/') and hasattr(g, '_sh_t0'):
-        _api_latency_ms.append(round((_t.time() - g._sh_t0) * 1000, 1))
+    if hasattr(g, '_sh_t0'):
+        ms = round((_t.time() - g._sh_t0) * 1000, 1)
+        if request.path.startswith('/api/'):
+            _api_latency_ms.append(ms)
+        if request.path.startswith('/api/attendance'):
+            print(f"[PERF] {request.method} {request.path}?{request.query_string.decode()} -> {response.status_code} in {ms}ms")
     return response
 
 

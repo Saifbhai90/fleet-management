@@ -259,6 +259,8 @@ ENDPOINT_PERMISSION_MAP = [
     ('role_form', 'role_add'),
     ('role_edit', 'role_edit'),
     ('form_control', 'form_control'),
+    ('form_control_delete_override', 'form_control'),
+    ('form_control_edit_override', 'form_control'),
     ('notification_list', 'notification_list'),
     ('notification_add', 'notification_add'),
     ('notification_mark_read', 'notification_list'),

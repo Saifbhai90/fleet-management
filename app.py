@@ -50,6 +50,12 @@ if database_url:
         database_url = 'postgresql://' + database_url[9:]
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///company_management.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': 10,
+    'max_overflow': 20,
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+}
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload
 app.config['TEMPLATES_AUTO_RELOAD'] = True  # Force template reload on every request
@@ -359,4 +365,4 @@ if __name__ == '__main__':
     print(f"Server starting at: http://127.0.0.1:{port}")
     print("Browser mein ye URL open karein. Band karne ke liye Ctrl+C")
     print("="*50 + "\n")
-    app.run(debug=os.environ.get('FLASK_DEBUG', '0') == '1', host='0.0.0.0', port=port, use_reloader=False)
+    app.run(debug=os.environ.get('FLASK_DEBUG', '0') == '1', host='0.0.0.0', port=port, use_reloader=False, threaded=True)

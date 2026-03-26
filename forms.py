@@ -1063,6 +1063,23 @@ class AttendanceTimeControlForm(FlaskForm):
     submit        = SubmitField('Save')
 
 
+class AttendanceTimeOverrideForm(FlaskForm):
+    scope = SelectField('Override Type', choices=[
+        ('project', 'Project'),
+        ('district', 'Project + District'),
+        ('vehicle', 'Vehicle (Special Duty)'),
+    ], validators=[DataRequired()], render_kw={"class": "form-select"})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], render_kw={"class": "form-select search-select"})
+    district_id = SelectField('District', coerce=int, validators=[Optional()], render_kw={"class": "form-select search-select"})
+    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], render_kw={"class": "form-select search-select"})
+    morning_start = StringField('Morning Start', validators=[Optional()], render_kw={"type": "time", "class": "form-control"})
+    morning_end = StringField('Morning End', validators=[Optional()], render_kw={"type": "time", "class": "form-control"})
+    night_start = StringField('Night Start', validators=[Optional()], render_kw={"type": "time", "class": "form-control"})
+    night_end = StringField('Night End', validators=[Optional()], render_kw={"type": "time", "class": "form-control"})
+    remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"class": "form-control", "rows": "2"})
+    submit = SubmitField('Save Override')
+
+
 # ════════════════════════════════════════════════════════════════════════════════
 # FINANCE & ACCOUNTING FORMS
 # ════════════════════════════════════════════════════════════════════════════════

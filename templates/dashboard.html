@@ -290,15 +290,45 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+<!-- Access Denied Toast -->
+<div id="accessToast" style="display:none;position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:9999;
+    background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;padding:14px 28px;border-radius:14px;
+    box-shadow:0 12px 40px rgba(0,0,0,0.25);font-size:0.88rem;font-weight:600;
+    border-left:4px solid #ef4444;max-width:420px;text-align:center;">
+    <i class="bi bi-shield-lock-fill me-2" style="color:#ef4444;"></i>
+    <span id="accessToastMsg">You do not have permission to access this page.</span>
+</div>
+<script>
+function showAccessDenied(msg) {
+    var t = document.getElementById('accessToast');
+    var m = document.getElementById('accessToastMsg');
+    if (!t) return;
+    m.textContent = msg || 'You do not have permission to access this page.';
+    t.style.display = 'block';
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(-50%) translateY(-12px)';
+    t.offsetHeight;
+    t.style.transition = 'opacity 0.3s, transform 0.3s';
+    t.style.opacity = '1';
+    t.style.transform = 'translateX(-50%) translateY(0)';
+    clearTimeout(window._atTimer);
+    window._atTimer = setTimeout(function() {
+        t.style.opacity = '0';
+        t.style.transform = 'translateX(-50%) translateY(-12px)';
+        setTimeout(function() { t.style.display = 'none'; }, 300);
+    }, 3000);
+}
+</script>
+
 <!-- ═══════════════════════════════
      BENTO GRID
 ═══════════════════════════════ -->
 {% if can_see_page('dashboard_card_drivers') or can_see_page('active_drivers_report') or can_see_page('dashboard_card_vehicles') or can_see_page('dashboard_card_attendance') or can_see_page('dashboard_card_transfers') or can_see_page('dashboard_card_projects') or can_see_page('dashboard_card_districts') or can_see_page('dashboard_card_parking') or can_see_page('dashboard_card_companies') %}
 <div class="bento-grid">
 
-    <!-- ① HERO: Active Drivers (2×2 — dominant card) -->
     {% if can_see_page('dashboard_card_drivers') or can_see_page('active_drivers_report') %}
-    <a href="{{ url_for('active_drivers_report') }}" class="bc bc-blue bc-hero">
+    <a {% if can_see_page('active_drivers_report') %}href="{{ url_for('active_drivers_report') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Active Drivers Report permission required.')"{% endif %}
+       class="bc bc-blue bc-hero" style="cursor:pointer;">
         <div style="position:relative;z-index:1;">
             <div class="bc-tag">Active Drivers</div>
             <div class="bc-num bc-num-xl">{{ active_drivers }}</div>
@@ -318,12 +348,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 <path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4z"/>
             </svg>
         </div>
+        {% if not can_see_page('active_drivers_report') %}
+        <div style="position:absolute;top:12px;right:14px;z-index:2;background:rgba(0,0,0,0.25);border-radius:8px;padding:3px 8px;">
+            <i class="bi bi-eye-fill" style="font-size:0.7rem;opacity:0.8;"></i>
+            <span style="font-size:0.65rem;opacity:0.8;font-weight:600;margin-left:2px;">View Only</span>
+        </div>
+        {% endif %}
     </a>
     {% endif %}
 
-    <!-- ② TALL: Fleet Deployed (1×2) -->
     {% if can_see_page('dashboard_card_vehicles') %}
-    <a href="{{ url_for('report_vehicle_summary') }}" class="bc bc-green bc-tall">
+    <a {% if can_see_page('report_vehicle_summary') %}href="{{ url_for('report_vehicle_summary') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Vehicle Summary Report permission required.')"{% endif %}
+       class="bc bc-green bc-tall" style="cursor:pointer;">
         <div style="position:relative;z-index:1;">
             <div class="bc-tag">Fleet Deployed</div>
             <div class="bc-num bc-num-lg">{{ assigned_vehicles }}</div>
@@ -343,12 +379,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 <path d="M1 3h15v13H1zM16 8h4l3 3v5h-7V8zM5.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM18.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
             </svg>
         </div>
+        {% if not can_see_page('report_vehicle_summary') %}
+        <div style="position:absolute;top:12px;right:14px;z-index:2;background:rgba(0,0,0,0.25);border-radius:8px;padding:3px 8px;">
+            <i class="bi bi-eye-fill" style="font-size:0.7rem;opacity:0.8;"></i>
+            <span style="font-size:0.65rem;opacity:0.8;font-weight:600;margin-left:2px;">View Only</span>
+        </div>
+        {% endif %}
     </a>
     {% endif %}
 
-    <!-- ③ Today's Attendance (1×1) -->
     {% if can_see_page('dashboard_card_attendance') %}
-    <a href="{{ url_for('driver_attendance_list') }}" class="bc bc-orange bc-sm">
+    <a {% if can_see_page('driver_attendance_list') %}href="{{ url_for('driver_attendance_list') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Attendance List permission required.')"{% endif %}
+       class="bc bc-orange bc-sm" style="cursor:pointer;">
         <div>
             <div class="bc-tag">Today's Attendance</div>
             <div class="bc-num bc-num-md">{{ today_attendance }}</div>
@@ -357,12 +399,17 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="bc-deco-icon">
             <svg viewBox="0 0 24 24" fill="white"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         </div>
+        {% if not can_see_page('driver_attendance_list') %}
+        <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.25);border-radius:8px;padding:3px 8px;">
+            <i class="bi bi-eye-fill" style="font-size:0.7rem;opacity:0.8;"></i>
+        </div>
+        {% endif %}
     </a>
     {% endif %}
 
-    <!-- ④ Today's Transfers (1×1) -->
     {% if can_see_page('dashboard_card_transfers') %}
-    <a href="{{ url_for('driver_transfers') }}" class="bc bc-violet bc-sm">
+    <a {% if can_see_page('driver_transfers') %}href="{{ url_for('driver_transfers') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Driver Transfers permission required.')"{% endif %}
+       class="bc bc-violet bc-sm" style="cursor:pointer;">
         <div>
             <div class="bc-tag">Today's Transfers</div>
             <div class="bc-num bc-num-md">{{ today_transfers }}</div>
@@ -371,12 +418,17 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="bc-deco-icon">
             <svg viewBox="0 0 24 24" fill="white"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
         </div>
+        {% if not can_see_page('driver_transfers') %}
+        <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.25);border-radius:8px;padding:3px 8px;">
+            <i class="bi bi-eye-fill" style="font-size:0.7rem;opacity:0.8;"></i>
+        </div>
+        {% endif %}
     </a>
     {% endif %}
 
-    <!-- ⑤ Projects (1×1 light) -->
     {% if can_see_page('dashboard_card_projects') %}
-    <a href="{{ url_for('report_project_summary') }}" class="bc bc-light bc-sm">
+    <a {% if can_see_page('report_project_summary') %}href="{{ url_for('report_project_summary') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Project Summary Report permission required.')"{% endif %}
+       class="bc bc-light bc-sm" style="cursor:pointer;">
         <div class="chip-icon" style="background:#dbeafe;color:#1d4ed8;">
             <i data-lucide="briefcase" style="width:22px;height:22px;"></i>
         </div>
@@ -384,12 +436,17 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_projects }}</div>
             <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Projects</div>
         </div>
+        {% if not can_see_page('report_project_summary') %}
+        <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.12);border-radius:8px;padding:3px 8px;">
+            <i class="bi bi-eye-fill" style="font-size:0.7rem;color:#94a3b8;"></i>
+        </div>
+        {% endif %}
     </a>
     {% endif %}
 
-    <!-- ⑥ Districts (1×1 light) -->
     {% if can_see_page('dashboard_card_districts') %}
-    <a href="{{ url_for('report_district_summary') }}" class="bc bc-light bc-sm">
+    <a {% if can_see_page('report_district_summary') %}href="{{ url_for('report_district_summary') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - District Summary Report permission required.')"{% endif %}
+       class="bc bc-light bc-sm" style="cursor:pointer;">
         <div class="chip-icon" style="background:#dcfce7;color:#15803d;">
             <i data-lucide="map-pin" style="width:22px;height:22px;"></i>
         </div>
@@ -397,12 +454,17 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_districts }}</div>
             <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Districts</div>
         </div>
+        {% if not can_see_page('report_district_summary') %}
+        <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.12);border-radius:8px;padding:3px 8px;">
+            <i class="bi bi-eye-fill" style="font-size:0.7rem;color:#94a3b8;"></i>
+        </div>
+        {% endif %}
     </a>
     {% endif %}
 
-    <!-- ⑦ Parking Stations (1×1 light) -->
     {% if can_see_page('dashboard_card_parking') %}
-    <a href="{{ url_for('report_parking_utilization') }}" class="bc bc-light bc-sm">
+    <a {% if can_see_page('report_parking_utilization') %}href="{{ url_for('report_parking_utilization') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Parking Report permission required.')"{% endif %}
+       class="bc bc-light bc-sm" style="cursor:pointer;">
         <div class="chip-icon" style="background:#fce7f3;color:#be185d;">
             <i data-lucide="parking-circle" style="width:22px;height:22px;"></i>
         </div>
@@ -410,12 +472,17 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_parking }}</div>
             <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Parking</div>
         </div>
+        {% if not can_see_page('report_parking_utilization') %}
+        <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.12);border-radius:8px;padding:3px 8px;">
+            <i class="bi bi-eye-fill" style="font-size:0.7rem;color:#94a3b8;"></i>
+        </div>
+        {% endif %}
     </a>
     {% endif %}
 
-    <!-- ⑧ Companies (1×1 light) -->
     {% if can_see_page('dashboard_card_companies') %}
-    <a href="{{ url_for('companies') }}" class="bc bc-light bc-sm">
+    <a {% if can_see_page('companies') %}href="{{ url_for('companies') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Companies permission required.')"{% endif %}
+       class="bc bc-light bc-sm" style="cursor:pointer;">
         <div class="chip-icon" style="background:#f3e8ff;color:#7c3aed;">
             <i data-lucide="building-2" style="width:22px;height:22px;"></i>
         </div>
@@ -423,6 +490,11 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_companies }}</div>
             <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Companies</div>
         </div>
+        {% if not can_see_page('companies') %}
+        <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.12);border-radius:8px;padding:3px 8px;">
+            <i class="bi bi-eye-fill" style="font-size:0.7rem;color:#94a3b8;"></i>
+        </div>
+        {% endif %}
     </a>
     {% endif %}
 
