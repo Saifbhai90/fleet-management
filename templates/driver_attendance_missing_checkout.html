@@ -388,11 +388,11 @@
   var missingCoSearch = document.getElementById('missingCoTableSearch');
   if (missingCoSearch) {
     missingCoSearch.addEventListener('keyup', function() {
-      var q = this.value.toLowerCase();
+      var q = this.value.trim();
       document.querySelectorAll('#missingCoTable tbody tr').forEach(function(row) {
         if (row.cells.length < 2) return;
-        var text = row.innerText.toLowerCase();
-        row.dataset.searchHidden = text.indexOf(q) > -1 ? '0' : '1';
+        var text = row.innerText;
+        row.dataset.searchHidden = window.fleetMultiWordMatch(text, q) ? '0' : '1';
       });
       var tbl = document.getElementById('missingCoTable');
       if (tbl) tbl.dataset.curPage = '1';

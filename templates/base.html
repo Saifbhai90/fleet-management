@@ -3316,6 +3316,19 @@
         });
         _sdObs.observe(document.body, { childList: true, subtree: true });
 
+        // ── Global Multi-Word AND Search Helper ──
+        // Usage: window.fleetMultiWordMatch(text, query)
+        // Returns true if ALL space-separated words in query appear in text
+        window.fleetMultiWordMatch = function(text, query) {
+            if (!query || !query.trim()) return true;
+            var words = query.toLowerCase().split(/\s+/).filter(Boolean);
+            var lower = (text || '').toLowerCase();
+            for (var i = 0; i < words.length; i++) {
+                if (lower.indexOf(words[i]) === -1) return false;
+            }
+            return true;
+        };
+
         // ── Global Enter-to-Tab (Window-Capture) ──
         var _enterGuard = 0;
         window.addEventListener('keydown', function(e) {
@@ -3435,15 +3448,14 @@
             var $rows = $table.find("tbody tr");
 
             function applyFilter() {
-                var q = ($input.val() || "").toString().toLowerCase().trim();
+                var q = ($input.val() || "").toString().trim();
                 if (!q) {
                     $rows.show();
                     return;
                 }
                 $rows.each(function() {
                     var $row = $(this);
-                    var text = $row.text().toLowerCase();
-                    $row.toggle(text.indexOf(q) !== -1);
+                    $row.toggle(window.fleetMultiWordMatch($row.text(), q));
                 });
             }
 
@@ -4900,6 +4912,17 @@
         });
     }
 
+    /* ── Multi-word AND match: every word must appear somewhere in text ── */
+    function multiWordMatch(text, query) {
+        if (!query) return true;
+        var words = query.toLowerCase().split(/\s+/).filter(Boolean);
+        var lower = text.toLowerCase();
+        for (var i = 0; i < words.length; i++) {
+            if (lower.indexOf(words[i]) === -1) return false;
+        }
+        return true;
+    }
+
     /* ── Add search bar above each card list ── */
     function addCardSearch() {
         if (window.innerWidth > 767) return;
@@ -4932,10 +4955,10 @@
             inp.addEventListener('input', function() {
                 clearTimeout(debounce);
                 debounce = setTimeout(function() {
-                    var q = inp.value.toLowerCase().trim();
+                    var q = inp.value.trim();
                     var shown = 0;
                     cards.forEach(function(card) {
-                        if (!q || card.textContent.toLowerCase().indexOf(q) !== -1) {
+                        if (multiWordMatch(card.textContent, q)) {
                             card.style.display = '';
                             shown++;
                         } else {

@@ -484,11 +484,11 @@
   var markSearch = document.getElementById('markTableSearch');
   if (markSearch) {
     markSearch.addEventListener('keyup', function() {
-      var q = this.value.toLowerCase();
+      var q = this.value.trim();
       document.querySelectorAll('#markTable tbody tr').forEach(function(row) {
         if (row.cells.length < 2) return;
-        var text = row.innerText.toLowerCase();
-        row.dataset.searchHidden = text.indexOf(q) > -1 ? '0' : '1';
+        var text = row.innerText;
+        row.dataset.searchHidden = window.fleetMultiWordMatch(text, q) ? '0' : '1';
       });
       var tbl = document.getElementById('markTable');
       if (tbl) tbl.dataset.curPage = '1';

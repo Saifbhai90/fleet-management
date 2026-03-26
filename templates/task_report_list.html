@@ -156,12 +156,11 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     var noDataRow = allTr.find(function(tr) { return tr.cells.length === 1; }) || null;
     var dataRows = allTr.filter(function(tr) { return tr.cells.length > 1; });
     searchInput.addEventListener('input', function() {
-      var q = this.value.trim().toLowerCase();
+      var q = this.value.trim();
       var visible = 0;
       if (dataRows.length) {
         dataRows.forEach(function(row) {
-          var text = row.textContent.replace(/\s+/g, ' ').toLowerCase();
-          var show = !q || text.indexOf(q) > -1;
+          var show = !q || window.fleetMultiWordMatch(row.innerText || row.textContent, q);
           row.style.display = show ? '' : 'none';
           if (show) visible++;
         });

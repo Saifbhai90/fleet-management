@@ -411,9 +411,23 @@
       ]
     });
 
-    $('#exExpiryTableSearch').on('keyup search input', function () {
-      table.search(this.value).draw();
-    });
+    (function() {
+      var searchVal = '';
+      $.fn.dataTable.ext.search.push(function(settings, data) {
+        if (settings.nTable.id !== 'expiryTable') return true;
+        if (!searchVal) return true;
+        var words = searchVal.toLowerCase().split(/\s+/).filter(Boolean);
+        var rowText = data.join(' ').toLowerCase();
+        for (var i = 0; i < words.length; i++) {
+          if (rowText.indexOf(words[i]) === -1) return false;
+        }
+        return true;
+      });
+      $('#exExpiryTableSearch').on('keyup search input', function () {
+        searchVal = this.value.trim();
+        table.draw();
+      });
+    })();
 
     table.buttons().container().appendTo('#expiryExportButtons');
   });

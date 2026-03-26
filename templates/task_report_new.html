@@ -189,10 +189,9 @@
     var taskEntrySearch = document.getElementById('taskEntrySearch');
     if (taskEntrySearch) {
       taskEntrySearch.addEventListener('input', function() {
-        var q = this.value.trim().toLowerCase();
+        var q = this.value.trim();
         batchTable.querySelectorAll('.task-row').forEach(function(row) {
-          var text = row.textContent.replace(/\s+/g, ' ').toLowerCase();
-          row.style.display = (!q || text.indexOf(q) > -1) ? '' : 'none';
+          row.style.display = (!q || window.fleetMultiWordMatch(row.innerText || row.textContent, q)) ? '' : 'none';
         });
       });
     }

@@ -286,18 +286,10 @@ def api_global_search():
     q = request.args.get('q', '').strip()
     if not q or len(q) < 2:
         return jsonify({'drivers': [], 'vehicles': []})
-    like = f'%{q}%'
-    drivers = Driver.query.filter(
-        Driver.name.ilike(like) |
-        Driver.driver_id.ilike(like) |
-        Driver.cnic_no.ilike(like) |
-        Driver.phone1.ilike(like)
-    ).order_by(Driver.name).limit(8).all()
-    vehicles = Vehicle.query.filter(
-        Vehicle.vehicle_no.ilike(like) |
-        Vehicle.model.ilike(like) |
-        Vehicle.engine_no.ilike(like)
-    ).order_by(Vehicle.vehicle_no).limit(6).all()
+    flt_d = _multi_word_filter(q, Driver.name, Driver.driver_id, Driver.cnic_no, Driver.phone1)
+    drivers = Driver.query.filter(flt_d).order_by(Driver.name).limit(8).all() if flt_d is not None else []
+    flt_v = _multi_word_filter(q, Vehicle.vehicle_no, Vehicle.model, Vehicle.engine_no)
+    vehicles = Vehicle.query.filter(flt_v).order_by(Vehicle.vehicle_no).limit(6).all() if flt_v is not None else []
     return jsonify({
         'drivers': [{'id': d.id, 'name': d.name, 'driver_id': d.driver_id,
                      'status': d.status, 'cnic': d.cnic_no} for d in drivers],
@@ -1371,11 +1363,9 @@ def companies_export():
     search = request.args.get('search', '').strip()
     query = Company.query
     if search:
-        like = f'%{search}%'
-        query = query.filter(
-            Company.name.ilike(like) | Company.email.ilike(like) |
-            Company.mobile.ilike(like) | Company.office_address.ilike(like)
-        )
+        flt = _multi_word_filter(search, Company.name, Company.email, Company.mobile, Company.office_address)
+        if flt is not None:
+            query = query.filter(flt)
     companies_list = query.order_by(Company.name).all()
     output = _io.StringIO()
     writer = csv.writer(output)
@@ -1422,12 +1412,9 @@ def projects_list():
         query = query.filter(Project.id.in_(list(allowed_projects)))
 
     if search:
-        like = f'%{search}%'
-        query = query.filter(
-            Project.name.ilike(like) |
-            Project.status.ilike(like) |
-            Project.remarks.ilike(like)
-        )
+        flt = _multi_word_filter(search, Project.name, Project.status, Project.remarks)
+        if flt is not None:
+            query = query.filter(flt)
     if from_date:
         query = query.filter(Project.start_date >= from_date)
     if to_date:
@@ -1458,7 +1445,9 @@ def projects_export():
     search = request.args.get('search', '').strip()
     query = Project.query
     if search:
-        query = query.filter(Project.name.ilike(f'%{search}%'))
+        flt = _multi_word_filter(search, Project.name)
+        if flt is not None:
+            query = query.filter(flt)
     projects = query.order_by(Project.name).all()
     headers = ['ID', 'Project Name', 'Start Date', 'Status']
     rows = []
@@ -1479,7 +1468,9 @@ def projects_print():
     search = request.args.get('search', '').strip()
     query = Project.query
     if search:
-        query = query.filter(Project.name.ilike(f'%{search}%'))
+        flt = _multi_word_filter(search, Project.name)
+        if flt is not None:
+            query = query.filter(flt)
     projects = query.order_by(Project.name).all()
     return render_template('projects_print.html', projects=projects, search=search)
 
@@ -1492,13 +1483,25 @@ def project_detail(id):
     p_search = request.args.get('p_search', '')
     vehicles = project.vehicles
     if v_search:
-        vehicles = [v for v in vehicles if v_search.lower() in v.vehicle_no.lower() or v_search.lower() in v.model.lower() or v_search.lower() in v.vehicle_type.lower()]
+        words = v_search.lower().split()
+        vehicles = [v for v in vehicles if all(
+            any(w in col for col in [v.vehicle_no.lower(), v.model.lower(), v.vehicle_type.lower()])
+            for w in words
+        )]
     drivers = project.drivers
     if d_search:
-        drivers = [d for d in drivers if d_search.lower() in d.name.lower() or d_search.lower() in (d.cnic_no or '').lower() or d_search.lower() in (d.license_no or '').lower()]
+        words = d_search.lower().split()
+        drivers = [d for d in drivers if all(
+            any(w in col for col in [d.name.lower(), (d.cnic_no or '').lower(), (d.license_no or '').lower()])
+            for w in words
+        )]
     parkings = project.parking_stations
     if p_search:
-        parkings = [p for p in parkings if p_search.lower() in p.name.lower() or p_search.lower() in (p.district or '').lower() or p_search.lower() in (p.address_location or '').lower()]
+        words = p_search.lower().split()
+        parkings = [p for p in parkings if all(
+            any(w in col for col in [p.name.lower(), (p.district or '').lower(), (p.address_location or '').lower()])
+            for w in words
+        )]
     return render_template('project_detail.html',
                            project=project,
                            vehicles=vehicles,
@@ -1515,7 +1518,9 @@ def company_projects(company_id):
     search = request.args.get('search', '')
     query = Project.query.filter_by(company_id=company_id)
     if search:
-        query = query.filter(Project.name.ilike(f'%{search}%'))
+        flt = _multi_word_filter(search, Project.name)
+        if flt is not None:
+            query = query.filter(flt)
     projects = query.all()
     return render_template('projects.html', company=company, projects=projects, search=search)
 
@@ -1916,12 +1921,9 @@ def vehicles_export():
     search = request.args.get('search', '').strip()
     query = Vehicle.query
     if search:
-        like = f'%{search}%'
-        query = query.filter(
-            Vehicle.vehicle_no.ilike(like) |
-            Vehicle.model.ilike(like) |
-            Vehicle.vehicle_type.ilike(like)
-        )
+        flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type)
+        if flt is not None:
+            query = query.filter(flt)
     vehicles = query.order_by(Vehicle.id).all()
     headers = ['ID', 'Vehicle No', 'Model', 'Type', 'Driver Capacity', 'Phone', 'Active Date']
     rows = []
@@ -2120,12 +2122,9 @@ def vehicles_print():
     search = request.args.get('search', '').strip()
     query = Vehicle.query
     if search:
-        like = f'%{search}%'
-        query = query.filter(
-            Vehicle.vehicle_no.ilike(like) |
-            Vehicle.model.ilike(like) |
-            Vehicle.vehicle_type.ilike(like)
-        )
+        flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type)
+        if flt is not None:
+            query = query.filter(flt)
     vehicles = query.order_by(Vehicle.id).all()
     return render_template('vehicles_print.html', vehicles=vehicles, search=search)
 
@@ -2267,17 +2266,9 @@ def drivers_export():
     search = request.args.get('search', '').strip()
     query = Driver.query
     if search:
-        like = f"%{search}%"
-        query = query.filter(
-            Driver.driver_id.ilike(like) |
-            Driver.name.ilike(like) |
-            Driver.cnic_no.ilike(like) |
-            Driver.cnic_status.ilike(like) |
-            Driver.license_no.ilike(like) |
-            Driver.license_status.ilike(like) |
-            Driver.phone1.ilike(like) |
-            Driver.driver_district.ilike(like)
-        )
+        flt = _multi_word_filter(search, Driver.driver_id, Driver.name, Driver.cnic_no, Driver.cnic_status, Driver.license_no, Driver.license_status, Driver.phone1, Driver.driver_district)
+        if flt is not None:
+            query = query.filter(flt)
     drivers = query.order_by(Driver.id.asc()).all()
     # List/Print jaisi same columns: Driver ID, Name, CNIC No, CNIC Status, License No, License Status, Phone, Driver District
     headers = ['Driver ID', 'Name', 'CNIC No', 'CNIC Status', 'License No', 'License Status', 'Phone', 'Driver District']
@@ -2523,17 +2514,9 @@ def drivers_print():
     search = request.args.get('search', '').strip()
     query = Driver.query
     if search:
-        like = f"%{search}%"
-        query = query.filter(
-            Driver.driver_id.ilike(like) |
-            Driver.name.ilike(like) |
-            Driver.cnic_no.ilike(like) |
-            Driver.cnic_status.ilike(like) |
-            Driver.license_no.ilike(like) |
-            Driver.license_status.ilike(like) |
-            Driver.phone1.ilike(like) |
-            Driver.driver_district.ilike(like)
-        )
+        flt = _multi_word_filter(search, Driver.driver_id, Driver.name, Driver.cnic_no, Driver.cnic_status, Driver.license_no, Driver.license_status, Driver.phone1, Driver.driver_district)
+        if flt is not None:
+            query = query.filter(flt)
     drivers = query.order_by(Driver.id.asc()).all()
     return render_template('drivers_print.html', drivers=drivers, search=search)
 
@@ -3193,13 +3176,9 @@ def employees_export():
     search = request.args.get('search', '').strip()
     query = Employee.query
     if search:
-        like = f"%{search}%"
-        query = query.filter(
-            Employee.name.ilike(like) |
-            Employee.code.ilike(like) |
-            Employee.department.ilike(like) |
-            Employee.cnic_no.ilike(like)
-        )
+        flt = _multi_word_filter(search, Employee.name, Employee.code, Employee.department, Employee.cnic_no)
+        if flt is not None:
+            query = query.filter(flt)
     employees = query.order_by(Employee.id.asc()).all()
     headers = ['ID', 'Code', 'Name', 'Father Name', 'CNIC', 'Post', 'Department', 'Phone', 'Email', 'Joining Date', 'Status']
     rows = []
@@ -3408,13 +3387,9 @@ def employees_print():
     search = request.args.get('search', '').strip()
     query = Employee.query
     if search:
-        like = f"%{search}%"
-        query = query.filter(
-            Employee.name.ilike(like) |
-            Employee.code.ilike(like) |
-            Employee.department.ilike(like) |
-            Employee.cnic_no.ilike(like)
-        )
+        flt = _multi_word_filter(search, Employee.name, Employee.code, Employee.department, Employee.cnic_no)
+        if flt is not None:
+            query = query.filter(flt)
     employees = query.order_by(Employee.id.asc()).all()
     return render_template('employees_print.html', employees=employees, search=search)
 # ────────────────────────────────────────────────
@@ -3835,13 +3810,9 @@ def user_list():
     search = request.args.get('search', '').strip()
     query = User.query
     if search:
-        like = f'%{search}%'
-        query = query.filter(
-            db.or_(
-                User.username.ilike(like),
-                User.full_name.ilike(like),
-            )
-        )
+        flt = _multi_word_filter(search, User.username, User.full_name)
+        if flt is not None:
+            query = query.filter(flt)
     users = query.order_by(User.username).all()
     if not _current_user_is_master():
         # Admin login: Master user ki koi information show na ho
@@ -4401,11 +4372,9 @@ def parking_list():
         query = query.filter(ParkingStation.project_id.in_(list(allowed_projects)))
     
     if search:
-        query = query.filter(
-            ParkingStation.name.ilike(f'%{search}%') |
-            ParkingStation.district.ilike(f'%{search}%') |
-            ParkingStation.address_location.ilike(f'%{search}%')
-        )
+        flt = _multi_word_filter(search, ParkingStation.name, ParkingStation.district, ParkingStation.address_location)
+        if flt is not None:
+            query = query.filter(flt)
     
     # Apply sorting based on sort_by column
     if sort_by == 'id':
@@ -4602,11 +4571,9 @@ def parking_export():
     search = request.args.get('search', '').strip()
     query = ParkingStation.query
     if search:
-        query = query.filter(
-            ParkingStation.name.ilike(f'%{search}%') |
-            ParkingStation.district.ilike(f'%{search}%') |
-            ParkingStation.address_location.ilike(f'%{search}%')
-        )
+        flt = _multi_word_filter(search, ParkingStation.name, ParkingStation.district, ParkingStation.address_location)
+        if flt is not None:
+            query = query.filter(flt)
     parkings = query.order_by(ParkingStation.id).all()
     headers = ['ID', 'Station Name', 'District', 'Tehsil', 'Capacity', 'Address/Location']
     rows = []
@@ -4628,11 +4595,9 @@ def parking_print():
     search = request.args.get('search', '').strip()
     query = ParkingStation.query
     if search:
-        query = query.filter(
-            ParkingStation.name.ilike(f'%{search}%') |
-            ParkingStation.district.ilike(f'%{search}%') |
-            ParkingStation.address_location.ilike(f'%{search}%')
-        )
+        flt = _multi_word_filter(search, ParkingStation.name, ParkingStation.district, ParkingStation.address_location)
+        if flt is not None:
+            query = query.filter(flt)
     parkings = query.order_by(ParkingStation.id).all()
     return render_template('parking_print.html', parkings=parkings, search=search)
 
@@ -4829,10 +4794,9 @@ def _assign_project_to_company_data(search=None, sort_by='assign_date', sort_ord
     """Query assigned projects (optionally filtered by search). Returns list of Project."""
     q = Project.query.filter(Project.company_id.isnot(None))
     if search:
-        like = f'%{search}%'
-        q = q.outerjoin(Company, Project.company_id == Company.id).filter(
-            or_(Project.name.ilike(like), (Company.name.ilike(like)))
-        )
+        flt = _multi_word_filter(search, Project.name, Company.name)
+        if flt is not None:
+            q = q.outerjoin(Company, Project.company_id == Company.id).filter(flt)
     
     # Apply sorting - database level for performance
     if sort_by == 'project':
@@ -6579,11 +6543,9 @@ def project_transfers():
         query = query.filter(ProjectTransfer.project_id.in_(list(allowed_projects)))
     
     if search:
-        query = query.join(Project).join(Company, ProjectTransfer.new_company_id == Company.id).filter(
-            (Project.name.ilike(f'%{search}%')) |
-            (Company.name.ilike(f'%{search}%')) |
-            (ProjectTransfer.remarks.ilike(f'%{search}%'))
-        )
+        flt = _multi_word_filter(search, Project.name, Company.name, ProjectTransfer.remarks)
+        if flt is not None:
+            query = query.join(Project).join(Company, ProjectTransfer.new_company_id == Company.id).filter(flt)
     
     # Apply sorting
     if sort_by == 'project':
@@ -6685,11 +6647,9 @@ def project_transfers_export():
     query = ProjectTransfer.query
     
     if search:
-        query = query.join(Project).join(Company, ProjectTransfer.new_company_id == Company.id).filter(
-            (Project.name.ilike(f'%{search}%')) |
-            (Company.name.ilike(f'%{search}%')) |
-            (ProjectTransfer.remarks.ilike(f'%{search}%'))
-        )
+        flt = _multi_word_filter(search, Project.name, Company.name, ProjectTransfer.remarks)
+        if flt is not None:
+            query = query.join(Project).join(Company, ProjectTransfer.new_company_id == Company.id).filter(flt)
     
     transfers = query.order_by(ProjectTransfer.transfer_date.desc()).all()
     
@@ -6734,11 +6694,9 @@ def project_transfers_print():
     query = ProjectTransfer.query
     
     if search:
-        query = query.join(Project).join(Company, ProjectTransfer.new_company_id == Company.id).filter(
-            (Project.name.ilike(f'%{search}%')) |
-            (Company.name.ilike(f'%{search}%')) |
-            (ProjectTransfer.remarks.ilike(f'%{search}%'))
-        )
+        flt = _multi_word_filter(search, Project.name, Company.name, ProjectTransfer.remarks)
+        if flt is not None:
+            query = query.join(Project).join(Company, ProjectTransfer.new_company_id == Company.id).filter(flt)
     
     transfers = query.order_by(ProjectTransfer.transfer_date.desc()).all()
     return render_template('project_transfers_print.html', transfers=transfers, search=search)
@@ -7119,16 +7077,11 @@ def vehicle_transfers_print():
     if district_id:
         query = query.filter(VehicleTransfer.new_district_id == district_id)
     if q:
-        like = f'%{q}%'
-        query = query.join(Vehicle).outerjoin(Project, VehicleTransfer.new_project_id == Project.id).outerjoin(
-            District, VehicleTransfer.new_district_id == District.id
-        ).filter(or_(
-            Vehicle.vehicle_no.ilike(like),
-            Project.name.ilike(like),
-            District.name.ilike(like),
-            VehicleTransfer.remarks.ilike(like),
-            cast(VehicleTransfer.transfer_date, SAString).ilike(like),
-        ))
+        flt = _multi_word_filter(q, Vehicle.vehicle_no, Project.name, District.name, VehicleTransfer.remarks, cast(VehicleTransfer.transfer_date, SAString))
+        if flt is not None:
+            query = query.join(Vehicle).outerjoin(Project, VehicleTransfer.new_project_id == Project.id).outerjoin(
+                District, VehicleTransfer.new_district_id == District.id
+            ).filter(flt)
     
     transfers = query.order_by(VehicleTransfer.transfer_date.desc()).all()
     return render_template('vehicle_transfers_print.html', transfers=transfers, q=q, project_id=project_id, district_id=district_id)
@@ -7525,20 +7478,13 @@ def driver_transfers_export():
             Vehicle.district_id == district_id
         )
     if q:
-        like = f'%{q}%'
-        query = query.join(Driver).join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id).outerjoin(
-            Project, DriverTransfer.new_project_id == Project.id
-        ).outerjoin(
-            District, Vehicle.district_id == District.id
-        ).filter(or_(
-            Driver.name.ilike(like),
-            Driver.driver_id.ilike(like),
-            Vehicle.vehicle_no.ilike(like),
-            Project.name.ilike(like),
-            District.name.ilike(like),
-            DriverTransfer.remarks.ilike(like),
-            cast(DriverTransfer.transfer_date, SAString).ilike(like),
-        ))
+        flt = _multi_word_filter(q, Driver.name, Driver.driver_id, Vehicle.vehicle_no, Project.name, District.name, DriverTransfer.remarks, cast(DriverTransfer.transfer_date, SAString))
+        if flt is not None:
+            query = query.join(Driver).join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id).outerjoin(
+                Project, DriverTransfer.new_project_id == Project.id
+            ).outerjoin(
+                District, Vehicle.district_id == District.id
+            ).filter(flt)
     
     transfers = query.order_by(DriverTransfer.transfer_date.desc()).all()
     
@@ -7598,20 +7544,13 @@ def driver_transfers_print():
             Vehicle.district_id == district_id
         )
     if q:
-        like = f'%{q}%'
-        query = query.join(Driver).join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id).outerjoin(
-            Project, DriverTransfer.new_project_id == Project.id
-        ).outerjoin(
-            District, Vehicle.district_id == District.id
-        ).filter(or_(
-            Driver.name.ilike(like),
-            Driver.driver_id.ilike(like),
-            Vehicle.vehicle_no.ilike(like),
-            Project.name.ilike(like),
-            District.name.ilike(like),
-            DriverTransfer.remarks.ilike(like),
-            cast(DriverTransfer.transfer_date, SAString).ilike(like),
-        ))
+        flt = _multi_word_filter(q, Driver.name, Driver.driver_id, Vehicle.vehicle_no, Project.name, District.name, DriverTransfer.remarks, cast(DriverTransfer.transfer_date, SAString))
+        if flt is not None:
+            query = query.join(Driver).join(Vehicle, DriverTransfer.new_vehicle_id == Vehicle.id).outerjoin(
+                Project, DriverTransfer.new_project_id == Project.id
+            ).outerjoin(
+                District, Vehicle.district_id == District.id
+            ).filter(flt)
     
     transfers = query.order_by(DriverTransfer.transfer_date.desc()).all()
     return render_template('driver_transfers_print.html', transfers=transfers, q=q, project_id=project_id, district_id=district_id)
@@ -8706,17 +8645,11 @@ def driver_job_left_export():
     if district_id:
         query = query.filter(DriverStatusChange.left_district_id == district_id)
     if q:
-        like = f'%{q}%'
-        query = query.join(Driver).outerjoin(Project, DriverStatusChange.left_project_id == Project.id).outerjoin(
-            District, DriverStatusChange.left_district_id == District.id
-        ).filter(or_(
-            Driver.name.ilike(like),
-            Driver.driver_id.ilike(like),
-            Project.name.ilike(like),
-            District.name.ilike(like),
-            DriverStatusChange.reason.ilike(like),
-            DriverStatusChange.remarks.ilike(like),
-        ))
+        flt = _multi_word_filter(q, Driver.name, Driver.driver_id, Project.name, District.name, DriverStatusChange.reason, DriverStatusChange.remarks)
+        if flt is not None:
+            query = query.join(Driver).outerjoin(Project, DriverStatusChange.left_project_id == Project.id).outerjoin(
+                District, DriverStatusChange.left_district_id == District.id
+            ).filter(flt)
     
     records = query.order_by(DriverStatusChange.change_date.desc()).all()
     
@@ -8772,17 +8705,11 @@ def driver_job_left_print():
     if district_id:
         query = query.filter(DriverStatusChange.left_district_id == district_id)
     if q:
-        like = f'%{q}%'
-        query = query.join(Driver).outerjoin(Project, DriverStatusChange.left_project_id == Project.id).outerjoin(
-            District, DriverStatusChange.left_district_id == District.id
-        ).filter(or_(
-            Driver.name.ilike(like),
-            Driver.driver_id.ilike(like),
-            Project.name.ilike(like),
-            District.name.ilike(like),
-            DriverStatusChange.reason.ilike(like),
-            DriverStatusChange.remarks.ilike(like),
-        ))
+        flt = _multi_word_filter(q, Driver.name, Driver.driver_id, Project.name, District.name, DriverStatusChange.reason, DriverStatusChange.remarks)
+        if flt is not None:
+            query = query.join(Driver).outerjoin(Project, DriverStatusChange.left_project_id == Project.id).outerjoin(
+                District, DriverStatusChange.left_district_id == District.id
+            ).filter(flt)
     
     records = query.order_by(DriverStatusChange.change_date.desc()).all()
     return render_template('driver_job_left_print.html', records=records, q=q, project_id=project_id, district_id=district_id)
@@ -8894,15 +8821,9 @@ def driver_rejoin_print():
                          .outerjoin(Project, DriverStatusChange.new_project_id == Project.id) \
                          .outerjoin(Vehicle, DriverStatusChange.new_vehicle_id == Vehicle.id)
     if search:
-        like = f'%{search}%'
-        query = query.filter(
-            or_(
-                Driver.name.ilike(like),
-                Driver.driver_id.ilike(like),
-                Project.name.ilike(like),
-                Vehicle.vehicle_no.ilike(like)
-            )
-        )
+        flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Project.name, Vehicle.vehicle_no)
+        if flt is not None:
+            query = query.filter(flt)
     records = query.order_by(DriverStatusChange.change_date.desc()).all()
     return render_template('driver_rejoin_print.html', records=records, search=search)
 
@@ -9152,19 +9073,9 @@ def driver_attendance_list():
         if shift:
             drivers_query = drivers_query.filter(Driver.shift == shift)
         if search:
-            q = f'%{search}%'
-            drivers_query = drivers_query.filter(
-                or_(
-                    Driver.name.ilike(q),
-                    Driver.driver_id.ilike(q),
-                    Driver.shift.ilike(q),
-                    Vehicle.vehicle_no.ilike(q),
-                    Vehicle.vehicle_type.ilike(q),
-                    Project.name.ilike(q),
-                    District.name.ilike(q),
-                    ParkingStation.name.ilike(q),
-                )
-            )
+            flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Driver.shift, Vehicle.vehicle_no, Vehicle.vehicle_type, Project.name, District.name, ParkingStation.name)
+            if flt is not None:
+                drivers_query = drivers_query.filter(flt)
         drivers = drivers_query.order_by(Driver.name).all()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -9203,14 +9114,9 @@ def _driver_attendance_marked_list(view_date, project_id=None, district_id=None,
     if shift:
         drivers_query = drivers_query.filter(Driver.shift == shift)
     if search:
-        q = f'%{search}%'
-        drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
-            or_(
-                Driver.name.ilike(q),
-                Driver.driver_id.ilike(q),
-                Vehicle.vehicle_no.ilike(q),
-            )
-        )
+        flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
+        if flt is not None:
+            drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(flt)
     return drivers_query.order_by(Driver.name).all(), by_driver
 
 
@@ -9455,14 +9361,9 @@ def driver_attendance_mark():
     if shift:
         drivers_query = drivers_query.filter(Driver.shift == shift)
     if search:
-        q = f'%{search}%'
-        drivers_query = drivers_query.filter(
-            db.or_(
-                Driver.name.ilike(q),
-                Driver.driver_id.ilike(q),
-                Vehicle.vehicle_no.ilike(q),
-            )
-        )
+        flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
+        if flt is not None:
+            drivers_query = drivers_query.filter(flt)
     vehicle_drivers = drivers_query.distinct().order_by(Driver.name).all()
     if driver_id:
         drivers_query = drivers_query.filter(Driver.id == driver_id)
@@ -9761,14 +9662,9 @@ def driver_attendance_pending():
     if shift:
         drivers_query = drivers_query.filter(Driver.shift == shift)
     if search:
-        q = f'%{search}%'
-        drivers_query = drivers_query.filter(
-            db.or_(
-                Driver.name.ilike(q),
-                Driver.driver_id.ilike(q),
-                Vehicle.vehicle_no.ilike(q),
-            )
-        )
+        flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
+        if flt is not None:
+            drivers_query = drivers_query.filter(flt)
     vehicle_drivers = drivers_query.order_by(Driver.name).all()
     if driver_id:
         drivers_query = drivers_query.filter(Driver.id == driver_id)
@@ -9876,14 +9772,9 @@ def driver_attendance_missing_checkout():
     if shift:
         vehicle_drivers_q = vehicle_drivers_q.filter(Driver.shift == shift)
     if search:
-        q = f'%{search}%'
-        vehicle_drivers_q = vehicle_drivers_q.filter(
-            db.or_(
-                Driver.name.ilike(q),
-                Driver.driver_id.ilike(q),
-                Vehicle.vehicle_no.ilike(q),
-            )
-        )
+        flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
+        if flt is not None:
+            vehicle_drivers_q = vehicle_drivers_q.filter(flt)
     vehicle_drivers = vehicle_drivers_q.order_by(Driver.name).all()
     need_vehicle_join = bool(district_id or search or (not is_master_or_admin and allowed_districts))
     query = DriverAttendance.query.filter(
@@ -9908,14 +9799,9 @@ def driver_attendance_missing_checkout():
     if driver_id:
         query = query.filter(Driver.id == driver_id)
     if search:
-        q = f'%{search}%'
-        query = query.filter(
-            db.or_(
-                Driver.name.ilike(q),
-                Driver.driver_id.ilike(q),
-                Vehicle.vehicle_no.ilike(q),
-            )
-        )
+        flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
+        if flt is not None:
+            query = query.filter(flt)
     records = query.order_by(Driver.name).all()
     return render_template(
         'driver_attendance_missing_checkout.html',
@@ -10770,14 +10656,9 @@ def driver_attendance_report():
         if driver_id_filter:
             drivers_query = drivers_query.filter(Driver.id == driver_id_filter)
         if search:
-            q = f'%{search}%'
-            drivers_query = drivers_query.filter(
-                db.or_(
-                    Driver.name.ilike(q),
-                    Driver.driver_id.ilike(q),
-                    Vehicle.vehicle_no.ilike(q),
-                )
-            )
+            flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
+            if flt is not None:
+                drivers_query = drivers_query.filter(flt)
         drivers = drivers_query.distinct().order_by(Driver.name).all()
         from calendar import monthrange
         _, ndays = monthrange(year, month)
@@ -11911,7 +11792,9 @@ def driver_post_list():
     
     query = EmployeePost.query
     if search:
-        query = query.filter(EmployeePost.full_name.ilike(f'%{search}%'))
+        flt = _multi_word_filter(search, EmployeePost.full_name)
+        if flt is not None:
+            query = query.filter(flt)
     
     # Apply sorting
     if sort_by == 'id':
@@ -11965,7 +11848,9 @@ def driver_post_export():
     search = request.args.get('search', '').strip()
     query = EmployeePost.query
     if search:
-        query = query.filter(EmployeePost.full_name.ilike(f'%{search}%'))
+        flt = _multi_word_filter(search, EmployeePost.full_name)
+        if flt is not None:
+            query = query.filter(flt)
     posts = query.order_by(EmployeePost.full_name).all()
     headers = ['ID', 'Short Name', 'Full Name', 'Remarks']
     rows = []
@@ -11980,7 +11865,9 @@ def driver_post_print():
     search = request.args.get('search', '').strip()
     query = EmployeePost.query
     if search:
-        query = query.filter(EmployeePost.full_name.ilike(f'%{search}%'))
+        flt = _multi_word_filter(search, EmployeePost.full_name)
+        if flt is not None:
+            query = query.filter(flt)
     posts = query.order_by(EmployeePost.full_name).all()
     return render_template('driver_post_print.html', posts=posts, search=search)
 
@@ -11999,7 +11886,9 @@ def party_list():
     if party_type:
         query = query.filter(Party.party_type == party_type)
     if search:
-        query = query.filter(Party.name.ilike(f'%{search}%'))
+        flt = _multi_word_filter(search, Party.name)
+        if flt is not None:
+            query = query.filter(flt)
     
     # Apply sorting based on sort_by column
     if sort_by == 'party_type':
@@ -12058,7 +11947,9 @@ def _party_list_query(search=None, party_type=None):
     if party_type:
         query = query.filter(Party.party_type == party_type)
     if search:
-        query = query.filter(Party.name.ilike(f'%{search}%'))
+        flt = _multi_word_filter(search, Party.name)
+        if flt is not None:
+            query = query.filter(flt)
     return query.order_by(Party.party_type, Party.name)
 
 
@@ -12206,7 +12097,9 @@ def product_list():
 
     query = Product.query
     if search:
-        query = query.filter(Product.name.ilike(f'%{search}%'))
+        flt = _multi_word_filter(search, Product.name)
+        if flt is not None:
+            query = query.filter(flt)
     
     # Apply sorting
     if sort_by == 'name':
@@ -12257,7 +12150,9 @@ def product_delete(id):
 def _product_list_query(search=None):
     query = Product.query
     if search:
-        query = query.filter(Product.name.ilike(f'%{search}%'))
+        flt = _multi_word_filter(search, Product.name)
+        if flt is not None:
+            query = query.filter(flt)
     return query.order_by(Product.name)
 
 
@@ -12352,7 +12247,9 @@ def api_parties():
     if party_type:
         query = query.filter(Party.party_type == party_type)
     if search:
-        query = query.filter(Party.name.ilike(f'%{search}%'))
+        flt = _multi_word_filter(search, Party.name)
+        if flt is not None:
+            query = query.filter(flt)
     parties = query.order_by(Party.name).limit(100).all()
     return jsonify([{'id': p.id, 'name': p.name, 'party_type': p.party_type} for p in parties])
 
@@ -13373,8 +13270,9 @@ def activity_log_report():
     if user_id_q:
         query_sessions = query_sessions.filter(LoginLog.user_id == user_id_q)
     if username_q:
-        like = f'%{username_q}%'
-        query_sessions = query_sessions.filter(or_(User.username.ilike(like), (User.full_name or User.username).ilike(like)))
+        flt = _multi_word_filter(username_q, User.username, User.full_name)
+        if flt is not None:
+            query_sessions = query_sessions.filter(flt)
     sessions = query_sessions.limit(500).all()
     log_ids = [s.id for s in sessions]
     activities_by_log = {}
@@ -13399,11 +13297,13 @@ def activity_log_report():
     if user_id_q:
         query_client = query_client.filter(ClientActivityLog.user_id == user_id_q)
     if device_id_q:
-        like = f'%{device_id_q}%'
-        query_client = query_client.filter(ClientActivityLog.device_id.ilike(like))
+        flt = _multi_word_filter(device_id_q, ClientActivityLog.device_id)
+        if flt is not None:
+            query_client = query_client.filter(flt)
     if username_q:
-        like = f'%{username_q}%'
-        query_client = query_client.filter(or_(User.username.ilike(like), (User.full_name or User.username).ilike(like)))
+        flt = _multi_word_filter(username_q, User.username, User.full_name)
+        if flt is not None:
+            query_client = query_client.filter(flt)
     client_logs = query_client.limit(1000).all()
 
     users_for_filter = User.query.order_by(User.username).all()

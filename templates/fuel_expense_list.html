@@ -222,11 +222,10 @@
       var dataRows = Array.from(tbody.querySelectorAll('tr.fuel-expense-row'));
       var noDataRow = tbody.querySelector('tr#fuelExpenseNoDataRow') || tbody.querySelector('tr[colspan]') || null;
       searchInput.addEventListener('input', function() {
-        var q = this.value.trim().toLowerCase();
+        var q = this.value.trim();
         var visible = 0;
         dataRows.forEach(function(row) {
-          var text = row.textContent.replace(/\s+/g, ' ').toLowerCase();
-          var show = !q || text.indexOf(q) > -1;
+          var show = !q || window.fleetMultiWordMatch(row.innerText || row.textContent, q);
           row.style.display = show ? '' : 'none';
           if (show) visible++;
         });

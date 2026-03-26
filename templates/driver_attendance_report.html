@@ -306,10 +306,9 @@
 var reportSearch = document.getElementById('reportTableSearch');
 if (reportSearch) {
   reportSearch.addEventListener('keyup', function() {
-    var q = this.value.toLowerCase();
+    var q = this.value.trim();
     document.querySelectorAll('#reportTable tbody tr').forEach(function(row) {
-      var text = row.innerText.toLowerCase();
-      row.style.display = text.indexOf(q) > -1 ? '' : 'none';
+      row.style.display = (!q || window.fleetMultiWordMatch(row.innerText || row.textContent, q)) ? '' : 'none';
     });
   });
 }

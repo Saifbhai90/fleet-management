@@ -216,7 +216,23 @@ $(document).ready(function() {
         dom: 'tip',
         language: { emptyTable: 'No drivers with missing documents found.' }
     });
-    $('#dtSearchInput').on('keyup', function() { table.search(this.value).draw(); });
+    (function() {
+        var searchVal = '';
+        $.fn.dataTable.ext.search.push(function(settings, data) {
+            if (settings.nTable.id !== 'missingDocsTable') return true;
+            if (!searchVal) return true;
+            var words = searchVal.toLowerCase().split(/\s+/).filter(Boolean);
+            var rowText = data.join(' ').toLowerCase();
+            for (var i = 0; i < words.length; i++) {
+                if (rowText.indexOf(words[i]) === -1) return false;
+            }
+            return true;
+        });
+        $('#dtSearchInput').on('keyup input', function() {
+            searchVal = this.value.trim();
+            table.draw();
+        });
+    })();
     $('#dtLengthSelect').on('change', function() { table.page.len($(this).val()).draw(); });
 
     $('#checkAll').on('click', function(e) {

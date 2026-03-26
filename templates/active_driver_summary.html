@@ -271,9 +271,23 @@ $(document).ready(function () {
     });
 
     /* Wire the custom search input in the header to DataTables */
-    $('#dtSearchInput').on('keyup input', function () {
-        table.search(this.value).draw();
-    });
+    (function() {
+        var searchVal = '';
+        $.fn.dataTable.ext.search.push(function(settings, data) {
+            if (settings.nTable.id !== 'activeDriverTable') return true;
+            if (!searchVal) return true;
+            var words = searchVal.toLowerCase().split(/\s+/).filter(Boolean);
+            var rowText = data.join(' ').toLowerCase();
+            for (var i = 0; i < words.length; i++) {
+                if (rowText.indexOf(words[i]) === -1) return false;
+            }
+            return true;
+        });
+        $('#dtSearchInput').on('keyup input', function () {
+            searchVal = this.value.trim();
+            table.draw();
+        });
+    })();
 
     /* Wire the custom per-page dropdown in the header to DataTables */
     $('#dtLengthSelect').on('change', function () {
