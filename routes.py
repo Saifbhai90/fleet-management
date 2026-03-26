@@ -8972,7 +8972,7 @@ def driver_attendance_list():
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
     form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
     # Default: aaj ki date; from/to support ke liye base date phir bhi chahiye
-    view_date = date.today()
+    view_date = _attendance_local_date()
     def _int_arg(name):
         v = request.args.get(name)
         if v is None or v == '':
@@ -9232,7 +9232,7 @@ def _attendance_check_out_remarks(rec):
 
 @app.route('/driver-attendance/export')
 def driver_attendance_export():
-    view_date = date.today()
+    view_date = _attendance_local_date()
     if request.args.get('date'):
         view_date = parse_date(request.args.get('date')) or view_date
     project_id = request.args.get('project_id', type=int) or None
@@ -9271,7 +9271,7 @@ def driver_attendance_export():
 
 @app.route('/driver-attendance/print')
 def driver_attendance_print():
-    view_date = date.today()
+    view_date = _attendance_local_date()
     if request.args.get('date'):
         view_date = parse_date(request.args.get('date')) or view_date
     project_id = request.args.get('project_id', type=int) or None
@@ -9297,7 +9297,7 @@ def driver_attendance_mark():
         scope_vehicles and len(scope_vehicles) == 1 and
         scope_shifts and len(scope_shifts) == 1
     )
-    view_date = date.today()
+    view_date = _attendance_local_date()
     project_id = request.args.get('project_id', type=int) or request.form.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int) or request.form.get('district_id', type=int)
     vehicle_id = request.args.get('vehicle_id', type=int) or request.form.get('vehicle_id', type=int)
@@ -9330,9 +9330,9 @@ def driver_attendance_mark():
     if request.method == 'POST' and request.form.get('attendance_date'):
         candidate = parse_date(request.form.get('attendance_date')) or view_date
         # Future date par Leave / Late / Half-Day / Off ya koi bhi manual status allow na karein
-        if candidate and candidate > date.today():
+        if candidate and candidate > _attendance_local_date():
             flash('Attendance status cannot be marked for a future date.', 'danger')
-            return redirect(url_for('driver_attendance_mark', date=date.today().strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', vehicle_id=vehicle_id or '', shift=shift or '', driver_id=driver_id or '', search=search))
+            return redirect(url_for('driver_attendance_mark', date=_attendance_local_date().strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', vehicle_id=vehicle_id or '', shift=shift or '', driver_id=driver_id or '', search=search))
         view_date = candidate
         project_id = request.form.get('project_id', type=int) or None
         if project_id == 0:
@@ -9532,7 +9532,7 @@ def driver_attendance_bulk_off():
         districts_q = districts_q.filter(District.id.in_(list(allowed_districts)))
     districts = districts_q.order_by(District.name).all()
 
-    view_date = date.today()
+    view_date = _attendance_local_date()
     district_id = request.args.get('district_id', type=int) or request.form.get('district_id', type=int)
     project_id = request.args.get('project_id', type=int) or request.form.get('project_id', type=int)
     if request.args.get('date'):
@@ -9593,10 +9593,10 @@ def driver_attendance_bulk_off():
 
     if request.method == 'POST' and request.form.get('confirm_bulk_off'):
         # Future date par Bulk Off allow na karein (sirf past / today)
-        if view_date > date.today():
+        if view_date > _attendance_local_date():
             flash('Bulk Off cannot be applied for a future date.', 'danger')
             return redirect(url_for('driver_attendance_bulk_off',
-                                    date=date.today().strftime('%d-%m-%Y'),
+                                    date=_attendance_local_date().strftime('%d-%m-%Y'),
                                     district_id=district_id or '',
                                     project_id=project_id or ''))
 
@@ -9667,7 +9667,7 @@ def driver_attendance_pending():
     if not is_master_or_admin and allowed_projects:
         proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
     form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_q.order_by(Project.name).all()]
-    view_date = date.today()
+    view_date = _attendance_local_date()
     if request.args.get('date'):
         view_date = parse_date(request.args.get('date')) or view_date
     project_id = request.args.get('project_id', type=int) or None
@@ -9777,7 +9777,7 @@ def driver_attendance_missing_checkout():
     if not is_master_or_admin and allowed_projects:
         proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
     form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_q.order_by(Project.name).all()]
-    view_date = date.today()
+    view_date = _attendance_local_date()
     if request.args.get('date'):
         view_date = parse_date(request.args.get('date')) or view_date
     project_id = request.args.get('project_id', type=int) or None
@@ -9912,12 +9912,13 @@ def driver_attendance_missing_checkout():
 @app.route('/driver-attendance/manual-checkin', methods=['GET', 'POST'])
 def driver_attendance_manual_checkin():
     """Manual check-in form: set check-in time for a driver who has not checked in."""
+    local_today = _attendance_local_date()
     driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
     date_str = request.args.get('date') or request.form.get('date')
-    view_date = parse_date(date_str) if date_str else date.today()
-    if view_date > date.today():
+    view_date = parse_date(date_str) if date_str else local_today
+    if view_date > local_today:
         flash('Manual check-in cannot be recorded for a future date.', 'danger')
-        return redirect(url_for('driver_attendance_pending', date=date.today().strftime('%d-%m-%Y')))
+        return redirect(url_for('driver_attendance_pending', date=local_today.strftime('%d-%m-%Y')))
     back_params = {}
     for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search'):
         v = request.args.get(k) or request.form.get(k)
@@ -9996,12 +9997,13 @@ def driver_attendance_manual_checkin():
 @app.route('/driver-attendance/manual-checkout', methods=['GET', 'POST'])
 def driver_attendance_manual_checkout():
     """Manual check-out form: set check-out time (and optional remarks) for a driver who has check-in but no check-out."""
+    local_today = _attendance_local_date()
     driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
     date_str = request.args.get('date') or request.form.get('date')
-    view_date = parse_date(date_str) if date_str else date.today()
-    if view_date > date.today():
+    view_date = parse_date(date_str) if date_str else local_today
+    if view_date > local_today:
         flash('Manual check-out cannot be recorded for a future date.', 'danger')
-        return redirect(url_for('driver_attendance_missing_checkout', date=date.today().strftime('%d-%m-%Y')))
+        return redirect(url_for('driver_attendance_missing_checkout', date=local_today.strftime('%d-%m-%Y')))
     back_params = {}
     for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search'):
         v = request.args.get(k) or request.form.get(k)
@@ -10060,7 +10062,7 @@ def driver_attendance_manual_checkout():
         if check_out_d > max_allowed_date:
             flash('Check-out date zyada se zyada attendance date ke agle din tak ho sakti hai.', 'danger')
             return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
-        if not allow_future and check_out_d > date.today():
+        if not allow_future and check_out_d > local_today:
             flash('Check-out date future mein nahi ho sakti. Admin Settings se "Allow Future Manual Check-out" ON karein agar night shift ke liye zaroorat hai.', 'danger')
             return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
         if check_out_d == view_date and rec.check_in and check_out_t < rec.check_in:
