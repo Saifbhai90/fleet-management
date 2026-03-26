@@ -8,6 +8,7 @@ import os
 import zipfile
 import tempfile
 from datetime import datetime
+from utils import pk_now
 from urllib.parse import unquote
 
 
@@ -91,7 +92,7 @@ def create_backup_zip(app):
     try:
         db_uri = (app.config.get('SQLALCHEMY_DATABASE_URI') or '').strip()
         upload_folder = app.config.get('UPLOAD_FOLDER') or ''
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = pk_now().strftime('%Y%m%d_%H%M%S')
         zip_basename = f'fleet_backup_{timestamp}.zip'
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             if 'sqlite' in db_uri:
@@ -176,7 +177,7 @@ def send_backup_email(app, zip_path, to_email):
         from email.mime.text import MIMEText
         from email import encoders
         msg = MIMEMultipart()
-        msg['Subject'] = f'Fleet Manager Backup {datetime.now().strftime("%Y-%m-%d %H:%M")}'
+        msg['Subject'] = f'Fleet Manager Backup {pk_now().strftime("%Y-%m-%d %H:%M")}'
         msg['From'] = mail_from
         msg['To'] = to_email
         msg.attach(MIMEText('Fleet Manager database and uploads backup. Please store securely.', 'plain'))

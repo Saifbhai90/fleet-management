@@ -7,6 +7,7 @@ from sqlalchemy import select, func
 from models import db, PhysicalBook, BookAssignment, Vehicle, Driver
 from forms import BookStockEntryForm, BookIssueForm, BookReturnForm
 from permissions_config import can_see_page
+from utils import pk_date
 from datetime import datetime, date
 
 
@@ -169,7 +170,7 @@ def book_mark_lost(pk):
     ).first()
     if active_assign:
         active_assign.status = 'Closed'
-        active_assign.return_date = date.today()
+        active_assign.return_date = pk_date()
         active_assign.remarks = (active_assign.remarks or '') + ' [Marked as Lost]'
     db.session.commit()
     flash(f'Book "{book.serial_no}" marked as Lost.', 'warning')
@@ -347,7 +348,7 @@ def book_pending_returns():
     return render_template('books/pending_returns.html',
                            pending=pending, total=total,
                            logbooks=logbooks, maint_books=maint_books,
-                           today=date.today())
+                           today=pk_date())
 
 
 # ════════════════════════════════════════════════════════════════════════════════

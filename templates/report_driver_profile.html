@@ -1103,9 +1103,9 @@
     var s = clonedDoc.createElement('style');
     s.textContent = _COMPACT_CSS;
     clonedDoc.head.appendChild(s);
-    var d  = new Date();
-    var ds = ('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear()+
-             ' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+    var d  = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
+    var ds = ('0'+d.getUTCDate()).slice(-2)+'-'+('0'+(d.getUTCMonth()+1)).slice(-2)+'-'+d.getUTCFullYear()+
+             ' '+('0'+d.getUTCHours()).slice(-2)+':'+('0'+d.getUTCMinutes()).slice(-2)+' PKT';
     var wmC = clonedDoc.getElementById('pdfWatermark');
     if (wmC) {
       var pde = clonedDoc.getElementById('pdfDate');

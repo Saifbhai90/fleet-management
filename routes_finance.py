@@ -11,6 +11,7 @@ from finance_utils import (generate_entry_number, create_journal_entry, create_p
                            create_receipt_voucher_journal, create_bank_entry_journal, 
                            get_account_ledger, get_dto_wallet_summary, get_account_balance)
 from permissions_config import can_see_page
+from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 import os
@@ -468,7 +469,7 @@ def accounts_balance_sheet():
     balance_sheet_data = None
     
     if request.method == 'POST' and form.validate_on_submit():
-        as_of_date = form.as_of_date.data or date.today()
+        as_of_date = form.as_of_date.data or pk_date()
         
         # Get all accounts grouped by type
         assets      = Account.query.filter_by(account_type='Asset',     is_active=True).order_by(Account.code).all()
@@ -562,7 +563,7 @@ def employee_expense_form(pk=None):
             if form.receipt.data:
                 file = form.receipt.data
                 filename = secure_filename(file.filename)
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                timestamp = pk_now().strftime('%Y%m%d_%H%M%S')
                 filename = f"receipt_{timestamp}_{filename}"
                 upload_folder = os.path.join('static', 'uploads', 'receipts')
                 os.makedirs(upload_folder, exist_ok=True)

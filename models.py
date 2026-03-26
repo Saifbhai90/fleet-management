@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, date, time
+from utils import pk_now
 import hashlib
 
 
@@ -40,7 +41,7 @@ class Company(db.Model):
     phone = db.Column(db.String(20))
     email = db.Column(db.String(120))
     remarks = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     # Relationship with Projects
     projects = db.relationship('Project', backref='company', lazy=True)
@@ -64,7 +65,7 @@ class Project(db.Model):
     
     remarks = db.Column(db.Text)
     company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     # Relationships
     districts = db.relationship('District', secondary=project_district,
@@ -146,7 +147,7 @@ class Employee(db.Model):
     status = db.Column(db.String(20), default='Active')  # Active / Inactive / Left
     remarks = db.Column(db.Text)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     post = db.relationship('EmployeePost', backref='employees')
     # Multiple projects and districts (assignment from this form)
@@ -165,7 +166,7 @@ class EmployeeDocument(db.Model):
     employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False)
     title = db.Column(db.String(120), nullable=True)  # e.g. "CNIC Copy", "Contract"
     file_path = db.Column(db.String(500), nullable=False)  # relative to UPLOAD_FOLDER, e.g. employees/1/abc.pdf
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     def __repr__(self):
         return f'<EmployeeDocument {self.title or self.file_path}>'
@@ -218,7 +219,7 @@ class Driver(db.Model):
     assign_remarks = db.Column(db.Text, nullable=True)
     remarks = db.Column(db.Text)
     status = db.Column(db.String(20), default='Active') # Active / Left
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     # Photo and documents (stored as R2 public URL or local relative path)
     photo_path = db.Column(db.String(500), nullable=True)
@@ -251,7 +252,7 @@ class Vehicle(db.Model):
     active_date = db.Column(db.Date, index=True)
     driver_capacity = db.Column(db.Integer, default=1)
     remarks = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     # Assignment Links
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
@@ -293,7 +294,7 @@ class ParkingStation(db.Model):
     capacity = db.Column(db.Integer, nullable=False, index=True)
     latitude = db.Column(db.Numeric(10, 6), nullable=True)
     longitude = db.Column(db.Numeric(10, 6), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
     vehicles = db.relationship('Vehicle', backref='parking_station', lazy=True)
@@ -309,7 +310,7 @@ class District(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False, index=True)
     province = db.Column(db.String(100), index=True)
     remarks = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    created_at = db.Column(db.DateTime, default=pk_now, index=True)
 
     def __repr__(self):
         return f'<District {self.name}>'
@@ -324,7 +325,7 @@ class ProjectTransfer(db.Model):
     transfer_date = db.Column(db.Date, nullable=False, default=date.today, index=True)
     remarks = db.Column(db.Text)
     transferred_by = db.Column(db.String(100))  # future mein user login se
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     project = db.relationship('Project', backref='transfer_history', lazy='select')
     old_company = db.relationship('Company', foreign_keys=[old_company_id], lazy='select')
@@ -359,7 +360,7 @@ class VehicleTransfer(db.Model):
     
     transfer_date = db.Column(db.Date, nullable=False, default=date.today, index=True)
     remarks = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     # Relationships
     vehicle = db.relationship('Vehicle', backref='transfer_history', lazy='select')
@@ -396,7 +397,7 @@ class DriverTransfer(db.Model):
     
     transfer_date = db.Column(db.Date, nullable=False, default=date.today, index=True)
     remarks = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     # Relationships
     driver = db.relationship('Driver', backref='transfer_history', lazy='select')
@@ -423,7 +424,7 @@ class DriverStatusChange(db.Model):
     reason = db.Column(db.String(100))                              # Resigned, Terminated, etc.
     change_date = db.Column(db.Date, nullable=False, default=date.today)
     remarks = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
     
     # Left ke waqt purana assignment
     left_project_id = db.Column(db.Integer, db.ForeignKey('project.id'))
@@ -474,8 +475,8 @@ class DriverAttendance(db.Model):
     check_out_latitude = db.Column(db.Numeric(12, 8), nullable=True)
     check_out_longitude = db.Column(db.Numeric(12, 8), nullable=True)
     check_out_photo_path = db.Column(db.String(500), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 
     driver = db.relationship('Driver', backref='attendance_records', lazy='select')
     project = db.relationship('Project', backref='attendance_records', lazy='select')
@@ -498,7 +499,7 @@ class VehicleDailyTask(db.Model):
     close_reading = db.Column(db.Numeric(12, 2), nullable=False)
     tasks_count = db.Column(db.Integer, default=1)
     remarks = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     vehicle = db.relationship('Vehicle', backref='daily_tasks', lazy='select')
     project = db.relationship('Project', backref='daily_tasks', lazy='select')
@@ -515,7 +516,7 @@ class EmergencyTaskRecord(db.Model):
     vehicle_no = db.Column(db.String(50), nullable=False)
     emg_tasks_count = db.Column(db.Integer, default=0)
     upload_date = db.Column(db.Date, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     def __repr__(self):
         return f'<EmergencyTaskRecord {self.vehicle_no} {self.task_date}>'
@@ -528,7 +529,7 @@ class VehicleMileageRecord(db.Model):
     vehicle_no = db.Column(db.String(50), nullable=False)
     tracker_km = db.Column(db.Numeric(12, 2), default=0)
     upload_date = db.Column(db.Date, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     def __repr__(self):
         return f'<VehicleMileageRecord {self.vehicle_no} {self.task_date}>'
@@ -550,7 +551,7 @@ class RedTask(db.Model):
     call_to_dto = db.Column(db.String(10), nullable=True)   # Yes / No
     dto_investigation = db.Column(db.Text, nullable=True)   # According to DTO Investigation
     action = db.Column(db.String(100), nullable=True)       # Action Against Red Task (No, Fine, etc.)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     district = db.relationship('District', backref='red_tasks', lazy='select')
     project = db.relationship('Project', backref='red_tasks', lazy='select')
@@ -578,7 +579,7 @@ class VehicleMoveWithoutTask(db.Model):
     t_km = db.Column(db.Numeric(12, 2), nullable=True)       # Task KM
     remarks = db.Column(db.Text, nullable=True)
     fine = db.Column(db.String(50), nullable=True)            # "No" or amount e.g. "500"
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     district = db.relationship('District', backref='move_without_tasks', lazy='select')
     project = db.relationship('Project', backref='move_without_tasks', lazy='select')
@@ -601,7 +602,7 @@ class PenaltyRecord(db.Model):
     record_date = db.Column(db.Date, nullable=False)
     fine = db.Column(db.String(100), nullable=True)   # amount or text
     remarks = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     district = db.relationship('District', backref='penalty_records', lazy='select')
     project = db.relationship('Project', backref='penalty_records', lazy='select')
@@ -625,7 +626,7 @@ class Party(db.Model):
     contact = db.Column(db.String(100), nullable=True)
     address = db.Column(db.String(255), nullable=True)
     remarks = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     district = db.relationship('District', backref='parties', lazy=True)
 
@@ -642,7 +643,7 @@ class Product(db.Model):
     name = db.Column(db.String(150), nullable=False, unique=True)
     used_in_forms = db.Column(db.String(100), nullable=True)  # comma-separated: Fueling,Oil,Maintenance
     remarks = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     def __repr__(self):
         return f'<Product {self.name}>'
@@ -677,7 +678,7 @@ class FuelExpense(db.Model):
     km_in_task = db.Column(db.Numeric(12, 2), nullable=True)          # KM In (Day Close) from task report
     meter_reading_matched = db.Column(db.String(10), nullable=True)    # Yes / No
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     district = db.relationship('District', backref='fuel_expenses', lazy='select')
     project = db.relationship('Project', backref='fuel_expenses', lazy='select')
@@ -696,7 +697,7 @@ class ProductBalance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False, unique=True)
     balance_qty = db.Column(db.Numeric(12, 2), default=0, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 
     product = db.relationship('Product', backref=db.backref('balance', uselist=False), lazy=True)
 
@@ -719,7 +720,7 @@ class OilExpense(db.Model):
     current_reading = db.Column(db.Numeric(12, 2), nullable=True)
     km = db.Column(db.Numeric(12, 2), nullable=True)  # current - previous
     remarks = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     district = db.relationship('District', backref='oil_expenses', lazy='select')
     project = db.relationship('Project', backref='oil_expenses', lazy='select')
@@ -763,7 +764,7 @@ class OilExpenseAttachment(db.Model):
     file_path = db.Column(db.String(500), nullable=False)
     file_type = db.Column(db.String(20), nullable=True)  # image, video
     original_name = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     def __repr__(self):
         return f'<OilExpenseAttachment {self.file_path}>'
@@ -783,7 +784,7 @@ class MaintenanceExpense(db.Model):
     current_reading = db.Column(db.Numeric(12, 2), nullable=True)
     km = db.Column(db.Numeric(12, 2), nullable=True)
     remarks = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     district = db.relationship('District', backref='maintenance_expenses', lazy='select')
     project = db.relationship('Project', backref='maintenance_expenses', lazy='select')
@@ -824,7 +825,7 @@ class MaintenanceExpenseAttachment(db.Model):
     file_path = db.Column(db.String(500), nullable=False)
     file_type = db.Column(db.String(20), nullable=True)
     original_name = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     def __repr__(self):
         return f'<MaintenanceExpenseAttachment {self.file_path}>'
@@ -842,7 +843,7 @@ class Notification(db.Model):
     link_text = db.Column(db.String(100))
     notification_type = db.Column(db.String(50), default='info')  # info, warning, success, danger
     read_at = db.Column(db.DateTime, nullable=True)  # legacy: when single user marked read (deprecated; use NotificationRead)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
 
     created_by = db.relationship('User', backref='created_notifications', foreign_keys=[created_by_user_id], lazy=True)
@@ -856,7 +857,7 @@ class NotificationRead(db.Model):
     __tablename__ = 'notification_read'
     notification_id = db.Column(db.Integer, db.ForeignKey('notification.id', ondelete='CASCADE'), primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), primary_key=True)
-    read_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    read_at = db.Column(db.DateTime, default=pk_now, nullable=False)
 
 
 class Reminder(db.Model):
@@ -869,7 +870,7 @@ class Reminder(db.Model):
     reminder_date = db.Column(db.Date, nullable=False)
     reminder_time = db.Column(db.Time, nullable=True)  # optional
     is_completed = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     user = db.relationship('User', backref='reminders', lazy=True)
 
@@ -924,7 +925,7 @@ class User(db.Model):
     employee_post_id = db.Column(db.Integer, db.ForeignKey('driver_post.id', ondelete='SET NULL'), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     force_password_change = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
 
     role = db.relationship('Role', backref='users', lazy=True)
     employee_post = db.relationship('EmployeePost', backref='users', foreign_keys=[employee_post_id], lazy=True)
@@ -943,7 +944,7 @@ class LoginLog(db.Model):
     __tablename__ = 'login_log'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
-    login_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    login_at = db.Column(db.DateTime, default=pk_now, nullable=False)
     ip_address = db.Column(db.String(64), nullable=True)
     user_agent = db.Column(db.String(500), nullable=True)  # Browser/device string
     logout_at = db.Column(db.DateTime, nullable=True)
@@ -967,7 +968,7 @@ class ActivityLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
     login_log_id = db.Column(db.Integer, db.ForeignKey('login_log.id', ondelete='SET NULL'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=pk_now, nullable=False)
     endpoint = db.Column(db.String(120), nullable=True)
     method = db.Column(db.String(10), nullable=True)
     path = db.Column(db.String(500), nullable=True)
@@ -990,7 +991,7 @@ class ClientActivityLog(db.Model):
     longitude = db.Column(db.Numeric(12, 8), nullable=True)
     accuracy = db.Column(db.Numeric(10, 2), nullable=True)  # meters
     ip_address = db.Column(db.String(64), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=pk_now, nullable=False)
 
     user = db.relationship('User', backref='client_activity_logs', lazy=True)
 
@@ -1010,7 +1011,7 @@ class AttendanceTimeControl(db.Model):
     morning_end   = db.Column(db.Time, nullable=True)   # e.g. 10:00
     night_start   = db.Column(db.Time, nullable=True)   # e.g. 18:00
     night_end     = db.Column(db.Time, nullable=True)   # e.g. 22:00
-    updated_at    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at    = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 
     def __repr__(self):
         return f'<AttendanceTimeControl Morning {self.morning_start}-{self.morning_end} Night {self.night_start}-{self.night_end}>'
@@ -1038,7 +1039,7 @@ class AttendanceTimeOverride(db.Model):
     night_checkout_end = db.Column(db.Time, nullable=True)
     allow_future_checkout = db.Column(db.Boolean, nullable=False, server_default='0')
     remarks = db.Column(db.Text, nullable=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 
     project = db.relationship('Project', foreign_keys=[project_id], lazy='joined')
     district_rel = db.relationship('District', foreign_keys=[district_id], lazy='joined')
@@ -1089,7 +1090,7 @@ class Account(db.Model):
     party_id = db.Column(db.Integer, db.ForeignKey('party.id'), nullable=True)
     
     description = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
     
     # Relationships
     parent = db.relationship('Account', remote_side=[id], backref='sub_accounts')
@@ -1126,7 +1127,7 @@ class JournalEntry(db.Model):
     # Posting status
     is_posted = db.Column(db.Boolean, default=True, nullable=False)
     posted_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
     
     # Relationships
     created_by = db.relationship('User', backref='journal_entries', lazy='select')
@@ -1195,7 +1196,7 @@ class PaymentVoucher(db.Model):
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
     
     # Relationships
     from_account = db.relationship('Account', foreign_keys=[from_account_id], backref='payments_from', lazy='select')
@@ -1230,7 +1231,7 @@ class ReceiptVoucher(db.Model):
     journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
     
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
     
     # Relationships
     from_account = db.relationship('Account', foreign_keys=[from_account_id], backref='receipts_from', lazy='select')
@@ -1261,7 +1262,7 @@ class BankEntry(db.Model):
     journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
     
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
     
     # Relationships
     from_account = db.relationship('Account', foreign_keys=[from_account_id], backref='bank_entries_from', lazy='select')
@@ -1299,7 +1300,7 @@ class EmployeeExpense(db.Model):
     journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
     
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
     
     # Relationships
     employee = db.relationship('Employee', backref='expenses', lazy='select')
@@ -1357,8 +1358,8 @@ class EmployeeSalaryConfig(db.Model):
     payment_mode = db.Column(db.String(20), default='Cash')  # Cash, Bank Transfer, Cheque
     remarks = db.Column(db.Text, nullable=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 
     employee = db.relationship('Employee', backref=db.backref('salary_config', uselist=False, lazy='select'))
     driver = db.relationship('Driver', backref=db.backref('salary_config', uselist=False, lazy='select'))
@@ -1448,8 +1449,8 @@ class MonthlyPayroll(db.Model):
     journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
 
     remarks = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 
     # Relationships
     employee = db.relationship('Employee', backref='payroll_records', lazy='select')
@@ -1521,8 +1522,8 @@ class PhysicalBook(db.Model):
     end_page = db.Column(db.Integer, nullable=False, default=100)
     status = db.Column(db.String(20), nullable=False, default='In-Stock')  # In-Stock, Issued, Returned-Full, Lost
     remarks = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 
     assignments = db.relationship('BookAssignment', backref='book', lazy='dynamic', order_by='BookAssignment.issue_date.desc()')
 
@@ -1553,8 +1554,8 @@ class BookAssignment(db.Model):
 
     status = db.Column(db.String(20), nullable=False, default='Active')  # Active, Closed
     remarks = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 
     vehicle = db.relationship('Vehicle', backref=db.backref('book_assignments', lazy='dynamic'))
     issued_to_driver = db.relationship('Driver', foreign_keys=[issued_to_driver_id], backref='books_issued', lazy='select')

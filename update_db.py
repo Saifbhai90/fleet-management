@@ -3,6 +3,7 @@ from app import app, db
 from sqlalchemy import text, inspect
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from datetime import datetime
+from utils import pk_now
 
 
 def column_exists(table_name, column_name):
@@ -21,7 +22,7 @@ def table_exists(table_name):
 def update_database_schema():
     with app.app_context():
         print("=== Starting database schema update script ===\n")
-        print("Current time:", datetime.now().strftime("%Y-%m-%d %H:%M:%S PKT"))
+        print("Current time:", pk_now().strftime("%Y-%m-%d %H:%M:%S PKT"))
         print("-" * 80)
 
         success = 0

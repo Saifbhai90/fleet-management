@@ -10,6 +10,7 @@ from models import (db, Employee, EmployeeSalaryConfig, MonthlyPayroll,
 from forms import SalaryConfigForm, PayrollGenerateForm, PayrollPaymentForm, DriverBulkSalaryForm
 from permissions_config import can_see_page
 from finance_utils import generate_entry_number
+from utils import pk_now, pk_date
 from datetime import datetime, date
 from decimal import Decimal
 import calendar
@@ -304,7 +305,7 @@ def payroll_list():
     payrolls = pagination.items
 
     years = db.session.query(db.distinct(MonthlyPayroll.year)).order_by(MonthlyPayroll.year.desc()).all()
-    year_list = [y[0] for y in years] if years else [date.today().year]
+    year_list = [y[0] for y in years] if years else [pk_date().year]
 
     return render_template('payroll/payroll_list.html',
                            payrolls=payrolls, pagination=pagination,
@@ -340,9 +341,9 @@ def payroll_generate():
 
     form.person_id.choices = choices
 
-    current_year = date.today().year
+    current_year = pk_date().year
     form.year.choices = [(y, str(y)) for y in range(current_year - 2, current_year + 2)]
-    form.month.default = date.today().month
+    form.month.default = pk_date().month
     form.year.default = current_year
 
     if request.method == 'POST' and form.validate_on_submit():
@@ -429,7 +430,7 @@ def payroll_edit(pk):
         form.person_id.choices = [(f'drv_{payroll.driver_id}', f"[DRV] {payroll.person_code} – {payroll.person_name}")]
         form.person_id.data = f'drv_{payroll.driver_id}'
 
-    current_year = date.today().year
+    current_year = pk_date().year
     form.year.choices = [(y, str(y)) for y in range(current_year - 2, current_year + 2)]
 
     if request.method == 'POST' and form.validate_on_submit():
@@ -491,7 +492,7 @@ def payroll_finalize(pk):
 
     payroll.calculate()
     payroll.status = 'Finalized'
-    payroll.finalized_at = datetime.utcnow()
+    payroll.finalized_at = pk_now()
     payroll.finalized_by_user_id = session.get('user_id')
     db.session.commit()
     flash(f'Payroll finalized for {payroll.person_name}. Net payable: Rs. {payroll.net_payable:,.2f}', 'success')
@@ -522,7 +523,7 @@ def payroll_pay(pk):
         payroll.payment_date = form.payment_date.data
         payroll.payment_method = form.payment_method.data
         payroll.payment_account_id = form.payment_account_id.data
-        payroll.paid_at = datetime.utcnow()
+        payroll.paid_at = pk_now()
         payroll.paid_by_user_id = session.get('user_id')
         if form.remarks.data:
             payroll.remarks = (payroll.remarks or '') + '\nPayment: ' + form.remarks.data
@@ -543,7 +544,7 @@ def payroll_pay(pk):
                 reference_id=payroll.id,
                 created_by_user_id=session.get('user_id'),
                 is_posted=True,
-                posted_at=datetime.utcnow(),
+                posted_at=pk_now(),
             )
             db.session.add(je)
             db.session.flush()
@@ -694,10 +695,10 @@ def payroll_bulk_generate():
         flash(f'Bulk generation complete: {created} created, {skipped} skipped.', 'success')
         return redirect(url_for('payroll_list', month=month, year=year))
 
-    current_year = date.today().year
+    current_year = pk_date().year
     years = list(range(current_year - 2, current_year + 2))
     return render_template('payroll/payroll_bulk_generate.html', years=years,
-                           now_month=date.today().month, now_year=current_year)
+                           now_month=pk_date().month, now_year=current_year)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -875,5 +876,5 @@ def payroll_payslip(pk):
     if auth_check:
         return auth_check
     payroll = MonthlyPayroll.query.get_or_404(pk)
-    generated_at = datetime.now().strftime('%d %b %Y, %I:%M %p')
+    generated_at = pk_now().strftime('%d %b %Y, %I:%M %p')
     return render_template('payroll/payslip.html', payroll=payroll, generated_at=generated_at)

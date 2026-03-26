@@ -278,8 +278,8 @@
       end = win.night_end ? minutesFromMidnight(win.night_end) : null;
     }
     if (start === null && end === null) return { inWindow: true, label: '' };
-    var now = new Date();
-    var current = now.getHours() * 60 + now.getMinutes();
+    var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
+    var current = now.getUTCHours() * 60 + now.getUTCMinutes();
     var inWindow = false;
     var label = (shiftLower === 'morning') ? ('Morning: ' + (win.morning_start || '') + ' – ' + (win.morning_end || '')) : ('Night: ' + (win.night_start || '') + ' – ' + (win.night_end || ''));
     if (start !== null && end !== null) {
@@ -303,8 +303,8 @@
     var start = startKey ? minutesFromMidnight(startKey) : null;
     var end = endKey ? minutesFromMidnight(endKey) : null;
     if (start === null && end === null) return { inWindow: true, label: '' };
-    var now = new Date();
-    var current = now.getHours() * 60 + now.getMinutes();
+    var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
+    var current = now.getUTCHours() * 60 + now.getUTCMinutes();
     var inWindow = false;
     if (start !== null && end !== null) {
       inWindow = (end >= start) ? (current >= start && current <= end) : (current >= start || current <= end);
@@ -645,9 +645,9 @@
     cameraCanvas.height = h;
     var ctx = cameraCanvas.getContext('2d');
     ctx.drawImage(cameraVideo, 0, 0);
-    var now = new Date();
-    var dateStr = now.getDate().toString().padStart(2, '0') + '-' + (now.getMonth() + 1).toString().padStart(2, '0') + '-' + now.getFullYear();
-    var timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0');
+    var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
+    var dateStr = now.getUTCDate().toString().padStart(2, '0') + '-' + (now.getUTCMonth() + 1).toString().padStart(2, '0') + '-' + now.getUTCFullYear();
+    var timeStr = now.getUTCHours().toString().padStart(2, '0') + ':' + now.getUTCMinutes().toString().padStart(2, '0') + ':' + now.getUTCSeconds().toString().padStart(2, '0');
     var locStr = '';
     if (currentPosition && currentPosition.coords) {
       locStr = currentPosition.coords.latitude.toFixed(6) + ', ' + currentPosition.coords.longitude.toFixed(6);

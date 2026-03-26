@@ -3,6 +3,7 @@ Finance & Accounting Utility Functions
 Helper functions for voucher number generation, journal entry creation, and balance updates
 """
 from models import db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence
+from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
@@ -24,7 +25,7 @@ def generate_entry_number(prefix='JE', entry_date=None):
         str: Unique entry number
     """
     if entry_date is None:
-        entry_date = date.today()
+        entry_date = pk_date()
 
     year = entry_date.year
     month = entry_date.month
@@ -97,7 +98,7 @@ def create_journal_entry(entry_type, entry_date, description, lines, district_id
         district_id=district_id,
         project_id=project_id,
         is_posted=True,
-        posted_at=datetime.utcnow()
+        posted_at=pk_now()
     )
     db.session.add(je)
     db.session.flush()  # Get the ID
@@ -516,7 +517,7 @@ def create_expense_journal(expense_type, expense_obj, expense_account_code, part
     elif hasattr(expense_obj, 'fueling_date'):
         expense_date = expense_obj.fueling_date
     else:
-        expense_date = date.today()
+        expense_date = pk_date()
     
     lines = [
         {

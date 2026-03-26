@@ -2797,14 +2797,24 @@
         });
     })();
 
-    // Live Clock
+    // Live Clock — Pakistan Server Time (PKT)
+    var _pktOffset = (function(){
+        var serverISO = "{{ server_pk_now }}";
+        var serverMs = new Date(serverISO).getTime();
+        var browserMs = Date.now();
+        return serverMs - browserMs;
+    })();
     function updateDateTime() {
-        const now = new Date();
-        const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
-        const date = now.toLocaleDateString('en-US', options);
-        const time = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const el = document.getElementById("liveDateTime");
-        if(el) el.innerHTML = `<i class="bi bi-calendar3 me-1"></i> ${date} | <i class="bi bi-clock me-1"></i> ${time}`;
+        var now = new Date(Date.now() + _pktOffset);
+        var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var dateStr = days[now.getUTCDay()] + ', ' + months[now.getUTCMonth()] + ' ' + now.getUTCDate() + ', ' + now.getUTCFullYear();
+        var h = now.getUTCHours(), m = now.getUTCMinutes(), s = now.getUTCSeconds();
+        var ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12; if(h === 0) h = 12;
+        var timeStr = ('0'+h).slice(-2) + ':' + ('0'+m).slice(-2) + ':' + ('0'+s).slice(-2) + ' ' + ampm;
+        var el = document.getElementById("liveDateTime");
+        if(el) el.innerHTML = '<i class="bi bi-calendar3 me-1"></i> ' + dateStr + ' | <i class="bi bi-clock me-1"></i> ' + timeStr + ' PKT';
     }
     setInterval(updateDateTime, 1000);
     updateDateTime();
@@ -5914,7 +5924,7 @@ window._dtPrintCustomize = function(title, color, icon) {
     var hdr = '<div style="background:linear-gradient(135deg,'+color+' 0%,'+color+'cc 100%);color:#fff;padding:16px 24px;border-radius:0 0 12px 12px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">'
       +'<i class="bi bi-'+icon+'" style="font-size:1.4rem;opacity:0.9;"></i>'
       +'<div><div style="font-size:1.15rem;font-weight:700;">'+title+'</div>'
-      +'<div style="font-size:0.78rem;opacity:0.85;">Generated: '+new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})+'</div></div></div>';
+      +'<div style="font-size:0.78rem;opacity:0.85;">Generated: '+(function(){var d=new Date(Date.now()+_pktOffset);var dd=('0'+d.getUTCDate()).slice(-2);var mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()];var h=d.getUTCHours(),m=('0'+d.getUTCMinutes()).slice(-2),ap=h>=12?'PM':'AM';h=h%12;if(!h)h=12;return dd+' '+mon+' '+d.getUTCFullYear()+', '+('0'+h).slice(-2)+':'+m+' '+ap+' PKT';})()+'</div></div></div>';
     var toolbar = '<div style="display:flex;gap:8px;padding:0 24px 12px;align-items:center;" class="dt-print-toolbar">'
       +'<button onclick="window.close()" style="background:#334155;color:#e2e8f0;border:none;border-radius:8px;padding:8px 18px;font-size:0.84rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;"><i class="bi bi-arrow-left"></i> Close</button>'
       +'<button onclick="_dtPrintOrPdf(this)" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:0.84rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(37,99,235,0.3);"><i class="bi bi-printer"></i> Print</button>'

@@ -206,9 +206,9 @@ def mobile_dashboard_stats():
     from models import Driver, Vehicle, DriverAttendance, FuelExpense
     from sqlalchemy import func
     from app import db
-    import datetime as dt
+    from utils import pk_date, pk_now
 
-    today = dt.date.today()
+    today = pk_date()
     active_drivers = Driver.query.filter_by(status='Active').count()
     total_vehicles = Vehicle.query.count()
     assigned_vehicles = Vehicle.query.filter(Vehicle.district_id.isnot(None)).count()
@@ -299,6 +299,7 @@ def mobile_checkin():
     """
     from models import DriverAttendance
     from app import db
+    from utils import pk_date, pk_now
     import datetime as dt
 
     body = request.get_json(silent=True) or {}
@@ -310,8 +311,8 @@ def mobile_checkin():
     if err:
         return err
 
-    today = dt.date.today()
-    now_utc = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+    today = pk_date()
+    now_utc = pk_now()
 
     existing = DriverAttendance.query.filter_by(
         driver_id=driver.id, attendance_date=today
@@ -358,6 +359,7 @@ def mobile_checkout():
     """
     from models import DriverAttendance
     from app import db
+    from utils import pk_date, pk_now
     import datetime as dt
 
     body = request.get_json(silent=True) or {}
@@ -369,8 +371,8 @@ def mobile_checkout():
     if err:
         return err
 
-    today = dt.date.today()
-    now_utc = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+    today = pk_date()
+    now_utc = pk_now()
 
     record = DriverAttendance.query.filter_by(
         driver_id=driver.id, attendance_date=today
@@ -410,6 +412,7 @@ def mobile_checkout():
 def mobile_driver_profile():
     """Full driver profile for current user or ?driver_id=X for admins."""
     from models import User, Driver, DriverAttendance
+    from utils import pk_date
     import datetime as dt
 
     uid = request.jwt_payload.get('user_id')
@@ -428,7 +431,7 @@ def mobile_driver_profile():
     if not driver:
         return _err('Driver profile not found for this user.', 404)
 
-    today = dt.date.today()
+    today = pk_date()
     attendance_today = DriverAttendance.query.filter_by(
         driver_id=driver.id, attendance_date=today
     ).first()

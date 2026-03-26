@@ -9,6 +9,7 @@ from wtforms.validators import (
     DataRequired, Length, Optional, NumberRange, Email, ValidationError, Regexp
 )
 from datetime import date
+from utils import pk_date
 
 
 # Company Form
@@ -213,8 +214,7 @@ class DriverForm(FlaskForm):
 
     def validate_dob(self, field):
         if field.data:
-            from datetime import date
-            today = date.today()
+            today = pk_date()
             if field.data >= today:
                 raise ValidationError('Date of Birth cannot be today or in the future.')
             age = (today - field.data).days // 365
@@ -385,7 +385,7 @@ class AssignDriverToVehicleForm(FlaskForm):
 
     def validate_assign_date(self, field):
         """Future date par driver assignment allow na karein."""
-        if field.data and field.data > date.today():
+        if field.data and field.data > pk_date():
             raise ValidationError('Assignment date cannot be in the future.')
 
 
@@ -438,7 +438,7 @@ class VehicleTransferForm(FlaskForm):
 
     def validate_transfer_date(self, field):
         """Future date par vehicle transfer allow na karein."""
-        if field.data and field.data > date.today():
+        if field.data and field.data > pk_date():
             raise ValidationError('Transfer date cannot be in the future.')
 
 class EditVehicleTransferForm(FlaskForm):
@@ -467,7 +467,7 @@ class DriverTransferForm(FlaskForm):
 
     def validate_transfer_date(self, field):
         """Future date par transfer allow na karein."""
-        if field.data and field.data > date.today():
+        if field.data and field.data > pk_date():
             raise ValidationError('Transfer date cannot be in the future.')
 
 class DriverJobLeftForm(FlaskForm):
@@ -507,7 +507,7 @@ class DriverJobLeftForm(FlaskForm):
 
     def validate_leave_date(self, field):
         """Future date par driver job left allow na karein."""
-        if field.data and field.data > date.today():
+        if field.data and field.data > pk_date():
             raise ValidationError('Leave date cannot be in the future.')
 
 class DriverRejoinForm(FlaskForm):
@@ -530,7 +530,7 @@ class DriverRejoinForm(FlaskForm):
 
     def validate_rejoin_date(self, field):
         """Future date par driver rejoin allow na karein."""
-        if field.data and field.data > date.today():
+        if field.data and field.data > pk_date():
             raise ValidationError('Rejoin date cannot be in the future.')
 
 
@@ -544,7 +544,7 @@ ATTENDANCE_STATUS_CHOICES = [
 
 
 class DriverAttendanceFilterForm(FlaskForm):
-    attendance_date = DateField('Date', format='%d-%m-%Y', default=date.today, validators=[DataRequired()])
+    attendance_date = DateField('Date', format='%d-%m-%Y', default=pk_date, validators=[DataRequired()])
     project_id = SelectField('Project (optional)', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
     district_id = SelectField('District (optional)', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
     vehicle_id = SelectField('Vehicle (optional)', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})

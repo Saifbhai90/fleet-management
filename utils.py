@@ -2,9 +2,32 @@
 import csv
 import re
 from io import StringIO, BytesIO
-from datetime import datetime, date
+from datetime import datetime, date, time as dt_time, timedelta
 from flask import Response
 from typing import List, Tuple, Union, Dict, Any, Optional
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
+
+_PKT = ZoneInfo('Asia/Karachi')
+
+
+def pk_now() -> datetime:
+    """Current naive datetime in Pakistan timezone (Asia/Karachi)."""
+    from datetime import timezone
+    return datetime.now(timezone.utc).astimezone(_PKT).replace(tzinfo=None)
+
+
+def pk_date() -> date:
+    """Today's date in Pakistan timezone."""
+    return pk_now().date()
+
+
+def pk_time() -> dt_time:
+    """Current time in Pakistan timezone."""
+    return pk_now().time()
 
 
 # ---------- Date: dd-mm-yyyy display & parse ----------

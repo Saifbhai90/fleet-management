@@ -75,9 +75,9 @@
 <script>
 (function() {
   function localDateStr(d) {
-    var y = d.getFullYear();
-    var m = ('0' + (d.getMonth() + 1)).slice(-2);
-    var day = ('0' + d.getDate()).slice(-2);
+    var y = d.getUTCFullYear();
+    var m = ('0' + (d.getUTCMonth() + 1)).slice(-2);
+    var day = ('0' + d.getUTCDate()).slice(-2);
     return y + '-' + m + '-' + day;
   }
 
@@ -90,21 +90,22 @@
   var hint = document.getElementById('nightShiftHint');
   var form = timeInput.closest('form');
 
-  var attendanceDate = new Date(attendanceDateStr + 'T00:00:00');
-  var nextDayDate = new Date(attendanceDate.getTime());
-  nextDayDate.setDate(nextDayDate.getDate() + 1);
+  var attendanceDate = new Date(attendanceDateStr + 'T00:00:00Z');
+  var nextDayDate = new Date(attendanceDate.getTime() + 86400000);
   var nextDayStr = localDateStr(nextDayDate);
 
   dateInput.setAttribute('min', attendanceDateStr);
   if (allowFuture) {
     dateInput.removeAttribute('max');
   } else {
-    var todayStr = localDateStr(new Date());
+    var _pkOff = (typeof _pktOffset!=='undefined') ? _pktOffset : 0;
+    var todayStr = localDateStr(new Date(Date.now() + _pkOff));
     var maxStr = nextDayStr <= todayStr ? nextDayStr : todayStr;
     dateInput.setAttribute('max', maxStr);
   }
 
   var userManuallySetDate = false;
+  var _pkOff = (typeof _pktOffset!=='undefined') ? _pktOffset : 0;
 
   dateInput.addEventListener('change', function() {
     userManuallySetDate = true;
@@ -117,7 +118,7 @@
 
     var coTime = timeInput.value;
     if (coTime < checkInTimeStr) {
-      var canSetNextDay = allowFuture || nextDayStr <= localDateStr(new Date());
+      var canSetNextDay = allowFuture || nextDayStr <= localDateStr(new Date(Date.now() + _pkOff));
       if (canSetNextDay) {
         dateInput.value = nextDayStr;
         hint.classList.remove('d-none');
@@ -134,13 +135,14 @@
       var coTime = timeInput.value;
       if (!coDate || !coTime) return;
       var selectedDT = new Date(coDate + 'T' + coTime + ':00');
-      var now = new Date();
-      if (selectedDT > now) {
+      var now = new Date(Date.now() + _pkOff);
+      var nowAsLocal = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds());
+      if (selectedDT > nowAsLocal) {
         e.preventDefault();
-        var hh = ('0' + now.getHours()).slice(-2);
-        var mm = ('0' + now.getMinutes()).slice(-2);
+        var hh = ('0' + now.getUTCHours()).slice(-2);
+        var mm = ('0' + now.getUTCMinutes()).slice(-2);
         var nowStr = localDateStr(now) + ' ' + hh + ':' + mm;
-        alert('Check-out date/time future mein nahi ho sakti.\nAbhi: ' + nowStr + '\nAapne select kiya: ' + coDate + ' ' + coTime + '\n\nAdmin Settings se "Allow Future Manual Check-out" ON karein agar night shift ke liye zaroorat hai.');
+        alert('Check-out date/time future mein nahi ho sakti.\nAbhi (PKT): ' + nowStr + '\nAapne select kiya: ' + coDate + ' ' + coTime + '\n\nAdmin Settings se "Allow Future Manual Check-out" ON karein agar night shift ke liye zaroorat hai.');
       }
     });
   }

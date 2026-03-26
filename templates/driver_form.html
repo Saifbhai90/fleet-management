@@ -1055,7 +1055,7 @@ document.addEventListener('DOMContentLoaded', function () {
   function generateID() {
     if (!driverIdField.value) {
       var randomId = Math.floor(1000 + Math.random() * 9000);
-      var year = new Date().getFullYear();
+      var year = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0)).getUTCFullYear();
       driverIdField.value = 'DRV-' + year + '-' + randomId;
     }
   }
@@ -1089,8 +1089,8 @@ document.addEventListener('DOMContentLoaded', function () {
     return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
   }
   function applyExpiryStatus(expiryDate, targetDisplay, targetHidden) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    var _pk = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
+    const today = new Date(_pk.getUTCFullYear(), _pk.getUTCMonth(), _pk.getUTCDate());
     if (expiryDate && expiryDate > today) {
       targetDisplay.value = "VALID";
       targetDisplay.className = "form-control status-auto valid-bg";

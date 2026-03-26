@@ -55,7 +55,7 @@ from sqlalchemy import func, text, inspect, or_, cast, and_
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError
 from sqlalchemy.orm import joinedload
-from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone
+from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, pk_now, pk_date, pk_time
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
 from flask_wtf.csrf import CSRFError
 from werkzeug.security import generate_password_hash
@@ -108,36 +108,13 @@ class SimplePagination:
 
 
 def _attendance_local_time():
-    """Current time in APP_TIMEZONE for attendance window comparison (Control form times are in local time)."""
-    try:
-        from zoneinfo import ZoneInfo
-        tz_name = app.config.get('APP_TIMEZONE', 'Asia/Karachi')
-        now_utc = datetime.now(timezone.utc)
-        return now_utc.astimezone(ZoneInfo(tz_name)).time()
-    except Exception:
-        return datetime.utcnow().time()
-
+    return pk_time()
 
 def _attendance_local_date():
-    """Today's date in APP_TIMEZONE so check-in/check-out date matches user's calendar."""
-    try:
-        from zoneinfo import ZoneInfo
-        tz_name = app.config.get('APP_TIMEZONE', 'Asia/Karachi')
-        now_utc = datetime.now(timezone.utc)
-        return now_utc.astimezone(ZoneInfo(tz_name)).date()
-    except Exception:
-        return date.today()
-
+    return pk_date()
 
 def _attendance_local_now():
-    """Current naive datetime in APP_TIMEZONE (date + time combined)."""
-    try:
-        from zoneinfo import ZoneInfo
-        tz_name = app.config.get('APP_TIMEZONE', 'Asia/Karachi')
-        now_utc = datetime.now(timezone.utc)
-        return now_utc.astimezone(ZoneInfo(tz_name)).replace(tzinfo=None)
-    except Exception:
-        return datetime.utcnow()
+    return pk_now()
 
 
 @app.before_request
@@ -171,7 +148,7 @@ def require_login():
     # Session timeout (unless "remember me" made session permanent)
     timeout_mins = app.config.get('SESSION_TIMEOUT_MINUTES', 60)
     last = session.get('last_activity')
-    now = datetime.now(timezone.utc)
+    now = pk_now()
     session['last_activity'] = now
     if last and not getattr(session, 'permanent', False):
         # Ensure both are timezone-aware UTC so subtraction works (avoid naive/aware mix)
@@ -678,7 +655,7 @@ def dashboard():
         def _can(key):
             return True
 
-    today_dt = date.today()
+    today_dt = pk_date()
 
     allowed_shifts = user_context.get('allowed_shifts', set())
     allowed_parking = user_context.get('allowed_parking', set())
@@ -898,7 +875,7 @@ def dashboard():
     # Do not add any "Parking full" notification (user requested: parking full ki notification na ho).
     try:
         if not notifications and total_drivers and user_id:
-            today = date.today()
+            today = pk_date()
             expiring_count = 0
             for d in Driver.query.filter(Driver.status == 'Active').all():
                 if (d.license_expiry_date and d.license_expiry_date < today) or (d.cnic_expiry_date and d.cnic_expiry_date < today):
@@ -917,7 +894,7 @@ def dashboard():
                 notifications = _unread_notifications_for_user(user_id, 20)
 
             from datetime import timedelta
-            _today2 = date.today()
+            _today2 = pk_date()
             start = _today2 - timedelta(days=7)
             _active_list = Driver.query.filter(Driver.status == 'Active').all()
             missing_count = 0
@@ -985,10 +962,10 @@ def notification_read(pk):
     if user_id:
         nr = NotificationRead.query.filter_by(notification_id=pk, user_id=user_id).first()
         if not nr:
-            nr = NotificationRead(notification_id=pk, user_id=user_id, read_at=datetime.utcnow())
+            nr = NotificationRead(notification_id=pk, user_id=user_id, read_at=pk_now())
             db.session.add(nr)
         else:
-            nr.read_at = datetime.utcnow()
+            nr.read_at = pk_now()
         db.session.commit()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({'ok': True})
@@ -1182,7 +1159,7 @@ def app_logout():
     try:
         log_id = session.get('login_log_id')
         if log_id:
-            LoginLog.query.filter_by(id=log_id).update({'logout_at': datetime.utcnow()})
+            LoginLog.query.filter_by(id=log_id).update({'logout_at': pk_now()})
             db.session.commit()
     except Exception:
         db.session.rollback()
@@ -1911,8 +1888,8 @@ def backup_download():
     try:
         filename = os.path.basename(zip_path)
         # Use a friendly download name
-        friendly = f'fleet_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip'
-        _last_backup_ts['ts'] = datetime.utcnow()
+        friendly = f'fleet_backup_{pk_now().strftime("%Y%m%d_%H%M%S")}.zip'
+        _last_backup_ts['ts'] = pk_now()
         return send_file(zip_path, as_attachment=True, download_name=friendly)
     finally:
         try:
@@ -1974,7 +1951,7 @@ def backup_save():
         flash(f'Backup failed: {err}', 'danger')
         return redirect(url_for('backup_index'))
     try:
-        friendly = f'fleet_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip'
+        friendly = f'fleet_backup_{pk_now().strftime("%Y%m%d_%H%M%S")}.zip'
         dest = os.path.join(path, friendly)
         shutil.copy2(zip_path, dest)
         flash(f'Backup saved to: {dest}', 'success')
@@ -2326,7 +2303,7 @@ def drivers_list():
     
     drivers_pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     drivers = drivers_pagination.items
-    today = date.today()
+    today = pk_date()
     return render_template('drivers_list.html', drivers=drivers, search=search, today=today,
                            pagination=drivers_pagination, per_page=per_page,
                            sort_by=sort_by, sort_order=sort_order)
@@ -2481,12 +2458,12 @@ def drivers_import():
 
                 from datetime import date as _date
                 if not application_date:
-                    application_date = _date.today()
+                    application_date = _pk_date()
 
                 def _expiry_status(expiry_date):
                     if expiry_date is None:
                         return None
-                    return "Expired" if expiry_date < _date.today() else "Valid"
+                    return "Expired" if expiry_date < _pk_date() else "Valid"
 
                 d = Driver(
                     driver_id=did,
@@ -2716,7 +2693,7 @@ def driver_form(id=None):
             u = None
             form.populate_obj(driver)
             # Always recalculate status server-side — do not rely on JS hidden fields
-            _today = date.today()
+            _today = pk_date()
             driver.cnic_status = ('Valid' if driver.cnic_expiry_date >= _today else 'Expired') if driver.cnic_expiry_date else None
             driver.license_status = ('Valid' if driver.license_expiry_date >= _today else 'Expired') if driver.license_expiry_date else None
             if not id:
@@ -2962,7 +2939,7 @@ def employee_form(id=None):
                 try:
                     code_val = (form1.code.data or '').strip()
                     if not code_val:
-                        year = datetime.now().year
+                        year = pk_now().year
                         last_emp = Employee.query.order_by(Employee.id.desc()).first()
                         next_num = (last_emp.id + 1) if last_emp else 1
                         code_val = f"EMP-{year}-{next_num:04d}"
@@ -3170,7 +3147,7 @@ def employee_assignment_form():
                 # Create new employee from draft
                 code_val = (draft.get('code') or '').strip()
                 if not code_val:
-                    year = datetime.now().year
+                    year = pk_now().year
                     last_emp = Employee.query.order_by(Employee.id.desc()).first()
                     next_num = (last_emp.id + 1) if last_emp else 1
                     code_val = f"EMP-{year}-{next_num:04d}"
@@ -3403,7 +3380,7 @@ def employees_import():
                     continue
 
                 if not code_val:
-                    year = datetime.now().year
+                    year = pk_now().year
                     last_emp = Employee.query.order_by(Employee.id.desc()).first()
                     next_num = (last_emp.id + 1) if last_emp else 1
                     code_val = f"EMP-{year}-{next_num:04d}"
@@ -3480,7 +3457,7 @@ def login():
         try:
             log_id = session.get('login_log_id')
             if log_id:
-                LoginLog.query.filter_by(id=log_id).update({'logout_at': datetime.utcnow()})
+                LoginLog.query.filter_by(id=log_id).update({'logout_at': pk_now()})
                 db.session.commit()
         except Exception:
             db.session.rollback()
@@ -3672,7 +3649,7 @@ def logout():
     try:
         log_id = session.get('login_log_id')
         if log_id:
-            LoginLog.query.filter_by(id=log_id).update({'logout_at': datetime.utcnow()})
+            LoginLog.query.filter_by(id=log_id).update({'logout_at': pk_now()})
             db.session.commit()
     except Exception:
         db.session.rollback()
@@ -5659,7 +5636,7 @@ def desassign_vehicle_from_district(vehicle_id):
 @app.route('/company/report/<int:id>')
 def company_report(id):
     company = Company.query.get_or_404(id)
-    today = date.today().strftime('%d %b, %Y')
+    today = pk_date().strftime('%d %b, %Y')
     return render_template('company_report.html', company=company, current_date=today)
 
 
@@ -6556,7 +6533,7 @@ def assign_driver_to_vehicle_edit(driver_id):
         form.vehicle_id.data    = driver.vehicle_id
         form.driver_id.data     = driver.id
         form.shift.data         = driver.shift
-        form.assign_date.data   = driver.assign_date or date.today()
+        form.assign_date.data   = driver.assign_date or pk_date()
         form.remarks.data       = driver.assign_remarks or ''
 
     if form.validate_on_submit():
@@ -6778,7 +6755,7 @@ def project_transfers_export():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'project_transfers_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'project_transfers_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @app.route('/project-transfers/print')
@@ -7155,7 +7132,7 @@ def vehicle_transfers_export():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'vehicle_transfers_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'vehicle_transfers_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @app.route('/vehicle-transfers/print')
@@ -7620,7 +7597,7 @@ def driver_transfers_export():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'driver_transfers_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'driver_transfers_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @app.route('/driver-transfers/print')
@@ -7858,7 +7835,7 @@ def active_drivers_report_export():
         ])
     return generate_excel_template(
         headers, rows, required_columns=[],
-        filename=f'active_drivers_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        filename=f'active_drivers_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 
@@ -8046,7 +8023,7 @@ def driver_seat_available_export():
         ])
     return generate_excel_template(
         headers, rows, required_columns=[],
-        filename=f'driver_seat_available_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        filename=f'driver_seat_available_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 
@@ -8783,7 +8760,7 @@ def driver_job_left_export():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'driver_job_left_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'driver_job_left_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @app.route('/driver-job-left/print')
@@ -9506,7 +9483,7 @@ def driver_attendance_mark():
                 rec.check_out_date = view_date if check_out_t else None
                 rec.remarks = remarks
                 rec.project_id = project_id
-                rec.updated_at = datetime.utcnow()
+                rec.updated_at = pk_now()
                 if photo_path:
                     rec.check_in_photo_path = photo_path
             else:
@@ -9630,7 +9607,7 @@ def driver_attendance_bulk_off():
                 rec.check_out = None
                 rec.check_out_date = None
                 rec.remarks = (rec.remarks or '').rstrip() + (' | Bulk Off' if (rec.remarks or '').strip() else 'Bulk Off')
-                rec.updated_at = datetime.utcnow()
+                rec.updated_at = pk_now()
             else:
                 rec = DriverAttendance(
                     driver_id=d.id,
@@ -9983,7 +9960,7 @@ def driver_attendance_manual_checkin():
             existing.remarks = (existing.remarks or '').rstrip() + (' | Manual check-in' + (': ' + remarks_add if remarks_add else ''))
             if photo_path:
                 existing.check_in_photo_path = photo_path
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = pk_now()
         else:
             rec = DriverAttendance(
                 driver_id=driver_id,
@@ -10095,7 +10072,7 @@ def driver_attendance_manual_checkout():
         rec.remarks = (rec.remarks or '').rstrip() + (' | Manual check-out' + (': ' + remarks_add if remarks_add else ''))
         if photo_path:
             rec.check_out_photo_path = photo_path
-        rec.updated_at = datetime.utcnow()
+        rec.updated_at = pk_now()
         try:
             db.session.commit()
             flash('Manual check-out save ho gaya.', 'success')
@@ -10396,7 +10373,7 @@ def driver_attendance_checkin():
         if not driver:
             flash('Invalid driver.', 'danger')
             return redirect(url_for('driver_attendance_checkin'))
-        now = datetime.utcnow()
+        now = pk_now()
         now_time = _attendance_local_time()
         _ci_vehicle_id = request.form.get('vehicle_id', type=int)
         _ci_project_id = request.form.get('project_id', type=int)
@@ -10592,7 +10569,7 @@ def driver_attendance_checkout():
         if not has_gps_checkin and not has_gps_remarks:
             flash('Check-out (GPS + Camera) sirf tab allow hai jab driver ne Mark At Attendance (GPS + Camera) se Check-in kiya ho. Is driver ka check-in is tareeqe se nahi laga.', 'danger')
             return redirect(url_for('driver_attendance_checkout'))
-        now = datetime.utcnow()
+        now = pk_now()
         now_time = _attendance_local_time()
         _co_vehicle_id = request.form.get('vehicle_id', type=int)
         _co_project_id = request.form.get('project_id', type=int)
@@ -10771,7 +10748,7 @@ def driver_attendance_report():
             districts_query = districts_query.filter(District.id.in_(scope_districts))
         districts = districts_query.order_by(District.name).all()
         form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
-    today = date.today()
+    today = pk_date()
     form.month.data = form.month.data or today.month
     form.year.data = form.year.data or today.year
     report = []
@@ -10941,7 +10918,7 @@ def task_report_list():
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
     form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
     
-    today = date.today()
+    today = pk_date()
     from_date = today
     to_date = today
     district_id = request.args.get('district_id', type=int) or 0
@@ -11047,7 +11024,7 @@ def task_report_logbook_cover():
     form = TaskReportFilterForm()
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    today = date.today()
+    today = pk_date()
     from_date = today
     to_date = today
     district_id = request.args.get('district_id', type=int) or 0
@@ -11198,7 +11175,7 @@ def task_report_logbook_view_all():
 @app.route('/task-report/new', methods=['GET', 'POST'])
 def task_report_new():
     districts = District.query.order_by(District.name).all()
-    view_date = parse_date(request.args.get('date') or request.form.get('task_date')) or date.today()
+    view_date = parse_date(request.args.get('date') or request.form.get('task_date')) or pk_date()
     district_id = request.args.get('district_id', type=int) or request.form.get('district_id', type=int) or 0
     project_id = request.args.get('project_id', type=int) or request.form.get('project_id', type=int) or 0
 
@@ -11349,9 +11326,9 @@ def task_report_upload_emergency():
                 existing = EmergencyTaskRecord.query.filter_by(task_date=task_date, vehicle_no=v_no).first()
                 if existing:
                     existing.emg_tasks_count = emg_val
-                    existing.upload_date = date.today()
+                    existing.upload_date = pk_date()
                 else:
-                    db.session.add(EmergencyTaskRecord(task_date=task_date, vehicle_no=v_no, emg_tasks_count=emg_val, upload_date=date.today()))
+                    db.session.add(EmergencyTaskRecord(task_date=task_date, vehicle_no=v_no, emg_tasks_count=emg_val, upload_date=pk_date()))
                 count += 1
             db.session.commit()
             flash(f'EmergencyTaskReport uploaded: {count} record(s).', 'success')
@@ -11403,9 +11380,9 @@ def task_report_upload_mileage():
                 existing = VehicleMileageRecord.query.filter_by(task_date=task_date, vehicle_no=v_no).first()
                 if existing:
                     existing.tracker_km = km_val
-                    existing.upload_date = date.today()
+                    existing.upload_date = pk_date()
                 else:
-                    db.session.add(VehicleMileageRecord(task_date=task_date, vehicle_no=v_no, tracker_km=km_val, upload_date=date.today()))
+                    db.session.add(VehicleMileageRecord(task_date=task_date, vehicle_no=v_no, tracker_km=km_val, upload_date=pk_date()))
                 count += 1
             db.session.commit()
             flash(f'Vehicle Mileage report uploaded: {count} record(s).', 'success')
@@ -11447,9 +11424,9 @@ def _parse_emergency_excel(f, task_date):
         existing = EmergencyTaskRecord.query.filter_by(task_date=task_date, vehicle_no=v_no).first()
         if existing:
             existing.emg_tasks_count = emg_val
-            existing.upload_date = date.today()
+            existing.upload_date = pk_date()
         else:
-            db.session.add(EmergencyTaskRecord(task_date=task_date, vehicle_no=v_no, emg_tasks_count=emg_val, upload_date=date.today()))
+            db.session.add(EmergencyTaskRecord(task_date=task_date, vehicle_no=v_no, emg_tasks_count=emg_val, upload_date=pk_date()))
         count += 1
     return count
 
@@ -11485,9 +11462,9 @@ def _parse_mileage_excel(f, task_date):
         existing = VehicleMileageRecord.query.filter_by(task_date=task_date, vehicle_no=v_no).first()
         if existing:
             existing.tracker_km = km_val
-            existing.upload_date = date.today()
+            existing.upload_date = pk_date()
         else:
-            db.session.add(VehicleMileageRecord(task_date=task_date, vehicle_no=v_no, tracker_km=km_val, upload_date=date.today()))
+            db.session.add(VehicleMileageRecord(task_date=task_date, vehicle_no=v_no, tracker_km=km_val, upload_date=pk_date()))
         count += 1
     return count
 
@@ -11530,7 +11507,7 @@ def task_report_upload():
 def red_task_list():
     form = RedTaskFilterForm()
     form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
-    today = date.today()
+    today = pk_date()
     from_date = today
     to_date = today
     district_id = request.args.get('district_id', type=int) or 0
@@ -11656,7 +11633,7 @@ def red_task_edit(pk):
 def without_task_list():
     form = VehicleMoveWithoutTaskFilterForm()
     form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
-    today = date.today()
+    today = pk_date()
     from_date = today
     to_date = today
     district_id = request.args.get('district_id', type=int) or 0
@@ -11792,7 +11769,7 @@ def without_task_edit(pk):
 def penalty_record_list():
     form = PenaltyRecordFilterForm()
     form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
-    today = date.today()
+    today = pk_date()
     from_date = today
     to_date = today
     district_id = request.args.get('district_id', type=int) or 0
@@ -11853,7 +11830,7 @@ def _penalty_record_query(from_date, to_date, district_id=0, project_id=0):
 
 @app.route('/penalty-record/export')
 def penalty_record_export():
-    today = date.today()
+    today = pk_date()
     from_date = parse_date(request.args.get('from_date')) or today
     to_date = parse_date(request.args.get('to_date')) or today
     district_id = request.args.get('district_id', type=int) or 0
@@ -11880,7 +11857,7 @@ def penalty_record_export():
 
 @app.route('/penalty-record/print')
 def penalty_record_print():
-    today = date.today()
+    today = pk_date()
     from_date = parse_date(request.args.get('from_date')) or today
     to_date = parse_date(request.args.get('to_date')) or today
     district_id = request.args.get('district_id', type=int) or 0
@@ -12566,7 +12543,7 @@ def fuel_expense_list():
     
     form.project_id.choices = [(0, '-- Select Project --')]
     form.vehicle_id.choices = [(0, '-- All Vehicles --')]
-    today = date.today()
+    today = pk_date()
     from_date = request.args.get('from_date')
     to_date = request.args.get('to_date')
     district_id = request.args.get('district_id', type=int) or 0
@@ -12934,12 +12911,12 @@ def oil_expense_list():
     project_id = request.args.get('project_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
     if from_date or to_date or district_id or project_id or vehicle_id:
-        from_d = parse_date(from_date) if from_date else date.today().replace(day=1)
-        to_d = parse_date(to_date) if to_date else date.today()
+        from_d = parse_date(from_date) if from_date else pk_date().replace(day=1)
+        to_d = parse_date(to_date) if to_date else pk_date()
         if not from_d:
-            from_d = date.today().replace(day=1)
+            from_d = pk_date().replace(day=1)
         if not to_d:
-            to_d = date.today()
+            to_d = pk_date()
         query = OilExpense.query.filter(
             OilExpense.expense_date >= from_d,
             OilExpense.expense_date <= to_d
@@ -13134,7 +13111,7 @@ def oil_expense_form(pk=None):
                 else:
                     continue
                 base, ext = os.path.splitext(fn)
-                unique = f"{base}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}{ext}"
+                unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
                 path = os.path.join(subdir, unique)
                 f.save(path)
                 rel_path = os.path.join('oil_expense', str(rec.id), unique)
@@ -13227,12 +13204,12 @@ def maintenance_expense_list():
     project_id = request.args.get('project_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
     if from_date or to_date or district_id or project_id or vehicle_id:
-        from_d = parse_date(from_date) if from_date else date.today().replace(day=1)
-        to_d = parse_date(to_date) if to_date else date.today()
+        from_d = parse_date(from_date) if from_date else pk_date().replace(day=1)
+        to_d = parse_date(to_date) if to_date else pk_date()
         if not from_d:
-            from_d = date.today().replace(day=1)
+            from_d = pk_date().replace(day=1)
         if not to_d:
-            to_d = date.today()
+            to_d = pk_date()
         query = MaintenanceExpense.query.filter(
             MaintenanceExpense.expense_date >= from_d,
             MaintenanceExpense.expense_date <= to_d
@@ -13394,7 +13371,7 @@ def maintenance_expense_form(pk=None):
                 else:
                     continue
                 base, ext = os.path.splitext(fn)
-                unique = f"{base}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}{ext}"
+                unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
                 path = os.path.join(subdir, unique)
                 f.save(path)
                 rel_path = os.path.join('maintenance_expense', str(rec.id), unique)
@@ -13555,7 +13532,7 @@ def report_ai():
                 result_html = _render_ai_report_table(['District', 'Vehicles', 'Drivers'], rows)
             elif any(w in desc for w in ['expiry', 'license', 'cnic', 'expiring']):
                 from datetime import timedelta
-                today = date.today()
+                today = pk_date()
                 end = today + timedelta(days=60)
                 drivers = Driver.query.filter(Driver.status == 'Active').all()
                 expiring = []
@@ -13591,7 +13568,7 @@ def report_ai():
             elif any(w in desc for w in ['fuel', 'diesel', 'petrol']):
                 # Fuel expenses: last 30 days
                 from datetime import timedelta
-                today = date.today()
+                today = pk_date()
                 start = today - timedelta(days=30)
                 q = FuelExpense.query.filter(FuelExpense.fueling_date >= start).order_by(FuelExpense.fueling_date.desc())
                 expenses = q.limit(500).all()
@@ -13615,7 +13592,7 @@ def report_ai():
             elif any(w in desc for w in ['maintenance', 'repair', 'service']):
                 # Maintenance expenses: last 90 days
                 from datetime import timedelta
-                today = date.today()
+                today = pk_date()
                 start = today - timedelta(days=90)
                 q = MaintenanceExpense.query.filter(MaintenanceExpense.expense_date >= start).order_by(MaintenanceExpense.expense_date.desc())
                 recs = q.limit(500).all()
@@ -13636,7 +13613,7 @@ def report_ai():
             elif any(w in desc for w in ['penalty', 'penalties', 'fine', 'fines']):
                 # Penalty records: last 60 days
                 from datetime import timedelta
-                today = date.today()
+                today = pk_date()
                 start = today - timedelta(days=60)
                 q = PenaltyRecord.query.filter(PenaltyRecord.record_date >= start).order_by(PenaltyRecord.record_date.desc())
                 recs = q.limit(500).all()
@@ -13658,7 +13635,7 @@ def report_ai():
             elif any(w in desc for w in ['attendance', 'absent', 'present']):
                 # Driver attendance summary: last 30 days
                 from datetime import timedelta
-                today = date.today()
+                today = pk_date()
                 start = today - timedelta(days=30)
                 q = DriverAttendance.query.filter(DriverAttendance.attendance_date >= start).order_by(DriverAttendance.attendance_date.desc())
                 recs = q.limit(500).all()
@@ -14044,7 +14021,7 @@ def report_driver_profile(driver_id):
     came_from = _from
     return render_template('report_driver_profile.html', driver=driver,
                            job_history=job_history, total_actions=total_actions,
-                           last_action=last_action, today=_date.today(),
+                           last_action=last_action, today=_pk_date(),
                            ref=ref, came_from=came_from, hide_edit=hide_edit)
 
 
@@ -14060,7 +14037,7 @@ def report_vehicle_profile(vehicle_id):
     ).join(PhysicalBook, BookAssignment.book_id == PhysicalBook.id).order_by(
         BookAssignment.issue_date.desc()
     ).all()
-    return render_template('report_vehicle_profile.html', vehicle=vehicle, transfers=transfers, driver_history=driver_history, book_assignments=book_assignments, generated_at=datetime.now().strftime('%d %b %Y, %I:%M %p'))
+    return render_template('report_vehicle_profile.html', vehicle=vehicle, transfers=transfers, driver_history=driver_history, book_assignments=book_assignments, generated_at=pk_now().strftime('%d %b %Y, %I:%M %p'))
 
 
 @app.route('/reports/expiry')
@@ -14071,7 +14048,7 @@ def report_expiry():
     user_id = session.get('user_id')
     user_context = get_user_context(user_id) if user_id else {}
     
-    today = date.today()
+    today = pk_date()
     # days=None or 0 → current (already expired) only; days>0 → expired + next N days
     days = request.args.get('days', type=int)
     if days is None:
@@ -14403,7 +14380,7 @@ def _build_health_data():
         'last_backup_ts':   _last_backup_ts.get('ts'),
         'checks':           {},
         'errors':           [],
-        'fetched_at':       datetime.utcnow().strftime('%d-%m-%Y %H:%M UTC'),
+        'fetched_at':       pk_now().strftime('%d-%m-%Y %H:%M UTC'),
     }
 
     render_key = os.environ.get('RENDER_API_KEY', '').strip()
@@ -14474,7 +14451,7 @@ def _build_health_data():
 
     # 4. Active Sessions (distinct users in last 30 min)
     try:
-        cutoff = datetime.utcnow() - timedelta(minutes=30)
+        cutoff = pk_now() - timedelta(minutes=30)
         active = db.session.query(ActivityLog.user_id).filter(
             ActivityLog.created_at >= cutoff).distinct().count()
         result['active_sessions'] = active
@@ -14538,7 +14515,7 @@ def system_health():
 @app.cli.command('fix-driver-status')
 def fix_driver_status():
     """One-time backfill: calculate cnic_status and license_status for all drivers where it is blank."""
-    today = date.today()
+    today = pk_date()
     drivers = Driver.query.all()
     updated = 0
     for d in drivers:
