@@ -1065,6 +1065,61 @@
         @media (max-width: 767.98px) {
             .mobile-card-list { display: block; }
             .table-to-hide { display: none !important; }
+
+            /* Auto card-ify ALL data tables on mobile */
+            .table-responsive { overflow-x: visible !important; }
+            .main-content table.table {
+                display: block !important; width: 100% !important; border: none !important;
+            }
+            .main-content table.table thead {
+                display: none !important;
+            }
+            .main-content table.table tbody {
+                display: block !important;
+            }
+            .main-content table.table tbody tr {
+                display: block !important;
+                background: #fff;
+                border-radius: 14px;
+                box-shadow: 0 1px 8px rgba(0,0,0,0.07);
+                margin-bottom: 10px;
+                padding: 12px 14px;
+                border: 1px solid #f1f5f9;
+                border-left: 4px solid #3b82f6;
+            }
+            .main-content table.table tbody td {
+                display: flex !important;
+                justify-content: space-between;
+                align-items: flex-start;
+                padding: 5px 0 !important;
+                border: none !important;
+                border-bottom: 1px solid #f8fafc !important;
+                font-size: 0.82rem;
+                text-align: right;
+                gap: 8px;
+            }
+            .main-content table.table tbody td:last-child {
+                border-bottom: none !important;
+            }
+            .main-content table.table tbody td::before {
+                content: attr(data-label);
+                font-weight: 700;
+                color: #64748b;
+                font-size: 0.68rem;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                text-align: left;
+                flex-shrink: 0;
+                min-width: 85px;
+                padding-top: 2px;
+            }
+            .main-content table.table .sr-badge,
+            .main-content table.table .sr-num,
+            .main-content table.table .vs-sr-num,
+            .main-content table.table .ex-sr-num,
+            .main-content table.table .ps-sr-num {
+                display: none !important;
+            }
         }
         .mobile-data-card {
             background: #fff; border-radius: 16px; padding: 16px 16px 12px; margin-bottom: 12px;
@@ -5732,5 +5787,33 @@ window._dtPrintCustomize = function(title, color, icon) {
 };
 </script>
 
+<script>
+(function(){
+  function injectDataLabels(tbl){
+    var headers = [];
+    tbl.querySelectorAll('thead th').forEach(function(th){
+      headers.push(th.textContent.trim().replace(/\s+/g,' '));
+    });
+    if(!headers.length) return;
+    tbl.querySelectorAll('tbody tr').forEach(function(tr){
+      tr.querySelectorAll('td').forEach(function(td, i){
+        if(!td.getAttribute('data-label') && headers[i]){
+          td.setAttribute('data-label', headers[i]);
+        }
+      });
+    });
+  }
+  function runAll(){
+    document.querySelectorAll('.main-content table.table').forEach(injectDataLabels);
+  }
+  runAll();
+  if(window.jQuery){
+    $(document).on('draw.dt', function(e){
+      var tbl = $(e.target).closest('table.table')[0];
+      if(tbl) injectDataLabels(tbl);
+    });
+  }
+})();
+</script>
 </body>
 </html>

@@ -214,42 +214,7 @@
     line-height: 1;
   }
 
-  /* ─── Mobile: card-style rows, no horizontal scroll ─── */
-  @media (max-width: 767.98px) {
-    .expiry-table-wrap { overflow-x: hidden !important; }
-    #expiryTable { display: block; width: 100% !important; }
-    #expiryTable thead { display: none; }
-    #expiryTable tbody { display: block; }
-    #expiryTable tbody tr {
-      display: block;
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 1px 6px rgba(0,0,0,0.09);
-      margin-bottom: 10px;
-      padding: 10px 14px;
-      border: 1px solid #e8edf2;
-    }
-    #expiryTable tbody td {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 5px 0;
-      border: none !important;
-      font-size: 0.82rem;
-      border-bottom: 1px solid #f1f5f9 !important;
-    }
-    #expiryTable tbody td:last-child { border-bottom: none !important; }
-    #expiryTable tbody td::before {
-      content: attr(data-label);
-      font-weight: 600;
-      color: #64748b;
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      flex-shrink: 0;
-      margin-right: 8px;
-    }
-  }
+  /* Mobile card layout handled by base.html global CSS */
 </style>
 
 <div class="container-fluid ex-page">

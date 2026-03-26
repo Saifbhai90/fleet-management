@@ -283,14 +283,14 @@
         <tbody>
           {% for v in vehicles %}
           <tr>
-            <td class="text-center"><span class="vs-sr-num sr-num">{{ loop.index }}</span></td>
-            <td>{{ v.project.name if v.project else '-' }}</td>
-            <td>{{ v.district.name if v.district else '-' }}</td>
-            <td><span class="vs-vehicle-no">{{ v.vehicle_no }}</span></td>
-            <td>{{ v.model }}</td>
-            <td>{{ v.vehicle_type or '-' }}</td>
-            <td>{{ v.parking_station.name if v.parking_station else '-' }}</td>
-            <td>{{ v.active_date|ddmmyyyy if v.active_date else '-' }}</td>
+            <td class="text-center" data-label="#"><span class="vs-sr-num sr-num">{{ loop.index }}</span></td>
+            <td data-label="Project">{{ v.project.name if v.project else '-' }}</td>
+            <td data-label="District">{{ v.district.name if v.district else '-' }}</td>
+            <td data-label="Vehicle No"><span class="vs-vehicle-no">{{ v.vehicle_no }}</span></td>
+            <td data-label="Model">{{ v.model }}</td>
+            <td data-label="Type">{{ v.vehicle_type or '-' }}</td>
+            <td data-label="Parking">{{ v.parking_station.name if v.parking_station else '-' }}</td>
+            <td data-label="Active Date">{{ v.active_date|ddmmyyyy if v.active_date else '-' }}</td>
           </tr>
           {% else %}
           <tr>

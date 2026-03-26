@@ -141,14 +141,14 @@
                 <tbody>
                     {% for row in data %}
                     <tr>
-                        <td class="text-center"><span class="ps-sr-num">{{ loop.index }}</span></td>
-                        <td><span class="ps-company">{{ row.project.company.name if row.project.company else '-' }}</span></td>
-                        <td><div class="ps-project-name">{{ row.project.name }}</div></td>
-                        <td class="text-center"><span class="ps-count-pill ps-pill-blue">{{ row.district_count }}</span></td>
-                        <td class="text-center"><span class="ps-count-pill ps-pill-green">{{ row.vehicle_count }}</span></td>
-                        <td class="text-center"><span class="ps-count-pill ps-pill-pink">{{ row.parking_count }}</span></td>
-                        <td class="text-center"><span class="ps-count-pill ps-pill-orange">{{ row.driver_count }}</span></td>
-                        <td>{{ row.project.start_date|ddmmyyyy if row.project.start_date else '-' }}</td>
+                        <td class="text-center" data-label="#"><span class="ps-sr-num">{{ loop.index }}</span></td>
+                        <td data-label="Company"><span class="ps-company">{{ row.project.company.name if row.project.company else '-' }}</span></td>
+                        <td data-label="Project"><div class="ps-project-name">{{ row.project.name }}</div></td>
+                        <td class="text-center" data-label="Districts"><span class="ps-count-pill ps-pill-blue">{{ row.district_count }}</span></td>
+                        <td class="text-center" data-label="Vehicles"><span class="ps-count-pill ps-pill-green">{{ row.vehicle_count }}</span></td>
+                        <td class="text-center" data-label="Parking"><span class="ps-count-pill ps-pill-pink">{{ row.parking_count }}</span></td>
+                        <td class="text-center" data-label="Drivers"><span class="ps-count-pill ps-pill-orange">{{ row.driver_count }}</span></td>
+                        <td data-label="Start Date">{{ row.project.start_date|ddmmyyyy if row.project.start_date else '-' }}</td>
                     </tr>
                     {% else %}
                     <tr>

@@ -113,6 +113,10 @@
             <div class="kpi-val">{{ total_vehicles }}</div>
             <div class="kpi-label"><i class="bi bi-truck-front me-1"></i>Vehicles</div>
         </div>
+        <div class="ds-kpi-card kpi-parking">
+            <div class="kpi-val">{{ total_parking }}</div>
+            <div class="kpi-label"><i class="bi bi-p-circle me-1"></i>Parking</div>
+        </div>
         <div class="ds-kpi-card kpi-drivers">
             <div class="kpi-val">{{ total_drivers }}</div>
             <div class="kpi-label"><i class="bi bi-people me-1"></i>Total Drivers</div>
@@ -120,10 +124,6 @@
         <div class="ds-kpi-card kpi-active">
             <div class="kpi-val">{{ total_active }}</div>
             <div class="kpi-label"><i class="bi bi-person-check me-1"></i>Active Drivers</div>
-        </div>
-        <div class="ds-kpi-card kpi-parking">
-            <div class="kpi-val">{{ total_parking }}</div>
-            <div class="kpi-label"><i class="bi bi-p-circle me-1"></i>Parking Stations</div>
         </div>
         <div class="ds-kpi-card" style="border-color:#0891b2;">
             <div class="kpi-val" style="color:{% if total_vacant > 0 %}#0891b2{% else %}#94a3b8{% endif %};">{{ total_vacant }}</div>
@@ -190,26 +190,26 @@
                         <th>Province</th>
                         <th class="text-center">Projects</th>
                         <th class="text-center">Vehicles</th>
+                        <th class="text-center">Parking</th>
                         <th class="text-center">Total Drivers</th>
                         <th class="text-center">Active Drivers</th>
-                        <th class="text-center">Parking</th>
                         <th class="text-center">Vacant Seats</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in data %}
                     <tr>
-                        <td class="text-center"><span class="sr-num">{{ loop.index }}</span></td>
-                        <td>
+                        <td class="text-center" data-label="#"><span class="sr-num">{{ loop.index }}</span></td>
+                        <td data-label="District">
                             <div class="district-name">{{ row.district.name }}</div>
                         </td>
-                        <td><span class="province-tag">{{ row.district.province or '-' }}</span></td>
-                        <td class="text-center"><span class="count-pill pill-blue">{{ row.project_count }}</span></td>
-                        <td class="text-center"><span class="count-pill pill-green">{{ row.vehicle_count }}</span></td>
-                        <td class="text-center"><span class="count-pill pill-orange">{{ row.driver_count }}</span></td>
-                        <td class="text-center"><span class="count-pill pill-violet">{{ row.active_driver_count }}</span></td>
-                        <td class="text-center"><span class="count-pill pill-pink">{{ row.parking_count }}</span></td>
-                        <td class="text-center">
+                        <td data-label="Province"><span class="province-tag">{{ row.district.province or '-' }}</span></td>
+                        <td class="text-center" data-label="Projects"><span class="count-pill pill-blue">{{ row.project_count }}</span></td>
+                        <td class="text-center" data-label="Vehicles"><span class="count-pill pill-green">{{ row.vehicle_count }}</span></td>
+                        <td class="text-center" data-label="Parking"><span class="count-pill pill-pink">{{ row.parking_count }}</span></td>
+                        <td class="text-center" data-label="Total Drivers"><span class="count-pill pill-orange">{{ row.driver_count }}</span></td>
+                        <td class="text-center" data-label="Active Drivers"><span class="count-pill pill-violet">{{ row.active_driver_count }}</span></td>
+                        <td class="text-center" data-label="Vacant Seats">
                             {% if row.vacant_seats > 0 %}
                             <span class="count-pill" style="background:#cffafe;color:#0891b2;">{{ row.vacant_seats }}</span>
                             {% else %}

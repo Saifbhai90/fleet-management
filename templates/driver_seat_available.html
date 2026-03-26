@@ -30,9 +30,10 @@
     .total-badge { background: #fff3e0; color: #e65100; font-size: 0.82rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 20px; }
     .total-vacant-badge { background: #fbe9e7; color: #bf360c; font-size: 0.82rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 20px; }
 
-    .stat-card { background: #fff; border-radius: 8px; padding: 0.65rem 0.9rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); text-align: center; }
-    .stat-card .stat-val { font-size: 1.5rem; font-weight: 800; }
-    .stat-card .stat-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #78909c; font-weight: 600; }
+    .stat-card { background: #fff; border-radius: 10px; padding: 0.5rem 0.7rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); display: flex; align-items: center; gap: 0.55rem; }
+    .stat-card .stat-icon { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+    .stat-card .stat-val { font-size: 1.15rem; font-weight: 800; line-height: 1.1; }
+    .stat-card .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.4px; color: #78909c; font-weight: 600; }
 
     div.dataTables_wrapper div.dataTables_filter input { border: 1px solid #ddd; border-radius: 5px; padding: 0.32rem 0.65rem; font-size: 0.84rem; margin-left: 6px; }
     div.dataTables_wrapper div.dataTables_filter input:focus { border-color: #e65100; box-shadow: 0 0 0 2px rgba(230,81,0,0.12); outline: none; }
@@ -83,26 +84,38 @@
     <div class="row g-2 mb-3">
         <div class="col-6 col-md-3">
             <div class="stat-card">
-                <div class="stat-val" style="color:#e65100;">{{ total }}</div>
-                <div class="stat-label">Vehicles with Vacant Seats</div>
+                <div class="stat-icon" style="background:#fff3e0;color:#e65100;"><i class="bi bi-truck-front-fill"></i></div>
+                <div>
+                    <div class="stat-val" style="color:#e65100;">{{ total }}</div>
+                    <div class="stat-label">Vehicles with Vacant</div>
+                </div>
             </div>
         </div>
         <div class="col-6 col-md-3">
             <div class="stat-card">
-                <div class="stat-val" style="color:#bf360c;">{{ total_vacant }}</div>
-                <div class="stat-label">Total Vacant Seats</div>
+                <div class="stat-icon" style="background:#fbe9e7;color:#bf360c;"><i class="bi bi-person-dash-fill"></i></div>
+                <div>
+                    <div class="stat-val" style="color:#bf360c;">{{ total_vacant }}</div>
+                    <div class="stat-label">Total Vacant Seats</div>
+                </div>
             </div>
         </div>
         <div class="col-6 col-md-3">
             <div class="stat-card">
-                <div class="stat-val" style="color:#2e7d32;">{{ results | map(attribute=4) | sum }}</div>
-                <div class="stat-label">Currently Assigned</div>
+                <div class="stat-icon" style="background:#e8f5e9;color:#2e7d32;"><i class="bi bi-person-check-fill"></i></div>
+                <div>
+                    <div class="stat-val" style="color:#2e7d32;">{{ results | map(attribute=4) | sum }}</div>
+                    <div class="stat-label">Currently Assigned</div>
+                </div>
             </div>
         </div>
         <div class="col-6 col-md-3">
             <div class="stat-card">
-                <div class="stat-val" style="color:#1565c0;">{{ results | map(attribute=3) | sum }}</div>
-                <div class="stat-label">Total Capacity</div>
+                <div class="stat-icon" style="background:#e3f2fd;color:#1565c0;"><i class="bi bi-speedometer2"></i></div>
+                <div>
+                    <div class="stat-val" style="color:#1565c0;">{{ results | map(attribute=3) | sum }}</div>
+                    <div class="stat-label">Total Capacity</div>
+                </div>
             </div>
         </div>
     </div>
@@ -192,10 +205,10 @@
                 <tbody>
                     {% for vehicle, project, district, cap, asgn, vacant in results %}
                     <tr>
-                        <td class="text-center"><span class="sr-badge">{{ loop.index }}</span></td>
-                        <td>{{ project.name if project else '-' }}</td>
-                        <td>{{ district.name if district else '-' }}</td>
-                        <td>
+                        <td class="text-center" data-label="#"><span class="sr-badge">{{ loop.index }}</span></td>
+                        <td data-label="Project">{{ project.name if project else '-' }}</td>
+                        <td data-label="District">{{ district.name if district else '-' }}</td>
+                        <td data-label="Vehicle">
                             <div class="veh-no">{{ vehicle.vehicle_no }}</div>
                             <div class="veh-meta">
                                 {% if vehicle.model %}{{ vehicle.model }}{% endif %}
@@ -203,10 +216,10 @@
                                 {% if vehicle.vehicle_type %}{{ vehicle.vehicle_type }}{% endif %}
                             </div>
                         </td>
-                        <td class="text-center"><span class="badge-cap">{{ cap }}</span></td>
-                        <td class="text-center"><span class="badge-assigned">{{ asgn }}</span></td>
-                        <td class="text-center"><span class="badge-vacant">{{ vacant }}</span></td>
-                        <td class="text-center">
+                        <td class="text-center" data-label="Capacity"><span class="badge-cap">{{ cap }}</span></td>
+                        <td class="text-center" data-label="Assigned"><span class="badge-assigned">{{ asgn }}</span></td>
+                        <td class="text-center" data-label="Vacant"><span class="badge-vacant">{{ vacant }}</span></td>
+                        <td class="text-center" data-label="Action">
                             <a href="{{ url_for('report_vehicle_profile', vehicle_id=vehicle.id) }}"
                                class="btn btn-sm" style="background:#fff3e0;color:#e65100;border:1px solid #ffcc80;font-size:0.72rem;padding:0.2rem 0.55rem;">
                                <i class="bi bi-eye-fill me-1"></i>View</a>

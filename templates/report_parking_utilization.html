@@ -349,18 +349,18 @@
         <tbody>
           {% for v in vehicles %}
           <tr>
-            <td class="ps-3 text-center"><span class="sr-num">{{ loop.index }}</span></td>
-            <td>{{ v.project.name if v.project else '-' }}</td>
-            <td>{{ v.district.name if v.district else '-' }}</td>
-            <td><span class="pu-vehicle-no text-primary">{{ v.vehicle_no }}</span></td>
-            <td>
+            <td class="ps-3 text-center" data-label="#"><span class="sr-num">{{ loop.index }}</span></td>
+            <td data-label="Project">{{ v.project.name if v.project else '-' }}</td>
+            <td data-label="District">{{ v.district.name if v.district else '-' }}</td>
+            <td data-label="Vehicle No"><span class="pu-vehicle-no text-primary">{{ v.vehicle_no }}</span></td>
+            <td data-label="Parking Station">
               {% if v.parking_station %}
               <i class="bi bi-geo-alt-fill pu-parking-geo me-1" aria-hidden="true"></i>{{ v.parking_station.name }}
               {% else %}-{% endif %}
             </td>
-            <td>{{ v.vehicle_type or '-' }}</td>
-            <td>{{ v.model or '-' }}</td>
-            <td>
+            <td data-label="Vehicle Type">{{ v.vehicle_type or '-' }}</td>
+            <td data-label="Model">{{ v.model or '-' }}</td>
+            <td data-label="Parking Date">
               {% if v.parking_assign_date %}
               {{ v.parking_assign_date.strftime('%d-%m-%Y') }}
               {% else %}-{% endif %}
