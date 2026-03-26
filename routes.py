@@ -13677,34 +13677,130 @@ def report_project_summary():
 @app.route('/reports/district-summary')
 def report_district_summary():
     from sqlalchemy import func
-    # B-07: Replace N+1 loop (3 queries × N districts) with 3 aggregate queries total
-    vehicle_counts = dict(
-        db.session.query(Vehicle.district_id, func.count(Vehicle.id))
-        .filter(Vehicle.district_id.isnot(None))
-        .group_by(Vehicle.district_id).all()
-    )
-    driver_counts = dict(
-        db.session.query(Driver.district_id, func.count(Driver.id))
-        .filter(Driver.district_id.isnot(None))
-        .group_by(Driver.district_id).all()
-    )
-    project_counts = dict(
-        db.session.query(
-            project_district.c.district_id,
-            func.count(project_district.c.project_id)
-        ).group_by(project_district.c.district_id).all()
-    )
-    districts = District.query.order_by(District.name).all()
-    data = [
-        {
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects  = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles  = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id  = request.args.get('project_id', type=int) or 0
+
+    districts_q = District.query.order_by(District.name)
+    if not is_master_or_admin and allowed_districts:
+        districts_q = districts_q.filter(District.id.in_(list(allowed_districts)))
+
+    if district_id:
+        districts_q = districts_q.filter(District.id == district_id)
+
+    if project_id:
+        district_ids_for_project = [
+            r[0] for r in db.session.query(project_district.c.district_id)
+            .filter(project_district.c.project_id == project_id).all()
+        ]
+        if district_ids_for_project:
+            districts_q = districts_q.filter(District.id.in_(district_ids_for_project))
+        else:
+            districts_q = districts_q.filter(District.id == -1)
+
+    districts = districts_q.all()
+    district_ids = [d.id for d in districts]
+
+    vehicle_counts = {}
+    driver_counts = {}
+    active_driver_counts = {}
+    parking_counts = {}
+    project_counts = {}
+
+    if district_ids:
+        v_q = db.session.query(Vehicle.district_id, func.count(Vehicle.id)).filter(
+            Vehicle.district_id.in_(district_ids)
+        )
+        if not is_master_or_admin and allowed_vehicles:
+            v_q = v_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+        elif not is_master_or_admin and allowed_projects:
+            v_q = v_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        vehicle_counts = dict(v_q.group_by(Vehicle.district_id).all())
+
+        d_q = db.session.query(Driver.district_id, func.count(Driver.id)).filter(
+            Driver.district_id.in_(district_ids)
+        )
+        if not is_master_or_admin and allowed_projects:
+            d_q = d_q.filter(Driver.project_id.in_(list(allowed_projects)))
+        driver_counts = dict(d_q.group_by(Driver.district_id).all())
+
+        ad_q = db.session.query(Driver.district_id, func.count(Driver.id)).filter(
+            Driver.district_id.in_(district_ids),
+            Driver.status == 'Active',
+            Driver.vehicle_id.isnot(None)
+        )
+        if not is_master_or_admin and allowed_projects:
+            ad_q = ad_q.filter(Driver.project_id.in_(list(allowed_projects)))
+        active_driver_counts = dict(ad_q.group_by(Driver.district_id).all())
+
+        pk_sub = db.session.query(
+            Vehicle.district_id,
+            func.count(func.distinct(Vehicle.parking_station_id))
+        ).filter(
+            Vehicle.district_id.in_(district_ids),
+            Vehicle.parking_station_id.isnot(None)
+        )
+        if not is_master_or_admin and allowed_vehicles:
+            pk_sub = pk_sub.filter(Vehicle.id.in_(list(allowed_vehicles)))
+        elif not is_master_or_admin and allowed_projects:
+            pk_sub = pk_sub.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        parking_counts = dict(pk_sub.group_by(Vehicle.district_id).all())
+
+        project_counts = dict(
+            db.session.query(
+                project_district.c.district_id,
+                func.count(project_district.c.project_id)
+            ).filter(
+                project_district.c.district_id.in_(district_ids)
+            ).group_by(project_district.c.district_id).all()
+        )
+
+    total_vehicles = sum(vehicle_counts.values())
+    total_drivers  = sum(driver_counts.values())
+    total_active   = sum(active_driver_counts.values())
+    total_parking  = sum(parking_counts.values())
+
+    data = []
+    for d in districts:
+        data.append({
             'district': d,
             'vehicle_count': vehicle_counts.get(d.id, 0),
             'driver_count': driver_counts.get(d.id, 0),
+            'active_driver_count': active_driver_counts.get(d.id, 0),
+            'parking_count': parking_counts.get(d.id, 0),
             'project_count': project_counts.get(d.id, 0),
-        }
-        for d in districts
-    ]
-    return render_template('report_district_summary.html', data=data)
+        })
+
+    dist_choices_q = District.query.order_by(District.name)
+    if not is_master_or_admin and allowed_districts:
+        dist_choices_q = dist_choices_q.filter(District.id.in_(list(allowed_districts)))
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_choices_q.all()]
+
+    proj_choices_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        proj_choices_q = proj_choices_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_choices_q.all()]
+
+    return render_template('report_district_summary.html',
+        data=data,
+        district_id=district_id,
+        project_id=project_id,
+        district_choices=district_choices,
+        project_choices=project_choices,
+        total_districts=len(districts),
+        total_vehicles=total_vehicles,
+        total_drivers=total_drivers,
+        total_active=total_active,
+        total_parking=total_parking,
+    )
 
 
 @app.route('/reports/vehicle-summary')
