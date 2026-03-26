@@ -1,100 +1,172 @@
 {% extends "base.html" %}
 {% block title %}Project Summary Report{% endblock %}
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h2 class="mb-0"><i class="bi bi-briefcase me-2 text-success"></i>Project Summary Report</h2>
-    <div id="projectSummaryExportButtons" class="d-flex gap-2"></div>
-  </div>
-
-  <div class="card shadow-sm border-0 rounded-3 mb-4">
-    <div class="card-body">
-      <form method="get" action="{{ url_for('report_project_summary') }}" class="row g-2 align-items-end">
-        <div class="col-md-3 col-lg-2">
-          <label class="form-label small text-muted mb-1">From Active Date</label>
-          <input type="text" name="from_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ from_date or '' }}">
-        </div>
-        <div class="col-md-3 col-lg-2">
-          <label class="form-label small text-muted mb-1">To Active Date</label>
-          <input type="text" name="to_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ to_date or '' }}">
-        </div>
-        <div class="col-md-3 col-lg-2">
-          <label class="form-label small text-muted mb-1">Project</label>
-          <select name="project_id" class="form-select form-select-sm search-select" data-placeholder="Search project...">
-            {% for val, label in project_choices %}
-              <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3 col-lg-2">
-          <button type="submit" class="btn btn-success btn-sm mt-3 mt-md-0 w-100">
-            <i class="bi bi-search me-1"></i> Show
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Search + Per-page toolbar -->
-  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-    <div class="d-flex align-items-center gap-2">
-      <label class="small text-muted mb-0">Show</label>
-      <select id="projLenSelect" class="form-select form-select-sm" style="width:auto;">
-        <option value="10">10</option>
-        <option value="25">25</option>
-        <option value="50" selected>50</option>
-        <option value="100">100</option>
-        <option value="-1">All</option>
-      </select>
-      <label class="small text-muted mb-0">entries</label>
-    </div>
-    <div style="min-width:200px;">
-      <input type="text" id="projSearchInput" class="form-control form-control-sm" placeholder="🔍 Search..." autocomplete="off">
-    </div>
-  </div>
-
-  <div class="card shadow border-0">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0" id="projectSummaryTable">
-        <thead class="table-light">
-          <tr>
-            <th class="ps-4">#</th>
-            <th>Company</th>
-            <th>Project</th>
-            <th class="text-center">Districts</th>
-            <th class="text-center">Vehicles</th>
-            <th class="text-center">Parking</th>
-            <th class="text-center">Drivers</th>
-            <th>Start Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in data %}
-          <tr>
-            <td class="ps-4">{{ loop.index }}</td>
-            <td>{{ row.project.company.name if row.project.company else '-' }}</td>
-            <td class="fw-medium">{{ row.project.name }}</td>
-            <td class="text-center">{{ row.district_count }}</td>
-            <td class="text-center">{{ row.vehicle_count }}</td>
-            <td class="text-center">{{ row.parking_count }}</td>
-            <td class="text-center">{{ row.driver_count }}</td>
-            <td>{{ row.project.start_date|ddmmyyyy if row.project.start_date else '-' }}</td>
-          </tr>
-          {% else %}
-          <tr>
-            <td class="text-center py-4 text-muted">No projects.</td>
-            <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- DataTables + Buttons -->
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+<style>
+.ps-header {
+    background: linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%);
+    color: #fff; border-radius: 14px; padding: 1.2rem 1.5rem; margin-bottom: 1.2rem;
+    position: relative; overflow: hidden;
+}
+.ps-header::before {
+    content: ''; position: absolute; top: -30px; right: -30px;
+    width: 140px; height: 140px; background: rgba(255,255,255,0.06); border-radius: 50%;
+}
+.ps-header::after {
+    content: ''; position: absolute; bottom: -50px; right: 40px;
+    width: 180px; height: 180px; background: rgba(52,211,153,0.12); border-radius: 50%;
+}
+.ps-header h2 { margin: 0; font-size: 1.3rem; font-weight: 700; position: relative; z-index: 1; }
+.ps-header .subtitle { font-size: 0.82rem; opacity: 0.88; margin-top: 0.15rem; position: relative; z-index: 1; }
+
+.ps-filter-card {
+    background: #fff; border-radius: 10px; padding: 1rem 1.2rem;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07); margin-bottom: 1rem;
+}
+.ps-filter-card label { font-size: 0.76rem; font-weight: 600; color: #475569; margin-bottom: 0.2rem; }
+
+.ps-table-wrap {
+    background: #fff; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    overflow: hidden; padding: 0;
+}
+#projectSummaryTable { font-size: 0.84rem; margin-bottom: 0; }
+#projectSummaryTable thead th {
+    background: linear-gradient(180deg, #ecfdf5, #d1fae5);
+    color: #14532d; font-weight: 700; font-size: 0.76rem; text-transform: uppercase;
+    letter-spacing: 0.04em; border-bottom: 2px solid #a7f3d0; white-space: nowrap; padding: 0.7rem 0.8rem;
+}
+#projectSummaryTable tbody tr { transition: background 0.12s; }
+#projectSummaryTable tbody tr:hover { background: #f0fdf4; }
+#projectSummaryTable td { padding: 0.6rem 0.8rem; vertical-align: middle; }
+.ps-project-name { font-weight: 700; color: #047857; font-size: 0.88rem; }
+.ps-company { font-size: 0.84rem; color: #334155; font-weight: 400; }
+.ps-sr-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 8px; background: #f1f5f9;
+    color: #475569; font-weight: 700; font-size: 0.76rem;
+}
+.ps-count-pill {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 32px; padding: 3px 10px; border-radius: 20px;
+    font-weight: 700; font-size: 0.78rem;
+}
+.ps-pill-blue   { background: #dbeafe; color: #1e40af; }
+.ps-pill-green  { background: #dcfce7; color: #15803d; }
+.ps-pill-orange { background: #ffedd5; color: #c2410c; }
+.ps-pill-pink   { background: #fce7f3; color: #be185d; }
+
+.ps-toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.8rem 1rem; border-bottom: 1px solid #f1f5f9; flex-wrap: wrap; gap: 8px;
+}
+.ps-toolbar .search-box {
+    border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 6px 12px;
+    font-size: 0.82rem; width: 220px; transition: border-color 0.2s;
+}
+.ps-toolbar .search-box:focus { border-color: #059669; outline: none; box-shadow: 0 0 0 3px rgba(5,150,105,0.12); }
+
+@media (max-width: 767px) {
+    .ps-toolbar .search-box { width: 160px; }
+}
+</style>
+
+<div class="container-fluid py-2 px-3 px-md-4">
+
+    <div class="ps-header">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="me-auto">
+                <h2><i class="bi bi-folder-fill me-2"></i>Project Summary Report</h2>
+                <div class="subtitle"><i class="bi bi-bar-chart-fill me-1"></i>Overview of projects with vehicle, driver &amp; district statistics</div>
+            </div>
+            <div id="projectSummaryExportButtons" class="d-flex gap-2" style="position:relative;z-index:1;"></div>
+        </div>
+    </div>
+
+    <div class="ps-filter-card">
+        <form method="get" action="{{ url_for('report_project_summary') }}" class="row g-2 align-items-end">
+            <div class="col-md-3 col-lg-2">
+                <label class="form-label mb-1">From Active Date</label>
+                <input type="text" name="from_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ from_date or '' }}">
+            </div>
+            <div class="col-md-3 col-lg-2">
+                <label class="form-label mb-1">To Active Date</label>
+                <input type="text" name="to_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ to_date or '' }}">
+            </div>
+            <div class="col-md-3 col-lg-2">
+                <label class="form-label mb-1">Project</label>
+                <select name="project_id" class="form-select form-select-sm search-select" data-placeholder="Search project...">
+                    {% for val, label in project_choices %}
+                    <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 col-lg-2">
+                <button type="submit" class="btn btn-sm w-100 mt-3 mt-md-0" style="background:#059669;color:#fff;font-weight:600;border-radius:8px;">
+                    <i class="bi bi-search me-1"></i>Show
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="ps-table-wrap">
+        <div class="ps-toolbar">
+            <div class="d-flex align-items-center gap-2">
+                <label class="small text-muted mb-0" style="font-size:0.76rem;">Show</label>
+                <select id="projLenSelect" class="form-select form-select-sm" style="width:auto;font-size:0.82rem;border-radius:6px;">
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                    <option value="-1">All</option>
+                </select>
+                <label class="small text-muted mb-0" style="font-size:0.76rem;">entries</label>
+            </div>
+            <input type="text" id="projSearchInput" class="search-box" placeholder="Search projects..." autocomplete="off">
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="projectSummaryTable">
+                <thead>
+                    <tr>
+                        <th style="width:50px" class="text-center">#</th>
+                        <th>Company</th>
+                        <th>Project</th>
+                        <th class="text-center">Districts</th>
+                        <th class="text-center">Vehicles</th>
+                        <th class="text-center">Parking</th>
+                        <th class="text-center">Drivers</th>
+                        <th>Start Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data %}
+                    <tr>
+                        <td class="text-center"><span class="ps-sr-num">{{ loop.index }}</span></td>
+                        <td><span class="ps-company">{{ row.project.company.name if row.project.company else '-' }}</span></td>
+                        <td><div class="ps-project-name">{{ row.project.name }}</div></td>
+                        <td class="text-center"><span class="ps-count-pill ps-pill-blue">{{ row.district_count }}</span></td>
+                        <td class="text-center"><span class="ps-count-pill ps-pill-green">{{ row.vehicle_count }}</span></td>
+                        <td class="text-center"><span class="ps-count-pill ps-pill-pink">{{ row.parking_count }}</span></td>
+                        <td class="text-center"><span class="ps-count-pill ps-pill-orange">{{ row.driver_count }}</span></td>
+                        <td>{{ row.project.start_date|ddmmyyyy if row.project.start_date else '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4">
+                            <div style="color:#94a3b8;">
+                                <i class="bi bi-folder2-open" style="font-size:2rem;opacity:0.3;"></i>
+                                <div style="font-size:0.9rem;margin-top:6px;">No projects.</div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
@@ -102,7 +174,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
-
 <script>
   $(document).ready(function () {
     var table = $('#projectSummaryTable').DataTable({

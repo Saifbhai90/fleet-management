@@ -15,6 +15,205 @@
     border: none !important;
   }
 
+  /* ─── Page shell ─── */
+  .ex-page {
+    --ex-red: #dc2626;
+    --ex-red-dark: #7f1d1d;
+    --ex-red-soft: #fff5f5;
+    --ex-border: #e8edf2;
+  }
+
+  .ex-header {
+    background: linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%);
+    color: #fff;
+    border-radius: 16px;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 10px 40px rgba(127, 29, 29, 0.25);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .ex-header-icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+  .ex-header-text h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.35rem 0;
+    line-height: 1.25;
+    color: #fff;
+  }
+  .ex-header-text p {
+    margin: 0;
+    font-size: 0.9rem;
+    opacity: 0.92;
+    max-width: 36rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.95);
+  }
+
+  /* ─── Filter card ─── */
+  .ex-filter-card {
+    border: 1px solid var(--ex-border);
+    border-radius: 14px;
+    box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+    background: #fff;
+    margin-bottom: 1rem;
+    overflow: hidden;
+  }
+  .ex-filter-card-body {
+    padding: 1.25rem 1.35rem;
+  }
+  .ex-filter-label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    margin-bottom: 0.35rem;
+  }
+  .ex-filter-card .form-control,
+  .ex-filter-card .form-select {
+    border-radius: 10px;
+    border-color: #e2e8f0;
+  }
+  .ex-filter-card .form-control:focus,
+  .ex-filter-card .form-select:focus {
+    border-color: #f87171;
+    box-shadow: 0 0 0 0.2rem rgba(220, 38, 38, 0.12);
+  }
+  .ex-filter-submit {
+    border-radius: 10px;
+    font-weight: 600;
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+  }
+
+  .ex-info-text {
+    font-size: 0.9rem;
+    color: #64748b;
+    margin-bottom: 1.25rem;
+    padding: 0.65rem 1rem;
+    background: #f8fafc;
+    border-radius: 10px;
+    border-left: 4px solid #dc2626;
+  }
+  .ex-info-text strong {
+    color: #334155;
+  }
+
+  /* ─── Table shell & toolbar ─── */
+  .ex-table-shell {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid var(--ex-border);
+    box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+  }
+  .ex-dt-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    padding: 0.85rem 1.15rem;
+    background: linear-gradient(180deg, #fafafa 0%, #fff 100%);
+    border-bottom: 1px solid var(--ex-border);
+  }
+  .ex-dt-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1 1 200px;
+    min-width: 0;
+    max-width: 320px;
+  }
+  .ex-dt-search-wrap .bi {
+    color: #94a3b8;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .ex-dt-search-input {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.875rem;
+    width: 100%;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .ex-dt-search-input:focus {
+    outline: none;
+    border-color: #f87171;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+  }
+  .ex-dt-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* ─── Table ─── */
+  .ex-table-wrap-inner {
+    border-radius: 0 0 14px 14px;
+  }
+  #expiryTable {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  #expiryTable thead th {
+    background: linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%);
+    color: #fff !important;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: none;
+    padding-top: 0.85rem;
+    padding-bottom: 0.85rem;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  #expiryTable thead th:first-child {
+    border-radius: 0;
+  }
+  #expiryTable tbody td {
+    border-color: #f1f5f9;
+    font-size: 0.875rem;
+    vertical-align: middle;
+  }
+  #expiryTable tbody tr:hover td {
+    background-color: #fff5f5 !important;
+  }
+  .ex-sr-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0 0.4rem;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #fef2f2 0%, #fee2e2 100%);
+    border: 1px solid #fecaca;
+    color: #991b1b;
+    font-weight: 700;
+    font-size: 0.8125rem;
+    line-height: 1;
+  }
+
   /* ─── Mobile: card-style rows, no horizontal scroll ─── */
   @media (max-width: 767.98px) {
     .expiry-table-wrap { overflow-x: hidden !important; }
@@ -53,21 +252,28 @@
   }
 </style>
 
-<div class="container-fluid">
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h2 class="mb-0"><i class="bi bi-calendar-x me-2 text-danger"></i>License / CNIC Expiry Report</h2>
-    <div id="expiryExportButtons" class="d-flex gap-2"></div>
-  </div>
+<div class="container-fluid ex-page">
+  <header class="ex-header">
+    <div class="d-flex gap-3 align-items-start">
+      <div class="ex-header-icon" aria-hidden="true">
+        <i class="bi bi-calendar-x-fill"></i>
+      </div>
+      <div class="ex-header-text">
+        <h1>License / CNIC Expiry Report</h1>
+        <p>Track expired and expiring driver documents</p>
+      </div>
+    </div>
+  </header>
 
-  <div class="card shadow-sm border-0 rounded-3 mb-4">
-    <div class="card-body">
+  <div class="ex-filter-card">
+    <div class="ex-filter-card-body">
       <form action="{{ url_for('report_expiry') }}" method="get" class="row g-2 align-items-end">
         <div class="col-md-2 col-lg-1">
-          <label class="form-label small text-muted mb-1">Days</label>
+          <label class="ex-filter-label">Days</label>
           <input type="number" name="days" class="form-control form-control-sm" min="0" placeholder="0 / 30" value="{{ days if days is not none else '' }}">
         </div>
         <div class="col-md-2 col-lg-2">
-          <label class="form-label small text-muted mb-1">Type</label>
+          <label class="ex-filter-label">Type</label>
           <select name="only" class="form-select form-select-sm">
             <option value="all" {% if only == 'all' %}selected{% endif %}>License + CNIC</option>
             <option value="license" {% if only == 'license' %}selected{% endif %}>License only</option>
@@ -75,7 +281,7 @@
           </select>
         </div>
         <div class="col-md-2 col-lg-2">
-          <label class="form-label small text-muted mb-1">Project</label>
+          <label class="ex-filter-label">Project</label>
           {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
           <select id="exProjectSelect" name="project_id" class="form-select form-select-sm" {% if disable_project %}disabled{% endif %}>
             {% for val, label in project_choices %}
@@ -84,7 +290,7 @@
           </select>
         </div>
         <div class="col-md-2 col-lg-2">
-          <label class="form-label small text-muted mb-1">District</label>
+          <label class="ex-filter-label">District</label>
           {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
           <select id="exDistrictSelect" name="district_id" class="form-select form-select-sm" {% if disable_district %}disabled{% endif %}>
             {% for val, label in district_choices %}
@@ -93,7 +299,7 @@
           </select>
         </div>
         <div class="col-md-2 col-lg-2">
-          <label class="form-label small text-muted mb-1">Vehicle</label>
+          <label class="ex-filter-label">Vehicle</label>
           <select id="exVehicleSelect" name="vehicle_id" class="form-select form-select-sm">
             {% for val, label in vehicle_choices %}
               <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
@@ -101,7 +307,7 @@
           </select>
         </div>
         <div class="col-md-2 col-lg-2">
-          <label class="form-label small text-muted mb-1">Shift</label>
+          <label class="ex-filter-label">Shift</label>
           <select name="shift" class="form-select form-select-sm">
             {% for val, label in shift_choices %}
               <option value="{{ val }}" {% if shift == val %}selected{% endif %}>{{ label }}</option>
@@ -109,7 +315,7 @@
           </select>
         </div>
         <div class="col-md-2 col-lg-1">
-          <button type="submit" class="btn btn-danger btn-sm w-100 mt-3 mt-md-0">
+          <button type="submit" class="btn btn-danger btn-sm w-100 mt-3 mt-md-0 ex-filter-submit">
             <i class="bi bi-search me-1"></i>Show
           </button>
         </div>
@@ -117,14 +323,23 @@
     </div>
   </div>
   {% if days == 0 %}
-  <p class="text-muted">Showing drivers with license or CNIC <strong>already expired</strong> (current expiry).</p>
+  <p class="ex-info-text">Showing drivers with license or CNIC <strong>already expired</strong> (current expiry).</p>
   {% else %}
-  <p class="text-muted">Showing drivers with license or CNIC <strong>already expired</strong> or expiring in the next <strong>{{ days }}</strong> days.</p>
+  <p class="ex-info-text">Showing drivers with license or CNIC <strong>already expired</strong> or expiring in the next <strong>{{ days }}</strong> days.</p>
   {% endif %}
-  <div class="card shadow border-0">
-    <div class="table-responsive expiry-table-wrap">
+
+  <div class="ex-table-shell">
+    <div class="ex-dt-toolbar">
+      <div class="ex-dt-search-wrap">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <label for="exExpiryTableSearch" class="visually-hidden">Search table</label>
+        <input type="search" id="exExpiryTableSearch" class="ex-dt-search-input" placeholder="Search table…" autocomplete="off">
+      </div>
+      <div id="expiryExportButtons" class="ex-dt-toolbar-actions"></div>
+    </div>
+    <div class="table-responsive expiry-table-wrap ex-table-wrap-inner">
       <table class="table table-hover align-middle mb-0" id="expiryTable">
-        <thead class="table-light">
+        <thead>
           <tr>
             <th class="ps-4">#</th>
             <th>Project</th>
@@ -142,7 +357,7 @@
           {% for row in expiring %}
           {% set d = row.driver %}
           <tr>
-            <td class="ps-4" data-label="#">{{ loop.index }}</td>
+            <td class="ps-4" data-label="#"><span class="ex-sr-num sr-num">{{ loop.index }}</span></td>
             <td data-label="Project">{{ d.project.name if d.project else '-' }}</td>
             <td data-label="District">{{ d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else '-') }}</td>
             <td data-label="Vehicle">
@@ -212,7 +427,7 @@
     if (window.innerWidth < 768) return;
     var table = $('#expiryTable').DataTable({
       pageLength: 50,
-      searching: false,
+      searching: true,
       order: [[3, 'asc']], // sort by district/project-ish columns
       dom: 'rt<"d-flex justify-content-between align-items-center p-2"ip>',
       buttons: [
@@ -229,6 +444,10 @@
           customize: window._dtPrintCustomize('License / CNIC Expiry Report', '#dc2626', 'calendar-x')
         }
       ]
+    });
+
+    $('#exExpiryTableSearch').on('keyup search input', function () {
+      table.search(this.value).draw();
     });
 
     table.buttons().container().appendTo('#expiryExportButtons');

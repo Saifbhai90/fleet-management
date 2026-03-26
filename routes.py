@@ -13763,13 +13763,28 @@ def report_district_summary():
             ).group_by(project_district.c.district_id).all()
         )
 
+        cap_q = db.session.query(
+            Vehicle.district_id,
+            func.coalesce(func.sum(Vehicle.driver_capacity), 0)
+        ).filter(Vehicle.district_id.in_(district_ids))
+        if not is_master_or_admin and allowed_vehicles:
+            cap_q = cap_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+        elif not is_master_or_admin and allowed_projects:
+            cap_q = cap_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        capacity_counts = dict(cap_q.group_by(Vehicle.district_id).all())
+
     total_vehicles = sum(vehicle_counts.values())
     total_drivers  = sum(driver_counts.values())
     total_active   = sum(active_driver_counts.values())
     total_parking  = sum(parking_counts.values())
+    total_vacant   = 0
 
     data = []
     for d in districts:
+        cap = int(capacity_counts.get(d.id, 0) or 0)
+        assigned = active_driver_counts.get(d.id, 0)
+        vacant = max(0, cap - assigned)
+        total_vacant += vacant
         data.append({
             'district': d,
             'vehicle_count': vehicle_counts.get(d.id, 0),
@@ -13777,6 +13792,7 @@ def report_district_summary():
             'active_driver_count': active_driver_counts.get(d.id, 0),
             'parking_count': parking_counts.get(d.id, 0),
             'project_count': project_counts.get(d.id, 0),
+            'vacant_seats': vacant,
         })
 
     dist_choices_q = District.query.order_by(District.name)
@@ -13800,6 +13816,7 @@ def report_district_summary():
         total_drivers=total_drivers,
         total_active=total_active,
         total_parking=total_parking,
+        total_vacant=total_vacant,
     )
 
 

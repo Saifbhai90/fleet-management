@@ -1,80 +1,276 @@
 {% extends "base.html" %}
 {% block title %}Vehicle Summary Report{% endblock %}
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h2 class="mb-0"><i class="bi bi-truck me-2 text-info"></i>Vehicle Summary Report</h2>
-    <div id="vehicleSummaryExportButtons" class="d-flex gap-2"></div>
-  </div>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+<style>
+.vs-header {
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 45%, #4c1d95 100%);
+  color: #fff;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(76, 29, 149, 0.25);
+}
+.vs-header::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -20px;
+  width: 160px;
+  height: 160px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 50%;
+}
+.vs-header::after {
+  content: '';
+  position: absolute;
+  bottom: -60px;
+  left: 15%;
+  width: 200px;
+  height: 200px;
+  background: rgba(167, 139, 250, 0.12);
+  border-radius: 50%;
+}
+.vs-header h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  position: relative;
+  z-index: 1;
+  letter-spacing: -0.02em;
+}
+.vs-header .vs-subtitle {
+  font-size: 0.84rem;
+  opacity: 0.88;
+  margin-top: 0.2rem;
+  position: relative;
+  z-index: 1;
+  font-weight: 500;
+}
+.vs-header .vs-header-actions {
+  position: relative;
+  z-index: 1;
+}
+.vs-header .vs-header-actions .dt-buttons .btn {
+  border-radius: 8px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
 
-  <div class="card shadow-sm border-0 rounded-3 mb-4">
-    <div class="card-body">
-      <form method="get" action="{{ url_for('report_vehicle_summary') }}" class="row g-2 align-items-end">
-        <div class="col-md-3 col-lg-2">
-          <label class="form-label small text-muted mb-1">From Active Date</label>
-          <input type="text" name="from_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ from_date or '' }}">
-        </div>
-        <div class="col-md-3 col-lg-2">
-          <label class="form-label small text-muted mb-1">To Active Date</label>
-          <input type="text" name="to_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ to_date or '' }}">
-        </div>
-        <div class="col-md-3 col-lg-2">
-          <label class="form-label small text-muted mb-1">Project</label>
-          <select id="vsProjectSelect" name="project_id" class="form-select form-select-sm search-select" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
-            {% for val, label in project_choices %}
-              <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3 col-lg-2">
-          <label class="form-label small text-muted mb-1">District</label>
-          <select id="vsDistrictSelect" name="district_id" class="form-select form-select-sm search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
-            {% for val, label in district_choices %}
-              <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3 col-lg-2">
-          <label class="form-label small text-muted mb-1">Vehicle</label>
-          <select id="vsVehicleSelect" name="vehicle_id" class="form-select form-select-sm search-select" data-placeholder="Search vehicle...">
-            {% for val, label in vehicle_choices %}
-              <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3 col-lg-2">
-          <button type="submit" class="btn btn-success btn-sm mt-3 mt-md-0 w-100">
-            <i class="bi bi-search me-1"></i> Show
-          </button>
-        </div>
-      </form>
+.vs-filter-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+  border: 1px solid #f1f5f9;
+  margin-bottom: 1.25rem;
+}
+.vs-filter-card .vs-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.25rem;
+  display: block;
+}
+.vs-filter-card .btn-vs-submit {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+}
+.vs-filter-card .btn-vs-submit:hover {
+  background: linear-gradient(135deg, #6d28d9, #5b21b6);
+  color: #fff;
+}
+
+.vs-table-wrap {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  border: 1px solid #f1f5f9;
+}
+.vs-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fafafa;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.vs-toolbar .vs-toolbar-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0;
+}
+.vs-toolbar .vs-search {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 12px 6px 36px;
+  font-size: 0.82rem;
+  width: min(260px, 100%);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/%3E%3C/svg%3E") 12px center no-repeat;
+}
+.vs-toolbar .vs-search:focus {
+  border-color: #7c3aed;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+.vs-toolbar .vs-len-select {
+  width: auto;
+  font-size: 0.82rem;
+  border-radius: 8px;
+  border-color: #e2e8f0;
+}
+
+#vehicleSummaryTable {
+  font-size: 0.86rem;
+  margin-bottom: 0;
+}
+#vehicleSummaryTable thead th {
+  background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+  color: #334155;
+  font-weight: 700;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+  padding: 0.72rem 0.85rem;
+  vertical-align: middle;
+}
+#vehicleSummaryTable tbody tr {
+  transition: background 0.12s ease;
+}
+#vehicleSummaryTable tbody tr:hover {
+  background: #f5f3ff;
+}
+#vehicleSummaryTable td {
+  padding: 0.62rem 0.85rem;
+  vertical-align: middle;
+  color: #334155;
+}
+#vehicleSummaryTable .vs-vehicle-no {
+  font-weight: 700;
+  color: #7c3aed;
+  font-size: 0.9rem;
+}
+.vs-table-wrap .sr-num,
+.vs-sr-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f1f5f9, #e2e8f0);
+  color: #475569;
+  font-weight: 700;
+  font-size: 0.76rem;
+}
+
+#vehicleSummaryTable_wrapper .dataTables_info,
+#vehicleSummaryTable_wrapper .dataTables_paginate {
+  padding: 0.65rem 1rem;
+  font-size: 0.82rem;
+}
+#vehicleSummaryTable_wrapper .page-link {
+  border-radius: 6px;
+  margin: 0 2px;
+}
+@media (max-width: 767px) {
+  .vs-toolbar .vs-search {
+    width: 100%;
+  }
+}
+</style>
+
+<div class="container-fluid py-2 px-3 px-md-4">
+
+  <div class="vs-header">
+    <div class="d-flex flex-wrap align-items-center gap-3">
+      <div class="me-auto">
+        <h2><i class="bi bi-truck-front-fill me-2"></i>Vehicle Summary Report</h2>
+        <div class="vs-subtitle">Detailed vehicle deployment across projects &amp; districts</div>
+      </div>
+      <div id="vehicleSummaryExportButtons" class="d-flex flex-wrap gap-2 vs-header-actions"></div>
     </div>
   </div>
 
-  <!-- Search + Per-page toolbar -->
-  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-    <div class="d-flex align-items-center gap-2">
-      <label class="small text-muted mb-0">Show</label>
-      <select id="vehLenSelect" class="form-select form-select-sm" style="width:auto;">
-        <option value="10">10</option>
-        <option value="25">25</option>
-        <option value="50" selected>50</option>
-        <option value="100">100</option>
-        <option value="-1">All</option>
-      </select>
-      <label class="small text-muted mb-0">entries</label>
-    </div>
-    <div style="min-width:200px;">
-      <input type="text" id="vehSearchInput" class="form-control form-control-sm" placeholder="🔍 Search..." autocomplete="off">
-    </div>
+  <div class="vs-filter-card">
+    <form method="get" action="{{ url_for('report_vehicle_summary') }}" class="row g-3 align-items-end">
+      <div class="col-6 col-md-4 col-lg-2">
+        <label class="vs-label" for="vs-from-date">From Active Date</label>
+        <input id="vs-from-date" type="text" name="from_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ from_date or '' }}">
+      </div>
+      <div class="col-6 col-md-4 col-lg-2">
+        <label class="vs-label" for="vs-to-date">To Active Date</label>
+        <input id="vs-to-date" type="text" name="to_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ to_date or '' }}">
+      </div>
+      <div class="col-6 col-md-4 col-lg-2">
+        <label class="vs-label" for="vsProjectSelect">Project</label>
+        {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
+        <select id="vsProjectSelect" name="project_id" class="form-select form-select-sm search-select" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
+          {% for val, label in project_choices %}
+            <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-4 col-lg-2">
+        <label class="vs-label" for="vsDistrictSelect">District</label>
+        {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
+        <select id="vsDistrictSelect" name="district_id" class="form-select form-select-sm search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
+          {% for val, label in district_choices %}
+            <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-4 col-lg-2">
+        <label class="vs-label" for="vsVehicleSelect">Vehicle</label>
+        <select id="vsVehicleSelect" name="vehicle_id" class="form-select form-select-sm search-select" data-placeholder="Search vehicle...">
+          {% for val, label in vehicle_choices %}
+            <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-4 col-lg-2">
+        <button type="submit" class="btn btn-vs-submit btn-sm w-100 mt-0">
+          <i class="bi bi-search me-1"></i>Show
+        </button>
+      </div>
+    </form>
   </div>
 
-  <div class="card shadow border-0">
+  <div class="vs-table-wrap">
+    <div class="vs-toolbar">
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <label class="vs-toolbar-label mb-0" for="vehLenSelect">Show</label>
+        <select id="vehLenSelect" class="form-select form-select-sm vs-len-select">
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="-1">All</option>
+        </select>
+        <label class="vs-toolbar-label mb-0">entries</label>
+      </div>
+      <input type="text" id="vehSearchInput" class="vs-search" placeholder="Search table..." autocomplete="off">
+    </div>
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0" id="vehicleSummaryTable">
-        <thead class="table-light">
+        <thead>
           <tr>
-            <th class="ps-4">#</th>
+            <th class="text-center" style="width:52px;">#</th>
             <th>Project</th>
             <th>District</th>
             <th>Vehicle No</th>
@@ -87,10 +283,10 @@
         <tbody>
           {% for v in vehicles %}
           <tr>
-            <td class="ps-4">{{ loop.index }}</td>
+            <td class="text-center"><span class="vs-sr-num sr-num">{{ loop.index }}</span></td>
             <td>{{ v.project.name if v.project else '-' }}</td>
             <td>{{ v.district.name if v.district else '-' }}</td>
-            <td class="fw-medium">{{ v.vehicle_no }}</td>
+            <td><span class="vs-vehicle-no">{{ v.vehicle_no }}</span></td>
             <td>{{ v.model }}</td>
             <td>{{ v.vehicle_type or '-' }}</td>
             <td>{{ v.parking_station.name if v.parking_station else '-' }}</td>
@@ -98,8 +294,7 @@
           </tr>
           {% else %}
           <tr>
-            <td class="text-center py-4 text-muted">No vehicles.</td>
-            <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+            <td colspan="8" class="text-center py-4 text-muted">No vehicles.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -108,9 +303,6 @@
   </div>
 </div>
 
-<!-- DataTables + Buttons for Excel / Print -->
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
