@@ -3858,42 +3858,53 @@
         /**
          * Download a Blob reliably — works in Capacitor WebView + all browsers.
          * Desktop: normal <a download> click.
-         * Mobile/WebView: POST base64 to /download-blob which returns Content-Disposition: attachment.
+         * Mobile/WebView: Web Share API (native share sheet) → fallback to <a download>.
          */
         function downloadBlob(blob, filename) {
+            var fname = filename || 'download';
+
             if (!_isNative) {
                 var url = URL.createObjectURL(blob);
                 var a = document.createElement('a');
-                a.href = url; a.download = filename || 'download';
+                a.href = url; a.download = fname;
                 document.body.appendChild(a); a.click();
-                setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+                setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
                 return Promise.resolve();
             }
-            return new Promise(function(resolve) {
-                var reader = new FileReader();
-                reader.onloadend = function() {
-                    var b64 = reader.result.split(',')[1] || '';
-                    var form = document.createElement('form');
-                    form.method = 'POST'; form.action = '/download-blob';
-                    form.style.display = 'none';
-                    var fields = { data: b64, filename: filename || 'download', mime: blob.type || 'application/octet-stream' };
-                    Object.keys(fields).forEach(function(k) {
-                        var inp = document.createElement('input');
-                        inp.type = 'hidden'; inp.name = k; inp.value = fields[k];
-                        form.appendChild(inp);
-                    });
-                    var csrf = document.querySelector('input[name="csrf_token"]');
-                    if (csrf) {
-                        var ci = document.createElement('input');
-                        ci.type = 'hidden'; ci.name = 'csrf_token'; ci.value = csrf.value;
-                        form.appendChild(ci);
+
+            /* Mobile: use Web Share API (available in Android WebView 76+) */
+            if (navigator.share && navigator.canShare) {
+                var file = new File([blob], fname, { type: blob.type || 'application/octet-stream' });
+                var shareData = { files: [file] };
+                try {
+                    if (navigator.canShare(shareData)) {
+                        return navigator.share(shareData).then(function() {
+                            _toast('Shared: ' + fname);
+                        }).catch(function(err) {
+                            if (err.name !== 'AbortError') _fallbackDownload(blob, fname);
+                        });
                     }
-                    document.body.appendChild(form);
-                    form.submit();
-                    setTimeout(function() { document.body.removeChild(form); resolve(); }, 500);
-                };
-                reader.readAsDataURL(blob);
-            });
+                } catch(e) { /* canShare threw — fall through */ }
+            }
+
+            return _fallbackDownload(blob, fname);
+        }
+
+        function _fallbackDownload(blob, fname) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = fname; a.style.display = 'none';
+            document.body.appendChild(a); a.click();
+            setTimeout(function() { document.body.removeChild(a); }, 300);
+            setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+            _toast('Downloading: ' + fname);
+            return Promise.resolve();
+        }
+
+        function _toast(msg) {
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
+                window.Capacitor.Plugins.Toast.show({ text: msg, duration: 'short', position: 'bottom' });
+            }
         }
 
         /**
