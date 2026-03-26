@@ -137,9 +137,17 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" id="cameraModalClose"></button>
       </div>
       <div class="modal-body text-center p-4">
-        <video id="cameraVideo" autoplay playsinline class="w-100 rounded-3" style="max-height: 360px; background: #111;"></video>
+        <div id="cameraLoading" class="py-4">
+          <div class="spinner-border text-primary mb-2" role="status" style="width: 2.5rem; height: 2.5rem;"></div>
+          <p class="mb-0 text-muted small">Camera loading...</p>
+        </div>
+        <video id="cameraVideo" autoplay playsinline class="w-100 rounded-3 d-none" style="max-height: 360px; background: #111;"></video>
         <canvas id="cameraCanvas" class="d-none"></canvas>
-        <button type="button" id="btnCapture" class="btn btn-primary btn-lg mt-3 rounded-pill px-4">
+        <div id="cameraError" class="alert alert-danger d-none mt-3 mb-0">
+          <i class="bi bi-exclamation-triangle me-2"></i><span id="cameraErrorText"></span>
+          <button type="button" class="btn btn-outline-danger btn-sm ms-2" id="btnRetryCamera"><i class="bi bi-arrow-clockwise me-1"></i>Retry</button>
+        </div>
+        <button type="button" id="btnCapture" class="btn btn-primary btn-lg mt-3 rounded-pill px-4 d-none">
           <i class="bi bi-camera me-2"></i>Capture
         </button>
       </div>
@@ -204,6 +212,11 @@
   var currentPosition = null;
   var parkingCoords = null;
   var stream = null;
+  var cameraModalInstance = null;
+  var cameraLoading = document.getElementById('cameraLoading');
+  var cameraError = document.getElementById('cameraError');
+  var cameraErrorText = document.getElementById('cameraErrorText');
+  var btnRetryCamera = document.getElementById('btnRetryCamera');
   var vehiclesData = {{ pre_vehicles_data | tojson }};
   var allVehiclesByProject = {{ all_vehicles_by_project | tojson }};
   var serverAutoShift = {{ auto_shift | tojson }};
@@ -474,7 +487,60 @@
 
   function stopCamera() {
     if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
+    cameraVideo.srcObject = null;
   }
+
+  function resetCameraUI() {
+    cameraLoading.classList.remove('d-none');
+    cameraVideo.classList.add('d-none');
+    btnCapture.classList.add('d-none');
+    cameraError.classList.add('d-none');
+  }
+
+  function showCameraError(msg) {
+    cameraLoading.classList.add('d-none');
+    cameraVideo.classList.add('d-none');
+    btnCapture.classList.add('d-none');
+    cameraError.classList.remove('d-none');
+    cameraErrorText.textContent = msg;
+  }
+
+  function startCamera() {
+    stopCamera();
+    resetCameraUI();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showCameraError('Camera not supported in this browser.');
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+      .then(function(s) {
+        stream = s;
+        cameraVideo.srcObject = s;
+        cameraVideo.onloadedmetadata = function() {
+          cameraVideo.play().then(function() {
+            cameraLoading.classList.add('d-none');
+            cameraVideo.classList.remove('d-none');
+            btnCapture.classList.remove('d-none');
+          }).catch(function() {
+            cameraLoading.classList.add('d-none');
+            cameraVideo.classList.remove('d-none');
+            btnCapture.classList.remove('d-none');
+          });
+        };
+        setTimeout(function() {
+          if (cameraVideo.classList.contains('d-none') && !cameraError.classList.contains('d-none') === false) {
+            cameraLoading.classList.add('d-none');
+            cameraVideo.classList.remove('d-none');
+            btnCapture.classList.remove('d-none');
+          }
+        }, 3000);
+      })
+      .catch(function(err) {
+        showCameraError('Camera failed: ' + (err.message || 'Permission denied'));
+      });
+  }
+
+  btnRetryCamera.addEventListener('click', function() { startCamera(); });
 
   btnMarkAttendance.addEventListener('click', function() {
     if (!currentPosition || !parkingCoords) return;
@@ -483,21 +549,35 @@
       alert('Parking coordinates set nahi. Admin se parking location set karwain.');
       return;
     }
-    var modal = new bootstrap.Modal(cameraModal);
-    modal.show();
-    cameraVideo.srcObject = null;
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
-        .then(function(s) { stream = s; cameraVideo.srcObject = s; })
-        .catch(function(err) { alert('Camera failed: ' + (err.message || 'Permission denied')); modal.hide(); });
-    } else { alert('Camera not supported.'); modal.hide(); }
+    if (!cameraModalInstance) {
+      cameraModalInstance = new bootstrap.Modal(cameraModal);
+    }
+    cameraModalInstance.show();
+    startCamera();
   });
 
   cameraModal.addEventListener('hidden.bs.modal', function() { stopCamera(); });
-  document.getElementById('cameraModalClose').addEventListener('click', function() { stopCamera(); });
+  document.getElementById('cameraModalClose').addEventListener('click', function() {
+    stopCamera();
+    if (cameraModalInstance) cameraModalInstance.hide();
+  });
 
   btnCapture.addEventListener('click', function() {
-    if (!cameraVideo.srcObject || cameraVideo.readyState < 2) return;
+    if (!cameraVideo.srcObject) return;
+    if (cameraVideo.readyState < 2) {
+      btnCapture.disabled = true;
+      btnCapture.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Wait...';
+      var waitCheck = setInterval(function() {
+        if (cameraVideo.readyState >= 2) {
+          clearInterval(waitCheck);
+          btnCapture.disabled = false;
+          btnCapture.innerHTML = '<i class="bi bi-camera me-2"></i>Capture';
+          btnCapture.click();
+        }
+      }, 200);
+      setTimeout(function() { clearInterval(waitCheck); btnCapture.disabled = false; btnCapture.innerHTML = '<i class="bi bi-camera me-2"></i>Capture'; }, 5000);
+      return;
+    }
     var w = cameraVideo.videoWidth;
     var h = cameraVideo.videoHeight;
     cameraCanvas.width = w;
@@ -536,7 +616,7 @@
     }
     var dataUrl = cameraCanvas.toDataURL('image/jpeg', 0.9);
     stopCamera();
-    bootstrap.Modal.getInstance(cameraModal).hide();
+    if (cameraModalInstance) cameraModalInstance.hide();
     formDriverId.value = driverSelect.value;
     formParkingId.value = parkingId.value;
     formLat.value = currentPosition.coords.latitude;
