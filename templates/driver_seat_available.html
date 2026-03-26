@@ -237,6 +237,7 @@
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <script>
 $(document).ready(function () {
+    if (window.innerWidth < 768) return;
     var table = $('#seatTable').DataTable({
         dom: "<'row'<'col-12'tr>><'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>",
         pageLength: 25,

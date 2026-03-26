@@ -395,6 +395,7 @@
 
 <script>
   $(document).ready(function () {
+    if (window.innerWidth < 768) return;
     var table = $('#parkingTable').DataTable({
       pageLength: 50,
       searching: true,

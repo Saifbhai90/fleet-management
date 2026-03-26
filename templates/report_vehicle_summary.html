@@ -313,6 +313,7 @@
 
 <script>
   $(document).ready(function () {
+    if (window.innerWidth < 768) return;
     var table = $('#vehicleSummaryTable').DataTable({
       pageLength: 50,
       searching: true,

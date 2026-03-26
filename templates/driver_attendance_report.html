@@ -316,6 +316,7 @@ if (reportSearch) {
 
 // DataTables Excel / Print for monthly summary
 $(document).ready(function () {
+  if (window.innerWidth < 768) return;
   var $t = $('#reportTable');
   if ($t.length) {
     var dt = $t.DataTable({
