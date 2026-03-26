@@ -89,7 +89,6 @@ self.addEventListener('fetch', function(event) {
         }).catch(function() {
             return caches.match(request).then(function(cached) {
                 if (cached) return cached;
-                // Offline fallback for navigation
                 if (request.destination === 'document') {
                     return new Response(
                         '<html><body style="font-family:sans-serif;text-align:center;padding:40px;">' +
@@ -100,6 +99,7 @@ self.addEventListener('fetch', function(event) {
                         { headers: { 'Content-Type': 'text/html' } }
                     );
                 }
+                return new Response('', { status: 503, statusText: 'Offline' });
             });
         })
     );
