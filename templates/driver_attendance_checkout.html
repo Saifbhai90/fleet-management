@@ -609,6 +609,10 @@
 
   btnRetryCamera.addEventListener('click', function() { startCamera(); });
 
+  if (cameraModal.parentElement !== document.body) {
+    document.body.appendChild(cameraModal);
+  }
+
   btnMarkCheckout.addEventListener('click', function() {
     if (!currentPosition || !parkingCoords) return;
     if (!driverSelect.value) { alert('Please select a driver.'); return; }
