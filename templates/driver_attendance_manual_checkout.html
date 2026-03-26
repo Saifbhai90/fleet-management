@@ -74,23 +74,30 @@
 
 <script>
 (function() {
+  function localDateStr(d) {
+    var y = d.getFullYear();
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var day = ('0' + d.getDate()).slice(-2);
+    return y + '-' + m + '-' + day;
+  }
+
   var attendanceDateStr = '{{ view_date.strftime("%Y-%m-%d") }}';
   var checkInTimeStr = '{{ rec.check_in.strftime("%H:%M") if rec and rec.check_in else "" }}';
   var allowFuture = {{ 'true' if allow_future_checkout else 'false' }};
-  var todayStr = new Date().toISOString().slice(0, 10);
 
   var timeInput = document.getElementById('checkOutTime');
   var dateInput = document.getElementById('checkOutDate');
   var hint = document.getElementById('nightShiftHint');
 
   var attendanceDate = new Date(attendanceDateStr + 'T00:00:00');
-  var nextDayDate = new Date(attendanceDate);
+  var nextDayDate = new Date(attendanceDate.getTime());
   nextDayDate.setDate(nextDayDate.getDate() + 1);
-  var nextDayStr = nextDayDate.toISOString().slice(0, 10);
+  var nextDayStr = localDateStr(nextDayDate);
+  var todayStr = localDateStr(new Date());
 
   dateInput.setAttribute('min', attendanceDateStr);
   if (allowFuture) {
-    dateInput.setAttribute('max', nextDayStr);
+    dateInput.removeAttribute('max');
   } else {
     var maxStr = nextDayStr <= todayStr ? nextDayStr : todayStr;
     dateInput.setAttribute('max', maxStr);
