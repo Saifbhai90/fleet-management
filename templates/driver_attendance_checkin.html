@@ -23,6 +23,11 @@
   .gps-attendance-page .btn-mark:disabled { box-shadow: none; }
   .gps-attendance-page .step-num { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; font-size: 0.7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; }
   .gps-attendance-page .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.4rem; }
+  #cameraModal { z-index: 1090 !important; }
+  #cameraModal + .modal-backdrop { z-index: 1089 !important; }
+  #cameraModal .modal-body { padding: 0.5rem 0.5rem 0 !important; }
+  #cameraModal video { max-height: 55vh; display: block; background: #111; }
+  #cameraModal .modal-footer { border-top: none; padding: 0.5rem 1rem 1rem; }
 </style>
 
 <div class="container-fluid gps-attendance-page">
