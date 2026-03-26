@@ -3855,7 +3855,65 @@
             });
         }
 
-        return { isNative: _isNative, getGPS: getGPS, takeSelfie: takeSelfie, requestPushPermission: requestPushPermission, initPermissions: initPermissions, showPermissionAlert: _showPermissionAlert };
+        /**
+         * Download a Blob reliably — works in Capacitor WebView + all browsers.
+         * Desktop: normal <a download> click.
+         * Mobile/WebView: POST base64 to /download-blob which returns Content-Disposition: attachment.
+         */
+        function downloadBlob(blob, filename) {
+            if (!_isNative) {
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url; a.download = filename || 'download';
+                document.body.appendChild(a); a.click();
+                setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+                return Promise.resolve();
+            }
+            return new Promise(function(resolve) {
+                var reader = new FileReader();
+                reader.onloadend = function() {
+                    var b64 = reader.result.split(',')[1] || '';
+                    var form = document.createElement('form');
+                    form.method = 'POST'; form.action = '/download-blob';
+                    form.style.display = 'none';
+                    var fields = { data: b64, filename: filename || 'download', mime: blob.type || 'application/octet-stream' };
+                    Object.keys(fields).forEach(function(k) {
+                        var inp = document.createElement('input');
+                        inp.type = 'hidden'; inp.name = k; inp.value = fields[k];
+                        form.appendChild(inp);
+                    });
+                    var csrf = document.querySelector('input[name="csrf_token"]');
+                    if (csrf) {
+                        var ci = document.createElement('input');
+                        ci.type = 'hidden'; ci.name = 'csrf_token'; ci.value = csrf.value;
+                        form.appendChild(ci);
+                    }
+                    document.body.appendChild(form);
+                    form.submit();
+                    setTimeout(function() { document.body.removeChild(form); resolve(); }, 500);
+                };
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        /**
+         * Open a blob URL for viewing — Desktop: new tab. Mobile: inline or same-tab.
+         */
+        function openBlobUrl(blobUrl, fallbackUrl) {
+            if (!_isNative) {
+                var win = window.open(blobUrl, '_blank');
+                if (!win && fallbackUrl) window.open(fallbackUrl, '_blank');
+                return;
+            }
+            window.location.href = blobUrl;
+        }
+
+        return {
+            isNative: _isNative, getGPS: getGPS, takeSelfie: takeSelfie,
+            requestPushPermission: requestPushPermission, initPermissions: initPermissions,
+            showPermissionAlert: _showPermissionAlert,
+            downloadBlob: downloadBlob, openBlobUrl: openBlobUrl
+        };
     })();
 
     // ── Native App UI Enhancements (Capacitor context) ────────────────────

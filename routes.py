@@ -533,6 +533,27 @@ def image_proxy():
     except Exception:
         return '', 502
 
+@app.route('/download-blob', methods=['POST'])
+@csrf.exempt
+def download_blob():
+    """Echo back a base64-encoded blob as a downloadable file.
+    Used by Capacitor WebView where <a download> doesn't work."""
+    import base64 as _b64
+    data_b64 = request.form.get('data', '')
+    filename = request.form.get('filename', 'download')
+    mime = request.form.get('mime', 'application/octet-stream')
+    if not data_b64:
+        return '', 400
+    try:
+        raw = _b64.b64decode(data_b64)
+    except Exception:
+        return '', 400
+    resp = make_response(raw)
+    resp.headers['Content-Type'] = mime
+    resp.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    resp.headers['Content-Length'] = len(raw)
+    return resp
+
 @app.template_filter('media_url')
 def media_url_filter(path):
     """Convert a stored file path (local relative or R2 full URL) to a usable URL."""

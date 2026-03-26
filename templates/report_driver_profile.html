@@ -1334,7 +1334,7 @@
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
 
-  /* ── Print button — html2pdf → blob → browser's native PDF viewer ─── */
+  /* ── Print button — html2pdf → blob → view/download ─── */
   function doPrint() {
     var pb = document.getElementById('printBtn');
     pb.disabled = true;
@@ -1342,18 +1342,23 @@
     var sg = setTimeout(function() {
       pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
     }, 90000);
-    var opts = Object.assign({}, _PDF_OPTS, { filename: 'Driver_Profile_{{ driver.driver_id }}.pdf' });
+    var fname = 'Driver_Profile_{{ driver.driver_id }}.pdf';
+    var opts = Object.assign({}, _PDF_OPTS, { filename: fname });
     _renderDoc(opts, 'blob', function(blob, err) {
       clearTimeout(sg);
       pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
       if (err || !blob) return;
-      var url = URL.createObjectURL(blob);
-      var win = window.open(url, '_blank');
-      if (!win) {
-        alert('Pop-up blocked — please allow pop-ups for this site, then try again.');
-        URL.revokeObjectURL(url);
+      if (window.FleetBridge && window.FleetBridge.isNative) {
+        window.FleetBridge.downloadBlob(blob, fname);
       } else {
-        setTimeout(function() { try { URL.revokeObjectURL(url); } catch(e){} }, 120000);
+        var url = URL.createObjectURL(blob);
+        var win = window.open(url, '_blank');
+        if (!win) {
+          alert('Pop-up blocked — please allow pop-ups for this site, then try again.');
+          URL.revokeObjectURL(url);
+        } else {
+          setTimeout(function() { try { URL.revokeObjectURL(url); } catch(e){} }, 120000);
+        }
       }
     });
   }
@@ -1406,11 +1411,21 @@
     var sg = setTimeout(function() {
       btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
     }, 90000);
-    var opts = Object.assign({}, _PDF_OPTS, { filename: 'Driver_Profile_{{ driver.driver_id }}.pdf' });
-    _renderDoc(opts, 'save', function() {
-      clearTimeout(sg);
-      btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
-    });
+    var fname = 'Driver_Profile_{{ driver.driver_id }}.pdf';
+    var opts = Object.assign({}, _PDF_OPTS, { filename: fname });
+    if (window.FleetBridge && window.FleetBridge.isNative) {
+      _renderDoc(opts, 'blob', function(blob, err) {
+        clearTimeout(sg);
+        btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
+        if (err || !blob) return;
+        window.FleetBridge.downloadBlob(blob, fname);
+      });
+    } else {
+      _renderDoc(opts, 'save', function() {
+        clearTimeout(sg);
+        btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
+      });
+    }
   }
 
   /* ── Image-format choice modal ── */
@@ -1498,18 +1513,41 @@
           return;
         }
 
+        function _canvasToBlob(canvas) {
+          return new Promise(function(resolve) {
+            if (canvas.toBlob) {
+              canvas.toBlob(function(b) { resolve(b); }, 'image/png');
+            } else {
+              var dataUrl = canvas.toDataURL('image/png');
+              var byteStr = atob(dataUrl.split(',')[1]);
+              var ab = new ArrayBuffer(byteStr.length);
+              var ia = new Uint8Array(ab);
+              for (var i = 0; i < byteStr.length; i++) ia[i] = byteStr.charCodeAt(i);
+              resolve(new Blob([ab], { type: 'image/png' }));
+            }
+          });
+        }
+
+        var _useNativeDl = window.FleetBridge && window.FleetBridge.isNative;
+
         if (choice === 'long') {
-          /* Single long image */
           btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
           var longCanvas = _stitchCanvases(pages);
-          var a = document.createElement('a');
-          a.href     = longCanvas.toDataURL('image/png');
-          a.download = 'Driver_Profile_' + id + '_Full.png';
-          document.body.appendChild(a); a.click(); document.body.removeChild(a);
-          btn.disabled = false; btn.innerHTML = '<i class="bi bi-images me-1"></i>Download Images';
+          var longName = 'Driver_Profile_' + id + '_Full.png';
+          if (_useNativeDl) {
+            _canvasToBlob(longCanvas).then(function(blob) {
+              window.FleetBridge.downloadBlob(blob, longName);
+              btn.disabled = false; btn.innerHTML = '<i class="bi bi-images me-1"></i>Download Images';
+            });
+          } else {
+            var a = document.createElement('a');
+            a.href = longCanvas.toDataURL('image/png');
+            a.download = longName;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            btn.disabled = false; btn.innerHTML = '<i class="bi bi-images me-1"></i>Download Images';
+          }
 
         } else {
-          /* Per-page images */
           var n = pages.length;
           function next(idx) {
             if (idx >= n) {
@@ -1518,11 +1556,19 @@
             }
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' +
                             'Page ' + (idx + 1) + ' / ' + n + '...';
-            var a = document.createElement('a');
-            a.href     = pages[idx].toDataURL('image/png');
-            a.download = 'Driver_Profile_' + id + '_Page_' + (idx + 1) + '.png';
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            setTimeout(function() { next(idx + 1); }, 250);
+            var pgName = 'Driver_Profile_' + id + '_Page_' + (idx + 1) + '.png';
+            if (_useNativeDl) {
+              _canvasToBlob(pages[idx]).then(function(blob) {
+                window.FleetBridge.downloadBlob(blob, pgName);
+                setTimeout(function() { next(idx + 1); }, 400);
+              });
+            } else {
+              var a = document.createElement('a');
+              a.href = pages[idx].toDataURL('image/png');
+              a.download = pgName;
+              document.body.appendChild(a); a.click(); document.body.removeChild(a);
+              setTimeout(function() { next(idx + 1); }, 250);
+            }
           }
           next(0);
         }

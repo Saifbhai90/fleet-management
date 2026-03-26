@@ -275,33 +275,52 @@ function downloadPDF(){
   _captureEngine(function(clone, host){
     var empName = '{{ payroll.person_name }}'.replace(/[^a-zA-Z0-9 ]/g,'');
     var fname = 'Payslip_'+empName+'_{{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][payroll.month] }}_{{ payroll.year }}.pdf';
-    html2pdf().set({
+    var pdfOpts = {
       margin: 8,
       filename: fname,
       image: {type:'jpeg',quality:0.95},
       html2canvas: {scale:2,useCORS:true,width:800,windowWidth:800,y:0,x:0,scrollX:0,scrollY:0},
       jsPDF: {unit:'mm',format:'a4',orientation:'portrait'},
       pagebreak: {mode:['css','legacy']}
-    }).from(clone).save().then(function(){
+    };
+    function finishBtn(){
       document.body.removeChild(host);
       btn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> PDF';
       btn.disabled = false;
-    });
+    }
+    if (window.FleetBridge && window.FleetBridge.isNative) {
+      html2pdf().set(pdfOpts).from(clone).output('blob').then(function(blob){
+        finishBtn();
+        window.FleetBridge.downloadBlob(blob, fname);
+      }).catch(finishBtn);
+    } else {
+      html2pdf().set(pdfOpts).from(clone).save().then(finishBtn);
+    }
   });
 }
 
 function doPrint(){
   _captureEngine(function(clone, host){
-    html2pdf().set({
+    var empName = '{{ payroll.person_name }}'.replace(/[^a-zA-Z0-9 ]/g,'');
+    var fname = 'Payslip_'+empName+'_{{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][payroll.month] }}_{{ payroll.year }}.pdf';
+    var printOpts = {
       margin: 8,
       image: {type:'jpeg',quality:0.95},
       html2canvas: {scale:2,useCORS:true,width:800,windowWidth:800,y:0,x:0,scrollX:0,scrollY:0},
       jsPDF: {unit:'mm',format:'a4',orientation:'portrait'},
       pagebreak: {mode:['css','legacy']}
-    }).from(clone).outputPdf('bloburl').then(function(url){
-      document.body.removeChild(host);
-      window.open(url, '_blank');
-    });
+    };
+    if (window.FleetBridge && window.FleetBridge.isNative) {
+      html2pdf().set(printOpts).from(clone).output('blob').then(function(blob){
+        document.body.removeChild(host);
+        window.FleetBridge.downloadBlob(blob, fname);
+      }).catch(function(){ if (host.parentNode) document.body.removeChild(host); });
+    } else {
+      html2pdf().set(printOpts).from(clone).outputPdf('bloburl').then(function(url){
+        document.body.removeChild(host);
+        window.open(url, '_blank');
+      });
+    }
   });
 }
 
@@ -312,13 +331,22 @@ function downloadImage(){
   _captureEngine(function(clone, host){
     html2canvas(clone, {scale:2,useCORS:true,width:800,windowWidth:800,y:0,x:0,scrollX:0,scrollY:0}).then(function(canvas){
       document.body.removeChild(host);
-      var link = document.createElement('a');
       var empName = '{{ payroll.person_name }}'.replace(/[^a-zA-Z0-9 ]/g,'');
-      link.download = 'Payslip_'+empName+'_{{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][payroll.month] }}_{{ payroll.year }}.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      btn.innerHTML = '<i class="bi bi-image"></i> Image';
-      btn.disabled = false;
+      var fname = 'Payslip_'+empName+'_{{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][payroll.month] }}_{{ payroll.year }}.png';
+      if (window.FleetBridge && window.FleetBridge.isNative) {
+        canvas.toBlob(function(blob){
+          if (blob) window.FleetBridge.downloadBlob(blob, fname);
+          btn.innerHTML = '<i class="bi bi-image"></i> Image';
+          btn.disabled = false;
+        }, 'image/png');
+      } else {
+        var link = document.createElement('a');
+        link.download = fname;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        btn.innerHTML = '<i class="bi bi-image"></i> Image';
+        btn.disabled = false;
+      }
     });
   });
 }

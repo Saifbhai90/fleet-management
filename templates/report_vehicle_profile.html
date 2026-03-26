@@ -436,7 +436,7 @@
     requestAnimationFrame(function(){
       setTimeout(function(){
         var w = html2pdf().set(opts).from(el);
-        var p = (mode==='blob') ? w.output('blob') : w.save();
+        var p = (mode==='blob' || mode==='pdfblob') ? w.output('blob') : w.save();
         p.then(function(r){cleanup(r,null);}).catch(function(e){console.error(e);cleanup(null,e);});
       },0);
     });
@@ -444,16 +444,29 @@
 
   window.doPrint = function(){
     var opts = Object.assign({}, _PDF_OPTS, { filename: vehNo+'_Profile.pdf' });
+    var fname = vehNo+'_Profile.pdf';
     _renderDoc(opts,'blob',function(blob,err){
       if(err||!blob)return;
-      var url=URL.createObjectURL(blob);
-      window.open(url,'_blank');
-      setTimeout(function(){URL.revokeObjectURL(url);},60000);
+      if (window.FleetBridge && window.FleetBridge.isNative) {
+        window.FleetBridge.downloadBlob(blob, fname);
+      } else {
+        var url=URL.createObjectURL(blob);
+        window.open(url,'_blank');
+        setTimeout(function(){URL.revokeObjectURL(url);},60000);
+      }
     });
   };
   window.downloadPDF = function(){
     var opts = Object.assign({}, _PDF_OPTS, { filename: vehNo+'_Profile.pdf' });
-    _renderDoc(opts,'save',function(){});
+    var fname = vehNo+'_Profile.pdf';
+    if (window.FleetBridge && window.FleetBridge.isNative) {
+      _renderDoc(opts,'pdfblob',function(blob,err){
+        if(err||!blob)return;
+        window.FleetBridge.downloadBlob(blob, fname);
+      });
+    } else {
+      _renderDoc(opts,'save',function(){});
+    }
   };
 })();
 </script>

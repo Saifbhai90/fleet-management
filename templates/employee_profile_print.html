@@ -672,18 +672,31 @@
   /* ── Print → blob → native PDF viewer ── */
   window.doPrint = function() {
     var opts = Object.assign({}, _PDF_OPTS, { filename: empName + '_Profile.pdf' });
+    var filename = empName + '_Profile.pdf';
     _renderDoc(opts, 'blob', function(blob, err) {
       if (err || !blob) return;
-      var url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+      if (window.FleetBridge && window.FleetBridge.isNative) {
+        window.FleetBridge.downloadBlob(blob, filename);
+      } else {
+        var url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+      }
     });
   };
 
   /* ── PDF → direct download ── */
   window.downloadPDF = function() {
     var opts = Object.assign({}, _PDF_OPTS, { filename: empName + '_Profile.pdf' });
-    _renderDoc(opts, 'save', function() {});
+    var filename = empName + '_Profile.pdf';
+    if (window.FleetBridge && window.FleetBridge.isNative) {
+      _renderDoc(opts, 'blob', function(blob, err) {
+        if (err || !blob) return;
+        window.FleetBridge.downloadBlob(blob, filename);
+      });
+    } else {
+      _renderDoc(opts, 'save', function() {});
+    }
   };
 
   /* ── Images → per-page PNG download ── */
@@ -730,11 +743,19 @@
           ctx.fillStyle = '#fff';
           ctx.fillRect(0, 0, cw, pg.h);
           ctx.drawImage(canvas, 0, pg.y, cw, pg.h, 0, 0, cw, pg.h);
-          var link = document.createElement('a');
-          link.download = empName + '_Page_' + (idx + 1) + '.png';
-          link.href = pc.toDataURL('image/png');
-          link.click();
-          if (idx === pages.length - 1) _hideOverlay();
+          var imgFilename = empName + '_Page_' + (idx + 1) + '.png';
+          if (window.FleetBridge && window.FleetBridge.isNative) {
+            pc.toBlob(function(blob) {
+              if (blob) window.FleetBridge.downloadBlob(blob, imgFilename);
+              if (idx === pages.length - 1) _hideOverlay();
+            }, 'image/png');
+          } else {
+            var link = document.createElement('a');
+            link.download = imgFilename;
+            link.href = pc.toDataURL('image/png');
+            link.click();
+            if (idx === pages.length - 1) _hideOverlay();
+          }
         }, delay);
         delay += 350;
       });
