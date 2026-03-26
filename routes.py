@@ -655,13 +655,25 @@ def dashboard():
 
     total_drivers = _scope_driver_q(Driver.query).count() if (_can('dashboard_card_drivers') or _can('active_drivers_report')) else 0
 
-    parking_q = ParkingStation.query
-    if not is_master_or_admin:
-        if allowed_parking:
-            parking_q = parking_q.filter(ParkingStation.id.in_(list(allowed_parking)))
-        elif allowed_projects:
-            parking_q = parking_q.filter(ParkingStation.project_id.in_(list(allowed_projects)))
-    total_parking = parking_q.count() if _can('dashboard_card_parking') else 0
+    total_parking = 0
+    if _can('dashboard_card_parking'):
+        if is_master_or_admin:
+            total_parking = ParkingStation.query.count()
+        else:
+            scoped_v = _scope_vehicle_q(Vehicle.query).with_entities(Vehicle.parking_station_id).filter(
+                Vehicle.parking_station_id.isnot(None)
+            ).distinct()
+            parking_ids_from_vehicles = {r[0] for r in scoped_v.all()}
+            if allowed_parking:
+                parking_ids_from_vehicles |= allowed_parking
+            if parking_ids_from_vehicles:
+                total_parking = ParkingStation.query.filter(
+                    ParkingStation.id.in_(list(parking_ids_from_vehicles))
+                ).count()
+            elif allowed_projects:
+                total_parking = ParkingStation.query.filter(
+                    ParkingStation.project_id.in_(list(allowed_projects))
+                ).count()
 
     district_q = District.query
     if not is_master_or_admin and allowed_districts:

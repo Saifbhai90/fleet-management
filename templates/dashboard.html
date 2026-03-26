@@ -161,14 +161,18 @@
 .bc-deco-icon svg { width: 110px; height: 110px; }
 .bc-hero .bc-deco-icon svg { width: 180px; height: 180px; }
 
-/* ── Secondary card inner icon chip ── */
-.chip-icon {
-    width: 52px; height: 52px;
-    border-radius: 16px;
+/* ── Card icon (HMIS-style prominent icon on every card) ── */
+.bc-card-icon {
+    width: 48px; height: 48px;
+    border-radius: 14px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.5rem;
+    font-size: 1.35rem;
     flex-shrink: 0;
+    position: relative;
+    z-index: 1;
 }
+.bc-hero .bc-card-icon { width: 56px; height: 56px; font-size: 1.6rem; border-radius: 16px; }
+.bc-tall .bc-card-icon { width: 52px; height: 52px; font-size: 1.5rem; border-radius: 15px; }
 
 /* ── Stagger entrance animation ── */
 .bc { opacity: 0; transform: translateY(20px); }
@@ -330,7 +334,10 @@ function showAccessDenied(msg) {
     <a {% if can_see_page('active_drivers_report') %}href="{{ url_for('active_drivers_report') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Active Drivers Report permission required.')"{% endif %}
        class="bc bc-blue bc-hero" style="cursor:pointer;">
         <div style="position:relative;z-index:1;">
-            <div class="bc-tag">Active Drivers</div>
+            <div class="d-flex align-items-center gap-3 mb-2">
+                <div class="bc-card-icon" style="background:rgba(255,255,255,0.18);"><i class="bi bi-people-fill"></i></div>
+                <div class="bc-tag mb-0">Active Drivers</div>
+            </div>
             <div class="bc-num bc-num-xl">{{ active_drivers }}</div>
             <div class="bc-sub">of {{ total_drivers }} total registered</div>
         </div>
@@ -342,11 +349,6 @@ function showAccessDenied(msg) {
             <div class="bc-progress-bar">
                 <div class="bc-progress-fill" style="width:{{ driver_pct }}%;"></div>
             </div>
-        </div>
-        <div class="bc-deco-icon">
-            <svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14c-5.33 0-8 2.67-8 4v1h16v-1c0-1.33-2.67-4-8-4z"/>
-            </svg>
         </div>
         {% if not can_see_page('active_drivers_report') %}
         <div style="position:absolute;top:12px;right:14px;z-index:2;background:rgba(0,0,0,0.25);border-radius:8px;padding:3px 8px;">
@@ -361,7 +363,10 @@ function showAccessDenied(msg) {
     <a {% if can_see_page('report_vehicle_summary') %}href="{{ url_for('report_vehicle_summary') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Vehicle Summary Report permission required.')"{% endif %}
        class="bc bc-green bc-tall" style="cursor:pointer;">
         <div style="position:relative;z-index:1;">
-            <div class="bc-tag">Fleet Deployed</div>
+            <div class="d-flex align-items-center gap-3 mb-2">
+                <div class="bc-card-icon" style="background:rgba(255,255,255,0.18);"><i class="bi bi-truck-front-fill"></i></div>
+                <div class="bc-tag mb-0">Fleet Deployed</div>
+            </div>
             <div class="bc-num bc-num-lg">{{ assigned_vehicles }}</div>
             <div class="bc-sub">{{ total_vehicles }} total vehicles</div>
         </div>
@@ -373,11 +378,6 @@ function showAccessDenied(msg) {
             <div class="bc-progress-bar">
                 <div class="bc-progress-fill" style="width:{{ fleet_pct }}%;"></div>
             </div>
-        </div>
-        <div class="bc-deco-icon">
-            <svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
-                <path d="M1 3h15v13H1zM16 8h4l3 3v5h-7V8zM5.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM18.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
-            </svg>
         </div>
         {% if not can_see_page('report_vehicle_summary') %}
         <div style="position:absolute;top:12px;right:14px;z-index:2;background:rgba(0,0,0,0.25);border-radius:8px;padding:3px 8px;">
@@ -391,13 +391,13 @@ function showAccessDenied(msg) {
     {% if can_see_page('dashboard_card_attendance') %}
     <a {% if can_see_page('driver_attendance_list') %}href="{{ url_for('driver_attendance_list') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Attendance List permission required.')"{% endif %}
        class="bc bc-orange bc-sm" style="cursor:pointer;">
-        <div>
-            <div class="bc-tag">Today's Attendance</div>
-            <div class="bc-num bc-num-md">{{ today_attendance }}</div>
-            <div class="bc-sub">check-ins today</div>
-        </div>
-        <div class="bc-deco-icon">
-            <svg viewBox="0 0 24 24" fill="white"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <div class="d-flex align-items-start gap-3">
+            <div class="bc-card-icon" style="background:rgba(255,255,255,0.2);"><i class="bi bi-calendar2-check-fill"></i></div>
+            <div>
+                <div class="bc-tag">Today's Attendance</div>
+                <div class="bc-num bc-num-md">{{ today_attendance }}</div>
+                <div class="bc-sub">check-ins today</div>
+            </div>
         </div>
         {% if not can_see_page('driver_attendance_list') %}
         <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.25);border-radius:8px;padding:3px 8px;">
@@ -410,13 +410,13 @@ function showAccessDenied(msg) {
     {% if can_see_page('dashboard_card_transfers') %}
     <a {% if can_see_page('driver_transfers') %}href="{{ url_for('driver_transfers') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Driver Transfers permission required.')"{% endif %}
        class="bc bc-violet bc-sm" style="cursor:pointer;">
-        <div>
-            <div class="bc-tag">Today's Transfers</div>
-            <div class="bc-num bc-num-md">{{ today_transfers }}</div>
-            <div class="bc-sub">driver moves today</div>
-        </div>
-        <div class="bc-deco-icon">
-            <svg viewBox="0 0 24 24" fill="white"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+        <div class="d-flex align-items-start gap-3">
+            <div class="bc-card-icon" style="background:rgba(255,255,255,0.18);"><i class="bi bi-arrow-left-right"></i></div>
+            <div>
+                <div class="bc-tag">Today's Transfers</div>
+                <div class="bc-num bc-num-md">{{ today_transfers }}</div>
+                <div class="bc-sub">driver moves today</div>
+            </div>
         </div>
         {% if not can_see_page('driver_transfers') %}
         <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.25);border-radius:8px;padding:3px 8px;">
@@ -429,12 +429,12 @@ function showAccessDenied(msg) {
     {% if can_see_page('dashboard_card_projects') %}
     <a {% if can_see_page('report_project_summary') %}href="{{ url_for('report_project_summary') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Project Summary Report permission required.')"{% endif %}
        class="bc bc-light bc-sm" style="cursor:pointer;">
-        <div class="chip-icon" style="background:#dbeafe;color:#1d4ed8;">
-            <i data-lucide="briefcase" style="width:22px;height:22px;"></i>
-        </div>
-        <div>
-            <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_projects }}</div>
-            <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Projects</div>
+        <div class="d-flex align-items-start gap-3">
+            <div class="bc-card-icon" style="background:#dbeafe;color:#1d4ed8;"><i class="bi bi-folder-fill"></i></div>
+            <div>
+                <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_projects }}</div>
+                <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Projects</div>
+            </div>
         </div>
         {% if not can_see_page('report_project_summary') %}
         <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.12);border-radius:8px;padding:3px 8px;">
@@ -447,12 +447,12 @@ function showAccessDenied(msg) {
     {% if can_see_page('dashboard_card_districts') %}
     <a {% if can_see_page('report_district_summary') %}href="{{ url_for('report_district_summary') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - District Summary Report permission required.')"{% endif %}
        class="bc bc-light bc-sm" style="cursor:pointer;">
-        <div class="chip-icon" style="background:#dcfce7;color:#15803d;">
-            <i data-lucide="map-pin" style="width:22px;height:22px;"></i>
-        </div>
-        <div>
-            <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_districts }}</div>
-            <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Districts</div>
+        <div class="d-flex align-items-start gap-3">
+            <div class="bc-card-icon" style="background:#dcfce7;color:#15803d;"><i class="bi bi-geo-alt-fill"></i></div>
+            <div>
+                <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_districts }}</div>
+                <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Districts</div>
+            </div>
         </div>
         {% if not can_see_page('report_district_summary') %}
         <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.12);border-radius:8px;padding:3px 8px;">
@@ -465,12 +465,12 @@ function showAccessDenied(msg) {
     {% if can_see_page('dashboard_card_parking') %}
     <a {% if can_see_page('report_parking_utilization') %}href="{{ url_for('report_parking_utilization') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Parking Report permission required.')"{% endif %}
        class="bc bc-light bc-sm" style="cursor:pointer;">
-        <div class="chip-icon" style="background:#fce7f3;color:#be185d;">
-            <i data-lucide="parking-circle" style="width:22px;height:22px;"></i>
-        </div>
-        <div>
-            <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_parking }}</div>
-            <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Parking</div>
+        <div class="d-flex align-items-start gap-3">
+            <div class="bc-card-icon" style="background:#fce7f3;color:#be185d;"><i class="bi bi-p-circle-fill"></i></div>
+            <div>
+                <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_parking }}</div>
+                <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Parking</div>
+            </div>
         </div>
         {% if not can_see_page('report_parking_utilization') %}
         <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.12);border-radius:8px;padding:3px 8px;">
@@ -483,12 +483,12 @@ function showAccessDenied(msg) {
     {% if can_see_page('dashboard_card_companies') %}
     <a {% if can_see_page('companies') %}href="{{ url_for('companies') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Companies permission required.')"{% endif %}
        class="bc bc-light bc-sm" style="cursor:pointer;">
-        <div class="chip-icon" style="background:#f3e8ff;color:#7c3aed;">
-            <i data-lucide="building-2" style="width:22px;height:22px;"></i>
-        </div>
-        <div>
-            <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_companies }}</div>
-            <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Companies</div>
+        <div class="d-flex align-items-start gap-3">
+            <div class="bc-card-icon" style="background:#f3e8ff;color:#7c3aed;"><i class="bi bi-building"></i></div>
+            <div>
+                <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_companies }}</div>
+                <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Companies</div>
+            </div>
         </div>
         {% if not can_see_page('companies') %}
         <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.12);border-radius:8px;padding:3px 8px;">
