@@ -159,6 +159,14 @@
   .table-footer.mp-hide-mobile {
     display: none !important;
   }
+  /* Hide desktop-only toolbars (search + pagination) — mp-search replaces them */
+  .ds-toolbar,
+  .ps-toolbar,
+  .vs-toolbar,
+  .pu-toolbar,
+  .ex-dt-toolbar {
+    display: none !important;
+  }
 }
 
 /* ── 7. MOBILE CARDS (visible only on mobile) ────────────────── */
@@ -331,18 +339,80 @@
   }
 }
 
-/* ── 7b. HIDE INLINE SEARCH INPUTS inside section headings (mobile) ─ */
+/* ── 7b. HIDE DESKTOP TABLE SEARCH on mobile (mp-search replaces it) ─ */
 @media (max-width: 767px) {
-  /* The "Search in list..." input inside card-header / section-heading */
-  #tableSearch,
-  .card-header input[type="text"],
+  /* Section heading inputs */
   .section-heading input[type="text"],
-  .section-heading input[type="search"] {
-    display: none !important;
-  }
-  /* Also hide per-page selects inside section headings on mobile */
+  .section-heading input[type="search"],
   .section-heading select {
     display: none !important;
+  }
+  /* Server-side and DataTables search inputs */
+  .heading-search-input,
+  #tableSearch,
+  #dtSearchInput,
+  #reportTableSearch {
+    display: none !important;
+  }
+  /* Card-header inline search inputs (expense lists, task lists etc.) */
+  .card-header input[type="text"][id$="Search"],
+  .card-header input[type="text"][id$="search"],
+  #oilExpenseSearch,
+  #maintenanceSearch,
+  #fuelExpenseSearch,
+  #penaltySearch,
+  #redTaskSearch,
+  #withoutTaskSearch,
+  #taskReportSearch,
+  #taskEntrySearch {
+    display: none !important;
+  }
+  /* Desktop toolbar search + page-length selects */
+  #dtLengthSelect {
+    display: none !important;
+  }
+}
+
+/* ── 7c. MOBILE CARD SEARCH BAR ─────────────────────────────────────── */
+.mp-search-wrap {
+  display: none;
+}
+@media (max-width: 767px) {
+  .mp-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 0 2px;
+  }
+  .mp-search-input {
+    flex: 1;
+    min-height: 42px;
+    padding: 8px 14px;
+    font-size: 15px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 10px;
+    background: #fff;
+    color: #1e293b;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .mp-search-input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  }
+  .mp-search-input::placeholder {
+    color: #94a3b8;
+  }
+  .mp-search-count {
+    font-size: 0.72rem;
+    color: #64748b;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 60px;
+    text-align: right;
   }
 }
 

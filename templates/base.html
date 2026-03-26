@@ -4900,10 +4900,59 @@
         });
     }
 
+    /* ── Add search bar above each card list ── */
+    function addCardSearch() {
+        if (window.innerWidth > 767) return;
+        document.querySelectorAll('.mp-card-list').forEach(function(list) {
+            if (list.dataset.mpSearchDone) return;
+            list.dataset.mpSearchDone = '1';
+
+            var cards = list.querySelectorAll('.mp-card');
+            if (cards.length < 3) return;
+
+            var wrap = document.createElement('div');
+            wrap.className = 'mp-search-wrap';
+            var inp = document.createElement('input');
+            inp.type = 'search';
+            inp.className = 'mp-search-input';
+            inp.placeholder = 'Search...';
+            inp.setAttribute('autocomplete', 'off');
+            inp.setAttribute('autocorrect', 'off');
+            inp.setAttribute('spellcheck', 'false');
+
+            var countEl = document.createElement('span');
+            countEl.className = 'mp-search-count';
+            countEl.textContent = cards.length + ' records';
+
+            wrap.appendChild(inp);
+            wrap.appendChild(countEl);
+            list.parentNode.insertBefore(wrap, list);
+
+            var debounce;
+            inp.addEventListener('input', function() {
+                clearTimeout(debounce);
+                debounce = setTimeout(function() {
+                    var q = inp.value.toLowerCase().trim();
+                    var shown = 0;
+                    cards.forEach(function(card) {
+                        if (!q || card.textContent.toLowerCase().indexOf(q) !== -1) {
+                            card.style.display = '';
+                            shown++;
+                        } else {
+                            card.style.display = 'none';
+                        }
+                    });
+                    countEl.textContent = q ? (shown + ' / ' + cards.length) : (cards.length + ' records');
+                }, 150);
+            });
+        });
+    }
+
     /* ── Run on DOM ready ── */
     function init() {
         setInputModes();
         buildAllCards();
+        addCardSearch();
     }
 
     if (document.readyState === 'loading') {
