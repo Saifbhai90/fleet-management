@@ -88,17 +88,18 @@
   var timeInput = document.getElementById('checkOutTime');
   var dateInput = document.getElementById('checkOutDate');
   var hint = document.getElementById('nightShiftHint');
+  var form = timeInput.closest('form');
 
   var attendanceDate = new Date(attendanceDateStr + 'T00:00:00');
   var nextDayDate = new Date(attendanceDate.getTime());
   nextDayDate.setDate(nextDayDate.getDate() + 1);
   var nextDayStr = localDateStr(nextDayDate);
-  var todayStr = localDateStr(new Date());
 
   dateInput.setAttribute('min', attendanceDateStr);
   if (allowFuture) {
     dateInput.removeAttribute('max');
   } else {
+    var todayStr = localDateStr(new Date());
     var maxStr = nextDayStr <= todayStr ? nextDayStr : todayStr;
     dateInput.setAttribute('max', maxStr);
   }
@@ -116,7 +117,7 @@
 
     var coTime = timeInput.value;
     if (coTime < checkInTimeStr) {
-      var canSetNextDay = allowFuture || nextDayStr <= todayStr;
+      var canSetNextDay = allowFuture || nextDayStr <= localDateStr(new Date());
       if (canSetNextDay) {
         dateInput.value = nextDayStr;
         hint.classList.remove('d-none');
@@ -126,6 +127,23 @@
       hint.classList.add('d-none');
     }
   });
+
+  if (!allowFuture) {
+    form.addEventListener('submit', function(e) {
+      var coDate = dateInput.value;
+      var coTime = timeInput.value;
+      if (!coDate || !coTime) return;
+      var selectedDT = new Date(coDate + 'T' + coTime + ':00');
+      var now = new Date();
+      if (selectedDT > now) {
+        e.preventDefault();
+        var hh = ('0' + now.getHours()).slice(-2);
+        var mm = ('0' + now.getMinutes()).slice(-2);
+        var nowStr = localDateStr(now) + ' ' + hh + ':' + mm;
+        alert('Check-out date/time future mein nahi ho sakti.\nAbhi: ' + nowStr + '\nAapne select kiya: ' + coDate + ' ' + coTime + '\n\nAdmin Settings se "Allow Future Manual Check-out" ON karein agar night shift ke liye zaroorat hai.');
+      }
+    });
+  }
 })();
 </script>
 {% endblock %}

@@ -129,6 +129,17 @@ def _attendance_local_date():
         return date.today()
 
 
+def _attendance_local_now():
+    """Current naive datetime in APP_TIMEZONE (date + time combined)."""
+    try:
+        from zoneinfo import ZoneInfo
+        tz_name = app.config.get('APP_TIMEZONE', 'Asia/Karachi')
+        now_utc = datetime.now(timezone.utc)
+        return now_utc.astimezone(ZoneInfo(tz_name)).replace(tzinfo=None)
+    except Exception:
+        return datetime.utcnow()
+
+
 @app.before_request
 def require_login():
     """Redirect to login if user not logged in. Check permission for endpoint. Session timeout."""
@@ -10062,9 +10073,12 @@ def driver_attendance_manual_checkout():
         if check_out_d > max_allowed_date:
             flash('Check-out date zyada se zyada attendance date ke agle din tak ho sakti hai.', 'danger')
             return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
-        if not allow_future and check_out_d > local_today:
-            flash('Check-out date future mein nahi ho sakti. Admin Settings se "Allow Future Manual Check-out" ON karein agar night shift ke liye zaroorat hai.', 'danger')
-            return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
+        if not allow_future:
+            now_pk = _attendance_local_now()
+            check_out_dt = datetime.combine(check_out_d, check_out_t)
+            if check_out_dt > now_pk:
+                flash('Check-out date/time future mein nahi ho sakti (abhi: ' + now_pk.strftime('%d-%m-%Y %I:%M %p') + '). Admin Settings se "Allow Future Manual Check-out" ON karein agar night shift ke liye zaroorat hai.', 'danger')
+                return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
         if check_out_d == view_date and rec.check_in and check_out_t < rec.check_in:
             flash('Check-out time check-in time se pehle hai — kya ye night shift hai? Agar haan to Check-out Date ko agle din par set karein.', 'warning')
             return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
