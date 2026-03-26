@@ -9252,7 +9252,7 @@ def driver_attendance_export():
             rec.check_in.strftime('%H:%M') if rec and rec.check_in else '-',
             'Yes' if rec and rec.check_in_photo_path else '-',
             _attendance_check_in_remarks(rec) or '-',
-            rec.check_out.strftime('%H:%M') if rec and rec.check_out else '-',
+            (rec.check_out.strftime('%H:%M') + (' (' + rec.check_out_date.strftime('%d-%m-%Y') + ')' if rec.check_out_date and rec.check_out_date != rec.attendance_date else '')) if rec and rec.check_out else '-',
             'Yes' if rec and rec.check_out_photo_path else '-',
             _attendance_check_out_remarks(rec) or '-',
         ])
@@ -9483,6 +9483,7 @@ def driver_attendance_mark():
                 rec.status = status
                 rec.check_in = check_in_t
                 rec.check_out = check_out_t
+                rec.check_out_date = view_date if check_out_t else None
                 rec.remarks = remarks
                 rec.project_id = project_id
                 rec.updated_at = datetime.utcnow()
@@ -9491,7 +9492,9 @@ def driver_attendance_mark():
             else:
                 rec = DriverAttendance(
                     driver_id=did, attendance_date=view_date, status=status,
-                    check_in=check_in_t, check_out=check_out_t, remarks=remarks,
+                    check_in=check_in_t, check_out=check_out_t,
+                    check_out_date=view_date if check_out_t else None,
+                    remarks=remarks,
                     project_id=project_id, check_in_photo_path=photo_path
                 )
                 db.session.add(rec)
@@ -9605,6 +9608,7 @@ def driver_attendance_bulk_off():
                 rec.status = 'Off'
                 rec.check_in = None
                 rec.check_out = None
+                rec.check_out_date = None
                 rec.remarks = (rec.remarks or '').rstrip() + (' | Bulk Off' if (rec.remarks or '').strip() else 'Bulk Off')
                 rec.updated_at = datetime.utcnow()
             else:
@@ -10013,17 +10017,20 @@ def driver_attendance_manual_checkout():
         flash('Is driver ka check-out pehle hi lag chuka hai.', 'info')
         return redirect(back_url)
 
+    tpl_kwargs = dict(driver=driver, rec=rec, view_date=view_date, back_url=back_url, back_params=back_params)
+
     if request.method == 'POST':
         time_str = (request.form.get('check_out_time') or '').strip()
+        checkout_date_str = (request.form.get('check_out_date') or '').strip()
         remarks_add = (request.form.get('remarks') or '').strip()
         if not time_str:
             flash('Check-out time zaroori hai.', 'danger')
-            return render_template('driver_attendance_manual_checkout.html', driver=driver, rec=rec, view_date=view_date, back_url=back_url, back_params=back_params)
+            return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
         if not remarks_add:
             flash('Reason zaroori hai (manual check-out kyun kar rahe hain).', 'danger')
-            return render_template('driver_attendance_manual_checkout.html', driver=driver, rec=rec, view_date=view_date, back_url=back_url, back_params=back_params)
+            return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
         try:
-            from datetime import time as dt_time
+            from datetime import time as dt_time, timedelta
             parts = time_str.split(':')
             h = int(parts[0]) if len(parts) > 0 else 0
             m = int(parts[1]) if len(parts) > 1 else 0
@@ -10031,7 +10038,23 @@ def driver_attendance_manual_checkout():
             check_out_t = dt_time(h, m, s)
         except (ValueError, IndexError):
             flash('Invalid check-out time. HH:MM format use karein.', 'danger')
-            return render_template('driver_attendance_manual_checkout.html', driver=driver, rec=rec, view_date=view_date, back_url=back_url, back_params=back_params)
+            return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
+        check_out_d = parse_date(checkout_date_str) if checkout_date_str else view_date
+        if check_out_d is None:
+            check_out_d = view_date
+        max_allowed_date = view_date + timedelta(days=1)
+        if check_out_d < view_date:
+            flash('Check-out date attendance date se pehle nahi ho sakti.', 'danger')
+            return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
+        if check_out_d > max_allowed_date:
+            flash('Check-out date zyada se zyada attendance date ke agle din tak ho sakti hai.', 'danger')
+            return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
+        if check_out_d > date.today():
+            flash('Check-out date future mein nahi ho sakti.', 'danger')
+            return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
+        if check_out_d == view_date and rec.check_in and check_out_t < rec.check_in:
+            flash('Check-out time check-in time se pehle hai — kya ye night shift hai? Agar haan to Check-out Date ko agle din par set karein.', 'warning')
+            return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
         photo_path = None
         photo = request.files.get('photo')
         if photo and photo.filename:
@@ -10041,6 +10064,7 @@ def driver_attendance_manual_checkout():
             except Exception as e:
                 flash(f'Photo save nahi hua (cloud storage): {str(e)}', 'warning')
         rec.check_out = check_out_t
+        rec.check_out_date = check_out_d
         rec.remarks = (rec.remarks or '').rstrip() + (' | Manual check-out' + (': ' + remarks_add if remarks_add else ''))
         if photo_path:
             rec.check_out_photo_path = photo_path
@@ -10052,7 +10076,7 @@ def driver_attendance_manual_checkout():
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
-    return render_template('driver_attendance_manual_checkout.html', driver=driver, rec=rec, view_date=view_date, back_url=back_url, back_params=back_params)
+    return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
 
 
 # ────────────────────────────────────────────────
@@ -10594,13 +10618,22 @@ def driver_attendance_checkout():
                     flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
                     return redirect(url_for('driver_attendance_checkout'))
         existing = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=today).first()
+        if not existing:
+            yesterday = today - timedelta(days=1)
+            existing = DriverAttendance.query.filter_by(
+                driver_id=driver_id, attendance_date=yesterday
+            ).filter(
+                DriverAttendance.check_in.isnot(None),
+                DriverAttendance.check_out.is_(None)
+            ).first()
         if existing:
-            # Check-out time check-in time se pehle nahi ho sakta
             check_out_time = now.time()
-            if existing.check_in is not None and check_out_time <= existing.check_in:
+            is_overnight = (existing.attendance_date != today)
+            if not is_overnight and existing.check_in is not None and check_out_time <= existing.check_in:
                 flash('Check-out ka time check-in time se pehle ya barabar nahi ho sakta. Pehle check-in time check karein.', 'danger')
                 return redirect(url_for('driver_attendance_checkout'))
             existing.check_out = check_out_time
+            existing.check_out_date = today
             existing.check_out_latitude = lat_val
             existing.check_out_longitude = lng_val
             if photo_path:

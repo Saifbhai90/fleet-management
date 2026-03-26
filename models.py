@@ -462,6 +462,7 @@ class DriverAttendance(db.Model):
     # Present | Absent | Leave | Late | Half-Day | Off
     check_in = db.Column(db.Time, nullable=True)
     check_out = db.Column(db.Time, nullable=True)
+    check_out_date = db.Column(db.Date, nullable=True)
     remarks = db.Column(db.Text, nullable=True)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
     # Geofenced check-in: parking station, driver's coords at check-in, selfie

@@ -22,7 +22,7 @@
         <dd class="col-sm-8">{{ driver.name }}{% if driver.driver_id %} ({{ driver.driver_id }}){% endif %}</dd>
         <dt class="col-sm-4">Shift</dt>
         <dd class="col-sm-8">{{ driver.shift or '-' }}</dd>
-        <dt class="col-sm-4">Date</dt>
+        <dt class="col-sm-4">Attendance Date</dt>
         <dd class="col-sm-8">{{ view_date.strftime('%d-%m-%Y') }}</dd>
         <dt class="col-sm-4">Check-in Time</dt>
         <dd class="col-sm-8">{% if rec and rec.check_in %}{{ rec.check_in.strftime('%I:%M %p') }}{% else %}-{% endif %}</dd>
@@ -37,8 +37,19 @@
         {% endfor %}
         <div class="mb-3">
           <label class="form-label fw-semibold">Check-out Time <span class="text-danger">*</span></label>
-          <input type="time" name="check_out_time" class="form-control form-control-lg" required step="60" value="{{ request.form.get('check_out_time', '') }}">
-          <div class="form-text">Format: HH:MM AM/PM (e.g. 9:00 AM, 5:30 PM) — seconds mat likhein.</div>
+          <input type="time" id="checkOutTime" name="check_out_time" class="form-control form-control-lg" required step="60" value="{{ request.form.get('check_out_time', '') }}">
+          <div class="form-text">Format: HH:MM (e.g. 09:00, 17:30)</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Check-out Date <span class="text-danger">*</span></label>
+          <input type="date" id="checkOutDate" name="check_out_date" class="form-control" required
+                 value="{{ request.form.get('check_out_date', view_date.strftime('%Y-%m-%d')) }}"
+                 min="{{ view_date.strftime('%Y-%m-%d') }}">
+          <div class="form-text">Night shift ke liye agle din ki date select karein.</div>
+          <div id="nightShiftHint" class="alert alert-info small mt-2 py-2 px-3 d-none">
+            <i class="bi bi-moon-stars me-1"></i><strong>Night shift detected!</strong>
+            Check-out time check-in time se pehle hai — date automatically agle din par set ki gayi hai.
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label fw-semibold">Reason <span class="text-danger">*</span></label>
@@ -60,4 +71,47 @@
     </div>
   </div>
 </div>
+
+<script>
+(function() {
+  var attendanceDateStr = '{{ view_date.strftime("%Y-%m-%d") }}';
+  var checkInTimeStr = '{{ rec.check_in.strftime("%H:%M") if rec and rec.check_in else "" }}';
+  var todayStr = new Date().toISOString().slice(0, 10);
+
+  var timeInput = document.getElementById('checkOutTime');
+  var dateInput = document.getElementById('checkOutDate');
+  var hint = document.getElementById('nightShiftHint');
+
+  var attendanceDate = new Date(attendanceDateStr + 'T00:00:00');
+  var nextDayDate = new Date(attendanceDate);
+  nextDayDate.setDate(nextDayDate.getDate() + 1);
+  var nextDayStr = nextDayDate.toISOString().slice(0, 10);
+
+  var maxDateStr = nextDayStr <= todayStr ? nextDayStr : todayStr;
+  dateInput.setAttribute('max', maxDateStr);
+
+  var userManuallySetDate = false;
+
+  dateInput.addEventListener('change', function() {
+    userManuallySetDate = true;
+    hint.classList.add('d-none');
+  });
+
+  timeInput.addEventListener('change', function() {
+    if (userManuallySetDate) return;
+    if (!checkInTimeStr || !timeInput.value) return;
+
+    var coTime = timeInput.value;
+    if (coTime < checkInTimeStr) {
+      if (nextDayStr <= todayStr) {
+        dateInput.value = nextDayStr;
+        hint.classList.remove('d-none');
+      }
+    } else {
+      dateInput.value = attendanceDateStr;
+      hint.classList.add('d-none');
+    }
+  });
+})();
+</script>
 {% endblock %}

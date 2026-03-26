@@ -227,7 +227,7 @@
                 {% if missing_checkout %}
                   <a href="{{ url_for('driver_attendance_missing_checkout') }}?date={{ view_date.strftime('%d-%m-%Y') }}" class="badge bg-warning text-dark" title="Check-out missing">No check-out</a>
                 {% elif rec and rec.check_out %}
-                  {{ rec.check_out.strftime('%H:%M') }}
+                  {{ rec.check_out.strftime('%H:%M') }}{% if rec.check_out_date and rec.check_out_date != rec.attendance_date %}<br><small class="text-muted">({{ rec.check_out_date.strftime('%d-%m') }})</small>{% endif %}
                   {% if rec.check_out_latitude is not none and rec.check_out_longitude is not none %}<br><span class="badge bg-success badge-sm" title="GPS">GPS</span>{% endif %}
                 {% else %}-{% endif %}
               </td>

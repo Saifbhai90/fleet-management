@@ -376,6 +376,14 @@ def mobile_checkout():
         driver_id=driver.id, attendance_date=today
     ).first()
     if not record or not record.check_in:
+        yesterday = today - dt.timedelta(days=1)
+        record = DriverAttendance.query.filter_by(
+            driver_id=driver.id, attendance_date=yesterday
+        ).filter(
+            DriverAttendance.check_in.isnot(None),
+            DriverAttendance.check_out.is_(None)
+        ).first()
+    if not record or not record.check_in:
         return _err('No check-in found for today. Please check in first.')
     if record.check_out:
         return _err('Already checked out today.')
@@ -384,6 +392,7 @@ def mobile_checkout():
 
     try:
         record.check_out = now_utc.time()
+        record.check_out_date = today
         record.check_out_latitude = lat
         record.check_out_longitude = lng
         if photo_url:
@@ -445,6 +454,7 @@ def mobile_driver_profile():
             'checked_out': bool(attendance_today and attendance_today.check_out),
             'check_in_time': str(attendance_today.check_in)[:5] if attendance_today and attendance_today.check_in else None,
             'check_out_time': str(attendance_today.check_out)[:5] if attendance_today and attendance_today.check_out else None,
+            'check_out_date': attendance_today.check_out_date.isoformat() if attendance_today and attendance_today.check_out_date else None,
             'status': attendance_today.status if attendance_today else None,
         } if attendance_today else None,
     })
