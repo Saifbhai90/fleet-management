@@ -76,7 +76,6 @@
 (function() {
   var attendanceDateStr = '{{ view_date.strftime("%Y-%m-%d") }}';
   var checkInTimeStr = '{{ rec.check_in.strftime("%H:%M") if rec and rec.check_in else "" }}';
-  var todayStr = new Date().toISOString().slice(0, 10);
 
   var timeInput = document.getElementById('checkOutTime');
   var dateInput = document.getElementById('checkOutDate');
@@ -87,8 +86,8 @@
   nextDayDate.setDate(nextDayDate.getDate() + 1);
   var nextDayStr = nextDayDate.toISOString().slice(0, 10);
 
-  var maxDateStr = nextDayStr <= todayStr ? nextDayStr : todayStr;
-  dateInput.setAttribute('max', maxDateStr);
+  dateInput.setAttribute('min', attendanceDateStr);
+  dateInput.setAttribute('max', nextDayStr);
 
   var userManuallySetDate = false;
 
@@ -103,10 +102,8 @@
 
     var coTime = timeInput.value;
     if (coTime < checkInTimeStr) {
-      if (nextDayStr <= todayStr) {
-        dateInput.value = nextDayStr;
-        hint.classList.remove('d-none');
-      }
+      dateInput.value = nextDayStr;
+      hint.classList.remove('d-none');
     } else {
       dateInput.value = attendanceDateStr;
       hint.classList.add('d-none');

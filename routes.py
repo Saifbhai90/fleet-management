@@ -10049,9 +10049,6 @@ def driver_attendance_manual_checkout():
         if check_out_d > max_allowed_date:
             flash('Check-out date zyada se zyada attendance date ke agle din tak ho sakti hai.', 'danger')
             return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
-        if check_out_d > date.today():
-            flash('Check-out date future mein nahi ho sakti.', 'danger')
-            return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
         if check_out_d == view_date and rec.check_in and check_out_t < rec.check_in:
             flash('Check-out time check-in time se pehle hai — kya ye night shift hai? Agar haan to Check-out Date ko agle din par set karein.', 'warning')
             return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
