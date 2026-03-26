@@ -76,26 +76,38 @@
                 <input type="time" name="night_checkout_end" class="form-control form-control-sm" value="{{ global_override.night_checkout_end.strftime('%H:%M') if global_override and global_override.night_checkout_end else '' }}">
               </div>
             </div>
-            <hr class="my-3">
-            <p class="text-muted small mb-2"><strong><i class="bi bi-gear me-1"></i>Manual Check-out Settings:</strong></p>
-            <div class="row g-3 align-items-center">
-              <div class="col-auto">
-                <div class="form-check form-switch">
-                  <input class="form-check-input" type="checkbox" role="switch" id="allowFutureCheckout" name="allow_future_checkout" value="1" {% if global_override and global_override.allow_future_checkout %}checked{% endif %}>
-                  <label class="form-check-label fw-semibold" for="allowFutureCheckout">Allow Future Manual Check-out</label>
-                </div>
-                <div class="form-text">
-                  <strong>ON:</strong> Night shift drivers ka manual check-out agle din ki date par bhi allowed hoga (attendance_date + 1 day), chahe abhi woh din na aaya ho.<br>
-                  <strong>OFF:</strong> Sirf aaj tak ki date allowed hogi — admin ko agle din aane ka wait karna hoga.
-                </div>
-              </div>
-            </div>
             <div class="row mt-3">
               <div class="col-12">
                 <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i>Save Global Default</button>
                 <span class="text-muted small ms-3">Blank = koi time restriction nahi. Overnight window bhi supported hai (e.g. 22:00 – 06:00).</span>
               </div>
             </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ CHECKOUT SETTINGS ═══════════════ -->
+  <div class="row mb-4">
+    <div class="col-lg-10">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-warning text-dark py-3">
+          <h5 class="mb-0"><i class="bi bi-gear me-2"></i>Manual Check-out Settings</h5>
+        </div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('form_control') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="save_checkout_settings">
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" role="switch" id="allowFutureCheckout" name="allow_future_checkout" value="1" {% if global_override and global_override.allow_future_checkout %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="allowFutureCheckout">Allow Future Manual Check-out</label>
+            </div>
+            <div class="form-text mb-3">
+              <strong>ON:</strong> Night shift drivers ka manual check-out agle din ki date par bhi allowed hoga (attendance_date + 1 day), chahe abhi woh din na aaya ho.<br>
+              <strong>OFF:</strong> Sirf aaj tak ki date allowed hogi — admin ko agle din aane ka wait karna hoga.
+            </div>
+            <button type="submit" class="btn btn-warning"><i class="bi bi-check2-circle me-1"></i>Save Setting</button>
           </form>
         </div>
       </div>

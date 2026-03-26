@@ -4160,9 +4160,17 @@ def form_control():
         glob.morning_checkout_end = parse_time(request.form.get('morning_checkout_end'))
         glob.night_checkout_start = parse_time(request.form.get('night_checkout_start'))
         glob.night_checkout_end = parse_time(request.form.get('night_checkout_end'))
-        glob.allow_future_checkout = bool(request.form.get('allow_future_checkout'))
         db.session.commit()
         flash('Global default time saved.', 'success')
+        return redirect(url_for('form_control'))
+
+    if action == 'save_checkout_settings':
+        if not glob:
+            glob = AttendanceTimeOverride(scope='global')
+            db.session.add(glob)
+        glob.allow_future_checkout = bool(request.form.get('allow_future_checkout'))
+        db.session.commit()
+        flash('Manual check-out setting saved.', 'success')
         return redirect(url_for('form_control'))
 
     if action == 'add_override':
