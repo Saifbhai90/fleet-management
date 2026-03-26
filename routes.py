@@ -61,6 +61,8 @@ from flask_wtf.csrf import CSRFError
 from werkzeug.security import generate_password_hash
 import re
 import os
+import tempfile
+import time as _time_mod
 from werkzeug.utils import secure_filename
 from r2_storage import upload_image_file, upload_image_bytes
 
@@ -533,25 +535,63 @@ def image_proxy():
     except Exception:
         return '', 502
 
-@app.route('/download-blob', methods=['POST'])
+_BLOB_DIR = os.path.join(tempfile.gettempdir(), 'fleet_blobs')
+os.makedirs(_BLOB_DIR, exist_ok=True)
+
+@app.route('/upload-blob', methods=['POST'])
 @csrf.exempt
-def download_blob():
-    """Echo back a base64-encoded blob as a downloadable file.
-    Used by Capacitor WebView where <a download> doesn't work."""
-    import base64 as _b64
-    data_b64 = request.form.get('data', '')
-    filename = request.form.get('filename', 'download')
-    mime = request.form.get('mime', 'application/octet-stream')
-    if not data_b64:
-        return '', 400
+def upload_blob():
+    """Accept a blob file upload, store to temp dir, return a download token.
+    Uses filesystem so it works across multiple Gunicorn workers."""
+    import uuid as _uuid, json as _json
+    f = request.files.get('file')
+    if not f:
+        return jsonify(error='No file'), 400
+    fname = request.form.get('filename', f.filename or 'download')
+    mime = f.content_type or 'application/octet-stream'
+    token = str(_uuid.uuid4())
+    data_path = os.path.join(_BLOB_DIR, token + '.dat')
+    meta_path = os.path.join(_BLOB_DIR, token + '.meta')
+    f.save(data_path)
+    with open(meta_path, 'w') as mf:
+        _json.dump({'filename': fname, 'mime': mime, 'ts': _time_mod.time()}, mf)
+    for old in os.listdir(_BLOB_DIR):
+        if old.endswith('.meta'):
+            mp = os.path.join(_BLOB_DIR, old)
+            try:
+                with open(mp) as omf:
+                    m = _json.load(omf)
+                if _time_mod.time() - m.get('ts', 0) > 300:
+                    os.remove(mp)
+                    dp = mp.replace('.meta', '.dat')
+                    if os.path.exists(dp):
+                        os.remove(dp)
+            except Exception:
+                pass
+    return jsonify(token=token)
+
+@app.route('/download-blob/<token>')
+def download_blob(token):
+    """Serve a temporarily stored blob as a downloadable file."""
+    import json as _json
+    data_path = os.path.join(_BLOB_DIR, token + '.dat')
+    meta_path = os.path.join(_BLOB_DIR, token + '.meta')
+    if not os.path.exists(data_path) or not os.path.exists(meta_path):
+        return 'Expired or not found', 404
+    with open(meta_path) as mf:
+        meta = _json.load(mf)
+    with open(data_path, 'rb') as df:
+        data = df.read()
     try:
-        raw = _b64.b64decode(data_b64)
+        os.remove(data_path)
+        os.remove(meta_path)
     except Exception:
-        return '', 400
-    resp = make_response(raw)
-    resp.headers['Content-Type'] = mime
-    resp.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-    resp.headers['Content-Length'] = len(raw)
+        pass
+    resp = make_response(data)
+    resp.headers['Content-Type'] = meta.get('mime', 'application/octet-stream')
+    resp.headers['Content-Disposition'] = f'attachment; filename="{meta.get("filename", "download")}"'
+    resp.headers['Content-Length'] = len(data)
+    resp.headers['Cache-Control'] = 'no-store'
     return resp
 
 @app.template_filter('media_url')

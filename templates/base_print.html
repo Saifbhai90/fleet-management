@@ -43,6 +43,14 @@
       background: #fff;
       min-height: calc(100vh - 50px);
     }
+    ._bp-overlay {
+      position: fixed; inset: 0; z-index: 99998;
+      background: rgba(30,58,138,.82); backdrop-filter: blur(3px);
+      display: flex; align-items: center; justify-content: center;
+      animation: _bp_fade .2s ease;
+    }
+    @keyframes _bp_fade { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes _bp_spin { to { transform: rotate(360deg) } }
     @media print {
       .no-print, .print-toolbar { display: none !important; }
       body { background: #fff; margin: 0; padding: 0; }
@@ -68,10 +76,10 @@
     <button onclick="if(window.history.length > 1){ window.history.back(); } else { window.close(); }" class="tb-btn tb-close">
       <i class="bi bi-arrow-left"></i> Close
     </button>
-    <button onclick="window.print()" class="tb-btn tb-print">
+    <button id="_tbPrint" onclick="_doPrintAction('print')" class="tb-btn tb-print">
       <i class="bi bi-printer"></i> Print
     </button>
-    <button onclick="window.print()" class="tb-btn tb-pdf">
+    <button id="_tbPdf" onclick="_doPrintAction('pdf')" class="tb-btn tb-pdf">
       <i class="bi bi-file-earmark-pdf"></i> Save as PDF
     </button>
     <span class="tb-hint">
@@ -79,8 +87,89 @@
       Use <kbd>Ctrl+P</kbd> and select "Save as PDF" for PDF download
     </span>
   </div>
-  <div class="print-container">
+  <div class="print-container" id="printContainer">
     {% block content %}{% endblock %}
   </div>
+
+  <script>
+  var _bpIsNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+  function _doPrintAction(mode) {
+    if (!_bpIsNative) {
+      window.print();
+      return;
+    }
+    var btn = document.getElementById(mode === 'pdf' ? '_tbPdf' : '_tbPrint');
+    var origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span style="width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;display:inline-block;animation:_bp_spin .7s linear infinite;vertical-align:middle;"></span> Generating...';
+
+    var ov = document.createElement('div');
+    ov.className = '_bp-overlay';
+    ov.innerHTML = '<div style="text-align:center;color:#fff;">'
+      + '<div style="width:44px;height:44px;margin:0 auto 12px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:_bp_spin .7s linear infinite;"></div>'
+      + '<div style="font-weight:600;font-size:14px;">Generating PDF...</div>'
+      + '<div style="font-size:12px;opacity:.7;margin-top:4px;">Please wait</div></div>';
+    document.body.appendChild(ov);
+
+    var el = document.getElementById('printContainer');
+    var title = document.title.replace(/[^a-zA-Z0-9_ -]/g, '') || 'Report';
+    var fname = title.replace(/\s+/g, '_') + '.pdf';
+
+    var scr = document.createElement('script');
+    scr.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
+    scr.onload = function() {
+      var opts = {
+        margin: [6, 4, 6, 4],
+        filename: fname,
+        image: { type: 'jpeg', quality: 0.92 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+        pagebreak: { mode: ['css', 'legacy'] }
+      };
+      html2pdf().set(opts).from(el).output('blob').then(function(blob) {
+        if (ov.parentNode) ov.parentNode.removeChild(ov);
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+        _uploadAndDownload(blob, fname);
+      }).catch(function(e) {
+        console.error('PDF generation error:', e);
+        if (ov.parentNode) ov.parentNode.removeChild(ov);
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+        alert('PDF generation failed. Please try again.');
+      });
+    };
+    scr.onerror = function() {
+      if (ov.parentNode) ov.parentNode.removeChild(ov);
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+      alert('Could not load PDF library. Please check your internet connection.');
+    };
+    document.head.appendChild(scr);
+  }
+
+  function _uploadAndDownload(blob, fname) {
+    var fd = new FormData();
+    fd.append('file', blob, fname);
+    fd.append('filename', fname);
+    fetch('/upload-blob', { method: 'POST', body: fd })
+      .then(function(r) { return r.json(); })
+      .then(function(j) {
+        if (j.token) window.location.href = '/download-blob/' + j.token;
+      })
+      .catch(function(e) {
+        console.error('Upload failed:', e);
+        alert('Download failed. Please try again.');
+      });
+  }
+
+  if (_bpIsNative) {
+    var _origPrint = window.print;
+    window.print = function() {
+      _doPrintAction('pdf');
+    };
+  }
+  </script>
 </body>
 </html>
