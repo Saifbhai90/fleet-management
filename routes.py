@@ -2458,12 +2458,12 @@ def drivers_import():
 
                 from datetime import date as _date
                 if not application_date:
-                    application_date = _pk_date()
+                    application_date = pk_date()
 
                 def _expiry_status(expiry_date):
                     if expiry_date is None:
                         return None
-                    return "Expired" if expiry_date < _pk_date() else "Valid"
+                    return "Expired" if expiry_date < pk_date() else "Valid"
 
                 d = Driver(
                     driver_id=did,
@@ -14021,7 +14021,7 @@ def report_driver_profile(driver_id):
     came_from = _from
     return render_template('report_driver_profile.html', driver=driver,
                            job_history=job_history, total_actions=total_actions,
-                           last_action=last_action, today=_pk_date(),
+                           last_action=last_action, today=pk_date(),
                            ref=ref, came_from=came_from, hide_edit=hide_edit)
 
 
