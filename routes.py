@@ -14004,10 +14004,14 @@ def report_driver_profile(driver_id):
         job_history.append({'date': s.change_date, 'type': 'status', 'data': s})
     job_history.sort(key=lambda x: x['date'])
 
+    from datetime import date as _date
+    _today_d = _date.today()
+    for i, h in enumerate(job_history):
+        next_date = job_history[i + 1]['date'] if i + 1 < len(job_history) else _today_d
+        h['duration_days'] = (next_date - h['date']).days
+
     total_actions = len(job_history)
     last_action = job_history[-1]['date'] if job_history else None
-
-    from datetime import date as _date
     _from = request.args.get('from', '').strip()
     _ref  = request.args.get('ref',  '').strip()
     _back_map = {
@@ -14019,9 +14023,33 @@ def report_driver_profile(driver_id):
     # Show Edit only when opened directly from Drivers List (master section)
     hide_edit = (_from != 'master')
     came_from = _from
+    _today = pk_date()
+    service_days = (_today - driver.application_date).days if driver.application_date else None
+    driver_age = None
+    if driver.dob:
+        driver_age = _today.year - driver.dob.year - ((_today.month, _today.day) < (driver.dob.month, driver.dob.day))
+    doc_fields = [driver.photo_path, driver.cnic_front_path, driver.cnic_back_path,
+                  driver.license_front_path, driver.license_back_path, driver.document_path]
+    doc_uploaded = sum(1 for d in doc_fields if d)
+    doc_total = len(doc_fields)
+    jh_counts = {'assignment': 0, 'transfer': 0, 'left': 0, 'rejoin': 0}
+    for h in job_history:
+        if h['type'] == 'assignment':
+            jh_counts['assignment'] += 1
+        elif h['type'] == 'transfer':
+            jh_counts['transfer'] += 1
+        elif h['type'] == 'status':
+            if h['data'].action_type == 'left':
+                jh_counts['left'] += 1
+            else:
+                jh_counts['rejoin'] += 1
+    profile_url = url_for('report_driver_profile', driver_id=driver_id, _external=True)
     return render_template('report_driver_profile.html', driver=driver,
                            job_history=job_history, total_actions=total_actions,
-                           last_action=last_action, today=pk_date(),
+                           last_action=last_action, today=_today,
+                           service_days=service_days, driver_age=driver_age,
+                           doc_uploaded=doc_uploaded, doc_total=doc_total,
+                           jh_counts=jh_counts, profile_url=profile_url,
                            ref=ref, came_from=came_from, hide_edit=hide_edit)
 
 

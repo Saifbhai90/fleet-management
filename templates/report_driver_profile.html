@@ -82,7 +82,7 @@
 
   /* ── Stats row ── */
   .stats-row {
-    display: grid; grid-template-columns: repeat(3,1fr);
+    display: grid; grid-template-columns: repeat(4,1fr);
     gap: 0.85rem; margin-bottom: 0.85rem;
   }
   .stat-box {
@@ -133,12 +133,113 @@
   }
 
   /* ── Info grid ── */
-  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem 2rem; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .85rem 1.5rem; }
+  .info-grid-2col { grid-template-columns: 1fr 1fr; }
   .info-item .info-label {
     font-size: .63rem; color: var(--text-light); font-weight: 600;
     text-transform: uppercase; letter-spacing: .5px; margin-bottom: .18rem;
+    display: flex; align-items: center; gap: .3rem;
   }
+  .info-item .info-label i { font-size: .7rem; color: var(--brand-mid); }
   .info-item .info-value { font-size: .88rem; color: var(--text-dark); font-weight: 600; }
+  .info-value a.tel-link {
+    color: var(--brand); text-decoration: none;
+    border-bottom: 1px dashed rgba(29,78,216,.3);
+    transition: border-color .15s, color .15s;
+  }
+  .info-value a.tel-link:hover { color: var(--brand-dark); border-bottom-color: var(--brand); }
+  .wa-link {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #25d366; color: #fff; font-size: .65rem;
+    text-decoration: none; margin-left: .35rem;
+    vertical-align: middle;
+    transition: transform .15s, box-shadow .15s;
+    box-shadow: 0 1px 3px rgba(37,211,102,.3);
+  }
+  .wa-link:hover { transform: scale(1.15); box-shadow: 0 2px 8px rgba(37,211,102,.45); }
+
+  /* ── Timeline duration badge ── */
+  .timeline-duration {
+    display: inline-flex; align-items: center; gap: .2rem;
+    font-size: .65rem; font-weight: 600; color: var(--text-light);
+    background: var(--bg-subtle); border: 1px solid var(--border);
+    border-radius: 4px; padding: .1rem .4rem;
+    margin-left: auto;
+  }
+  .timeline-duration i { font-size: .6rem; }
+
+  /* ── Emergency grouped box ── */
+  .emergency-box {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    padding: .75rem 1rem;
+    display: grid; grid-template-columns: 1fr 1fr; gap: .5rem 1.5rem;
+    margin-top: .25rem;
+  }
+  .emergency-box .emergency-title {
+    grid-column: 1 / -1;
+    font-size: .63rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .8px; color: #92400e;
+    display: flex; align-items: center; gap: .35rem;
+    margin-bottom: .15rem;
+  }
+  .emergency-box .emergency-title i { font-size: .75rem; }
+
+  /* ── No assignment placeholder ── */
+  .no-assignment-box {
+    background: var(--bg-subtle);
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    text-align: center;
+    margin-bottom: 0.85rem;
+  }
+  .no-assignment-box i { font-size: 1.5rem; color: #d1d5db; display: block; margin-bottom: .4rem; }
+  .no-assignment-box .na-text { font-size: .85rem; color: var(--text-light); font-weight: 500; }
+  .no-assignment-box .na-sub { font-size: .72rem; color: #9ca3af; margin-top: .2rem; }
+
+  /* ── Document completeness bar ── */
+  .doc-completeness {
+    display: flex; align-items: center; gap: .75rem;
+    margin-bottom: 1rem; padding: .6rem .85rem;
+    background: var(--bg-subtle); border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .doc-completeness .dc-info {
+    flex-shrink: 0; display: flex; align-items: center; gap: .4rem;
+    font-size: .78rem; font-weight: 600; color: var(--text-mid);
+  }
+  .doc-completeness .dc-info i { font-size: .9rem; }
+  .dc-bar-wrap {
+    flex: 1; height: 8px; background: #e5e7eb;
+    border-radius: 4px; overflow: hidden; position: relative;
+  }
+  .dc-bar-fill {
+    height: 100%; border-radius: 4px;
+    transition: width .4s ease;
+  }
+  .dc-bar-fill.dc-complete { background: linear-gradient(90deg, #10b981, #34d399); }
+  .dc-bar-fill.dc-partial  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .dc-bar-fill.dc-low      { background: linear-gradient(90deg, #ef4444, #f87171); }
+  .dc-count {
+    flex-shrink: 0; font-size: .72rem; font-weight: 700;
+    padding: .15rem .5rem; border-radius: 12px;
+  }
+  .dc-count.dc-complete { background: #d1fae5; color: #065f46; }
+  .dc-count.dc-partial  { background: #fef3c7; color: #92400e; }
+  .dc-count.dc-low      { background: #fee2e2; color: #991b1b; }
+
+  /* ── Age badge ── */
+  .age-badge {
+    display: inline-block; font-size: .72rem; font-weight: 600;
+    color: var(--text-light); background: var(--bg-subtle);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: .08rem .4rem; margin-left: .35rem;
+    vertical-align: middle;
+  }
 
   /* ── Document cards ── */
   .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -158,12 +259,51 @@
   .badge-expired { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
   .badge-unknown { background: #f3f4f6; color: var(--text-light); border: 1px solid var(--border); }
 
+  .doc-card.doc-expired {
+    border-color: #fca5a5;
+    background: linear-gradient(180deg, #fff5f5 0%, #fafafa 100%);
+    box-shadow: 0 0 0 1px rgba(239,68,68,.1);
+  }
+
   /* ── Uniform box ── */
   .uniform-box {
     background: #f8fafc; border: 1px solid var(--border);
     border-radius: 6px; padding: .65rem 1rem;
     font-size: .875rem; color: var(--text-mid);
     margin-top: .75rem;
+  }
+
+  /* ── Job history summary badges ── */
+  .jh-summary {
+    display: flex; flex-wrap: wrap; gap: .45rem;
+    margin-bottom: .85rem;
+  }
+  .jh-chip {
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .25rem .65rem; border-radius: 20px;
+    font-size: .72rem; font-weight: 600;
+    border: 1px solid transparent;
+  }
+  .jh-chip i { font-size: .7rem; }
+  .jh-chip .jh-num {
+    font-weight: 800; font-size: .78rem;
+    min-width: 16px; text-align: center;
+  }
+  .jh-chip-assign  { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+  .jh-chip-transfer{ background: #fffbeb; color: #d97706; border-color: #fde68a; }
+  .jh-chip-left    { background: #fff1f2; color: #e11d48; border-color: #fecdd3; }
+  .jh-chip-rejoin  { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+
+  /* ── QR Code block (only in PDF/Print) ── */
+  .qr-block {
+    display: none;
+    text-align: center; margin-top: .5rem;
+    padding: .5rem 0;
+  }
+  .qr-block img { width: 80px; height: 80px; }
+  .qr-block .qr-label {
+    font-size: .6rem; color: #9ca3af; margin-top: .2rem;
+    letter-spacing: .3px;
   }
 
   /* ── Modern timeline ── */
@@ -289,8 +429,6 @@
   .doc-pdf-wrap .pdf-icon { font-size: 2.5rem; color: #ef4444; }
   .doc-pdf-wrap a { font-size: .82rem; font-weight: 600; }
 
-  @media (max-width: 480px) { .docs-photo-grid { grid-template-columns: 1fr; } }
-
   /* ── Assignment tag ── */
   .current-tag {
     display: inline-block; background: #dbeafe; color: var(--brand);
@@ -299,11 +437,18 @@
 
   .pdf-page-break-before { /* no screen styles */ }
 
-  @media (max-width: 640px) {
+  @media (max-width: 768px) {
+    .stats-row { grid-template-columns: repeat(2,1fr); }
+    .info-grid  { grid-template-columns: 1fr 1fr; }
+    .doc-grid   { grid-template-columns: 1fr; }
+    .docs-photo-grid .photo-row { grid-template-columns: repeat(2,1fr); }
+    .profile-header h2 { font-size: 1.35rem; }
+  }
+  @media (max-width: 480px) {
     .stats-row { grid-template-columns: 1fr; }
     .info-grid  { grid-template-columns: 1fr; }
-    .doc-grid   { grid-template-columns: 1fr; }
-    .profile-header h2 { font-size: 1.35rem; }
+    .emergency-box { grid-template-columns: 1fr; }
+    .docs-photo-grid .photo-row { grid-template-columns: 1fr; }
     .status-badge { position: static; margin-top: .75rem; display: inline-block; }
   }
 
@@ -350,7 +495,7 @@
       -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }
     .stats-row {
-      display: grid !important; grid-template-columns: repeat(3,1fr) !important;
+      display: grid !important; grid-template-columns: repeat(4,1fr) !important;
       gap: .25rem !important; margin-bottom: .25rem !important;
     }
     .stat-box {
@@ -370,7 +515,20 @@
     .info-item { margin-bottom: 0 !important; }
     .info-item .info-label { font-size: .56rem !important; margin-bottom: .04rem !important; }
     .info-item .info-value { font-size: .74rem !important; }
-    .info-grid { display: grid !important; gap: .12rem 1rem !important; }
+    .info-grid { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; gap: .12rem 1rem !important; }
+    .info-grid-2col { grid-template-columns: 1fr 1fr !important; }
+    .emergency-box { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: .12rem .5rem !important; padding: .2rem .4rem !important; margin-top: .15rem !important; background: #fffbeb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .emergency-box .emergency-title { grid-column: 1/-1 !important; font-size: .52rem !important; }
+    .no-assignment-box { padding: .2rem .4rem !important; margin-bottom: .2rem !important; border: 1px dashed #e5e7eb !important; }
+    .no-assignment-box i { font-size: .8rem !important; }
+    .no-assignment-box .na-text { font-size: .65rem !important; }
+    .no-assignment-box .na-sub { font-size: .55rem !important; }
+    .doc-completeness { display: flex !important; padding: .2rem .4rem !important; margin-bottom: .3rem !important; gap: .4rem !important; background: #f3f4f6 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .doc-completeness .dc-info { font-size: .58rem !important; }
+    .dc-bar-wrap { height: 5px !important; }
+    .dc-bar-fill { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .dc-count { font-size: .55rem !important; padding: .08rem .3rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .age-badge { font-size: .58rem !important; padding: .04rem .28rem !important; }
     .doc-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: .3rem !important; }
     .doc-card {
       border: 1px solid #e5e7eb !important; border-radius: 3px !important;
@@ -419,9 +577,18 @@
       background: #fff !important; border: 1px solid #e5e7eb !important;
       -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }
+    .wa-link { display: none !important; }
     .timeline-meta { display: flex !important; align-items: center !important; gap: .35rem !important; margin-bottom: .18rem !important; }
+    .timeline-duration { font-size: .52rem !important; padding: .06rem .25rem !important; }
+    .timeline-duration i { font-size: .48rem !important; }
     .timeline-badge { font-size: .56rem !important; padding: .08rem .38rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     .timeline-detail { font-size: .7rem !important; }
+    .jh-summary { display: flex !important; gap: .2rem !important; margin-bottom: .3rem !important; }
+    .jh-chip { font-size: .55rem !important; padding: .1rem .35rem !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .jh-chip .jh-num { font-size: .6rem !important; }
+    #qrBlock { display: block !important; margin-top: .3rem !important; }
+    #qrBlock img { width: 55px !important; height: 55px !important; }
+    #qrBlock .qr-label { font-size: .5rem !important; }
     #pdfWatermark { display: block !important; font-size: .58rem !important; padding: .2rem .5rem !important; margin-top: .2rem !important; }
   }
 </style>
@@ -494,6 +661,17 @@
       <div class="stat-value" style="font-size:1rem;">{{ driver.application_date|ddmmyyyy if driver.application_date else '—' }}</div>
     </div>
     <div class="stat-box">
+      <i class="bi bi-hourglass-split stat-icon"></i>
+      <div class="stat-label">Service Duration</div>
+      <div class="stat-value" style="font-size:1rem;">
+        {% if service_days is not none %}
+          {% if service_days >= 365 %}{{ (service_days // 365) }}y {{ ((service_days % 365) // 30) }}m
+          {% elif service_days >= 30 %}{{ (service_days // 30) }}m {{ (service_days % 30) }}d
+          {% else %}{{ service_days }}d{% endif %}
+        {% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="stat-box">
       <i class="bi bi-clock-history stat-icon"></i>
       <div class="stat-label">Last Action</div>
       <div class="stat-value" style="font-size:1rem;">{{ last_action|ddmmyyyy if last_action else '—' }}</div>
@@ -508,36 +686,43 @@
     </div>
     <div class="info-grid">
       <div class="info-item">
-        <div class="info-label">Father Name</div>
+        <div class="info-label"><i class="bi bi-person"></i> Father Name</div>
         <div class="info-value">{{ driver.father_name or '—' }}</div>
       </div>
       <div class="info-item">
-        <div class="info-label">Date of Birth</div>
-        <div class="info-value">{{ driver.dob|ddmmyyyy if driver.dob else '—' }}</div>
+        <div class="info-label"><i class="bi bi-calendar-event"></i> Date of Birth</div>
+        <div class="info-value">{{ driver.dob|ddmmyyyy if driver.dob else '—' }}{% if driver_age is not none %}<span class="age-badge">{{ driver_age }} yrs</span>{% endif %}</div>
       </div>
       <div class="info-item">
-        <div class="info-label">Phone No 1</div>
-        <div class="info-value">{{ driver.phone1|phone_fmt if driver.phone1 else '—' }}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">Phone No 2</div>
-        <div class="info-value">{{ driver.phone2|phone_fmt if driver.phone2 else '—' }}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">Education</div>
-        <div class="info-value">{{ driver.education or '—' }}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">Blood Group</div>
+        <div class="info-label"><i class="bi bi-droplet-fill"></i> Blood Group</div>
         <div class="info-value">{{ driver.blood_group or '—' }}</div>
       </div>
       <div class="info-item">
-        <div class="info-label">Emergency No</div>
-        <div class="info-value">{{ driver.emergency_no or '—' }}</div>
+        <div class="info-label"><i class="bi bi-telephone-fill"></i> Phone No 1</div>
+        <div class="info-value">{% if driver.phone1 %}<a href="tel:{{ driver.phone1 }}" class="tel-link">{{ driver.phone1|phone_fmt }}</a><a href="https://wa.me/92{{ driver.phone1|replace('-','')|replace(' ','')|replace('0','',1) }}" target="_blank" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a>{% else %}—{% endif %}</div>
       </div>
       <div class="info-item">
-        <div class="info-label">Address</div>
+        <div class="info-label"><i class="bi bi-telephone"></i> Phone No 2</div>
+        <div class="info-value">{% if driver.phone2 %}<a href="tel:{{ driver.phone2 }}" class="tel-link">{{ driver.phone2|phone_fmt }}</a><a href="https://wa.me/92{{ driver.phone2|replace('-','')|replace(' ','')|replace('0','',1) }}" target="_blank" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a>{% else %}—{% endif %}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label"><i class="bi bi-mortarboard-fill"></i> Education</div>
+        <div class="info-value">{{ driver.education or '—' }}</div>
+      </div>
+      <div class="info-item" style="grid-column:1/-1;">
+        <div class="info-label"><i class="bi bi-geo-alt-fill"></i> Address</div>
         <div class="info-value">{{ driver.address or '—' }}</div>
+      </div>
+      <div class="emergency-box">
+        <div class="emergency-title"><i class="bi bi-exclamation-triangle-fill"></i> Emergency Contact</div>
+        <div class="info-item">
+          <div class="info-label"><i class="bi bi-telephone-forward-fill"></i> Emergency No</div>
+          <div class="info-value">{% if driver.emergency_no %}<a href="tel:{{ driver.emergency_no }}" class="tel-link">{{ driver.emergency_no|phone_fmt }}</a><a href="https://wa.me/92{{ driver.emergency_no|replace('-','')|replace(' ','')|replace('0','',1) }}" target="_blank" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a>{% else %}—{% endif %}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label"><i class="bi bi-people-fill"></i> Relation</div>
+          <div class="info-value">{{ driver.emergency_relation or '—' }}</div>
+        </div>
       </div>
     </div>
   </div>
@@ -549,9 +734,9 @@
       <span class="section-icon"><i class="bi bi-truck-front-fill"></i></span>
       <span>Current Assignment</span>
     </div>
-    <div class="info-grid">
+    <div class="info-grid info-grid-2col">
       <div class="info-item">
-        <div class="info-label">Vehicle</div>
+        <div class="info-label"><i class="bi bi-truck-front"></i> Vehicle</div>
         <div class="info-value">
           {% if driver.vehicle %}
             <strong>{{ driver.vehicle.vehicle_no }}</strong>
@@ -561,18 +746,44 @@
         </div>
       </div>
       <div class="info-item">
-        <div class="info-label">Assigned Since</div>
+        <div class="info-label"><i class="bi bi-calendar2-check"></i> Assigned Since</div>
         <div class="info-value">{{ driver.assign_date|ddmmyyyy if driver.assign_date else '—' }}</div>
       </div>
       <div class="info-item">
-        <div class="info-label">Project</div>
+        <div class="info-label"><i class="bi bi-building"></i> Project</div>
         <div class="info-value">{{ driver.project.name if driver.project else '—' }}</div>
       </div>
       <div class="info-item">
-        <div class="info-label">District</div>
+        <div class="info-label"><i class="bi bi-geo-alt"></i> District</div>
         <div class="info-value">{{ driver.district.name if driver.district else '—' }}</div>
       </div>
+      {% if driver.assign_remarks %}
+      <div class="info-item" style="grid-column:1/-1;">
+        <div class="info-label"><i class="bi bi-chat-left-text"></i> Remarks</div>
+        <div class="info-value" style="font-style:italic;color:var(--text-mid);">{{ driver.assign_remarks }}</div>
+      </div>
+      {% endif %}
     </div>
+  </div>
+  {% else %}
+  <div class="no-assignment-box">
+    <i class="bi bi-truck-front"></i>
+    <div class="na-text">No Active Assignment</div>
+    <div class="na-sub">
+      {% if driver.status == 'Left' %}This driver has left the job.
+      {% else %}This driver is not currently assigned to any vehicle.{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- General Remarks -->
+  {% if driver.remarks %}
+  <div class="section-card" style="border-left:3.5px solid #f59e0b;">
+    <div class="section-title">
+      <span class="section-icon" style="background:linear-gradient(135deg,#92400e 0%,#f59e0b 100%);"><i class="bi bi-chat-square-text"></i></span>
+      <span>Remarks</span>
+    </div>
+    <div style="font-size:.88rem;color:var(--text-mid);line-height:1.65;white-space:pre-line;">{{ driver.remarks }}</div>
   </div>
   {% endif %}
 
@@ -582,68 +793,70 @@
       <span class="section-icon"><i class="bi bi-shield-check"></i></span>
       <span>Identification Documents</span>
     </div>
+    {% set cnic_valid = driver.cnic_expiry_date and driver.cnic_expiry_date > today %}
+    {% set cnic_expired = driver.cnic_expiry_date and not cnic_valid %}
+    {% set lic_valid = driver.license_expiry_date and driver.license_expiry_date > today %}
+    {% set lic_expired = driver.license_expiry_date and not lic_valid %}
     <div class="doc-grid">
       <!-- CNIC -->
-      <div class="doc-card">
+      <div class="doc-card {{ 'doc-expired' if cnic_expired }}">
         <div class="doc-card-title"><i class="bi bi-person-vcard me-1"></i>CNIC Details</div>
         <div class="info-item mb-2">
-          <div class="info-label">Number</div>
+          <div class="info-label"><i class="bi bi-hash"></i> Number</div>
           <div class="info-value fw-bold">{{ driver.cnic_no|cnic_fmt if driver.cnic_no else '—' }}</div>
         </div>
         <div class="doc-dates">
           <div class="info-item">
-            <div class="info-label">Issue Date</div>
+            <div class="info-label"><i class="bi bi-calendar-plus"></i> Issue Date</div>
             <div class="info-value">{{ driver.cnic_issue_date|ddmmyyyy if driver.cnic_issue_date else '—' }}</div>
           </div>
           <div class="info-item">
-            <div class="info-label">Expiry Date</div>
+            <div class="info-label"><i class="bi bi-calendar-x"></i> Expiry Date</div>
             <div class="info-value">{{ driver.cnic_expiry_date|ddmmyyyy if driver.cnic_expiry_date else '—' }}</div>
           </div>
         </div>
         {% if driver.cnic_expiry_date %}
-        {% set cnic_valid = driver.cnic_expiry_date > today %}
         <div>
           <span class="validity-badge {{ 'badge-valid' if cnic_valid else 'badge-expired' }}">
-            {% if cnic_valid %}✓ Valid (Expires {{ driver.cnic_expiry_date|ddmmyyyy }})
-            {% else %}✗ Expired ({{ driver.cnic_expiry_date|ddmmyyyy }}){% endif %}
+            {% if cnic_valid %}<i class="bi bi-check-circle-fill me-1"></i>Valid (Expires {{ driver.cnic_expiry_date|ddmmyyyy }})
+            {% else %}<i class="bi bi-x-circle-fill me-1"></i>Expired ({{ driver.cnic_expiry_date|ddmmyyyy }}){% endif %}
           </span>
         </div>
         {% endif %}
       </div>
 
       <!-- License -->
-      <div class="doc-card">
+      <div class="doc-card {{ 'doc-expired' if lic_expired }}">
         <div class="doc-card-title"><i class="bi bi-card-checklist me-1"></i>License Details</div>
-        <div class="info-grid" style="grid-template-columns:1fr 1fr; gap:0.5rem 1rem;">
+        <div class="info-grid info-grid-2col" style="gap:0.5rem 1rem;">
           <div class="info-item">
-            <div class="info-label">Number</div>
+            <div class="info-label"><i class="bi bi-hash"></i> Number</div>
             <div class="info-value fw-bold">{{ driver.license_no or '—' }}</div>
           </div>
           <div class="info-item">
-            <div class="info-label">Type</div>
+            <div class="info-label"><i class="bi bi-tag"></i> Type</div>
             <div class="info-value">{{ driver.license_type or '—' }}</div>
           </div>
         </div>
         <div class="info-item mt-2 mb-2">
-          <div class="info-label">Issue District</div>
+          <div class="info-label"><i class="bi bi-pin-map"></i> Issue District</div>
           <div class="info-value">{{ driver.issue_district or '—' }}</div>
         </div>
         <div class="doc-dates">
           <div class="info-item">
-            <div class="info-label">Issue Date</div>
+            <div class="info-label"><i class="bi bi-calendar-plus"></i> Issue Date</div>
             <div class="info-value">{{ driver.license_issue_date|ddmmyyyy if driver.license_issue_date else '—' }}</div>
           </div>
           <div class="info-item">
-            <div class="info-label">Expiry Date</div>
+            <div class="info-label"><i class="bi bi-calendar-x"></i> Expiry Date</div>
             <div class="info-value">{{ driver.license_expiry_date|ddmmyyyy if driver.license_expiry_date else '—' }}</div>
           </div>
         </div>
         {% if driver.license_expiry_date %}
-        {% set lic_valid = driver.license_expiry_date > today %}
         <div>
           <span class="validity-badge {{ 'badge-valid' if lic_valid else 'badge-expired' }}">
-            {% if lic_valid %}✓ Valid (Expires {{ driver.license_expiry_date|ddmmyyyy }})
-            {% else %}✗ Expired ({{ driver.license_expiry_date|ddmmyyyy }}){% endif %}
+            {% if lic_valid %}<i class="bi bi-check-circle-fill me-1"></i>Valid (Expires {{ driver.license_expiry_date|ddmmyyyy }})
+            {% else %}<i class="bi bi-x-circle-fill me-1"></i>Expired ({{ driver.license_expiry_date|ddmmyyyy }}){% endif %}
           </span>
         </div>
         {% endif %}
@@ -657,17 +870,17 @@
       <span class="section-icon"><i class="bi bi-bank2"></i></span>
       <span>Official Details</span>
     </div>
-    <div class="info-grid">
+    <div class="info-grid info-grid-2col">
       <div class="info-item">
-        <div class="info-label">Bank Name</div>
+        <div class="info-label"><i class="bi bi-bank"></i> Bank Name</div>
         <div class="info-value">{{ driver.bank_name or '—' }}</div>
       </div>
       <div class="info-item">
-        <div class="info-label">Account No</div>
+        <div class="info-label"><i class="bi bi-credit-card-2-front"></i> Account No</div>
         <div class="info-value">{{ driver.account_no or '—' }}</div>
       </div>
       <div class="info-item" style="grid-column:1/-1;">
-        <div class="info-label">Account Title</div>
+        <div class="info-label"><i class="bi bi-person-lines-fill"></i> Account Title</div>
         <div class="info-value">{{ driver.account_title or '—' }}</div>
       </div>
     </div>
@@ -685,10 +898,22 @@
 
   <!-- Photos & Documents -->
   {% set _has_any_doc = driver.photo_path or driver.cnic_front_path or driver.cnic_back_path or driver.license_front_path or driver.license_back_path or driver.document_path %}
+  {% set dc_pct = ((doc_uploaded / doc_total) * 100)|int if doc_total else 0 %}
+  {% set dc_level = 'dc-complete' if doc_uploaded == doc_total else ('dc-partial' if doc_uploaded >= 3 else 'dc-low') %}
   <div class="section-card" id="photos-docs-section">
     <div class="section-title">
       <span class="section-icon"><i class="bi bi-images"></i></span>
       <span>Photos &amp; Documents</span>
+    </div>
+    <div class="doc-completeness">
+      <div class="dc-info">
+        <i class="bi bi-folder-check"></i>
+        <span>Completeness</span>
+      </div>
+      <div class="dc-bar-wrap">
+        <div class="dc-bar-fill {{ dc_level }}" style="width:{{ dc_pct }}%;"></div>
+      </div>
+      <span class="dc-count {{ dc_level }}">{{ doc_uploaded }}/{{ doc_total }}</span>
     </div>
     {% if _has_any_doc %}
     <div class="docs-photo-grid">
@@ -1035,7 +1260,7 @@
 
     /* ── 3. Stats row — LARGE container → auto split; stat-box → avoid ── */
     '#profile-content .stats-row { display: block !important; margin-bottom: 5px !important; break-inside: auto !important; page-break-inside: auto !important; overflow: hidden !important; }',
-    '#profile-content .stat-box { float: left !important; width: 31% !important; margin-right: 2% !important; padding: 5px 8px !important; text-align: center !important; box-shadow: none !important; border-radius: 5px !important; border: 1px solid #e5e7eb !important; border-top: 2px solid #3b82f6 !important; background: #fff !important; break-inside: avoid !important; page-break-inside: avoid !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .stat-box { float: left !important; width: 23% !important; margin-right: 2% !important; padding: 5px 8px !important; text-align: center !important; box-shadow: none !important; border-radius: 5px !important; border: 1px solid #e5e7eb !important; border-top: 2px solid #3b82f6 !important; background: #fff !important; break-inside: avoid !important; page-break-inside: avoid !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
     '#profile-content .stat-box .stat-icon { font-size: 0.72rem !important; margin-bottom: 2px !important; display: block !important; }',
     '#profile-content .stat-box .stat-label { font-size: 0.52rem !important; margin-bottom: 1px !important; color: #6b7280 !important; display: block !important; }',
     '#profile-content .stat-box .stat-value { font-size: 0.8rem !important; color: #1d4ed8 !important; display: block !important; }',
@@ -1049,7 +1274,24 @@
 
     /* ── 6. Info grid → BLOCK so rows can split across pages ── */
     '#profile-content .info-grid { display: block !important; overflow: hidden !important; margin: 0 !important; }',
-    '#profile-content .info-item { float: left !important; width: 48% !important; margin-right: 2% !important; margin-bottom: 3px !important; break-inside: auto !important; page-break-inside: auto !important; }',
+    '#profile-content .info-grid-2col { display: block !important; }',
+    '#profile-content .info-item { float: left !important; width: 31% !important; margin-right: 2% !important; margin-bottom: 3px !important; break-inside: auto !important; page-break-inside: auto !important; }',
+    '#profile-content .info-item[style*=\"grid-column\"] { float: none !important; clear: both !important; width: 100% !important; margin-right: 0 !important; }',
+    '#profile-content .info-grid-2col .info-item { width: 48% !important; }',
+    '#profile-content .info-grid-2col .info-item[style*=\"grid-column\"] { float: none !important; clear: both !important; width: 100% !important; margin-right: 0 !important; }',
+    '#profile-content .emergency-box { display: block !important; overflow: hidden !important; clear: both !important; background: #fffbeb !important; border: 1px solid #fcd34d !important; border-radius: 4px !important; padding: 5px 8px !important; margin-top: 3px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .emergency-box .emergency-title { display: block !important; font-size: 0.52rem !important; margin-bottom: 2px !important; }',
+    '#profile-content .emergency-box .info-item { float: left !important; width: 48% !important; margin-right: 2% !important; }',
+    '#profile-content .no-assignment-box { display: block !important; padding: 8px !important; margin-bottom: 5px !important; text-align: center !important; border: 1px dashed #e5e7eb !important; border-radius: 5px !important; }',
+    '#profile-content .no-assignment-box i { font-size: 1rem !important; }',
+    '#profile-content .no-assignment-box .na-text { font-size: 0.7rem !important; }',
+    '#profile-content .no-assignment-box .na-sub { font-size: 0.58rem !important; }',
+    '#profile-content .doc-completeness { display: flex !important; padding: 4px 7px !important; margin-bottom: 5px !important; gap: 5px !important; background: #f3f4f6 !important; border-radius: 4px !important; border: 1px solid #e5e7eb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .doc-completeness .dc-info { font-size: 0.6rem !important; }',
+    '#profile-content .dc-bar-wrap { height: 5px !important; }',
+    '#profile-content .dc-bar-fill { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .dc-count { font-size: 0.54rem !important; padding: 1px 4px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .age-badge { font-size: 0.58rem !important; padding: 1px 3px !important; }',
     '#profile-content .info-item .info-label { font-size: 0.54rem !important; margin-bottom: 0 !important; color: #6b7280 !important; display: block !important; }',
     '#profile-content .info-item .info-value { font-size: 0.72rem !important; color: #111827 !important; font-weight: 600 !important; display: block !important; }',
 
@@ -1069,7 +1311,10 @@
     '#profile-content .timeline-item { display: block !important; margin-bottom: 5px !important; break-inside: avoid !important; page-break-inside: avoid !important; }',
     '#profile-content .timeline-date { font-size: 0.6rem !important; display: block !important; }',
     '#profile-content .timeline-card { display: block !important; padding: 4px 7px !important; border-radius: 0 4px 4px 0 !important; background: #fff !important; border: 1px solid #e5e7eb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .wa-link { display: none !important; }',
     '#profile-content .timeline-meta { display: flex !important; align-items: center !important; gap: 5px !important; margin-bottom: 2px !important; }',
+    '#profile-content .timeline-duration { font-size: 0.52rem !important; padding: 1px 3px !important; }',
+    '#profile-content .timeline-duration i { font-size: 0.48rem !important; }',
     '#profile-content .timeline-badge { font-size: 0.52rem !important; padding: 2px 5px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
     '#profile-content .timeline-detail { font-size: 0.66rem !important; line-height: 1.4 !important; display: block !important; }',
 
@@ -1091,7 +1336,18 @@
     /* ── 12. Job History section — LARGE container → auto split ── */
     '#job-history-section { display: block !important; margin-bottom: 0 !important; break-inside: auto !important; page-break-inside: auto !important; }',
 
-    /* ── 13. Watermark & trailing guard ── */
+    /* ── 13. Job history summary badges ── */
+    '#profile-content .jh-summary { display: flex !important; flex-wrap: wrap !important; gap: 3px !important; margin-bottom: 5px !important; }',
+    '#profile-content .jh-chip { font-size: 0.54rem !important; padding: 2px 5px !important; border-radius: 10px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .jh-chip .jh-num { font-size: 0.58rem !important; }',
+    '#profile-content .jh-chip i { font-size: 0.5rem !important; }',
+
+    /* ── 14. QR Code block ── */
+    '#profile-content #qrBlock { display: block !important; text-align: center !important; margin-top: 6px !important; padding: 4px 0 !important; }',
+    '#profile-content #qrBlock img { width: 60px !important; height: 60px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content #qrBlock .qr-label { font-size: 0.48rem !important; margin-top: 2px !important; }',
+
+    /* ── 15. Watermark & trailing guard ── */
     '#profile-content #pdfWatermark { display: block !important; margin-top: 6px !important; margin-bottom: 0 !important; padding: 4px 8px !important; font-size: 0.54rem !important; }',
     '#profile-content > *:last-child { margin-bottom: 0 !important; padding-bottom: 0 !important; }'
 
@@ -1112,6 +1368,8 @@
       if (pde) pde.textContent = ds;
       wmC.style.setProperty('display', 'block', 'important');
     }
+    var qrB = clonedDoc.getElementById('qrBlock');
+    if (qrB) qrB.style.setProperty('display', 'block', 'important');
   }
 
   /* ── Find the row with the lowest pixel variance (= gap between section
@@ -1584,6 +1842,12 @@
       <span>Job History <span style="font-weight:400;opacity:.6;font-size:.85em;">(Oldest First)</span></span>
     </div>
     {% if job_history %}
+    <div class="jh-summary">
+      {% if jh_counts.assignment %}<span class="jh-chip jh-chip-assign"><i class="bi bi-plus-circle-fill"></i><span class="jh-num">{{ jh_counts.assignment }}</span> Assignment{{ 's' if jh_counts.assignment > 1 }}</span>{% endif %}
+      {% if jh_counts.transfer %}<span class="jh-chip jh-chip-transfer"><i class="bi bi-shuffle"></i><span class="jh-num">{{ jh_counts.transfer }}</span> Transfer{{ 's' if jh_counts.transfer > 1 }}</span>{% endif %}
+      {% if jh_counts.left %}<span class="jh-chip jh-chip-left"><i class="bi bi-box-arrow-right"></i><span class="jh-num">{{ jh_counts.left }}</span> Left</span>{% endif %}
+      {% if jh_counts.rejoin %}<span class="jh-chip jh-chip-rejoin"><i class="bi bi-arrow-return-left"></i><span class="jh-num">{{ jh_counts.rejoin }}</span> Rejoin{{ 's' if jh_counts.rejoin > 1 }}</span>{% endif %}
+    </div>
     <div class="timeline">
       {% for item in job_history %}
 
@@ -1596,6 +1860,7 @@
               <div class="timeline-meta">
                 <span class="timeline-date">{{ item.date|ddmmyyyy }}</span>
                 <span class="timeline-badge badge-assign"><i class="bi bi-plus-circle-fill"></i> Assignment</span>
+                {% if item.duration_days is not none %}<span class="timeline-duration"><i class="bi bi-calendar-range"></i> {{ item.duration_days }}d</span>{% endif %}
               </div>
               <div class="timeline-detail">
                 <i class="bi bi-truck-front text-primary me-1" style="font-size:.78rem;"></i>
@@ -1618,6 +1883,7 @@
               <div class="timeline-meta">
                 <span class="timeline-date transfer">{{ item.date|ddmmyyyy }}</span>
                 <span class="timeline-badge badge-transfer"><i class="bi bi-shuffle"></i> Transfer</span>
+                {% if item.duration_days is not none %}<span class="timeline-duration"><i class="bi bi-calendar-range"></i> {{ item.duration_days }}d</span>{% endif %}
               </div>
               <div class="timeline-detail">
                 <i class="bi bi-arrow-left-right text-warning me-1" style="font-size:.78rem;"></i>
@@ -1647,6 +1913,7 @@
                 {% else %}
                   <span class="timeline-badge badge-rejoin"><i class="bi bi-arrow-return-left"></i> Rejoined</span>
                 {% endif %}
+                {% if item.duration_days is not none %}<span class="timeline-duration"><i class="bi bi-calendar-range"></i> {{ item.duration_days }}d</span>{% endif %}
               </div>
               <div class="timeline-detail">
                 {% if is_left %}
@@ -1672,6 +1939,12 @@
     {% else %}
     <p class="text-muted mb-0" style="font-size:.88rem;"><i class="bi bi-info-circle me-1"></i>No job history recorded yet.</p>
     {% endif %}
+  </div>
+
+  <!-- QR Code — hidden on screen, visible only in PDF/Print -->
+  <div class="qr-block" id="qrBlock">
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data={{ profile_url|urlencode }}" alt="QR Code">
+    <div class="qr-label"><i class="bi bi-qr-code me-1"></i>Scan to open driver profile</div>
   </div>
 
   <!-- PDF/Print watermark — hidden on screen, visible only in PDF/Print -->
