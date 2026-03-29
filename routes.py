@@ -2250,23 +2250,27 @@ def delete_vehicle(id):
 @app.route('/drivers')
 def drivers_list():
     from auth_utils import get_user_context
-    
+
     user_id = session.get('user_id')
     user_context = get_user_context(user_id) if user_id else {}
     allowed_projects = user_context.get('allowed_projects', set())
     allowed_districts = user_context.get('allowed_districts', set())
     allowed_vehicles = user_context.get('allowed_vehicles', set())
     is_master_or_admin = user_context.get('is_master_or_admin', False)
-    
-    search = request.args.get('search', '').strip()
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
-    sort_by = request.args.get('sort_by', 'name')
-    sort_order = request.args.get('sort_order', 'asc')
 
-    query = Driver.query
-    
-    # Apply user data scope
+    search = request.args.get('search', '').strip()
+    f_status = request.args.get('status', '').strip()
+    f_cnic = request.args.get('cnic_status', '').strip()
+    f_license = request.args.get('license_status', '').strip()
+
+    query = (
+        db.session.query(Driver, Project)
+        .outerjoin(Project, Driver.project_id == Project.id)
+        .outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+        .outerjoin(District, Driver.district_id == District.id)
+        .options(db.joinedload(Driver.vehicle), db.joinedload(Driver.district))
+    )
+
     if not is_master_or_admin:
         if allowed_projects:
             query = query.filter(Driver.project_id.in_(list(allowed_projects)))
@@ -2274,11 +2278,15 @@ def drivers_list():
             query = query.filter(Driver.district_id.in_(list(allowed_districts)))
         if allowed_vehicles:
             query = query.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
-    
+
+    if f_status in ('Active', 'Left'):
+        query = query.filter(Driver.status == f_status)
+    if f_cnic in ('Valid', 'Expired'):
+        query = query.filter(Driver.cnic_status == f_cnic)
+    if f_license in ('Valid', 'Expired'):
+        query = query.filter(Driver.license_status == f_license)
+
     if search:
-        query = query.outerjoin(Vehicle,  Driver.vehicle_id  == Vehicle.id) \
-                     .outerjoin(Project,  Driver.project_id  == Project.id) \
-                     .outerjoin(District, Driver.district_id == District.id)
         flt = _multi_word_filter(search,
             Driver.driver_id, Driver.name, Driver.cnic_no,
             Driver.cnic_status, Driver.license_no, Driver.license_status,
@@ -2287,26 +2295,28 @@ def drivers_list():
         if flt is not None:
             query = query.filter(flt)
 
-    # Apply sorting based on sort_by column
-    if sort_by == 'driver_id':
-        order_col = Driver.driver_id.asc() if sort_order == 'asc' else Driver.driver_id.desc()
-    elif sort_by == 'cnic_no':
-        order_col = Driver.cnic_no.asc() if sort_order == 'asc' else Driver.cnic_no.desc()
-    elif sort_by == 'license_no':
-        order_col = Driver.license_no.asc() if sort_order == 'asc' else Driver.license_no.desc()
-    elif sort_by == 'phone':
-        order_col = Driver.phone1.asc() if sort_order == 'asc' else Driver.phone1.desc()
-    elif sort_by == 'district':
-        order_col = Driver.driver_district.asc() if sort_order == 'asc' else Driver.driver_district.desc()
-    else:  # default to name
-        order_col = Driver.name.asc() if sort_order == 'asc' else Driver.name.desc()
-    
-    drivers_pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
-    drivers = drivers_pagination.items
+    rows = query.order_by(Driver.name.asc()).all()
+    drivers = []
+    driver_projects = {}
+    for drv, proj in rows:
+        drivers.append(drv)
+        driver_projects[drv.id] = proj
+
     today = pk_date()
+    stats = {
+        'total': len(drivers),
+        'active': sum(1 for d in drivers if d.status == 'Active'),
+        'left': sum(1 for d in drivers if d.status == 'Left'),
+        'expired_cnic': sum(1 for d in drivers if d.cnic_status == 'Expired'),
+        'expired_license': sum(1 for d in drivers if d.license_status == 'Expired'),
+    }
+
+    districts_list = sorted(set(d.driver_district for d in drivers if d.driver_district))
+
     return render_template('drivers_list.html', drivers=drivers, search=search, today=today,
-                           pagination=drivers_pagination, per_page=per_page,
-                           sort_by=sort_by, sort_order=sort_order)
+                           stats=stats, driver_projects=driver_projects,
+                           districts_list=districts_list,
+                           f_status=f_status, f_cnic=f_cnic, f_license=f_license)
 
 
 @app.route('/drivers/export')
