@@ -170,9 +170,9 @@
   .save-contact-link:hover { transform: scale(1.15); box-shadow: 0 2px 8px rgba(25,118,210,.45); color: #fff; }
   @media (max-width: 768px) { .save-contact-link { display: inline-flex; } }
   .license-age-badge {
-    display: inline-block; font-size: .7rem; font-weight: 600;
-    background: #e8eaf6; color: #3f51b5; border-radius: 10px;
-    padding: .12rem .5rem; margin-left: .35rem; vertical-align: middle;
+    display: inline-block; font-size: .68rem; font-weight: 600;
+    background: #f3e5f5; color: #7b1fa2; border-radius: 8px;
+    padding: .1rem .4rem; margin-left: .3rem; vertical-align: middle;
   }
 
   /* ── Timeline duration badge ── */
@@ -866,16 +866,9 @@
           </div>
           <div class="info-item">
             <div class="info-label"><i class="bi bi-calendar-x"></i> Expiry Date</div>
-            <div class="info-value">{{ driver.license_expiry_date|ddmmyyyy if driver.license_expiry_date else '—' }}</div>
+            <div class="info-value">{{ driver.license_expiry_date|ddmmyyyy if driver.license_expiry_date else '—' }}{% if driver.license_issue_date and driver.license_expiry_date %}{% set lic_total = (driver.license_expiry_date - driver.license_issue_date).days %}{% set lic_y = lic_total // 365 %}{% set lic_m = (lic_total % 365) // 30 %}{% set lic_d = (lic_total % 365) % 30 %} <span class="license-age-badge">{% if lic_y %}{{ lic_y }}y {% endif %}{% if lic_m %}{{ lic_m }}m {% endif %}{{ lic_d }}d</span>{% endif %}</div>
           </div>
         </div>
-        {% if driver.license_issue_date and driver.license_expiry_date %}
-        {% set lic_total = (driver.license_expiry_date - driver.license_issue_date).days %}
-        {% set lic_y = lic_total // 365 %}{% set lic_m = (lic_total % 365) // 30 %}{% set lic_d = (lic_total % 365) % 30 %}
-        <div class="mt-1 mb-1">
-          <span class="license-age-badge"><i class="bi bi-clock-history me-1"></i>License Validity: {% if lic_y %}{{ lic_y }}y {% endif %}{% if lic_m %}{{ lic_m }}m {% endif %}{{ lic_d }}d</span>
-        </div>
-        {% endif %}
         {% if driver.license_expiry_date %}
         <div>
           <span class="validity-badge {{ 'badge-valid' if lic_valid else 'badge-expired' }}">
@@ -2002,15 +1995,13 @@
       + 'FN:' + fullName + '\r\n'
       + 'TEL;TYPE=CELL:' + phone + '\r\n'
       + 'END:VCARD';
-    var blob = new Blob([vcard], { type: 'text/vcard;charset=utf-8' });
-    var url = URL.createObjectURL(blob);
+    var dataUri = 'data:text/vcard;charset=utf-8,' + encodeURIComponent(vcard);
     var a = document.createElement('a');
-    a.href = url;
+    a.href = dataUri;
     a.download = driverName.replace(/\s+/g, '_') + '.vcf';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   }
   </script>
 
