@@ -6,96 +6,116 @@
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <style>
   body { background: #f8f9fa; }
-  .page-header-gradient { background: #fff; padding: 0; margin-bottom: 1rem; }
-  .page-header-gradient h3 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
-  .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+  .page-header-gradient { background: #fff; padding: 0; margin-bottom: 0.75rem; }
+  .page-header-gradient h3 { color: #2c3e50; margin: 0; font-size: 1.3rem; font-weight: 600; padding: 0.75rem 0; }
+  .page-header-gradient .subtitle { color: #6c757d; font-size: 0.82rem; margin-top: 0.15rem; }
 
-  /* Stats cards */
-  .stat-card { background: #fff; border-radius: 10px; padding: 0.55rem 0.75rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); display: flex; align-items: center; gap: 0.55rem; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; }
-  .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
-  .stat-card.active-card { border-color: currentColor; }
-  .stat-card .stat-icon { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
-  .stat-card .stat-val { font-size: 1.15rem; font-weight: 800; line-height: 1.1; }
-  .stat-card .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.4px; color: #78909c; font-weight: 600; }
+  /* ── Stats cards — dashboard style with left border ── */
+  .stat-card {
+    background: #fff; border-radius: 6px; padding: 0.6rem 0.85rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    cursor: pointer; transition: all 0.2s;
+    border: 1px solid #e8e8e8;
+    border-left: 4px solid #ccc;
+    display: flex; align-items: center; gap: 0.6rem;
+    min-height: 56px;
+  }
+  .stat-card:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,0.1); }
+  .stat-card.active-card { border-left-width: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); background: #fafbff; }
+  .stat-card .sc-icon { font-size: 1.15rem; opacity: 0.7; flex-shrink: 0; }
+  .stat-card .sc-num { font-size: 1.35rem; font-weight: 800; line-height: 1; }
+  .stat-card .sc-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.5px; color: #78909c; font-weight: 600; margin-top: 1px; white-space: nowrap; }
 
-  /* Filter bar */
-  .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
-  .filter-input { border: 1px solid #ddd; border-radius: 5px; padding: 0.38rem 0.7rem; font-size: 0.855rem; }
+  /* per-card accent colors */
+  .sc-total  { border-left-color: #3f51b5; }
+  .sc-total .sc-icon, .sc-total .sc-num  { color: #3f51b5; }
+  .sc-active { border-left-color: #2e7d32; }
+  .sc-active .sc-icon, .sc-active .sc-num { color: #2e7d32; }
+  .sc-left   { border-left-color: #e65100; }
+  .sc-left .sc-icon, .sc-left .sc-num   { color: #e65100; }
+  .sc-cnic   { border-left-color: #d84315; }
+  .sc-cnic .sc-icon, .sc-cnic .sc-num   { color: #d84315; }
+  .sc-lic    { border-left-color: #c62828; }
+  .sc-lic .sc-icon, .sc-lic .sc-num    { color: #c62828; }
+
+  /* ── Filter bar ── */
+  .filter-bar { background: #fff; border-radius: 6px; padding: 0.7rem 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 0.75rem; }
+  .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.32rem 0.6rem; font-size: 0.8rem; }
   .filter-input:focus { border-color: #3f51b5; box-shadow: 0 0 0 2px rgba(63,81,181,0.12); outline: none; }
-  .btn-filter { background: #3f51b5; color: #fff; border: none; border-radius: 5px; padding: 0.4rem 1rem; font-size: 0.855rem; font-weight: 600; }
+  .filter-lbl { font-size: 0.7rem; font-weight: 600; color: #455a64; margin-bottom: 2px; }
+  .btn-filter { background: #3f51b5; color: #fff; border: none; border-radius: 4px; padding: 0.32rem 0.85rem; font-size: 0.8rem; font-weight: 600; }
   .btn-filter:hover { background: #303f9f; color: #fff; }
 
-  /* Table wrapper */
-  .section-heading { background: #3f51b5; color: white; padding: 0.75rem 1rem; font-size: 1rem; font-weight: 600; border-radius: 4px 4px 0 0; margin: 0; }
-  .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  /* ── Table wrapper ── */
+  .section-heading { background: #3f51b5; color: white; padding: 0.55rem 0.85rem; font-size: 0.9rem; font-weight: 600; border-radius: 4px 4px 0 0; margin: 0; }
+  .data-table-wrapper { background: #fff; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 
-  /* Table */
-  #driversTable { font-size: 0.855rem; }
-  #driversTable thead th { background: #f5f5f5; color: #2c3e50; font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 2px solid #3f51b5; white-space: nowrap; padding: 0.6rem 0.75rem; }
+  /* ── Table ── */
+  #driversTable { font-size: 0.78rem; }
+  #driversTable thead th { background: #f5f5f5; color: #2c3e50; font-weight: 700; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 2px solid #3f51b5; white-space: nowrap; padding: 0.45rem 0.5rem; }
   #driversTable tbody tr { border-bottom: 1px solid #f0f0f0; transition: background 0.15s; cursor: pointer; }
   #driversTable tbody tr:hover { background: linear-gradient(to right, #e8eaf6 0%, #ffffff 100%); }
-  #driversTable tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
-  .sr-badge { background: #3f51b5; color: #fff; border-radius: 4px; padding: 0.12rem 0.45rem; font-size: 0.75rem; font-weight: 700; }
+  #driversTable tbody td { padding: 0.35rem 0.5rem; vertical-align: middle; }
+  .sr-badge { background: #3f51b5; color: #fff; border-radius: 3px; padding: 0.1rem 0.35rem; font-size: 0.68rem; font-weight: 700; }
 
-  /* Buttons */
-  .btn-compact { padding: 0.25rem 0.6rem; font-size: 0.8125rem; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+  /* ── Buttons ── */
+  .btn-compact { padding: 0.2rem 0.45rem; font-size: 0.72rem; border-radius: 3px; font-weight: 500; transition: all 0.2s; }
   .btn-info-compact { background: #17a2b8; color: white; border: none; }
-  .btn-info-compact:hover { background: #138496; transform: translateY(-2px); }
+  .btn-info-compact:hover { background: #138496; transform: translateY(-1px); }
   .btn-edit-compact { background: #ffc107; color: #000; border: none; }
-  .btn-edit-compact:hover { background: #e0a800; transform: translateY(-2px); }
+  .btn-edit-compact:hover { background: #e0a800; transform: translateY(-1px); }
   .btn-delete-compact { background: #dc3545; color: white; border: none; }
-  .btn-delete-compact:hover { background: #c82333; transform: translateY(-2px); }
-  .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .btn-delete-compact:hover { background: #c82333; transform: translateY(-1px); }
+  .top-btn-compact { padding: 0.35rem 0.75rem; font-size: 0.8rem; border-radius: 5px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
   .btn-success-compact { background: #4caf50; color: white; border: none; }
-  .btn-success-compact:hover { background: #388e3c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(76,175,80,0.4); }
+  .btn-success-compact:hover { background: #388e3c; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(76,175,80,0.4); }
   .btn-outline-compact { background: #ff9800; color: white; border: none; }
-  .btn-outline-compact:hover { background: #f57c00; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255,152,0,0.4); }
+  .btn-outline-compact:hover { background: #f57c00; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255,152,0,0.4); }
 
-  /* Status badge in table */
-  .badge-active { background: #e8f5e9; color: #2e7d32; padding: 0.2rem 0.55rem; border-radius: 12px; font-size: 0.74rem; font-weight: 600; }
-  .badge-left { background: #fbe9e7; color: #bf360c; padding: 0.2rem 0.55rem; border-radius: 12px; font-size: 0.74rem; font-weight: 600; }
+  /* ── Status badge in table ── */
+  .badge-active { background: #e8f5e9; color: #2e7d32; padding: 0.15rem 0.45rem; border-radius: 10px; font-size: 0.68rem; font-weight: 600; white-space: nowrap; }
+  .badge-left { background: #fbe9e7; color: #bf360c; padding: 0.15rem 0.45rem; border-radius: 10px; font-size: 0.68rem; font-weight: 600; white-space: nowrap; }
 
-  /* Search wrapper with clear X */
+  /* ── Search wrapper with clear X ── */
   .search-wrap { position: relative; display: inline-block; }
-  .search-wrap input { padding-right: 28px; }
-  .search-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 1.1rem; color: rgba(255,255,255,0.6); cursor: pointer; display: none; line-height: 1; padding: 0; }
+  .search-wrap input { padding-right: 26px; }
+  .search-clear { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 1rem; color: rgba(255,255,255,0.6); cursor: pointer; display: none; line-height: 1; padding: 0; }
   .search-clear:hover { color: #fff; }
 
-  /* DataTables overrides */
-  div.dataTables_wrapper div.dataTables_filter input { border: 1px solid #ddd; border-radius: 5px; padding: 0.32rem 0.65rem; font-size: 0.84rem; margin-left: 6px; }
-  div.dataTables_wrapper div.dataTables_info { font-size: 0.82rem; color: #607d8b; padding-top: 0.75rem; }
-  div.dataTables_wrapper div.dataTables_paginate { padding-top: 0.55rem; }
-  div.dataTables_wrapper div.dataTables_paginate .paginate_button { font-size: 0.82rem; padding: 0.28rem 0.6rem; }
-  div.dataTables_wrapper div.dataTables_paginate .paginate_button.current { background: #3f51b5 !important; border-color: #3f51b5 !important; color: #fff !important; border-radius: 4px; }
+  /* ── DataTables overrides ── */
+  div.dataTables_wrapper div.dataTables_info { font-size: 0.75rem; color: #607d8b; padding-top: 0.5rem; }
+  div.dataTables_wrapper div.dataTables_paginate { padding-top: 0.4rem; }
+  div.dataTables_wrapper div.dataTables_paginate .paginate_button { font-size: 0.75rem; padding: 0.22rem 0.5rem; }
+  div.dataTables_wrapper div.dataTables_paginate .paginate_button.current { background: #3f51b5 !important; border-color: #3f51b5 !important; color: #fff !important; border-radius: 3px; }
   div.dataTables_wrapper div.dataTables_paginate .paginate_button:hover:not(.disabled):not(.current) { background: #e8eaf6 !important; border-color: #c5cae9 !important; color: #3f51b5 !important; }
   table.dataTable.no-footer { border-bottom: 1px solid #e0e0e0; }
 
-  /* Popover styles */
-  .driver-popover { width: 310px; }
+  /* ── Popover styles ── */
+  .driver-popover { width: 300px; }
   .driver-popover .popover-body { padding: 0; }
-  .pop-card { padding: 0.75rem; }
-  .pop-header { display: flex; gap: 0.65rem; align-items: center; margin-bottom: 0.55rem; padding-bottom: 0.55rem; border-bottom: 1px solid #eee; }
-  .pop-photo { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #e0e0e0; flex-shrink: 0; }
-  .pop-photo-placeholder { width: 48px; height: 48px; border-radius: 50%; background: #e8eaf6; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; color: #3f51b5; flex-shrink: 0; }
-  .pop-name { font-weight: 700; font-size: 0.9rem; color: #263238; line-height: 1.2; }
-  .pop-id { font-size: 0.72rem; color: #78909c; }
-  .pop-row { display: flex; justify-content: space-between; align-items: center; padding: 0.22rem 0; font-size: 0.78rem; }
+  .pop-card { padding: 0.65rem; }
+  .pop-header { display: flex; gap: 0.55rem; align-items: center; margin-bottom: 0.45rem; padding-bottom: 0.45rem; border-bottom: 1px solid #eee; }
+  .pop-photo { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid #e0e0e0; flex-shrink: 0; }
+  .pop-photo-placeholder { width: 44px; height: 44px; border-radius: 50%; background: #e8eaf6; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #3f51b5; flex-shrink: 0; }
+  .pop-name { font-weight: 700; font-size: 0.85rem; color: #263238; line-height: 1.2; }
+  .pop-id { font-size: 0.68rem; color: #78909c; }
+  .pop-row { display: flex; justify-content: space-between; align-items: center; padding: 0.18rem 0; font-size: 0.73rem; }
   .pop-label { color: #78909c; font-weight: 600; }
   .pop-val { color: #263238; font-weight: 500; }
-  .pop-assign { background: #f5f5f5; border-radius: 6px; padding: 0.45rem 0.55rem; margin-top: 0.4rem; }
-  .pop-assign-title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #3f51b5; margin-bottom: 0.25rem; letter-spacing: 0.3px; }
-  .pop-footer { text-align: center; padding-top: 0.5rem; margin-top: 0.45rem; border-top: 1px solid #eee; }
+  .pop-assign { background: #f5f5f5; border-radius: 5px; padding: 0.4rem 0.5rem; margin-top: 0.35rem; }
+  .pop-assign-title { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: #3f51b5; margin-bottom: 0.2rem; letter-spacing: 0.3px; }
+  .pop-footer { text-align: center; padding-top: 0.4rem; margin-top: 0.35rem; border-top: 1px solid #eee; }
 
+  /* ── Responsive ── */
   @media (max-width: 767px) {
-    #driversTable tbody td:last-child { white-space: nowrap; min-width: 120px; }
-    .btn-compact { padding: 0.3rem 0.45rem; font-size: 0.75rem; }
-    .stat-card { padding: 0.4rem 0.55rem; }
-    .stat-card .stat-val { font-size: 0.95rem; }
-    .stat-card .stat-icon { width: 30px; height: 30px; font-size: 0.85rem; }
+    #driversTable tbody td:last-child { white-space: nowrap; min-width: 100px; }
+    .btn-compact { padding: 0.25rem 0.4rem; font-size: 0.68rem; }
+    .stat-card { padding: 0.45rem 0.6rem; min-height: 48px; }
+    .stat-card .sc-num { font-size: 1.1rem; }
   }
 </style>
 
-<div class="container-fluid py-3 px-3 px-md-4">
+<div class="container-fluid py-2 px-3 px-md-4">
 
   <!-- Page Header -->
   <div class="page-header-gradient">
@@ -129,50 +149,50 @@
     </div>
   </div>
 
-  <!-- Summary Stats Bar -->
-  <div class="row g-2 mb-3">
-    <div class="col-6 col-md">
-      <div class="stat-card{% if not f_status and not f_cnic and not f_license %} active-card{% endif %}" onclick="applyFilter('')" style="color:#3f51b5;">
-        <div class="stat-icon" style="background:#e8eaf6;color:#3f51b5;"><i class="bi bi-people-fill"></i></div>
+  <!-- Summary Stats Bar — dashboard-style left-border cards -->
+  <div class="row g-2 mb-2">
+    <div class="col-6 col-lg">
+      <div class="stat-card sc-total{% if not f_status and not f_cnic and not f_license %} active-card{% endif %}" onclick="applyFilter('')">
+        <i class="bi bi-people-fill sc-icon"></i>
         <div>
-          <div class="stat-val" style="color:#3f51b5;">{{ stats.total }}</div>
-          <div class="stat-label">Total Drivers</div>
+          <div class="sc-num">{{ stats.total }}</div>
+          <div class="sc-label">Total Drivers</div>
         </div>
       </div>
     </div>
-    <div class="col-6 col-md">
-      <div class="stat-card{% if f_status == 'Active' %} active-card{% endif %}" onclick="applyFilter('status=Active')" style="color:#2e7d32;">
-        <div class="stat-icon" style="background:#e8f5e9;color:#2e7d32;"><i class="bi bi-person-check-fill"></i></div>
+    <div class="col-6 col-lg">
+      <div class="stat-card sc-active{% if f_status == 'Active' %} active-card{% endif %}" onclick="applyFilter('status=Active')">
+        <i class="bi bi-person-check-fill sc-icon"></i>
         <div>
-          <div class="stat-val" style="color:#2e7d32;">{{ stats.active }}</div>
-          <div class="stat-label">Active</div>
+          <div class="sc-num">{{ stats.active }}</div>
+          <div class="sc-label">Active Drivers</div>
         </div>
       </div>
     </div>
-    <div class="col-6 col-md">
-      <div class="stat-card{% if f_status == 'Left' %} active-card{% endif %}" onclick="applyFilter('status=Left')" style="color:#bf360c;">
-        <div class="stat-icon" style="background:#fbe9e7;color:#bf360c;"><i class="bi bi-person-dash-fill"></i></div>
+    <div class="col-6 col-lg">
+      <div class="stat-card sc-left{% if f_status == 'Left' %} active-card{% endif %}" onclick="applyFilter('status=Left')">
+        <i class="bi bi-person-dash-fill sc-icon"></i>
         <div>
-          <div class="stat-val" style="color:#bf360c;">{{ stats.left }}</div>
-          <div class="stat-label">Left</div>
+          <div class="sc-num">{{ stats.left }}</div>
+          <div class="sc-label">Left</div>
         </div>
       </div>
     </div>
-    <div class="col-6 col-md">
-      <div class="stat-card{% if f_cnic == 'Expired' %} active-card{% endif %}" onclick="applyFilter('cnic_status=Expired')" style="color:#e65100;">
-        <div class="stat-icon" style="background:#fff3e0;color:#e65100;"><i class="bi bi-credit-card-2-front"></i></div>
+    <div class="col-6 col-lg">
+      <div class="stat-card sc-cnic{% if f_cnic == 'Expired' %} active-card{% endif %}" onclick="applyFilter('cnic_status=Expired')">
+        <i class="bi bi-credit-card-2-front sc-icon"></i>
         <div>
-          <div class="stat-val" style="color:#e65100;">{{ stats.expired_cnic }}</div>
-          <div class="stat-label">Expired CNIC</div>
+          <div class="sc-num">{{ stats.expired_cnic }}</div>
+          <div class="sc-label">Expired CNIC</div>
         </div>
       </div>
     </div>
-    <div class="col-6 col-md">
-      <div class="stat-card{% if f_license == 'Expired' %} active-card{% endif %}" onclick="applyFilter('license_status=Expired')" style="color:#c62828;">
-        <div class="stat-icon" style="background:#ffebee;color:#c62828;"><i class="bi bi-card-heading"></i></div>
+    <div class="col-6 col-lg">
+      <div class="stat-card sc-lic{% if f_license == 'Expired' %} active-card{% endif %}" onclick="applyFilter('license_status=Expired')">
+        <i class="bi bi-card-heading sc-icon"></i>
         <div>
-          <div class="stat-val" style="color:#c62828;">{{ stats.expired_license }}</div>
-          <div class="stat-label">Expired License</div>
+          <div class="sc-num">{{ stats.expired_license }}</div>
+          <div class="sc-label">Expired License</div>
         </div>
       </div>
     </div>
@@ -183,7 +203,7 @@
     <form method="GET" action="{{ url_for('drivers_list') }}" id="filterForm">
       <div class="row g-2 align-items-end">
         <div class="col-6 col-md-3">
-          <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Status</label>
+          <div class="filter-lbl">Driver Status</div>
           <select name="status" class="form-select filter-input">
             <option value="">All Status</option>
             <option value="Active" {% if f_status == 'Active' %}selected{% endif %}>Active</option>
@@ -191,7 +211,7 @@
           </select>
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">CNIC Status</label>
+          <div class="filter-lbl">CNIC Status</div>
           <select name="cnic_status" class="form-select filter-input">
             <option value="">All CNIC</option>
             <option value="Valid" {% if f_cnic == 'Valid' %}selected{% endif %}>Valid</option>
@@ -199,7 +219,7 @@
           </select>
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">License Status</label>
+          <div class="filter-lbl">License Status</div>
           <select name="license_status" class="form-select filter-input">
             <option value="">All License</option>
             <option value="Valid" {% if f_license == 'Valid' %}selected{% endif %}>Valid</option>
@@ -209,7 +229,7 @@
         <div class="col-6 col-md-3 d-flex gap-1">
           <button type="submit" class="btn btn-filter w-100"><i class="bi bi-funnel-fill me-1"></i>Filter</button>
           {% if f_status or f_cnic or f_license %}
-          <a href="{{ url_for('drivers_list') }}" class="btn btn-outline-secondary btn-sm" style="white-space:nowrap;"><i class="bi bi-x-circle"></i></a>
+          <a href="{{ url_for('drivers_list') }}" class="btn btn-outline-secondary btn-sm" style="white-space:nowrap;font-size:0.78rem;"><i class="bi bi-x-circle"></i></a>
           {% endif %}
         </div>
       </div>
@@ -224,10 +244,10 @@
         <div class="search-wrap">
           <input type="text" id="dtSearchInput" class="form-control form-control-sm"
                  placeholder="Search all columns..." autocomplete="off"
-                 style="width:240px;border:1px solid rgba(255,255,255,0.4);border-radius:5px;font-size:0.82rem;background:rgba(255,255,255,0.15);color:#fff;">
+                 style="width:220px;border:1px solid rgba(255,255,255,0.4);border-radius:4px;font-size:0.78rem;background:rgba(255,255,255,0.15);color:#fff;">
           <button type="button" class="search-clear" id="searchClear">&times;</button>
         </div>
-        <select id="dtLengthSelect" class="form-select form-select-sm" style="width:auto;font-size:0.82rem;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);">
+        <select id="dtLengthSelect" class="form-select form-select-sm" style="width:auto;font-size:0.78rem;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);">
           <option value="25">25 / page</option>
           <option value="50">50 / page</option>
           <option value="100">100 / page</option>
@@ -242,14 +262,14 @@
             <th style="width:3%">Sr #</th>
             <th>Driver ID</th>
             <th>Driver Name</th>
-            <th>Status</th>
+            <th>Driver Status</th>
             <th>CNIC No</th>
             <th>CNIC Status</th>
             <th>License No</th>
             <th>License Status</th>
             <th>Phone</th>
             <th>Driver District</th>
-            <th style="width:8%">Actions</th>
+            <th style="width:7%">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -257,7 +277,7 @@
           {% set proj = driver_projects.get(driver.id) %}
           <tr data-href="{{ url_for('report_driver_profile', driver_id=driver.id) }}?from=master">
             <td class="text-center"><span class="sr-badge">{{ loop.index }}</span></td>
-            <td class="fw-bold">{{ driver.driver_id }}</td>
+            <td class="fw-bold" style="white-space:nowrap;">{{ driver.driver_id }}</td>
             <td class="driver-name-cell fw-medium"
                 data-pop-name="{{ driver.name }}"
                 data-pop-id="{{ driver.driver_id }}"
@@ -270,10 +290,11 @@
                 data-pop-project="{{ proj.name if proj else '' }}"
                 data-pop-district="{{ driver.district.name if driver.district else '' }}"
                 data-pop-shift="{{ driver.shift or '' }}"
-                data-pop-profile="{{ url_for('report_driver_profile', driver_id=driver.id) }}?from=master">
+                data-pop-profile="{{ url_for('report_driver_profile', driver_id=driver.id) }}?from=master"
+                style="white-space:nowrap;">
               {{ driver.name }}
-              {% if driver.photo_path %} <i class="bi bi-image text-info" style="font-size:0.7rem;" title="Photo uploaded"></i>{% endif %}
-              {% if driver.document_path %} <a href="{{ url_for('uploaded_file', filename=driver.document_path) }}" target="_blank" class="text-primary ms-1" title="View documents" onclick="event.stopPropagation();"><i class="bi bi-file-earmark-pdf" style="font-size:0.7rem;"></i></a>{% endif %}
+              {% if driver.photo_path %} <i class="bi bi-image text-info" style="font-size:0.65rem;" title="Photo uploaded"></i>{% endif %}
+              {% if driver.document_path %} <a href="{{ url_for('uploaded_file', filename=driver.document_path) }}" target="_blank" class="text-primary ms-1" title="View documents" onclick="event.stopPropagation();"><i class="bi bi-file-earmark-pdf" style="font-size:0.65rem;"></i></a>{% endif %}
             </td>
             <td>
               {% if driver.status == 'Left' %}
@@ -282,29 +303,29 @@
                 <span class="badge-active"><i class="bi bi-check-circle me-1"></i>Active</span>
               {% endif %}
             </td>
-            <td>{{ driver.cnic_no|cnic_fmt or '-' }}</td>
+            <td style="white-space:nowrap;">{{ driver.cnic_no|cnic_fmt or '-' }}</td>
             <td>
               {% if driver.cnic_status == 'Valid' %}
-                <span class="badge bg-success" style="font-size:0.72rem;">Valid</span>
+                <span class="badge bg-success" style="font-size:0.67rem;">Valid</span>
               {% elif driver.cnic_status == 'Expired' %}
-                <span class="badge bg-danger" style="font-size:0.72rem;">Expired</span>
+                <span class="badge bg-danger" style="font-size:0.67rem;">Expired</span>
               {% else %}
-                <span class="badge bg-secondary" style="font-size:0.72rem;">N/A</span>
+                <span class="badge bg-secondary" style="font-size:0.67rem;">N/A</span>
               {% endif %}
             </td>
-            <td>{{ driver.license_no or '-' }}</td>
+            <td style="white-space:nowrap;">{{ driver.license_no or '-' }}</td>
             <td>
               {% if driver.license_status == 'Valid' %}
-                <span class="badge bg-success" style="font-size:0.72rem;">Valid</span>
+                <span class="badge bg-success" style="font-size:0.67rem;">Valid</span>
               {% elif driver.license_status == 'Expired' %}
-                <span class="badge bg-danger" style="font-size:0.72rem;">Expired</span>
+                <span class="badge bg-danger" style="font-size:0.67rem;">Expired</span>
               {% else %}
-                <span class="badge bg-secondary" style="font-size:0.72rem;">N/A</span>
+                <span class="badge bg-secondary" style="font-size:0.67rem;">N/A</span>
               {% endif %}
             </td>
-            <td>{{ driver.phone1|phone_fmt or '-' }}</td>
+            <td style="white-space:nowrap;">{{ driver.phone1|phone_fmt or '-' }}</td>
             <td>{{ driver.driver_district or '-' }}</td>
-            <td class="text-center" onclick="event.stopPropagation();">
+            <td class="text-center" style="white-space:nowrap;" onclick="event.stopPropagation();">
               <a href="{{ url_for('report_driver_profile', driver_id=driver.id) }}?from=master" class="btn btn-sm btn-info-compact me-1" title="Profile Report">
                 <i class="bi bi-file-text"></i>
               </a>
@@ -359,7 +380,7 @@
     <div class="pop-row"><span class="pop-label"><i class="bi bi-credit-card me-1"></i>CNIC</span><span class="pop-val pop-cnic"></span></div>
     <div class="pop-assign-wrap"></div>
     <div class="pop-footer">
-      <a href="#" class="pop-profile-link btn btn-sm btn-outline-primary" style="font-size:0.75rem;"><i class="bi bi-eye me-1"></i>View Full Profile</a>
+      <a href="#" class="pop-profile-link btn btn-sm btn-outline-primary" style="font-size:0.7rem;"><i class="bi bi-eye me-1"></i>View Full Profile</a>
     </div>
   </div>
 </div>
@@ -369,7 +390,6 @@
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <script>
 $(document).ready(function () {
-    /* ── DataTable init ── */
     var table = $('#driversTable').DataTable({
         dom: "<'row'<'col-12'tr>><'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>",
         pageLength: 25,
@@ -425,7 +445,6 @@ $(document).ready(function () {
     $searchInput.on('focus', function () { $(this).css('border-color', '#fff'); });
     $searchInput.on('blur', function () { $(this).css('border-color', 'rgba(255,255,255,0.4)'); });
 
-    /* ── Per-page length ── */
     $('#dtLengthSelect').on('change', function () {
         table.page.len(parseInt(this.value)).draw();
     });
