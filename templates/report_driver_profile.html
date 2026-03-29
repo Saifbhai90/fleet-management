@@ -1943,9 +1943,20 @@
 
   <!-- QR Code — hidden on screen, visible only in PDF/Print -->
   <div class="qr-block" id="qrBlock">
-    <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data={{ profile_url|urlencode }}" alt="QR Code">
+    <img id="qrImg" src="" alt="QR Code">
     <div class="qr-label"><i class="bi bi-qr-code me-1"></i>Scan to open driver profile</div>
   </div>
+  <script>
+  (function(){
+    var qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data={{ profile_url|urlencode }}';
+    fetch('/image-proxy?url=' + encodeURIComponent(qrSrc))
+      .then(function(r){ return r.ok ? r.blob() : Promise.reject(r.status); })
+      .then(function(b){ document.getElementById('qrImg').src = URL.createObjectURL(b); })
+      .catch(function(){
+        document.getElementById('qrImg').src = qrSrc;
+      });
+  })();
+  </script>
 
   <!-- PDF/Print watermark — hidden on screen, visible only in PDF/Print -->
   <div id="pdfWatermark"
