@@ -676,7 +676,7 @@ def app_check_update():
     """Returns latest app version info for in-app update system.
     Place APK files in static/apps/ with name: fleet-manager-X.Y.Z.apk
     Update LATEST_APP_VERSION when you upload a new APK."""
-    LATEST_APP_VERSION = '1.0.0'
+    LATEST_APP_VERSION = '1.1.0'
     FORCE_UPDATE = False
 
     apk_filename = f'fleet-manager-{LATEST_APP_VERSION}.apk'
