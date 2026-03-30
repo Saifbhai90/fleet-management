@@ -1641,6 +1641,51 @@ class DeviceFCMToken(db.Model):
 
 
 # ────────────────────────────────────────────────
+# Login Attempts (security tracking — failed/success)
+# ────────────────────────────────────────────────
+class LoginAttempt(db.Model):
+    __tablename__ = 'login_attempt'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(200), nullable=False, index=True)
+    ip_address = db.Column(db.String(64), nullable=True)
+    user_agent = db.Column(db.String(500), nullable=True)
+    success = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=pk_now, nullable=False, index=True)
+
+    def __repr__(self):
+        return f'<LoginAttempt {self.username} ok={self.success} at {self.created_at}>'
+
+
+# ────────────────────────────────────────────────
+# System Settings (key-value store for persistent config)
+# ────────────────────────────────────────────────
+class SystemSetting(db.Model):
+    __tablename__ = 'system_setting'
+    key = db.Column(db.String(100), primary_key=True)
+    value = db.Column(db.Text, nullable=True)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    def __repr__(self):
+        return f'<SystemSetting {self.key}>'
+
+    @staticmethod
+    def get(key, default=None):
+        row = SystemSetting.query.get(key)
+        return row.value if row else default
+
+    @staticmethod
+    def set(key, value):
+        row = SystemSetting.query.get(key)
+        if row:
+            row.value = str(value) if value is not None else None
+        else:
+            row = SystemSetting(key=key, value=str(value) if value is not None else None)
+            db.session.add(row)
+        db.session.commit()
+        return row
+
+
+# ────────────────────────────────────────────────
 # App Releases (for admin-managed in-app updates)
 # ────────────────────────────────────────────────
 class AppRelease(db.Model):

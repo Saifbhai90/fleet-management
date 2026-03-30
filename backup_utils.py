@@ -220,8 +220,22 @@ def run_scheduled_backup(app):
         if err:
             if hasattr(app, 'logger'):
                 app.logger.warning('Scheduled backup failed: %s', err)
+            try:
+                from models import SystemSetting
+                SystemSetting.set('last_backup_result', 'failed')
+                SystemSetting.set('last_backup_ts', __import__('datetime').datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'))
+            except Exception:
+                pass
             return
         try:
+            try:
+                from models import SystemSetting
+                _bk_sz = os.path.getsize(zip_path) if zip_path and os.path.exists(zip_path) else 0
+                SystemSetting.set('last_backup_ts', __import__('datetime').datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'))
+                SystemSetting.set('last_backup_result', 'success')
+                SystemSetting.set('last_backup_size', f'{round(_bk_sz / (1024*1024), 1)} MB')
+            except Exception:
+                pass
             to_email = (app.config.get('BACKUP_EMAIL_TO') or os.environ.get('BACKUP_EMAIL_TO') or '').strip()
             if to_email:
                 ok, msg = send_backup_email(app, zip_path, to_email)

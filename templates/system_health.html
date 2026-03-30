@@ -1,12 +1,8 @@
 {% extends "base.html" %}
 {% block title %}System Health — Fleet Manager{% endblock %}
-{# ═══════════════════════════════════════════════════════════════════════════
-   COMPLETE REPLACEMENT — tighter grid, 6 KPI cards, backup, sessions, latency
-   ═══════════════════════════════════════════════════════════════════════════ #}
 
 {% block extra_head %}
 <style>
-/* ── base card ── */
 .sh-card {
     border-radius: 16px;
     padding: 18px 20px;
@@ -23,14 +19,15 @@
 .sh-card-info    { border-left: 4px solid #3b82f6; }
 .sh-card-violet  { border-left: 4px solid #8b5cf6; }
 .sh-card-neutral { border-left: 4px solid #cbd5e1; }
+.sh-card-teal    { border-left: 4px solid #14b8a6; }
+.sh-card-rose    { border-left: 4px solid #f43f5e; }
+.sh-card-amber   { border-left: 4px solid #f59e0b; }
+.sh-card-cyan    { border-left: 4px solid #06b6d4; }
 
 .lbl {
-    font-size: 0.68rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #64748b;
-    margin-bottom: 4px;
+    font-size: 0.68rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: #64748b; margin-bottom: 4px;
 }
 .val-lg { font-size: 1.9rem; font-weight: 800; color: #0f172a; line-height: 1.1; }
 .val-md { font-size: 1.4rem; font-weight: 800; color: #0f172a; line-height: 1.15; }
@@ -44,7 +41,6 @@
 .sb-down { background:#fee2e2; color:#dc2626; }
 .sb-bld  { background:#fef9c3; color:#a16207; }
 .sb-unk  { background:#f1f5f9; color:#64748b; }
-.sb-na   { background:#f8fafc; color:#94a3b8; }
 
 .pt { height: 7px; border-radius: 4px; background:#e8edf3; overflow:hidden; margin-top:8px; }
 .pf { height:100%; border-radius:4px; transition:width .6s; }
@@ -86,7 +82,7 @@
 .chip-na   { background:#f8fafc; color:#94a3b8; }
 
 .commit-hash {
-    font-family:monospace; font-size:0.8rem;
+    font-family:monospace; font-size:0.75rem;
     background:#eff6ff; color:#1d4ed8; padding:2px 7px; border-radius:5px; display:inline-block;
 }
 .setup-step {
@@ -94,6 +90,33 @@
     padding:10px 14px; margin-bottom:8px; font-size:0.8rem;
 }
 .setup-step code { background:#eff6ff; color:#1d4ed8; padding:2px 6px; border-radius:4px; font-size:0.78rem; }
+
+.sparkline-svg { display:block; width:100%; height:40px; margin-top:6px; }
+.sparkline-line { fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.sparkline-area { opacity:0.12; }
+
+.deploy-row { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid #f1f5f9; font-size:0.73rem; }
+.deploy-row:last-child { border-bottom:none; }
+
+.tbl-stat-row { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #f1f5f9; font-size:0.73rem; }
+.tbl-stat-row:last-child { border-bottom:none; }
+
+.error-item {
+    display:flex; align-items:flex-start; gap:8px; padding:8px 12px;
+    background:#fef2f2; border:1px solid #fecaca; border-radius:10px;
+    margin-bottom:6px; font-size:0.78rem; color:#991b1b;
+}
+.error-item:last-child { margin-bottom:0; }
+
+.auto-refresh-toggle {
+    cursor:pointer; user-select:none; font-size:0.72rem; font-weight:600;
+    display:inline-flex; align-items:center; gap:4px;
+}
+.auto-refresh-toggle .dot {
+    width:8px; height:8px; border-radius:50%; transition:background 0.2s;
+}
+.auto-refresh-toggle.active .dot { background:#10b981; }
+.auto-refresh-toggle:not(.active) .dot { background:#94a3b8; }
 </style>
 {% endblock %}
 
@@ -114,10 +137,22 @@
         <strong class="text-danger">Critical Storage Alert</strong>
         <span class="ms-2 text-danger" style="font-size:0.85rem;">
             {% if data.db_critical %}Database at <strong>{{ data.db_pct }}%</strong> ({{ data.db_size_mb }} MB / {{ data.db_size_limit_mb }} MB).{% endif %}
-            {% if data.r2_critical %}R2 Bucket at <strong>{{ data.r2_pct }}%</strong> of 10 GB.{% endif %}
-            An in-app notification has been sent to all users.
+            {% if data.r2_critical %}R2 Bucket at <strong>{{ data.r2_pct }}%</strong>.{% endif %}
         </span>
     </div>
+</div>
+{% endif %}
+
+{# ── Errors Panel ── #}
+{% if data.errors %}
+<div class="sh-card sh-card-danger mb-3">
+    <div class="lbl mb-2"><i class="bi bi-exclamation-circle me-1"></i>Errors ({{ data.errors | length }})</div>
+    {% for err in data.errors %}
+    <div class="error-item">
+        <i class="bi bi-x-circle-fill flex-shrink-0" style="margin-top:2px;"></i>
+        <span>{{ err }}</span>
+    </div>
+    {% endfor %}
 </div>
 {% endif %}
 
@@ -128,9 +163,13 @@
             <i class="bi bi-activity text-primary me-2"></i>System Health &amp; Cloud Status
         </h2>
         <span class="text-muted" style="font-size:0.78rem;">
-            Fetched: <strong>{{ data.fetched_at }}</strong>
+            Fetched: <strong id="sh-fetched-at">{{ data.fetched_at }}</strong>
             <span style="color:#cbd5e1;margin:0 5px;">·</span>
-            <span style="color:#94a3b8;">cached 15 min</span>
+            <span id="sh-updated-ago" style="color:#94a3b8;">just now</span>
+            <span style="color:#cbd5e1;margin:0 5px;">·</span>
+            <span class="auto-refresh-toggle active" id="sh-ar-toggle" onclick="_shToggleAutoRefresh()">
+                <span class="dot"></span> Auto-refresh <span id="sh-ar-label">ON</span>
+            </span>
         </span>
     </div>
     <div class="d-flex gap-2 flex-wrap">
@@ -146,13 +185,13 @@
     </div>
 </div>
 
-{# ════════════════════════════════════════════════════════
-   ROW 1 — 6 tight KPI cards
-════════════════════════════════════════════════════════ #}
+{# ═════════════════════════════════════════
+   ROW 1 — 8 KPI cards (added RAM + FCM)
+═════════════════════════════════════════ #}
 <div class="row g-2 mb-2">
 
     {# 1. Render Service #}
-    <div class="col-6 col-md-4 col-xl-2">
+    <div class="col-6 col-md-4 col-xl-3 col-xxl">
         <div class="sh-card {% if svc and svc_st in ['running','live','active'] %}sh-card-success{% elif svc and svc_st in ['suspended','failed'] %}sh-card-danger{% elif svc %}sh-card-warning{% else %}sh-card-neutral{% endif %}">
             <div class="lbl"><i class="bi bi-cloud-check me-1"></i>Service</div>
             {% if svc %}
@@ -172,8 +211,8 @@
         </div>
     </div>
 
-    {# 2. Last Deployment #}
-    <div class="col-6 col-md-4 col-xl-2">
+    {# 2. Last Deploy #}
+    <div class="col-6 col-md-4 col-xl-3 col-xxl">
         <div class="sh-card sh-card-info">
             <div class="lbl"><i class="bi bi-rocket-takeoff me-1"></i>Deploy</div>
             {% if dep %}
@@ -184,8 +223,8 @@
                 </div>
                 {% if dep.commit %}
                 <div class="sub mt-1">
-                    <span class="commit-hash">{{ dep.commit.id[:7] if dep.commit.id else '?' }}</span><br>
-                    <span style="font-size:0.67rem;color:#64748b;" title="{{ dep.commit.message }}">
+                    <span class="commit-hash">{{ dep.commit.id[:7] if dep.commit.id else '?' }}</span>
+                    <span style="font-size:0.67rem;color:#64748b;display:block;margin-top:2px;" title="{{ dep.commit.message }}">
                         {{ (dep.commit.message or '')[:30] }}{% if (dep.commit.message or '') | length > 30 %}…{% endif %}
                     </span>
                 </div>
@@ -194,43 +233,41 @@
                 <div class="sub" style="font-size:0.67rem;">{{ dep.finishedAt[:10] }}</div>
                 {% endif %}
             {% else %}
-                <div class="sub mt-2" style="color:#94a3b8;font-size:0.72rem;">No data — add API key</div>
+                <div class="sub mt-2" style="color:#94a3b8;font-size:0.72rem;">No data</div>
             {% endif %}
         </div>
     </div>
 
     {# 3. Database Storage #}
-    <div class="col-6 col-md-4 col-xl-2">
+    <div class="col-6 col-md-4 col-xl-3 col-xxl">
         <div class="sh-card {% if data.db_critical %}sh-card-danger{% elif data.db_pct and data.db_pct >= 60 %}sh-card-warning{% elif data.db_size_mb is not none %}sh-card-success{% else %}sh-card-neutral{% endif %}">
             <div class="lbl"><i class="bi bi-database me-1"></i>Database</div>
             {% if data.db_size_mb is not none %}
-                <div class="val-md mt-1 {% if data.db_critical %}text-danger{% elif data.db_pct >= 60 %}text-warning{% endif %}">
+                <div class="val-md mt-1 {% if data.db_critical %}text-danger{% elif data.db_pct >= 60 %}text-warning{% endif %}" id="kpi-db-val">
                     {{ data.db_size_mb }}<small style="font-size:0.85rem;font-weight:500;"> MB</small>
                 </div>
-                <div class="sub">{{ data.db_pct }}% of {{ data.db_size_limit_mb }} MB</div>
-                <div class="pt"><div class="pf {% if data.db_critical %}pf-bad{% elif data.db_pct >= 60 %}pf-warn{% else %}pf-ok{% endif %}" style="width:{{ [data.db_pct, 100] | min }}%;"></div></div>
-                {% if data.db_critical %}<div class="mt-1 text-danger fw-bold" style="font-size:0.65rem;">CRITICAL</div>{% endif %}
+                <div class="sub" id="kpi-db-sub">{{ data.db_pct }}% of {{ data.db_size_limit_mb }} MB</div>
+                <div class="pt"><div class="pf {% if data.db_critical %}pf-bad{% elif data.db_pct >= 60 %}pf-warn{% else %}pf-ok{% endif %}" style="width:{{ [data.db_pct, 100] | min }}%;" id="kpi-db-bar"></div></div>
             {% else %}
                 <div class="sub mt-2">Unavailable</div>
             {% endif %}
         </div>
     </div>
 
-    {# 4. Cloudflare R2 #}
-    <div class="col-6 col-md-4 col-xl-2">
+    {# 4. R2 Bucket #}
+    <div class="col-6 col-md-4 col-xl-3 col-xxl">
         <div class="sh-card {% if data.r2_critical %}sh-card-danger{% elif data.r2_pct and data.r2_pct >= 60 %}sh-card-warning{% elif data.r2_size_mb is not none %}sh-card-success{% else %}sh-card-neutral{% endif %}">
             <div class="lbl"><i class="bi bi-cloud-haze2 me-1"></i>R2 Bucket</div>
             {% if data.r2_size_mb is not none %}
-                <div class="val-md mt-1 {% if data.r2_critical %}text-danger{% endif %}">
+                <div class="val-md mt-1 {% if data.r2_critical %}text-danger{% endif %}" id="kpi-r2-val">
                     {% if data.r2_size_mb >= 1024 %}
                         {{ (data.r2_size_mb / 1024) | round(2) }}<small style="font-size:0.85rem;font-weight:500;"> GB</small>
                     {% else %}
                         {{ data.r2_size_mb }}<small style="font-size:0.85rem;font-weight:500;"> MB</small>
                     {% endif %}
                 </div>
-                <div class="sub">{{ data.r2_pct }}% · {{ data.r2_total_objects }} files</div>
-                <div class="pt"><div class="pf {% if data.r2_critical %}pf-bad{% elif data.r2_pct >= 60 %}pf-warn{% else %}pf-ok{% endif %}" style="width:{{ [data.r2_pct, 100] | min }}%;"></div></div>
-                {% if data.r2_critical %}<div class="mt-1 text-danger fw-bold" style="font-size:0.65rem;">CRITICAL</div>{% endif %}
+                <div class="sub" id="kpi-r2-sub">{{ data.r2_pct }}% · {{ data.r2_total_objects }} files</div>
+                <div class="pt"><div class="pf {% if data.r2_critical %}pf-bad{% elif data.r2_pct >= 60 %}pf-warn{% else %}pf-ok{% endif %}" style="width:{{ [data.r2_pct, 100] | min }}%;" id="kpi-r2-bar"></div></div>
             {% else %}
                 <div class="sub mt-2">Unavailable</div>
             {% endif %}
@@ -238,42 +275,151 @@
     </div>
 
     {# 5. Active Sessions #}
-    <div class="col-6 col-md-4 col-xl-2">
+    <div class="col-6 col-md-4 col-xl-3 col-xxl">
         <div class="sh-card sh-card-violet">
             <div class="lbl"><i class="bi bi-people me-1"></i>Live Sessions</div>
             {% if data.active_sessions is not none %}
-                <div class="val-lg mt-1" style="color:#7c3aed;">{{ data.active_sessions }}</div>
+                <div class="val-lg mt-1" style="color:#7c3aed;" id="kpi-sessions-val">{{ data.active_sessions }}</div>
                 <div class="sub">users in last 30 min</div>
             {% else %}
                 <div class="sub mt-2">Unavailable</div>
             {% endif %}
-            <div class="pt">
-                <div class="pf" style="background:#8b5cf6;width:{% if data.active_sessions %}{{ [data.active_sessions * 20, 100] | min }}{% else %}0{% endif %}%;"></div>
-            </div>
+            <svg class="sparkline-svg" id="spark-sessions" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
         </div>
     </div>
 
     {# 6. API Latency #}
-    <div class="col-6 col-md-4 col-xl-2">
+    <div class="col-6 col-md-4 col-xl-3 col-xxl">
         <div class="sh-card {% if data.api_avg_ms and data.api_avg_ms > 500 %}sh-card-warning{% elif data.api_avg_ms %}sh-card-success{% else %}sh-card-neutral{% endif %}">
             <div class="lbl"><i class="bi bi-speedometer2 me-1"></i>API Latency</div>
             {% if data.api_avg_ms is not none %}
-                <div class="val-md mt-1 {% if data.api_avg_ms > 500 %}text-warning{% elif data.api_avg_ms > 1000 %}text-danger{% endif %}">
+                <div class="val-md mt-1" id="kpi-latency-val">
                     {{ data.api_avg_ms }}<small style="font-size:0.8rem;font-weight:500;"> ms</small>
                 </div>
-                <div class="sub">avg · p95: {{ data.api_p95_ms }}ms</div>
-                <div class="sub">{{ data.api_sample_count }} samples</div>
+                <div class="sub" id="kpi-latency-sub">avg · p95: {{ data.api_p95_ms }}ms · {{ data.api_sample_count }} samples</div>
             {% else %}
                 <div class="sub mt-2" style="font-size:0.7rem;">No /api/* calls yet</div>
+            {% endif %}
+            <svg class="sparkline-svg" id="spark-latency" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+        </div>
+    </div>
+
+    {# 7. RAM / Memory #}
+    <div class="col-6 col-md-4 col-xl-3 col-xxl">
+        {% set ram_pct = data.ram_pct or 0 %}
+        <div class="sh-card {% if ram_pct >= 80 %}sh-card-danger{% elif ram_pct >= 60 %}sh-card-warning{% elif data.ram_mb %}sh-card-teal{% else %}sh-card-neutral{% endif %}">
+            <div class="lbl"><i class="bi bi-memory me-1"></i>RAM Usage</div>
+            {% if data.ram_mb is not none %}
+                <div class="val-md mt-1 {% if ram_pct >= 80 %}text-danger{% elif ram_pct >= 60 %}text-warning{% endif %}" id="kpi-ram-val">
+                    {{ data.ram_mb }}<small style="font-size:0.85rem;font-weight:500;"> MB</small>
+                </div>
+                <div class="sub" id="kpi-ram-sub">{{ ram_pct }}% of {{ data.ram_limit_mb }} MB</div>
+                <div class="pt"><div class="pf {% if ram_pct >= 80 %}pf-bad{% elif ram_pct >= 60 %}pf-warn{% else %}pf-ok{% endif %}" style="width:{{ [ram_pct, 100] | min }}%;" id="kpi-ram-bar"></div></div>
+            {% else %}
+                <div class="sub mt-2">Unavailable</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# 8. FCM Push Stats #}
+    <div class="col-6 col-md-4 col-xl-3 col-xxl">
+        <div class="sh-card sh-card-cyan">
+            <div class="lbl"><i class="bi bi-bell me-1"></i>FCM Tokens</div>
+            <div class="val-md mt-1" style="color:#0891b2;" id="kpi-fcm-val">{{ data.fcm_total }}</div>
+            <div class="sub" id="kpi-fcm-sub">
+                <span style="color:#16a34a;">{{ data.fcm_active }} active</span> ·
+                <span style="color:#94a3b8;">{{ data.fcm_inactive }} inactive</span>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{# ═════════════════════════════════════════
+   ROW 2 — Deploy History | DB Table Stats | System Info
+═════════════════════════════════════════ #}
+<div class="row g-2 mb-2">
+
+    {# Recent Deploys #}
+    <div class="col-lg-4">
+        <div class="sh-card">
+            <div class="lbl mb-2"><i class="bi bi-clock-history me-1"></i>Recent Deploys (Last 5)</div>
+            {% if data.recent_deploys %}
+                {% for d in data.recent_deploys %}
+                {% set dst = (d.status or '') | lower %}
+                <div class="deploy-row">
+                    <span class="sbadge {% if dst in ['live','active'] %}sb-ok{% elif dst in ['failed','deactivated'] %}sb-down{% elif 'build' in dst or 'progress' in dst %}sb-bld{% else %}sb-unk{% endif %}" style="font-size:0.65rem;padding:2px 7px;">
+                        {{ d.status | replace('_',' ') | title if d.status else '?' }}
+                    </span>
+                    {% if d.commit and d.commit.id %}
+                    <span class="commit-hash" style="font-size:0.68rem;">{{ d.commit.id[:7] }}</span>
+                    {% endif %}
+                    <span class="flex-grow-1 text-truncate" style="color:#64748b;font-size:0.68rem;" title="{{ (d.commit.message or '') if d.commit else '' }}">
+                        {{ ((d.commit.message or '') if d.commit else '')[:35] }}{% if d.commit and (d.commit.message or '') | length > 35 %}…{% endif %}
+                    </span>
+                    {% if d.finishedAt %}
+                    <span style="color:#94a3b8;font-size:0.65rem;white-space:nowrap;">{{ d.finishedAt[:10] }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="sub">No deploy data available</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# DB Table Stats #}
+    <div class="col-lg-4">
+        <div class="sh-card">
+            <div class="lbl mb-2"><i class="bi bi-table me-1"></i>Top 10 Tables by Size</div>
+            {% if data.db_table_stats %}
+                {% for t in data.db_table_stats %}
+                <div class="tbl-stat-row">
+                    <span style="font-weight:600;color:#334155;font-family:monospace;">{{ t.name }}</span>
+                    <span style="color:#64748b;">{{ "{:,}".format(t.rows) }} rows</span>
+                    <span style="color:#0f172a;font-weight:700;">{{ t.size_mb }} MB</span>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="sub">PostgreSQL only — not available for SQLite</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# System Info #}
+    <div class="col-lg-4">
+        <div class="sh-card">
+            <div class="lbl mb-2"><i class="bi bi-cpu me-1"></i>System Info</div>
+            <div style="font-size:0.78rem;line-height:2;">
+                <div class="d-flex justify-content-between"><span style="color:#64748b;">Python</span><strong>{{ data.sys_python }}</strong></div>
+                <div class="d-flex justify-content-between"><span style="color:#64748b;">Flask</span><strong>{{ data.sys_flask }}</strong></div>
+                <div class="d-flex justify-content-between"><span style="color:#64748b;">OS</span><strong>{{ data.sys_os }}</strong></div>
+                <div class="d-flex justify-content-between"><span style="color:#64748b;">Timezone</span><strong>{{ data.sys_timezone }}</strong></div>
+                <div class="d-flex justify-content-between"><span style="color:#64748b;">Server Time</span><strong>{{ data.sys_server_time }}</strong></div>
+                <div class="d-flex justify-content-between">
+                    <span style="color:#64748b;">Uptime</span>
+                    <strong id="kpi-uptime-val">
+                        {% set hrs = data.sys_uptime_sec // 3600 %}
+                        {% set mins = (data.sys_uptime_sec % 3600) // 60 %}
+                        {{ hrs }}h {{ mins }}m
+                    </strong>
+                </div>
+            </div>
+            {% if data.upload_size_mb is not none %}
+            <hr class="my-2">
+            <div class="lbl mb-1"><i class="bi bi-folder me-1"></i>Local Uploads</div>
+            <div style="font-size:0.78rem;">
+                <strong>{{ data.upload_size_mb }} MB</strong> · {{ data.upload_file_count }} files
+            </div>
             {% endif %}
         </div>
     </div>
 
 </div>
 
-{# ════════════════════════════════════════════════════════
-   ROW 2 — Quick Actions | Env Vars | Fetch Log
-════════════════════════════════════════════════════════ #}
+{# ═════════════════════════════════════════
+   ROW 3 — Quick Links | Env Vars | Sync Log
+═════════════════════════════════════════ #}
 <div class="row g-2 mb-2">
 
     {# Quick Links + Backup #}
@@ -310,10 +456,17 @@
                     </div>
                 </a>
             </div>
+            {% if data.backup_schedule_enabled %}
+            <hr class="my-2">
+            <div style="font-size:0.72rem;color:#64748b;">
+                <i class="bi bi-clock me-1"></i>Scheduled backup: <strong class="text-dark">{{ data.backup_schedule_time }}</strong>
+                {% if data.backup_email_to %} → <strong class="text-dark">{{ data.backup_email_to }}</strong>{% endif %}
+            </div>
+            {% endif %}
         </div>
     </div>
 
-    {# Environment Variables #}
+    {# Env Vars #}
     <div class="col-lg-4">
         <div class="sh-card">
             <div class="lbl mb-2"><i class="bi bi-key me-1"></i>Environment Variables</div>
@@ -336,16 +489,18 @@
             </div>
             {% endfor %}
             <hr class="my-2">
-            <div class="lbl mb-1">Free Tier Limits</div>
+            <div class="lbl mb-1">Configured Limits</div>
             <div style="font-size:0.72rem;color:#64748b;line-height:1.7;">
-                Render DB: <strong class="text-dark">1 GB</strong> &nbsp;·&nbsp;
-                Render RAM: <strong class="text-dark">512 MB</strong><br>
-                Cloudflare R2: <strong class="text-dark">10 GB / 10M req/mo</strong>
+                DB: <strong class="text-dark">{{ data.db_size_limit_mb }} MB</strong>
+                <span style="color:#cbd5e1;">·</span>
+                RAM: <strong class="text-dark">{{ data.ram_limit_mb }} MB</strong>
+                <span style="color:#cbd5e1;">·</span>
+                R2: <strong class="text-dark">{{ (data.r2_size_limit_mb / 1024) | round(0) | int }} GB</strong>
             </div>
         </div>
     </div>
 
-    {# Fetch Log — per-service #}
+    {# Sync Log #}
     <div class="col-lg-4">
         <div class="sh-card">
             <div class="lbl mb-2"><i class="bi bi-terminal me-1"></i>Sync Log — Last Fetch</div>
@@ -376,16 +531,143 @@
             <div style="font-size:0.7rem;color:#94a3b8;">
                 <i class="bi bi-shield-lock me-1"></i>Master only &nbsp;·&nbsp;
                 <i class="bi bi-clock me-1"></i>15-min cache &nbsp;·&nbsp;
-                <i class="bi bi-bell me-1"></i>Auto-alerts on critical
+                <i class="bi bi-bell me-1"></i>Auto-alerts on critical &nbsp;·&nbsp;
+                <i class="bi bi-heart-pulse me-1"></i><code style="font-size:0.65rem;">/health</code> endpoint active
             </div>
         </div>
     </div>
 
 </div>
 
-{# ════════════════════════════════════════════════════════
-   ROW 3 — Setup Guide (shown only when RENDER_API_KEY is missing)
-════════════════════════════════════════════════════════ #}
+{# ═════════════════════════════════════════
+   ROW 4 — Security | DB Cleanup | Backup Panel
+═════════════════════════════════════════ #}
+<div class="row g-2 mb-2">
+
+    {# Security Dashboard #}
+    <div class="col-lg-4">
+        <div class="sh-card sh-card-rose">
+            <div class="lbl mb-2"><i class="bi bi-shield-exclamation me-1"></i>Security — Last 24h</div>
+            <div class="d-flex gap-3 mb-2">
+                <div>
+                    <div style="font-size:1.4rem;font-weight:800;color:#e11d48;" id="kpi-fail-logins">{{ data.failed_logins_24h|default(0) }}</div>
+                    <div class="sub">Failed logins</div>
+                </div>
+                <div>
+                    <div style="font-size:1.4rem;font-weight:800;color:#16a34a;" id="kpi-ok-logins">{{ data.success_logins_24h|default(0) }}</div>
+                    <div class="sub">Successful</div>
+                </div>
+            </div>
+            {% if data.top_fail_ips %}
+            <div class="lbl mt-2 mb-1">Top Offending IPs</div>
+            {% for item in data.top_fail_ips %}
+            <div style="display:flex;justify-content:space-between;font-size:0.73rem;padding:2px 0;border-bottom:1px solid #f1f5f9;">
+                <span style="font-family:monospace;color:#64748b;">{{ item.ip }}</span>
+                <span style="font-weight:700;color:#e11d48;">{{ item.count }}x</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% if data.active_user_list %}
+            <div class="lbl mt-2 mb-1">Active Users (30 min)</div>
+            {% for u in data.active_user_list %}
+            <div style="display:flex;justify-content:space-between;font-size:0.73rem;padding:2px 0;border-bottom:1px solid #f1f5f9;">
+                <span style="color:#334155;">{{ u.name }}</span>
+                <span style="color:#94a3b8;">{{ u.last_seen }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+            <div class="sub mt-2" style="font-size:0.65rem;color:#94a3b8;">
+                <i class="bi bi-lock me-1"></i>Account locks after 5 failed attempts (15 min)
+            </div>
+        </div>
+    </div>
+
+    {# Database Cleanup #}
+    <div class="col-lg-4">
+        <div class="sh-card sh-card-amber">
+            <div class="lbl mb-2"><i class="bi bi-trash3 me-1"></i>Database Cleanup</div>
+            <div style="font-size:0.78rem;margin-bottom:10px;color:#64748b;">
+                Purge old data to keep the database lean. Default: older than 90 days.
+            </div>
+            {% set cleanup_targets = [
+                ('activity_log', 'Activity Log', data.row_count_activity|default(0)),
+                ('login_log', 'Login Log', data.row_count_login|default(0)),
+                ('notifications', 'Read Notifications', data.row_count_notifications|default(0)),
+                ('login_attempts', 'Login Attempts', data.row_count_login_attempts|default(0)),
+            ] %}
+            {% for target, label, count in cleanup_targets %}
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;">
+                <div>
+                    <span style="font-size:0.78rem;font-weight:600;color:#334155;">{{ label }}</span>
+                    <span style="font-size:0.68rem;color:#94a3b8;margin-left:6px;">{{ "{:,}".format(count) }} rows</span>
+                </div>
+                <button class="btn btn-sm btn-outline-warning" style="font-size:0.68rem;padding:2px 10px;"
+                        onclick="_shCleanup('{{ target }}', '{{ label }}')">
+                    Purge 90d+
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# Backup Status Panel #}
+    <div class="col-lg-4">
+        <div class="sh-card sh-card-info">
+            <div class="lbl mb-2"><i class="bi bi-cloud-arrow-up me-1"></i>Backup Status</div>
+            <div style="font-size:0.78rem;line-height:2;">
+                <div class="d-flex justify-content-between">
+                    <span style="color:#64748b;">Schedule</span>
+                    {% if data.backup_schedule_enabled %}
+                    <span class="sbadge sb-ok" style="font-size:0.65rem;padding:2px 8px;">Enabled</span>
+                    {% else %}
+                    <span class="sbadge sb-unk" style="font-size:0.65rem;padding:2px 8px;">Disabled</span>
+                    {% endif %}
+                </div>
+                {% if data.backup_schedule_enabled %}
+                <div class="d-flex justify-content-between">
+                    <span style="color:#64748b;">Time</span>
+                    <strong>Daily at {{ data.backup_schedule_time }}</strong>
+                </div>
+                {% if data.backup_email_to %}
+                <div class="d-flex justify-content-between">
+                    <span style="color:#64748b;">Email To</span>
+                    <strong>{{ data.backup_email_to }}</strong>
+                </div>
+                {% endif %}
+                {% endif %}
+                <div class="d-flex justify-content-between">
+                    <span style="color:#64748b;">Last Backup</span>
+                    <strong>{{ data.last_backup_ts_persistent or 'Never' }}</strong>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span style="color:#64748b;">Result</span>
+                    {% if data.last_backup_result == 'success' %}
+                    <span class="sbadge sb-ok" style="font-size:0.65rem;padding:2px 8px;">Success</span>
+                    {% elif data.last_backup_result == 'failed' %}
+                    <span class="sbadge sb-down" style="font-size:0.65rem;padding:2px 8px;">Failed</span>
+                    {% else %}
+                    <span class="sbadge sb-unk" style="font-size:0.65rem;padding:2px 8px;">Unknown</span>
+                    {% endif %}
+                </div>
+                {% if data.last_backup_size %}
+                <div class="d-flex justify-content-between">
+                    <span style="color:#64748b;">Size</span>
+                    <strong>{{ data.last_backup_size }}</strong>
+                </div>
+                {% endif %}
+            </div>
+            {% if not data.backup_schedule_enabled %}
+            <hr class="my-2">
+            <div style="font-size:0.72rem;color:#f97316;">
+                <i class="bi bi-info-circle me-1"></i>Set <code style="font-size:0.68rem;">BACKUP_SCHEDULE_ENABLED=true</code> and <code style="font-size:0.68rem;">BACKUP_EMAIL_TO</code> in env vars to enable.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+
+{# ── Setup Guide ── #}
 {% if not env_vars_set.get('RENDER_API_KEY') or not env_vars_set.get('RENDER_SERVICE_ID') %}
 <div class="sh-card sh-card-warning mt-2">
     <div class="lbl mb-2"><i class="bi bi-info-circle me-1"></i>Setup Guide — Enable Render Integration</div>
@@ -394,7 +676,6 @@
             <div class="setup-step">
                 <strong>Step 1 — Get your API Key</strong><br>
                 Go to <a href="https://dashboard.render.com/u/settings" target="_blank" rel="noopener">Render → Settings → API Keys</a> → <em>Create API Key</em>.
-                Copy the key.
             </div>
             <div class="setup-step">
                 <strong>Step 2 — Get your Service ID</strong><br>
@@ -421,4 +702,171 @@
 {% endif %}
 
 </div>
+
+{# ═════════════════════════════════════════
+   Auto-Refresh JS + Sparkline Rendering
+═════════════════════════════════════════ #}
+<script>
+(function(){
+    var _arEnabled = true;
+    var _arTimer = null;
+    var _lastFetch = Date.now();
+    var _arInterval = 60000;
+
+    function _fmtUptime(sec) {
+        var h = Math.floor(sec / 3600);
+        var m = Math.floor((sec % 3600) / 60);
+        return h + 'h ' + m + 'm';
+    }
+
+    function _drawSparkline(svgId, data, color) {
+        var svg = document.getElementById(svgId);
+        if (!svg || !data || data.length < 2) return;
+        var w = 200, h = 40, pad = 2;
+        var mn = Math.min.apply(null, data);
+        var mx = Math.max.apply(null, data);
+        var range = mx - mn || 1;
+        var pts = [];
+        for (var i = 0; i < data.length; i++) {
+            var x = pad + (i / (data.length - 1)) * (w - 2 * pad);
+            var y = h - pad - ((data[i] - mn) / range) * (h - 2 * pad);
+            pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+        }
+        var polyline = pts.join(' ');
+        var areaPath = 'M' + pts[0] + ' L' + pts.join(' L') + ' L' + (w - pad) + ',' + h + ' L' + pad + ',' + h + ' Z';
+        svg.innerHTML =
+            '<path class="sparkline-area" d="' + areaPath + '" fill="' + color + '"/>' +
+            '<polyline class="sparkline-line" points="' + polyline + '" stroke="' + color + '"/>';
+    }
+
+    function _updateKPI(d) {
+        var el;
+        el = document.getElementById('sh-fetched-at');
+        if (el && d.fetched_at) el.textContent = d.fetched_at;
+
+        if (d.db_size_mb != null) {
+            el = document.getElementById('kpi-db-val');
+            if (el) el.innerHTML = d.db_size_mb + '<small style="font-size:0.85rem;font-weight:500;"> MB</small>';
+            el = document.getElementById('kpi-db-sub');
+            if (el) el.textContent = d.db_pct + '% of ' + d.db_size_limit_mb + ' MB';
+            el = document.getElementById('kpi-db-bar');
+            if (el) el.style.width = Math.min(d.db_pct, 100) + '%';
+        }
+        if (d.r2_size_mb != null) {
+            el = document.getElementById('kpi-r2-val');
+            if (el) {
+                if (d.r2_size_mb >= 1024) el.innerHTML = (d.r2_size_mb / 1024).toFixed(2) + '<small style="font-size:0.85rem;font-weight:500;"> GB</small>';
+                else el.innerHTML = d.r2_size_mb + '<small style="font-size:0.85rem;font-weight:500;"> MB</small>';
+            }
+            el = document.getElementById('kpi-r2-sub');
+            if (el) el.textContent = d.r2_pct + '% · ' + d.r2_total_objects + ' files';
+            el = document.getElementById('kpi-r2-bar');
+            if (el) el.style.width = Math.min(d.r2_pct, 100) + '%';
+        }
+        if (d.active_sessions != null) {
+            el = document.getElementById('kpi-sessions-val');
+            if (el) el.textContent = d.active_sessions;
+        }
+        if (d.api_avg_ms != null) {
+            el = document.getElementById('kpi-latency-val');
+            if (el) el.innerHTML = d.api_avg_ms + '<small style="font-size:0.8rem;font-weight:500;"> ms</small>';
+            el = document.getElementById('kpi-latency-sub');
+            if (el) el.textContent = 'avg · p95: ' + d.api_p95_ms + 'ms · ' + d.api_sample_count + ' samples';
+        }
+        if (d.ram_mb != null) {
+            el = document.getElementById('kpi-ram-val');
+            if (el) el.innerHTML = d.ram_mb + '<small style="font-size:0.85rem;font-weight:500;"> MB</small>';
+            el = document.getElementById('kpi-ram-sub');
+            if (el) el.textContent = d.ram_pct + '% of ' + d.ram_limit_mb + ' MB';
+            el = document.getElementById('kpi-ram-bar');
+            if (el) el.style.width = Math.min(d.ram_pct, 100) + '%';
+        }
+        el = document.getElementById('kpi-fcm-val');
+        if (el) el.textContent = d.fcm_total;
+        el = document.getElementById('kpi-fcm-sub');
+        if (el) el.innerHTML = '<span style="color:#16a34a;">' + d.fcm_active + ' active</span> · <span style="color:#94a3b8;">' + d.fcm_inactive + ' inactive</span>';
+
+        if (d.sys_uptime_sec != null) {
+            el = document.getElementById('kpi-uptime-val');
+            if (el) el.textContent = _fmtUptime(d.sys_uptime_sec);
+        }
+
+        el = document.getElementById('kpi-fail-logins');
+        if (el && d.failed_logins_24h != null) el.textContent = d.failed_logins_24h;
+        el = document.getElementById('kpi-ok-logins');
+        if (el && d.success_logins_24h != null) el.textContent = d.success_logins_24h;
+
+        if (d.latency_history) _drawSparkline('spark-latency', d.latency_history, '#10b981');
+        if (d.session_history) _drawSparkline('spark-sessions', d.session_history, '#8b5cf6');
+
+        _lastFetch = Date.now();
+    }
+
+    function _fetchData() {
+        if (!_arEnabled) return;
+        fetch('{{ url_for("system_health_api") }}')
+            .then(function(r) { return r.json(); })
+            .then(function(d) { _updateKPI(d); })
+            .catch(function() {});
+    }
+
+    function _startTimer() {
+        if (_arTimer) clearInterval(_arTimer);
+        _arTimer = setInterval(_fetchData, _arInterval);
+    }
+
+    function _updateAgoLabel() {
+        var sec = Math.floor((Date.now() - _lastFetch) / 1000);
+        var el = document.getElementById('sh-updated-ago');
+        if (el) {
+            if (sec < 5) el.textContent = 'just now';
+            else if (sec < 60) el.textContent = sec + 's ago';
+            else el.textContent = Math.floor(sec / 60) + 'm ago';
+        }
+    }
+
+    window._shToggleAutoRefresh = function() {
+        _arEnabled = !_arEnabled;
+        var tog = document.getElementById('sh-ar-toggle');
+        var lbl = document.getElementById('sh-ar-label');
+        if (_arEnabled) {
+            tog.classList.add('active');
+            lbl.textContent = 'ON';
+            _startTimer();
+        } else {
+            tog.classList.remove('active');
+            lbl.textContent = 'OFF';
+            if (_arTimer) clearInterval(_arTimer);
+        }
+    };
+
+    window._shCleanup = function(target, label) {
+        if (!confirm('Purge all ' + label + ' older than 90 days? This cannot be undone.')) return;
+        var csrf = document.querySelector('meta[name="csrf-token"]');
+        var headers = {'Content-Type': 'application/x-www-form-urlencoded'};
+        if (csrf) headers['X-CSRFToken'] = csrf.getAttribute('content');
+        fetch('{{ url_for("system_health_cleanup") }}', {
+            method: 'POST',
+            headers: headers,
+            body: 'target=' + encodeURIComponent(target) + '&days=90'
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) {
+                alert('Deleted ' + d.deleted + ' rows from ' + label + '.');
+                location.reload();
+            } else {
+                alert('Error: ' + (d.error || 'Unknown'));
+            }
+        })
+        .catch(function(e) { alert('Request failed: ' + e); });
+    };
+
+    _drawSparkline('spark-latency', {{ data.latency_history | tojson }}, '#10b981');
+    _drawSparkline('spark-sessions', {{ data.session_history | tojson }}, '#8b5cf6');
+
+    _startTimer();
+    setInterval(_updateAgoLabel, 5000);
+})();
+</script>
 {% endblock %}

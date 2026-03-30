@@ -18,6 +18,8 @@ from models import (
     AttendanceSettings,
     DeviceFCMToken,
     AppRelease,
+    LoginAttempt,
+    SystemSetting,
 )
 from forms import (
     CompanyForm, ProjectForm, VehicleForm, VehicleImportForm, DriverForm, DriverImportForm, EmployeeImportForm, ParkingForm, DistrictForm,
@@ -139,7 +141,7 @@ def require_login():
     endpoint = request.endpoint or ''
     if endpoint.startswith('static'):
         return
-    if endpoint in ('login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init', 'app_check_update', 'debug_fcm_status'):
+    if endpoint in ('login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init', 'app_check_update', 'debug_fcm_status', 'health_check'):
         return
     if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
         return
@@ -2247,6 +2249,13 @@ def backup_download():
         # Use a friendly download name
         friendly = f'fleet_backup_{pk_now().strftime("%Y%m%d_%H%M%S")}.zip'
         _last_backup_ts['ts'] = pk_now()
+        try:
+            _bk_size = os.path.getsize(zip_path)
+            SystemSetting.set('last_backup_ts', pk_now().strftime('%Y-%m-%d %H:%M:%S'))
+            SystemSetting.set('last_backup_result', 'success')
+            SystemSetting.set('last_backup_size', f'{round(_bk_size / (1024*1024), 1)} MB')
+        except Exception:
+            pass
         return send_file(zip_path, as_attachment=True, download_name=friendly)
     finally:
         try:
@@ -3840,6 +3849,22 @@ def login():
         if username and re.match(r'^[\d\-]+$', username):
             username = re.sub(r'\D', '', username)
         password = (form.password.data or '').strip()
+
+        _lockout_minutes = 15
+        _max_failures = 5
+        try:
+            _cutoff = pk_now() - timedelta(minutes=_lockout_minutes)
+            _recent_fails = LoginAttempt.query.filter(
+                LoginAttempt.username == username.lower(),
+                LoginAttempt.success == False,
+                LoginAttempt.created_at >= _cutoff
+            ).count()
+            if _recent_fails >= _max_failures:
+                flash(f'Account temporarily locked due to {_max_failures} failed attempts. Try again in {_lockout_minutes} minutes.', 'danger')
+                return redirect(url_for('login'))
+        except Exception:
+            pass
+
         user = User.query.filter(func.lower(User.username) == username.lower()).first()
         # Agar 13 digits mein user na mila to hyphen wala format try karein (DB mein 32304-0907226-5 ho sakta hai)
         if not user and len(username) == 13 and username.isdigit():
@@ -3976,6 +4001,11 @@ def login():
                         user_agent=(request.headers.get('User-Agent') or '')[:500],
                     )
                     db.session.add(login_log)
+                    db.session.add(LoginAttempt(
+                        username=username.lower(), ip_address=request.remote_addr,
+                        user_agent=(request.headers.get('User-Agent') or '')[:500],
+                        success=True,
+                    ))
                     db.session.commit()
                     session['login_log_id'] = login_log.id
                 except Exception:
@@ -4004,6 +4034,15 @@ def login():
                 flash(f'Welcome, {session["user"]}!', 'success')
                 resp_target = url_for('dashboard', from_login=1) if target_endpoint == 'dashboard' else url_for(target_endpoint)
                 return redirect(resp_target)
+        try:
+            db.session.add(LoginAttempt(
+                username=username.lower(), ip_address=request.remote_addr,
+                user_agent=(request.headers.get('User-Agent') or '')[:500],
+                success=False,
+            ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         flash('Invalid user ID or password.', 'danger')
     return render_template('login.html', form=form)
 
@@ -15161,31 +15200,31 @@ def report_parking_utilization():
 # ════════════════════════════════════════════════════════════════════════════════
 
 import collections as _sh_coll
+import time as _sh_time
 
 _health_cache      = {'data': None, 'ts': None}
-_HEALTH_CACHE_TTL  = 900                            # 15 minutes
-_api_latency_ms    = _sh_coll.deque(maxlen=100)     # rolling /api/* response times (ms)
-_last_backup_ts    = {'ts': None}                   # set on each successful backup_download
-_health_alert_sent = {'db': False, 'r2': False}     # prevent duplicate in-app alerts
+_HEALTH_CACHE_TTL  = 900
+_api_latency_ms    = _sh_coll.deque(maxlen=100)
+_latency_history   = _sh_coll.deque(maxlen=24)
+_session_history   = _sh_coll.deque(maxlen=24)
+_last_backup_ts    = {'ts': None}
+_health_alert_sent = {'db': False, 'r2': False}
+_app_start_time    = _sh_time.time()
 
 
 @app.before_request
 def _sh_before_request():
-    import time as _t
     from flask import g
-    g._sh_t0 = _t.time()
+    g._sh_t0 = _sh_time.time()
 
 
 @app.after_request
 def _sh_after_request(response):
-    import time as _t
     from flask import g
     if hasattr(g, '_sh_t0'):
-        ms = round((_t.time() - g._sh_t0) * 1000, 1)
+        ms = round((_sh_time.time() - g._sh_t0) * 1000, 1)
         if request.path.startswith('/api/'):
             _api_latency_ms.append(ms)
-        if request.path.startswith('/api/attendance'):
-            print(f"[PERF] {request.method} {request.path}?{request.query_string.decode()} -> {response.status_code} in {ms}ms")
     return response
 
 
@@ -15221,8 +15260,9 @@ def _maybe_send_health_alert(data):
         if data.get('r2_critical') and not _health_alert_sent['r2']:
             _health_alert_sent['r2'] = True
             _r2_title = 'R2 Bucket Storage Critical'
+            _r2_limit_gb = round(data.get('r2_size_limit_mb', 10240) / 1024)
             _r2_msg = (
-                f"Cloudflare R2 is at {data['r2_pct']}% of its 10 GB free limit. "
+                f"Cloudflare R2 is at {data['r2_pct']}% of its {_r2_limit_gb} GB limit. "
                 "Delete unused files or upgrade your R2 plan."
             )
             n2 = Notification(
@@ -15248,15 +15288,21 @@ def _build_health_data():
     """Fetch live infrastructure metrics from Render API, PostgreSQL, R2, and internal sources."""
     import json
     import urllib.request
+    import platform
+    import flask as _flask_mod
+
+    _db_limit = int(os.environ.get('DB_SIZE_LIMIT_MB', '1024'))
+    _r2_limit = int(os.environ.get('R2_SIZE_LIMIT_GB', '10')) * 1024
 
     result = {
         'service':          None,
         'last_deploy':      None,
+        'recent_deploys':   [],
         'db_size_mb':       None,
-        'db_size_limit_mb': 1024,
+        'db_size_limit_mb': _db_limit,
         'r2_size_mb':       None,
         'r2_total_objects': 0,
-        'r2_size_limit_mb': 10240,
+        'r2_size_limit_mb': _r2_limit,
         'active_sessions':  None,
         'api_avg_ms':       None,
         'api_p95_ms':       None,
@@ -15265,12 +15311,32 @@ def _build_health_data():
         'checks':           {},
         'errors':           [],
         'fetched_at':       pk_now().strftime('%d-%m-%Y %H:%M UTC'),
+        'ram_mb':           None,
+        'ram_limit_mb':     int(os.environ.get('RAM_LIMIT_MB', '512')),
+        'ram_pct':          None,
+        'upload_size_mb':   None,
+        'upload_file_count': 0,
+        'db_table_stats':   [],
+        'fcm_total':        0,
+        'fcm_active':       0,
+        'fcm_inactive':     0,
+        'sys_python':       platform.python_version(),
+        'sys_flask':        _flask_mod.__version__,
+        'sys_os':           f'{platform.system()} {platform.release()}',
+        'sys_timezone':     app.config.get('APP_TIMEZONE', 'UTC'),
+        'sys_server_time':  pk_now().strftime('%d-%m-%Y %H:%M:%S'),
+        'sys_uptime_sec':   int(_sh_time.time() - _app_start_time),
+        'latency_history':  list(_latency_history),
+        'session_history':  list(_session_history),
+        'backup_schedule_enabled': app.config.get('BACKUP_SCHEDULE_ENABLED', False),
+        'backup_schedule_time':    app.config.get('BACKUP_SCHEDULE_TIME', '02:00'),
+        'backup_email_to':         app.config.get('BACKUP_EMAIL_TO', ''),
     }
 
     render_key = os.environ.get('RENDER_API_KEY', '').strip()
     service_id = os.environ.get('RENDER_SERVICE_ID', '').strip()
 
-    # 1. Render Service + Last Deploy
+    # 1. Render Service + Deploy History
     if render_key and service_id:
         try:
             hdr = {'Authorization': f'Bearer {render_key}', 'Accept': 'application/json'}
@@ -15279,11 +15345,13 @@ def _build_health_data():
             with urllib.request.urlopen(req, timeout=8) as r:
                 result['service'] = json.loads(r.read())
             req2 = urllib.request.Request(
-                f'https://api.render.com/v1/services/{service_id}/deploys?limit=1', headers=hdr)
+                f'https://api.render.com/v1/services/{service_id}/deploys?limit=5', headers=hdr)
             with urllib.request.urlopen(req2, timeout=8) as r2:
                 deploys = json.loads(r2.read())
-                if deploys:
-                    result['last_deploy'] = deploys[0].get('deploy', deploys[0])
+                parsed = [d.get('deploy', d) for d in deploys] if deploys else []
+                result['recent_deploys'] = parsed
+                if parsed:
+                    result['last_deploy'] = parsed[0]
             svc_name   = (result['service'] or {}).get('name', service_id)
             svc_status = (result['service'] or {}).get('status', '?')
             result['checks']['render_api'] = {'status': 'ok', 'msg': f'{svc_name} is {svc_status}'}
@@ -15294,7 +15362,6 @@ def _build_health_data():
     else:
         result['checks']['render_api'] = {
             'status': 'skip', 'msg': 'RENDER_API_KEY or RENDER_SERVICE_ID not configured'}
-        result['errors'].append('Render API: env vars not set.')
 
     # 2. Database Size
     try:
@@ -15333,29 +15400,153 @@ def _build_health_data():
         result['checks']['r2_storage'] = {'status': 'error', 'msg': msg}
         result['errors'].append(f'R2 storage: {msg}')
 
-    # 4. Active Sessions (distinct users in last 30 min)
+    # 4. Active Sessions
     try:
         cutoff = pk_now() - timedelta(minutes=30)
         active = db.session.query(ActivityLog.user_id).filter(
             ActivityLog.created_at >= cutoff).distinct().count()
         result['active_sessions'] = active
         result['checks']['sessions'] = {'status': 'ok', 'msg': f'{active} user(s) active in last 30 min'}
+        _session_history.append(active)
     except Exception as e:
         result['checks']['sessions'] = {'status': 'error', 'msg': str(e)[:80]}
 
-    # 5. API Latency (in-memory rolling window)
+    # 5. API Latency
     if _api_latency_ms:
         samples = list(_api_latency_ms)
-        result['api_avg_ms']       = round(sum(samples) / len(samples), 1)
+        avg = round(sum(samples) / len(samples), 1)
+        result['api_avg_ms']       = avg
         result['api_sample_count'] = len(samples)
         p95_idx                    = max(0, int(len(samples) * 0.95) - 1)
         result['api_p95_ms']       = sorted(samples)[p95_idx]
         result['checks']['api_latency'] = {
             'status': 'ok',
-            'msg': f'avg {result["api_avg_ms"]}ms, p95 {result["api_p95_ms"]}ms ({len(samples)} samples)'}
+            'msg': f'avg {avg}ms, p95 {result["api_p95_ms"]}ms ({len(samples)} samples)'}
+        _latency_history.append(avg)
     else:
         result['checks']['api_latency'] = {
             'status': 'na', 'msg': 'No /api/* calls recorded yet in this session'}
+
+    # 6. RAM / Memory Usage
+    try:
+        import resource
+        rss_bytes = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+        result['ram_mb'] = round(rss_bytes / (1024 * 1024), 1)
+    except Exception:
+        try:
+            import psutil
+            result['ram_mb'] = round(psutil.Process().memory_info().rss / (1024 * 1024), 1)
+        except Exception:
+            pass
+    if result['ram_mb'] is not None and result['ram_limit_mb']:
+        result['ram_pct'] = round(result['ram_mb'] / result['ram_limit_mb'] * 100, 1)
+
+    # 7. Upload Folder Size
+    try:
+        upload_dir = app.config.get('UPLOAD_FOLDER', '')
+        if upload_dir and os.path.isdir(upload_dir):
+            total_sz, total_cnt = 0, 0
+            for dirpath, _dirnames, filenames in os.walk(upload_dir):
+                for f in filenames:
+                    fp = os.path.join(dirpath, f)
+                    try:
+                        total_sz += os.path.getsize(fp)
+                        total_cnt += 1
+                    except OSError:
+                        pass
+            result['upload_size_mb'] = round(total_sz / (1024 * 1024), 1)
+            result['upload_file_count'] = total_cnt
+    except Exception:
+        pass
+
+    # 8. Database Table Stats (PostgreSQL only)
+    try:
+        db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        if 'postgresql' in db_uri:
+            tbl_q = text("""
+                SELECT relname AS name,
+                       n_live_tup AS row_count,
+                       pg_total_relation_size(relid) AS size_bytes
+                FROM pg_stat_user_tables
+                ORDER BY pg_total_relation_size(relid) DESC
+                LIMIT 10
+            """)
+            rows = db.session.execute(tbl_q).fetchall()
+            result['db_table_stats'] = [
+                {'name': r.name, 'rows': r.row_count,
+                 'size_mb': round(r.size_bytes / (1024 * 1024), 2)}
+                for r in rows
+            ]
+    except Exception:
+        pass
+
+    # 9. FCM / Notification Stats
+    try:
+        result['fcm_total']    = DeviceFCMToken.query.count()
+        result['fcm_active']   = DeviceFCMToken.query.filter_by(is_active=True).count()
+        result['fcm_inactive'] = result['fcm_total'] - result['fcm_active']
+    except Exception:
+        pass
+
+    # 10. Security — Login Attempts (last 24h)
+    try:
+        _sec_cutoff = pk_now() - timedelta(hours=24)
+        result['failed_logins_24h'] = LoginAttempt.query.filter(
+            LoginAttempt.success == False,
+            LoginAttempt.created_at >= _sec_cutoff
+        ).count()
+        result['success_logins_24h'] = LoginAttempt.query.filter(
+            LoginAttempt.success == True,
+            LoginAttempt.created_at >= _sec_cutoff
+        ).count()
+        _top_ips_q = db.session.query(
+            LoginAttempt.ip_address, func.count(LoginAttempt.id).label('cnt')
+        ).filter(
+            LoginAttempt.success == False,
+            LoginAttempt.created_at >= _sec_cutoff
+        ).group_by(LoginAttempt.ip_address).order_by(func.count(LoginAttempt.id).desc()).limit(5).all()
+        result['top_fail_ips'] = [{'ip': r[0] or 'unknown', 'count': r[1]} for r in _top_ips_q]
+        _active_users = db.session.query(
+            User.full_name, ActivityLog.created_at
+        ).join(User, User.id == ActivityLog.user_id).filter(
+            ActivityLog.created_at >= pk_now() - timedelta(minutes=30)
+        ).group_by(User.id, User.full_name, ActivityLog.created_at).order_by(
+            ActivityLog.created_at.desc()
+        ).limit(20).all()
+        _seen = set()
+        _active_list = []
+        for name, ts in _active_users:
+            if name not in _seen:
+                _seen.add(name)
+                _active_list.append({'name': name, 'last_seen': ts.strftime('%H:%M') if ts else '?'})
+        result['active_user_list'] = _active_list[:10]
+    except Exception:
+        result['failed_logins_24h'] = 0
+        result['success_logins_24h'] = 0
+        result['top_fail_ips'] = []
+        result['active_user_list'] = []
+
+    # 11. Row counts for cleanup targets
+    try:
+        result['row_count_activity'] = ActivityLog.query.count()
+        result['row_count_login'] = LoginLog.query.count()
+        result['row_count_notifications'] = Notification.query.count()
+        result['row_count_login_attempts'] = LoginAttempt.query.count()
+    except Exception:
+        result['row_count_activity'] = 0
+        result['row_count_login'] = 0
+        result['row_count_notifications'] = 0
+        result['row_count_login_attempts'] = 0
+
+    # 12. Persistent backup info from SystemSetting
+    try:
+        result['last_backup_ts_persistent'] = SystemSetting.get('last_backup_ts')
+        result['last_backup_result'] = SystemSetting.get('last_backup_result', 'unknown')
+        result['last_backup_size'] = SystemSetting.get('last_backup_size')
+    except Exception:
+        result['last_backup_ts_persistent'] = None
+        result['last_backup_result'] = 'unknown'
+        result['last_backup_size'] = None
 
     # Percentages & Critical Flags
     result['db_pct']       = round(result['db_size_mb'] / result['db_size_limit_mb'] * 100, 1) if result['db_size_mb'] is not None else None
@@ -15364,9 +15555,7 @@ def _build_health_data():
     result['r2_critical']  = bool(result['r2_pct'] is not None and result['r2_pct'] >= 80)
     result['any_critical'] = result['db_critical'] or result['r2_critical']
 
-    # Smart Alert (in-app notification)
     _maybe_send_health_alert(result)
-
     return result
 
 
@@ -15394,6 +15583,66 @@ def system_health():
         'DATABASE_URL', 'SECRET_KEY',
     ]}
     return render_template('system_health.html', data=data, env_vars_set=env_vars_set)
+
+
+@app.route('/admin/system-health/api')
+def system_health_api():
+    """JSON API for auto-refresh — Master only."""
+    if not session.get('is_master'):
+        return jsonify({'error': 'Forbidden'}), 403
+    data = _fetch_system_health(force=False)
+    return jsonify(data)
+
+
+@app.route('/health')
+def health_check():
+    """Public health check for external monitoring (UptimeRobot, etc.)."""
+    try:
+        db.session.execute(text('SELECT 1'))
+        db_ok = True
+    except Exception:
+        db_ok = False
+    uptime = int(_sh_time.time() - _app_start_time)
+    status_code = 200 if db_ok else 503
+    return jsonify({
+        'status': 'ok' if db_ok else 'degraded',
+        'db': db_ok,
+        'uptime_seconds': uptime,
+    }), status_code
+
+
+@app.route('/admin/system-health/cleanup', methods=['POST'])
+def system_health_cleanup():
+    """Purge old data from specified table. Master only."""
+    if not session.get('is_master'):
+        return jsonify({'error': 'Forbidden'}), 403
+    target = request.form.get('target', '')
+    days = int(request.form.get('days', '90'))
+    cutoff = pk_now() - timedelta(days=days)
+    deleted = 0
+    try:
+        if target == 'activity_log':
+            deleted = ActivityLog.query.filter(ActivityLog.created_at < cutoff).delete()
+        elif target == 'login_log':
+            deleted = LoginLog.query.filter(LoginLog.login_at < cutoff).delete()
+        elif target == 'notifications':
+            read_ids = db.session.query(NotificationRead.notification_id).filter(
+                NotificationRead.read_at < cutoff
+            ).subquery()
+            deleted = Notification.query.filter(
+                Notification.id.in_(db.session.query(read_ids)),
+                Notification.created_at < cutoff
+            ).delete(synchronize_session='fetch')
+        elif target == 'login_attempts':
+            deleted = LoginAttempt.query.filter(LoginAttempt.created_at < cutoff).delete()
+        else:
+            return jsonify({'error': 'Unknown target'}), 400
+        db.session.commit()
+        _health_cache['data'] = None
+        return jsonify({'ok': True, 'deleted': deleted, 'target': target, 'days': days})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)[:200]}), 500
 
 
 @app.cli.command('fix-driver-status')
