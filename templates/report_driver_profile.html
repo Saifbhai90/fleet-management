@@ -866,7 +866,7 @@
           </div>
           <div class="info-item">
             <div class="info-label"><i class="bi bi-calendar-x"></i> Expiry Date</div>
-            <div class="info-value">{{ driver.license_expiry_date|ddmmyyyy if driver.license_expiry_date else '—' }}{% if driver.license_issue_date and driver.license_expiry_date %}{% set lic_total = (driver.license_expiry_date - driver.license_issue_date).days %}{% set lic_y = lic_total // 365 %}{% set lic_m = (lic_total % 365) // 30 %}{% set lic_d = (lic_total % 365) % 30 %} <span class="license-age-badge">{% if lic_y %}{{ lic_y }}y {% endif %}{% if lic_m %}{{ lic_m }}m {% endif %}{{ lic_d }}d</span>{% endif %}</div>
+            <div class="info-value">{{ driver.license_expiry_date|ddmmyyyy if driver.license_expiry_date else '—' }}{% if driver.license_issue_date %}{% set lic_age = (today - driver.license_issue_date).days %}{% set lic_y = lic_age // 365 %}{% set lic_m = (lic_age % 365) // 30 %}{% set lic_d = (lic_age % 365) % 30 %} <span class="license-age-badge">{% if lic_y %}{{ lic_y }}y {% endif %}{% if lic_m %}{{ lic_m }}m {% endif %}{{ lic_d }}d</span>{% endif %}</div>
           </div>
         </div>
         {% if driver.license_expiry_date %}
