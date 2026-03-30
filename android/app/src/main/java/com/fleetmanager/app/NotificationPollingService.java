@@ -9,7 +9,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.IBinder;
-import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
@@ -27,7 +26,6 @@ import java.util.TimerTask;
 
 public class NotificationPollingService extends Service {
 
-    private static final String TAG = "FCM_DEBUG";
     private static final String PREFS_NAME = "fcm_prefs";
     private static final String KEY_USE_POLLING = "use_polling";
     private static final String KEY_SEEN_IDS = "polling_seen_notification_ids";
@@ -49,7 +47,6 @@ public class NotificationPollingService extends Service {
         super.onCreate();
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         seenIds = new HashSet<>(prefs.getStringSet(KEY_SEEN_IDS, new HashSet<>()));
-        Log.e(TAG, "PollingService created. Seen: " + seenIds.size());
     }
 
     @Override
@@ -89,23 +86,19 @@ public class NotificationPollingService extends Service {
             @Override
             public void run() {
                 if (!prefs.getBoolean(KEY_USE_POLLING, false)) {
-                    Log.e(TAG, "Polling: token acquired - stopping");
                     stopSelf();
                     return;
                 }
                 pollServer();
             }
         }, 5000, POLL_INTERVAL_MS);
-        Log.e(TAG, "Polling started: every " + (POLL_INTERVAL_MS / 1000) + "s");
     }
 
     private void pollServer() {
         try {
             String cookie = getSessionCookie();
-            if (cookie == null || cookie.isEmpty()) {
-                Log.e(TAG, "Polling: no session cookie - skipping");
-                return;
-            }
+            if (cookie == null || cookie.isEmpty()) return;
+
             URL url = new URL(SERVER_BASE + "/api/poll-notifications");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
@@ -119,20 +112,14 @@ public class NotificationPollingService extends Service {
 
             if (code == 404) {
                 consecutiveErrors++;
-                Log.e(TAG, "Polling: 404 - endpoint not deployed (err#" + consecutiveErrors + ")");
                 if (consecutiveErrors >= 3) {
-                    Log.e(TAG, "Polling: backoff to " + (RETRY_AFTER_ERROR_MS / 1000) + "s");
                     rescheduleWithInterval(RETRY_AFTER_ERROR_MS);
                 }
                 return;
             }
-            if (code == 401) {
-                Log.e(TAG, "Polling: 401 - session expired");
-                return;
-            }
+            if (code == 401) return;
             if (code != 200) {
                 consecutiveErrors++;
-                Log.e(TAG, "Polling: HTTP " + code + " (err#" + consecutiveErrors + ")");
                 return;
             }
 
@@ -147,10 +134,7 @@ public class NotificationPollingService extends Service {
             JSONObject resp = new JSONObject(sb.toString());
             JSONArray arr = resp.optJSONArray("notifications");
             if (arr == null) arr = resp.optJSONArray("data");
-            if (arr == null || arr.length() == 0) {
-                Log.e(TAG, "Polling: 200 OK - no new notifications");
-                return;
-            }
+            if (arr == null || arr.length() == 0) return;
 
             int newCount = 0;
             for (int i = 0; i < arr.length(); i++) {
@@ -167,11 +151,9 @@ public class NotificationPollingService extends Service {
             }
             if (newCount > 0) {
                 prefs.edit().putStringSet(KEY_SEEN_IDS, seenIds).apply();
-                Log.e(TAG, "Polling: showed " + newCount + " new notifications");
             }
         } catch (Exception e) {
             consecutiveErrors++;
-            Log.e(TAG, "Polling: error - " + e.getMessage());
         }
     }
 
@@ -222,7 +204,6 @@ public class NotificationPollingService extends Service {
     @Override
     public void onDestroy() {
         if (pollTimer != null) { pollTimer.cancel(); pollTimer = null; }
-        Log.e(TAG, "PollingService destroyed");
         super.onDestroy();
     }
 }

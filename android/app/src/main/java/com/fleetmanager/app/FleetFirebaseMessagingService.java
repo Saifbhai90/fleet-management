@@ -6,21 +6,14 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
-import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 
-/**
- * Handles incoming FCM messages and token refresh events.
- * When a new token is generated (including after GMS proxy resolves), it is
- * persisted to SharedPreferences so the WebView layer can pick it up.
- */
 public class FleetFirebaseMessagingService extends FirebaseMessagingService {
 
-    private static final String TAG = "FCM_DEBUG";
     private static final String PREFS_NAME = "fcm_prefs";
     private static final String KEY_FCM_TOKEN = "fcm_token";
     private static final String KEY_USE_POLLING = "use_polling";
@@ -30,7 +23,6 @@ public class FleetFirebaseMessagingService extends FirebaseMessagingService {
     @Override
     public void onNewToken(String token) {
         super.onNewToken(token);
-        Log.e(TAG, "onNewToken fired: " + token.substring(0, Math.min(40, token.length())) + "...");
 
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         prefs.edit()
@@ -47,9 +39,6 @@ public class FleetFirebaseMessagingService extends FirebaseMessagingService {
     @Override
     public void onMessageReceived(RemoteMessage message) {
         super.onMessageReceived(message);
-        Log.e(TAG, "onMessageReceived from=" + message.getFrom()
-                + " data=" + message.getData()
-                + " notification=" + (message.getNotification() != null));
 
         String title = "Fleet Manager";
         String body = "";
