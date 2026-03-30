@@ -887,11 +887,11 @@
       </div>
       <div class="info-item">
         <div class="info-label"><i class="bi bi-telephone-fill"></i> Phone No 1</div>
-        <div class="info-value">{% if driver.phone1 %}{% set p1_intl = '92' ~ driver.phone1|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.phone1 }}" class="tel-link">{{ driver.phone1|phone_fmt }}</a><a href="whatsapp://send?phone={{ p1_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><a href="{{ url_for('download_vcard', driver_id=driver.id) }}" class="save-contact-link" title="Save Contact"><i class="bi bi-person-plus-fill"></i></a><button class="copy-btn" title="Copy" onclick="copyText('{{ driver.phone1 }}',this)"><i class="bi bi-clipboard"></i></button><a href="whatsapp://send?phone={{ p1_intl }}&text={{ driver.phone1|urlencode }}" class="wa-share-btn" title="Share via WhatsApp"><i class="bi bi-send"></i></a>{% else %}—{% endif %}</div>
+        <div class="info-value">{% if driver.phone1 %}{% set p1_intl = '92' ~ driver.phone1|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.phone1 }}" class="tel-link">{{ driver.phone1|phone_fmt }}</a><a href="whatsapp://send?phone={{ p1_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><a href="{{ url_for('download_vcard', driver_id=driver.id) }}" class="save-contact-link" title="Save Contact"><i class="bi bi-person-plus-fill"></i></a><button class="copy-btn" title="Copy Details" onclick="copyPhoneDetails('Phone No 1','{{ driver.phone1 }}',this)"><i class="bi bi-clipboard"></i></button><a href="whatsapp://send?phone={{ p1_intl }}&text={{ ('Name: ' ~ driver.name ~ '\nPhone No 1: ' ~ driver.phone1 ~ ('\nVehicle: ' ~ driver.vehicle.vehicle_no if driver.vehicle else ''))|urlencode }}" class="wa-share-btn" title="Share via WhatsApp"><i class="bi bi-send"></i></a>{% else %}—{% endif %}</div>
       </div>
       <div class="info-item">
         <div class="info-label"><i class="bi bi-telephone"></i> Phone No 2</div>
-        <div class="info-value">{% if driver.phone2 %}{% set p2_intl = '92' ~ driver.phone2|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.phone2 }}" class="tel-link">{{ driver.phone2|phone_fmt }}</a><a href="whatsapp://send?phone={{ p2_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><a href="{{ url_for('download_vcard', driver_id=driver.id) }}" class="save-contact-link" title="Save Contact"><i class="bi bi-person-plus-fill"></i></a><button class="copy-btn" title="Copy" onclick="copyText('{{ driver.phone2 }}',this)"><i class="bi bi-clipboard"></i></button><a href="whatsapp://send?phone={{ p2_intl }}&text={{ driver.phone2|urlencode }}" class="wa-share-btn" title="Share via WhatsApp"><i class="bi bi-send"></i></a>{% else %}—{% endif %}</div>
+        <div class="info-value">{% if driver.phone2 %}{% set p2_intl = '92' ~ driver.phone2|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.phone2 }}" class="tel-link">{{ driver.phone2|phone_fmt }}</a><a href="whatsapp://send?phone={{ p2_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><a href="{{ url_for('download_vcard', driver_id=driver.id) }}" class="save-contact-link" title="Save Contact"><i class="bi bi-person-plus-fill"></i></a><button class="copy-btn" title="Copy Details" onclick="copyPhoneDetails('Phone No 2','{{ driver.phone2 }}',this)"><i class="bi bi-clipboard"></i></button><a href="whatsapp://send?phone={{ p2_intl }}&text={{ ('Name: ' ~ driver.name ~ '\nPhone No 2: ' ~ driver.phone2 ~ ('\nVehicle: ' ~ driver.vehicle.vehicle_no if driver.vehicle else ''))|urlencode }}" class="wa-share-btn" title="Share via WhatsApp"><i class="bi bi-send"></i></a>{% else %}—{% endif %}</div>
       </div>
       <div class="info-item">
         <div class="info-label"><i class="bi bi-mortarboard-fill"></i> Education</div>
@@ -905,7 +905,7 @@
         <div class="emergency-title"><i class="bi bi-exclamation-triangle-fill"></i> Emergency Contact</div>
         <div class="info-item">
           <div class="info-label"><i class="bi bi-telephone-forward-fill"></i> Emergency No</div>
-          <div class="info-value">{% if driver.emergency_no %}{% set emg_intl = '92' ~ driver.emergency_no|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.emergency_no }}" class="tel-link">{{ driver.emergency_no|phone_fmt }}</a><a href="whatsapp://send?phone={{ emg_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a>{% else %}—{% endif %}</div>
+          <div class="info-value">{% if driver.emergency_no %}{% set emg_intl = '92' ~ driver.emergency_no|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.emergency_no }}" class="tel-link">{{ driver.emergency_no|phone_fmt }}</a><a href="whatsapp://send?phone={{ emg_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><button class="copy-btn" title="Copy Details" onclick="copyPhoneDetails('Emergency No','{{ driver.emergency_no }}',this)"><i class="bi bi-clipboard"></i></button>{% else %}—{% endif %}</div>
         </div>
         <div class="info-item">
           <div class="info-label"><i class="bi bi-people-fill"></i> Relation</div>
@@ -2211,8 +2211,15 @@
   </button>
 
   <script>
-  /* ── Copy text to clipboard ── */
-  function copyText(text, btn) {
+  /* ── Copy phone details to clipboard (Name + Label + Number + Vehicle) ── */
+  function copyPhoneDetails(label, phone, btn) {
+    var lines = [];
+    lines.push('Name: {{ driver.name }}');
+    lines.push(label + ': ' + phone);
+    {% if driver.vehicle %}
+    lines.push('Vehicle: {{ driver.vehicle.vehicle_no }}');
+    {% endif %}
+    var text = lines.join('\n');
     navigator.clipboard.writeText(text).then(function() {
       btn.classList.add('copied');
       btn.innerHTML = '<i class="bi bi-check"></i>';
