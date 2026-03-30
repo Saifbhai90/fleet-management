@@ -644,10 +644,30 @@ def _is_parking_full_notification(notification):
 
 
 def _unread_notifications_for_user(user_id, limit=20):
-    """Notifications not yet read by this user (per-user read via NotificationRead). Excludes Parking full."""
+    """Notifications not yet read by this user, filtered by role permissions.
+    Notifications with required_permission are only shown to users who have
+    at least one of the listed permission codes. Notifications without
+    required_permission are visible to everyone (broadcast)."""
     read_ids = db.session.query(NotificationRead.notification_id).filter(NotificationRead.user_id == user_id).subquery()
-    candidates = Notification.query.filter(~Notification.id.in_(read_ids)).order_by(Notification.created_at.desc()).limit(limit * 3).all()
-    out = [n for n in candidates if not _is_parking_full_notification(n)][:limit]
+    candidates = Notification.query.filter(~Notification.id.in_(read_ids)).order_by(Notification.created_at.desc()).limit(limit * 5).all()
+
+    user_perms = set(session.get('permissions') or [])
+    is_master = session.get('is_master', False)
+
+    out = []
+    for n in candidates:
+        if _is_parking_full_notification(n):
+            continue
+        if n.required_permission:
+            if is_master:
+                out.append(n)
+                continue
+            req_codes = set(n.required_permission.split(','))
+            if not (user_perms & req_codes):
+                continue
+        out.append(n)
+        if len(out) >= limit:
+            break
     return out
 
 
@@ -712,51 +732,6 @@ def app_check_update():
     })
 
 
-@app.route('/api/debug/fcm-status')
-def debug_fcm_status():
-    """Temporary diagnostic: check Firebase + token status."""
-    import json as _json
-    result = {}
-
-    # 1. Check Firebase init
-    try:
-        from push_notifications import _init_firebase
-        fb = _init_firebase()
-        result['firebase_initialized'] = fb is not None
-    except Exception as e:
-        result['firebase_initialized'] = False
-        result['firebase_error'] = str(e)
-
-    # 2. Check env var
-    env_val = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON', '')
-    result['env_var_set'] = bool(env_val)
-    result['env_var_length'] = len(env_val)
-    if env_val:
-        try:
-            parsed = _json.loads(env_val)
-            result['env_var_valid_json'] = True
-            result['env_var_project_id'] = parsed.get('project_id', '?')
-        except Exception:
-            result['env_var_valid_json'] = False
-
-    # 3. Check file
-    sa_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'firebase-service-account.json')
-    result['file_exists'] = os.path.exists(sa_path)
-
-    # 4. Token counts
-    total = DeviceFCMToken.query.count()
-    active = DeviceFCMToken.query.filter_by(is_active=True).count()
-    result['total_tokens'] = total
-    result['active_tokens'] = active
-
-    # 5. List active tokens (truncated)
-    tokens = DeviceFCMToken.query.filter_by(is_active=True).all()
-    result['token_details'] = [
-        {'user_id': t.user_id, 'device': t.device_unique_id, 'token_prefix': t.fcm_token[:20] + '...', 'updated': str(t.updated_at)}
-        for t in tokens
-    ]
-
-    return jsonify(result)
 
 
 @app.route('/admin/app-releases', methods=['GET', 'POST'])
@@ -936,25 +911,34 @@ def web_register_fcm_token():
 @app.route('/api/poll-notifications')
 def poll_notifications():
     """Session-based JSON endpoint for the native polling service.
-    Returns unread notifications when FCM push delivery is unavailable."""
+    Returns unread notifications filtered by user's role permissions."""
     uid = session.get('user_id')
     if not uid:
         return jsonify({'error': 'Not authenticated'}), 401
 
+    user_perms = set(session.get('permissions') or [])
+    is_master = session.get('is_master', False)
     read_ids = {r.notification_id for r in NotificationRead.query.filter_by(user_id=uid).all()}
-    all_n = Notification.query.order_by(Notification.created_at.desc()).limit(30).all()
-    notifications = [n for n in all_n if not _is_parking_full_notification(n)]
+    all_n = Notification.query.order_by(Notification.created_at.desc()).limit(50).all()
 
     result = []
-    for n in notifications:
-        if n.id not in read_ids:
-            result.append({
-                'id': n.id,
-                'title': n.title,
-                'message': n.message or '',
-                'link': n.link,
-                'created_at': n.created_at.isoformat() if n.created_at else None,
-            })
+    for n in all_n:
+        if n.id in read_ids or _is_parking_full_notification(n):
+            continue
+        if n.required_permission:
+            if not is_master:
+                req_codes = set(n.required_permission.split(','))
+                if not (user_perms & req_codes):
+                    continue
+        result.append({
+            'id': n.id,
+            'title': n.title,
+            'message': n.message or '',
+            'link': n.link,
+            'created_at': n.created_at.isoformat() if n.created_at else None,
+        })
+        if len(result) >= 20:
+            break
 
     return jsonify({'notifications': result})
 
@@ -1209,16 +1193,27 @@ def dashboard():
                 if (d.license_expiry_date and d.license_expiry_date < today) or (d.cnic_expiry_date and d.cnic_expiry_date < today):
                     expiring_count += 1
             if expiring_count > 0:
+                _exp_title = 'Document expiry'
+                _exp_msg = f'{expiring_count} driver(s) have license or CNIC already expired (current expiry).'
+                _exp_link = url_for('report_expiry', days=0)
                 n = Notification(
-                    title='Document expiry',
-                    message=f'{expiring_count} driver(s) have license or CNIC already expired (current expiry).',
-                    link=url_for('report_expiry', days=0),
+                    title=_exp_title,
+                    message=_exp_msg,
+                    link=_exp_link,
                     link_text='View expiry report',
                     notification_type='warning',
-                    created_by_user_id=None
+                    created_by_user_id=None,
+                    required_permission='report_expiry,reports,dashboard_card_doc_health,master,drivers_list'
                 )
                 db.session.add(n)
                 db.session.commit()
+                try:
+                    from push_notifications import send_push_to_permitted
+                    send_push_to_permitted(
+                        ['report_expiry', 'reports', 'dashboard_card_doc_health', 'master', 'drivers_list'],
+                        _exp_title, _exp_msg, link=_exp_link)
+                except Exception:
+                    pass
                 notifications = _unread_notifications_for_user(user_id, 20)
 
             from datetime import timedelta
@@ -1234,16 +1229,27 @@ def dashboard():
                 if not has_recent:
                     missing_count += 1
             if missing_count > 0:
+                _att_title = 'Attendance missing'
+                _att_msg = f'{missing_count} active driver(s) have no attendance in the last 7 days.'
+                _att_link = url_for('driver_attendance_list')
                 n3 = Notification(
-                    title='Attendance missing',
-                    message=f'{missing_count} active driver(s) have no attendance in the last 7 days.',
-                    link=url_for('driver_attendance_list'),
+                    title=_att_title,
+                    message=_att_msg,
+                    link=_att_link,
                     link_text='View attendance',
                     notification_type='info',
-                    created_by_user_id=None
+                    created_by_user_id=None,
+                    required_permission='driver_attendance,driver_attendance_list,driver_attendance_checkin'
                 )
                 db.session.add(n3)
                 db.session.commit()
+                try:
+                    from push_notifications import send_push_to_permitted
+                    send_push_to_permitted(
+                        ['driver_attendance', 'driver_attendance_list', 'driver_attendance_checkin'],
+                        _att_title, _att_msg, link=_att_link)
+                except Exception:
+                    pass
                 notifications = _unread_notifications_for_user(user_id, 20)
     except Exception:
         try:
@@ -1306,16 +1312,31 @@ def notification_read(pk):
 # ────────────────────────────────────────────────
 @app.route('/notifications')
 def notification_list():
-    """List all notifications (newest first); current user's unread highlighted. Excludes Parking full."""
+    """List notifications visible to the current user based on role permissions."""
     user_id = session.get('user_id')
+    user_perms = set(session.get('permissions') or [])
+    is_master = session.get('is_master', False)
     read_ids = set()
     if user_id:
         read_ids = {r.notification_id for r in NotificationRead.query.filter_by(user_id=user_id).all()}
-    all_n = Notification.query.order_by(Notification.created_at.desc()).limit(150).all()
-    notifications = [n for n in all_n if not _is_parking_full_notification(n)][:100]
+    all_n = Notification.query.order_by(Notification.created_at.desc()).limit(200).all()
+
+    filtered = []
+    for n in all_n:
+        if _is_parking_full_notification(n):
+            continue
+        if n.required_permission:
+            if not is_master:
+                req_codes = set(n.required_permission.split(','))
+                if not (user_perms & req_codes):
+                    continue
+        filtered.append(n)
+        if len(filtered) >= 100:
+            break
+
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    pagination = SimplePagination(notifications, page, per_page)
+    pagination = SimplePagination(filtered, page, per_page)
     notifications = pagination.items
     return render_template('notification_list.html', notifications=notifications, read_ids=read_ids, pagination=pagination, per_page=per_page)
 
@@ -1325,17 +1346,25 @@ def notification_add():
     """Any logged-in user can create a notification (broadcast to all users)."""
     form = NotificationForm()
     if form.validate_on_submit():
+        _n_title = form.title.data.strip()
+        _n_msg = (form.message.data or '').strip() or None
+        _n_link = (form.link.data or '').strip() or None
         n = Notification(
-            title=form.title.data.strip(),
-            message=(form.message.data or '').strip() or None,
-            link=(form.link.data or '').strip() or None,
+            title=_n_title,
+            message=_n_msg,
+            link=_n_link,
             link_text=(form.link_text.data or '').strip() or None,
             notification_type=form.notification_type.data or 'info',
             created_by_user_id=session.get('user_id')
         )
         db.session.add(n)
         db.session.commit()
-        flash('Notification sent to all users.', 'success')
+        try:
+            from push_notifications import broadcast_push_all
+            sent = broadcast_push_all(_n_title, _n_msg or '', link=_n_link)
+            flash(f'Notification sent to all users. ({sent} devices ko push bheji)', 'success')
+        except Exception:
+            flash('Notification sent to all users.', 'success')
         return redirect(url_for('notification_list'))
     return render_template('notification_form.html', form=form)
 
@@ -15165,18 +15194,24 @@ def _maybe_send_health_alert(data):
     try:
         if data.get('db_critical') and not _health_alert_sent['db']:
             _health_alert_sent['db'] = True
+            _db_title = 'Database Storage Critical'
+            _db_msg = (
+                f"Database is at {data['db_pct']}% "
+                f"({data['db_size_mb']} MB / {data['db_size_limit_mb']} MB). "
+                "Upgrade plan or clean up data immediately."
+            )
             n = Notification(
-                title='Database Storage Critical',
-                message=(
-                    f"Database is at {data['db_pct']}% "
-                    f"({data['db_size_mb']} MB / {data['db_size_limit_mb']} MB). "
-                    "Upgrade plan or clean up data immediately."
-                ),
-                notification_type='danger',
-                created_by_user_id=None,
+                title=_db_title, message=_db_msg,
+                notification_type='danger', created_by_user_id=None,
+                required_permission='backup,users_manage',
             )
             db.session.add(n)
             db.session.commit()
+            try:
+                from push_notifications import send_push_to_permitted
+                send_push_to_permitted(['backup', 'users_manage'], _db_title, _db_msg)
+            except Exception:
+                pass
     except Exception:
         try:
             db.session.rollback()
@@ -15185,17 +15220,23 @@ def _maybe_send_health_alert(data):
     try:
         if data.get('r2_critical') and not _health_alert_sent['r2']:
             _health_alert_sent['r2'] = True
+            _r2_title = 'R2 Bucket Storage Critical'
+            _r2_msg = (
+                f"Cloudflare R2 is at {data['r2_pct']}% of its 10 GB free limit. "
+                "Delete unused files or upgrade your R2 plan."
+            )
             n2 = Notification(
-                title='R2 Bucket Storage Critical',
-                message=(
-                    f"Cloudflare R2 is at {data['r2_pct']}% of its 10 GB free limit. "
-                    "Delete unused files or upgrade your R2 plan."
-                ),
-                notification_type='danger',
-                created_by_user_id=None,
+                title=_r2_title, message=_r2_msg,
+                notification_type='danger', created_by_user_id=None,
+                required_permission='backup,users_manage',
             )
             db.session.add(n2)
             db.session.commit()
+            try:
+                from push_notifications import send_push_to_permitted
+                send_push_to_permitted(['backup', 'users_manage'], _r2_title, _r2_msg)
+            except Exception:
+                pass
     except Exception:
         try:
             db.session.rollback()

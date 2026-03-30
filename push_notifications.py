@@ -116,6 +116,39 @@ def send_push_to_multiple(user_ids, title, body, data=None, link=None):
     return total
 
 
+def send_push_to_permitted(required_perms, title, body, data=None, link=None):
+    """Send push only to users whose role has ANY of the required permission codes.
+    required_perms: list of permission code strings (e.g. ['report_expiry', 'reports']).
+    Falls back to broadcast_push_all if required_perms is empty/None."""
+    if not required_perms:
+        return broadcast_push_all(title, body, data=data, link=link)
+
+    app = _init_firebase()
+    if not app:
+        return 0
+
+    from models import User, Role, Permission, role_permissions, DeviceFCMToken, db
+
+    perm_ids = [p.id for p in Permission.query.filter(Permission.code.in_(required_perms)).all()]
+    if not perm_ids:
+        return 0
+
+    role_ids = db.session.query(role_permissions.c.role_id).filter(
+        role_permissions.c.permission_id.in_(perm_ids)
+    ).distinct().all()
+    role_ids = [r[0] for r in role_ids]
+    if not role_ids:
+        return 0
+
+    user_ids = [u.id for u in User.query.filter(
+        User.role_id.in_(role_ids), User.is_active == True
+    ).all()]
+    if not user_ids:
+        return 0
+
+    return send_push_to_multiple(user_ids, title, body, data=data, link=link)
+
+
 def broadcast_push_all(title, body, data=None, link=None):
     """Broadcast push notification to ALL users with active tokens."""
     app_inst = _init_firebase()

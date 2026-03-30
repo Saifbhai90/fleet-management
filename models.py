@@ -839,12 +839,13 @@ class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     message = db.Column(db.Text)
-    link = db.Column(db.String(500))  # optional URL to open
+    link = db.Column(db.String(500))
     link_text = db.Column(db.String(100))
-    notification_type = db.Column(db.String(50), default='info')  # info, warning, success, danger
-    read_at = db.Column(db.DateTime, nullable=True)  # legacy: when single user marked read (deprecated; use NotificationRead)
+    notification_type = db.Column(db.String(50), default='info')
+    read_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    required_permission = db.Column(db.String(500), nullable=True)
 
     created_by = db.relationship('User', backref='created_notifications', foreign_keys=[created_by_user_id], lazy=True)
 
