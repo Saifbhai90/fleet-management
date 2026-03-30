@@ -22,6 +22,9 @@ uploads/
 # Node
 node_modules/
 
+# Firebase (secret keys)
+firebase-service-account.json
+
 # IDE / OS
 .idea/
 .vscode/

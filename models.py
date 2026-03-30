@@ -1611,3 +1611,24 @@ class LeaveRequest(db.Model):
 
     def __repr__(self):
         return f'<LeaveRequest Driver#{self.driver_id} {self.from_date} to {self.to_date} [{self.status}]>'
+
+
+# ────────────────────────────────────────────────
+# FCM Device Tokens (for push notifications)
+# ────────────────────────────────────────────────
+class DeviceFCMToken(db.Model):
+    __tablename__ = 'device_fcm_token'
+    __table_args__ = (db.UniqueConstraint('user_id', 'fcm_token', name='uq_user_fcm_token'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    fcm_token = db.Column(db.String(500), nullable=False)
+    device_info = db.Column(db.String(255), nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    user = db.relationship('User', backref=db.backref('fcm_tokens', lazy='dynamic'))
+
+    def __repr__(self):
+        return f'<DeviceFCMToken User#{self.user_id} active={self.is_active}>'

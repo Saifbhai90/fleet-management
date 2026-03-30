@@ -576,3 +576,61 @@ def mobile_vehicles():
         page=pagination.page,
         pages=pagination.pages,
     )
+
+
+# ── POST /api/v1/fcm-token ─── Register / refresh FCM device token ──────────
+@api_bp.route('/fcm-token', methods=['POST'])
+@jwt_required
+def register_fcm_token():
+    """
+    Body: { "token": "<fcm_token>", "device_info": "Android 14 / Samsung" }
+    Stores or refreshes the FCM token for this user.
+    """
+    from models import db, DeviceFCMToken
+
+    body = request.get_json(silent=True) or {}
+    token = (body.get('token') or '').strip()
+    if not token:
+        return _err('token is required.')
+
+    user_id = request.jwt_payload.get('user_id')
+    device_info = (body.get('device_info') or '')[:255]
+
+    existing = DeviceFCMToken.query.filter_by(user_id=user_id, fcm_token=token).first()
+    if existing:
+        existing.is_active = True
+        existing.device_info = device_info or existing.device_info
+        db.session.commit()
+        return _ok({'status': 'refreshed'})
+
+    DeviceFCMToken.query.filter_by(fcm_token=token).update(
+        {DeviceFCMToken.is_active: False}, synchronize_session=False
+    )
+
+    new_token = DeviceFCMToken(
+        user_id=user_id, fcm_token=token,
+        device_info=device_info, is_active=True
+    )
+    db.session.add(new_token)
+    db.session.commit()
+    return _ok({'status': 'registered'})
+
+
+# ── DELETE /api/v1/fcm-token ─── Unregister token (logout) ──────────────────
+@api_bp.route('/fcm-token', methods=['DELETE'])
+@jwt_required
+def unregister_fcm_token():
+    """Body: { "token": "<fcm_token>" } — marks token inactive on logout."""
+    from models import db, DeviceFCMToken
+
+    body = request.get_json(silent=True) or {}
+    token = (body.get('token') or '').strip()
+    if not token:
+        return _err('token is required.')
+
+    user_id = request.jwt_payload.get('user_id')
+    DeviceFCMToken.query.filter_by(user_id=user_id, fcm_token=token).update(
+        {DeviceFCMToken.is_active: False}, synchronize_session=False
+    )
+    db.session.commit()
+    return _ok({'status': 'unregistered'})

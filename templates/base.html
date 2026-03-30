@@ -3862,6 +3862,42 @@
             return Promise.all(jobs);
         }
 
+        function _sendTokenToServer(token) {
+            var deviceInfo = navigator.userAgent.substring(0, 200);
+            fetch('/api/register-fcm-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': (document.querySelector('meta[name=csrf-token]') || {}).content || '' },
+                credentials: 'include',
+                body: JSON.stringify({ token: token, device_info: deviceInfo })
+            }).then(function(r) { return r.json(); }).then(function(d) {
+                console.log('[FCM] Token registered:', d.status || d.error);
+            }).catch(function(e) { console.warn('[FCM] Token registration failed:', e); });
+        }
+
+        function _setupPushListeners() {
+            if (!_isNative || !window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
+            var Push = window.Capacitor.Plugins.PushNotifications;
+            Push.addListener('registration', function(token) {
+                console.log('[FCM] Device token:', token.value);
+                _sendTokenToServer(token.value);
+            });
+            Push.addListener('registrationError', function(err) {
+                console.error('[FCM] Registration error:', err);
+            });
+            Push.addListener('pushNotificationReceived', function(notification) {
+                console.log('[FCM] Foreground notification:', notification);
+                if (notification.title) {
+                    _toast(notification.title + (notification.body ? ': ' + notification.body : ''));
+                }
+            });
+            Push.addListener('pushNotificationActionPerformed', function(action) {
+                console.log('[FCM] Notification tapped:', action);
+                var data = (action.notification && action.notification.data) || {};
+                if (data.link) { window.location.href = data.link; }
+            });
+        }
+        _setupPushListeners();
+
         function requestPushPermission() {
             return new Promise(function(resolve) {
                 if (_isNative && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications) {
@@ -4139,6 +4175,13 @@
             // 1. Hide web-only elements
             var guideWrap = document.getElementById('guideChatbotWrap');
             if (guideWrap) guideWrap.style.display = 'none';
+
+            // 1b. Auto-request push notification permission on native app
+            {% if session.get('user_id') %}
+            setTimeout(function() {
+                window.FleetBridge.requestPushPermission();
+            }, 2000);
+            {% endif %}
 
             // 2. Auto-hide navbar on scroll down, show on scroll up (native feel)
             //    In Capacitor: body is fixed, so we listen on #mainContent (the scroll container)

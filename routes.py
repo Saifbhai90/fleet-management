@@ -15,6 +15,8 @@ from models import (
     Reminder,
     AttendanceTimeControl, AttendanceTimeOverride,
     PhysicalBook, BookAssignment,
+    AttendanceSettings,
+    DeviceFCMToken,
 )
 from forms import (
     CompanyForm, ProjectForm, VehicleForm, VehicleImportForm, DriverForm, DriverImportForm, EmployeeImportForm, ParkingForm, DistrictForm,
@@ -667,6 +669,39 @@ def api_me():
         'permissions': permissions,
         'permission_count': len(permissions),
     })
+
+
+@app.route('/api/register-fcm-token', methods=['POST'])
+def web_register_fcm_token():
+    """Register FCM push token for web-session user (Capacitor or browser)."""
+    uid = session.get('user_id')
+    if not uid:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    from models import DeviceFCMToken
+    data = request.get_json(silent=True) or {}
+    token = (data.get('token') or '').strip()
+    if not token:
+        return jsonify({'error': 'token required'}), 400
+
+    device_info = (data.get('device_info') or '')[:255]
+
+    existing = DeviceFCMToken.query.filter_by(user_id=uid, fcm_token=token).first()
+    if existing:
+        existing.is_active = True
+        existing.device_info = device_info or existing.device_info
+        db.session.commit()
+        return jsonify({'status': 'refreshed'})
+
+    DeviceFCMToken.query.filter_by(fcm_token=token).update(
+        {DeviceFCMToken.is_active: False}, synchronize_session=False
+    )
+    db.session.add(DeviceFCMToken(
+        user_id=uid, fcm_token=token,
+        device_info=device_info, is_active=True
+    ))
+    db.session.commit()
+    return jsonify({'status': 'registered'})
 
 
 @app.route('/')
@@ -10761,6 +10796,15 @@ def driver_attendance_checkin():
             db.session.add(rec)
         try:
             db.session.commit()
+            try:
+                _att_cfg = AttendanceSettings.query.first()
+                if _att_cfg and _att_cfg.notify_on_attendance_mark:
+                    from push_notifications import notify_driver
+                    notify_driver(driver, 'Check-in Recorded',
+                                  f'{driver.name}, your attendance check-in has been recorded at {pk_now().strftime("%I:%M %p")}.',
+                                  link=url_for('driver_attendance_list', date=today.strftime('%d-%m-%Y'), _external=True))
+            except Exception:
+                pass
             flash('Attendance marked successfully. Check-in recorded with photo.', 'success')
             return redirect(url_for('driver_attendance_list', date=today.strftime('%d-%m-%Y')))
         except Exception as e:
@@ -10972,6 +11016,15 @@ def driver_attendance_checkout():
             return redirect(url_for('driver_attendance_checkout'))
         try:
             db.session.commit()
+            try:
+                _att_cfg = AttendanceSettings.query.first()
+                if _att_cfg and _att_cfg.notify_on_attendance_mark:
+                    from push_notifications import notify_driver
+                    notify_driver(driver, 'Check-out Recorded',
+                                  f'{driver.name}, your check-out has been recorded at {pk_now().strftime("%I:%M %p")}.',
+                                  link=url_for('driver_attendance_list', date=today.strftime('%d-%m-%Y'), _external=True))
+            except Exception:
+                pass
             flash('Check-out recorded successfully with photo.', 'success')
             return redirect(url_for('driver_attendance_list', date=today.strftime('%d-%m-%Y')))
         except Exception as e:
@@ -11334,10 +11387,28 @@ def leave_request_review(req_id):
             marked += 1
             cur_d += timedelta(days=1)
         db.session.commit()
+        try:
+            _att_cfg = AttendanceSettings.query.first()
+            if _att_cfg and _att_cfg.notify_on_attendance_mark:
+                from push_notifications import notify_driver
+                notify_driver(lr.driver, 'Leave Approved',
+                              f'Your {lr.leave_type} request ({lr.from_date.strftime("%d-%m-%Y")} to {lr.to_date.strftime("%d-%m-%Y")}) has been approved.',
+                              link=url_for('leave_request_list', _external=True))
+        except Exception:
+            pass
         flash(f'Leave request approved. {marked} din ka {lr.leave_type} mark kar diya.', 'success')
     else:
         lr.status = 'Rejected'
         db.session.commit()
+        try:
+            _att_cfg = AttendanceSettings.query.first()
+            if _att_cfg and _att_cfg.notify_on_attendance_mark:
+                from push_notifications import notify_driver
+                notify_driver(lr.driver, 'Leave Rejected',
+                              f'Your {lr.leave_type} request ({lr.from_date.strftime("%d-%m-%Y")} to {lr.to_date.strftime("%d-%m-%Y")}) has been rejected.' + (f' Reason: {review_remarks}' if review_remarks else ''),
+                              link=url_for('leave_request_list', _external=True))
+        except Exception:
+            pass
         flash('Leave request rejected.', 'info')
 
     return redirect(url_for('leave_request_list'))
