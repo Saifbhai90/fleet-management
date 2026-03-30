@@ -3945,7 +3945,25 @@
                         _fcmDebug('Permission result: ' + result.receive);
                         if (result.receive === 'granted') {
                             _fcmDebug('GRANTED! Calling register()...');
-                            window.Capacitor.Plugins.PushNotifications.register();
+                            try {
+                                window.Capacitor.Plugins.PushNotifications.register()
+                                    .then(function() { _fcmDebug('register() resolved OK'); })
+                                    .catch(function(e) { _fcmDebug('register() REJECTED: ' + JSON.stringify(e)); });
+                            } catch(regErr) {
+                                _fcmDebug('register() THREW: ' + regErr);
+                            }
+                            // Fallback: wait 8s, if no token received, check manually
+                            setTimeout(function() {
+                                var Push2 = window.Capacitor.Plugins.PushNotifications;
+                                if (Push2.getDeliveredNotifications) {
+                                    _fcmDebug('8s timeout — no token yet. Trying getDeliveredNotifications as connectivity test...');
+                                    Push2.getDeliveredNotifications().then(function(r) {
+                                        _fcmDebug('getDelivered OK: ' + JSON.stringify(r).substring(0, 100));
+                                    }).catch(function(e) {
+                                        _fcmDebug('getDelivered ERR: ' + JSON.stringify(e));
+                                    });
+                                }
+                            }, 8000);
                         } else {
                             _fcmDebug('NOT GRANTED: ' + result.receive);
                         }
