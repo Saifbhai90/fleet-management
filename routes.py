@@ -676,6 +676,30 @@ def api_me():
 def app_check_update():
     """Returns latest app version info — reads from DB (AppRelease)."""
     latest = AppRelease.query.filter_by(is_latest=True).first()
+
+    if not latest:
+        apps_dir = os.path.join(app.static_folder, 'apps')
+        if os.path.isdir(apps_dir):
+            apks = sorted(
+                [f for f in os.listdir(apps_dir) if f.startswith('fleet-manager-') and f.endswith('.apk')],
+                reverse=True,
+            )
+            for fname in apks:
+                ver = fname.replace('fleet-manager-', '').replace('.apk', '')
+                parts = ver.split('.')
+                if len(parts) == 3 and all(p.isdigit() for p in parts):
+                    try:
+                        rel = AppRelease(
+                            version=ver, apk_filename=fname, force_update=False,
+                            is_latest=True, file_size_bytes=os.path.getsize(os.path.join(apps_dir, fname)),
+                        )
+                        db.session.add(rel)
+                        db.session.commit()
+                        latest = rel
+                    except Exception:
+                        db.session.rollback()
+                    break
+
     if not latest:
         return jsonify({'latest_version': '0.0.0', 'apk_url': '', 'apk_filename': '', 'force_update': False})
 
