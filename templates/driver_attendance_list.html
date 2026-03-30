@@ -125,7 +125,11 @@
         {% if search %} · Search{% endif %}
         <small class="opacity-75">(Only marked attendance)</small>
       </span>
-      <input type="text" id="tableSearch" class="form-control form-control-sm text-dark bg-light border-0" style="max-width: 220px;" placeholder="Search in list...">
+      <div class="d-flex align-items-center gap-2">
+        <input type="text" id="tableSearch" class="form-control form-control-sm text-dark bg-light border-0" style="max-width: 220px;" placeholder="Search in list...">
+        <button class="btn btn-sm btn-outline-light" title="Download Photos" onclick="showPhotoModal('download')"><i class="bi bi-download"></i></button>
+        <button class="btn btn-sm btn-outline-light" title="Share Photos" onclick="showPhotoModal('share')"><i class="bi bi-share"></i></button>
+      </div>
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
@@ -457,5 +461,103 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 
   initServerSearch('tableSearch', 'search');
 })();
+
+var _photoAction = '';
+function showPhotoModal(action) {
+  _photoAction = action;
+  var m = new bootstrap.Modal(document.getElementById('photoChoiceModal'));
+  m.show();
+}
+
+function collectPhotoUrls(type) {
+  var urls = [];
+  var rows = document.querySelectorAll('#attendanceTable tbody tr');
+  rows.forEach(function(row) {
+    if (row.style.display === 'none') return;
+    var cells = row.querySelectorAll('td');
+    if (cells.length < 14) return;
+    if (type === 'checkin' || type === 'both') {
+      var ciLink = cells[10].querySelector('a[href]');
+      if (ciLink) urls.push(ciLink.href);
+    }
+    if (type === 'checkout' || type === 'both') {
+      var coLink = cells[13].querySelector('a[href]');
+      if (coLink) urls.push(coLink.href);
+    }
+  });
+  return urls;
+}
+
+function doPhotoAction(type) {
+  bootstrap.Modal.getInstance(document.getElementById('photoChoiceModal')).hide();
+  var urls = collectPhotoUrls(type);
+  if (urls.length === 0) {
+    alert('No photos found for the selected option.');
+    return;
+  }
+  if (_photoAction === 'download') {
+    downloadPhotos(urls);
+  } else {
+    sharePhotos(urls, type);
+  }
+}
+
+function downloadPhotos(urls) {
+  var i = 0;
+  function next() {
+    if (i >= urls.length) return;
+    var a = document.createElement('a');
+    a.href = urls[i];
+    a.download = 'attendance_photo_' + (i + 1) + '.jpg';
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    i++;
+    setTimeout(next, 400);
+  }
+  next();
+}
+
+function sharePhotos(urls, type) {
+  if (navigator.share && navigator.canShare) {
+    var fetches = urls.map(function(url, idx) {
+      return fetch(url).then(function(r) { return r.blob(); }).then(function(blob) {
+        return new File([blob], 'attendance_' + type + '_' + (idx + 1) + '.jpg', { type: 'image/jpeg' });
+      });
+    });
+    Promise.all(fetches).then(function(files) {
+      var shareData = { files: files };
+      if (navigator.canShare(shareData)) {
+        navigator.share(shareData).catch(function() {});
+      } else {
+        alert('Sharing photos is not supported on this device. Use Download instead.');
+      }
+    }).catch(function() {
+      alert('Could not load photos for sharing. Use Download instead.');
+    });
+  } else {
+    alert('Web Share API not available. Use Download instead.');
+  }
+}
 </script>
+
+<div class="modal fade" id="photoChoiceModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-images me-2"></i>Select Photos</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center">
+        <p class="text-muted small mb-3">Which photos do you want?</p>
+        <div class="d-grid gap-2">
+          <button class="btn btn-outline-primary" onclick="doPhotoAction('checkin')"><i class="bi bi-box-arrow-in-right me-1"></i>Check-in Photos</button>
+          <button class="btn btn-outline-danger" onclick="doPhotoAction('checkout')"><i class="bi bi-box-arrow-right me-1"></i>Check-out Photos</button>
+          <button class="btn btn-primary" onclick="doPhotoAction('both')"><i class="bi bi-images me-1"></i>Both</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

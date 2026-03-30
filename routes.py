@@ -117,6 +117,18 @@ def _attendance_local_now():
     return pk_now()
 
 
+def _get_checked_in_vehicle_ids(attendance_date):
+    """Return set of vehicle_ids where at least one driver has check_in for this date."""
+    rows = db.session.query(Driver.vehicle_id).join(
+        DriverAttendance, Driver.id == DriverAttendance.driver_id
+    ).filter(
+        DriverAttendance.attendance_date == attendance_date,
+        DriverAttendance.check_in.isnot(None),
+        Driver.vehicle_id.isnot(None)
+    ).distinct().all()
+    return {r[0] for r in rows}
+
+
 @app.before_request
 def require_login():
     """Redirect to login if user not logged in. Check permission for endpoint. Session timeout."""
@@ -9481,7 +9493,9 @@ def driver_attendance_mark():
             rec = existing.get(did)
             if rec and rec.remarks and gps_cam_remark in (rec.remarks or ''):
                 continue
-            status = request.form.get(f'driver_{did}_status', 'Leave').strip() or 'Leave'
+            status = request.form.get(f'driver_{did}_status', '').strip()
+            if not status:
+                continue
             check_in_s = request.form.get(f'driver_{did}_check_in', '')
             check_out_s = request.form.get(f'driver_{did}_check_out', '')
             remarks = 'Manual entry form ki entry'
@@ -9512,11 +9526,16 @@ def driver_attendance_mark():
                     # Agar R2 upload fail ho jaye to silently ignore (status phir bhi save ho jaye)
                     photo_path = None
             if rec:
+                if rec.check_in is not None and not check_in_t:
+                    check_in_t = rec.check_in
+                if rec.check_out is not None and not check_out_t:
+                    check_out_t = rec.check_out
                 rec.status = status
                 rec.check_in = check_in_t
                 rec.check_out = check_out_t
-                rec.check_out_date = view_date if check_out_t else None
-                rec.remarks = remarks
+                rec.check_out_date = view_date if check_out_t else rec.check_out_date
+                if not rec.remarks or 'GPS' not in rec.remarks:
+                    rec.remarks = remarks
                 rec.project_id = project_id
                 rec.updated_at = pk_now()
                 if photo_path:
@@ -9612,10 +9631,11 @@ def driver_attendance_bulk_off():
         drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(
             db.or_(Driver.district_id.in_(list(allowed_districts)), Vehicle.district_id.in_(list(allowed_districts)))
         )
-    drivers = drivers_query.order_by(Driver.name).all()
+    all_drivers = drivers_query.order_by(Driver.name).all()
+    existing_att_ids = {a.driver_id for a in DriverAttendance.query.filter_by(attendance_date=view_date).all()}
+    drivers = [d for d in all_drivers if d.id not in existing_att_ids]
 
     if request.method == 'POST' and request.form.get('confirm_bulk_off'):
-        # Future date par Bulk Off allow na karein (sirf past / today)
         if view_date > _attendance_local_date():
             flash('Bulk Off cannot be applied for a future date.', 'danger')
             return redirect(url_for('driver_attendance_bulk_off',
@@ -9623,19 +9643,31 @@ def driver_attendance_bulk_off():
                                     district_id=district_id or '',
                                     project_id=project_id or ''))
 
-        if not drivers:
-            flash('No drivers found for the selected filters to apply Bulk Off.', 'warning')
+        selected_ids = set()
+        for v in request.form.getlist('selected_drivers'):
+            try:
+                selected_ids.add(int(v))
+            except (ValueError, TypeError):
+                pass
+        if not selected_ids:
+            flash('Kam az kam ek driver select karein.', 'warning')
             return redirect(url_for('driver_attendance_bulk_off',
                                     date=view_date.strftime('%d-%m-%Y'),
                                     district_id=district_id or '',
                                     project_id=project_id or ''))
 
         count = 0
-        for d in drivers:
+        skipped = 0
+        for d in all_drivers:
+            if d.id not in selected_ids:
+                continue
             rec = DriverAttendance.query.filter_by(
                 driver_id=d.id,
                 attendance_date=view_date,
             ).first()
+            if rec and rec.check_in is not None:
+                skipped += 1
+                continue
             if rec:
                 rec.status = 'Off'
                 rec.check_in = None
@@ -9655,7 +9687,10 @@ def driver_attendance_bulk_off():
             count += 1
         try:
             db.session.commit()
-            flash(f'{count} driver(s) ko {view_date.strftime("%d-%m-%Y")} ke liye Off mark kar diya gaya.', 'success')
+            msg = f'{count} driver(s) ko {view_date.strftime("%d-%m-%Y")} ke liye Off mark kar diya gaya.'
+            if skipped:
+                msg += f' {skipped} driver(s) skip kiye gaye (GPS/Manual check-in already recorded).'
+            flash(msg, 'success')
             return redirect(url_for('driver_attendance_bulk_off', date=view_date.strftime('%d-%m-%Y'), district_id=district_id or '', project_id=project_id or ''))
         except Exception as e:
             db.session.rollback()
@@ -9779,7 +9814,8 @@ def driver_attendance_pending():
         drivers_query = drivers_query.filter(Driver.id == driver_id)
     all_filtered_drivers = drivers_query.order_by(Driver.name).all()
     existing_ids = {a.driver_id for a in DriverAttendance.query.filter_by(attendance_date=view_date).all()}
-    drivers = [d for d in all_filtered_drivers if d.id not in existing_ids]
+    checked_in_vids = _get_checked_in_vehicle_ids(view_date)
+    drivers = [d for d in all_filtered_drivers if d.id not in existing_ids and d.vehicle_id not in checked_in_vids]
     return render_template('driver_attendance_pending.html', form=form, view_date=view_date, drivers=drivers, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, vehicles=vehicles, vehicle_drivers=vehicle_drivers, disable_project=disable_project, disable_district=disable_district, disable_vehicle=disable_vehicle, disable_shift=disable_shift)
 
 
@@ -9962,6 +9998,19 @@ def driver_attendance_manual_checkin():
     if existing and existing.check_in:
         flash('Is driver ne is date ko pehle hi check-in kar liya hai.', 'info')
         return redirect(back_url)
+
+    if driver.vehicle_id:
+        other_checkin = db.session.query(DriverAttendance.id).join(
+            Driver, Driver.id == DriverAttendance.driver_id
+        ).filter(
+            Driver.vehicle_id == driver.vehicle_id,
+            Driver.id != driver_id,
+            DriverAttendance.attendance_date == view_date,
+            DriverAttendance.check_in.isnot(None)
+        ).first()
+        if other_checkin:
+            flash('Is vehicle par dusri shift ke driver ne pehle hi check-in kar liya hai. Ek waqt mein sirf ek driver check-in kar sakta hai.', 'warning')
+            return redirect(back_url)
 
     if request.method == 'POST':
         time_str = (request.form.get('check_in_time') or '').strip()
@@ -10430,7 +10479,19 @@ def driver_attendance_checkin():
                 src = tw.get('source', '')
                 flash(f'Night shift ki attendance sirf configured time window mein lag sakti hai ({src}). Control mein time check karein.', 'danger')
                 return redirect(url_for('driver_attendance_checkin'))
-        # Photo: multipart file or base64
+        if driver.vehicle_id:
+            other_checkin = db.session.query(DriverAttendance.id).join(
+                Driver, Driver.id == DriverAttendance.driver_id
+            ).filter(
+                Driver.vehicle_id == driver.vehicle_id,
+                Driver.id != driver_id,
+                DriverAttendance.attendance_date == today,
+                DriverAttendance.check_in.isnot(None)
+            ).first()
+            if other_checkin:
+                flash('Is vehicle par dusri shift ke driver ne pehle hi check-in kar liya hai. Ek waqt mein sirf ek driver check-in kar sakta hai.', 'warning')
+                return redirect(url_for('driver_attendance_checkin'))
+
         photo_path = None
         photo = request.files.get('photo')
         if photo and photo.filename:
@@ -10441,7 +10502,6 @@ def driver_attendance_checkin():
                 flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
                 return redirect(url_for('driver_attendance_checkin'))
         else:
-            # Try base64 from form (e.g. from canvas capture)
             b64 = request.form.get('photo_base64', '').strip()
             if b64 and b64.startswith('data:image'):
                 try:

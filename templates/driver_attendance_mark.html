@@ -182,8 +182,9 @@
                     <span class="text-muted">{{ rec.status if rec else '-' }}</span>
                   {% else %}
                   <select name="driver_{{ driver.id }}_status" class="form-select form-select-sm search-select" style="min-width: 110px;">
+                    {% if not rec %}<option value="" selected>-- Select --</option>{% endif %}
                     {% for val, label in status_choices %}
-                      <option value="{{ val }}" {% if rec and rec.status == val %}selected{% elif not rec and val == 'Leave' %}selected{% endif %}>{{ label }}</option>
+                      <option value="{{ val }}" {% if rec and rec.status == val %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                   </select>
                   {% endif %}

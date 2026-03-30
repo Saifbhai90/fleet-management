@@ -61,47 +61,51 @@
   </div>
 
   {% if drivers is defined and drivers %}
-  <div class="card border-0 shadow-sm">
-    <div class="card-header bg-dark text-white">
-      <span>Is project ke <strong>{{ drivers|length }}</strong> driver(s) ko {{ view_date.strftime('%d-%m-%Y') }} ke liye Off mark karenge</span>
-    </div>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th class="ps-4">#</th>
-              <th>Driver</th>
-              <th>Vehicle No</th>
-              <th>Shift</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for d in drivers %}
-            <tr>
-              <td class="ps-4">{{ loop.index }}</td>
-              <td>{{ d.name }}{% if d.driver_id %} <small class="text-muted">({{ d.driver_id }})</small>{% endif %}</td>
-              <td>{{ d.vehicle.vehicle_no if d.vehicle else '-' }}</td>
-              <td>{{ d.shift or '-' }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+  <form method="post" action="{{ url_for('driver_attendance_bulk_off') }}" id="bulkOffForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="confirm_bulk_off" value="1">
+    <input type="hidden" name="bulk_off_date" value="{{ view_date.strftime('%d-%m-%Y') }}">
+    <input type="hidden" name="district_id" value="{{ district_id }}">
+    <input type="hidden" name="project_id" value="{{ project_id }}">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><strong>{{ drivers|length }}</strong> driver(s) — {{ view_date.strftime('%d-%m-%Y') }}</span>
+        <input type="text" id="bulkSearch" class="form-control form-control-sm bg-dark text-white border-secondary" style="max-width:250px;" placeholder="&#128269; Search...">
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0" id="bulkTable">
+            <thead class="table-light">
+              <tr>
+                <th style="width:40px;" class="ps-3"><input type="checkbox" id="selectAll" title="Select All"></th>
+                <th>#</th>
+                <th>Driver</th>
+                <th>Vehicle No</th>
+                <th>Shift</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in drivers %}
+              <tr>
+                <td class="ps-3"><input type="checkbox" name="selected_drivers" value="{{ d.id }}" class="driver-check" checked></td>
+                <td>{{ loop.index }}</td>
+                <td>{{ d.name }}{% if d.driver_id %} <small class="text-muted">({{ d.driver_id }})</small>{% endif %}</td>
+                <td>{{ d.vehicle.vehicle_no if d.vehicle else '-' }}</td>
+                <td>{{ d.shift or '-' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-footer bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <button type="submit" class="btn btn-dark btn-bulk" id="bulkSubmitBtn">
+          <i class="bi bi-check2-all me-1"></i>Mark Selected as Off
+        </button>
+        <small class="text-muted" id="bulkSelectedCount">{{ drivers|length }} selected</small>
       </div>
     </div>
-    <div class="card-footer bg-light">
-      <form method="post" action="{{ url_for('driver_attendance_bulk_off') }}" class="d-inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="confirm_bulk_off" value="1">
-        <input type="hidden" name="bulk_off_date" value="{{ view_date.strftime('%d-%m-%Y') }}">
-        <input type="hidden" name="district_id" value="{{ district_id }}">
-        <input type="hidden" name="project_id" value="{{ project_id }}">
-        <button type="submit" class="btn btn-dark btn-bulk" onclick="return confirm('In {{ drivers|length }} driver(s) ko {{ view_date.strftime('%d-%m-%Y') }} ke liye Off mark karna hai?');">
-          <i class="bi bi-check2-all me-1"></i>Mark All as Off
-        </button>
-      </form>
-    </div>
-  </div>
+  </form>
   {% elif (project_id or district_id) and drivers is defined and not drivers %}
   <div class="alert alert-info">
     Is project/district ke liye koi active driver (vehicle assigned) nahi mila. Pehle drivers assign karein.
@@ -178,6 +182,66 @@
     });
   } else {
     setTimeout(initBulkOffForm, 150);
+  }
+})();
+
+(function() {
+  var searchBox = document.getElementById('bulkSearch');
+  var selectAll = document.getElementById('selectAll');
+  var table = document.getElementById('bulkTable');
+  var countEl = document.getElementById('bulkSelectedCount');
+  var submitBtn = document.getElementById('bulkSubmitBtn');
+
+  function updateCount() {
+    if (!countEl) return;
+    var checks = document.querySelectorAll('.driver-check:checked');
+    var n = 0;
+    checks.forEach(function(cb) {
+      if (cb.closest('tr').style.display !== 'none') n++;
+    });
+    countEl.textContent = n + ' selected';
+  }
+
+  if (searchBox && table) {
+    searchBox.addEventListener('keyup', function() {
+      var q = this.value.trim().toLowerCase();
+      var words = q ? q.split(/\s+/) : [];
+      table.querySelectorAll('tbody tr').forEach(function(row) {
+        if (!words.length) { row.style.display = ''; return; }
+        var text = row.textContent.toLowerCase();
+        var match = words.every(function(w) { return text.indexOf(w) !== -1; });
+        row.style.display = match ? '' : 'none';
+      });
+      updateCount();
+    });
+  }
+
+  if (selectAll) {
+    selectAll.addEventListener('change', function() {
+      var checked = this.checked;
+      document.querySelectorAll('.driver-check').forEach(function(cb) {
+        if (cb.closest('tr').style.display !== 'none') cb.checked = checked;
+      });
+      updateCount();
+    });
+  }
+
+  document.querySelectorAll('.driver-check').forEach(function(cb) {
+    cb.addEventListener('change', updateCount);
+  });
+
+  if (submitBtn) {
+    submitBtn.closest('form').addEventListener('submit', function(e) {
+      var checked = document.querySelectorAll('.driver-check:checked');
+      if (checked.length === 0) {
+        e.preventDefault();
+        alert('Kam az kam ek driver select karein.');
+        return;
+      }
+      if (!confirm(checked.length + ' driver(s) ko Off mark karna hai?')) {
+        e.preventDefault();
+      }
+    });
   }
 })();
 </script>
