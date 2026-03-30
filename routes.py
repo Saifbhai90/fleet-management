@@ -673,34 +673,64 @@ def api_me():
 
 @app.route('/api/register-fcm-token', methods=['POST'])
 def web_register_fcm_token():
-    """Register FCM push token for web-session user (Capacitor or browser)."""
+    """Register FCM push token for web-session user (Capacitor or browser).
+    Bank-app style: if a new user logs into the same physical device,
+    the token is transferred and deactivated for the old user."""
     uid = session.get('user_id')
     if not uid:
         return jsonify({'error': 'Not authenticated'}), 401
 
-    from models import DeviceFCMToken
     data = request.get_json(silent=True) or {}
     token = (data.get('token') or '').strip()
     if not token:
         return jsonify({'error': 'token required'}), 400
 
+    device_id = (data.get('device_unique_id') or '').strip() or None
     device_info = (data.get('device_info') or '')[:255]
 
-    existing = DeviceFCMToken.query.filter_by(user_id=uid, fcm_token=token).first()
-    if existing:
-        existing.is_active = True
-        existing.device_info = device_info or existing.device_info
-        db.session.commit()
-        return jsonify({'status': 'refreshed'})
+    if device_id:
+        DeviceFCMToken.query.filter(
+            DeviceFCMToken.device_unique_id == device_id,
+            DeviceFCMToken.user_id != uid,
+        ).update({DeviceFCMToken.is_active: False}, synchronize_session=False)
 
-    DeviceFCMToken.query.filter_by(fcm_token=token).update(
-        {DeviceFCMToken.is_active: False}, synchronize_session=False
-    )
-    db.session.add(DeviceFCMToken(
+        existing = DeviceFCMToken.query.filter_by(
+            user_id=uid, device_unique_id=device_id
+        ).first()
+        if existing:
+            existing.fcm_token = token
+            existing.device_info = device_info or existing.device_info
+            existing.is_active = True
+            db.session.commit()
+            return jsonify({'status': 'refreshed'})
+    else:
+        existing = DeviceFCMToken.query.filter_by(
+            user_id=uid, fcm_token=token
+        ).first()
+        if existing:
+            existing.is_active = True
+            existing.device_info = device_info or existing.device_info
+            db.session.commit()
+            return jsonify({'status': 'refreshed'})
+
+    new_tok = DeviceFCMToken(
         user_id=uid, fcm_token=token,
+        device_unique_id=device_id,
         device_info=device_info, is_active=True
-    ))
-    db.session.commit()
+    )
+    db.session.add(new_tok)
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        if device_id:
+            dup = DeviceFCMToken.query.filter_by(
+                user_id=uid, device_unique_id=device_id
+            ).first()
+            if dup:
+                dup.fcm_token = token
+                dup.is_active = True
+                db.session.commit()
     return jsonify({'status': 'registered'})
 
 

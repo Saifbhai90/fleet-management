@@ -3862,16 +3862,33 @@
             return Promise.all(jobs);
         }
 
+        var _deviceUniqueId = null;
+
+        function _getDeviceUniqueId() {
+            if (_deviceUniqueId) return Promise.resolve(_deviceUniqueId);
+            if (_isNative && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Device) {
+                return window.Capacitor.Plugins.Device.getId().then(function(info) {
+                    _deviceUniqueId = info.identifier || info.uuid || null;
+                    return _deviceUniqueId;
+                }).catch(function() { return null; });
+            }
+            return Promise.resolve(null);
+        }
+
         function _sendTokenToServer(token) {
-            var deviceInfo = navigator.userAgent.substring(0, 200);
-            fetch('/api/register-fcm-token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': (document.querySelector('meta[name=csrf-token]') || {}).content || '' },
-                credentials: 'include',
-                body: JSON.stringify({ token: token, device_info: deviceInfo })
-            }).then(function(r) { return r.json(); }).then(function(d) {
-                console.log('[FCM] Token registered:', d.status || d.error);
-            }).catch(function(e) { console.warn('[FCM] Token registration failed:', e); });
+            _getDeviceUniqueId().then(function(devId) {
+                var deviceInfo = navigator.userAgent.substring(0, 200);
+                var payload = { token: token, device_info: deviceInfo };
+                if (devId) payload.device_unique_id = devId;
+                fetch('/api/register-fcm-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': (document.querySelector('meta[name=csrf-token]') || {}).content || '' },
+                    credentials: 'include',
+                    body: JSON.stringify(payload)
+                }).then(function(r) { return r.json(); }).then(function(d) {
+                    console.log('[FCM] Token registered:', d.status || d.error, devId ? '(device: ' + devId + ')' : '');
+                }).catch(function(e) { console.warn('[FCM] Token registration failed:', e); });
+            });
         }
 
         function _setupPushListeners() {

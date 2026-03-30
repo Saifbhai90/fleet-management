@@ -40,6 +40,10 @@ def _init_firebase():
 def send_push(user_id, title, body, data=None, link=None):
     """
     Send push notification to all active devices of a user.
+    Bank-app style: works even if the user has no active web/app session,
+    because tokens persist across logout. A token is only deactivated when
+    a different user logs into the same physical device, or when FCM reports
+    the token as unregistered/invalid.
     Returns number of successfully sent messages.
     """
     app = _init_firebase()

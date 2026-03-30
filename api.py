@@ -583,8 +583,10 @@ def mobile_vehicles():
 @jwt_required
 def register_fcm_token():
     """
-    Body: { "token": "<fcm_token>", "device_info": "Android 14 / Samsung" }
-    Stores or refreshes the FCM token for this user.
+    Body: { "token": "<fcm_token>", "device_unique_id": "abc123", "device_info": "Android 14" }
+    Bank-app style: token persists across logout. If a new user logs into
+    the same physical device (same device_unique_id), the token is
+    automatically transferred to the new user and deactivated for the old one.
     """
     from models import db, DeviceFCMToken
 
@@ -594,43 +596,63 @@ def register_fcm_token():
         return _err('token is required.')
 
     user_id = request.jwt_payload.get('user_id')
+    device_id = (body.get('device_unique_id') or '').strip() or None
     device_info = (body.get('device_info') or '')[:255]
 
-    existing = DeviceFCMToken.query.filter_by(user_id=user_id, fcm_token=token).first()
-    if existing:
-        existing.is_active = True
-        existing.device_info = device_info or existing.device_info
-        db.session.commit()
-        return _ok({'status': 'refreshed'})
+    if device_id:
+        DeviceFCMToken.query.filter(
+            DeviceFCMToken.device_unique_id == device_id,
+            DeviceFCMToken.user_id != user_id,
+        ).update({
+            DeviceFCMToken.is_active: False,
+        }, synchronize_session=False)
 
-    DeviceFCMToken.query.filter_by(fcm_token=token).update(
-        {DeviceFCMToken.is_active: False}, synchronize_session=False
-    )
+        existing = DeviceFCMToken.query.filter_by(
+            user_id=user_id, device_unique_id=device_id
+        ).first()
+        if existing:
+            existing.fcm_token = token
+            existing.device_info = device_info or existing.device_info
+            existing.is_active = True
+            db.session.commit()
+            return _ok({'status': 'refreshed'})
+    else:
+        existing = DeviceFCMToken.query.filter_by(
+            user_id=user_id, fcm_token=token
+        ).first()
+        if existing:
+            existing.is_active = True
+            existing.device_info = device_info or existing.device_info
+            db.session.commit()
+            return _ok({'status': 'refreshed'})
 
     new_token = DeviceFCMToken(
         user_id=user_id, fcm_token=token,
+        device_unique_id=device_id,
         device_info=device_info, is_active=True
     )
     db.session.add(new_token)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        dup = DeviceFCMToken.query.filter_by(
+            user_id=user_id, device_unique_id=device_id
+        ).first()
+        if dup:
+            dup.fcm_token = token
+            dup.is_active = True
+            db.session.commit()
     return _ok({'status': 'registered'})
 
 
-# ── DELETE /api/v1/fcm-token ─── Unregister token (logout) ──────────────────
+# ── DELETE /api/v1/fcm-token ─── Logout: keep token, just acknowledge ───────
 @api_bp.route('/fcm-token', methods=['DELETE'])
 @jwt_required
 def unregister_fcm_token():
-    """Body: { "token": "<fcm_token>" } — marks token inactive on logout."""
-    from models import db, DeviceFCMToken
-
-    body = request.get_json(silent=True) or {}
-    token = (body.get('token') or '').strip()
-    if not token:
-        return _err('token is required.')
-
-    user_id = request.jwt_payload.get('user_id')
-    DeviceFCMToken.query.filter_by(user_id=user_id, fcm_token=token).update(
-        {DeviceFCMToken.is_active: False}, synchronize_session=False
-    )
-    db.session.commit()
-    return _ok({'status': 'unregistered'})
+    """
+    Bank-app style: does NOT deactivate the token on logout.
+    The device keeps receiving critical notifications (license expiry, admin alerts).
+    Token is only deactivated when a different user logs into the same device.
+    """
+    return _ok({'status': 'acknowledged'})

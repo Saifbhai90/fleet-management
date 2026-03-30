@@ -1615,14 +1615,19 @@ class LeaveRequest(db.Model):
 
 # ────────────────────────────────────────────────
 # FCM Device Tokens (for push notifications)
+# Bank-app style: tokens persist across logout so critical
+# notifications (license expiry, admin alerts) still reach the device.
 # ────────────────────────────────────────────────
 class DeviceFCMToken(db.Model):
     __tablename__ = 'device_fcm_token'
-    __table_args__ = (db.UniqueConstraint('user_id', 'fcm_token', name='uq_user_fcm_token'),)
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'device_unique_id', name='uq_user_device'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
     fcm_token = db.Column(db.String(500), nullable=False)
+    device_unique_id = db.Column(db.String(255), nullable=True, index=True)
     device_info = db.Column(db.String(255), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=pk_now)
@@ -1631,4 +1636,4 @@ class DeviceFCMToken(db.Model):
     user = db.relationship('User', backref=db.backref('fcm_tokens', lazy='dynamic'))
 
     def __repr__(self):
-        return f'<DeviceFCMToken User#{self.user_id} active={self.is_active}>'
+        return f'<DeviceFCMToken User#{self.user_id} dev={self.device_unique_id} active={self.is_active}>'
