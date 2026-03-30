@@ -5,6 +5,7 @@ from models import (
     Company, Project, Vehicle, Driver, ParkingStation, District, EmployeePost, Employee, EmployeeDocument,
     project_district, employee_project, employee_district, vehicle_district, ProjectTransfer, VehicleTransfer, DriverTransfer, DriverStatusChange,
     DriverAttendance,
+    LeaveRequest,
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
     Party, Product, FuelExpense, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
@@ -4166,13 +4167,16 @@ def form_control():
     overrides = AttendanceTimeOverride.query.filter(AttendanceTimeOverride.scope != 'global')\
         .order_by(AttendanceTimeOverride.scope, AttendanceTimeOverride.updated_at.desc()).all()
 
+    from models import AttendanceSettings
+    att_settings = AttendanceSettings.query.first()
+
     if request.method == 'GET':
         if glob:
             global_form.morning_start.data = glob.morning_start.strftime('%H:%M') if glob.morning_start else ''
             global_form.morning_end.data = glob.morning_end.strftime('%H:%M') if glob.morning_end else ''
             global_form.night_start.data = glob.night_start.strftime('%H:%M') if glob.night_start else ''
             global_form.night_end.data = glob.night_end.strftime('%H:%M') if glob.night_end else ''
-        return render_template('control_form.html', global_form=global_form, override_form=override_form, overrides=overrides, global_override=glob)
+        return render_template('control_form.html', global_form=global_form, override_form=override_form, overrides=overrides, global_override=glob, att_settings=att_settings)
 
     action = request.form.get('action', '')
     def parse_time(s):
@@ -4206,6 +4210,21 @@ def form_control():
         glob.allow_future_checkout = bool(request.form.get('allow_future_checkout'))
         db.session.commit()
         flash('Manual check-out setting saved.', 'success')
+        return redirect(url_for('form_control'))
+
+    if action == 'save_geofence':
+        from models import AttendanceSettings
+        att_s = AttendanceSettings.query.first()
+        if not att_s:
+            att_s = AttendanceSettings()
+            db.session.add(att_s)
+        att_s.geofence_radius_meters = int(request.form.get('geofence_radius', 150) or 150)
+        att_s.geofence_enabled = bool(request.form.get('geofence_enabled'))
+        att_s.checkin_reminder_minutes = int(request.form.get('checkin_reminder_minutes', 20) or 20)
+        att_s.checkout_reminder_minutes = int(request.form.get('checkout_reminder_minutes', 30) or 30)
+        att_s.notify_on_attendance_mark = bool(request.form.get('notify_on_mark'))
+        db.session.commit()
+        flash('Geofence & Notification settings saved.', 'success')
         return redirect(url_for('form_control'))
 
     if action == 'add_override':
@@ -4256,7 +4275,7 @@ def form_control():
         flash(f'{scope.title()} override added.', 'success')
         return redirect(url_for('form_control'))
 
-    return render_template('control_form.html', global_form=global_form, override_form=override_form, overrides=overrides, global_override=glob)
+    return render_template('control_form.html', global_form=global_form, override_form=override_form, overrides=overrides, global_override=glob, att_settings=att_settings)
 
 
 @app.route('/form-control/override/<int:ov_id>/delete', methods=['POST'])
@@ -10760,13 +10779,19 @@ def driver_attendance_checkin():
         if _pk not in all_vehicles_by_project:
             all_vehicles_by_project[_pk] = []
         all_vehicles_by_project[_pk].append(_build_vehicle_dict(_av))
+    from models import AttendanceSettings
+    _att_s = AttendanceSettings.query.first()
+    _geofence_radius = _att_s.geofence_radius_meters if _att_s else 150
+    _geofence_enabled = _att_s.geofence_enabled if _att_s else True
     return render_template('driver_attendance_checkin.html',
         districts=districts, drivers=[], parking_stations=[],
         pre_projects=pre_projects, pre_vehicles_data=pre_vehicles_data,
         auto_district_id=auto_district_id, auto_project_id=auto_project_id,
         auto_vehicle_id=auto_vehicle_id, auto_shift=auto_shift,
         scope_shifts_list=scope_shifts_list,
-        all_vehicles_by_project=all_vehicles_by_project)
+        all_vehicles_by_project=all_vehicles_by_project,
+        geofence_radius=_geofence_radius,
+        geofence_enabled=_geofence_enabled)
 
 
 @app.route('/driver-attendance/checkout', methods=['GET', 'POST'])
@@ -10965,13 +10990,19 @@ def driver_attendance_checkout():
         if _pk not in all_vehicles_by_project:
             all_vehicles_by_project[_pk] = []
         all_vehicles_by_project[_pk].append(_build_vehicle_dict(_av))
+    from models import AttendanceSettings
+    _att_s = AttendanceSettings.query.first()
+    _geofence_radius = _att_s.geofence_radius_meters if _att_s else 150
+    _geofence_enabled = _att_s.geofence_enabled if _att_s else True
     return render_template('driver_attendance_checkout.html',
         districts=districts, drivers=[], parking_stations=[],
         pre_projects=pre_projects, pre_vehicles_data=pre_vehicles_data,
         auto_district_id=auto_district_id, auto_project_id=auto_project_id,
         auto_vehicle_id=auto_vehicle_id, auto_shift=auto_shift,
         scope_shifts_list=scope_shifts_list,
-        all_vehicles_by_project=all_vehicles_by_project)
+        all_vehicles_by_project=all_vehicles_by_project,
+        geofence_radius=_geofence_radius,
+        geofence_enabled=_geofence_enabled)
 
 
 @app.route('/driver-attendance/report', methods=['GET', 'POST'])
@@ -11158,6 +11189,158 @@ def driver_attendance_report():
     vehicle_drivers = vd_q.order_by(Driver.name).all()
     selected_driver_id = (request.form.get('driver_id', type=int) or 0) if request.method == 'POST' else 0
     return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices, disable_project=disable_project, disable_district=disable_district, vehicle_drivers=vehicle_drivers, selected_driver_id=selected_driver_id)
+
+
+# ────────────────────────────────────────────────
+# Leave Approval Workflow
+# ────────────────────────────────────────────────
+@app.route('/leave-requests')
+def leave_request_list():
+    """List all leave requests with filters."""
+    status_filter = request.args.get('status', '').strip()
+    driver_id_filter = request.args.get('driver_id', type=int)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
+    query = LeaveRequest.query.join(Driver, LeaveRequest.driver_id == Driver.id)
+    if status_filter:
+        query = query.filter(LeaveRequest.status == status_filter)
+    if driver_id_filter:
+        query = query.filter(LeaveRequest.driver_id == driver_id_filter)
+
+    search = request.args.get('search', '').strip()
+    if search:
+        flt = _multi_word_filter(search, Driver.name, Driver.driver_id)
+        if flt is not None:
+            query = query.filter(flt)
+
+    total = query.count()
+    requests_list = query.order_by(LeaveRequest.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    counts = {
+        'total': LeaveRequest.query.count(),
+        'pending': LeaveRequest.query.filter_by(status='Pending').count(),
+        'approved': LeaveRequest.query.filter_by(status='Approved').count(),
+        'rejected': LeaveRequest.query.filter_by(status='Rejected').count(),
+    }
+
+    drivers = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None)).order_by(Driver.name).all()
+
+    return render_template('leave_request_list.html',
+        requests=requests_list, counts=counts, drivers=drivers,
+        status_filter=status_filter, driver_id_filter=driver_id_filter,
+        search=search, page=page, per_page=per_page,
+        total=total, total_pages=total_pages)
+
+
+@app.route('/leave-requests/new', methods=['GET', 'POST'])
+def leave_request_new():
+    """Driver leave request form."""
+    drivers = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None)).order_by(Driver.name).all()
+
+    if request.method == 'POST':
+        driver_id = request.form.get('driver_id', type=int)
+        from_date_s = request.form.get('from_date', '').strip()
+        to_date_s = request.form.get('to_date', '').strip()
+        leave_type = request.form.get('leave_type', 'Leave').strip()
+        reason = request.form.get('reason', '').strip()
+
+        if not driver_id or not from_date_s or not to_date_s:
+            flash('Driver, From Date aur To Date required hain.', 'danger')
+            return redirect(url_for('leave_request_new'))
+
+        from_d = parse_date(from_date_s)
+        to_d = parse_date(to_date_s)
+        if not from_d or not to_d:
+            flash('Invalid date format. dd-mm-yyyy use karein.', 'danger')
+            return redirect(url_for('leave_request_new'))
+        if to_d < from_d:
+            flash('To Date, From Date se pehle nahi ho sakti.', 'danger')
+            return redirect(url_for('leave_request_new'))
+
+        existing = LeaveRequest.query.filter(
+            LeaveRequest.driver_id == driver_id,
+            LeaveRequest.status.in_(['Pending', 'Approved']),
+            LeaveRequest.from_date <= to_d,
+            LeaveRequest.to_date >= from_d,
+        ).first()
+        if existing:
+            flash(f'Is driver ki pehle se ek overlapping leave request hai ({existing.from_date.strftime("%d-%m-%Y")} to {existing.to_date.strftime("%d-%m-%Y")}, {existing.status}).', 'warning')
+            return redirect(url_for('leave_request_new'))
+
+        lr = LeaveRequest(
+            driver_id=driver_id,
+            from_date=from_d,
+            to_date=to_d,
+            leave_type=leave_type,
+            reason=reason,
+            status='Pending',
+        )
+        db.session.add(lr)
+        db.session.commit()
+        flash('Leave request submit ho gayi hai. Supervisor ke approval ka wait karein.', 'success')
+        return redirect(url_for('leave_request_list'))
+
+    return render_template('leave_request_form.html', drivers=drivers)
+
+
+@app.route('/leave-requests/<int:req_id>/review', methods=['POST'])
+def leave_request_review(req_id):
+    """Approve or reject a leave request. If approved, auto-mark attendance."""
+    lr = LeaveRequest.query.get_or_404(req_id)
+    action = request.form.get('action', '').strip()
+    review_remarks = request.form.get('review_remarks', '').strip()
+
+    if action not in ('approve', 'reject'):
+        flash('Invalid action.', 'danger')
+        return redirect(url_for('leave_request_list'))
+
+    if lr.status != 'Pending':
+        flash('Ye request already reviewed hai.', 'warning')
+        return redirect(url_for('leave_request_list'))
+
+    lr.reviewed_by = session.get('user_id')
+    lr.reviewed_at = pk_now()
+    lr.review_remarks = review_remarks
+
+    if action == 'approve':
+        lr.status = 'Approved'
+        _audit_user = session.get('user', '')
+        cur_d = lr.from_date
+        marked = 0
+        while cur_d <= lr.to_date:
+            rec = DriverAttendance.query.filter_by(
+                driver_id=lr.driver_id,
+                attendance_date=cur_d,
+            ).first()
+            if rec and rec.check_in is not None:
+                cur_d += timedelta(days=1)
+                continue
+            remark = f'{lr.leave_type} (Leave Request #{lr.id}) [approved by {_audit_user}]'
+            if rec:
+                rec.status = lr.leave_type
+                rec.remarks = remark
+                rec.updated_at = pk_now()
+            else:
+                rec = DriverAttendance(
+                    driver_id=lr.driver_id,
+                    attendance_date=cur_d,
+                    status=lr.leave_type,
+                    project_id=lr.driver.project_id if lr.driver else None,
+                    remarks=remark,
+                )
+                db.session.add(rec)
+            marked += 1
+            cur_d += timedelta(days=1)
+        db.session.commit()
+        flash(f'Leave request approved. {marked} din ka {lr.leave_type} mark kar diya.', 'success')
+    else:
+        lr.status = 'Rejected'
+        db.session.commit()
+        flash('Leave request rejected.', 'info')
+
+    return redirect(url_for('leave_request_list'))
 
 
 # ─── Task Report ─────────────────────────────────

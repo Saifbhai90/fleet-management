@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Leave Requests{% endblock %}
+
+{% block content %}
+<style>
+  .lr-page .page-header { padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.06); margin-bottom: 1rem; }
+  .lr-page .stat-card { min-width: 100px; }
+  .lr-page .table td, .lr-page .table th { font-size: 0.875rem; }
+  .lr-page .badge-status { font-size: 0.75rem; padding: 0.35em 0.65em; }
+</style>
+<div class="container-fluid lr-page">
+  <div class="page-header d-flex flex-wrap justify-content-between align-items-center">
+    <h1 class="mb-0" style="font-size:1.5rem;font-weight:700;"><i class="bi bi-calendar2-check me-2 text-primary"></i>Leave Requests {% if counts.pending %}<span class="badge bg-warning text-dark fs-6">{{ counts.pending }} Pending</span>{% endif %}</h1>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{{ url_for('leave_request_new') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>New Request</a>
+      <a href="{{ url_for('driver_attendance_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Attendance List</a>
+    </div>
+  </div>
+
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-primary stat-card"><div><div class="text-muted small">Total</div><div class="fw-bold fs-5 text-primary">{{ counts.total }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-warning stat-card"><div><div class="text-muted small">Pending</div><div class="fw-bold fs-5 text-warning">{{ counts.pending }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-success stat-card"><div><div class="text-muted small">Approved</div><div class="fw-bold fs-5 text-success">{{ counts.approved }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-danger stat-card"><div><div class="text-muted small">Rejected</div><div class="fw-bold fs-5 text-danger">{{ counts.rejected }}</div></div></div>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-3">
+    <div class="card-body py-2">
+      <form method="get" action="{{ url_for('leave_request_list') }}" class="row g-2 align-items-end">
+        <div class="col-auto">
+          <select name="status" class="form-select form-select-sm">
+            <option value="">All Status</option>
+            <option value="Pending" {% if status_filter == 'Pending' %}selected{% endif %}>Pending</option>
+            <option value="Approved" {% if status_filter == 'Approved' %}selected{% endif %}>Approved</option>
+            <option value="Rejected" {% if status_filter == 'Rejected' %}selected{% endif %}>Rejected</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <input type="text" name="search" class="form-control form-control-sm" placeholder="Search driver..." value="{{ search or '' }}">
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Filter</button>
+          <a href="{{ url_for('leave_request_list') }}" class="btn btn-outline-secondary btn-sm ms-1">Reset</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-dark text-white py-2 d-flex justify-content-between align-items-center">
+      <span class="fw-semibold small">{{ total }} request(s)</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">#</th>
+              <th>Driver</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Days</th>
+              <th>Type</th>
+              <th>Reason</th>
+              <th>Status</th>
+              <th>Reviewed By</th>
+              <th>Submitted</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for lr in requests %}
+            <tr>
+              <td class="ps-3">{{ (page - 1) * per_page + loop.index }}</td>
+              <td>
+                <span class="fw-medium">{{ lr.driver.name }}</span>
+                <br><small class="text-muted">{{ lr.driver.driver_id or '-' }}</small>
+                {% if lr.driver.vehicle %}<br><small class="text-muted">{{ lr.driver.vehicle.vehicle_no }}</small>{% endif %}
+              </td>
+              <td>{{ lr.from_date.strftime('%d-%m-%Y') }}</td>
+              <td>{{ lr.to_date.strftime('%d-%m-%Y') }}</td>
+              <td><span class="badge bg-light text-dark border">{{ lr.total_days }}d</span></td>
+              <td><span class="badge bg-info">{{ lr.leave_type }}</span></td>
+              <td class="small" style="max-width:200px;">{{ lr.reason or '-' }}</td>
+              <td>
+                {% if lr.status == 'Pending' %}
+                  <span class="badge bg-warning text-dark badge-status">Pending</span>
+                {% elif lr.status == 'Approved' %}
+                  <span class="badge bg-success badge-status">Approved</span>
+                {% else %}
+                  <span class="badge bg-danger badge-status">Rejected</span>
+                {% endif %}
+              </td>
+              <td class="small">
+                {% if lr.reviewer %}{{ lr.reviewer.username }}{% else %}-{% endif %}
+                {% if lr.reviewed_at %}<br><small class="text-muted">{{ lr.reviewed_at.strftime('%d-%m %H:%M') }}</small>{% endif %}
+                {% if lr.review_remarks %}<br><small class="text-info">{{ lr.review_remarks }}</small>{% endif %}
+              </td>
+              <td class="small text-muted">{{ lr.created_at.strftime('%d-%m-%Y %H:%M') if lr.created_at else '-' }}</td>
+              <td>
+                {% if lr.status == 'Pending' %}
+                <div class="d-flex gap-1">
+                  <form method="post" action="{{ url_for('leave_request_review', req_id=lr.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="approve">
+                    <button type="submit" class="btn btn-sm btn-success" title="Approve" onclick="return confirm('Approve karein? Leave auto-mark ho jayegi.')"><i class="bi bi-check-lg"></i></button>
+                  </form>
+                  <button type="button" class="btn btn-sm btn-outline-danger reject-btn" title="Reject" data-id="{{ lr.id }}" data-name="{{ lr.driver.name }}"><i class="bi bi-x-lg"></i></button>
+                </div>
+                {% else %}
+                <span class="text-muted small">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="11" class="text-center py-4 text-muted">Koi leave request nahi mili.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% if total_pages > 1 %}
+    <div class="card-footer bg-light d-flex justify-content-center">
+      <nav>
+        <ul class="pagination pagination-sm mb-0">
+          <li class="page-item {% if page <= 1 %}disabled{% endif %}"><a class="page-link" href="?page={{ page - 1 }}&status={{ status_filter or '' }}&search={{ search or '' }}"><i class="bi bi-chevron-left"></i></a></li>
+          {% for p in range(1, total_pages + 1) %}
+          <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}&status={{ status_filter or '' }}&search={{ search or '' }}">{{ p }}</a></li>
+          {% endfor %}
+          <li class="page-item {% if page >= total_pages %}disabled{% endif %}"><a class="page-link" href="?page={{ page + 1 }}&status={{ status_filter or '' }}&search={{ search or '' }}"><i class="bi bi-chevron-right"></i></a></li>
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="modal fade" id="rejectModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="" id="rejectForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="reject">
+        <div class="modal-header"><h6 class="modal-title"><i class="bi bi-x-circle me-2 text-danger"></i>Reject Leave</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <p><strong id="rejectDriverName"></strong> ki leave request reject karni hai?</p>
+          <textarea name="review_remarks" class="form-control" rows="2" placeholder="Rejection reason (optional)"></textarea>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger btn-sm">Reject</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.reject-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var id = this.dataset.id;
+    var name = this.dataset.name;
+    document.getElementById('rejectDriverName').textContent = name;
+    document.getElementById('rejectForm').action = '/leave-requests/' + id + '/review';
+    new bootstrap.Modal(document.getElementById('rejectModal')).show();
+  });
+});
+</script>
+{% endblock %}

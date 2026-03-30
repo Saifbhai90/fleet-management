@@ -40,7 +40,7 @@
     <a href="{{ url_for('driver_attendance_list') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-list-ul me-1"></i>Back to List</a>
   </div>
 
-  <p class="text-muted hint">District → Project → Vehicle (parking auto) → Shift → Driver. Pehle distance (150 m), phir time check. Dono OK hon par Mark Attendance → selfie.</p>
+  <p class="text-muted hint">District → Project → Vehicle (parking auto) → Shift → Driver. {% if geofence_enabled %}Pehle distance ({{ geofence_radius | default(150) }} m), phir time check.{% else %}Distance check OFF — kisi bhi jagah se attendance.{% endif %} Dono OK hon par Mark Attendance → selfie.</p>
 
   <div class="row g-2">
     <div class="col-xl-8">
@@ -121,7 +121,7 @@
             <span id="locationText">—</span>
           </div>
           <div id="distanceMessage" class="status-box warning d-none mb-2">
-            Move within 150 m of parking.
+            Move within {{ geofence_radius | default(150) }} m of parking.
           </div>
           <div id="timeWindowMessage" class="status-box warning d-none mb-2">
             <span id="timeWindowText">—</span>
@@ -186,7 +186,8 @@
 
 <script>
 (function() {
-  var RADIUS_METERS = 150;
+  var RADIUS_METERS = {{ geofence_radius | default(150) }};
+  var GEOFENCE_ENABLED = {{ 'true' if geofence_enabled else 'false' }};
   var LOCATION_TIMEOUT = 30000;
   var LOCATION_MAX_AGE = 60000;
   var districtSelect = document.getElementById('districtSelect');
@@ -304,9 +305,9 @@
     var dist = haversineDistance(currentPosition.coords.latitude, currentPosition.coords.longitude, parkingCoords.lat, parkingCoords.lng);
     locationStatus.classList.remove('d-none', 'warning');
     locationStatus.classList.add('neutral');
-    locationText.textContent = 'Distance: ' + Math.round(dist) + ' m' + (dist <= RADIUS_METERS ? ' ✓ Within range' : '');
-    if (dist <= RADIUS_METERS) locationStatus.classList.remove('neutral'), locationStatus.classList.add('success');
-    if (dist > RADIUS_METERS) {
+    locationText.textContent = 'Distance: ' + Math.round(dist) + ' m' + (!GEOFENCE_ENABLED || dist <= RADIUS_METERS ? ' ✓ Within range' : '');
+    if (!GEOFENCE_ENABLED || dist <= RADIUS_METERS) locationStatus.classList.remove('neutral'), locationStatus.classList.add('success');
+    if (GEOFENCE_ENABLED && dist > RADIUS_METERS) {
       btnMarkAttendance.disabled = true;
       distanceMessage.classList.remove('d-none');
       timeWindowMessage.classList.add('d-none');

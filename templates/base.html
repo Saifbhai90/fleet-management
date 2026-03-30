@@ -1521,7 +1521,7 @@
         {% set assignment_endpoints = ['assign_project_to_company', 'assign_project_to_district', 'assign_vehicle_to_district', 'assign_vehicle_to_parking_list', 'assign_vehicle_to_parking_new', 'assign_vehicle_to_parking_edit', 'assign_driver_to_vehicle_list', 'assign_driver_to_vehicle_new', 'assign_driver_to_vehicle_edit'] %}
         {% set transfer_endpoints = ['project_transfers', 'project_transfer_new', 'project_transfer_edit', 'vehicle_transfers', 'vehicle_transfer_new', 'vehicle_transfer_edit', 'driver_transfers', 'driver_transfer_new', 'driver_transfer_edit'] %}
         {% set driver_status_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'driver_attendance_list', 'driver_attendance_mark', 'driver_attendance_bulk_off', 'driver_attendance_pending', 'driver_attendance_missing_checkout', 'driver_attendance_manual_checkin', 'driver_attendance_manual_checkout', 'driver_attendance_checkin', 'driver_attendance_checkout', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
-        {% set attendance_endpoints = ['driver_attendance_list', 'driver_attendance_mark', 'driver_attendance_bulk_off', 'driver_attendance_pending', 'driver_attendance_missing_checkout', 'driver_attendance_manual_checkin', 'driver_attendance_manual_checkout', 'driver_attendance_checkin', 'driver_attendance_checkout'] %}
+        {% set attendance_endpoints = ['driver_attendance_list', 'driver_attendance_mark', 'driver_attendance_bulk_off', 'driver_attendance_pending', 'driver_attendance_missing_checkout', 'driver_attendance_manual_checkin', 'driver_attendance_manual_checkout', 'driver_attendance_checkin', 'driver_attendance_checkout', 'leave_request_list', 'leave_request_new', 'leave_request_review'] %}
         {% set workforce_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
         {% set task_report_endpoints = ['task_report_upload', 'task_report_list', 'red_task_list', 'red_task_new', 'red_task_edit', 'without_task_list', 'without_task_new', 'without_task_edit', 'task_report_logbook_cover', 'task_report_logbook_view', 'task_report_logbook_view_all'] %}
         {% set expenses_endpoints = ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form', 'employee_expense_list', 'employee_expense_form'] %}
@@ -1747,6 +1747,11 @@
                 {% if can_see_page('driver_attendance_bulk_off') %}
                 <a href="{{ url_for('driver_attendance_bulk_off') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_bulk_off' %}active-link{% endif %}">
                     <i class="bi bi-calendar-x text-secondary"></i><span>Bulk Status</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('leave_request_list') %}
+                <a href="{{ url_for('leave_request_list') }}" class="collapse-item {% if request.endpoint in ['leave_request_list', 'leave_request_new'] %}active-link{% endif %}">
+                    <i class="bi bi-calendar2-check text-info"></i><span>Leave Requests</span>
                 </a>
                 {% endif %}
                 {% if can_see_page('driver_attendance_list') %}

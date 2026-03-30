@@ -36,7 +36,7 @@
     <div class="d-flex flex-wrap gap-2">
       {% if drivers %}
       <a href="{{ url_for('driver_attendance_pending') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}&export=excel" class="btn btn-success btn-sm" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Excel</a>
-      <button type="button" class="btn btn-outline-secondary btn-sm" title="Print" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" title="Print Preview" onclick="printPreview()"><i class="bi bi-printer me-1"></i>Print</button>
       {% endif %}
       <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-arrow-left me-1"></i>Back to List
@@ -170,7 +170,7 @@
                 </a>
                 {% if driver.phone1 %}
                 {% set ph = '92' ~ driver.phone1|replace('-','')|replace(' ','')|replace('0','',1) %}
-                <a href="https://wa.me/{{ ph }}?text={{ 'Assalam o Alaikum, aap ka check-in abhi tak nahi hua. Please check-in karein.'|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success ms-1" title="WhatsApp Reminder"><i class="bi bi-whatsapp"></i></a>
+                <a href="#" class="btn btn-sm btn-outline-success ms-1 wa-remind-btn" title="WhatsApp Reminder" data-phone="{{ ph }}" data-msg="Assalam o Alaikum, aap ka check-in abhi tak nahi hua. Please check-in karein." onclick="sendWhatsApp(this);return false;"><i class="bi bi-whatsapp"></i></a>
                 {% endif %}
               </td>
             </tr>
@@ -497,5 +497,45 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 })();
+
+function printPreview() {
+  var table = document.getElementById('pendingTable');
+  if (!table) { window.print(); return; }
+  var rows = table.querySelectorAll('tbody tr');
+  var html = '<html><head><title>Missing Check-IN - {{ view_date.strftime("%d-%m-%Y") }}</title>';
+  html += '<style>body{font-family:Arial,sans-serif;margin:20px;}h2{color:#dc3545;margin-bottom:5px;}table{width:100%;border-collapse:collapse;margin-top:10px;}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px;}th{background:#f8f9fa;font-weight:600;}.text-muted{color:#6c757d;}.badge{padding:2px 6px;border-radius:4px;font-size:11px;}@media print{body{margin:0;}}</style>';
+  html += '</head><body>';
+  html += '<h2>Missing Check-IN</h2>';
+  html += '<p style="color:#6c757d;margin:0 0 10px;">Date: {{ view_date.strftime("%d-%m-%Y") }} — Total: ' + document.querySelectorAll('#pendingTable tbody tr').length + ' driver(s)</p>';
+  html += '<table><thead><tr><th>#</th><th>Project</th><th>District</th><th>Vehicle No</th><th>Vehicle Type</th><th>Shift</th><th>Driver</th></tr></thead><tbody>';
+  var n = 0;
+  rows.forEach(function(r) {
+    if (r.style.display === 'none' || r.cells.length < 7) return;
+    n++;
+    html += '<tr>';
+    html += '<td>' + n + '</td>';
+    for (var i = 1; i < 7; i++) html += '<td>' + (r.cells[i] ? r.cells[i].innerHTML : '') + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></body></html>';
+  var w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  w.onload = function() { w.print(); };
+}
+
+function sendWhatsApp(btn) {
+  var phone = btn.dataset.phone;
+  var msg = encodeURIComponent(btn.dataset.msg);
+  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) {
+    window.location.href = 'intent://send?phone=' + phone + '&text=' + msg + '#Intent;scheme=whatsapp;package=com.whatsapp;end';
+    setTimeout(function() {
+      window.location.href = 'https://api.whatsapp.com/send?phone=' + phone + '&text=' + msg;
+    }, 500);
+  } else {
+    window.open('https://web.whatsapp.com/send?phone=' + phone + '&text=' + msg, '_blank');
+  }
+}
 </script>
 {% endblock %}

@@ -33,7 +33,7 @@
     <div class="d-flex flex-wrap gap-2">
       {% if records %}
       <a href="{{ url_for('driver_attendance_missing_checkout') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}&export=excel" class="btn btn-success btn-sm" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Excel</a>
-      <button type="button" class="btn btn-outline-secondary btn-sm" title="Print" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" title="Print Preview" onclick="printPreview()"><i class="bi bi-printer me-1"></i>Print</button>
       {% endif %}
       <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-arrow-left me-1"></i>Back to List
@@ -465,5 +465,31 @@ document.addEventListener('click', function(e) {
   document.getElementById('coConfirmLink').href = btn.dataset.url || '#';
   new bootstrap.Modal(document.getElementById('checkoutConfirmModal')).show();
 });
+
+function printPreview() {
+  var table = document.getElementById('missingCoTable');
+  if (!table) { window.print(); return; }
+  var rows = table.querySelectorAll('tbody tr');
+  var html = '<html><head><title>Missing Checkout - {{ view_date.strftime("%d-%m-%Y") }}</title>';
+  html += '<style>body{font-family:Arial,sans-serif;margin:20px;}h2{color:#fd7e14;margin-bottom:5px;}table{width:100%;border-collapse:collapse;margin-top:10px;}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px;}th{background:#f8f9fa;font-weight:600;}@media print{body{margin:0;}}</style>';
+  html += '</head><body>';
+  html += '<h2>Missing Checkout</h2>';
+  html += '<p style="color:#6c757d;margin:0 0 10px;">Date: {{ view_date.strftime("%d-%m-%Y") }} — Total: ' + document.querySelectorAll('#missingCoTable tbody tr').length + ' driver(s)</p>';
+  html += '<table><thead><tr><th>#</th><th>Project</th><th>District</th><th>Vehicle No</th><th>Vehicle Type</th><th>Shift</th><th>Driver</th><th>Check-in</th></tr></thead><tbody>';
+  var n = 0;
+  rows.forEach(function(r) {
+    if (r.style.display === 'none' || r.cells.length < 8) return;
+    n++;
+    html += '<tr>';
+    html += '<td>' + n + '</td>';
+    for (var i = 1; i < 8; i++) html += '<td>' + (r.cells[i] ? r.cells[i].innerHTML : '') + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></body></html>';
+  var w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  w.onload = function() { w.print(); };
+}
 </script>
 {% endblock %}

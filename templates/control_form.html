@@ -114,6 +114,57 @@
     </div>
   </div>
 
+  <!-- ═══════════════ GEOFENCE & NOTIFICATION SETTINGS ═══════════════ -->
+  <div class="row mb-4">
+    <div class="col-lg-10">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-info text-white py-3">
+          <h5 class="mb-0"><i class="bi bi-geo-alt me-2"></i>Geofence & Notification Settings</h5>
+        </div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('form_control') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="save_geofence">
+            <div class="row g-3 mb-3">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Geofence Radius (meters)</label>
+                <input type="number" name="geofence_radius" class="form-control" min="0" max="10000" value="{{ att_settings.geofence_radius_meters if att_settings else 150 }}" placeholder="150">
+                <div class="form-text">0 = No restriction (driver kisi bhi jagah se check-in kar sakta hai)</div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Check-in Reminder (minutes)</label>
+                <input type="number" name="checkin_reminder_minutes" class="form-control" min="0" max="120" value="{{ att_settings.checkin_reminder_minutes if att_settings else 20 }}">
+                <div class="form-text">Shift start ke baad kitni der mein reminder bheje (0 = off)</div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Checkout Reminder (minutes)</label>
+                <input type="number" name="checkout_reminder_minutes" class="form-control" min="0" max="120" value="{{ att_settings.checkout_reminder_minutes if att_settings else 30 }}">
+                <div class="form-text">Shift end ke baad kitni der mein reminder bheje (0 = off)</div>
+              </div>
+            </div>
+            <div class="row g-3 mb-3">
+              <div class="col-md-4">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="geofenceEnabled" name="geofence_enabled" value="1" {% if not att_settings or att_settings.geofence_enabled %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="geofenceEnabled">Geofence Enabled</label>
+                </div>
+                <div class="form-text">OFF = Distance check skip, driver kahi se bhi attendance laga sakta hai</div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="notifyOnMark" name="notify_on_mark" value="1" {% if not att_settings or att_settings.notify_on_attendance_mark %}checked{% endif %}>
+                  <label class="form-check-label fw-semibold" for="notifyOnMark">Notify on Attendance Mark</label>
+                </div>
+                <div class="form-text">ON = Driver ko notification milegi jab attendance mark ho</div>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-info text-white"><i class="bi bi-check2-circle me-1"></i>Save Geofence Settings</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══════════════ OVERRIDES TABLE ═══════════════ -->
   <div class="row mb-4">
     <div class="col-lg-10">

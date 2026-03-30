@@ -1563,3 +1563,51 @@ class BookAssignment(db.Model):
 
     def __repr__(self):
         return f'<BookAssignment Book#{self.book_id} Vehicle#{self.vehicle_id} [{self.status}]>'
+
+
+# ────────────────────────────────────────────────
+# Geofence & Attendance Settings (admin-configurable)
+# ────────────────────────────────────────────────
+class AttendanceSettings(db.Model):
+    __tablename__ = 'attendance_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    geofence_radius_meters = db.Column(db.Integer, nullable=False, default=150)
+    geofence_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    checkin_reminder_minutes = db.Column(db.Integer, nullable=False, default=20)
+    checkout_reminder_minutes = db.Column(db.Integer, nullable=False, default=30)
+    notify_on_attendance_mark = db.Column(db.Boolean, nullable=False, default=True)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    def __repr__(self):
+        return f'<AttendanceSettings geofence={self.geofence_radius_meters}m enabled={self.geofence_enabled}>'
+
+
+# ────────────────────────────────────────────────
+# Leave Approval Workflow
+# ────────────────────────────────────────────────
+class LeaveRequest(db.Model):
+    __tablename__ = 'leave_request'
+    id = db.Column(db.Integer, primary_key=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id', ondelete='CASCADE'), nullable=False, index=True)
+    from_date = db.Column(db.Date, nullable=False)
+    to_date = db.Column(db.Date, nullable=False)
+    leave_type = db.Column(db.String(30), nullable=False, default='Leave')
+    reason = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='Pending')
+    reviewed_by = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    review_remarks = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    driver = db.relationship('Driver', backref=db.backref('leave_requests', lazy='dynamic', order_by='LeaveRequest.created_at.desc()'))
+    reviewer = db.relationship('User', backref='reviewed_leaves', lazy='select')
+
+    @property
+    def total_days(self):
+        if self.from_date and self.to_date:
+            return (self.to_date - self.from_date).days + 1
+        return 1
+
+    def __repr__(self):
+        return f'<LeaveRequest Driver#{self.driver_id} {self.from_date} to {self.to_date} [{self.status}]>'
