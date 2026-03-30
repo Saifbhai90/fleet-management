@@ -3879,30 +3879,48 @@
         }
 
         function _sendTokenToServer(token) {
+            _fcmDebug('_sendTokenToServer called, token=' + (token ? token.substring(0, 20) + '...' : 'NULL'));
             _getDeviceUniqueId().then(function(devId) {
+                _fcmDebug('DeviceId=' + (devId || 'NULL'));
                 var deviceInfo = navigator.userAgent.substring(0, 200);
                 var payload = { token: token, device_info: deviceInfo };
                 if (devId) payload.device_unique_id = devId;
+                var csrfToken = (document.querySelector('meta[name=csrf-token]') || {}).content || '';
+                _fcmDebug('Sending to /api/register-fcm-token... CSRF=' + (csrfToken ? 'yes' : 'NO'));
                 fetch('/api/register-fcm-token', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': (document.querySelector('meta[name=csrf-token]') || {}).content || '' },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                     credentials: 'include',
                     body: JSON.stringify(payload)
-                }).then(function(r) { return r.json(); }).then(function(d) {
-                    console.log('[FCM] Token registered:', d.status || d.error, devId ? '(device: ' + devId + ')' : '');
-                }).catch(function(e) { console.warn('[FCM] Token registration failed:', e); });
-            });
+                }).then(function(r) {
+                    _fcmDebug('Server response status: ' + r.status);
+                    return r.json();
+                }).then(function(d) {
+                    _fcmDebug('Server result: ' + JSON.stringify(d));
+                }).catch(function(e) { _fcmDebug('Token registration FAILED: ' + e); });
+            }).catch(function(e) { _fcmDebug('DeviceId ERROR: ' + e); });
+        }
+
+        function _fcmDebug(msg) {
+            console.log('[FCM] ' + msg);
+            var el = document.getElementById('fcmDebugLog');
+            if (el) { el.textContent += '\n' + msg; }
         }
 
         function _setupPushListeners() {
-            if (!_isNative || !window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
+            _fcmDebug('_setupPushListeners called. isNative=' + _isNative);
+            if (!_isNative) { _fcmDebug('NOT native, skipping.'); return; }
+            if (!window.Capacitor || !window.Capacitor.Plugins) { _fcmDebug('No Capacitor.Plugins'); return; }
+            if (!window.Capacitor.Plugins.PushNotifications) { _fcmDebug('PushNotifications plugin NOT found!'); return; }
+            _fcmDebug('PushNotifications plugin available.');
+
             var Push = window.Capacitor.Plugins.PushNotifications;
             Push.addListener('registration', function(token) {
-                console.log('[FCM] Device token:', token.value);
+                _fcmDebug('TOKEN received: ' + (token.value ? token.value.substring(0, 30) + '...' : 'EMPTY'));
                 _sendTokenToServer(token.value);
             });
             Push.addListener('registrationError', function(err) {
-                console.error('[FCM] Registration error:', err);
+                _fcmDebug('REGISTRATION ERROR: ' + JSON.stringify(err));
             });
             Push.addListener('pushNotificationReceived', function(notification) {
                 console.log('[FCM] Foreground notification:', notification);
@@ -3920,17 +3938,19 @@
 
         function requestPushPermission() {
             return new Promise(function(resolve) {
-                console.log('[FCM] requestPushPermission called. isNative=' + _isNative);
+                _fcmDebug('requestPushPermission called');
                 if (_isNative && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications) {
-                    console.log('[FCM] PushNotifications plugin available, requesting permissions...');
+                    _fcmDebug('Requesting permissions...');
                     window.Capacitor.Plugins.PushNotifications.requestPermissions().then(function(result) {
-                        console.log('[FCM] Permission result:', result.receive);
+                        _fcmDebug('Permission result: ' + result.receive);
                         if (result.receive === 'granted') {
-                            console.log('[FCM] Granted! Calling register()...');
+                            _fcmDebug('GRANTED! Calling register()...');
                             window.Capacitor.Plugins.PushNotifications.register();
+                        } else {
+                            _fcmDebug('NOT GRANTED: ' + result.receive);
                         }
                         resolve(result.receive === 'granted');
-                    }).catch(function(e) { console.error('[FCM] Permission error:', e); resolve(false); });
+                    }).catch(function(e) { _fcmDebug('Permission ERROR: ' + JSON.stringify(e)); resolve(false); });
                 } else {
                     if ('Notification' in window) {
                         Notification.requestPermission().then(function(p) { resolve(p === 'granted'); });
@@ -4342,6 +4362,15 @@
             // 1. Hide web-only elements
             var guideWrap = document.getElementById('guideChatbotWrap');
             if (guideWrap) guideWrap.style.display = 'none';
+
+            // DEBUG: Temporary visible FCM log panel (remove after debugging)
+            var dbgPanel = document.createElement('div');
+            dbgPanel.id = 'fcmDebugLog';
+            dbgPanel.style.cssText = 'position:fixed;bottom:80px;left:8px;right:8px;max-height:200px;overflow-y:auto;background:rgba(0,0,0,0.85);color:#0f0;font:11px monospace;padding:10px;border-radius:8px;z-index:99999;white-space:pre-wrap;pointer-events:auto;';
+            dbgPanel.textContent = '[FCM Debug Log]';
+            document.body.appendChild(dbgPanel);
+            // Tap to dismiss
+            dbgPanel.addEventListener('dblclick', function() { dbgPanel.remove(); });
 
             // 1b. Auto-request push notification permission on native app
             {% if session.get('user_id') %}
