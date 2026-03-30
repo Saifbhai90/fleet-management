@@ -1637,3 +1637,32 @@ class DeviceFCMToken(db.Model):
 
     def __repr__(self):
         return f'<DeviceFCMToken User#{self.user_id} dev={self.device_unique_id} active={self.is_active}>'
+
+
+# ────────────────────────────────────────────────
+# App Releases (for admin-managed in-app updates)
+# ────────────────────────────────────────────────
+class AppRelease(db.Model):
+    __tablename__ = 'app_release'
+
+    id = db.Column(db.Integer, primary_key=True)
+    version = db.Column(db.String(20), nullable=False, unique=True)
+    apk_filename = db.Column(db.String(255), nullable=False)
+    force_update = db.Column(db.Boolean, default=False, nullable=False)
+    is_latest = db.Column(db.Boolean, default=False, nullable=False)
+    release_notes = db.Column(db.Text, nullable=True)
+    file_size_bytes = db.Column(db.BigInteger, nullable=True)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    uploader = db.relationship('User', backref='app_releases', lazy='select')
+
+    def __repr__(self):
+        return f'<AppRelease v{self.version} latest={self.is_latest}>'
+
+    @property
+    def file_size_display(self):
+        if not self.file_size_bytes:
+            return '—'
+        mb = self.file_size_bytes / (1024 * 1024)
+        return f'{mb:.1f} MB'

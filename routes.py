@@ -17,6 +17,7 @@ from models import (
     PhysicalBook, BookAssignment,
     AttendanceSettings,
     DeviceFCMToken,
+    AppRelease,
 )
 from forms import (
     CompanyForm, ProjectForm, VehicleForm, VehicleImportForm, DriverForm, DriverImportForm, EmployeeImportForm, ParkingForm, DistrictForm,
@@ -673,21 +674,114 @@ def api_me():
 
 @app.route('/api/app/check-update')
 def app_check_update():
-    """Returns latest app version info for in-app update system.
-    Place APK files in static/apps/ with name: fleet-manager-X.Y.Z.apk
-    Update LATEST_APP_VERSION when you upload a new APK."""
-    LATEST_APP_VERSION = '1.1.0'
-    FORCE_UPDATE = False
+    """Returns latest app version info — reads from DB (AppRelease)."""
+    latest = AppRelease.query.filter_by(is_latest=True).first()
+    if not latest:
+        return jsonify({'latest_version': '0.0.0', 'apk_url': '', 'apk_filename': '', 'force_update': False})
 
-    apk_filename = f'fleet-manager-{LATEST_APP_VERSION}.apk'
-    apk_url = request.url_root.rstrip('/') + url_for('static', filename=f'apps/{apk_filename}')
-
+    apk_url = request.url_root.rstrip('/') + url_for('static', filename=f'apps/{latest.apk_filename}')
     return jsonify({
-        'latest_version': LATEST_APP_VERSION,
+        'latest_version': latest.version,
         'apk_url': apk_url,
-        'apk_filename': apk_filename,
-        'force_update': FORCE_UPDATE,
+        'apk_filename': latest.apk_filename,
+        'force_update': latest.force_update,
     })
+
+
+@app.route('/admin/app-releases', methods=['GET', 'POST'])
+def admin_app_releases():
+    """Admin page: upload APK, manage releases, toggle force-update."""
+    if not session.get('is_master'):
+        flash('Only master admin can manage app releases.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        action = request.form.get('action', '')
+
+        if action == 'upload':
+            apk_file = request.files.get('apk_file')
+            if not apk_file or not apk_file.filename:
+                flash('APK file select karein.', 'danger')
+                return redirect(url_for('admin_app_releases'))
+
+            fname = secure_filename(apk_file.filename)
+            if not fname.startswith('fleet-manager-') or not fname.endswith('.apk'):
+                flash('APK filename "fleet-manager-X.Y.Z.apk" format mein hona chahiye.', 'danger')
+                return redirect(url_for('admin_app_releases'))
+
+            version = fname.replace('fleet-manager-', '').replace('.apk', '')
+            parts = version.split('.')
+            if len(parts) != 3 or not all(p.isdigit() for p in parts):
+                flash(f'Version "{version}" valid nahi hai. Format: X.Y.Z (e.g. 1.2.0)', 'danger')
+                return redirect(url_for('admin_app_releases'))
+
+            existing = AppRelease.query.filter_by(version=version).first()
+            if existing:
+                flash(f'Version {version} already uploaded hai. Delete karein pehle ya naya version use karein.', 'warning')
+                return redirect(url_for('admin_app_releases'))
+
+            apps_dir = os.path.join(app.static_folder, 'apps')
+            os.makedirs(apps_dir, exist_ok=True)
+            file_path = os.path.join(apps_dir, fname)
+            apk_file.save(file_path)
+            file_size = os.path.getsize(file_path)
+
+            AppRelease.query.update({AppRelease.is_latest: False})
+
+            force = request.form.get('force_update') == 'on'
+            notes = request.form.get('release_notes', '').strip() or None
+            rel = AppRelease(
+                version=version,
+                apk_filename=fname,
+                force_update=force,
+                is_latest=True,
+                release_notes=notes,
+                file_size_bytes=file_size,
+                uploaded_by=session.get('user_id'),
+            )
+            db.session.add(rel)
+            db.session.commit()
+            flash(f'v{version} successfully uploaded aur latest set ho gaya!', 'success')
+            return redirect(url_for('admin_app_releases'))
+
+        if action == 'set_latest':
+            rel_id = request.form.get('release_id', type=int)
+            rel = AppRelease.query.get_or_404(rel_id)
+            AppRelease.query.update({AppRelease.is_latest: False})
+            rel.is_latest = True
+            db.session.commit()
+            flash(f'v{rel.version} ab latest version hai.', 'success')
+            return redirect(url_for('admin_app_releases'))
+
+        if action == 'toggle_force':
+            rel_id = request.form.get('release_id', type=int)
+            rel = AppRelease.query.get_or_404(rel_id)
+            rel.force_update = not rel.force_update
+            db.session.commit()
+            state = 'ON' if rel.force_update else 'OFF'
+            flash(f'v{rel.version} force update {state}.', 'info')
+            return redirect(url_for('admin_app_releases'))
+
+        if action == 'delete':
+            rel_id = request.form.get('release_id', type=int)
+            rel = AppRelease.query.get_or_404(rel_id)
+            file_path = os.path.join(app.static_folder, 'apps', rel.apk_filename)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            was_latest = rel.is_latest
+            db.session.delete(rel)
+            db.session.commit()
+            if was_latest:
+                newest = AppRelease.query.order_by(AppRelease.id.desc()).first()
+                if newest:
+                    newest.is_latest = True
+                    db.session.commit()
+            flash(f'v{rel.version} deleted.', 'success')
+            return redirect(url_for('admin_app_releases'))
+
+    releases = AppRelease.query.order_by(AppRelease.id.desc()).all()
+    latest = AppRelease.query.filter_by(is_latest=True).first()
+    return render_template('admin_app_releases.html', releases=releases, latest=latest)
 
 
 @app.route('/api/register-fcm-token', methods=['POST'])

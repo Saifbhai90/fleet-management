@@ -1548,7 +1548,7 @@
         {% set payroll_open = request.endpoint in payroll_endpoints %}
         {% set books_endpoints = ['book_inventory_list', 'book_stock_entry', 'book_stock_edit', 'book_issue', 'book_assignment_list', 'book_return', 'book_pending_returns'] %}
         {% set books_open = request.endpoint in books_endpoints %}
-        {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit', 'form_control'] %}
+        {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit', 'form_control', 'admin_app_releases'] %}
         {% set users_open = request.endpoint in users_manage_endpoints %}
 
         <!-- Dashboard -->
@@ -2068,6 +2068,9 @@
                 {% if current_user_is_master %}
                 <a href="{{ url_for('system_health') }}" class="collapse-item {% if request.endpoint == 'system_health' %}active-link{% endif %}">
                     <i class="bi bi-activity text-danger"></i><span>System Health</span>
+                </a>
+                <a href="{{ url_for('admin_app_releases') }}" class="collapse-item {% if request.endpoint == 'admin_app_releases' %}active-link{% endif %}">
+                    <i class="bi bi-phone-vibrate text-info"></i><span>App Updates</span>
                 </a>
                 {% endif %}
             </div>
@@ -5763,6 +5766,7 @@ document.addEventListener('DOMContentLoaded', function() {
         'Roles & Permissions': 'کردار و اجازت',
         'Setting': 'ترتیبات',
         'System Health': 'نظام صحت',
+        'App Updates': 'ایپ اپ ڈیٹ',
         'Backup': 'بیک اپ',
         "What's New": 'کیا نیا ہے',
         'Logout': 'لاگ آؤٹ',

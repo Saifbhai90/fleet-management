@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% block title %}App Update Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-phone-vibrate me-2 text-primary"></i>App Update Management</h2>
+    <a href="{{ url_for('form_control') }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left me-1"></i>Settings</a>
+  </div>
+
+  {% if latest %}
+  <div class="alert alert-success d-flex align-items-center shadow-sm mb-4" role="alert">
+    <i class="bi bi-check-circle-fill fs-4 me-3"></i>
+    <div>
+      <strong>Current Live Version:</strong> v{{ latest.version }}
+      <span class="text-muted ms-2">({{ latest.file_size_display }})</span>
+      {% if latest.force_update %}
+        <span class="badge bg-danger ms-2">Force Update ON</span>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-warning d-flex align-items-center shadow-sm mb-4">
+    <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+    <div>Koi release upload nahi hui. Pehli APK upload karein.</div>
+  </div>
+  {% endif %}
+
+  <div class="row g-4">
+    <!-- Upload Card -->
+    <div class="col-lg-5">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-primary text-white py-3">
+          <h5 class="mb-0"><i class="bi bi-cloud-upload me-2"></i>Upload New APK</h5>
+        </div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('admin_app_releases') }}" enctype="multipart/form-data" id="uploadForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="upload">
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold"><i class="bi bi-file-earmark-arrow-up me-1"></i>APK File</label>
+              <input type="file" class="form-control" name="apk_file" accept=".apk" required id="apkFileInput">
+              <div class="form-text">Filename format: <code>fleet-manager-X.Y.Z.apk</code> (e.g. fleet-manager-1.2.0.apk)</div>
+            </div>
+
+            <div id="filePreview" class="d-none mb-3">
+              <div class="card bg-light border-0">
+                <div class="card-body py-2 px-3">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                      <i class="bi bi-android2 text-success me-1"></i>
+                      <strong id="previewName">—</strong>
+                    </div>
+                    <span class="badge bg-primary" id="previewVersion">—</span>
+                  </div>
+                  <small class="text-muted" id="previewSize">—</small>
+                </div>
+              </div>
+            </div>
+
+            <div id="versionError" class="alert alert-danger d-none py-2 small"></div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold"><i class="bi bi-journal-text me-1"></i>Release Notes (optional)</label>
+              <textarea class="form-control" name="release_notes" rows="2" placeholder="e.g. Bug fixes, new attendance feature..."></textarea>
+            </div>
+
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" name="force_update" id="forceSwitch">
+              <label class="form-check-label" for="forceSwitch">
+                <i class="bi bi-exclamation-diamond me-1 text-danger"></i><strong>Force Update</strong>
+                <small class="text-muted d-block">Users will not be able to dismiss — update mandatory hoga</small>
+              </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100" id="uploadBtn" disabled>
+              <i class="bi bi-cloud-upload me-1"></i>Upload & Publish
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- How It Works -->
+      <div class="card shadow-sm border-0 rounded-3 mt-4">
+        <div class="card-header bg-dark text-white py-3">
+          <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Kaise Kaam Karta Hai</h6>
+        </div>
+        <div class="card-body small">
+          <ol class="mb-0 ps-3">
+            <li class="mb-2">Android Studio mein <code>build.gradle</code> mein <code>versionCode</code> +1 aur <code>versionName</code> change karein</li>
+            <li class="mb-2"><strong>Build > Build APK(s)</strong> se APK banayein</li>
+            <li class="mb-2">APK ka naam rakhein: <code>fleet-manager-X.Y.Z.apk</code></li>
+            <li class="mb-2">Yahan upload karein — <strong>bas!</strong></li>
+          </ol>
+          <div class="mt-2 text-muted">
+            <i class="bi bi-magic me-1"></i>Version auto-detect hoti hai filename se. Server par sab automatic set hota hai.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Release History -->
+    <div class="col-lg-7">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="bi bi-clock-history me-2 text-secondary"></i>Release History</h5>
+          <span class="badge bg-secondary">{{ releases|length }} releases</span>
+        </div>
+        <div class="card-body p-0">
+          {% if releases %}
+          <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th style="width:60px">Status</th>
+                  <th>Version</th>
+                  <th>Size</th>
+                  <th>Notes</th>
+                  <th>Uploaded</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for rel in releases %}
+                <tr class="{% if rel.is_latest %}table-success{% endif %}">
+                  <td>
+                    {% if rel.is_latest %}
+                      <span class="badge bg-success"><i class="bi bi-broadcast me-1"></i>Live</span>
+                    {% else %}
+                      <span class="badge bg-secondary">Old</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <strong>v{{ rel.version }}</strong>
+                    {% if rel.force_update %}
+                      <span class="badge bg-danger ms-1" title="Force Update ON"><i class="bi bi-exclamation-diamond"></i></span>
+                    {% endif %}
+                  </td>
+                  <td class="text-muted small">{{ rel.file_size_display }}</td>
+                  <td class="small text-muted" style="max-width:180px">{{ rel.release_notes or '—' }}</td>
+                  <td class="small text-muted">
+                    {% if rel.uploader %}{{ rel.uploader.name or rel.uploader.username }}{% else %}System{% endif %}
+                    <br>{{ rel.created_at.strftime('%d-%b-%Y %I:%M %p') if rel.created_at else '—' }}
+                  </td>
+                  <td class="text-end">
+                    <div class="btn-group btn-group-sm">
+                      {% if not rel.is_latest %}
+                      <form method="post" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="set_latest">
+                        <input type="hidden" name="release_id" value="{{ rel.id }}">
+                        <button type="submit" class="btn btn-outline-success btn-sm" title="Set as Live">
+                          <i class="bi bi-broadcast"></i>
+                        </button>
+                      </form>
+                      {% endif %}
+                      <form method="post" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="toggle_force">
+                        <input type="hidden" name="release_id" value="{{ rel.id }}">
+                        <button type="submit" class="btn btn-outline-{{ 'danger' if rel.force_update else 'warning' }} btn-sm" title="Toggle Force Update">
+                          <i class="bi bi-exclamation-diamond{% if rel.force_update %}-fill{% endif %}"></i>
+                        </button>
+                      </form>
+                      <form method="post" class="d-inline" onsubmit="return confirm('Delete v{{ rel.version }}?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="release_id" value="{{ rel.id }}">
+                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </form>
+                      <a href="{{ url_for('static', filename='apps/' + rel.apk_filename) }}" class="btn btn-outline-primary btn-sm" title="Download APK" download>
+                        <i class="bi bi-download"></i>
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox display-4 d-block mb-2"></i>
+            <p>Koi release nahi hai. Pehli APK upload karein!</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var fileInput = document.getElementById('apkFileInput');
+    var preview = document.getElementById('filePreview');
+    var previewName = document.getElementById('previewName');
+    var previewVersion = document.getElementById('previewVersion');
+    var previewSize = document.getElementById('previewSize');
+    var versionError = document.getElementById('versionError');
+    var uploadBtn = document.getElementById('uploadBtn');
+
+    fileInput.addEventListener('change', function() {
+        var file = this.files[0];
+        versionError.classList.add('d-none');
+        preview.classList.add('d-none');
+        uploadBtn.disabled = true;
+
+        if (!file) return;
+
+        var fname = file.name;
+        if (!fname.startsWith('fleet-manager-') || !fname.endsWith('.apk')) {
+            versionError.innerHTML = '<i class="bi bi-x-circle me-1"></i>Filename <code>fleet-manager-X.Y.Z.apk</code> format mein hona chahiye.';
+            versionError.classList.remove('d-none');
+            return;
+        }
+
+        var version = fname.replace('fleet-manager-', '').replace('.apk', '');
+        var parts = version.split('.');
+        if (parts.length !== 3 || !parts.every(function(p) { return /^\d+$/.test(p); })) {
+            versionError.innerHTML = '<i class="bi bi-x-circle me-1"></i>Version "' + version + '" valid nahi. Format: X.Y.Z (e.g. 1.2.0)';
+            versionError.classList.remove('d-none');
+            return;
+        }
+
+        var sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        previewName.textContent = fname;
+        previewVersion.textContent = 'v' + version;
+        previewSize.textContent = sizeMB + ' MB';
+        preview.classList.remove('d-none');
+        uploadBtn.disabled = false;
+    });
+
+    var uploadForm = document.getElementById('uploadForm');
+    uploadForm.addEventListener('submit', function() {
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Uploading...';
+    });
+});
+</script>
+{% endblock %}
