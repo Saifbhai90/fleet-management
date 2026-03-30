@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = 'notif_perm_01'
-down_revision = 'fcm_bank_style_01'
+down_revision = 'app_release_001'
 branch_labels = None
 depends_on = None
 
