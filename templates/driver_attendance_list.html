@@ -40,11 +40,11 @@
         <div class="row g-3 align-items-end mb-2">
           <div class="col-md-3 col-lg-2">
             <label class="form-label">From Date</label>
-            <input type="text" name="from_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ from_date or view_date.strftime('%d-%m-%Y') }}">
+            <input type="text" name="from_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ from_date or '' }}">
           </div>
           <div class="col-md-3 col-lg-2">
             <label class="form-label">To Date</label>
-            <input type="text" name="to_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ to_date or view_date.strftime('%d-%m-%Y') }}">
+            <input type="text" name="to_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ to_date or '' }}">
           </div>
         </div>
 
@@ -95,11 +95,7 @@
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-4 col-lg-3">
-            <label class="form-label">Search</label>
-            <input type="text" name="search" class="form-control" placeholder="Name, Driver ID, Vehicle..." value="{{ search or '' }}">
-          </div>
-          <div class="col-md-2 col-lg-1">
+          <div class="col-md-2 col-lg-2">
             <button type="submit" class="btn btn-primary w-100">
               <i class="bi bi-search me-1"></i> View
             </button>
@@ -108,6 +104,17 @@
       </form>
     </div>
   </div>
+
+  {% if att_counts %}
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-success"><div><div class="text-muted small">Present</div><div class="fw-bold fs-5 text-success">{{ att_counts.present }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-warning"><div><div class="text-muted small">Late</div><div class="fw-bold fs-5 text-warning">{{ att_counts.late }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-info"><div><div class="text-muted small">Leave</div><div class="fw-bold fs-5 text-info">{{ att_counts.leave }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-secondary"><div><div class="text-muted small">Half-Day</div><div class="fw-bold fs-5 text-secondary">{{ att_counts.half_day }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-dark"><div><div class="text-muted small">Off</div><div class="fw-bold fs-5">{{ att_counts.off }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-danger"><div><div class="text-muted small">Missing C/O</div><div class="fw-bold fs-5 text-danger">{{ att_counts.missing_co }}</div></div></div>
+  </div>
+  {% endif %}
 
   <div class="card shadow border-0 rounded-3 overflow-hidden">
     <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -182,7 +189,7 @@
             {% endif %}
             <tr class="{% if missing_checkout %}table-warning{% endif %}">
               <td class="ps-4">{{ loop.index }}</td>
-              <td>{{ view_date.strftime('%d-%m-%Y') }}</td>
+              <td>{{ rec.attendance_date.strftime('%d-%m-%Y') if rec else view_date.strftime('%d-%m-%Y') }}</td>
               <td class="text-muted small">{{ driver.driver_id or '-' }}</td>
               <td class="fw-medium">{{ driver.name }}</td>
               <td class="small" style="max-width:200px;">{{ project_district_parking }}</td>
@@ -460,6 +467,24 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
   }
 
   initServerSearch('tableSearch', 'search');
+
+  var tblSearch = document.getElementById('tableSearch');
+  if (tblSearch) {
+    tblSearch.addEventListener('keyup', function() {
+      var rows = document.querySelectorAll('#attendanceTable tbody tr');
+      var visCount = 0;
+      rows.forEach(function(r) { if (r.style.display !== 'none' && !r.classList.contains('no-match-row')) visCount++; });
+      var existing = document.querySelector('.no-match-row');
+      if (visCount === 0 && !existing) {
+        var nr = document.createElement('tr');
+        nr.className = 'no-match-row';
+        nr.innerHTML = '<td colspan="15" class="text-center py-4 text-muted"><i class="bi bi-search me-2"></i>No matching records found.</td>';
+        document.querySelector('#attendanceTable tbody').appendChild(nr);
+      } else if (visCount > 0 && existing) {
+        existing.remove();
+      }
+    });
+  }
 })();
 
 var _photoAction = '';
@@ -542,7 +567,7 @@ function sharePhotos(urls, type) {
 }
 </script>
 
-<div class="modal fade" id="photoChoiceModal" tabindex="-1">
+<div class="modal fade" id="photoChoiceModal" tabindex="-1" data-bs-backdrop="false">
   <div class="modal-dialog modal-dialog-centered modal-sm">
     <div class="modal-content">
       <div class="modal-header">

@@ -7,6 +7,7 @@
   .bulk-off-page .card-header { font-weight: 600; padding: 0.75rem 1rem; }
   .bulk-off-page .form-label { font-weight: 600; font-size: 0.875rem; }
   .bulk-off-page .btn-bulk { font-weight: 600; padding: 0.5rem 1.25rem; }
+  .bulk-off-page .ts-dropdown { z-index: 9999 !important; }
 </style>
 <div class="container-fluid bulk-off-page">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
@@ -87,7 +88,7 @@
             <tbody>
               {% for d in drivers %}
               <tr>
-                <td class="ps-3"><input type="checkbox" name="selected_drivers" value="{{ d.id }}" class="driver-check" checked></td>
+                <td class="ps-3"><input type="checkbox" name="selected_drivers" value="{{ d.id }}" class="driver-check"></td>
                 <td>{{ loop.index }}</td>
                 <td>{{ d.name }}{% if d.driver_id %} <small class="text-muted">({{ d.driver_id }})</small>{% endif %}</td>
                 <td>{{ d.vehicle.vehicle_no if d.vehicle else '-' }}</td>
@@ -102,10 +103,20 @@
         <button type="submit" class="btn btn-dark btn-bulk" id="bulkSubmitBtn">
           <i class="bi bi-check2-all me-1"></i>Mark Selected as Off
         </button>
-        <small class="text-muted" id="bulkSelectedCount">{{ drivers|length }} selected</small>
+        <small class="text-muted" id="bulkSelectedCount">0 selected</small>
       </div>
     </div>
   </form>
+
+  <div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+        <div class="modal-header"><h6 class="modal-title"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>Confirm</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body text-center"><p><span id="confirmCount">0</span> driver(s) ko Off mark karna hai?</p></div>
+        <div class="modal-footer justify-content-center"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-dark" onclick="document.getElementById('confirmModal').querySelector('.btn-close').click();document.getElementById('bulkOffForm').submit();">Confirm</button></div>
+      </div>
+    </div>
+  </div>
   {% elif (project_id or district_id) and drivers is defined and not drivers %}
   <div class="alert alert-info">
     Is project/district ke liye koi active driver (vehicle assigned) nahi mila. Pehle drivers assign karein.
@@ -238,9 +249,9 @@
         alert('Kam az kam ek driver select karein.');
         return;
       }
-      if (!confirm(checked.length + ' driver(s) ko Off mark karna hai?')) {
-        e.preventDefault();
-      }
+      e.preventDefault();
+      document.getElementById('confirmCount').textContent = checked.length;
+      new bootstrap.Modal(document.getElementById('confirmModal')).show();
     });
   }
 })();

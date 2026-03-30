@@ -9194,11 +9194,29 @@ def driver_attendance_list():
             if flt is not None:
                 drivers_query = drivers_query.filter(flt)
         drivers = drivers_query.order_by(Driver.name).all()
+    att_counts = {'present': 0, 'late': 0, 'leave': 0, 'half_day': 0, 'off': 0, 'absent': 0, 'missing_co': 0}
+    for rec in attendance_list:
+        s = (rec.status or '').lower()
+        if s == 'present':
+            att_counts['present'] += 1
+        elif s == 'late':
+            att_counts['late'] += 1
+        elif s == 'leave':
+            att_counts['leave'] += 1
+        elif s == 'half-day':
+            att_counts['half_day'] += 1
+        elif s == 'off':
+            att_counts['off'] += 1
+        elif s == 'absent':
+            att_counts['absent'] += 1
+        if rec.check_in and not rec.check_out:
+            att_counts['missing_co'] += 1
+
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(drivers, page, per_page)
     drivers = pagination.items
-    return render_template('driver_attendance_list.html', form=form, view_date=view_date, drivers=drivers, by_driver=by_driver, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, vehicle_drivers=vehicle_drivers, search=search, from_date=from_date_str, to_date=to_date_str, disable_project=disable_project, disable_district=disable_district, disable_vehicle=disable_vehicle, disable_shift=disable_shift, pagination=pagination, per_page=per_page)
+    return render_template('driver_attendance_list.html', form=form, view_date=view_date, drivers=drivers, by_driver=by_driver, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, vehicle_drivers=vehicle_drivers, search=search, from_date=from_date_str, to_date=to_date_str, disable_project=disable_project, disable_district=disable_district, disable_vehicle=disable_vehicle, disable_shift=disable_shift, pagination=pagination, per_page=per_page, att_counts=att_counts)
 
 
 def _driver_attendance_marked_list(view_date, project_id=None, district_id=None, vehicle_id=None, shift=None, search=None):
@@ -9498,7 +9516,11 @@ def driver_attendance_mark():
                 continue
             check_in_s = request.form.get(f'driver_{did}_check_in', '')
             check_out_s = request.form.get(f'driver_{did}_check_out', '')
-            remarks = 'Manual entry form ki entry'
+            user_remarks = request.form.get(f'driver_{did}_remarks', '').strip()
+            _audit_user = session.get('user', '')
+            remarks = user_remarks if user_remarks else 'Manual entry form ki entry'
+            if _audit_user:
+                remarks += f' [by {_audit_user}]'
             check_in_t = None
             check_out_t = None
             if check_in_s:
@@ -9658,6 +9680,8 @@ def driver_attendance_bulk_off():
 
         count = 0
         skipped = 0
+        _audit_user = session.get('user', '')
+        _bulk_tag = f'Bulk Off [by {_audit_user}]' if _audit_user else 'Bulk Off'
         for d in all_drivers:
             if d.id not in selected_ids:
                 continue
@@ -9673,7 +9697,7 @@ def driver_attendance_bulk_off():
                 rec.check_in = None
                 rec.check_out = None
                 rec.check_out_date = None
-                rec.remarks = (rec.remarks or '').rstrip() + (' | Bulk Off' if (rec.remarks or '').strip() else 'Bulk Off')
+                rec.remarks = (rec.remarks or '').rstrip() + (' | ' + _bulk_tag if (rec.remarks or '').strip() else _bulk_tag)
                 rec.updated_at = pk_now()
             else:
                 rec = DriverAttendance(
@@ -9681,7 +9705,7 @@ def driver_attendance_bulk_off():
                     attendance_date=view_date,
                     status='Off',
                     project_id=d.project_id,
-                    remarks='Bulk Off',
+                    remarks=_bulk_tag,
                 )
                 db.session.add(rec)
             count += 1
@@ -9815,8 +9839,25 @@ def driver_attendance_pending():
     all_filtered_drivers = drivers_query.order_by(Driver.name).all()
     existing_ids = {a.driver_id for a in DriverAttendance.query.filter_by(attendance_date=view_date).all()}
     checked_in_vids = _get_checked_in_vehicle_ids(view_date)
+    checked_in_vehicle_count = len(checked_in_vids)
     drivers = [d for d in all_filtered_drivers if d.id not in existing_ids and d.vehicle_id not in checked_in_vids]
-    return render_template('driver_attendance_pending.html', form=form, view_date=view_date, drivers=drivers, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, vehicles=vehicles, vehicle_drivers=vehicle_drivers, disable_project=disable_project, disable_district=disable_district, disable_vehicle=disable_vehicle, disable_shift=disable_shift)
+    if (request.args.get('export') or '').strip().lower() == 'excel':
+        headers = ['#', 'Project', 'District', 'Vehicle No', 'Vehicle Type', 'Shift', 'Driver', 'Driver ID']
+        rows = []
+        for i, d in enumerate(drivers, start=1):
+            rows.append([
+                i,
+                d.project.name if d.project else '',
+                d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else ''),
+                d.vehicle.vehicle_no if d.vehicle else '',
+                (d.vehicle.vehicle_type if d.vehicle and d.vehicle.vehicle_type else '') or '',
+                d.shift or '',
+                d.name,
+                d.driver_id or '',
+            ])
+        fn = f'missing_checkin_{view_date.strftime("%Y%m%d")}.xlsx'
+        return generate_excel_template(headers, rows, required_columns=[], filename=fn)
+    return render_template('driver_attendance_pending.html', form=form, view_date=view_date, drivers=drivers, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, vehicles=vehicles, vehicle_drivers=vehicle_drivers, disable_project=disable_project, disable_district=disable_district, disable_vehicle=disable_vehicle, disable_shift=disable_shift, checked_in_vehicle_count=checked_in_vehicle_count)
 
 
 @app.route('/driver-attendance/missing-checkout', methods=['GET'])

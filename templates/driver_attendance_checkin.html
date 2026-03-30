@@ -619,6 +619,8 @@
     formPhotoBase64.value = dataUrl;
     formVehicleId.value = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
     formProjectId.value = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
+    btnCapture.disabled = true;
+    btnCapture.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
     document.getElementById('savingOverlay').style.display = 'flex';
     checkinForm.submit();
   });

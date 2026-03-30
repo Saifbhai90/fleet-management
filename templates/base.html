@@ -3339,6 +3339,17 @@
             return true;
         };
 
+        // ── Loading spinner on filter form submit ──
+        document.addEventListener('submit', function(e) {
+            var form = e.target;
+            if (!form || form.id !== 'filterForm') return;
+            var btn = form.querySelector('button[type="submit"]');
+            if (btn && !btn.disabled) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Loading...';
+            }
+        });
+
         // ── Global Enter-to-Tab (Window-Capture) ──
         var _enterGuard = 0;
         window.addEventListener('keydown', function(e) {

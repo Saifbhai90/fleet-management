@@ -30,7 +30,7 @@
 </style>
 <div class="container-fluid pending-att-page">
   <div class="page-header d-flex flex-wrap justify-content-between align-items-center">
-    <h1 class="page-title mb-0"><i class="bi bi-exclamation-circle me-2 text-danger"></i>Missing Check IN</h1>
+    <h1 class="page-title mb-0"><i class="bi bi-exclamation-circle me-2 text-danger"></i>Missing Check IN {% if drivers %}<span class="badge bg-danger fs-6 align-middle">{{ drivers|length }}</span>{% endif %}</h1>
     <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-primary">
       <i class="bi bi-arrow-left me-1"></i>Back to List
     </a>
@@ -97,10 +97,6 @@
           </select>
         </div>
         <div class="col-6 col-md-4 col-lg-3">
-          <label class="form-label">Search</label>
-          <input type="text" name="search" class="form-control" placeholder="Name, Vehicle..." value="{{ search or '' }}">
-        </div>
-        <div class="col-6 col-md-4 col-lg-3">
           <label class="form-label d-none d-md-block">&nbsp;</label>
           <button type="submit" class="btn btn-primary w-100">
             <i class="bi bi-search me-1"></i>Load
@@ -110,9 +106,14 @@
     </div>
   </div>
 
+  {% if checked_in_vehicle_count is defined and checked_in_vehicle_count > 0 %}
+  <div class="alert alert-info py-2 px-3 small mb-3"><i class="bi bi-info-circle me-1"></i>{{ checked_in_vehicle_count }} vehicle(s) already have a driver checked in — those vehicles' other shift drivers are hidden from this list.</div>
+  {% endif %}
+
   <div class="card shadow border-0 mb-4 pending-att-table-card">
     <div class="card-header bg-danger text-white py-3">
       <span class="header-title">Drivers without check-in for {{ view_date|ddmmyyyy }}</span>
+      <a href="{{ url_for('driver_attendance_pending') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}&export=excel" class="btn btn-sm btn-outline-light" title="Export to Excel"><i class="bi bi-file-earmark-excel"></i></a>
       {% if drivers %}
       <div class="d-flex align-items-center gap-2 flex-wrap">
         <div class="list-search-wrap flex-grow-1 flex-md-grow-0">
@@ -145,7 +146,7 @@
           </thead>
           <tbody>
             {% for driver in drivers %}
-            <tr>
+            <tr data-shift="{{ driver.shift or '' }}">
               <td class="ps-4">{{ loop.index }}</td>
               <td>{{ driver.project.name if driver.project else '-' }}</td>
               <td>{{ driver.district.name if driver.district else (driver.vehicle.district.name if driver.vehicle and driver.vehicle.district else '-') }}</td>
@@ -160,6 +161,10 @@
                 <a href="{{ url_for('driver_attendance_manual_checkin', driver_id=driver.id, date=view_date.strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', vehicle_id=vehicle_id or '', shift=shift or '', search=search or '') }}" class="btn btn-sm btn-outline-success" title="Manual check-in karein">
                   <i class="bi bi-box-arrow-in-down me-1"></i>Check IN
                 </a>
+                {% if driver.phone1 %}
+                {% set ph = '92' ~ driver.phone1|replace('-','')|replace(' ','')|replace('0','',1) %}
+                <a href="https://wa.me/{{ ph }}?text={{ 'Assalam o Alaikum, aap ka check-in abhi tak nahi hua. Please check-in karein.'|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success ms-1" title="WhatsApp Reminder"><i class="bi bi-whatsapp"></i></a>
+                {% endif %}
               </td>
             </tr>
             {% else %}

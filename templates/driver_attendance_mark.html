@@ -106,10 +106,6 @@
           </select>
         </div>
         <div class="col-6 col-md-4 col-lg-3">
-          <label class="form-label">Search</label>
-          <input type="text" name="search" class="form-control" placeholder="Name, Vehicle..." value="{{ search or '' }}">
-        </div>
-        <div class="col-6 col-md-4 col-lg-3">
           <label class="form-label d-none d-md-block">&nbsp;</label>
           <button type="submit" class="btn btn-primary w-100">
             <i class="bi bi-search me-1"></i>Load
@@ -193,14 +189,14 @@
                   {% if gps_cam_locked %}
                     <span class="text-muted">{% if rec and rec.check_in %}{{ rec.check_in.strftime('%H:%M') }}{% else %}-{% endif %}</span>
                   {% else %}
-                  <input type="text" name="driver_{{ driver.id }}_check_in" class="form-control form-control-sm" placeholder="09:00" value="{% if rec and rec.check_in %}{{ rec.check_in.strftime('%H:%M') }}{% endif %}" maxlength="5">
+                  <input type="time" name="driver_{{ driver.id }}_check_in" class="form-control form-control-sm" value="{% if rec and rec.check_in %}{{ rec.check_in.strftime('%H:%M') }}{% endif %}">
                   {% endif %}
                 </td>
                 <td>
                   {% if gps_cam_locked %}
                     <span class="text-muted">{% if rec and rec.check_out %}{{ rec.check_out.strftime('%H:%M') }}{% else %}-{% endif %}</span>
                   {% else %}
-                  <input type="text" name="driver_{{ driver.id }}_check_out" class="form-control form-control-sm" placeholder="17:00" value="{% if rec and rec.check_out %}{{ rec.check_out.strftime('%H:%M') }}{% endif %}" maxlength="5">
+                  <input type="time" name="driver_{{ driver.id }}_check_out" class="form-control form-control-sm" value="{% if rec and rec.check_out %}{{ rec.check_out.strftime('%H:%M') }}{% endif %}">
                   {% endif %}
                 </td>
                 <td>
@@ -231,7 +227,7 @@
                   {% if gps_cam_locked %}
                     <small class="text-muted">{{ rec.remarks[:40] }}{% if rec.remarks|length > 40 %}...{% endif %}</small>
                   {% else %}
-                    <small class="text-muted">Manual entry form ki entry</small>
+                    <input type="text" name="driver_{{ driver.id }}_remarks" class="form-control form-control-sm" placeholder="Remarks (optional)" value="{{ rec.remarks if rec and rec.remarks and 'Manual entry' not in rec.remarks else '' }}" style="min-width:120px;">
                   {% endif %}
                 </td>
               </tr>
