@@ -3901,11 +3901,7 @@
             }).catch(function(e) { _fcmDebug('DeviceId ERROR: ' + e); });
         }
 
-        function _fcmDebug(msg) {
-            console.log('[FCM] ' + msg);
-            var el = document.getElementById('fcmDebugLog');
-            if (el) { el.textContent += '\n' + msg; }
-        }
+        function _fcmDebug() {}
 
         function _setupPushListeners() {
             _fcmDebug('_setupPushListeners called. isNative=' + _isNative);
@@ -3924,13 +3920,13 @@
                 _fcmDebug('REGISTRATION ERROR: ' + JSON.stringify(err));
             });
             Push.addListener('pushNotificationReceived', function(notification) {
-                console.log('[FCM] Foreground notification:', notification);
+                // foreground notification received
                 if (notification.title) {
                     _toast(notification.title + (notification.body ? ': ' + notification.body : ''));
                 }
             });
             Push.addListener('pushNotificationActionPerformed', function(action) {
-                console.log('[FCM] Notification tapped:', action);
+                // notification tapped
                 var data = (action.notification && action.notification.data) || {};
                 if (data.link) { window.location.href = data.link; }
             });
@@ -4417,14 +4413,7 @@
             var guideWrap = document.getElementById('guideChatbotWrap');
             if (guideWrap) guideWrap.style.display = 'none';
 
-            // DEBUG: Temporary visible FCM log panel (remove after debugging)
-            var dbgPanel = document.createElement('div');
-            dbgPanel.id = 'fcmDebugLog';
-            dbgPanel.style.cssText = 'position:fixed;bottom:80px;left:8px;right:8px;max-height:200px;overflow-y:auto;background:rgba(0,0,0,0.85);color:#0f0;font:11px monospace;padding:10px;border-radius:8px;z-index:99999;white-space:pre-wrap;pointer-events:auto;';
-            dbgPanel.textContent = '[FCM Debug Log]';
-            document.body.appendChild(dbgPanel);
-            // Tap to dismiss
-            dbgPanel.addEventListener('dblclick', function() { dbgPanel.remove(); });
+            // FCM debug panel removed — production mode
 
             // 1b. Auto-request push notification permission on native app
             {% if session.get('user_id') %}
