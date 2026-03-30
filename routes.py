@@ -671,6 +671,25 @@ def api_me():
     })
 
 
+@app.route('/api/app/check-update')
+def app_check_update():
+    """Returns latest app version info for in-app update system.
+    Place APK files in static/apps/ with name: fleet-manager-X.Y.Z.apk
+    Update LATEST_APP_VERSION when you upload a new APK."""
+    LATEST_APP_VERSION = '1.0.0'
+    FORCE_UPDATE = False
+
+    apk_filename = f'fleet-manager-{LATEST_APP_VERSION}.apk'
+    apk_url = request.url_root.rstrip('/') + url_for('static', filename=f'apps/{apk_filename}')
+
+    return jsonify({
+        'latest_version': LATEST_APP_VERSION,
+        'apk_url': apk_url,
+        'apk_filename': apk_filename,
+        'force_update': FORCE_UPDATE,
+    })
+
+
 @app.route('/api/register-fcm-token', methods=['POST'])
 def web_register_fcm_token():
     """Register FCM push token for web-session user (Capacitor or browser).

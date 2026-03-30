@@ -3934,6 +3934,135 @@
             });
         }
 
+        /* ── In-App Update System ──────────────────────────────────────── */
+        function _compareVersions(a, b) {
+            var pa = (a || '0').split('.').map(Number);
+            var pb = (b || '0').split('.').map(Number);
+            for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+                var na = pa[i] || 0, nb = pb[i] || 0;
+                if (na < nb) return -1;
+                if (na > nb) return 1;
+            }
+            return 0;
+        }
+
+        function _checkForAppUpdate() {
+            if (!_isNative) return;
+            var AppPlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+            if (!AppPlugin) return;
+
+            AppPlugin.getInfo().then(function(info) {
+                var currentVersion = info.version; // from build.gradle versionName
+                fetch('/api/app/check-update', { credentials: 'include' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (!data.latest_version) return;
+                        if (_compareVersions(currentVersion, data.latest_version) >= 0) return;
+
+                        console.log('[Update] New version available:', data.latest_version, '(current:', currentVersion + ')');
+                        _showUpdateBanner(data);
+                    }).catch(function(e) { console.warn('[Update] Check failed:', e); });
+            }).catch(function(e) { console.warn('[Update] Could not get app info:', e); });
+        }
+
+        function _showUpdateBanner(data) {
+            var existing = document.getElementById('appUpdateBanner');
+            if (existing) existing.remove();
+
+            var banner = document.createElement('div');
+            banner.id = 'appUpdateBanner';
+            banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;font-family:system-ui;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+            banner.innerHTML = '<div style="flex:1"><strong>New Update v' + data.latest_version + '</strong><br><span style="font-size:12px;opacity:0.85">Tap Update to download and install</span></div>' +
+                '<button id="appUpdateBtn" style="background:#fff;color:#1e40af;border:none;border-radius:8px;padding:8px 18px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">Update</button>' +
+                (data.force_update ? '' : '<button id="appUpdateDismiss" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px 8px;opacity:0.7">&times;</button>');
+
+            document.body.appendChild(banner);
+
+            document.getElementById('appUpdateBtn').addEventListener('click', function() {
+                _downloadAndInstallApk(data, banner);
+            });
+            var dismiss = document.getElementById('appUpdateDismiss');
+            if (dismiss) {
+                dismiss.addEventListener('click', function() { banner.remove(); });
+            }
+        }
+
+        function _downloadAndInstallApk(data, banner) {
+            var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+            var FileOpener = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileOpener;
+            if (!Filesystem) { alert('Filesystem plugin not available.'); return; }
+            if (!FileOpener) { alert('FileOpener plugin not available.'); return; }
+
+            banner.innerHTML = '<div style="flex:1">' +
+                '<div style="margin-bottom:6px;font-weight:600">Downloading v' + data.latest_version + '...</div>' +
+                '<div style="background:rgba(255,255,255,0.25);border-radius:6px;height:8px;overflow:hidden">' +
+                '<div id="apkProgressBar" style="background:#fff;height:100%;width:0%;border-radius:6px;transition:width 0.3s"></div></div>' +
+                '<div id="apkProgressText" style="font-size:11px;opacity:0.8;margin-top:4px">Starting download...</div>' +
+                '</div>';
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', data.apk_url, true);
+            xhr.responseType = 'blob';
+            xhr.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    var pct = Math.round((e.loaded / e.total) * 100);
+                    var bar = document.getElementById('apkProgressBar');
+                    var txt = document.getElementById('apkProgressText');
+                    if (bar) bar.style.width = pct + '%';
+                    if (txt) txt.textContent = pct + '% (' + (e.loaded / 1048576).toFixed(1) + ' MB / ' + (e.total / 1048576).toFixed(1) + ' MB)';
+                }
+            };
+            xhr.onload = function() {
+                if (xhr.status !== 200) {
+                    banner.innerHTML = '<div style="flex:1;color:#fca5a5">Download failed (HTTP ' + xhr.status + '). Please try again later.</div>';
+                    setTimeout(function() { banner.remove(); }, 5000);
+                    return;
+                }
+                var blob = xhr.response;
+                var fname = data.apk_filename || 'fleet-manager-update.apk';
+                var txtEl = document.getElementById('apkProgressText');
+                if (txtEl) txtEl.textContent = 'Saving file...';
+
+                var reader = new FileReader();
+                reader.onloadend = function() {
+                    var base64 = reader.result.substring(reader.result.indexOf(',') + 1);
+                    Filesystem.writeFile({
+                        path: fname,
+                        data: base64,
+                        directory: 'CACHE'
+                    }).then(function(result) {
+                        console.log('[Update] APK saved:', result.uri);
+                        _showInstallPrompt(result.uri, fname, banner);
+                    }).catch(function(err) {
+                        console.error('[Update] Save failed:', err);
+                        banner.innerHTML = '<div style="flex:1;color:#fca5a5">Save failed. Please try again.</div>';
+                        setTimeout(function() { banner.remove(); }, 5000);
+                    });
+                };
+                reader.readAsDataURL(blob);
+            };
+            xhr.onerror = function() {
+                banner.innerHTML = '<div style="flex:1;color:#fca5a5">Download failed. Check your connection.</div>';
+                setTimeout(function() { banner.remove(); }, 5000);
+            };
+            xhr.send();
+        }
+
+        function _showInstallPrompt(fileUri, fname, banner) {
+            var FileOpener = window.Capacitor.Plugins.FileOpener;
+            banner.style.background = 'linear-gradient(135deg,#065f46,#10b981)';
+            banner.innerHTML = '<div style="flex:1"><strong>Update Ready!</strong><br><span style="font-size:12px;opacity:0.9">Tap Install to apply the update</span></div>' +
+                '<button id="apkInstallBtn" style="background:#fff;color:#065f46;border:none;border-radius:8px;padding:10px 22px;font-weight:700;font-size:14px;cursor:pointer">Install</button>';
+            document.getElementById('apkInstallBtn').addEventListener('click', function() {
+                FileOpener.open({ filePath: fileUri, contentType: 'application/vnd.android.package-archive' })
+                    .then(function() { console.log('[Update] Installer launched'); })
+                    .catch(function(err) {
+                        console.error('[Update] FileOpener failed:', err);
+                        alert('Could not open APK installer. Please install manually from Downloads.');
+                    });
+            });
+        }
+
         function _toast(msg) {
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
                 window.Capacitor.Plugins.Toast.show({ text: msg, duration: 'short', position: 'bottom' });
@@ -4047,7 +4176,8 @@
             isNative: _isNative, getGPS: getGPS, takeSelfie: takeSelfie,
             requestPushPermission: requestPushPermission, initPermissions: initPermissions,
             showPermissionAlert: _showPermissionAlert,
-            downloadBlob: downloadBlob, openBlobUrl: openBlobUrl, _toast: _toast
+            downloadBlob: downloadBlob, openBlobUrl: openBlobUrl, _toast: _toast,
+            checkForAppUpdate: _checkForAppUpdate
         };
     })();
 
@@ -4199,6 +4329,9 @@
                 window.FleetBridge.requestPushPermission();
             }, 2000);
             {% endif %}
+
+            // 1c. In-App Update Check (native only)
+            setTimeout(function() { _checkForAppUpdate(); }, 4000);
 
             // 2. Auto-hide navbar on scroll down, show on scroll up (native feel)
             //    In Capacitor: body is fixed, so we listen on #mainContent (the scroll container)
