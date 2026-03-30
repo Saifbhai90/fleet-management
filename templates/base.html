@@ -3950,21 +3950,34 @@
         }
 
         function _checkForAppUpdate() {
-            if (!_isNative) return;
+            console.log('[Update] Starting check. isNative=' + _isNative);
+            if (!_isNative) { console.log('[Update] Not native, skipping.'); return; }
+
             var AppPlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
-            if (!AppPlugin) return;
+            if (!AppPlugin) { console.warn('[Update] App plugin not available.'); return; }
 
             AppPlugin.getInfo().then(function(info) {
-                var currentVersion = info.version; // from build.gradle versionName
+                var currentVersion = info.version || info.build || '0.0.0';
+                console.log('[Update] App version from device:', currentVersion, 'raw info:', JSON.stringify(info));
+
                 fetch('/api/app/check-update', { credentials: 'include' })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
-                        if (!data.latest_version) return;
-                        if (_compareVersions(currentVersion, data.latest_version) >= 0) return;
+                        console.log('[Update] Server response:', JSON.stringify(data));
+                        if (!data.latest_version || data.latest_version === '0.0.0') {
+                            console.log('[Update] No valid version from server.');
+                            return;
+                        }
+                        var cmp = _compareVersions(currentVersion, data.latest_version);
+                        console.log('[Update] Compare result:', cmp, '(app=' + currentVersion + ' server=' + data.latest_version + ')');
+                        if (cmp >= 0) {
+                            console.log('[Update] App is up-to-date or newer. No update needed.');
+                            return;
+                        }
 
-                        console.log('[Update] New version available:', data.latest_version, '(current:', currentVersion + ')');
+                        console.log('[Update] New version available! Showing banner.');
                         _showUpdateBanner(data);
-                    }).catch(function(e) { console.warn('[Update] Check failed:', e); });
+                    }).catch(function(e) { console.warn('[Update] Fetch failed:', e); });
             }).catch(function(e) { console.warn('[Update] Could not get app info:', e); });
         }
 
