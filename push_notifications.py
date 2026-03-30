@@ -109,6 +109,62 @@ def send_push_to_multiple(user_ids, title, body, data=None, link=None):
     return total
 
 
+def broadcast_push_all(title, body, data=None, link=None):
+    """Broadcast push notification to ALL users with active tokens."""
+    app_inst = _init_firebase()
+    if not app_inst:
+        return 0
+
+    from firebase_admin import messaging
+    from models import DeviceFCMToken, db
+
+    tokens = DeviceFCMToken.query.filter_by(is_active=True).all()
+    if not tokens:
+        return 0
+
+    payload_data = dict(data or {})
+    if link:
+        payload_data['click_action'] = link
+        payload_data['link'] = link
+
+    success_count = 0
+    stale_ids = []
+
+    for tok in tokens:
+        try:
+            message = messaging.Message(
+                notification=messaging.Notification(title=title, body=body),
+                data=payload_data,
+                token=tok.fcm_token,
+                android=messaging.AndroidConfig(
+                    priority='high',
+                    notification=messaging.AndroidNotification(
+                        sound='default',
+                        channel_id='fleet_attendance',
+                    ),
+                ),
+            )
+            messaging.send(message)
+            success_count += 1
+        except messaging.UnregisteredError:
+            stale_ids.append(tok.id)
+        except messaging.SenderIdMismatchError:
+            stale_ids.append(tok.id)
+        except Exception as e:
+            logger.warning("FCM broadcast failed for token %s: %s", tok.id, e)
+
+    if stale_ids:
+        try:
+            DeviceFCMToken.query.filter(DeviceFCMToken.id.in_(stale_ids)).update(
+                {DeviceFCMToken.is_active: False}, synchronize_session=False
+            )
+            db.session.commit()
+        except Exception:
+            pass
+
+    return success_count
+
+
 def get_user_id_for_driver(driver):
     """Find user_id for a driver (linked by cnic_no == username)."""
     if not driver or not driver.cnic_no:

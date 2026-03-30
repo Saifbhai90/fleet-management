@@ -139,7 +139,7 @@ def require_login():
     endpoint = request.endpoint or ''
     if endpoint.startswith('static'):
         return
-    if endpoint in ('login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init'):
+    if endpoint in ('login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init', 'app_check_update'):
         return
     if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
         return
@@ -765,7 +765,22 @@ def admin_app_releases():
             )
             db.session.add(rel)
             db.session.commit()
-            flash(f'v{version} successfully uploaded aur latest set ho gaya!', 'success')
+
+            try:
+                from push_notifications import broadcast_push_all
+                note_body = f'Version {version} available hai. App kholein — update automatic download hoga.'
+                if notes:
+                    note_body = f'{notes}\n\nApp kholein — update automatic download hoga.'
+                sent = broadcast_push_all(
+                    title=f'Fleet Manager v{version} Update!',
+                    body=note_body,
+                    data={'type': 'app_update', 'version': version},
+                )
+                flash(f'v{version} uploaded + {sent} users ko notification bheji gayi!', 'success')
+            except Exception as e:
+                app.logger.warning('Update notification broadcast failed: %s', e)
+                flash(f'v{version} uploaded! (Notification send mein issue: {e})', 'success')
+
             return redirect(url_for('admin_app_releases'))
 
         if action == 'set_latest':
