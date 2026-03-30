@@ -192,9 +192,7 @@
     </div>
   </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var fileInput = document.getElementById('apkFileInput');
@@ -213,21 +211,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!file) return;
 
-        var fname = file.name;
-        if (!fname.startsWith('fleet-manager-') || !fname.endsWith('.apk')) {
-            versionError.innerHTML = '<i class="bi bi-x-circle me-1"></i>Filename <code>fleet-manager-X.Y.Z.apk</code> format mein hona chahiye.';
+        var fname = file.name.trim();
+        var match = fname.match(/^fleet-manager-(\d+\.\d+\.\d+)\.apk$/i);
+        if (!match) {
+            versionError.innerHTML = '<i class="bi bi-x-circle me-1"></i>Filename <code>fleet-manager-X.Y.Z.apk</code> format mein hona chahiye.<br><small class="text-muted">Selected: ' + fname + '</small>';
             versionError.classList.remove('d-none');
             return;
         }
 
-        var version = fname.replace('fleet-manager-', '').replace('.apk', '');
-        var parts = version.split('.');
-        if (parts.length !== 3 || !parts.every(function(p) { return /^\d+$/.test(p); })) {
-            versionError.innerHTML = '<i class="bi bi-x-circle me-1"></i>Version "' + version + '" valid nahi. Format: X.Y.Z (e.g. 1.2.0)';
-            versionError.classList.remove('d-none');
-            return;
-        }
-
+        var version = match[1];
         var sizeMB = (file.size / (1024 * 1024)).toFixed(1);
         previewName.textContent = fname;
         previewVersion.textContent = 'v' + version;
@@ -243,4 +235,5 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
 {% endblock %}
