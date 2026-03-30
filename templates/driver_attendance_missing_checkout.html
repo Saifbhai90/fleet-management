@@ -6,12 +6,14 @@
   .missing-co-page { --missing-co-primary: #fd7e14; --missing-co-muted: #64748b; }
   .missing-co-page .page-header { padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.06); margin-bottom: 1rem; }
   .missing-co-page .page-title { font-size: 1.5rem; font-weight: 700; color: #1e293b; letter-spacing: -0.02em; }
-  .missing-co-filter .card { border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 12px rgba(0,0,0,0.05); overflow: hidden; }
+  .missing-co-filter .card { border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 12px rgba(0,0,0,0.05); overflow: visible; }
+  .missing-co-filter .ts-dropdown { z-index: 9999 !important; }
   .missing-co-filter .card-header { font-weight: 600; color: #334155; padding: 0.5rem 1rem; background: linear-gradient(135deg, #f8fafc 0%, #fff7ed 100%); border-bottom: 1px solid #e2e8f0; font-size: 0.9375rem; }
   .missing-co-filter .card-header .hint { font-weight: 400; color: var(--missing-co-muted); font-size: 0.75rem; }
   .missing-co-filter .card-body { padding: 0.75rem 1rem 1rem; }
   .missing-co-filter .form-label { font-weight: 600; color: #475569; font-size: 0.75rem; margin-bottom: 0.25rem; }
   .missing-co-filter .form-control, .missing-co-filter .form-select { min-height: 36px; border-radius: 6px; border-color: #e2e8f0; font-size: 0.875rem; }
+  .missing-co-filter .form-control:focus, .missing-co-filter .form-select:focus { border-color: var(--missing-co-primary); box-shadow: 0 0 0 2px rgba(253, 126, 20, 0.15); }
   .missing-co-table-card { border-radius: 14px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden; }
   .missing-co-table-card .card-header { padding: 0.75rem 1.25rem; background: linear-gradient(135deg, #fd7e14 0%, #e8590c 100%); border: none; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; }
   .missing-co-table-card .card-header .header-title { font-weight: 600; font-size: 1.05rem; }
@@ -23,14 +25,20 @@
   .missing-co-table-card .table tbody td { padding: 0.75rem 1rem; vertical-align: middle; }
   .missing-co-table-card .table tbody tr:hover { background-color: #fff7ed; }
   .missing-co-table-card .card-footer { padding: 1rem 1.25rem; background: #fff7ed; border-top: 1px solid #e2e8f0; }
-  .info-box { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.875rem; color: #9a3412; }
+  @media print { .missing-co-filter, .page-header .d-flex.gap-2, .missing-co-table-card .card-header, .missing-co-table-card .card-footer, #missingCoTableSearch { display: none !important; } .missing-co-table-card { box-shadow: none !important; border: 1px solid #ddd !important; } }
 </style>
 <div class="container-fluid missing-co-page">
   <div class="page-header d-flex flex-wrap justify-content-between align-items-center">
-    <h1 class="page-title mb-0"><i class="bi bi-box-arrow-right me-2 text-warning"></i>Missing Check-outs</h1>
-    <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-primary">
-      <i class="bi bi-arrow-left me-1"></i>Back to List
-    </a>
+    <h1 class="page-title mb-0"><i class="bi bi-box-arrow-right me-2 text-warning"></i>Missing Check-outs {% if records %}<span class="badge bg-warning text-dark fs-6 align-middle">{{ records|length }}</span>{% endif %}</h1>
+    <div class="d-flex flex-wrap gap-2">
+      {% if records %}
+      <a href="{{ url_for('driver_attendance_missing_checkout') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}&export=excel" class="btn btn-success btn-sm" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Excel</a>
+      <button type="button" class="btn btn-outline-secondary btn-sm" title="Print" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+      {% endif %}
+      <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to List
+      </a>
+    </div>
   </div>
 
   <div class="card shadow-sm border-0 mb-4 missing-co-filter">
@@ -153,9 +161,11 @@
               </td>
               <td><span class="badge bg-success">{{ rec.check_in.strftime('%H:%M') if rec.check_in else '-' }}</span></td>
               <td>
-                <a href="{{ url_for('driver_attendance_manual_checkout', driver_id=d.id, date=view_date.strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', vehicle_id=vehicle_id or '', shift=shift or '', search=search or '') }}" class="btn btn-sm btn-outline-danger" title="Manual check-out karein">
+                <button type="button" class="btn btn-sm btn-outline-danger checkout-confirm-btn" title="Manual check-out karein"
+                  data-url="{{ url_for('driver_attendance_manual_checkout', driver_id=d.id, date=view_date.strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', vehicle_id=vehicle_id or '', shift=shift or '', search=search or '') }}"
+                  data-name="{{ d.name }}">
                   <i class="bi bi-box-arrow-right me-1"></i>Check-out
-                </a>
+                </button>
               </td>
             </tr>
             {% else %}
@@ -179,6 +189,16 @@
       <nav id="missingPagNav"></nav>
     </div>
     {% endif %}
+  </div>
+
+  <div class="modal fade" id="checkoutConfirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+        <div class="modal-header"><h6 class="modal-title"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>Confirm Checkout</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body text-center"><p><strong id="coDriverName"></strong> ka manual check-out karna hai?</p></div>
+        <div class="modal-footer justify-content-center"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><a href="#" id="coConfirmLink" class="btn btn-danger btn-sm">Confirm Check-out</a></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -436,6 +456,14 @@ function attGoPage(tableId, perPageId, navId, countId, p) {
 }
 document.addEventListener('DOMContentLoaded', function() {
   attPaginate('missingCoTable','missingPerPage','missingPagNav','missingCount');
+});
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.checkout-confirm-btn');
+  if (!btn) return;
+  e.preventDefault();
+  document.getElementById('coDriverName').textContent = btn.dataset.name || '';
+  document.getElementById('coConfirmLink').href = btn.dataset.url || '#';
+  new bootstrap.Modal(document.getElementById('checkoutConfirmModal')).show();
 });
 </script>
 {% endblock %}

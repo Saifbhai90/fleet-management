@@ -6,7 +6,8 @@
   .pending-att-page { --pending-primary: #0d6efd; --pending-warning: #dc3545; --pending-muted: #64748b; }
   .pending-att-page .page-header { padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.06); margin-bottom: 1rem; }
   .pending-att-page .page-title { font-size: 1.5rem; font-weight: 700; color: #1e293b; letter-spacing: -0.02em; }
-  .pending-att-filter .card { border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 12px rgba(0,0,0,0.05); overflow: hidden; }
+  .pending-att-filter .card { border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 12px rgba(0,0,0,0.05); overflow: visible; }
+  .pending-att-filter .ts-dropdown { z-index: 9999 !important; }
   .pending-att-filter .card-header { font-weight: 600; color: #334155; padding: 0.5rem 1rem; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-bottom: 1px solid #e2e8f0; font-size: 0.9375rem; }
   .pending-att-filter .card-header .hint { font-weight: 400; color: var(--pending-muted); font-size: 0.75rem; }
   .pending-att-filter .card-body { padding: 0.75rem 1rem 1rem; }
@@ -27,13 +28,20 @@
   .pending-att-table-card .table tbody td { padding: 0.75rem 1rem; vertical-align: middle; }
   .pending-att-table-card .table tbody tr:hover { background-color: #f8fafc; }
   .pending-att-table-card .card-footer { padding: 1rem 1.25rem; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+  @media print { .pending-att-filter, .page-header .d-flex.gap-2, .pending-att-table-card .card-header, .pending-att-table-card .card-footer, #pendingTableSearch { display: none !important; } .pending-att-table-card { box-shadow: none !important; border: 1px solid #ddd !important; } }
 </style>
 <div class="container-fluid pending-att-page">
   <div class="page-header d-flex flex-wrap justify-content-between align-items-center">
     <h1 class="page-title mb-0"><i class="bi bi-exclamation-circle me-2 text-danger"></i>Missing Check IN {% if drivers %}<span class="badge bg-danger fs-6 align-middle">{{ drivers|length }}</span>{% endif %}</h1>
-    <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-primary">
-      <i class="bi bi-arrow-left me-1"></i>Back to List
-    </a>
+    <div class="d-flex flex-wrap gap-2">
+      {% if drivers %}
+      <a href="{{ url_for('driver_attendance_pending') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}&export=excel" class="btn btn-success btn-sm" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Excel</a>
+      <button type="button" class="btn btn-outline-secondary btn-sm" title="Print" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+      {% endif %}
+      <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to List
+      </a>
+    </div>
   </div>
 
   <div class="card shadow-sm border-0 mb-4 pending-att-filter">
@@ -113,7 +121,6 @@
   <div class="card shadow border-0 mb-4 pending-att-table-card">
     <div class="card-header bg-danger text-white py-3">
       <span class="header-title">Drivers without check-in for {{ view_date|ddmmyyyy }}</span>
-      <a href="{{ url_for('driver_attendance_pending') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}&export=excel" class="btn btn-sm btn-outline-light" title="Export to Excel"><i class="bi bi-file-earmark-excel"></i></a>
       {% if drivers %}
       <div class="d-flex align-items-center gap-2 flex-wrap">
         <div class="list-search-wrap flex-grow-1 flex-md-grow-0">
@@ -448,5 +455,47 @@ function attGoPage(tableId, perPageId, navId, countId, p) {
 document.addEventListener('DOMContentLoaded', function() {
   attPaginate('pendingTable','pendingPerPage','pendingPagNav','pendingCount');
 });
+
+(function() {
+  var table = document.getElementById('pendingTable');
+  if (!table) return;
+  var headers = table.querySelectorAll('thead th');
+  var sortableIdx = [];
+  headers.forEach(function(th, idx) {
+    var txt = (th.textContent || '').trim().toLowerCase();
+    if (['vehicle no', 'vehicle type', 'shift', 'driver', 'project', 'district'].indexOf(txt) !== -1) {
+      sortableIdx.push(idx);
+      th.style.cursor = 'pointer';
+      th.title = 'Click to sort';
+      th.innerHTML += ' <i class="bi bi-arrow-down-up text-muted" style="font-size:0.7em;"></i>';
+    }
+  });
+  var sortDir = {};
+  headers.forEach(function(th, idx) {
+    if (sortableIdx.indexOf(idx) === -1) return;
+    th.addEventListener('click', function() {
+      var dir = sortDir[idx] === 'asc' ? 'desc' : 'asc';
+      sortDir[idx] = dir;
+      headers.forEach(function(h, i) {
+        var icon = h.querySelector('i.bi-arrow-down-up, i.bi-arrow-up, i.bi-arrow-down');
+        if (icon) { icon.className = 'bi bi-arrow-down-up text-muted'; icon.style.fontSize = '0.7em'; }
+      });
+      var icon = th.querySelector('i');
+      if (icon) { icon.className = dir === 'asc' ? 'bi bi-arrow-up text-primary' : 'bi bi-arrow-down text-primary'; icon.style.fontSize = '0.7em'; }
+      var rows = Array.from(table.querySelectorAll('tbody tr'));
+      rows.sort(function(a, b) {
+        var at = (a.cells[idx] ? a.cells[idx].textContent : '').trim().toLowerCase();
+        var bt = (b.cells[idx] ? b.cells[idx].textContent : '').trim().toLowerCase();
+        if (at < bt) return dir === 'asc' ? -1 : 1;
+        if (at > bt) return dir === 'asc' ? 1 : -1;
+        return 0;
+      });
+      var tbody = table.querySelector('tbody');
+      rows.forEach(function(r) { tbody.appendChild(r); });
+      table.dataset.curPage = '1';
+      attPaginate('pendingTable','pendingPerPage','pendingPagNav','pendingCount');
+    });
+  });
+})();
 </script>
 {% endblock %}

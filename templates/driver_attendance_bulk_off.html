@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Bulk Off{% endblock %}
+{% block title %}Bulk Status{% endblock %}
 
 {% block content %}
 <style>
@@ -13,11 +13,11 @@
 </style>
 <div class="container-fluid bulk-off-page">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-calendar-x me-2 text-secondary"></i>Bulk Off</h2>
+    <h2 class="mb-0"><i class="bi bi-calendar-x me-2 text-secondary"></i>Bulk Status</h2>
     <a href="{{ url_for('driver_attendance_list') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>Attendance List</a>
   </div>
 
-  <p class="text-muted mb-4">Kisi <strong>District</strong> ke kisi <strong>Project</strong> ke saare drivers ko ek date ke liye <strong>Off</strong> mark karein. Pehle District aur Project select karein, phir <strong>View Drivers</strong> dabayein, phir <strong>Mark All as Off</strong>.</p>
+  <p class="text-muted mb-4">Drivers ko bulk mein <strong>Off</strong>, <strong>Leave</strong> ya <strong>Half-Day</strong> mark karein. Date range select karke multiple dates ke liye ek sath mark kar sakte hain (e.g. Eid holidays).</p>
 
   <div class="card border-0 shadow-sm mb-4 bulk-off-filter-card">
     <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap">
@@ -31,9 +31,13 @@
         <input type="hidden" name="district_id" id="hiddenDistrictId" value="{{ district_id or '' }}">
         <input type="hidden" name="project_id" id="hiddenProjectId" value="{{ project_id or '' }}">
         <div class="row g-3 align-items-end">
-          <div class="col-md-3">
-            <label class="form-label">Date</label>
-            <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
+          <div class="col-md-2">
+            <label class="form-label">From Date</label>
+            <input type="text" name="from_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ from_date or view_date.strftime('%d-%m-%Y') }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">To Date</label>
+            <input type="text" name="to_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ to_date or view_date.strftime('%d-%m-%Y') }}">
           </div>
           <div class="col-md-3">
             <label class="form-label">District</label>
@@ -67,7 +71,8 @@
   <form method="post" action="{{ url_for('driver_attendance_bulk_off') }}" id="bulkOffForm">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="confirm_bulk_off" value="1">
-    <input type="hidden" name="bulk_off_date" value="{{ view_date.strftime('%d-%m-%Y') }}">
+    <input type="hidden" name="bulk_off_from_date" value="{{ from_date or view_date.strftime('%d-%m-%Y') }}">
+    <input type="hidden" name="bulk_off_to_date" value="{{ to_date or view_date.strftime('%d-%m-%Y') }}">
     <input type="hidden" name="district_id" value="{{ district_id }}">
     <input type="hidden" name="project_id" value="{{ project_id }}">
     <div class="card border-0 shadow-sm">
@@ -102,9 +107,16 @@
         </div>
       </div>
       <div class="card-footer bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <button type="submit" class="btn btn-dark btn-bulk" id="bulkSubmitBtn">
-          <i class="bi bi-check2-all me-1"></i>Mark Selected as Off
-        </button>
+        <div class="d-flex align-items-center gap-2">
+          <select name="bulk_status" id="bulkStatusSelect" class="form-select form-select-sm" style="width:auto;">
+            <option value="Off" selected>Off</option>
+            <option value="Leave">Leave</option>
+            <option value="Half-Day">Half-Day</option>
+          </select>
+          <button type="submit" class="btn btn-dark btn-bulk" id="bulkSubmitBtn">
+            <i class="bi bi-check2-all me-1"></i>Mark Selected
+          </button>
+        </div>
         <small class="text-muted" id="bulkSelectedCount">0 selected</small>
       </div>
     </div>
@@ -114,7 +126,7 @@
     <div class="modal-dialog modal-dialog-centered modal-sm">
       <div class="modal-content">
         <div class="modal-header"><h6 class="modal-title"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>Confirm</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body text-center"><p><span id="confirmCount">0</span> driver(s) ko Off mark karna hai?</p></div>
+        <div class="modal-body text-center"><p><span id="confirmCount">0</span> driver(s) ko <strong id="confirmStatus">Off</strong> mark karna hai?</p></div>
         <div class="modal-footer justify-content-center"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-dark" onclick="document.getElementById('confirmModal').querySelector('.btn-close').click();document.getElementById('bulkOffForm').submit();">Confirm</button></div>
       </div>
     </div>
@@ -122,6 +134,37 @@
   {% elif (project_id or district_id) and drivers is defined and not drivers %}
   <div class="alert alert-info">
     Is project/district ke liye koi active driver (vehicle assigned) nahi mila. Pehle drivers assign karein.
+  </div>
+  {% endif %}
+
+  {% if last_bulk_action %}
+  <div class="alert alert-warning d-flex justify-content-between align-items-center py-2 mb-3">
+    <small><i class="bi bi-clock-history me-1"></i>Last bulk action: <strong>{{ last_bulk_action.count }}</strong> driver(s) marked <strong>{{ last_bulk_action.status }}</strong> on {{ last_bulk_action.date }} by {{ last_bulk_action.user }} — {{ last_bulk_action.ago }}</small>
+    <form method="post" action="{{ url_for('driver_attendance_bulk_off') }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="undo_bulk" value="1">
+      <input type="hidden" name="district_id" value="{{ district_id or '' }}">
+      <input type="hidden" name="project_id" value="{{ project_id or '' }}">
+      <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Undo this bulk action? All {{ last_bulk_action.count }} records will be deleted.');">
+        <i class="bi bi-arrow-counterclockwise me-1"></i>Undo
+      </button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if bulk_history %}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-light py-2"><small class="fw-semibold"><i class="bi bi-clock-history me-2"></i>Recent Bulk Actions</small></div>
+    <div class="card-body p-0">
+      <table class="table table-sm table-hover mb-0 small">
+        <thead class="table-light"><tr><th>Date</th><th>Status</th><th>Drivers</th><th>By</th><th>When</th></tr></thead>
+        <tbody>
+          {% for h in bulk_history %}
+          <tr><td>{{ h.date }}</td><td><span class="badge bg-{{ 'dark' if h.status == 'Off' else ('info' if h.status == 'Leave' else 'secondary') }}">{{ h.status }}</span></td><td>{{ h.count }}</td><td>{{ h.user }}</td><td>{{ h.ago }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
   {% endif %}
 
@@ -253,6 +296,8 @@
       }
       e.preventDefault();
       document.getElementById('confirmCount').textContent = checked.length;
+      var statusSel = document.getElementById('bulkStatusSelect');
+      document.getElementById('confirmStatus').textContent = statusSel ? statusSel.value : 'Off';
       new bootstrap.Modal(document.getElementById('confirmModal')).show();
     });
   }

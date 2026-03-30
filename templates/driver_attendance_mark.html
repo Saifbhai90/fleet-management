@@ -7,7 +7,8 @@
   .mark-att-page .page-header { padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.06); margin-bottom: 1rem; }
   .mark-att-page .page-title { font-size: 1.5rem; font-weight: 700; color: #1e293b; letter-spacing: -0.02em; }
   .mark-att-page .page-title i { opacity: 0.9; }
-  .mark-att-filter .card { border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 12px rgba(0,0,0,0.05); overflow: hidden; }
+  .mark-att-filter .card { border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 12px rgba(0,0,0,0.05); overflow: visible; }
+  .mark-att-filter .ts-dropdown { z-index: 9999 !important; }
   .mark-att-filter .card-header { font-weight: 600; color: #334155; padding: 0.5rem 1rem; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-bottom: 1px solid #e2e8f0; font-size: 0.9375rem; }
   .mark-att-filter .card-header .hint { font-weight: 400; color: var(--mark-att-muted); font-size: 0.75rem; }
   .mark-att-filter .card-body { padding: 0.75rem 1rem 1rem; }
@@ -29,6 +30,16 @@
   .mark-att-table-card .table tbody tr:hover { background-color: #f8fafc; }
   .mark-att-table-card .card-footer { padding: 1rem 1.25rem; background: #f8fafc; border-top: 1px solid #e2e8f0; }
   .mark-att-table-card .card-footer .btn-success { border-radius: 8px; font-weight: 600; }
+  .mini-history { display: flex; gap: 2px; margin-top: 4px; }
+  .mini-history .day-dot { width: 18px; height: 18px; border-radius: 4px; font-size: 9px; line-height: 18px; text-align: center; color: #fff; font-weight: 600; cursor: default; }
+  .mini-history .day-dot.st-present { background: #198754; }
+  .mini-history .day-dot.st-late { background: #ffc107; color: #000; }
+  .mini-history .day-dot.st-leave { background: #0dcaf0; }
+  .mini-history .day-dot.st-half { background: #6c757d; }
+  .mini-history .day-dot.st-off { background: #212529; }
+  .mini-history .day-dot.st-absent { background: #dc3545; }
+  .mini-history .day-dot.st-none { background: #e9ecef; color: #999; }
+  .conflict-badge { font-size: 0.7rem; }
 </style>
 <div class="container-fluid mark-att-page">
   <div class="page-header d-flex flex-wrap justify-content-between align-items-center">
@@ -154,6 +165,7 @@
                 <th>Vehicle Type</th>
                 <th>Driver</th>
                 <th>Status</th>
+                <th>Reason</th>
                 <th>Check In (HH:MM)</th>
                 <th>Check Out (HH:MM)</th>
                 <th>Photo (optional)</th>
@@ -172,6 +184,14 @@
                   <span class="fw-medium">{{ driver.name }}</span>
                   <br><small class="text-muted">{{ driver.driver_id }}</small>
                   {% if gps_cam_locked %}<br><span class="badge bg-success mt-1">GPS+Cam — Locked</span>{% endif %}
+                  {% if rec and rec.check_in and not gps_cam_locked %}<br><span class="badge bg-warning text-dark conflict-badge mt-1"><i class="bi bi-exclamation-triangle me-1"></i>Check-in exists</span>{% endif %}
+                  {% if driver_history and driver_history[driver.id] %}
+                  <div class="mini-history" title="Last 7 days">
+                    {% for dh in driver_history[driver.id] %}
+                    <span class="day-dot st-{{ dh.cls }}" title="{{ dh.date }}: {{ dh.status }}">{{ dh.label }}</span>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
                 </td>
                 <td>
                   {% if gps_cam_locked %}
@@ -182,6 +202,26 @@
                     {% for val, label in status_choices %}
                       <option value="{{ val }}" {% if rec and rec.status == val %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
+                  </select>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if gps_cam_locked %}
+                    <span class="text-muted">-</span>
+                  {% else %}
+                  <select name="driver_{{ driver.id }}_reason" class="form-select form-select-sm" style="min-width:120px;">
+                    <option value="">-- Reason --</option>
+                    <option value="Sick Leave">Sick Leave</option>
+                    <option value="Emergency">Emergency</option>
+                    <option value="Planned Leave">Planned Leave</option>
+                    <option value="Family Emergency">Family Emergency</option>
+                    <option value="Late - Traffic">Late - Traffic</option>
+                    <option value="Late - Vehicle Issue">Late - Vehicle Issue</option>
+                    <option value="Half Day - Early Leave">Half Day - Early Leave</option>
+                    <option value="Half Day - Late Arrival">Half Day - Late Arrival</option>
+                    <option value="Off - Holiday">Off - Holiday</option>
+                    <option value="Off - No Work">Off - No Work</option>
+                    <option value="Other">Other</option>
                   </select>
                   {% endif %}
                 </td>
@@ -233,7 +273,7 @@
               </tr>
               {% else %}
               <tr>
-                <td colspan="9" class="text-center py-5 text-muted">
+                <td colspan="10" class="text-center py-5 text-muted">
                   Filters use karein (Excel ki tarah — koi bhi alag ya mila kar). Project / District / Vehicle No / Shift / Driver. Phir <strong>Load</strong> dabayein. Sirf assigned data dikhega.
                 </td>
               </tr>

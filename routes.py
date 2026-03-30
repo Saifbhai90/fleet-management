@@ -9516,9 +9516,15 @@ def driver_attendance_mark():
                 continue
             check_in_s = request.form.get(f'driver_{did}_check_in', '')
             check_out_s = request.form.get(f'driver_{did}_check_out', '')
+            reason_code = request.form.get(f'driver_{did}_reason', '').strip()
             user_remarks = request.form.get(f'driver_{did}_remarks', '').strip()
             _audit_user = session.get('user', '')
-            remarks = user_remarks if user_remarks else 'Manual entry form ki entry'
+            remarks_parts = []
+            if reason_code:
+                remarks_parts.append(reason_code)
+            if user_remarks:
+                remarks_parts.append(user_remarks)
+            remarks = ' | '.join(remarks_parts) if remarks_parts else 'Manual entry form ki entry'
             if _audit_user:
                 remarks += f' [by {_audit_user}]'
             check_in_t = None
@@ -9578,12 +9584,41 @@ def driver_attendance_mark():
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
-    return render_template('driver_attendance_mark.html', form=form, view_date=view_date, drivers=drivers, existing=existing, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, status_choices=ATTENDANCE_STATUS_CHOICES, vehicles=vehicles, vehicle_drivers=vehicle_drivers, has_single_scope=has_single_scope, disable_project=disable_project, disable_district=disable_district)
+    # ── Build 7-day mini status history per driver ──
+    driver_history = {}
+    if drivers:
+        _hist_ids = [d.id for d in drivers]
+        _hist_start = view_date - timedelta(days=7)
+        _hist_recs = DriverAttendance.query.filter(
+            DriverAttendance.driver_id.in_(_hist_ids),
+            DriverAttendance.attendance_date >= _hist_start,
+            DriverAttendance.attendance_date < view_date,
+        ).all()
+        _hist_map = {}
+        for hr in _hist_recs:
+            _hist_map.setdefault(hr.driver_id, {})[hr.attendance_date] = hr
+        _status_cls = {'Present': 'present', 'Late': 'late', 'Leave': 'leave',
+                       'Half-Day': 'half', 'Off': 'off', 'Absent': 'absent'}
+        _status_label = {'Present': 'P', 'Late': 'L', 'Leave': 'Lv', 'Half-Day': 'H', 'Off': 'O', 'Absent': 'A'}
+        for did in _hist_ids:
+            days = []
+            for i in range(7, 0, -1):
+                dt = view_date - timedelta(days=i)
+                rec_h = _hist_map.get(did, {}).get(dt)
+                if rec_h:
+                    st = rec_h.status or 'Present'
+                    days.append({'date': dt.strftime('%d-%m'), 'status': st,
+                                 'cls': _status_cls.get(st, 'none'), 'label': _status_label.get(st, '?')})
+                else:
+                    days.append({'date': dt.strftime('%d-%m'), 'status': 'No Record', 'cls': 'none', 'label': '-'})
+            driver_history[did] = days
+
+    return render_template('driver_attendance_mark.html', form=form, view_date=view_date, drivers=drivers, existing=existing, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, status_choices=ATTENDANCE_STATUS_CHOICES, vehicles=vehicles, vehicle_drivers=vehicle_drivers, has_single_scope=has_single_scope, disable_project=disable_project, disable_district=disable_district, driver_history=driver_history)
 
 
 @app.route('/driver-attendance/bulk-off', methods=['GET', 'POST'])
 def driver_attendance_bulk_off():
-    """Bulk Off: Select District + Project + Date, mark all drivers of that project (in that district) as Off for the date."""
+    """Bulk Status: Select District + Project + Date range, mark drivers Off/Leave/Half-Day."""
     from auth_utils import get_user_context
     user_id = session.get('user_id')
     user_context = get_user_context(user_id) if user_id else {}
@@ -9596,20 +9631,29 @@ def driver_attendance_bulk_off():
         districts_q = districts_q.filter(District.id.in_(list(allowed_districts)))
     districts = districts_q.order_by(District.name).all()
 
-    view_date = _attendance_local_date()
+    today = _attendance_local_date()
+    view_date = today
     district_id = request.args.get('district_id', type=int) or request.form.get('district_id', type=int)
     project_id = request.args.get('project_id', type=int) or request.form.get('project_id', type=int)
-    if request.args.get('date'):
-        # Report kisi bhi date ke liye dekh sakte hain (including future)
-        view_date = parse_date(request.args.get('date')) or view_date
-    if request.form.get('bulk_off_date'):
-        # Form se aane wali date ko bhi direct view_date bana do (sirf list / confirmation ke liye)
-        view_date = parse_date(request.form.get('bulk_off_date')) or view_date
+
+    from_date_str = request.args.get('from_date') or request.args.get('date') or ''
+    to_date_str = request.args.get('to_date') or ''
+    from_date_parsed = parse_date(from_date_str) if from_date_str else None
+    to_date_parsed = parse_date(to_date_str) if to_date_str else None
+    if from_date_parsed:
+        view_date = from_date_parsed
+
+    if request.form.get('bulk_off_from_date'):
+        from_date_parsed = parse_date(request.form.get('bulk_off_from_date')) or today
+        view_date = from_date_parsed
+    if request.form.get('bulk_off_to_date'):
+        to_date_parsed = parse_date(request.form.get('bulk_off_to_date')) or from_date_parsed or today
+
     if district_id == 0:
         district_id = None
     if project_id == 0:
         project_id = None
-    # Auto-select & disable if only 1 option allowed
+
     disable_district = False
     disable_project = False
     if not is_master_or_admin:
@@ -9633,7 +9677,6 @@ def driver_attendance_bulk_off():
             proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
         projects = proj_q.order_by(Project.name).all()
 
-    # Drivers list: agar project/district select nahi bhi kiye, to bhi date ke liye complete list dikhao
     drivers_query = Driver.query.filter(
         Driver.status == 'Active',
         Driver.vehicle_id.isnot(None),
@@ -9657,13 +9700,61 @@ def driver_attendance_bulk_off():
     existing_att_ids = {a.driver_id for a in DriverAttendance.query.filter_by(attendance_date=view_date).all()}
     drivers = [d for d in all_drivers if d.id not in existing_att_ids]
 
+    # ── Undo handler ──
+    if request.method == 'POST' and request.form.get('undo_bulk'):
+        _audit_user = session.get('user', '')
+        undo_tag = f'Bulk [by {_audit_user}]' if _audit_user else 'Bulk'
+        recent = DriverAttendance.query.filter(
+            DriverAttendance.remarks.ilike(f'%{undo_tag}%'),
+            DriverAttendance.check_in.is_(None),
+        ).order_by(DriverAttendance.updated_at.desc()).limit(500).all()
+        if not recent:
+            recent = DriverAttendance.query.filter(
+                DriverAttendance.remarks.ilike('%Bulk%'),
+                DriverAttendance.check_in.is_(None),
+            ).order_by(DriverAttendance.updated_at.desc()).limit(500).all()
+        if recent:
+            last_ts = recent[0].updated_at
+            undo_count = 0
+            for r in recent:
+                if last_ts and r.updated_at and abs((last_ts - r.updated_at).total_seconds()) < 120:
+                    db.session.delete(r)
+                    undo_count += 1
+            try:
+                db.session.commit()
+                flash(f'{undo_count} bulk record(s) undo kar diye gaye.', 'success')
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Undo error: {str(e)}', 'danger')
+        else:
+            flash('Koi recent bulk action nahi mili undo karne ke liye.', 'warning')
+        return redirect(url_for('driver_attendance_bulk_off',
+                                from_date=view_date.strftime('%d-%m-%Y'),
+                                district_id=district_id or '', project_id=project_id or ''))
+
+    # ── Main bulk mark handler (date range + status choice) ──
     if request.method == 'POST' and request.form.get('confirm_bulk_off'):
-        if view_date > _attendance_local_date():
-            flash('Bulk Off cannot be applied for a future date.', 'danger')
+        bulk_status = request.form.get('bulk_status', 'Off').strip() or 'Off'
+        if bulk_status not in ('Off', 'Leave', 'Half-Day'):
+            bulk_status = 'Off'
+
+        start_d = from_date_parsed or view_date
+        end_d = to_date_parsed or start_d
+        if end_d < start_d:
+            end_d = start_d
+        if start_d > today:
+            flash('Future date ke liye Bulk status nahi laga sakte.', 'danger')
             return redirect(url_for('driver_attendance_bulk_off',
-                                    date=_attendance_local_date().strftime('%d-%m-%Y'),
-                                    district_id=district_id or '',
-                                    project_id=project_id or ''))
+                                    from_date=today.strftime('%d-%m-%Y'),
+                                    district_id=district_id or '', project_id=project_id or ''))
+        if end_d > today:
+            end_d = today
+        max_range = 30
+        if (end_d - start_d).days > max_range:
+            flash(f'Maximum {max_range} din ka range select kar sakte hain.', 'danger')
+            return redirect(url_for('driver_attendance_bulk_off',
+                                    from_date=start_d.strftime('%d-%m-%Y'), to_date=end_d.strftime('%d-%m-%Y'),
+                                    district_id=district_id or '', project_id=project_id or ''))
 
         selected_ids = set()
         for v in request.form.getlist('selected_drivers'):
@@ -9674,61 +9765,111 @@ def driver_attendance_bulk_off():
         if not selected_ids:
             flash('Kam az kam ek driver select karein.', 'warning')
             return redirect(url_for('driver_attendance_bulk_off',
-                                    date=view_date.strftime('%d-%m-%Y'),
-                                    district_id=district_id or '',
-                                    project_id=project_id or ''))
+                                    from_date=view_date.strftime('%d-%m-%Y'),
+                                    district_id=district_id or '', project_id=project_id or ''))
 
-        count = 0
-        skipped = 0
+        total_count = 0
+        total_skipped = 0
         _audit_user = session.get('user', '')
-        _bulk_tag = f'Bulk Off [by {_audit_user}]' if _audit_user else 'Bulk Off'
-        for d in all_drivers:
-            if d.id not in selected_ids:
-                continue
-            rec = DriverAttendance.query.filter_by(
-                driver_id=d.id,
-                attendance_date=view_date,
-            ).first()
-            if rec and rec.check_in is not None:
-                skipped += 1
-                continue
-            if rec:
-                rec.status = 'Off'
-                rec.check_in = None
-                rec.check_out = None
-                rec.check_out_date = None
-                rec.remarks = (rec.remarks or '').rstrip() + (' | ' + _bulk_tag if (rec.remarks or '').strip() else _bulk_tag)
-                rec.updated_at = pk_now()
-            else:
-                rec = DriverAttendance(
+        _bulk_tag = f'Bulk {bulk_status} [by {_audit_user}]' if _audit_user else f'Bulk {bulk_status}'
+        cur_d = start_d
+        while cur_d <= end_d:
+            for d in all_drivers:
+                if d.id not in selected_ids:
+                    continue
+                rec = DriverAttendance.query.filter_by(
                     driver_id=d.id,
-                    attendance_date=view_date,
-                    status='Off',
-                    project_id=d.project_id,
-                    remarks=_bulk_tag,
-                )
-                db.session.add(rec)
-            count += 1
+                    attendance_date=cur_d,
+                ).first()
+                if rec and rec.check_in is not None:
+                    total_skipped += 1
+                    continue
+                if rec:
+                    rec.status = bulk_status
+                    rec.check_in = None
+                    rec.check_out = None
+                    rec.check_out_date = None
+                    rec.remarks = (rec.remarks or '').rstrip() + (' | ' + _bulk_tag if (rec.remarks or '').strip() else _bulk_tag)
+                    rec.updated_at = pk_now()
+                else:
+                    rec = DriverAttendance(
+                        driver_id=d.id,
+                        attendance_date=cur_d,
+                        status=bulk_status,
+                        project_id=d.project_id,
+                        remarks=_bulk_tag,
+                    )
+                    db.session.add(rec)
+                total_count += 1
+            cur_d += timedelta(days=1)
         try:
             db.session.commit()
-            msg = f'{count} driver(s) ko {view_date.strftime("%d-%m-%Y")} ke liye Off mark kar diya gaya.'
-            if skipped:
-                msg += f' {skipped} driver(s) skip kiye gaye (GPS/Manual check-in already recorded).'
+            date_label = start_d.strftime('%d-%m-%Y')
+            if end_d != start_d:
+                date_label += f' to {end_d.strftime("%d-%m-%Y")}'
+            msg = f'{total_count} record(s) ko {date_label} ke liye {bulk_status} mark kar diya gaya.'
+            if total_skipped:
+                msg += f' {total_skipped} skip kiye gaye (GPS/Manual check-in already recorded).'
             flash(msg, 'success')
-            return redirect(url_for('driver_attendance_bulk_off', date=view_date.strftime('%d-%m-%Y'), district_id=district_id or '', project_id=project_id or ''))
+            return redirect(url_for('driver_attendance_bulk_off',
+                                    from_date=start_d.strftime('%d-%m-%Y'), to_date=end_d.strftime('%d-%m-%Y'),
+                                    district_id=district_id or '', project_id=project_id or ''))
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
+
+    # ── Build history log + last action for undo strip ──
+    last_bulk_action = None
+    bulk_history = []
+    _bulk_recs = DriverAttendance.query.filter(
+        DriverAttendance.remarks.ilike('%Bulk%'),
+    ).order_by(DriverAttendance.updated_at.desc()).limit(500).all()
+    if _bulk_recs:
+        from collections import defaultdict
+        _groups = defaultdict(lambda: {'count': 0, 'status': '', 'date': '', 'user': '', 'ts': None})
+        for br in _bulk_recs:
+            _rm = br.remarks or ''
+            _u = ''
+            if '[by ' in _rm:
+                _u = _rm.split('[by ')[-1].rstrip(']').strip()
+            _key = f'{br.attendance_date}|{br.status}|{_u}'
+            g = _groups[_key]
+            g['count'] += 1
+            g['status'] = br.status or 'Off'
+            g['date'] = br.attendance_date.strftime('%d-%m-%Y') if br.attendance_date else ''
+            g['user'] = _u or 'System'
+            if g['ts'] is None or (br.updated_at and br.updated_at > g['ts']):
+                g['ts'] = br.updated_at
+        _sorted = sorted(_groups.values(), key=lambda x: x['ts'] or datetime.min, reverse=True)
+        for i, g in enumerate(_sorted[:10]):
+            ago_str = ''
+            if g['ts']:
+                _delta = pk_now() - g['ts']
+                if _delta.days > 0:
+                    ago_str = f"{_delta.days}d ago"
+                elif _delta.seconds >= 3600:
+                    ago_str = f"{_delta.seconds // 3600}h ago"
+                else:
+                    ago_str = f"{max(1, _delta.seconds // 60)}m ago"
+            entry = {'count': g['count'], 'status': g['status'], 'date': g['date'], 'user': g['user'], 'ago': ago_str}
+            if i == 0:
+                last_bulk_action = entry
+            bulk_history.append(entry)
+
     return render_template(
         'driver_attendance_bulk_off.html',
         districts=districts,
         projects=projects,
         drivers=drivers,
         view_date=view_date,
+        from_date=from_date_str or view_date.strftime('%d-%m-%Y'),
+        to_date=to_date_str or view_date.strftime('%d-%m-%Y'),
         district_id=district_id,
         project_id=project_id,
         disable_district=disable_district,
         disable_project=disable_project,
+        last_bulk_action=last_bulk_action,
+        bulk_history=bulk_history,
     )
 
 
@@ -9989,6 +10130,26 @@ def driver_attendance_missing_checkout():
         if flt is not None:
             query = query.filter(flt)
     records = query.order_by(Driver.name).all()
+
+    if (request.args.get('export') or '').strip().lower() == 'excel':
+        headers = ['#', 'Project', 'District', 'Vehicle No', 'Vehicle Type', 'Shift', 'Driver', 'Driver ID', 'Check-in Time']
+        rows = []
+        for i, rec in enumerate(records, start=1):
+            d = rec.driver
+            rows.append([
+                i,
+                rec.project.name if rec.project else (d.project.name if d.project else ''),
+                d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else ''),
+                d.vehicle.vehicle_no if d.vehicle else '',
+                (d.vehicle.vehicle_type if d.vehicle and d.vehicle.vehicle_type else '') or '',
+                d.shift or '',
+                d.name,
+                d.driver_id or '',
+                rec.check_in.strftime('%H:%M') if rec.check_in else '',
+            ])
+        fn = f'missing_checkout_{view_date.strftime("%Y%m%d")}.xlsx'
+        return generate_excel_template(headers, rows, required_columns=[], filename=fn)
+
     return render_template(
         'driver_attendance_missing_checkout.html',
         form=form,
