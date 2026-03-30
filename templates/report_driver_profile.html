@@ -75,9 +75,15 @@
     font-size: 0.76rem; font-weight: 700; letter-spacing: 1.3px;
     backdrop-filter: blur(6px);
     box-shadow: 0 0 14px rgba(255,255,255,.12);
+    animation: badgePulse 2s ease-in-out infinite;
+  }
+  @keyframes badgePulse {
+    0%, 100% { box-shadow: 0 0 14px rgba(255,255,255,.12); }
+    50%      { box-shadow: 0 0 22px rgba(255,255,255,.35), 0 0 6px rgba(59,130,246,.4); }
   }
   .status-badge.left {
     background: rgba(239,68,68,.28); border-color: rgba(239,68,68,.55);
+    animation: none;
   }
 
   /* ── Stats row ── */
@@ -497,6 +503,85 @@
     font-size: .72rem; font-weight: 600; color: #dc2626;
     margin-top: .3rem; text-align: center;
   }
+  /* ── Copy button ── */
+  .copy-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #f3f4f6; color: var(--text-light); font-size: .62rem;
+    text-decoration: none; margin-left: .25rem; vertical-align: middle;
+    border: 1px solid var(--border); cursor: pointer;
+    transition: all .15s;
+  }
+  .copy-btn:hover { background: var(--brand-mid); color: #fff; border-color: var(--brand-mid); }
+  .copy-btn.copied { background: #10b981; color: #fff; border-color: #10b981; }
+  .wa-share-btn {
+    display: none; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #25d366; color: #fff; font-size: .62rem;
+    text-decoration: none; margin-left: .2rem; vertical-align: middle;
+    transition: transform .15s;
+  }
+  .wa-share-btn:hover { transform: scale(1.15); }
+  @media (max-width: 768px) { .wa-share-btn { display: inline-flex; } }
+  /* ── Scroll to top ── */
+  .scroll-top-btn {
+    position: fixed; bottom: 24px; right: 24px; z-index: 9990;
+    width: 42px; height: 42px; border-radius: 50%;
+    background: var(--brand); color: #fff; border: none;
+    font-size: 1.1rem; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(29,78,216,.35);
+    display: none; align-items: center; justify-content: center;
+    transition: opacity .2s, transform .2s;
+    opacity: 0; transform: translateY(10px);
+  }
+  .scroll-top-btn.visible { display: flex; opacity: 1; transform: translateY(0); }
+  .scroll-top-btn:hover { background: var(--brand-dark); transform: translateY(-2px); }
+  /* ── Image download overlay ── */
+  .doc-photo-thumb-wrap { position: relative; }
+  .doc-dl-btn {
+    position: absolute; top: 6px; left: 6px; z-index: 2;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: rgba(0,0,0,.55); color: #fff; border: none;
+    font-size: .65rem; cursor: pointer; display: flex;
+    align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .15s;
+  }
+  .doc-photo-thumb-wrap:hover .doc-dl-btn { opacity: 1; }
+  /* ── Quick actions dropdown ── */
+  .quick-actions-wrap { position: relative; display: none; }
+  @media (max-width: 768px) {
+    .quick-actions-wrap { display: inline-block; }
+    .desktop-actions { display: none !important; }
+  }
+  .qa-menu {
+    position: absolute; top: 100%; right: 0; z-index: 99;
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    min-width: 180px; padding: .4rem 0; display: none;
+  }
+  .qa-menu.open { display: block; }
+  .qa-menu a, .qa-menu button {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .5rem 1rem; width: 100%; border: none;
+    background: none; font-size: .82rem; color: var(--text-dark);
+    cursor: pointer; text-decoration: none; font-weight: 500;
+  }
+  .qa-menu a:hover, .qa-menu button:hover { background: var(--bg-subtle); }
+  /* ── Timeline fade-in ── */
+  .timeline-item { opacity: 0; transform: translateY(16px); transition: opacity .4s ease, transform .4s ease; }
+  .timeline-item.tl-visible { opacity: 1; transform: translateY(0); }
+  /* ── Assignment duration badge ── */
+  .assign-duration-badge {
+    display: inline-flex; align-items: center; gap: .25rem;
+    font-size: .68rem; font-weight: 600; color: #059669;
+    background: #ecfdf5; border: 1px solid #a7f3d0;
+    border-radius: 12px; padding: .12rem .5rem; margin-left: .4rem;
+  }
+  /* ── Last updated subtle line ── */
+  .header-updated {
+    font-size: .72rem; opacity: .65; margin-top: .15rem;
+  }
+  .header-updated i { margin-right: .2rem; }
 
   .pdf-page-break-before { /* no screen styles */ }
 
@@ -556,6 +641,7 @@
     .status-badge {
       font-size: .6rem !important; padding: .15rem .5rem !important;
       -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+      animation: none !important;
     }
     .stats-row {
       display: grid !important; grid-template-columns: repeat(5,1fr) !important;
@@ -573,7 +659,8 @@
     .svc-progress { height: 3px !important; margin-top: .2rem !important; }
     .emergency-warning { font-size: .55rem !important; padding: .15rem .3rem !important; }
     .doc-missing-note { font-size: .55rem !important; }
-    .save-contact-link { display: none !important; }
+    .save-contact-link, .copy-btn, .wa-share-btn, .doc-dl-btn, .scroll-top-btn, .quick-actions-wrap, .assign-duration-badge { display: none !important; }
+    .header-updated { display: none !important; }
     .section-card {
       display: block !important; box-shadow: none !important;
       background: #fff !important; border: 1px solid #e5e7eb !important;
@@ -671,29 +758,48 @@
   <!-- Action Bar — excluded from PDF/Print capture -->
   <div class="action-bar" id="profile-action-bar">
     <h4><i class="bi bi-person-badge me-2 text-primary"></i>Driver Profile</h4>
-    <div class="d-flex gap-2">
-      <a href="{{ ref if ref else url_for('drivers_list') }}" class="btn btn-outline-secondary btn-action">
+    <div class="d-flex gap-2 align-items-center">
+      <a href="{{ ref if ref else url_for('drivers_list') }}" class="btn btn-outline-secondary btn-action" id="backBtn">
         <i class="bi bi-arrow-left me-1"></i>Back
       </a>
       {% if not hide_edit %}
-      <a href="{{ url_for('driver_form', id=driver.id) }}" class="btn btn-outline-warning btn-action">
+      <a href="{{ url_for('driver_form', id=driver.id) }}" class="btn btn-outline-warning btn-action" id="editBtn">
         <i class="bi bi-pencil me-1"></i>Edit
       </a>
       {% endif %}
-      <button onclick="doPrint()" class="btn btn-outline-primary btn-action" id="printBtn">
-        <i class="bi bi-printer me-1"></i>Print
-      </button>
-      <button onclick="downloadPDF()" class="btn btn-outline-success btn-action" id="pdfBtn">
-        <i class="bi bi-file-earmark-pdf me-1"></i>PDF
-      </button>
-      <button onclick="downloadAsImages()" class="btn btn-outline-info btn-action" id="imagesBtn">
-        <i class="bi bi-images me-1"></i>Download Images
-      </button>
-      {% if driver.document_path %}
-      <a href="{{ driver.document_path | media_url }}" target="_blank" class="btn btn-outline-danger btn-action">
-        <i class="bi bi-file-earmark-pdf me-1"></i>Docs
-      </a>
-      {% endif %}
+      <div class="desktop-actions d-flex gap-2">
+        <button onclick="doPrint()" class="btn btn-outline-primary btn-action" id="printBtn">
+          <i class="bi bi-printer me-1"></i>Print
+        </button>
+        <button onclick="downloadPDF()" class="btn btn-outline-success btn-action" id="pdfBtn">
+          <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+        </button>
+        <button onclick="downloadAsImages()" class="btn btn-outline-info btn-action" id="imagesBtn">
+          <i class="bi bi-images me-1"></i>Download Images
+        </button>
+        {% if driver.document_path %}
+        <a href="{{ driver.document_path | media_url }}" target="_blank" class="btn btn-outline-danger btn-action">
+          <i class="bi bi-file-earmark-pdf me-1"></i>Docs
+        </a>
+        {% endif %}
+        <button onclick="shareProfile()" class="btn btn-outline-dark btn-action" title="Share">
+          <i class="bi bi-share me-1"></i>Share
+        </button>
+      </div>
+      <div class="quick-actions-wrap">
+        <button class="btn btn-outline-secondary btn-action" onclick="toggleQuickActions()" id="qaToggle">
+          <i class="bi bi-three-dots-vertical"></i>
+        </button>
+        <div class="qa-menu" id="qaMenu">
+          <button onclick="doPrint();closeQA();" id="printBtnM"><i class="bi bi-printer"></i> Print</button>
+          <button onclick="downloadPDF();closeQA();" id="pdfBtnM"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
+          <button onclick="downloadAsImages();closeQA();" id="imagesBtnM"><i class="bi bi-images"></i> Images</button>
+          {% if driver.document_path %}
+          <a href="{{ driver.document_path | media_url }}" target="_blank" onclick="closeQA();"><i class="bi bi-file-earmark-pdf"></i> Docs</a>
+          {% endif %}
+          <button onclick="shareProfile();closeQA();"><i class="bi bi-share"></i> Share</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -715,6 +821,7 @@
         <h2>{{ driver.name }}</h2>
         <p class="sub">ID: {{ driver.driver_id }}{% if driver.post %} &nbsp;|&nbsp; Post: {{ driver.post }}{% endif %}</p>
         <p class="sub">District: {{ driver.driver_district or '—' }}</p>
+        <p class="header-updated"><i class="bi bi-clock"></i>{% if last_action %}Last updated: {{ last_action|ddmmyyyy }}{% set upd_days = (today - last_action).days %} ({{ upd_days }} day{{ 's' if upd_days != 1 else '' }} ago){% else %}Created: {{ driver.created_at.strftime('%d-%m-%Y') if driver.created_at else '—' }}{% endif %}</p>
       </div>
     </div>
     <span class="status-badge {% if driver.status == 'Left' %}left{% endif %}">{{ (driver.status or 'Active')|upper }}</span>
@@ -780,11 +887,11 @@
       </div>
       <div class="info-item">
         <div class="info-label"><i class="bi bi-telephone-fill"></i> Phone No 1</div>
-        <div class="info-value">{% if driver.phone1 %}{% set p1_intl = '92' ~ driver.phone1|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.phone1 }}" class="tel-link">{{ driver.phone1|phone_fmt }}</a><a href="whatsapp://send?phone={{ p1_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><a href="{{ url_for('download_vcard', driver_id=driver.id) }}" class="save-contact-link" title="Save Contact"><i class="bi bi-person-plus-fill"></i></a>{% else %}—{% endif %}</div>
+        <div class="info-value">{% if driver.phone1 %}{% set p1_intl = '92' ~ driver.phone1|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.phone1 }}" class="tel-link">{{ driver.phone1|phone_fmt }}</a><a href="whatsapp://send?phone={{ p1_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><a href="{{ url_for('download_vcard', driver_id=driver.id) }}" class="save-contact-link" title="Save Contact"><i class="bi bi-person-plus-fill"></i></a><button class="copy-btn" title="Copy" onclick="copyText('{{ driver.phone1 }}',this)"><i class="bi bi-clipboard"></i></button><a href="whatsapp://send?phone={{ p1_intl }}&text={{ driver.phone1|urlencode }}" class="wa-share-btn" title="Share via WhatsApp"><i class="bi bi-send"></i></a>{% else %}—{% endif %}</div>
       </div>
       <div class="info-item">
         <div class="info-label"><i class="bi bi-telephone"></i> Phone No 2</div>
-        <div class="info-value">{% if driver.phone2 %}{% set p2_intl = '92' ~ driver.phone2|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.phone2 }}" class="tel-link">{{ driver.phone2|phone_fmt }}</a><a href="whatsapp://send?phone={{ p2_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><a href="{{ url_for('download_vcard', driver_id=driver.id) }}" class="save-contact-link" title="Save Contact"><i class="bi bi-person-plus-fill"></i></a>{% else %}—{% endif %}</div>
+        <div class="info-value">{% if driver.phone2 %}{% set p2_intl = '92' ~ driver.phone2|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.phone2 }}" class="tel-link">{{ driver.phone2|phone_fmt }}</a><a href="whatsapp://send?phone={{ p2_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><a href="{{ url_for('download_vcard', driver_id=driver.id) }}" class="save-contact-link" title="Save Contact"><i class="bi bi-person-plus-fill"></i></a><button class="copy-btn" title="Copy" onclick="copyText('{{ driver.phone2 }}',this)"><i class="bi bi-clipboard"></i></button><a href="whatsapp://send?phone={{ p2_intl }}&text={{ driver.phone2|urlencode }}" class="wa-share-btn" title="Share via WhatsApp"><i class="bi bi-send"></i></a>{% else %}—{% endif %}</div>
       </div>
       <div class="info-item">
         <div class="info-label"><i class="bi bi-mortarboard-fill"></i> Education</div>
@@ -808,6 +915,9 @@
         <div class="emergency-warning"><i class="bi bi-exclamation-circle-fill"></i> Please update emergency contact information</div>
         {% elif not driver.emergency_no %}
         <div class="emergency-warning"><i class="bi bi-exclamation-circle-fill"></i> Emergency phone number is missing</div>
+        {% endif %}
+        {% if driver.emergency_relation and driver.emergency_relation|lower == 'unknown' %}
+        <div class="emergency-warning"><i class="bi bi-exclamation-circle-fill"></i> Relation not defined — please update</div>
         {% endif %}
       </div>
     </div>
@@ -833,7 +943,7 @@
       </div>
       <div class="info-item">
         <div class="info-label"><i class="bi bi-calendar2-check"></i> Assigned Since</div>
-        <div class="info-value">{{ driver.assign_date|ddmmyyyy if driver.assign_date else '—' }}</div>
+        <div class="info-value">{{ driver.assign_date|ddmmyyyy if driver.assign_date else '—' }}{% if driver.assign_date %}{% set ad = (today - driver.assign_date).days %}{% set ay = ad // 365 %}{% set am = (ad % 365) // 30 %}{% set add = (ad % 365) % 30 %}<span class="assign-duration-badge"><i class="bi bi-clock"></i> {% if ay %}{{ ay }}y {% endif %}{% if am %}{{ am }}m {% endif %}{{ add }}d</span>{% endif %}</div>
       </div>
       <div class="info-item">
         <div class="info-label"><i class="bi bi-building"></i> Project</div>
@@ -963,7 +1073,7 @@
       </div>
       <div class="info-item">
         <div class="info-label"><i class="bi bi-credit-card-2-front"></i> Account No</div>
-        <div class="info-value">{{ driver.account_no or '—' }}</div>
+        <div class="info-value">{{ driver.account_no or '—' }}{% if driver.account_no %}<button class="copy-btn" title="Copy Bank Details" onclick="copyBankDetails(this)"><i class="bi bi-clipboard"></i></button><a href="whatsapp://send?text={{ ('Bank: ' ~ (driver.bank_name or '') ~ '\nTitle: ' ~ (driver.account_title or '') ~ '\nA/C: ' ~ (driver.account_no or ''))|urlencode }}" class="wa-share-btn" title="Share via WhatsApp"><i class="bi bi-send"></i></a>{% endif %}</div>
       </div>
       <div class="info-item" style="grid-column:1/-1;">
         <div class="info-label"><i class="bi bi-person-lines-fill"></i> Account Title</div>
@@ -1015,6 +1125,9 @@
       {% if doc_uploaded < doc_total %}
       <span class="doc-missing-note">{{ doc_total - doc_uploaded }} document{{ 's' if (doc_total - doc_uploaded) > 1 else '' }} missing</span>
       {% endif %}
+      {% if doc_uploaded > 0 %}
+      <button class="btn btn-sm btn-outline-primary ms-auto" onclick="downloadAllDocs()" style="font-size:.68rem;padding:.2rem .6rem;border-radius:6px;font-weight:600;white-space:nowrap;"><i class="bi bi-download me-1"></i>Download All</button>
+      {% endif %}
     </div>
     {% if _has_any_doc %}
     <div class="docs-photo-grid">
@@ -1025,9 +1138,10 @@
         <div class="doc-photo-item">
           <div class="doc-photo-label"><i class="bi bi-person-fill me-1"></i>Driver Photo</div>
           {% if driver.photo_path %}
-          <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.photo_path | media_url }}','Driver Photo')">
+          <div class="doc-photo-thumb-wrap" data-doc-url="{{ driver.photo_path | media_url }}" data-doc-name="Driver_Photo" onclick="openDocModal('{{ driver.photo_path | media_url }}','Driver Photo')">
             <img src="{{ driver.photo_path | media_url }}" alt="Driver Photo"
                  onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+            <button class="doc-dl-btn" onclick="event.stopPropagation();dlDoc(this)" title="Download"><i class="bi bi-download"></i></button>
             <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
           </div>
           {% else %}
@@ -1039,9 +1153,10 @@
         <div class="doc-photo-item">
           <div class="doc-photo-label"><i class="bi bi-person-vcard me-1"></i>CNIC Front</div>
           {% if driver.cnic_front_path %}
-          <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.cnic_front_path | media_url }}','CNIC Front')">
+          <div class="doc-photo-thumb-wrap" data-doc-url="{{ driver.cnic_front_path | media_url }}" data-doc-name="CNIC_Front" onclick="openDocModal('{{ driver.cnic_front_path | media_url }}','CNIC Front')">
             <img src="{{ driver.cnic_front_path | media_url }}" alt="CNIC Front"
                  onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+            <button class="doc-dl-btn" onclick="event.stopPropagation();dlDoc(this)" title="Download"><i class="bi bi-download"></i></button>
             <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
           </div>
           {% else %}
@@ -1053,9 +1168,10 @@
         <div class="doc-photo-item">
           <div class="doc-photo-label"><i class="bi bi-person-vcard-fill me-1"></i>CNIC Back</div>
           {% if driver.cnic_back_path %}
-          <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.cnic_back_path | media_url }}','CNIC Back')">
+          <div class="doc-photo-thumb-wrap" data-doc-url="{{ driver.cnic_back_path | media_url }}" data-doc-name="CNIC_Back" onclick="openDocModal('{{ driver.cnic_back_path | media_url }}','CNIC Back')">
             <img src="{{ driver.cnic_back_path | media_url }}" alt="CNIC Back"
                  onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+            <button class="doc-dl-btn" onclick="event.stopPropagation();dlDoc(this)" title="Download"><i class="bi bi-download"></i></button>
             <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
           </div>
           {% else %}
@@ -1070,9 +1186,10 @@
         <div class="doc-photo-item">
           <div class="doc-photo-label"><i class="bi bi-card-checklist me-1"></i>License Front</div>
           {% if driver.license_front_path %}
-          <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.license_front_path | media_url }}','License Front')">
+          <div class="doc-photo-thumb-wrap" data-doc-url="{{ driver.license_front_path | media_url }}" data-doc-name="License_Front" onclick="openDocModal('{{ driver.license_front_path | media_url }}','License Front')">
             <img src="{{ driver.license_front_path | media_url }}" alt="License Front"
                  onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+            <button class="doc-dl-btn" onclick="event.stopPropagation();dlDoc(this)" title="Download"><i class="bi bi-download"></i></button>
             <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
           </div>
           {% else %}
@@ -1084,9 +1201,10 @@
         <div class="doc-photo-item">
           <div class="doc-photo-label"><i class="bi bi-card-checklist me-1"></i>License Back</div>
           {% if driver.license_back_path %}
-          <div class="doc-photo-thumb-wrap" onclick="openDocModal('{{ driver.license_back_path | media_url }}','License Back')">
+          <div class="doc-photo-thumb-wrap" data-doc-url="{{ driver.license_back_path | media_url }}" data-doc-name="License_Back" onclick="openDocModal('{{ driver.license_back_path | media_url }}','License Back')">
             <img src="{{ driver.license_back_path | media_url }}" alt="License Back"
                  onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+            <button class="doc-dl-btn" onclick="event.stopPropagation();dlDoc(this)" title="Download"><i class="bi bi-download"></i></button>
             <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
           </div>
           {% else %}
@@ -1357,7 +1475,7 @@
     '#profile-content .profile-header h2 { font-size: 0.92rem !important; margin: 0 0 2px !important; line-height: 1.2 !important; }',
     '#profile-content .profile-header .sub { font-size: 0.61rem !important; margin: 0 !important; line-height: 1.2 !important; }',
     '#profile-content .photo-circle, #profile-content .photo-placeholder { width: 40px !important; height: 40px !important; font-size: 1.1rem !important; margin-right: 8px !important; }',
-    '#profile-content .status-badge { font-size: 0.53rem !important; padding: 2px 7px !important; top: 7px !important; right: 8px !important; }',
+    '#profile-content .status-badge { font-size: 0.53rem !important; padding: 2px 7px !important; top: 7px !important; right: 8px !important; animation: none !important; }',
 
     /* ── 3. Stats row — LARGE container → auto split; stat-box → avoid ── */
     '#profile-content .stats-row { display: block !important; margin-bottom: 5px !important; break-inside: auto !important; page-break-inside: auto !important; overflow: hidden !important; }',
@@ -1420,11 +1538,16 @@
 
     /* ── 9. Timeline — section auto; each item → avoid ── */
     '#profile-content .timeline { display: block !important; padding-left: 14px !important; position: relative !important; }',
-    '#profile-content .timeline-item { display: block !important; margin-bottom: 5px !important; break-inside: avoid !important; page-break-inside: avoid !important; }',
+    '#profile-content .timeline-item { display: block !important; margin-bottom: 5px !important; break-inside: avoid !important; page-break-inside: avoid !important; opacity: 1 !important; transform: none !important; transition: none !important; }',
     '#profile-content .timeline-date { font-size: 0.6rem !important; display: block !important; }',
     '#profile-content .timeline-card { display: block !important; padding: 4px 7px !important; border-radius: 0 4px 4px 0 !important; background: #fff !important; border: 1px solid #e5e7eb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
     '#profile-content .wa-link { display: none !important; }',
     '#profile-content .save-contact-link { display: none !important; }',
+    '#profile-content .copy-btn { display: none !important; }',
+    '#profile-content .wa-share-btn { display: none !important; }',
+    '#profile-content .doc-dl-btn { display: none !important; }',
+    '#profile-content .assign-duration-badge { display: none !important; }',
+    '#profile-content .header-updated { display: none !important; }',
     '#profile-content .license-age-badge { font-size: 0.6rem !important; padding: 1px 4px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
     '#profile-content .timeline-meta { display: flex !important; align-items: center !important; gap: 5px !important; margin-bottom: 2px !important; }',
     '#profile-content .timeline-duration { font-size: 0.52rem !important; padding: 1px 3px !important; }',
@@ -1715,7 +1838,7 @@
     var sg = setTimeout(function() {
       pb.disabled = false; pb.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
     }, 90000);
-    var fname = 'Driver_Profile_{{ driver.driver_id }}.pdf';
+    var fname = 'Driver_Profile_{{ driver.driver_id }}_{{ driver.name|replace(" ","_") }}.pdf';
     var opts = Object.assign({}, _PDF_OPTS, { filename: fname });
     _renderDoc(opts, 'blob', function(blob, err) {
       clearTimeout(sg);
@@ -1784,7 +1907,7 @@
     var sg = setTimeout(function() {
       btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
     }, 90000);
-    var fname = 'Driver_Profile_{{ driver.driver_id }}.pdf';
+    var fname = 'Driver_Profile_{{ driver.driver_id }}_{{ driver.name|replace(" ","_") }}.pdf';
     var opts = Object.assign({}, _PDF_OPTS, { filename: fname });
     if (window.FleetBridge && window.FleetBridge.isNative) {
       _renderDoc(opts, 'blob', function(blob, err) {
@@ -2080,9 +2203,146 @@
     Generated by FleetManager &nbsp;&bull;&nbsp; {{ driver.name }} ({{ driver.driver_id }}) &nbsp;&bull;&nbsp; <span id="pdfDate"></span>
   </div>
 
-  <!-- Save Contact is now handled via server-side /download-vcard/ endpoint -->
-
   </div><!-- /profile-content -->
+
+  <!-- Scroll to Top Button -->
+  <button class="scroll-top-btn" id="scrollTopBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+    <i class="bi bi-chevron-up"></i>
+  </button>
+
+  <script>
+  /* ── Copy text to clipboard ── */
+  function copyText(text, btn) {
+    navigator.clipboard.writeText(text).then(function() {
+      btn.classList.add('copied');
+      btn.innerHTML = '<i class="bi bi-check"></i>';
+      setTimeout(function() {
+        btn.classList.remove('copied');
+        btn.innerHTML = '<i class="bi bi-clipboard"></i>';
+      }, 1500);
+    }).catch(function() { alert('Copy failed'); });
+  }
+
+  /* ── Copy bank details (Bank Name + Account Title + Account No) ── */
+  function copyBankDetails(btn) {
+    var details = 'Bank: {{ driver.bank_name or "" }}\nTitle: {{ driver.account_title or "" }}\nA/C: {{ driver.account_no or "" }}';
+    navigator.clipboard.writeText(details).then(function() {
+      btn.classList.add('copied');
+      btn.innerHTML = '<i class="bi bi-check"></i>';
+      setTimeout(function() {
+        btn.classList.remove('copied');
+        btn.innerHTML = '<i class="bi bi-clipboard"></i>';
+      }, 1500);
+    }).catch(function() { alert('Copy failed'); });
+  }
+
+  /* ── Share profile ── */
+  function shareProfile() {
+    var url = '{{ profile_url }}';
+    var title = 'Driver Profile - {{ driver.name }} ({{ driver.driver_id }})';
+    if (navigator.share) {
+      navigator.share({ title: title, url: url }).catch(function(){});
+    } else {
+      navigator.clipboard.writeText(url).then(function() {
+        var t = document.createElement('div');
+        t.textContent = '✓ Link copied!';
+        t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:8px 18px;border-radius:8px;font-size:.82rem;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15);';
+        document.body.appendChild(t);
+        setTimeout(function() { t.remove(); }, 2000);
+      }).catch(function() { prompt('Copy this link:', url); });
+    }
+  }
+
+  /* ── Quick actions dropdown ── */
+  function toggleQuickActions() {
+    document.getElementById('qaMenu').classList.toggle('open');
+  }
+  function closeQA() {
+    document.getElementById('qaMenu').classList.remove('open');
+  }
+  document.addEventListener('click', function(e) {
+    var wrap = document.querySelector('.quick-actions-wrap');
+    if (wrap && !wrap.contains(e.target)) closeQA();
+  });
+
+  /* ── Scroll to top button ── */
+  (function() {
+    var btn = document.getElementById('scrollTopBtn');
+    var scrollEl = document.scrollingElement || document.documentElement;
+    function checkScroll() {
+      var pct = window.scrollY / (scrollEl.scrollHeight - window.innerHeight);
+      if (pct > 0.3) { btn.classList.add('visible'); }
+      else { btn.classList.remove('visible'); }
+    }
+    window.addEventListener('scroll', checkScroll, { passive: true });
+    checkScroll();
+  })();
+
+  /* ── Keyboard shortcuts ── */
+  document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var k = e.key.toLowerCase();
+    if (k === 'b') { var bb = document.getElementById('backBtn'); if (bb) bb.click(); }
+    else if (k === 'e') { var eb = document.getElementById('editBtn'); if (eb) eb.click(); }
+    else if (k === 'p') { e.preventDefault(); doPrint(); }
+  });
+
+  /* ── Timeline fade-in on scroll ── */
+  (function() {
+    var items = document.querySelectorAll('.timeline-item');
+    if (!items.length) return;
+    if ('IntersectionObserver' in window) {
+      var obs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('tl-visible');
+            obs.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.15 });
+      items.forEach(function(el) { obs.observe(el); });
+    } else {
+      items.forEach(function(el) { el.classList.add('tl-visible'); });
+    }
+  })();
+
+  /* ── Download single document image ── */
+  function dlDoc(btn) {
+    var wrap = btn.closest('.doc-photo-thumb-wrap');
+    var url = wrap.getAttribute('data-doc-url');
+    var name = wrap.getAttribute('data-doc-name') || 'document';
+    var fname = '{{ driver.driver_id }}_' + name;
+    var a = document.createElement('a');
+    a.href = url; a.download = fname; a.target = '_blank';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+
+  /* ── Download all documents ── */
+  function downloadAllDocs() {
+    var wraps = document.querySelectorAll('.doc-photo-thumb-wrap[data-doc-url]');
+    var delay = 0;
+    wraps.forEach(function(w) {
+      setTimeout(function() {
+        var a = document.createElement('a');
+        a.href = w.getAttribute('data-doc-url');
+        a.download = '{{ driver.driver_id }}_' + (w.getAttribute('data-doc-name') || 'doc');
+        a.target = '_blank';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      }, delay);
+      delay += 400;
+    });
+    {% if driver.document_path %}
+    setTimeout(function() {
+      var a = document.createElement('a');
+      a.href = '{{ driver.document_path | media_url }}';
+      a.download = '{{ driver.driver_id }}_Complete_File';
+      a.target = '_blank';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }, delay);
+    {% endif %}
+  }
+  </script>
 
 </div>
 {% endblock %}
