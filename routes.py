@@ -139,7 +139,7 @@ def require_login():
     endpoint = request.endpoint or ''
     if endpoint.startswith('static'):
         return
-    if endpoint in ('login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init', 'app_check_update'):
+    if endpoint in ('login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init', 'app_check_update', 'debug_fcm_status'):
         return
     if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
         return
@@ -710,6 +710,53 @@ def app_check_update():
         'apk_filename': latest.apk_filename,
         'force_update': latest.force_update,
     })
+
+
+@app.route('/api/debug/fcm-status')
+def debug_fcm_status():
+    """Temporary diagnostic: check Firebase + token status."""
+    import json as _json
+    result = {}
+
+    # 1. Check Firebase init
+    try:
+        from push_notifications import _init_firebase
+        fb = _init_firebase()
+        result['firebase_initialized'] = fb is not None
+    except Exception as e:
+        result['firebase_initialized'] = False
+        result['firebase_error'] = str(e)
+
+    # 2. Check env var
+    env_val = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON', '')
+    result['env_var_set'] = bool(env_val)
+    result['env_var_length'] = len(env_val)
+    if env_val:
+        try:
+            parsed = _json.loads(env_val)
+            result['env_var_valid_json'] = True
+            result['env_var_project_id'] = parsed.get('project_id', '?')
+        except Exception:
+            result['env_var_valid_json'] = False
+
+    # 3. Check file
+    sa_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'firebase-service-account.json')
+    result['file_exists'] = os.path.exists(sa_path)
+
+    # 4. Token counts
+    total = DeviceFCMToken.query.count()
+    active = DeviceFCMToken.query.filter_by(is_active=True).count()
+    result['total_tokens'] = total
+    result['active_tokens'] = active
+
+    # 5. List active tokens (truncated)
+    tokens = DeviceFCMToken.query.filter_by(is_active=True).all()
+    result['token_details'] = [
+        {'user_id': t.user_id, 'device': t.device_unique_id, 'token_prefix': t.fcm_token[:20] + '...', 'updated': str(t.updated_at)}
+        for t in tokens
+    ]
+
+    return jsonify(result)
 
 
 @app.route('/admin/app-releases', methods=['GET', 'POST'])
