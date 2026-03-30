@@ -82,50 +82,69 @@
 
   /* ── Stats row ── */
   .stats-row {
-    display: grid; grid-template-columns: repeat(4,1fr);
-    gap: 0.85rem; margin-bottom: 0.85rem;
+    display: grid; grid-template-columns: repeat(5,1fr);
+    gap: 0.75rem; margin-bottom: 1rem;
   }
   .stat-box {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-top: 3px solid var(--brand-mid);
-    border-radius: 10px;
-    padding: 1rem 1.25rem;
+    border-radius: 12px;
+    padding: 1rem 1rem;
     text-align: center;
-    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+    position: relative;
+    overflow: hidden;
+    transition: transform .15s, box-shadow .15s;
   }
+  .stat-box:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+  .stat-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 3px; border-radius: 12px 12px 0 0;
+  }
+  .stat-box.sb-actions::before { background: var(--brand-mid); }
+  .stat-box.sb-appdate::before { background: #10b981; }
+  .stat-box.sb-service::before { background: #f59e0b; }
+  .stat-box.sb-transfers::before { background: #8b5cf6; }
+  .stat-box.sb-lastact::before  { background: #ef4444; }
   .stat-box .stat-icon {
-    font-size: 1.15rem; color: var(--brand-mid);
-    margin-bottom: .3rem; display: block;
+    font-size: 1.3rem; margin-bottom: .35rem; display: block;
   }
+  .stat-box.sb-actions .stat-icon  { color: var(--brand-mid); }
+  .stat-box.sb-appdate .stat-icon  { color: #10b981; }
+  .stat-box.sb-service .stat-icon  { color: #f59e0b; }
+  .stat-box.sb-transfers .stat-icon{ color: #8b5cf6; }
+  .stat-box.sb-lastact .stat-icon  { color: #ef4444; }
   .stat-box .stat-label {
-    font-size: .65rem; text-transform: uppercase; letter-spacing: .8px;
-    color: var(--text-light); font-weight: 600; margin-bottom: .25rem;
+    font-size: .62rem; text-transform: uppercase; letter-spacing: .8px;
+    color: var(--text-light); font-weight: 600; margin-bottom: .2rem;
   }
-  .stat-box .stat-value { font-size: 1.2rem; font-weight: 700; color: var(--brand); }
+  .stat-box .stat-value { font-size: 1.15rem; font-weight: 700; color: var(--text-dark); }
+  .stat-box .stat-sub { font-size: .62rem; color: var(--text-light); font-weight: 500; margin-top: .15rem; }
+  .svc-progress { height: 4px; background: #e5e7eb; border-radius: 2px; margin-top: .4rem; overflow: hidden; }
+  .svc-progress-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #f59e0b, #fbbf24); transition: width .5s; }
 
   /* ── Section cards ── */
   .section-card {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1.5rem;
-    margin-bottom: 0.85rem;
-    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    border-radius: 12px;
+    padding: 1.6rem 1.7rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,.035);
   }
 
   /* ── Section header (icon badge + label + rule) ── */
   .section-title {
-    display: flex; align-items: center; gap: .55rem;
-    font-size: .68rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 1.1px;
+    display: flex; align-items: center; gap: .6rem;
+    font-size: .74rem; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 1.2px;
     color: var(--text-dark);
-    border-bottom: 1.5px solid #eef2ff;
-    padding-bottom: .65rem;
-    margin-bottom: 1rem;
+    border-bottom: 2px solid #eef2ff;
+    padding-bottom: .7rem;
+    margin-bottom: 1.1rem;
   }
   .section-icon {
-    width: 26px; height: 26px; border-radius: 7px;
+    width: 28px; height: 28px; border-radius: 7px;
     background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand-mid) 100%);
     display: flex; align-items: center; justify-content: center;
     font-size: .75rem; color: #fff; flex-shrink: 0;
@@ -133,14 +152,14 @@
   }
 
   /* ── Info grid ── */
-  .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .85rem 1.5rem; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem 1.6rem; }
   .info-grid-2col { grid-template-columns: 1fr 1fr; }
   .info-item .info-label {
     font-size: .63rem; color: var(--text-light); font-weight: 600;
     text-transform: uppercase; letter-spacing: .5px; margin-bottom: .18rem;
     display: flex; align-items: center; gap: .3rem;
   }
-  .info-item .info-label i { font-size: .7rem; color: var(--brand-mid); }
+  .info-item .info-label i { font-size: .72rem; color: var(--brand-mid); width: 14px; text-align: center; }
   .info-item .info-value { font-size: .88rem; color: var(--text-dark); font-weight: 600; }
   .info-value a.tel-link {
     color: var(--brand); text-decoration: none;
@@ -284,10 +303,21 @@
   /* ── Uniform box ── */
   .uniform-box {
     background: #f8fafc; border: 1px solid var(--border);
-    border-radius: 6px; padding: .65rem 1rem;
+    border-radius: 8px; padding: .85rem 1rem;
     font-size: .875rem; color: var(--text-mid);
-    margin-top: .75rem;
+    margin-top: .85rem;
   }
+  .uniform-row { display: flex; gap: 1.2rem; align-items: center; flex-wrap: wrap; }
+  .uniform-item { display: flex; align-items: center; gap: .35rem; }
+  .uniform-item .u-emoji { font-size: 1.1rem; }
+  .uniform-item .u-label { font-size: .72rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: .3px; }
+  .size-badge {
+    display: inline-block; font-size: .72rem; font-weight: 700;
+    padding: .15rem .5rem; border-radius: 12px; margin-left: .2rem;
+  }
+  .size-badge-shirt  { background: #dbeafe; color: #1d4ed8; }
+  .size-badge-trouser{ background: #fef3c7; color: #92400e; }
+  .size-badge-jacket { background: #ede9fe; color: #6d28d9; }
 
   /* ── Job history summary badges ── */
   .jh-summary {
@@ -435,9 +465,12 @@
   .doc-photo-missing {
     height: 190px; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: .4rem; color: #9ca3af; font-size: .78rem;
+    gap: .4rem; color: #dc2626; font-size: .75rem; font-weight: 600;
+    border: 2px dashed #fca5a5;
+    border-radius: 8px;
+    background: #fef2f2;
   }
-  .doc-photo-missing i { font-size: 1.8rem; }
+  .doc-photo-missing i { font-size: 1.8rem; color: #ef4444; }
   .doc-pdf-wrap {
     height: 190px; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: .5rem;
@@ -447,14 +480,28 @@
 
   /* ── Assignment tag ── */
   .current-tag {
-    display: inline-block; background: #dbeafe; color: var(--brand);
-    border-radius: 4px; padding: .14rem .5rem; font-size: .7rem; font-weight: 600;
+    display: inline-block; border-radius: 4px; padding: .14rem .5rem; font-size: .7rem; font-weight: 600;
+  }
+  .shift-morning { background: #e0f2fe; color: #0369a1; }
+  .shift-night   { background: #1e3a5f; color: #93c5fd; }
+  .shift-default { background: #dbeafe; color: var(--brand); }
+  .emergency-warning {
+    grid-column: 1 / -1; display: flex; align-items: center; gap: .4rem;
+    background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px;
+    padding: .45rem .75rem; font-size: .72rem; font-weight: 600; color: #c2410c;
+    margin-top: .2rem;
+  }
+  .emergency-warning i { font-size: .85rem; }
+  .relation-unknown { color: #ea580c; font-weight: 700; }
+  .doc-missing-note {
+    font-size: .72rem; font-weight: 600; color: #dc2626;
+    margin-top: .3rem; text-align: center;
   }
 
   .pdf-page-break-before { /* no screen styles */ }
 
   @media (max-width: 768px) {
-    .stats-row { grid-template-columns: repeat(2,1fr); }
+    .stats-row { grid-template-columns: repeat(3,1fr); }
     .info-grid  { grid-template-columns: 1fr 1fr; }
     .doc-grid   { grid-template-columns: 1fr; }
     .docs-photo-grid .photo-row { grid-template-columns: repeat(2,1fr); }
@@ -511,15 +558,22 @@
       -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }
     .stats-row {
-      display: grid !important; grid-template-columns: repeat(4,1fr) !important;
+      display: grid !important; grid-template-columns: repeat(5,1fr) !important;
       gap: .25rem !important; margin-bottom: .25rem !important;
     }
     .stat-box {
       display: block !important; box-shadow: none !important;
       background: #fff !important; border: 1px solid #e5e7eb !important; padding: .25rem .4rem !important;
     }
+    .stat-box:hover { transform: none !important; }
+    .stat-box::before { display: none !important; }
     .stat-box .stat-label { font-size: .58rem !important; margin-bottom: .08rem !important; }
     .stat-box .stat-value { font-size: .82rem !important; }
+    .stat-box .stat-sub  { font-size: .52rem !important; }
+    .svc-progress { height: 3px !important; margin-top: .2rem !important; }
+    .emergency-warning { font-size: .55rem !important; padding: .15rem .3rem !important; }
+    .doc-missing-note { font-size: .55rem !important; }
+    .save-contact-link { display: none !important; }
     .section-card {
       display: block !important; box-shadow: none !important;
       background: #fff !important; border: 1px solid #e5e7eb !important;
@@ -668,30 +722,40 @@
 
   <!-- Stats Row -->
   <div class="stats-row">
-    <div class="stat-box">
+    <div class="stat-box sb-actions">
       <i class="bi bi-activity stat-icon"></i>
       <div class="stat-label">Total Actions</div>
       <div class="stat-value">{{ total_actions }}</div>
     </div>
-    <div class="stat-box">
+    <div class="stat-box sb-appdate">
       <i class="bi bi-calendar-check stat-icon"></i>
       <div class="stat-label">Application Date</div>
-      <div class="stat-value" style="font-size:1rem;">{{ driver.application_date|ddmmyyyy if driver.application_date else '—' }}</div>
+      <div class="stat-value" style="font-size:.95rem;">{{ driver.application_date|ddmmyyyy if driver.application_date else '—' }}</div>
     </div>
-    <div class="stat-box">
+    <div class="stat-box sb-service">
       <i class="bi bi-hourglass-split stat-icon"></i>
       <div class="stat-label">Service Duration</div>
-      <div class="stat-value" style="font-size:1rem;">
+      <div class="stat-value" style="font-size:.95rem;">
         {% if service_days is not none %}
           {% set sy = service_days // 365 %}{% set sm = (service_days % 365) // 30 %}{% set sd = (service_days % 365) % 30 %}
           {% if sy %}{{ sy }}y {% endif %}{% if sm %}{{ sm }}m {% endif %}{{ sd }}d
         {% else %}—{% endif %}
       </div>
+      {% if service_days is not none %}
+      {% set svc_pct = [((service_days / 1825) * 100)|int, 100]|min %}
+      <div class="svc-progress"><div class="svc-progress-fill" style="width:{{ svc_pct }}%;"></div></div>
+      {% endif %}
     </div>
-    <div class="stat-box">
+    <div class="stat-box sb-transfers">
+      <i class="bi bi-arrow-left-right stat-icon"></i>
+      <div class="stat-label">Total Transfers</div>
+      <div class="stat-value">{{ jh_counts.transfer }}</div>
+    </div>
+    <div class="stat-box sb-lastact">
       <i class="bi bi-clock-history stat-icon"></i>
       <div class="stat-label">Last Action</div>
-      <div class="stat-value" style="font-size:1rem;">{{ last_action|ddmmyyyy if last_action else '—' }}</div>
+      <div class="stat-value" style="font-size:.95rem;">{{ last_action|ddmmyyyy if last_action else '—' }}</div>
+      {% if last_action_type %}<div class="stat-sub">{{ last_action_type }}</div>{% endif %}
     </div>
   </div>
 
@@ -716,11 +780,11 @@
       </div>
       <div class="info-item">
         <div class="info-label"><i class="bi bi-telephone-fill"></i> Phone No 1</div>
-        <div class="info-value">{% if driver.phone1 %}{% set p1_intl = '92' ~ driver.phone1|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.phone1 }}" class="tel-link">{{ driver.phone1|phone_fmt }}</a><a href="whatsapp://send?phone={{ p1_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><a href="#" class="save-contact-link" title="Save Contact" onclick="event.preventDefault();saveContact('{{ driver.phone1 }}','{{ driver.name }}');"><i class="bi bi-person-plus-fill"></i></a>{% else %}—{% endif %}</div>
+        <div class="info-value">{% if driver.phone1 %}{% set p1_intl = '92' ~ driver.phone1|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.phone1 }}" class="tel-link">{{ driver.phone1|phone_fmt }}</a><a href="whatsapp://send?phone={{ p1_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><a href="{{ url_for('download_vcard', driver_id=driver.id) }}" class="save-contact-link" title="Save Contact"><i class="bi bi-person-plus-fill"></i></a>{% else %}—{% endif %}</div>
       </div>
       <div class="info-item">
         <div class="info-label"><i class="bi bi-telephone"></i> Phone No 2</div>
-        <div class="info-value">{% if driver.phone2 %}{% set p2_intl = '92' ~ driver.phone2|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.phone2 }}" class="tel-link">{{ driver.phone2|phone_fmt }}</a><a href="whatsapp://send?phone={{ p2_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><a href="#" class="save-contact-link" title="Save Contact" onclick="event.preventDefault();saveContact('{{ driver.phone2 }}','{{ driver.name }}');"><i class="bi bi-person-plus-fill"></i></a>{% else %}—{% endif %}</div>
+        <div class="info-value">{% if driver.phone2 %}{% set p2_intl = '92' ~ driver.phone2|replace('-','')|replace(' ','')|replace('0','',1) %}<a href="tel:{{ driver.phone2 }}" class="tel-link">{{ driver.phone2|phone_fmt }}</a><a href="whatsapp://send?phone={{ p2_intl }}" class="wa-link" title="WhatsApp"><i class="bi bi-whatsapp"></i></a><a href="{{ url_for('download_vcard', driver_id=driver.id) }}" class="save-contact-link" title="Save Contact"><i class="bi bi-person-plus-fill"></i></a>{% else %}—{% endif %}</div>
       </div>
       <div class="info-item">
         <div class="info-label"><i class="bi bi-mortarboard-fill"></i> Education</div>
@@ -738,8 +802,13 @@
         </div>
         <div class="info-item">
           <div class="info-label"><i class="bi bi-people-fill"></i> Relation</div>
-          <div class="info-value">{{ driver.emergency_relation or '—' }}</div>
+          <div class="info-value">{% if driver.emergency_relation and driver.emergency_relation|lower == 'unknown' %}<span class="relation-unknown">{{ driver.emergency_relation }} ⚠</span>{% else %}{{ driver.emergency_relation or '—' }}{% endif %}</div>
         </div>
+        {% if not driver.emergency_no and not driver.emergency_relation %}
+        <div class="emergency-warning"><i class="bi bi-exclamation-circle-fill"></i> Please update emergency contact information</div>
+        {% elif not driver.emergency_no %}
+        <div class="emergency-warning"><i class="bi bi-exclamation-circle-fill"></i> Emergency phone number is missing</div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -758,7 +827,7 @@
           {% if driver.vehicle %}
             <strong>{{ driver.vehicle.vehicle_no }}</strong>
             {% if driver.vehicle.vehicle_type %}<span class="text-muted">({{ driver.vehicle.vehicle_type }})</span>{% endif %}
-            &nbsp;<span class="current-tag">{{ driver.shift or '' }} Shift</span>
+            &nbsp;<span class="current-tag {% if driver.shift and driver.shift|lower == 'morning' %}shift-morning{% elif driver.shift and driver.shift|lower == 'night' %}shift-night{% else %}shift-default{% endif %}">{% if driver.shift and driver.shift|lower == 'morning' %}🌤 {% elif driver.shift and driver.shift|lower == 'night' %}🌙 {% endif %}{{ driver.shift or '' }} Shift</span>
           {% else %}—{% endif %}
         </div>
       </div>
@@ -903,12 +972,24 @@
     </div>
     {% if driver.shirt_size or driver.trouser_size or driver.jacket_size %}
     <div class="uniform-box mt-3">
-      <span class="text-muted" style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Uniform Sizes</span><br>
-      <span><strong>Shirt:</strong> {{ driver.shirt_size or '—' }}</span>
-      &nbsp;•&nbsp;
-      <span><strong>Trouser:</strong> {{ driver.trouser_size or '—' }}</span>
-      &nbsp;•&nbsp;
-      <span><strong>Jacket:</strong> {{ driver.jacket_size or '—' }}</span>
+      <span class="text-muted" style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;display:block;margin-bottom:.5rem;">Uniform Sizes</span>
+      <div class="uniform-row">
+        <div class="uniform-item">
+          <span class="u-emoji">👕</span>
+          <span class="u-label">Shirt</span>
+          {% if driver.shirt_size %}<span class="size-badge size-badge-shirt">{{ driver.shirt_size }}</span>{% else %}<span class="text-muted" style="font-size:.78rem;">—</span>{% endif %}
+        </div>
+        <div class="uniform-item">
+          <span class="u-emoji">👖</span>
+          <span class="u-label">Trouser</span>
+          {% if driver.trouser_size %}<span class="size-badge size-badge-trouser">{{ driver.trouser_size }}</span>{% else %}<span class="text-muted" style="font-size:.78rem;">—</span>{% endif %}
+        </div>
+        <div class="uniform-item">
+          <span class="u-emoji">🧥</span>
+          <span class="u-label">Jacket</span>
+          {% if driver.jacket_size %}<span class="size-badge size-badge-jacket">{{ driver.jacket_size }}</span>{% else %}<span class="text-muted" style="font-size:.78rem;">—</span>{% endif %}
+        </div>
+      </div>
     </div>
     {% endif %}
   </div>
@@ -931,6 +1012,9 @@
         <div class="dc-bar-fill {{ dc_level }}" style="width:{{ dc_pct }}%;"></div>
       </div>
       <span class="dc-count {{ dc_level }}">{{ doc_uploaded }}/{{ doc_total }}</span>
+      {% if doc_uploaded < doc_total %}
+      <span class="doc-missing-note">{{ doc_total - doc_uploaded }} document{{ 's' if (doc_total - doc_uploaded) > 1 else '' }} missing</span>
+      {% endif %}
     </div>
     {% if _has_any_doc %}
     <div class="docs-photo-grid">
@@ -947,7 +1031,7 @@
             <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
           </div>
           {% else %}
-          <div class="doc-photo-missing"><i class="bi bi-person-bounding-box"></i><span>Not Uploaded</span></div>
+          <div class="doc-photo-missing"><i class="bi bi-cloud-arrow-up"></i><span>❌ Not Uploaded</span></div>
           {% endif %}
         </div>
 
@@ -961,7 +1045,7 @@
             <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
           </div>
           {% else %}
-          <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
+          <div class="doc-photo-missing"><i class="bi bi-cloud-arrow-up"></i><span>❌ Not Uploaded</span></div>
           {% endif %}
         </div>
 
@@ -975,7 +1059,7 @@
             <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
           </div>
           {% else %}
-          <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
+          <div class="doc-photo-missing"><i class="bi bi-cloud-arrow-up"></i><span>❌ Not Uploaded</span></div>
           {% endif %}
         </div>
       </div><!-- /photo-row 1 -->
@@ -992,7 +1076,7 @@
             <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
           </div>
           {% else %}
-          <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
+          <div class="doc-photo-missing"><i class="bi bi-cloud-arrow-up"></i><span>❌ Not Uploaded</span></div>
           {% endif %}
         </div>
 
@@ -1006,7 +1090,7 @@
             <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
           </div>
           {% else %}
-          <div class="doc-photo-missing"><i class="bi bi-card-image"></i><span>Not Uploaded</span></div>
+          <div class="doc-photo-missing"><i class="bi bi-cloud-arrow-up"></i><span>❌ Not Uploaded</span></div>
           {% endif %}
         </div>
 
@@ -1021,7 +1105,7 @@
             </a>
           </div>
           {% else %}
-          <div class="doc-photo-missing"><i class="bi bi-file-earmark-x"></i><span>Not Uploaded</span></div>
+          <div class="doc-photo-missing"><i class="bi bi-cloud-arrow-up"></i><span>❌ Not Uploaded</span></div>
           {% endif %}
         </div>
       </div><!-- /photo-row 2 -->
@@ -1277,10 +1361,16 @@
 
     /* ── 3. Stats row — LARGE container → auto split; stat-box → avoid ── */
     '#profile-content .stats-row { display: block !important; margin-bottom: 5px !important; break-inside: auto !important; page-break-inside: auto !important; overflow: hidden !important; }',
-    '#profile-content .stat-box { float: left !important; width: 23% !important; margin-right: 2% !important; padding: 5px 8px !important; text-align: center !important; box-shadow: none !important; border-radius: 5px !important; border: 1px solid #e5e7eb !important; border-top: 2px solid #3b82f6 !important; background: #fff !important; break-inside: avoid !important; page-break-inside: avoid !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
-    '#profile-content .stat-box .stat-icon { font-size: 0.72rem !important; margin-bottom: 2px !important; display: block !important; }',
-    '#profile-content .stat-box .stat-label { font-size: 0.52rem !important; margin-bottom: 1px !important; color: #6b7280 !important; display: block !important; }',
-    '#profile-content .stat-box .stat-value { font-size: 0.8rem !important; color: #1d4ed8 !important; display: block !important; }',
+    '#profile-content .stat-box { float: left !important; width: 18% !important; margin-right: 1.5% !important; padding: 5px 6px !important; text-align: center !important; box-shadow: none !important; border-radius: 5px !important; border: 1px solid #e5e7eb !important; background: #fff !important; break-inside: avoid !important; page-break-inside: avoid !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .stat-box::before { display: none !important; }',
+    '#profile-content .stat-box:hover { transform: none !important; }',
+    '#profile-content .stat-box .stat-icon { font-size: 0.68rem !important; margin-bottom: 2px !important; display: block !important; }',
+    '#profile-content .stat-box .stat-label { font-size: 0.48rem !important; margin-bottom: 1px !important; color: #6b7280 !important; display: block !important; }',
+    '#profile-content .stat-box .stat-value { font-size: 0.75rem !important; color: #111827 !important; display: block !important; }',
+    '#profile-content .stat-box .stat-sub { font-size: 0.48rem !important; display: block !important; }',
+    '#profile-content .svc-progress { height: 3px !important; margin-top: 2px !important; }',
+    '#profile-content .emergency-warning { font-size: 0.52rem !important; padding: 2px 5px !important; }',
+    '#profile-content .doc-missing-note { font-size: 0.52rem !important; }',
 
     /* ── 4. Section cards — LARGE container → auto; 5 px margin, 12 px pad ── */
     '#profile-content .section-card { display: block !important; padding: 12px !important; margin-bottom: 5px !important; box-shadow: none !important; border-radius: 5px !important; border: 1px solid #e5e7eb !important; background: #fff !important; break-inside: auto !important; page-break-inside: auto !important; overflow: visible !important; }',
@@ -1322,6 +1412,11 @@
 
     /* ── 8. Uniform box → avoid (small leaf) ── */
     '#profile-content .uniform-box { clear: both !important; padding: 4px 8px !important; margin-top: 6px !important; font-size: 0.68rem !important; background: #f8fafc !important; border: 1px solid #e5e7eb !important; break-inside: avoid !important; page-break-inside: avoid !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .uniform-row { display: flex !important; gap: 8px !important; flex-wrap: wrap !important; }',
+    '#profile-content .uniform-item { display: flex !important; align-items: center !important; gap: 3px !important; }',
+    '#profile-content .uniform-item .u-emoji { font-size: 0.8rem !important; }',
+    '#profile-content .uniform-item .u-label { font-size: 0.52rem !important; }',
+    '#profile-content .size-badge { font-size: 0.54rem !important; padding: 1px 4px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
 
     /* ── 9. Timeline — section auto; each item → avoid ── */
     '#profile-content .timeline { display: block !important; padding-left: 14px !important; position: relative !important; }',
@@ -1349,7 +1444,8 @@
     '#profile-content .doc-photo-label { display: block !important; background: #f3f4f6 !important; color: #374151 !important; font-size: 0.56rem !important; padding: 3px 5px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
     '#profile-content .doc-photo-thumb-wrap { display: block !important; height: 110px !important; overflow: hidden !important; }',
     '#profile-content .doc-photo-thumb-wrap img { display: block !important; width: 100% !important; height: 110px !important; object-fit: cover !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
-    '#profile-content .doc-photo-missing { display: flex !important; height: 80px !important; font-size: 0.58rem !important; }',
+    '#profile-content .doc-photo-missing { display: flex !important; height: 80px !important; font-size: 0.52rem !important; border: 1.5px dashed #fca5a5 !important; background: #fef2f2 !important; color: #dc2626 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+    '#profile-content .doc-photo-missing i { color: #ef4444 !important; font-size: 1rem !important; }',
     '#profile-content .doc-pdf-wrap { display: flex !important; height: 80px !important; font-size: 0.58rem !important; }',
 
     /* ── 12. Job History section — LARGE container → auto split ── */
@@ -1984,26 +2080,7 @@
     Generated by FleetManager &nbsp;&bull;&nbsp; {{ driver.name }} ({{ driver.driver_id }}) &nbsp;&bull;&nbsp; <span id="pdfDate"></span>
   </div>
 
-  <script>
-  function saveContact(phone, driverName) {
-    var parts = [driverName];
-    {% if driver.vehicle %}parts.push('{{ driver.vehicle.vehicle_no }}');{% endif %}
-    {% if driver.project %}parts.push('{{ driver.project.name }}');{% endif %}
-    {% if driver.district %}parts.push('{{ driver.district.name }}');{% endif %}
-    var fullName = parts.join(' - ');
-    var vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\n'
-      + 'FN:' + fullName + '\r\n'
-      + 'TEL;TYPE=CELL:' + phone + '\r\n'
-      + 'END:VCARD';
-    var dataUri = 'data:text/vcard;charset=utf-8,' + encodeURIComponent(vcard);
-    var a = document.createElement('a');
-    a.href = dataUri;
-    a.download = driverName.replace(/\s+/g, '_') + '.vcf';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
-  </script>
+  <!-- Save Contact is now handled via server-side /download-vcard/ endpoint -->
 
   </div><!-- /profile-content -->
 

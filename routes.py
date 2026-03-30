@@ -523,6 +523,31 @@ def image_proxy():
     except Exception:
         return '', 502
 
+
+@app.route('/download-vcard/<int:driver_id>')
+def download_vcard(driver_id):
+    d = Driver.query.get_or_404(driver_id)
+    parts = [d.name or 'Driver']
+    if d.vehicle:
+        parts.append(d.vehicle.vehicle_no)
+    if d.project:
+        parts.append(d.project.name)
+    if d.district:
+        parts.append(d.district.name)
+    full_name = ' - '.join(parts)
+    lines = ['BEGIN:VCARD', 'VERSION:3.0', f'FN:{full_name}']
+    if d.phone1:
+        lines.append(f'TEL;TYPE=CELL:{d.phone1}')
+    if d.phone2:
+        lines.append(f'TEL;TYPE=CELL:{d.phone2}')
+    lines.append('END:VCARD')
+    vcard_str = '\r\n'.join(lines) + '\r\n'
+    safe_name = (d.name or 'driver').replace(' ', '_')
+    resp = make_response(vcard_str)
+    resp.headers['Content-Type'] = 'text/vcard; charset=utf-8'
+    resp.headers['Content-Disposition'] = f'attachment; filename="{safe_name}.vcf"'
+    return resp
+
 _BLOB_DIR = os.path.join(tempfile.gettempdir(), 'fleet_blobs')
 os.makedirs(_BLOB_DIR, exist_ok=True)
 
@@ -14022,6 +14047,15 @@ def report_driver_profile(driver_id):
 
     total_actions = len(job_history)
     last_action = job_history[-1]['date'] if job_history else None
+    last_action_type = None
+    if job_history:
+        _la = job_history[-1]
+        if _la['type'] == 'assignment':
+            last_action_type = 'Assigned'
+        elif _la['type'] == 'transfer':
+            last_action_type = 'Transferred'
+        elif _la['type'] == 'status':
+            last_action_type = 'Left' if _la['data'].action_type == 'left' else 'Rejoined'
     _from = request.args.get('from', '').strip()
     _ref  = request.args.get('ref',  '').strip()
     _back_map = {
@@ -14056,7 +14090,7 @@ def report_driver_profile(driver_id):
     profile_url = url_for('report_driver_profile', driver_id=driver_id, _external=True)
     return render_template('report_driver_profile.html', driver=driver,
                            job_history=job_history, total_actions=total_actions,
-                           last_action=last_action, today=_today,
+                           last_action=last_action, last_action_type=last_action_type, today=_today,
                            service_days=service_days, driver_age=driver_age,
                            doc_uploaded=doc_uploaded, doc_total=doc_total,
                            jh_counts=jh_counts, profile_url=profile_url,
