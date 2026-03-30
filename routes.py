@@ -933,6 +933,32 @@ def web_register_fcm_token():
     return jsonify({'status': 'registered'})
 
 
+@app.route('/api/poll-notifications')
+def poll_notifications():
+    """Session-based JSON endpoint for the native polling service.
+    Returns unread notifications when FCM push delivery is unavailable."""
+    uid = session.get('user_id')
+    if not uid:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    read_ids = {r.notification_id for r in NotificationRead.query.filter_by(user_id=uid).all()}
+    all_n = Notification.query.order_by(Notification.created_at.desc()).limit(30).all()
+    notifications = [n for n in all_n if not _is_parking_full_notification(n)]
+
+    result = []
+    for n in notifications:
+        if n.id not in read_ids:
+            result.append({
+                'id': n.id,
+                'title': n.title,
+                'message': n.message or '',
+                'link': n.link,
+                'created_at': n.created_at.isoformat() if n.created_at else None,
+            })
+
+    return jsonify({'notifications': result})
+
+
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():

@@ -3916,6 +3916,7 @@
 
             var Push = window.Capacitor.Plugins.PushNotifications;
             Push.addListener('registration', function(token) {
+                _tokenReceived = true;
                 _fcmDebug('TOKEN received: ' + (token.value ? token.value.substring(0, 30) + '...' : 'EMPTY'));
                 _sendTokenToServer(token.value);
             });
@@ -3936,6 +3937,52 @@
         }
         _setupPushListeners();
 
+        // Native fallback: receives token directly from Java when GMS proxy blocks getToken()
+        window._onNativeFcmToken = function(token) {
+            _fcmDebug('NATIVE DIRECT TOKEN received: ' + (token ? token.substring(0, 30) + '...' : 'EMPTY'));
+            if (token && !_tokenReceived) {
+                _tokenReceived = true;
+                _sendTokenToServer(token);
+            }
+        };
+
+        // Banking-style fallback: called when FCM is completely blocked and polling mode activates.
+        // fisId = Firebase Installation ID used as temporary device identifier.
+        window._onFcmFallbackMode = function(fisId) {
+            _fcmDebug('POLLING FALLBACK activated. FIS ID: ' + (fisId || 'NONE'));
+            _fcmDebug('Push notifications unavailable — server polling active every 2 min');
+            if (fisId && !_tokenReceived) {
+                _tokenReceived = true;
+                var fisToken = 'fis:' + fisId;
+                _sendTokenToServer(fisToken);
+                // Retry registration after 10s in case session wasn't ready
+                setTimeout(function() { _sendTokenToServer(fisToken); }, 10000);
+                // Store FIS ID in localStorage for future reference
+                try { localStorage.setItem('fleet_fis_id', fisId); } catch(e) {}
+            }
+        };
+
+        var _tokenReceived = false;
+
+        function _retryRegister(attempt) {
+            if (_tokenReceived || attempt > 5) {
+                if (!_tokenReceived && attempt > 5) _fcmDebug('All 5 retry attempts exhausted — token never arrived.');
+                return;
+            }
+            var delay = attempt * 10000;
+            _fcmDebug('Retry #' + attempt + ' — re-calling register() in ' + (delay/1000) + 's...');
+            setTimeout(function() {
+                if (_tokenReceived) return;
+                _fcmDebug('Retry #' + attempt + ' — calling register() now');
+                try {
+                    window.Capacitor.Plugins.PushNotifications.register()
+                        .then(function() { _fcmDebug('Retry #' + attempt + ' register() resolved'); })
+                        .catch(function(e) { _fcmDebug('Retry #' + attempt + ' register() rejected: ' + JSON.stringify(e)); });
+                } catch(e) { _fcmDebug('Retry #' + attempt + ' register() threw: ' + e); }
+                _retryRegister(attempt + 1);
+            }, delay);
+        }
+
         function requestPushPermission() {
             return new Promise(function(resolve) {
                 _fcmDebug('requestPushPermission called');
@@ -3952,18 +3999,7 @@
                             } catch(regErr) {
                                 _fcmDebug('register() THREW: ' + regErr);
                             }
-                            // Fallback: wait 8s, if no token received, check manually
-                            setTimeout(function() {
-                                var Push2 = window.Capacitor.Plugins.PushNotifications;
-                                if (Push2.getDeliveredNotifications) {
-                                    _fcmDebug('8s timeout — no token yet. Trying getDeliveredNotifications as connectivity test...');
-                                    Push2.getDeliveredNotifications().then(function(r) {
-                                        _fcmDebug('getDelivered OK: ' + JSON.stringify(r).substring(0, 100));
-                                    }).catch(function(e) {
-                                        _fcmDebug('getDelivered ERR: ' + JSON.stringify(e));
-                                    });
-                                }
-                            }, 8000);
+                            _retryRegister(1);
                         } else {
                             _fcmDebug('NOT GRANTED: ' + result.receive);
                         }

@@ -82,6 +82,7 @@ def send_push(user_id, title, body, data=None, link=None):
                     notification=messaging.AndroidNotification(
                         sound='default',
                         channel_id='fleet_attendance',
+                        proxy='deny',
                     ),
                 ),
             )
@@ -147,6 +148,7 @@ def broadcast_push_all(title, body, data=None, link=None):
                     notification=messaging.AndroidNotification(
                         sound='default',
                         channel_id='fleet_attendance',
+                        proxy='deny',
                     ),
                 ),
             )

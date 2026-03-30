@@ -20,6 +20,21 @@
             </intent-filter>
         </activity>
 
+        <!-- FCM Message Handling Service -->
+        <service
+            android:name=".FleetFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Notification Polling Fallback Service -->
+        <service
+            android:name=".NotificationPollingService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -28,17 +43,26 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
 
-        <service
-            android:name="com.google.firebase.messaging.FirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="fleet_attendance" />
+
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="true" />
+        <meta-data
+            android:name="firebase_data_collection_default_enabled"
+            android:value="true" />
+
+        <!-- Disable GMS notification delegation/proxy — fixes getToken() hang on Android 14+ -->
+        <meta-data
+            android:name="firebase_messaging_notification_delegation_enabled"
+            android:value="false" />
+
+        <!-- GMS version meta for proxy handshake -->
+        <meta-data
+            android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version" />
     </application>
 
     <!-- ── Permissions ──────────────────────────────────────────────────── -->
@@ -46,6 +70,10 @@
     <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- FCM background delivery -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
 
     <!-- Location / GPS (Check-in geofence) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -64,6 +92,8 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <!-- File Downloads (DownloadManager + Filesystem plugin) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
