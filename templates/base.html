@@ -4347,7 +4347,7 @@
             {% endif %}
 
             // 1c. In-App Update Check (native only)
-            setTimeout(function() { _checkForAppUpdate(); }, 4000);
+            setTimeout(function() { window.FleetBridge.checkForAppUpdate(); }, 4000);
 
             // 2. Auto-hide navbar on scroll down, show on scroll up (native feel)
             //    In Capacitor: body is fixed, so we listen on #mainContent (the scroll container)
