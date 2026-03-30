@@ -18,6 +18,17 @@
     </div>
   </div>
 
+  {% if att_counts %}
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-success"><div><div class="text-muted small">Present</div><div class="fw-bold fs-5 text-success">{{ att_counts.present }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-warning"><div><div class="text-muted small">Late</div><div class="fw-bold fs-5 text-warning">{{ att_counts.late }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-info"><div><div class="text-muted small">Leave</div><div class="fw-bold fs-5 text-info">{{ att_counts.leave }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-secondary"><div><div class="text-muted small">Half-Day</div><div class="fw-bold fs-5 text-secondary">{{ att_counts.half_day }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-dark"><div><div class="text-muted small">Off</div><div class="fw-bold fs-5">{{ att_counts.off }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-danger"><div><div class="text-muted small">Missing C/O</div><div class="fw-bold fs-5 text-danger">{{ att_counts.missing_co }}</div></div></div>
+  </div>
+  {% endif %}
+
   <div class="d-flex justify-content-end align-items-center mb-2">
     <span class="text-muted small me-2">Per Page:</span>
     <select class="form-select form-select-sm" style="width:80px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
@@ -104,17 +115,6 @@
       </form>
     </div>
   </div>
-
-  {% if att_counts %}
-  <div class="d-flex flex-wrap gap-2 mb-3">
-    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-success"><div><div class="text-muted small">Present</div><div class="fw-bold fs-5 text-success">{{ att_counts.present }}</div></div></div>
-    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-warning"><div><div class="text-muted small">Late</div><div class="fw-bold fs-5 text-warning">{{ att_counts.late }}</div></div></div>
-    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-info"><div><div class="text-muted small">Leave</div><div class="fw-bold fs-5 text-info">{{ att_counts.leave }}</div></div></div>
-    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-secondary"><div><div class="text-muted small">Half-Day</div><div class="fw-bold fs-5 text-secondary">{{ att_counts.half_day }}</div></div></div>
-    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-dark"><div><div class="text-muted small">Off</div><div class="fw-bold fs-5">{{ att_counts.off }}</div></div></div>
-    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-danger"><div><div class="text-muted small">Missing C/O</div><div class="fw-bold fs-5 text-danger">{{ att_counts.missing_co }}</div></div></div>
-  </div>
-  {% endif %}
 
   <div class="card shadow border-0 rounded-3 overflow-hidden">
     <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">

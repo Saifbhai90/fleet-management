@@ -8,6 +8,8 @@
   .bulk-off-page .form-label { font-weight: 600; font-size: 0.875rem; }
   .bulk-off-page .btn-bulk { font-weight: 600; padding: 0.5rem 1.25rem; }
   .bulk-off-page .ts-dropdown { z-index: 9999 !important; }
+  .bulk-off-filter-card { position: relative; z-index: 10; overflow: visible; }
+  .bulk-off-filter-card .card-body { overflow: visible; }
 </style>
 <div class="container-fluid bulk-off-page">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
@@ -17,7 +19,7 @@
 
   <p class="text-muted mb-4">Kisi <strong>District</strong> ke kisi <strong>Project</strong> ke saare drivers ko ek date ke liye <strong>Off</strong> mark karein. Pehle District aur Project select karein, phir <strong>View Drivers</strong> dabayein, phir <strong>Mark All as Off</strong>.</p>
 
-  <div class="card border-0 shadow-sm mb-4">
+  <div class="card border-0 shadow-sm mb-4 bulk-off-filter-card">
     <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap">
       <span><i class="bi bi-funnel me-2"></i>Select Date, District & Project</span>
       <a href="{{ url_for('driver_attendance_bulk_off') }}" class="btn btn-outline-secondary btn-sm" id="bulkOffResetBtn" title="District aur Project clear karke form reset karein">
