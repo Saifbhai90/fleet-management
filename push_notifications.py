@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def _init_firebase():
-    """Lazy-initialize Firebase Admin SDK from service account JSON."""
+    """Lazy-initialize Firebase Admin SDK from service account JSON file or env var."""
     global _firebase_app, _initialized
     if _initialized:
         return _firebase_app
@@ -22,13 +22,19 @@ def _init_firebase():
     try:
         import firebase_admin
         from firebase_admin import credentials
+        import json
 
         sa_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'firebase-service-account.json')
-        if not os.path.exists(sa_path):
-            logger.warning("firebase-service-account.json not found — push notifications disabled.")
+
+        if os.path.exists(sa_path):
+            cred = credentials.Certificate(sa_path)
+        elif os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON'):
+            sa_dict = json.loads(os.environ['FIREBASE_SERVICE_ACCOUNT_JSON'])
+            cred = credentials.Certificate(sa_dict)
+        else:
+            logger.warning("Firebase credentials not found (no file or FIREBASE_SERVICE_ACCOUNT_JSON env var) — push notifications disabled.")
             return None
 
-        cred = credentials.Certificate(sa_path)
         _firebase_app = firebase_admin.initialize_app(cred)
         logger.info("Firebase Admin SDK initialized successfully.")
         return _firebase_app
