@@ -191,12 +191,12 @@
     {% endif %}
   </div>
 
-  <div class="modal fade" id="checkoutConfirmModal" tabindex="-1">
+  <div class="modal fade" id="checkoutConfirmModal" tabindex="-1" data-bs-backdrop="true" data-bs-keyboard="true">
     <div class="modal-dialog modal-dialog-centered modal-sm">
       <div class="modal-content">
         <div class="modal-header"><h6 class="modal-title"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>Confirm Checkout</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body text-center"><p><strong id="coDriverName"></strong> ka manual check-out karna hai?</p></div>
-        <div class="modal-footer justify-content-center"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><a href="#" id="coConfirmLink" class="btn btn-danger btn-sm">Confirm Check-out</a></div>
+        <div class="modal-footer justify-content-center"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><button type="button" id="coConfirmBtn" class="btn btn-danger btn-sm"><i class="bi bi-check2 me-1"></i>Confirm Check-out</button></div>
       </div>
     </div>
   </div>
@@ -457,14 +457,47 @@ function attGoPage(tableId, perPageId, navId, countId, p) {
 document.addEventListener('DOMContentLoaded', function() {
   attPaginate('missingCoTable','missingPerPage','missingPagNav','missingCount');
 });
+var _coModalEl = document.getElementById('checkoutConfirmModal');
+var _coModal = _coModalEl ? new bootstrap.Modal(_coModalEl) : null;
+var _coTargetUrl = '#';
+
 document.addEventListener('click', function(e) {
   var btn = e.target.closest('.checkout-confirm-btn');
   if (!btn) return;
   e.preventDefault();
+  _coTargetUrl = btn.dataset.url || '#';
   document.getElementById('coDriverName').textContent = btn.dataset.name || '';
-  document.getElementById('coConfirmLink').href = btn.dataset.url || '#';
-  new bootstrap.Modal(document.getElementById('checkoutConfirmModal')).show();
+  if (_coModal) _coModal.show();
 });
+
+var _coConfirmBtn = document.getElementById('coConfirmBtn');
+if (_coConfirmBtn) {
+  _coConfirmBtn.addEventListener('click', function() {
+    var url = _coTargetUrl;
+    if (_coModal) {
+      _coModal.hide();
+      _coModalEl.addEventListener('hidden.bs.modal', function onHidden() {
+        _coModalEl.removeEventListener('hidden.bs.modal', onHidden);
+        document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        if (url && url !== '#') window.location.href = url;
+      }, { once: true });
+    } else {
+      if (url && url !== '#') window.location.href = url;
+    }
+  });
+}
+
+if (_coModalEl) {
+  _coModalEl.addEventListener('hidden.bs.modal', function() {
+    document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+  });
+}
 
 function printPreview() {
   var table = document.getElementById('missingCoTable');

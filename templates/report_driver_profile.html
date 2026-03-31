@@ -2247,7 +2247,10 @@
   function shareProfile() {
     var url = '{{ profile_url }}';
     var title = 'Driver Profile - {{ driver.name }} ({{ driver.driver_id }})';
-    if (navigator.share) {
+    var SharePlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+    if (SharePlugin) {
+      SharePlugin.share({ title: title, url: url, dialogTitle: title }).catch(function(){});
+    } else if (navigator.share) {
       navigator.share({ title: title, url: url }).catch(function(){});
     } else {
       navigator.clipboard.writeText(url).then(function() {

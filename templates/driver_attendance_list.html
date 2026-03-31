@@ -136,6 +136,18 @@
         <input type="text" id="tableSearch" class="form-control form-control-sm text-dark bg-light border-0" style="max-width: 220px;" placeholder="Search in list...">
       </div>
     </div>
+    <div id="photoChoicePanel" class="d-none" style="background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);border-bottom:2px solid #38bdf8;padding:14px 20px;">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h6 class="mb-0 fw-bold" style="color:#0369a1;"><i class="bi bi-images me-2"></i><span id="photoChoiceTitle">Select Photos</span></h6>
+        <button type="button" class="btn-close" onclick="hidePhotoPanel()" aria-label="Close"></button>
+      </div>
+      <p class="text-muted small mb-2">Konsi photos <span id="photoChoiceVerb">download</span> karni hain?</p>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-primary btn-sm" onclick="doPhotoAction('checkin')"><i class="bi bi-box-arrow-in-right me-1"></i>Check-in Photos</button>
+        <button class="btn btn-outline-danger btn-sm" onclick="doPhotoAction('checkout')"><i class="bi bi-box-arrow-right me-1"></i>Check-out Photos</button>
+        <button class="btn btn-primary btn-sm" onclick="doPhotoAction('both')"><i class="bi bi-images me-1"></i>Both</button>
+      </div>
+    </div>
     <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0" id="attendanceTable">
@@ -234,7 +246,11 @@
               <td class="small text-muted" style="max-width:160px;">{{ check_in_remarks_text or '-' }}</td>
               <td>
                 {% if missing_checkout %}
-                  <a href="{{ url_for('driver_attendance_missing_checkout') }}?date={{ view_date.strftime('%d-%m-%Y') }}" class="badge bg-warning text-dark" title="Check-out missing">No check-out</a>
+                  <button type="button" class="btn btn-sm btn-outline-danger att-checkout-btn" title="Manual check-out karein"
+                    data-url="{{ url_for('driver_attendance_manual_checkout', driver_id=driver.id, date=view_date.strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', vehicle_id=vehicle_id or '', shift=shift or '', search=search or '', back_to='attendance_list') }}"
+                    data-name="{{ driver.name }}">
+                    <i class="bi bi-box-arrow-right me-1"></i>Check-out
+                  </button>
                 {% elif rec and rec.check_out %}
                   {{ rec.check_out.strftime('%H:%M') }}{% if rec.check_out_date and rec.check_out_date != rec.attendance_date %}<br><small class="text-muted">({{ rec.check_out_date.strftime('%d-%m') }})</small>{% endif %}
                   {% if rec.check_out_latitude is not none and rec.check_out_longitude is not none %}<br><span class="badge bg-success badge-sm" title="GPS">GPS</span>{% endif %}
@@ -488,8 +504,21 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 var _photoAction = '';
 function showPhotoModal(action) {
   _photoAction = action;
-  var m = new bootstrap.Modal(document.getElementById('photoChoiceModal'));
-  m.show();
+  var panel = document.getElementById('photoChoicePanel');
+  var verb = document.getElementById('photoChoiceVerb');
+  var title = document.getElementById('photoChoiceTitle');
+  if (action === 'download') {
+    if (verb) verb.textContent = 'download';
+    if (title) title.textContent = 'Download Photos';
+  } else {
+    if (verb) verb.textContent = 'share';
+    if (title) title.textContent = 'Share Photos';
+  }
+  panel.classList.remove('d-none');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function hidePhotoPanel() {
+  document.getElementById('photoChoicePanel').classList.add('d-none');
 }
 
 function collectPhotoUrls(type) {
@@ -512,7 +541,7 @@ function collectPhotoUrls(type) {
 }
 
 function doPhotoAction(type) {
-  bootstrap.Modal.getInstance(document.getElementById('photoChoiceModal')).hide();
+  hidePhotoPanel();
   var urls = collectPhotoUrls(type);
   if (urls.length === 0) {
     alert('No photos found for the selected option.');
@@ -526,6 +555,11 @@ function doPhotoAction(type) {
 }
 
 function downloadPhotos(urls) {
+  var isNative = window.FleetBridge && window.FleetBridge.isNative;
+  if (isNative) {
+    _nativeDownloadPhotos(urls, 0);
+    return;
+  }
   var i = 0;
   function next() {
     if (i >= urls.length) return;
@@ -542,7 +576,27 @@ function downloadPhotos(urls) {
   next();
 }
 
+function _nativeDownloadPhotos(urls, idx) {
+  if (idx >= urls.length) {
+    if (window.FleetBridge) window.FleetBridge._toast('All ' + urls.length + ' photos saved.');
+    return;
+  }
+  var fname = 'attendance_photo_' + (idx + 1) + '.jpg';
+  fetch(urls[idx])
+    .then(function(r) { return r.blob(); })
+    .then(function(blob) { return window.FleetBridge.downloadBlob(blob, fname); })
+    .then(function() { _nativeDownloadPhotos(urls, idx + 1); })
+    .catch(function() { _nativeDownloadPhotos(urls, idx + 1); });
+}
+
 function sharePhotos(urls, type) {
+  var isNative = window.FleetBridge && window.FleetBridge.isNative;
+
+  if (isNative) {
+    _nativeSharePhotos(urls, type);
+    return;
+  }
+
   if (navigator.share && navigator.canShare) {
     var fetches = urls.map(function(url, idx) {
       return fetch(url).then(function(r) { return r.blob(); }).then(function(blob) {
@@ -554,33 +608,132 @@ function sharePhotos(urls, type) {
       if (navigator.canShare(shareData)) {
         navigator.share(shareData).catch(function() {});
       } else {
-        alert('Sharing photos is not supported on this device. Use Download instead.');
+        downloadPhotos(urls);
       }
     }).catch(function() {
-      alert('Could not load photos for sharing. Use Download instead.');
+      downloadPhotos(urls);
     });
   } else {
-    alert('Web Share API not available. Use Download instead.');
+    downloadPhotos(urls);
   }
 }
+
+function _nativeSharePhotos(urls, type) {
+  var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+  var SharePlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+  if (!Filesystem || !SharePlugin) {
+    if (window.FleetBridge) window.FleetBridge._toast('Downloading photos instead...');
+    downloadPhotos(urls);
+    return;
+  }
+
+  if (window.FleetBridge) window.FleetBridge._toast('Preparing ' + urls.length + ' photo(s)...');
+
+  function blobToBase64(blob) {
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onloadend = function() { resolve(reader.result); };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  var savedUris = [];
+  function saveNext(idx) {
+    if (idx >= urls.length) {
+      if (savedUris.length === 0) {
+        if (window.FleetBridge) window.FleetBridge._toast('No photos could be loaded.');
+        return;
+      }
+      if (savedUris.length === 1) {
+        SharePlugin.share({
+          title: 'Attendance Photo',
+          url: savedUris[0],
+          dialogTitle: 'Share Attendance Photo'
+        }).catch(function() {});
+      } else {
+        SharePlugin.share({
+          title: 'Attendance Photos (' + savedUris.length + ')',
+          text: 'Attendance ' + type + ' photos (' + savedUris.length + ')',
+          url: savedUris[0],
+          dialogTitle: 'Share Attendance Photos'
+        }).catch(function() {
+          if (window.FleetBridge) window.FleetBridge._toast(savedUris.length + ' photos saved to Downloads.');
+        });
+      }
+      return;
+    }
+    var fname = 'attendance_' + type + '_' + (idx + 1) + '.jpg';
+    fetch(urls[idx])
+      .then(function(r) { return r.blob(); })
+      .then(function(blob) { return blobToBase64(blob); })
+      .then(function(b64) {
+        return Filesystem.writeFile({
+          path: 'Download/' + fname, data: b64, directory: 'EXTERNAL', recursive: true
+        });
+      })
+      .then(function(result) {
+        savedUris.push(result.uri);
+        saveNext(idx + 1);
+      })
+      .catch(function() { saveNext(idx + 1); });
+  }
+  saveNext(0);
+}
+
+(function() {
+  var coModalEl = document.getElementById('attCheckoutConfirmModal');
+  var coModal = coModalEl ? new bootstrap.Modal(coModalEl) : null;
+  var coTargetUrl = '#';
+
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.att-checkout-btn');
+    if (!btn) return;
+    e.preventDefault();
+    coTargetUrl = btn.dataset.url || '#';
+    document.getElementById('attCoDriverName').textContent = btn.dataset.name || '';
+    if (coModal) coModal.show();
+  });
+
+  var confirmBtn = document.getElementById('attCoConfirmBtn');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', function() {
+      var url = coTargetUrl;
+      if (coModal) {
+        coModal.hide();
+        coModalEl.addEventListener('hidden.bs.modal', function onHidden() {
+          coModalEl.removeEventListener('hidden.bs.modal', onHidden);
+          document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
+          document.body.classList.remove('modal-open');
+          document.body.style.removeProperty('overflow');
+          document.body.style.removeProperty('padding-right');
+          if (url && url !== '#') window.location.href = url;
+        }, { once: true });
+      } else {
+        if (url && url !== '#') window.location.href = url;
+      }
+    });
+  }
+
+  if (coModalEl) {
+    coModalEl.addEventListener('hidden.bs.modal', function() {
+      document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+    });
+  }
+})();
 </script>
 
-<div class="modal fade" id="photoChoiceModal" tabindex="-1" data-bs-backdrop="false">
+<div class="modal fade" id="attCheckoutConfirmModal" tabindex="-1" data-bs-backdrop="true" data-bs-keyboard="true">
   <div class="modal-dialog modal-dialog-centered modal-sm">
     <div class="modal-content">
-      <div class="modal-header">
-        <h6 class="modal-title"><i class="bi bi-images me-2"></i>Select Photos</h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body text-center">
-        <p class="text-muted small mb-3">Which photos do you want?</p>
-        <div class="d-grid gap-2">
-          <button class="btn btn-outline-primary" onclick="doPhotoAction('checkin')"><i class="bi bi-box-arrow-in-right me-1"></i>Check-in Photos</button>
-          <button class="btn btn-outline-danger" onclick="doPhotoAction('checkout')"><i class="bi bi-box-arrow-right me-1"></i>Check-out Photos</button>
-          <button class="btn btn-primary" onclick="doPhotoAction('both')"><i class="bi bi-images me-1"></i>Both</button>
-        </div>
-      </div>
+      <div class="modal-header"><h6 class="modal-title"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>Confirm Checkout</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body text-center"><p><strong id="attCoDriverName"></strong> ka manual check-out karna hai?</p></div>
+      <div class="modal-footer justify-content-center"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><button type="button" id="attCoConfirmBtn" class="btn btn-danger btn-sm"><i class="bi bi-check2 me-1"></i>Confirm Check-out</button></div>
     </div>
   </div>
 </div>
+
 {% endblock %}

@@ -10660,7 +10660,14 @@ def driver_attendance_manual_checkout():
         v = request.args.get(k) or request.form.get(k)
         if v is not None and v != '':
             back_params[k] = v
-    back_url = url_for('driver_attendance_missing_checkout', date=view_date.strftime('%d-%m-%Y'), **back_params)
+    back_to = request.args.get('back_to') or request.form.get('back_to') or ''
+    if back_to:
+        back_params['back_to'] = back_to
+    if back_to == 'attendance_list':
+        list_params = {k: v for k, v in back_params.items() if k != 'back_to'}
+        back_url = url_for('driver_attendance_list', date=view_date.strftime('%d-%m-%Y'), **list_params)
+    else:
+        back_url = url_for('driver_attendance_missing_checkout', date=view_date.strftime('%d-%m-%Y'), **{k: v for k, v in back_params.items() if k != 'back_to'})
 
     if not driver_id:
         flash('Driver select karein.', 'danger')
