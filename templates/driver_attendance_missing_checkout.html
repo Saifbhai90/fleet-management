@@ -457,47 +457,31 @@ function attGoPage(tableId, perPageId, navId, countId, p) {
 document.addEventListener('DOMContentLoaded', function() {
   attPaginate('missingCoTable','missingPerPage','missingPagNav','missingCount');
 });
-var _coModalEl = document.getElementById('checkoutConfirmModal');
-var _coModal = _coModalEl ? new bootstrap.Modal(_coModalEl) : null;
-var _coTargetUrl = '#';
-
 document.addEventListener('click', function(e) {
   var btn = e.target.closest('.checkout-confirm-btn');
   if (!btn) return;
   e.preventDefault();
-  _coTargetUrl = btn.dataset.url || '#';
-  document.getElementById('coDriverName').textContent = btn.dataset.name || '';
-  if (_coModal) _coModal.show();
-});
+  var url = btn.dataset.url || '#';
+  var name = btn.dataset.name || '';
+  document.getElementById('coDriverName').textContent = name;
 
-var _coConfirmBtn = document.getElementById('coConfirmBtn');
-if (_coConfirmBtn) {
-  _coConfirmBtn.addEventListener('click', function() {
-    var url = _coTargetUrl;
-    if (_coModal) {
-      _coModal.hide();
-      _coModalEl.addEventListener('hidden.bs.modal', function onHidden() {
-        _coModalEl.removeEventListener('hidden.bs.modal', onHidden);
-        document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('overflow');
-        document.body.style.removeProperty('padding-right');
-        if (url && url !== '#') window.location.href = url;
-      }, { once: true });
-    } else {
+  var modalEl = document.getElementById('checkoutConfirmModal');
+  var confirmBtn = document.getElementById('coConfirmBtn');
+  var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  modal.show();
+
+  var handler = function() {
+    modal.hide();
+    modalEl.addEventListener('hidden.bs.modal', function() {
+      document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
       if (url && url !== '#') window.location.href = url;
-    }
-  });
-}
-
-if (_coModalEl) {
-  _coModalEl.addEventListener('hidden.bs.modal', function() {
-    document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
-    document.body.classList.remove('modal-open');
-    document.body.style.removeProperty('overflow');
-    document.body.style.removeProperty('padding-right');
-  });
-}
+    }, { once: true });
+  };
+  confirmBtn.onclick = handler;
+});
 
 function printPreview() {
   var table = document.getElementById('missingCoTable');

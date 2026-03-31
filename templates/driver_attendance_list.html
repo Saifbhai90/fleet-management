@@ -681,49 +681,30 @@ function _nativeSharePhotos(urls, type) {
   saveNext(0);
 }
 
-(function() {
-  var coModalEl = document.getElementById('attCheckoutConfirmModal');
-  var coModal = coModalEl ? new bootstrap.Modal(coModalEl) : null;
-  var coTargetUrl = '#';
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.att-checkout-btn');
+  if (!btn) return;
+  e.preventDefault();
+  var url = btn.dataset.url || '#';
+  var name = btn.dataset.name || '';
+  document.getElementById('attCoDriverName').textContent = name;
 
-  document.addEventListener('click', function(e) {
-    var btn = e.target.closest('.att-checkout-btn');
-    if (!btn) return;
-    e.preventDefault();
-    coTargetUrl = btn.dataset.url || '#';
-    document.getElementById('attCoDriverName').textContent = btn.dataset.name || '';
-    if (coModal) coModal.show();
-  });
-
+  var modalEl = document.getElementById('attCheckoutConfirmModal');
   var confirmBtn = document.getElementById('attCoConfirmBtn');
-  if (confirmBtn) {
-    confirmBtn.addEventListener('click', function() {
-      var url = coTargetUrl;
-      if (coModal) {
-        coModal.hide();
-        coModalEl.addEventListener('hidden.bs.modal', function onHidden() {
-          coModalEl.removeEventListener('hidden.bs.modal', onHidden);
-          document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
-          document.body.classList.remove('modal-open');
-          document.body.style.removeProperty('overflow');
-          document.body.style.removeProperty('padding-right');
-          if (url && url !== '#') window.location.href = url;
-        }, { once: true });
-      } else {
-        if (url && url !== '#') window.location.href = url;
-      }
-    });
-  }
+  var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  modal.show();
 
-  if (coModalEl) {
-    coModalEl.addEventListener('hidden.bs.modal', function() {
+  confirmBtn.onclick = function() {
+    modal.hide();
+    modalEl.addEventListener('hidden.bs.modal', function() {
       document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
       document.body.classList.remove('modal-open');
       document.body.style.removeProperty('overflow');
       document.body.style.removeProperty('padding-right');
-    });
-  }
-})();
+      if (url && url !== '#') window.location.href = url;
+    }, { once: true });
+  };
+});
 </script>
 
 <div class="modal fade" id="attCheckoutConfirmModal" tabindex="-1" data-bs-backdrop="true" data-bs-keyboard="true">
