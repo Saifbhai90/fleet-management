@@ -15,18 +15,18 @@
           <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
         </div>
         <div class="col-md-3">
-          <label class="form-label">District <span class="text-danger">*</span></label>
-          <select name="district_id" id="districtSelect" class="form-select search-select" required>
-            <option value="0">-- Select District --</option>
+          <label class="form-label">District</label>
+          <select name="district_id" id="districtSelect" class="form-select search-select">
+            <option value="0">-- All Districts --</option>
             {% for d in districts %}
               <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Project <span class="text-danger">*</span></label>
-          <select name="project_id" id="projectSelect" class="form-select search-select" required>
-            <option value="0">-- Select Project --</option>
+          <label class="form-label">Project</label>
+          <select name="project_id" id="projectSelect" class="form-select search-select">
+            <option value="0">-- All Projects --</option>
             {% for p in projects %}
               <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
             {% endfor %}
@@ -497,6 +497,6 @@
   });
 })();
 window._fleetAfterFilter = function(){ if(typeof updateTotals==='function') updateTotals(); };
-if (window.fleetTableEnhance) window.fleetTableEnhance('batchTable');
+document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('batchTable'); });
 </script>
 {% endblock %}

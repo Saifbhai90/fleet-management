@@ -177,6 +177,6 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     }
   }
 })();
-if (window.fleetTableEnhance) window.fleetTableEnhance('withoutTaskTable');
+document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('withoutTaskTable'); });
 </script>
 {% endblock %}

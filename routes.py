@@ -12631,7 +12631,8 @@ def task_report_new():
         projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
     else:
         projects = Project.query.order_by(Project.name).all()
-    if district_id or project_id:
+    _has_filter = request.args.get('date') is not None
+    if _has_filter or district_id or project_id:
         q = Vehicle.query
         if project_id:
             q = q.filter(Vehicle.project_id == project_id)
@@ -13130,6 +13131,8 @@ def red_task_new():
     projects = []
     if district_id:
         projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
+    else:
+        projects = Project.query.order_by(Project.name).all()
 
     if request.method == 'POST' and request.form.get('save_batch'):
         task_date = parse_date(request.form.get('task_date')) or pk_date()
@@ -13181,7 +13184,8 @@ def red_task_new():
         return redirect(url_for('red_task_list'))
 
     rows = []
-    if district_id or project_id:
+    _has_filter = date_str != ''
+    if _has_filter or district_id or project_id:
         vq = Vehicle.query
         if district_id:
             vq = vq.filter_by(district_id=district_id)
@@ -13192,7 +13196,7 @@ def red_task_new():
         veh_map = {v.vehicle_no: v for v in _vehs}
         emg_recs = EmergencyTaskRecord.query.filter(
             EmergencyTaskRecord.task_date == view_date,
-            EmergencyTaskRecord.amb_reg_no.in_(vehicle_nos),
+            EmergencyTaskRecord.amb_reg_no.in_(vehicle_nos) if vehicle_nos else EmergencyTaskRecord.id > 0,
             EmergencyTaskRecord.category == 'Red',
         ).all()
         for e in emg_recs:
@@ -13324,6 +13328,8 @@ def without_task_new():
     projects = []
     if district_id:
         projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
+    else:
+        projects = Project.query.order_by(Project.name).all()
 
     if request.method == 'POST' and request.form.get('save_batch'):
         move_date = parse_date(request.form.get('task_date')) or pk_date()
@@ -13387,7 +13393,8 @@ def without_task_new():
         return redirect(url_for('without_task_list'))
 
     rows = []
-    if district_id or project_id:
+    _has_filter = date_str != ''
+    if _has_filter or district_id or project_id:
         tq = VehicleDailyTask.query.filter(VehicleDailyTask.task_date == view_date)
         if district_id:
             tq = tq.filter(VehicleDailyTask.district_id == district_id)

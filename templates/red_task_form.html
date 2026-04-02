@@ -16,8 +16,8 @@
         </div>
         <div class="col-md-3">
           <label class="form-label">District <span class="text-danger">*</span></label>
-          <select name="district_id" id="districtSelect" class="form-select search-select" required>
-            <option value="0">-- Select District --</option>
+          <select name="district_id" id="districtSelect" class="form-select search-select">
+            <option value="0">-- All Districts --</option>
             {% for d in districts %}
               <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
             {% endfor %}
@@ -25,8 +25,8 @@
         </div>
         <div class="col-md-3">
           <label class="form-label">Project <span class="text-danger">*</span></label>
-          <select name="project_id" id="projectSelect" class="form-select search-select" required>
-            <option value="0">-- Select Project --</option>
+          <select name="project_id" id="projectSelect" class="form-select search-select">
+            <option value="0">-- All Projects --</option>
             {% for p in projects %}
               <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
             {% endfor %}
@@ -134,7 +134,7 @@
     document.getElementById('districtSelect').addEventListener('change', function() {
       var did = this.value;
       if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
-      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+      projectSelect.innerHTML = '<option value="0">-- All Projects --</option>';
       if (did && did !== '0') {
         fetch('/get_projects_by_district/' + did)
           .then(function(r) { return r.json(); })
