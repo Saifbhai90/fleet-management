@@ -7858,106 +7858,138 @@ def driver_transfer_new():
     is_shift_only = request.form.get('is_shift_only') == '1'
 
     if is_shift_only and request.method == 'POST':
-        form.new_project_id.data = form.from_project_id.data
-        form.new_district_id.data = form.from_district_id.data
-        form.new_vehicle_id.data = form.from_vehicle_id.data
+        driver_id_val = request.form.get('driver_id', type=int) or 0
+        new_shift_val = (request.form.get('new_shift') or '').strip()
+        transfer_date_raw = (request.form.get('transfer_date') or '').strip()
+        remarks_val = (request.form.get('remarks') or '').strip()
 
-        if form.new_project_id.data and form.new_project_id.data != 0:
-            districts = District.query.join(project_district).filter(
-                project_district.c.project_id == form.new_project_id.data
-            ).order_by(District.name).all()
-            form.new_district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
-            if form.new_district_id.data and form.new_district_id.data != 0:
-                vehicles = Vehicle.query.filter_by(
-                    project_id=form.new_project_id.data, district_id=form.new_district_id.data
-                ).order_by(Vehicle.vehicle_no).all()
-                form.new_vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicles]
+        if driver_id_val and new_shift_val and transfer_date_raw:
+            try:
+                from datetime import datetime as _dt
+                t_date = _dt.strptime(transfer_date_raw, '%d-%m-%Y').date()
+                if t_date > pk_date():
+                    flash('Transfer date cannot be in the future.', 'danger')
+                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
 
-    if form.validate_on_submit():
-        try:
-            driver = Driver.query.get_or_404(form.driver_id.data)
-
-            if is_shift_only:
+                driver = Driver.query.get_or_404(driver_id_val)
                 target_vehicle = driver.vehicle
                 if not target_vehicle:
                     flash("Driver is not assigned to any vehicle.", "danger")
                     return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
 
-                shift_taken = Driver.query.filter(
-                    Driver.vehicle_id == target_vehicle.id,
-                    Driver.shift == form.new_shift.data,
-                    Driver.id != driver.id
-                ).first()
-                if shift_taken:
-                    flash(f"Shift '{form.new_shift.data}' already assigned in vehicle {target_vehicle.vehicle_no}.", "danger")
+                if (target_vehicle.driver_capacity or 1) < 2:
+                    flash(f"Vehicle {target_vehicle.vehicle_no} has capacity 1 — shift change is not applicable.", "danger")
                     return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
 
-                transfer = DriverTransfer(
+                if driver.shift == new_shift_val:
+                    flash(f"Driver '{driver.name}' is already on {new_shift_val} shift.", "warning")
+                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+
+                other_driver = Driver.query.filter(
+                    Driver.vehicle_id == target_vehicle.id,
+                    Driver.id != driver.id,
+                    Driver.shift == new_shift_val,
+                ).first()
+
+                old_shift = driver.shift
+                transfer1 = DriverTransfer(
                     driver_id=driver.id,
                     old_project_id=driver.project_id,
                     old_vehicle_id=driver.vehicle_id,
-                    old_shift=driver.shift,
+                    old_shift=old_shift,
                     old_district_id=driver.district_id,
                     new_project_id=driver.project_id,
                     new_vehicle_id=driver.vehicle_id,
-                    new_shift=form.new_shift.data,
+                    new_shift=new_shift_val,
                     new_district_id=driver.district_id,
-                    transfer_date=form.transfer_date.data,
+                    transfer_date=t_date,
                     is_shift_only=True,
-                    remarks=form.remarks.data or f'Shift changed from {driver.shift} to {form.new_shift.data}'
+                    remarks=remarks_val or f'Shift changed from {old_shift} to {new_shift_val}'
                 )
-                db.session.add(transfer)
-                driver.shift = form.new_shift.data
-                db.session.commit()
+                db.session.add(transfer1)
+                driver.shift = new_shift_val
 
-                flash(f"Driver '{driver.name}' shift changed to '{form.new_shift.data}' successfully.", "success")
+                if other_driver:
+                    transfer2 = DriverTransfer(
+                        driver_id=other_driver.id,
+                        old_project_id=other_driver.project_id,
+                        old_vehicle_id=other_driver.vehicle_id,
+                        old_shift=other_driver.shift,
+                        old_district_id=other_driver.district_id,
+                        new_project_id=other_driver.project_id,
+                        new_vehicle_id=other_driver.vehicle_id,
+                        new_shift=old_shift,
+                        new_district_id=other_driver.district_id,
+                        transfer_date=t_date,
+                        is_shift_only=True,
+                        remarks=f'Auto-swapped: shift changed from {other_driver.shift} to {old_shift} (swap with {driver.name})'
+                    )
+                    db.session.add(transfer2)
+                    other_driver.shift = old_shift
+                    db.session.commit()
+                    flash(f"Shifts swapped: '{driver.name}' → {new_shift_val}, '{other_driver.name}' → {old_shift}.", "success")
+                else:
+                    db.session.commit()
+                    flash(f"Driver '{driver.name}' shift changed to '{new_shift_val}' successfully.", "success")
+
                 return redirect(url_for('driver_transfers'))
-            else:
-                new_vehicle = Vehicle.query.get_or_404(form.new_vehicle_id.data)
 
-                existing_count = Driver.query.filter(
-                    Driver.vehicle_id == new_vehicle.id,
-                    Driver.id != driver.id
-                ).count()
+            except Exception as e:
+                db.session.rollback()
+                flash(f"Error: {str(e)}", "danger")
+        else:
+            flash("Please select Driver, New Shift and Date.", "danger")
 
-                if existing_count >= (new_vehicle.driver_capacity or 1):
-                    flash(f"Vehicle {new_vehicle.vehicle_no} is full (capacity reached).", "danger")
-                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+        return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
 
-                shift_taken = Driver.query.filter(
-                    Driver.vehicle_id == new_vehicle.id,
-                    Driver.shift == form.new_shift.data,
-                    Driver.id != driver.id
-                ).first()
+    if form.validate_on_submit():
+        try:
+            driver = Driver.query.get_or_404(form.driver_id.data)
+            new_vehicle = Vehicle.query.get_or_404(form.new_vehicle_id.data)
 
-                if shift_taken:
-                    flash(f"Shift '{form.new_shift.data}' already assigned in vehicle {new_vehicle.vehicle_no}.", "danger")
-                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+            existing_count = Driver.query.filter(
+                Driver.vehicle_id == new_vehicle.id,
+                Driver.id != driver.id
+            ).count()
 
-                transfer = DriverTransfer(
-                    driver_id=driver.id,
-                    old_project_id=driver.project_id,
-                    old_vehicle_id=driver.vehicle_id,
-                    old_shift=driver.shift,
-                    old_district_id=driver.district_id,
-                    new_project_id=form.new_project_id.data,
-                    new_vehicle_id=new_vehicle.id,
-                    new_shift=form.new_shift.data,
-                    new_district_id=form.new_district_id.data,
-                    transfer_date=form.transfer_date.data,
-                    remarks=form.remarks.data
-                )
-                db.session.add(transfer)
+            if existing_count >= (new_vehicle.driver_capacity or 1):
+                flash(f"Vehicle {new_vehicle.vehicle_no} is full (capacity reached).", "danger")
+                return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
 
-                driver.project_id = form.new_project_id.data
-                driver.district_id = form.new_district_id.data
-                driver.vehicle_id = new_vehicle.id
-                driver.shift = form.new_shift.data
+            shift_taken = Driver.query.filter(
+                Driver.vehicle_id == new_vehicle.id,
+                Driver.shift == form.new_shift.data,
+                Driver.id != driver.id
+            ).first()
 
-                db.session.commit()
+            if shift_taken:
+                flash(f"Shift '{form.new_shift.data}' already assigned in vehicle {new_vehicle.vehicle_no}.", "danger")
+                return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
 
-                flash(f"Driver '{driver.name}' successfully transferred to vehicle '{new_vehicle.vehicle_no}'.", "success")
-                return redirect(url_for('driver_transfers'))
+            transfer = DriverTransfer(
+                driver_id=driver.id,
+                old_project_id=driver.project_id,
+                old_vehicle_id=driver.vehicle_id,
+                old_shift=driver.shift,
+                old_district_id=driver.district_id,
+                new_project_id=form.new_project_id.data,
+                new_vehicle_id=new_vehicle.id,
+                new_shift=form.new_shift.data,
+                new_district_id=form.new_district_id.data,
+                transfer_date=form.transfer_date.data,
+                remarks=form.remarks.data
+            )
+            db.session.add(transfer)
+
+            driver.project_id = form.new_project_id.data
+            driver.district_id = form.new_district_id.data
+            driver.vehicle_id = new_vehicle.id
+            driver.shift = form.new_shift.data
+
+            db.session.commit()
+
+            flash(f"Driver '{driver.name}' successfully transferred to vehicle '{new_vehicle.vehicle_no}'.", "success")
+            return redirect(url_for('driver_transfers'))
 
         except Exception as e:
             db.session.rollback()

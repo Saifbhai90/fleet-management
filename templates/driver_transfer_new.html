@@ -193,36 +193,34 @@ textarea.form-control { height: auto !important; }
     submitText.textContent = on ? 'Confirm Shift Change' : 'Confirm Driver Transfer';
     shiftZoneTitle.querySelector('span').textContent = on ? 'New Shift & Date' : 'Shift & Date';
 
-    if (on) {
-      var vid = fromVehicle ? fromVehicle.value : '';
-      if (vid) {
-        loadShiftsForVehicle(vid);
-      }
+    if (on && driverId && driverId.value) {
+      loadShiftSwapOptions();
     }
     checkSubmitReady();
   }
 
-  function loadShiftsForVehicle(vid) {
-    if (!vid) return;
-    fetch('/get_available_shifts/' + vid).then(function(r){return r.json();}).then(function(data){
-      var shiftWarn = document.getElementById('shift_warning');
-      var warnText  = document.getElementById('warning_text');
+  function loadShiftSwapOptions() {
+    var did = driverId ? driverId.value : '';
+    if (!did) return;
+    var shiftWarn = document.getElementById('shift_warning');
+    var warnText  = document.getElementById('warning_text');
 
-      var currentDriverId = driverId ? driverId.value : '';
-      if (isShiftOnly && currentDriverId) {
-        fetch('/get_driver_current_info/' + currentDriverId).then(function(r){return r.json();}).then(function(info){
-          var otherShift = info.shift === 'Morning' ? 'Night' : 'Morning';
-          var shiftAvail = data.some(function(s) { return s.id === otherShift; });
-          if (shiftWarn) shiftWarn.classList.add('d-none');
-          var html = '<option value="">-- Select Shift --</option>';
-          html += '<option value="' + otherShift + '">' + otherShift + '</option>';
-          rebuildSel(newShift, html);
-        }).catch(function() {
-          buildShiftOptions(data, shiftWarn, warnText);
-        });
-      } else {
-        buildShiftOptions(data, shiftWarn, warnText);
+    fetch('/get_driver_current_info/' + did).then(function(r){return r.json();}).then(function(info){
+      var currentShift = info.shift || '';
+      if (!currentShift) {
+        if (shiftWarn) { shiftWarn.classList.remove('d-none'); }
+        if (warnText) { warnText.textContent = 'Driver has no shift assigned.'; }
+        rebuildSel(newShift, '<option value="">No shift</option>');
+        if (submitBtn) submitBtn.disabled = true;
+        return;
       }
+      var otherShift = currentShift === 'Morning' ? 'Night' : 'Morning';
+      if (shiftWarn) shiftWarn.classList.add('d-none');
+      var html = '<option value="">-- Select Shift --</option>';
+      html += '<option value="' + otherShift + '">' + otherShift + ' (swap from ' + currentShift + ')</option>';
+      rebuildSel(newShift, html);
+    }).catch(function() {
+      rebuildSel(newShift, '<option value="">-- Select Shift --</option><option value="Morning">Morning</option><option value="Night">Night</option>');
     });
   }
 
@@ -289,8 +287,8 @@ textarea.form-control { height: auto !important; }
         d.forEach(function(x){ html += '<option value="' + x.id + '">' + x.name + '</option>'; });
         rebuildSel(driverId, html);
       });
-      if (isShiftOnly && vid) {
-        loadShiftsForVehicle(vid);
+      if (isShiftOnly && driverId && driverId.value) {
+        loadShiftSwapOptions();
       }
     });
   }
@@ -299,8 +297,7 @@ textarea.form-control { height: auto !important; }
     driverId.addEventListener('change', function() {
       if (typeof loadDriverInsight === 'function') loadDriverInsight(this.value);
       if (isShiftOnly) {
-        var vid = fromVehicle ? fromVehicle.value : '';
-        if (vid) loadShiftsForVehicle(vid);
+        loadShiftSwapOptions();
       }
       checkSubmitReady();
     });
@@ -333,7 +330,13 @@ textarea.form-control { height: auto !important; }
   if (newVehicle) {
     newVehicle.addEventListener('change', function() {
       if (isShiftOnly) return;
-      loadShiftsForVehicle(this.value);
+      var vid = this.value;
+      if (!vid) return;
+      fetch('/get_available_shifts/' + vid).then(function(r){return r.json();}).then(function(data){
+        var shiftWarn = document.getElementById('shift_warning');
+        var warnText  = document.getElementById('warning_text');
+        buildShiftOptions(data, shiftWarn, warnText);
+      });
     });
   }
 
