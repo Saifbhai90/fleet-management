@@ -11715,16 +11715,6 @@ def driver_attendance_tra_report():
         drivers = drivers_query.distinct().order_by(Driver.name).all()
 
         for d in drivers:
-            att_rows = DriverAttendance.query.filter(
-                DriverAttendance.driver_id == d.id,
-                DriverAttendance.attendance_date >= start_d,
-                DriverAttendance.attendance_date <= end_d
-            ).all()
-            by_status = {}
-            for r in att_rows:
-                by_status[r.status] = by_status.get(r.status, 0) + 1
-            present_days = by_status.get('Present', 0) + by_status.get('Late', 0) + by_status.get('Half-Day', 0)
-
             left_rec = DriverStatusChange.query.filter(
                 DriverStatusChange.driver_id == d.id,
                 DriverStatusChange.action_type == 'left',
@@ -11739,6 +11729,20 @@ def driver_attendance_tra_report():
                 DriverTransfer.driver_id == d.id,
             ).order_by(DriverTransfer.transfer_date.desc()).first()
 
+            transfer_in_rec = DriverTransfer.query.filter(
+                DriverTransfer.driver_id == d.id,
+                DriverTransfer.new_vehicle_id == d.vehicle_id,
+                DriverTransfer.transfer_date >= start_d,
+                DriverTransfer.transfer_date <= end_d,
+            ).order_by(DriverTransfer.transfer_date.desc()).first()
+
+            transfer_out_rec = DriverTransfer.query.filter(
+                DriverTransfer.driver_id == d.id,
+                DriverTransfer.old_vehicle_id == d.vehicle_id,
+                DriverTransfer.transfer_date >= start_d,
+                DriverTransfer.transfer_date <= end_d,
+            ).order_by(DriverTransfer.transfer_date.desc()).first()
+
             maint_days = 0
             if d.vehicle_id:
                 maint_days = MaintenanceExpense.query.filter(
@@ -11747,26 +11751,157 @@ def driver_attendance_tra_report():
                     MaintenanceExpense.expense_date <= end_d
                 ).count()
 
-            total_working_days = present_days - ndays
+            drv_start = start_d
+            drv_end = end_d
+            if d.assign_date and d.assign_date > start_d:
+                drv_start = d.assign_date
+            if rejoin_rec and rejoin_rec.change_date and rejoin_rec.change_date >= start_d and rejoin_rec.change_date <= end_d:
+                if rejoin_rec.change_date > drv_start:
+                    drv_start = rejoin_rec.change_date
+            if transfer_in_rec and transfer_in_rec.transfer_date:
+                if transfer_in_rec.transfer_date > drv_start:
+                    drv_start = transfer_in_rec.transfer_date
+
+            if left_rec and left_rec.change_date and left_rec.change_date >= start_d and left_rec.change_date <= end_d:
+                if left_rec.change_date < drv_end:
+                    drv_end = left_rec.change_date
+            if transfer_out_rec and transfer_out_rec.transfer_date:
+                t_last_day = transfer_out_rec.transfer_date - timedelta(days=1)
+                if t_last_day >= start_d and t_last_day < drv_end:
+                    drv_end = t_last_day
+
+            if drv_start > drv_end:
+                active_days = 0
+            else:
+                active_days = (drv_end - drv_start).days + 1
+
+            vehicle = d.vehicle
+            capacity = vehicle.driver_capacity if vehicle else 1
+            working_days = active_days
 
             remarks_parts = []
+
+            if capacity >= 2 and vehicle:
+                same_vehicle_drivers = Driver.query.filter(
+                    Driver.vehicle_id == vehicle.id,
+                    Driver.id != d.id,
+                ).all()
+
+                partner_present_days = 0
+                for partner in same_vehicle_drivers:
+                    p_start = start_d
+                    p_end = end_d
+                    if partner.assign_date and partner.assign_date > p_start:
+                        p_start = partner.assign_date
+
+                    p_rejoin = DriverStatusChange.query.filter(
+                        DriverStatusChange.driver_id == partner.id,
+                        DriverStatusChange.action_type == 'rejoin',
+                        DriverStatusChange.change_date >= start_d,
+                        DriverStatusChange.change_date <= end_d,
+                    ).order_by(DriverStatusChange.change_date.desc()).first()
+                    if p_rejoin and p_rejoin.change_date and p_rejoin.change_date > p_start:
+                        p_start = p_rejoin.change_date
+
+                    p_transfer_in = DriverTransfer.query.filter(
+                        DriverTransfer.driver_id == partner.id,
+                        DriverTransfer.new_vehicle_id == vehicle.id,
+                        DriverTransfer.transfer_date >= start_d,
+                        DriverTransfer.transfer_date <= end_d,
+                    ).order_by(DriverTransfer.transfer_date.desc()).first()
+                    if p_transfer_in and p_transfer_in.transfer_date > p_start:
+                        p_start = p_transfer_in.transfer_date
+
+                    p_left = DriverStatusChange.query.filter(
+                        DriverStatusChange.driver_id == partner.id,
+                        DriverStatusChange.action_type == 'left',
+                    ).order_by(DriverStatusChange.change_date.desc()).first()
+                    if p_left and p_left.change_date and p_left.change_date >= start_d and p_left.change_date <= end_d:
+                        if p_left.change_date < p_end:
+                            p_end = p_left.change_date
+
+                    p_transfer_out = DriverTransfer.query.filter(
+                        DriverTransfer.driver_id == partner.id,
+                        DriverTransfer.old_vehicle_id == vehicle.id,
+                        DriverTransfer.transfer_date >= start_d,
+                        DriverTransfer.transfer_date <= end_d,
+                    ).order_by(DriverTransfer.transfer_date.desc()).first()
+                    if p_transfer_out and p_transfer_out.transfer_date:
+                        p_last = p_transfer_out.transfer_date - timedelta(days=1)
+                        if p_last >= start_d and p_last < p_end:
+                            p_end = p_last
+
+                    if p_start <= p_end:
+                        overlap_s = max(drv_start, p_start)
+                        overlap_e = min(drv_end, p_end)
+                        if overlap_s <= overlap_e:
+                            partner_present_days += (overlap_e - overlap_s).days + 1
+
+                solo_days = active_days - partner_present_days
+                if solo_days < 0:
+                    solo_days = 0
+                working_days = active_days + solo_days
+
+                if solo_days > 0 and solo_days >= ndays:
+                    remarks_parts.append(
+                        'Due to no second driver, he did double duty for the whole month.'
+                    )
+                elif solo_days > 0:
+                    paired_days = active_days - solo_days
+                    if same_vehicle_drivers:
+                        best_partner = same_vehicle_drivers[0]
+                        best_join = best_partner.assign_date
+                        for sp in same_vehicle_drivers:
+                            if sp.assign_date and (not best_join or sp.assign_date > best_join):
+                                best_partner = sp
+                                best_join = sp.assign_date
+                        if best_join and best_join >= start_d and best_join <= end_d:
+                            remarks_parts.append(
+                                f'Due to no second driver, he did double duty for {solo_days} days. '
+                                f'The second driver joined duty on {best_join.strftime("%d-%m-%Y")}.'
+                            )
+                        else:
+                            remarks_parts.append(
+                                f'Due to no second driver, he did double duty for {solo_days} days.'
+                            )
+
             if transfer_rec:
                 old_v = transfer_rec.old_vehicle.vehicle_no if transfer_rec.old_vehicle else '?'
                 new_v = transfer_rec.new_vehicle.vehicle_no if transfer_rec.new_vehicle else '?'
                 t_date = transfer_rec.transfer_date.strftime('%d-%m-%Y') if transfer_rec.transfer_date else ''
-                remarks_parts.append(f'Transferred from {old_v} to {new_v} on {t_date}')
+                if transfer_out_rec:
+                    remarks_parts.append(f'Transferred from {old_v} to {new_v} on {t_date}. His working days on this vehicle are {active_days}.')
+                elif transfer_in_rec:
+                    remarks_parts.append(f'Transferred from {old_v} to {new_v} on {t_date}. Joined this vehicle on {t_date}. Working days are {active_days}.')
+                else:
+                    remarks_parts.append(f'Transferred from {old_v} to {new_v} on {t_date}.')
                 if transfer_rec.remarks:
                     remarks_parts.append(transfer_rec.remarks)
-            if rejoin_rec:
-                r_date = rejoin_rec.change_date.strftime('%d-%m-%Y') if rejoin_rec.change_date else ''
-                remarks_parts.append(f'Rejoined on {r_date}')
+
+            if rejoin_rec and rejoin_rec.change_date and rejoin_rec.change_date >= start_d and rejoin_rec.change_date <= end_d:
+                r_date = rejoin_rec.change_date.strftime('%d-%m-%Y')
+                remarks_parts.append(f'Rejoined on {r_date}. Working days after rejoin: {active_days}.')
                 if rejoin_rec.remarks:
                     remarks_parts.append(rejoin_rec.remarks)
-            if left_rec and d.status != 'Active':
-                l_date = left_rec.change_date.strftime('%d-%m-%Y') if left_rec.change_date else ''
-                remarks_parts.append(f'Left on {l_date}')
+            elif rejoin_rec and rejoin_rec.change_date:
+                r_date = rejoin_rec.change_date.strftime('%d-%m-%Y')
+                remarks_parts.append(f'Rejoined on {r_date}.')
+
+            if left_rec and left_rec.change_date and left_rec.change_date >= start_d and left_rec.change_date <= end_d:
+                l_date = left_rec.change_date.strftime('%d-%m-%Y')
+                remarks_parts.append(f'Left on {l_date}. Working days before leaving: {active_days}.')
                 if left_rec.reason:
                     remarks_parts.append(left_rec.reason)
+            elif left_rec and d.status != 'Active':
+                l_date = left_rec.change_date.strftime('%d-%m-%Y') if left_rec.change_date else ''
+                remarks_parts.append(f'Left on {l_date}.')
+                if left_rec.reason:
+                    remarks_parts.append(left_rec.reason)
+
+            if d.assign_date and d.assign_date >= start_d and d.assign_date <= end_d:
+                remarks_parts.append(f'This driver joined duty on {d.assign_date.strftime("%d-%m-%Y")}. His working days are {active_days}.')
+
+            total_working_days = working_days - ndays
 
             report.append({
                 'driver': d,
@@ -11774,11 +11909,11 @@ def driver_attendance_tra_report():
                 'date_of_leaving': left_rec.change_date if left_rec else None,
                 'date_of_rejoining': rejoin_rec.change_date if rejoin_rec else None,
                 'transfer_date': transfer_rec.transfer_date if transfer_rec else None,
-                'working_days': ndays,
-                'present_days': present_days,
+                'working_days': working_days,
+                'present_days': ndays,
                 'maintenance_days': maint_days,
                 'total_working_days': total_working_days,
-                'remarks': '. '.join(remarks_parts) if remarks_parts else '',
+                'remarks': ' '.join(remarks_parts) if remarks_parts else '',
             })
 
     vd_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
