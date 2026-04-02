@@ -43,6 +43,7 @@
 
   {% if rows %}
   <form method="POST" id="batchForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="save_batch" value="1">
     <input type="hidden" name="task_date" value="{{ view_date.strftime('%d-%m-%Y') }}">
     <input type="hidden" name="district_id" value="{{ district_id }}">
