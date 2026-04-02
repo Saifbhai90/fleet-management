@@ -2,13 +2,27 @@
 {% block title %}TRA Attendance Sheet{% endblock %}
 
 {% block content %}
+<style>
+  .tra-table { font-size: 0.75rem; }
+  .tra-table th { font-size: 0.7rem; padding: 6px 5px !important; white-space: nowrap; text-align: center; vertical-align: middle; }
+  .tra-table td { padding: 5px 5px !important; vertical-align: middle; }
+  .tra-table .remarks-col { white-space: normal; max-width: 220px; font-size: 0.68rem; }
+  .tra-header { background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%); }
+  @media print {
+    .tra-table { font-size: 8px !important; }
+    .tra-table th { font-size: 7.5px !important; padding: 3px 2px !important; }
+    .tra-table td { padding: 3px 2px !important; }
+    .tra-table .remarks-col { max-width: 160px; font-size: 7px !important; }
+    .no-print { display: none !important; }
+  }
+</style>
 <div class="container-fluid">
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h2 class="mb-0"><i class="bi bi-clipboard-data me-2" style="color:#1d4ed8;"></i>TRA Attendance Sheet</h2>
     <div id="traReportExportButtons" class="d-flex gap-2"></div>
   </div>
 
-  <div class="card shadow-sm border-0 rounded-3 mb-4">
+  <div class="card shadow-sm border-0 rounded-3 mb-4 no-print">
     <div class="card-body">
       <form method="post" action="{{ url_for('driver_attendance_tra_report') }}" id="traReportForm">
         {{ form.hidden_tag() }}
@@ -94,44 +108,57 @@
 
   {% if report %}
   <div class="card shadow border-0 rounded-3 overflow-hidden">
-    <div class="card-header text-white py-3" style="background:linear-gradient(135deg,#1d4ed8 0%,#1e40af 100%);">
-      <span class="fw-semibold">{{ report_title }}</span>
+    <div class="card-header text-white py-2 tra-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span class="fw-semibold" style="font-size:0.85rem;">{{ report_title }}</span>
+      <div class="d-flex align-items-center gap-2 no-print">
+        <input type="text" id="traTableSearch" class="form-control form-control-sm bg-white text-dark border-0" style="max-width:180px;height:30px;font-size:0.75rem;" placeholder="&#128269; Search...">
+        <span class="small opacity-75">Per Page:</span>
+        <select id="traPerPage" class="form-select form-select-sm text-white border-secondary" style="width:65px;height:30px;font-size:0.75rem;background:#1e3a8a;">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="99999">All</option>
+        </select>
+      </div>
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-bordered table-hover align-middle mb-0" id="traReportTable">
+        <table class="table table-bordered table-hover align-middle mb-0 tra-table" id="traReportTable">
           <thead>
             <tr style="background:#2563eb;color:#fff;">
-              <th class="ps-3 text-center" style="min-width:45px;">S.No</th>
-              <th style="min-width:120px;">District Name</th>
-              <th style="min-width:150px;">Parking Station</th>
-              <th style="min-width:110px;">Vehicle</th>
-              <th style="min-width:80px;">Shift</th>
-              <th style="min-width:150px;">Driver Name</th>
-              <th class="text-center" style="min-width:100px;">Date of Joining</th>
-              <th class="text-center" style="min-width:100px;">Date of Leaving</th>
-              <th class="text-center" style="min-width:100px;">Date of Rejoining</th>
-              <th class="text-center" style="min-width:100px;">Transfer Date</th>
-              <th class="text-center" style="min-width:80px;">Working Days</th>
-              <th class="text-center" style="min-width:90px;">Total Days in this Month</th>
-              <th class="text-center" style="min-width:90px;">Vehicles in Maintenance</th>
-              <th class="text-center" style="min-width:90px;">Total Working Days</th>
-              <th style="min-width:120px;">Bank Name</th>
-              <th style="min-width:130px;">Account Title</th>
-              <th style="min-width:160px;">Account Number</th>
-              <th style="min-width:250px;">Remarks</th>
+              <th>S.No</th>
+              <th>District</th>
+              <th>Project</th>
+              <th>Parking Station</th>
+              <th>Vehicle</th>
+              <th>Shift</th>
+              <th>Driver Name</th>
+              <th>Date of Joining</th>
+              <th>Date of Leaving</th>
+              <th>Date of Rejoining</th>
+              <th>Transfer Date</th>
+              <th>Working Days</th>
+              <th>Total Days in this Month</th>
+              <th>Vehicles in Maintenance</th>
+              <th>Total Working Days</th>
+              <th>Bank Name</th>
+              <th>Account Title</th>
+              <th>Account Number</th>
+              <th>Remarks</th>
             </tr>
           </thead>
           <tbody>
             {% for row in report %}
             {% set d = row.driver %}
             <tr>
-              <td class="ps-3 text-center">{{ loop.index }}</td>
+              <td class="text-center">{{ loop.index }}</td>
               <td>{{ d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else '-') }}</td>
+              <td>{{ d.project.name if d.project else '-' }}</td>
               <td>{{ d.vehicle.parking_station.name if d.vehicle and d.vehicle.parking_station else '-' }}</td>
               <td class="fw-medium">{{ d.vehicle.vehicle_no if d.vehicle else '-' }}</td>
-              <td>{{ d.shift or '-' }}</td>
-              <td class="fw-medium">{{ d.name }}</td>
+              <td class="text-center">{{ d.shift or '-' }}</td>
+              <td class="fw-medium text-nowrap">{{ d.name }}</td>
               <td class="text-center">{{ row.date_of_joining.strftime('%d-%b-%y') if row.date_of_joining else '' }}</td>
               <td class="text-center">{{ row.date_of_leaving.strftime('%d-%m-%Y') if row.date_of_leaving else '' }}</td>
               <td class="text-center">{{ row.date_of_rejoining.strftime('%d-%m-%Y') if row.date_of_rejoining else '' }}</td>
@@ -142,17 +169,19 @@
               <td class="text-center {% if row.total_working_days < 0 %}text-danger fw-bold{% endif %}">{{ row.total_working_days }}</td>
               <td>{{ d.bank_name or '-' }}</td>
               <td>{{ d.account_title or '-' }}</td>
-              <td class="small">{{ d.account_no or '-' }}</td>
-              <td class="small" style="max-width:300px;">{{ row.remarks or '' }}</td>
+              <td>{{ d.account_no or '-' }}</td>
+              <td class="remarks-col">{{ row.remarks or '' }}</td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     </div>
-    <div class="card-footer bg-light text-muted small d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span>Total drivers: <strong>{{ report|length }}</strong></span>
-      <input type="text" id="traTableSearch" class="form-control form-control-sm" style="max-width: 220px;" placeholder="Search in report...">
+    <div class="card-footer bg-white border-top py-2 px-3">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <small class="text-muted" id="traShowingInfo">Showing 1 to {{ report|length }} of {{ report|length }} records</small>
+        <nav id="traPagNav"><ul class="pagination pagination-sm mb-0"></ul></nav>
+      </div>
     </div>
   </div>
   {% else %}
@@ -274,43 +303,120 @@
   {% endif %}
 })();
 
-var traSearch = document.getElementById('traTableSearch');
-if (traSearch) {
-  traSearch.addEventListener('keyup', function() {
-    var q = this.value.trim();
-    document.querySelectorAll('#traReportTable tbody tr').forEach(function(row) {
-      row.style.display = (!q || window.fleetMultiWordMatch(row.innerText || row.textContent, q)) ? '' : 'none';
+(function() {
+  var table = document.getElementById('traReportTable');
+  if (!table) return;
+  var allRows = Array.from(table.querySelectorAll('tbody tr'));
+  var perPageEl = document.getElementById('traPerPage');
+  var infoEl = document.getElementById('traShowingInfo');
+  var navEl = document.getElementById('traPagNav');
+  var searchEl = document.getElementById('traTableSearch');
+  var curPage = 1;
+
+  function getVisibleRows() {
+    return allRows.filter(function(r) { return r.dataset.searchHidden !== '1'; });
+  }
+
+  function paginate() {
+    var perPage = parseInt(perPageEl.value) || 20;
+    var vis = getVisibleRows();
+    var total = vis.length;
+    allRows.forEach(function(r) { r.style.display = 'none'; });
+    var totalPages = Math.max(1, Math.ceil(total / perPage));
+    if (curPage > totalPages) curPage = 1;
+    vis.forEach(function(r, i) {
+      r.style.display = (i >= (curPage - 1) * perPage && i < curPage * perPage) ? '' : 'none';
     });
+    var from = total === 0 ? 0 : (curPage - 1) * perPage + 1;
+    var to = Math.min(curPage * perPage, total);
+    infoEl.textContent = 'Showing ' + from + ' to ' + to + ' of ' + total + ' records';
+
+    var html = '<ul class="pagination pagination-sm mb-0">';
+    html += '<li class="page-item' + (curPage <= 1 ? ' disabled' : '') + '"><a class="page-link" href="#" data-p="' + (curPage - 1) + '"><i class="bi bi-chevron-left"></i></a></li>';
+    var startP = Math.max(1, curPage - 2);
+    var endP = Math.min(totalPages, curPage + 2);
+    if (startP > 1) html += '<li class="page-item"><a class="page-link" href="#" data-p="1">1</a></li>';
+    if (startP > 2) html += '<li class="page-item disabled"><span class="page-link">…</span></li>';
+    for (var p = startP; p <= endP; p++) {
+      html += '<li class="page-item' + (p === curPage ? ' active' : '') + '"><a class="page-link" href="#" data-p="' + p + '">' + p + '</a></li>';
+    }
+    if (endP < totalPages - 1) html += '<li class="page-item disabled"><span class="page-link">…</span></li>';
+    if (endP < totalPages) html += '<li class="page-item"><a class="page-link" href="#" data-p="' + totalPages + '">' + totalPages + '</a></li>';
+    html += '<li class="page-item' + (curPage >= totalPages ? ' disabled' : '') + '"><a class="page-link" href="#" data-p="' + (curPage + 1) + '"><i class="bi bi-chevron-right"></i></a></li>';
+    html += '</ul>';
+    navEl.innerHTML = html;
+  }
+
+  navEl.addEventListener('click', function(e) {
+    var a = e.target.closest('a[data-p]');
+    if (!a) return;
+    e.preventDefault();
+    var p = parseInt(a.dataset.p);
+    if (p >= 1) { curPage = p; paginate(); }
   });
-}
+
+  perPageEl.addEventListener('change', function() { curPage = 1; paginate(); });
+
+  if (searchEl) {
+    searchEl.addEventListener('keyup', function() {
+      var q = this.value.trim();
+      allRows.forEach(function(r) {
+        r.dataset.searchHidden = (!q || window.fleetMultiWordMatch(r.innerText || r.textContent, q)) ? '0' : '1';
+      });
+      curPage = 1;
+      paginate();
+    });
+  }
+
+  paginate();
+})();
 
 $(document).ready(function () {
-  if (window.innerWidth < 768) return;
   var $t = $('#traReportTable');
-  if ($t.length) {
-    var dt = $t.DataTable({
-      pageLength: 50,
-      searching: false,
-      ordering: true,
-      dom: 'rt<"d-flex justify-content-between align-items-center p-2"ip>',
-      buttons: [
-        {
-          extend: 'excelHtml5',
-          text: '<i class="bi bi-file-earmark-excel me-1"></i> Excel',
-          className: 'btn btn-success btn-sm',
-          title: '{{ report_title|e }}'
-        },
-        {
-          extend: 'print',
-          text: '<i class="bi bi-printer me-1"></i> Print / Preview',
-          className: 'btn btn-secondary btn-sm',
-          autoPrint: false,
-          customize: window._dtPrintCustomize('TRA Attendance Sheet', '#1d4ed8', 'clipboard-data')
+  if (!$t.length) return;
+  var dt = $t.DataTable({
+    paging: false,
+    searching: false,
+    ordering: true,
+    info: false,
+    dom: 'rt',
+    buttons: [
+      {
+        extend: 'excelHtml5',
+        text: '<i class="bi bi-file-earmark-excel me-1"></i> Excel',
+        className: 'btn btn-success btn-sm',
+        title: '{{ report_title|e }}'
+      },
+      {
+        extend: 'print',
+        text: '<i class="bi bi-printer me-1"></i> Print / Preview',
+        className: 'btn btn-secondary btn-sm',
+        autoPrint: false,
+        customize: function(win) {
+          var doc = win.document;
+          var body = doc.body;
+          body.style.fontSize = '8px';
+          body.style.fontFamily = 'Arial, sans-serif';
+          body.style.margin = '10px';
+          var header = doc.createElement('div');
+          header.style.cssText = 'text-align:center;margin-bottom:10px;border-bottom:2px solid #1d4ed8;padding-bottom:8px;';
+          header.innerHTML = '<h3 style="color:#1d4ed8;margin:0 0 4px;font-size:14px;">TRA Attendance Sheet</h3><p style="margin:0;color:#555;font-size:10px;">{{ report_title|e }}</p>';
+          body.insertBefore(header, body.firstChild);
+          var tables = doc.querySelectorAll('table');
+          tables.forEach(function(tbl) {
+            tbl.style.fontSize = '7.5px';
+            tbl.style.width = '100%';
+            tbl.style.borderCollapse = 'collapse';
+            var ths = tbl.querySelectorAll('th');
+            ths.forEach(function(th) { th.style.cssText = 'background:#1d4ed8;color:#fff;padding:3px 2px;font-size:7px;text-align:center;border:1px solid #ccc;'; });
+            var tds = tbl.querySelectorAll('td');
+            tds.forEach(function(td) { td.style.cssText = 'padding:2px 2px;border:1px solid #ddd;font-size:7.5px;'; });
+          });
         }
-      ]
-    });
-    dt.buttons().container().appendTo('#traReportExportButtons');
-  }
+      }
+    ]
+  });
+  dt.buttons().container().appendTo('#traReportExportButtons');
 });
 </script>
 {% endblock %}

@@ -11674,7 +11674,12 @@ def driver_attendance_tra_report():
             dist_obj = District.query.get(district_id)
             dist_name = dist_obj.name if dist_obj else ''
         month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+        company_name = ''
+        if project_id and proj_obj and proj_obj.company:
+            company_name = proj_obj.company.name
         title_parts = []
+        if company_name:
+            title_parts.append(company_name)
         if proj_name:
             title_parts.append(proj_name)
         if dist_name:
