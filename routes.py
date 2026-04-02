@@ -11575,6 +11575,225 @@ def driver_attendance_report():
 
 
 # ────────────────────────────────────────────────
+# TRA Attendance Sheet (Monthly with Transfer/Rejoin)
+# ────────────────────────────────────────────────
+@app.route('/driver-attendance/tra-report', methods=['GET', 'POST'])
+def driver_attendance_tra_report():
+    from auth_utils import get_user_context
+    from calendar import monthrange
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    allowed_shifts = user_context.get('allowed_shifts', set())
+
+    scope_projects = list(allowed_projects) if allowed_projects else []
+    scope_districts = list(allowed_districts) if allowed_districts else []
+    scope_vehicles = list(allowed_vehicles) if allowed_vehicles else []
+    scope_shifts = list(allowed_shifts) if allowed_shifts else []
+
+    form = DriverAttendanceReportForm()
+    has_single_scope = bool(scope_projects and len(scope_projects) == 1 and scope_districts and len(scope_districts) == 1 and scope_vehicles and len(scope_vehicles) == 1 and scope_shifts and len(scope_shifts) == 1)
+    single_vehicle = Vehicle.query.get(scope_vehicles[0]) if has_single_scope and scope_vehicles else None
+
+    disable_project = bool(scope_projects and len(scope_projects) == 1)
+    disable_district = bool(scope_districts and len(scope_districts) == 1)
+
+    project_query = Project.query.filter(Project.company_id.isnot(None))
+    if scope_projects:
+        project_query = project_query.filter(Project.id.in_(scope_projects))
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_query.order_by(Project.name).all()]
+
+    if disable_project:
+        form.project_id.data = scope_projects[0]
+    if disable_district:
+        form.district_id.data = scope_districts[0]
+
+    if request.method == 'POST':
+        pid = request.form.get('project_id', type=int) or 0
+        if not pid and disable_project and scope_projects:
+            pid = scope_projects[0]
+        districts_query = District.query.join(project_district).filter(project_district.c.project_id == pid) if pid else District.query
+        if scope_districts:
+            districts_query = districts_query.filter(District.id.in_(scope_districts))
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts_query.order_by(District.name).all()]
+    else:
+        districts_query = District.query
+        if scope_districts:
+            districts_query = districts_query.filter(District.id.in_(scope_districts))
+        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts_query.order_by(District.name).all()]
+
+    today = pk_date()
+    form.month.data = form.month.data or today.month
+    form.year.data = form.year.data or today.year
+    report = []
+    selected_vehicle_id = 0
+    selected_shift = ''
+    vehicle_choices = []
+    report_title = ''
+
+    if request.method == 'POST':
+        selected_vehicle_id = request.form.get('vehicle_id', type=int) or 0
+        selected_shift = (request.form.get('shift') or '').strip()
+        pid = form.project_id.data or 0
+        did = form.district_id.data or 0
+        if pid and did:
+            vq = Vehicle.query.filter(Vehicle.project_id == pid, Vehicle.district_id == did)
+            if scope_vehicles:
+                vq = vq.filter(Vehicle.id.in_(scope_vehicles))
+            for v in vq.order_by(Vehicle.vehicle_no).all():
+                vehicle_choices.append((v.id, v.vehicle_no + ((' (' + v.vehicle_type + ')') if v.vehicle_type else '')))
+
+    if request.method == 'POST' and form.validate_on_submit():
+        month = form.month.data
+        year = form.year.data
+        project_id = form.project_id.data or None
+        if project_id == 0:
+            project_id = None
+        district_id = form.district_id.data or None
+        if district_id == 0:
+            district_id = None
+        vehicle_id = request.form.get('vehicle_id', type=int) or None
+        if vehicle_id == 0:
+            vehicle_id = None
+        shift = (request.form.get('shift') or '').strip()
+        search = (form.search.data or '').strip()
+
+        _, ndays = monthrange(year, month)
+        start_d = date(year, month, 1)
+        end_d = date(year, month, ndays)
+
+        proj_name = ''
+        dist_name = ''
+        if project_id:
+            proj_obj = Project.query.get(project_id)
+            proj_name = proj_obj.name if proj_obj else ''
+        if district_id:
+            dist_obj = District.query.get(district_id)
+            dist_name = dist_obj.name if dist_obj else ''
+        month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+        title_parts = []
+        if proj_name:
+            title_parts.append(proj_name)
+        if dist_name:
+            title_parts.append(dist_name)
+        report_title = (' - '.join(title_parts) if title_parts else 'All Projects') + " \u2014 Driver's Attendance Sheet For the Month of " + month_names[month] + '-' + str(year)
+
+        drivers_query = Driver.query.filter(
+            Driver.vehicle_id.isnot(None),
+        ).outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+        if scope_projects:
+            drivers_query = drivers_query.filter(db.or_(Driver.project_id.in_(scope_projects), Vehicle.project_id.in_(scope_projects)))
+        if scope_districts:
+            drivers_query = drivers_query.filter(db.or_(Driver.district_id.in_(scope_districts), Vehicle.district_id.in_(scope_districts)))
+        if scope_vehicles:
+            drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
+        if scope_shifts:
+            drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
+        if project_id:
+            drivers_query = drivers_query.filter(db.or_(Driver.project_id == project_id, Vehicle.project_id == project_id))
+        if district_id:
+            drivers_query = drivers_query.filter(db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id))
+        if vehicle_id:
+            drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
+        if shift:
+            drivers_query = drivers_query.filter(Driver.shift == shift)
+        driver_id_filter = request.form.get('driver_id', type=int) or 0
+        if driver_id_filter:
+            drivers_query = drivers_query.filter(Driver.id == driver_id_filter)
+        if search:
+            flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
+            if flt is not None:
+                drivers_query = drivers_query.filter(flt)
+        drivers = drivers_query.distinct().order_by(Driver.name).all()
+
+        for d in drivers:
+            att_rows = DriverAttendance.query.filter(
+                DriverAttendance.driver_id == d.id,
+                DriverAttendance.attendance_date >= start_d,
+                DriverAttendance.attendance_date <= end_d
+            ).all()
+            by_status = {}
+            for r in att_rows:
+                by_status[r.status] = by_status.get(r.status, 0) + 1
+            present_days = by_status.get('Present', 0) + by_status.get('Late', 0) + by_status.get('Half-Day', 0)
+
+            left_rec = DriverStatusChange.query.filter(
+                DriverStatusChange.driver_id == d.id,
+                DriverStatusChange.action_type == 'left',
+            ).order_by(DriverStatusChange.change_date.desc()).first()
+
+            rejoin_rec = DriverStatusChange.query.filter(
+                DriverStatusChange.driver_id == d.id,
+                DriverStatusChange.action_type == 'rejoin',
+            ).order_by(DriverStatusChange.change_date.desc()).first()
+
+            transfer_rec = DriverTransfer.query.filter(
+                DriverTransfer.driver_id == d.id,
+            ).order_by(DriverTransfer.transfer_date.desc()).first()
+
+            maint_days = 0
+            if d.vehicle_id:
+                maint_days = MaintenanceExpense.query.filter(
+                    MaintenanceExpense.vehicle_id == d.vehicle_id,
+                    MaintenanceExpense.expense_date >= start_d,
+                    MaintenanceExpense.expense_date <= end_d
+                ).count()
+
+            total_working_days = present_days - ndays
+
+            remarks_parts = []
+            if transfer_rec:
+                old_v = transfer_rec.old_vehicle.vehicle_no if transfer_rec.old_vehicle else '?'
+                new_v = transfer_rec.new_vehicle.vehicle_no if transfer_rec.new_vehicle else '?'
+                t_date = transfer_rec.transfer_date.strftime('%d-%m-%Y') if transfer_rec.transfer_date else ''
+                remarks_parts.append(f'Transferred from {old_v} to {new_v} on {t_date}')
+                if transfer_rec.remarks:
+                    remarks_parts.append(transfer_rec.remarks)
+            if rejoin_rec:
+                r_date = rejoin_rec.change_date.strftime('%d-%m-%Y') if rejoin_rec.change_date else ''
+                remarks_parts.append(f'Rejoined on {r_date}')
+                if rejoin_rec.remarks:
+                    remarks_parts.append(rejoin_rec.remarks)
+            if left_rec and d.status != 'Active':
+                l_date = left_rec.change_date.strftime('%d-%m-%Y') if left_rec.change_date else ''
+                remarks_parts.append(f'Left on {l_date}')
+                if left_rec.reason:
+                    remarks_parts.append(left_rec.reason)
+
+            report.append({
+                'driver': d,
+                'date_of_joining': d.assign_date,
+                'date_of_leaving': left_rec.change_date if left_rec else None,
+                'date_of_rejoining': rejoin_rec.change_date if rejoin_rec else None,
+                'transfer_date': transfer_rec.transfer_date if transfer_rec else None,
+                'working_days': ndays,
+                'present_days': present_days,
+                'maintenance_days': maint_days,
+                'total_working_days': total_working_days,
+                'remarks': '. '.join(remarks_parts) if remarks_parts else '',
+            })
+
+    vd_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
+    if scope_projects:
+        vd_q = vd_q.filter(Driver.project_id.in_(scope_projects))
+    if scope_vehicles:
+        vd_q = vd_q.filter(Driver.vehicle_id.in_(scope_vehicles))
+    vehicle_drivers = vd_q.order_by(Driver.name).all()
+    selected_driver_id = (request.form.get('driver_id', type=int) or 0) if request.method == 'POST' else 0
+
+    return render_template('driver_attendance_tra_report.html',
+        form=form, report=report, report_title=report_title,
+        single_vehicle=single_vehicle, has_single_scope=has_single_scope,
+        selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift,
+        vehicle_choices=vehicle_choices, disable_project=disable_project,
+        disable_district=disable_district, vehicle_drivers=vehicle_drivers,
+        selected_driver_id=selected_driver_id)
+
+
+# ────────────────────────────────────────────────
 # Leave Approval Workflow
 # ────────────────────────────────────────────────
 @app.route('/leave-requests')

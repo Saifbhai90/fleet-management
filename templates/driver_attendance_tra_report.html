@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block title %}TRA Attendance Sheet{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="mb-0"><i class="bi bi-clipboard-data me-2" style="color:#1d4ed8;"></i>TRA Attendance Sheet</h2>
+    <div id="traReportExportButtons" class="d-flex gap-2"></div>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="post" action="{{ url_for('driver_attendance_tra_report') }}" id="traReportForm">
+        {{ form.hidden_tag() }}
+        <div class="row g-3 align-items-end">
+          <div class="col-md-2 col-lg-1">
+            <label class="form-label">Month</label>
+            <input type="number" name="month" class="form-control" min="1" max="12" value="{{ form.month.data or '' }}" placeholder="1-12" required>
+          </div>
+          <div class="col-md-2 col-lg-1">
+            <label class="form-label">Year</label>
+            <input type="number" name="year" class="form-control" min="2020" max="2030" value="{{ form.year.data or '' }}" placeholder="2025" required>
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Project</label>
+            <select name="project_id" id="traProjectSelect" class="form-select search-select" {% if disable_project %}disabled{% endif %}>
+              {% for val, label in form.project_id.choices %}
+                <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if disable_project %}<input type="hidden" name="project_id" value="{{ form.project_id.data or 0 }}">{% endif %}
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">District</label>
+            <select name="district_id" id="traDistrictSelect" class="form-select search-select" {% if disable_district %}disabled{% endif %}>
+              {% for val, label in form.district_id.choices %}
+                <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if disable_district %}<input type="hidden" name="district_id" value="{{ form.district_id.data or 0 }}">{% endif %}
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Vehicle</label>
+            <select name="vehicle_id" id="traVehicleSelect" class="form-select search-select">
+              <option value="0">-- All Vehicles --</option>
+              {% if vehicle_choices %}
+                {% for v_id, v_label in vehicle_choices %}
+              <option value="{{ v_id }}" {% if selected_vehicle_id == v_id %}selected{% endif %}>{{ v_label }}</option>
+                {% endfor %}
+              {% elif has_single_scope and single_vehicle %}
+              <option value="{{ single_vehicle.id }}" selected>
+                {{ single_vehicle.vehicle_no }}{% if single_vehicle.vehicle_type %} ({{ single_vehicle.vehicle_type }}){% endif %}
+              </option>
+              {% endif %}
+            </select>
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Shift</label>
+            {% set allowed_shifts = session.get('allowed_shifts') or [] %}
+            <select name="shift" id="traShiftSelect" class="form-select search-select">
+              <option value="">-- All Shifts --</option>
+              {% if not allowed_shifts %}
+              <option value="Morning" {% if (selected_shift or '') == 'Morning' %}selected{% endif %}>Morning</option>
+              <option value="Night" {% if (selected_shift or '') == 'Night' %}selected{% endif %}>Night</option>
+              {% else %}
+                {% for s in allowed_shifts %}
+                <option value="{{ s }}" {% if (selected_shift or '') == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+              {% endif %}
+            </select>
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Driver</label>
+            <select name="driver_id" id="traDriverSelect" class="form-select search-select">
+              <option value="0">-- All Drivers --</option>
+              {% for d in vehicle_drivers %}
+              <option value="{{ d.id }}" {% if selected_driver_id == d.id %}selected{% endif %}>{{ d.name }} ({{ d.driver_id or '-' }}) - {{ d.shift or '-' }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4 col-lg-2">
+            <label class="form-label">Search</label>
+            <div class="input-group input-group-sm">
+              <input type="text" name="search" class="form-control" placeholder="Name, Driver ID, Vehicle" value="{{ form.search.data or '' }}">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-search me-1"></i>Show
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if report %}
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header text-white py-3" style="background:linear-gradient(135deg,#1d4ed8 0%,#1e40af 100%);">
+      <span class="fw-semibold">{{ report_title }}</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle mb-0" id="traReportTable">
+          <thead>
+            <tr style="background:#2563eb;color:#fff;">
+              <th class="ps-3 text-center" style="min-width:45px;">S.No</th>
+              <th style="min-width:120px;">District Name</th>
+              <th style="min-width:150px;">Parking Station</th>
+              <th style="min-width:110px;">Vehicle</th>
+              <th style="min-width:80px;">Shift</th>
+              <th style="min-width:150px;">Driver Name</th>
+              <th class="text-center" style="min-width:100px;">Date of Joining</th>
+              <th class="text-center" style="min-width:100px;">Date of Leaving</th>
+              <th class="text-center" style="min-width:100px;">Date of Rejoining</th>
+              <th class="text-center" style="min-width:100px;">Transfer Date</th>
+              <th class="text-center" style="min-width:80px;">Working Days</th>
+              <th class="text-center" style="min-width:90px;">Total Days in this Month</th>
+              <th class="text-center" style="min-width:90px;">Vehicles in Maintenance</th>
+              <th class="text-center" style="min-width:90px;">Total Working Days</th>
+              <th style="min-width:120px;">Bank Name</th>
+              <th style="min-width:130px;">Account Title</th>
+              <th style="min-width:160px;">Account Number</th>
+              <th style="min-width:250px;">Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in report %}
+            {% set d = row.driver %}
+            <tr>
+              <td class="ps-3 text-center">{{ loop.index }}</td>
+              <td>{{ d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else '-') }}</td>
+              <td>{{ d.vehicle.parking_station.name if d.vehicle and d.vehicle.parking_station else '-' }}</td>
+              <td class="fw-medium">{{ d.vehicle.vehicle_no if d.vehicle else '-' }}</td>
+              <td>{{ d.shift or '-' }}</td>
+              <td class="fw-medium">{{ d.name }}</td>
+              <td class="text-center">{{ row.date_of_joining.strftime('%d-%b-%y') if row.date_of_joining else '' }}</td>
+              <td class="text-center">{{ row.date_of_leaving.strftime('%d-%m-%Y') if row.date_of_leaving else '' }}</td>
+              <td class="text-center">{{ row.date_of_rejoining.strftime('%d-%m-%Y') if row.date_of_rejoining else '' }}</td>
+              <td class="text-center">{{ row.transfer_date.strftime('%d-%m-%Y') if row.transfer_date else '' }}</td>
+              <td class="text-center">{{ row.working_days }}</td>
+              <td class="text-center">{{ row.present_days }}</td>
+              <td class="text-center">{{ row.maintenance_days }}</td>
+              <td class="text-center {% if row.total_working_days < 0 %}text-danger fw-bold{% endif %}">{{ row.total_working_days }}</td>
+              <td>{{ d.bank_name or '-' }}</td>
+              <td>{{ d.account_title or '-' }}</td>
+              <td class="small">{{ d.account_no or '-' }}</td>
+              <td class="small" style="max-width:300px;">{{ row.remarks or '' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer bg-light text-muted small d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span>Total drivers: <strong>{{ report|length }}</strong></span>
+      <input type="text" id="traTableSearch" class="form-control form-control-sm" style="max-width: 220px;" placeholder="Search in report...">
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-info border-0 shadow-sm">
+    <i class="bi bi-info-circle me-2"></i>Month, Year aur Project / District select karein, phir <strong>Show</strong> dabayein.
+  </div>
+  {% endif %}
+</div>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
+<script>
+(function() {
+  var projectSelect = document.getElementById('traProjectSelect');
+  var districtSelect = document.getElementById('traDistrictSelect');
+  var vehicleSelect = document.getElementById('traVehicleSelect');
+  var shiftSelect = document.getElementById('traShiftSelect');
+  var driverSelect = document.getElementById('traDriverSelect');
+
+  var scope = {
+    projects: {{ (session.get('allowed_projects') or []) | tojson }},
+    districts: {{ (session.get('allowed_districts') or []) | tojson }},
+    vehicles: {{ (session.get('allowed_vehicles') or []) | tojson }},
+    shifts: {{ (session.get('allowed_shifts') or []) | tojson }}
+  };
+  var hasSingle = scope.projects.length === 1 && scope.districts.length === 1 && scope.vehicles.length === 1 && scope.shifts.length === 1;
+
+  function loadDistricts(projectId) {
+    if (hasSingle) return;
+    districtSelect.innerHTML = '<option value="0">-- All Districts --</option>';
+    if (!projectId || projectId === '0') {
+      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+      return;
+    }
+    fetch('/api/filter/districts-by-project?project_id=' + projectId)
+      .then(function(r) { return r.json(); })
+      .then(function(districts) {
+        districts.forEach(function(d) {
+          var opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = d.name;
+          districtSelect.appendChild(opt);
+        });
+        loadVehicles();
+      });
+  }
+
+  function loadVehicles() {
+    var pid = projectSelect.value || '0';
+    var did = districtSelect.value || '0';
+    vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
+      .then(function(r) { return r.json(); })
+      .then(function(vehicles) {
+        vehicles.forEach(function(v) {
+          var opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+          vehicleSelect.appendChild(opt);
+        });
+        if (hasSingle && scope.vehicles.length === 1) {
+          vehicleSelect.value = String(scope.vehicles[0]);
+          vehicleSelect.disabled = true;
+        }
+      });
+  }
+
+  function refreshDriverDropdown(onDone) {
+    var pid = projectSelect.value || '0';
+    var did = districtSelect.value || '0';
+    var vid = vehicleSelect.value || '0';
+    var sh = shiftSelect.value || '';
+    fetch('/api/attendance/filtered-drivers?project_id=' + pid + '&district_id=' + did + '&vehicle_id=' + vid + '&shift=' + encodeURIComponent(sh))
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        if (!driverSelect) { if (typeof onDone === 'function') onDone(); return; }
+        var cur = driverSelect.value;
+        driverSelect.innerHTML = '<option value="0">-- All Drivers --</option>';
+        arr.forEach(function(d) {
+          var opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = d.name + ' (' + (d.driver_id || '-') + ') - ' + (d.shift || '-');
+          if (String(d.id) === String(cur)) opt.selected = true;
+          driverSelect.appendChild(opt);
+        });
+        if (hasSingle && arr.length >= 1) {
+          driverSelect.value = String(arr[0].id);
+          driverSelect.disabled = true;
+        }
+        if (typeof onDone === 'function') onDone();
+      }).catch(function() { if (typeof onDone === 'function') onDone(); });
+  }
+
+  projectSelect.addEventListener('change', function() { loadDistricts(this.value); });
+  districtSelect.addEventListener('change', function() { loadVehicles(); refreshDriverDropdown(); });
+  if (vehicleSelect) vehicleSelect.addEventListener('change', function() { refreshDriverDropdown(); });
+  if (shiftSelect) shiftSelect.addEventListener('change', function() { refreshDriverDropdown(); });
+
+  if (hasSingle) {
+    if (scope.projects.length === 1) { projectSelect.value = String(scope.projects[0]); projectSelect.disabled = true; }
+    if (scope.districts.length === 1) { districtSelect.value = String(scope.districts[0]); districtSelect.disabled = true; }
+    if (scope.vehicles.length === 1) { vehicleSelect.value = String(scope.vehicles[0]); vehicleSelect.disabled = true; }
+    if (scope.shifts.length === 1) { shiftSelect.value = String(scope.shifts[0]); shiftSelect.disabled = true; }
+  }
+
+  {% if request.method == 'GET' and not report %}
+  if (hasSingle) {
+    refreshDriverDropdown(function() {
+      document.getElementById('traReportForm').submit();
+    });
+  }
+  {% endif %}
+})();
+
+var traSearch = document.getElementById('traTableSearch');
+if (traSearch) {
+  traSearch.addEventListener('keyup', function() {
+    var q = this.value.trim();
+    document.querySelectorAll('#traReportTable tbody tr').forEach(function(row) {
+      row.style.display = (!q || window.fleetMultiWordMatch(row.innerText || row.textContent, q)) ? '' : 'none';
+    });
+  });
+}
+
+$(document).ready(function () {
+  if (window.innerWidth < 768) return;
+  var $t = $('#traReportTable');
+  if ($t.length) {
+    var dt = $t.DataTable({
+      pageLength: 50,
+      searching: false,
+      ordering: true,
+      dom: 'rt<"d-flex justify-content-between align-items-center p-2"ip>',
+      buttons: [
+        {
+          extend: 'excelHtml5',
+          text: '<i class="bi bi-file-earmark-excel me-1"></i> Excel',
+          className: 'btn btn-success btn-sm',
+          title: '{{ report_title|e }}'
+        },
+        {
+          extend: 'print',
+          text: '<i class="bi bi-printer me-1"></i> Print / Preview',
+          className: 'btn btn-secondary btn-sm',
+          autoPrint: false,
+          customize: window._dtPrintCustomize('TRA Attendance Sheet', '#1d4ed8', 'clipboard-data')
+        }
+      ]
+    });
+    dt.buttons().container().appendTo('#traReportExportButtons');
+  }
+});
+</script>
+{% endblock %}
