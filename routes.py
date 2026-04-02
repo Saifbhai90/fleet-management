@@ -14365,7 +14365,6 @@ def fuel_expense_list():
                            district_id=district_id, project_id=project_id, vehicle_id=vehicle_id)
 
 
-@app.route('/expenses/fuel/add', methods=['GET', 'POST'])
 def _expense_by_choices():
     choices = [('', '-- None (No Wallet Deduction) --')]
     for e in Employee.query.filter_by(status='Active').order_by(Employee.name).all():
@@ -14392,6 +14391,7 @@ def _deduct_from_wallet(expense_type, expense_obj, expense_code, expense_by_val)
         print(f"Wallet deduction failed for {expense_type}: {e}")
 
 
+@app.route('/expenses/fuel/add', methods=['GET', 'POST'])
 def fuel_expense_add():
     form = FuelExpenseForm()
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
