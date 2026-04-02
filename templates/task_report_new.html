@@ -128,85 +128,67 @@
   {% endif %}
 </div>
 
-<!-- EMG Detail Modal -->
-<div class="modal fade" id="emgModal" tabindex="-1">
-  <div class="modal-dialog modal-xl modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header bg-info bg-opacity-10">
-        <h5 class="modal-title"><i class="bi bi-clipboard2-pulse me-2"></i>EMG Tasks — <span id="emgVehicleNo"></span></h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body p-0">
-        <div class="table-responsive">
-          <table class="table table-sm table-hover align-middle mb-0" id="emgDetailTable">
-            <thead class="table-light">
-              <tr>
-                <th class="ps-3">#</th>
-                <th>TaskId</th>
-                <th>Phone</th>
-                <th>Name</th>
-                <th>Vehicle</th>
-                <th>ReceivedBy</th>
-                <th>Category</th>
-                <th>FacilityName</th>
-                <th>CreatedDate</th>
-                <th>CompletedDateTime</th>
-              </tr>
-            </thead>
-            <tbody id="emgDetailBody"></tbody>
-          </table>
-        </div>
-        <div id="emgLoading" class="text-center py-4 d-none"><div class="spinner-border spinner-border-sm text-info"></div> Loading...</div>
-        <div id="emgEmpty" class="text-center py-4 text-muted d-none"><i class="bi bi-inbox me-1"></i>No EMG tasks found.</div>
-      </div>
-      <div class="modal-footer justify-content-between">
-        <span class="text-muted small" id="emgCount"></span>
-        <div class="d-flex gap-2">
-          <button class="btn btn-outline-success btn-sm" id="emgExportBtn"><i class="bi bi-file-earmark-excel me-1"></i>Export to Excel</button>
-          <button class="btn btn-outline-secondary btn-sm" id="emgPrintBtn"><i class="bi bi-printer me-1"></i>Print</button>
-          <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-        </div>
-      </div>
+<!-- EMG Detail Panel (inline, no backdrop) -->
+<div id="emgPanel" class="card shadow-lg border-info d-none mb-3" style="z-index:10;">
+  <div class="card-header bg-info bg-opacity-10 d-flex justify-content-between align-items-center py-2">
+    <h6 class="mb-0"><i class="bi bi-clipboard2-pulse me-2"></i>EMG Tasks — <span id="emgVehicleNo"></span></h6>
+    <button type="button" class="btn-close" id="emgCloseBtn"></button>
+  </div>
+  <div class="card-body p-0" style="max-height:320px;overflow-y:auto;">
+    <table class="table table-sm table-hover align-middle mb-0" id="emgDetailTable">
+      <thead class="table-light sticky-top">
+        <tr>
+          <th class="ps-3">#</th><th>TaskId</th><th>Phone</th><th>Name</th><th>Vehicle</th>
+          <th>ReceivedBy</th><th>Category</th><th>FacilityName</th><th>CreatedDate</th><th>CompletedDateTime</th>
+        </tr>
+      </thead>
+      <tbody id="emgDetailBody"></tbody>
+    </table>
+    <div id="emgLoading" class="text-center py-3 d-none"><span class="spinner-border spinner-border-sm text-info"></span> Loading...</div>
+    <div id="emgEmpty" class="text-center py-3 text-muted d-none"><i class="bi bi-inbox me-1"></i>No EMG tasks found.</div>
+  </div>
+  <div class="card-footer py-2 d-flex justify-content-between align-items-center">
+    <span class="text-muted small" id="emgCount"></span>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-success btn-sm" id="emgExportBtn"><i class="bi bi-file-earmark-excel me-1"></i>Export to Excel</button>
+      <button class="btn btn-outline-secondary btn-sm" id="emgPrintBtn"><i class="bi bi-printer me-1"></i>Print</button>
+      <button class="btn btn-secondary btn-sm" id="emgCloseBtnFooter">Close</button>
     </div>
   </div>
 </div>
 
-<!-- Tracker Detail / Edit Modal -->
-<div class="modal fade" id="trackerModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header bg-dark text-white">
-        <h5 class="modal-title"><i class="bi bi-speedometer2 me-2"></i>Tracker KM — <span id="trackerVehicleNo"></span></h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div id="trackerLoading" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div> Loading...</div>
-        <div id="trackerContent" class="d-none">
-          <input type="hidden" id="trackerRecId">
-          <div class="row g-3 mb-3">
-            <div class="col-md-4"><label class="form-label text-muted small">ID</label><input class="form-control form-control-sm" id="trId" readonly></div>
-            <div class="col-md-4"><label class="form-label text-muted small">RegNo</label><input class="form-control form-control-sm" id="trRegNo" readonly></div>
-            <div class="col-md-4"></div>
-            <div class="col-md-3"><label class="form-label text-muted small">DateFrom</label><input class="form-control form-control-sm" id="trDateFrom" readonly></div>
-            <div class="col-md-3"><label class="form-label text-muted small">TimeFrom</label><input class="form-control form-control-sm" id="trTimeFrom" readonly></div>
-            <div class="col-md-3"><label class="form-label text-muted small">DateTo</label><input class="form-control form-control-sm" id="trDateTo" readonly></div>
-            <div class="col-md-3"><label class="form-label text-muted small">TimeTo</label><input class="form-control form-control-sm" id="trTimeTo" readonly></div>
-            <div class="col-md-4"><label class="form-label text-muted small">Mileage</label><input class="form-control form-control-sm" id="trMileage" readonly></div>
-            <div class="col-md-4"><label class="form-label text-muted small">PtoP</label><input class="form-control form-control-sm" id="trPtoP" readonly></div>
-            <div class="col-md-4">
-              <label class="form-label fw-bold text-primary small">Selected KM <i class="bi bi-pencil-square"></i></label>
-              <input type="number" step="0.01" min="0" class="form-control form-control-sm border-primary" id="trSelectedKm">
-              <div class="text-muted" style="font-size:.7rem;margin-top:2px;" id="trAutoHint"></div>
-            </div>
-          </div>
+<!-- Tracker Detail / Edit Panel (inline, no backdrop) -->
+<div id="trackerPanel" class="card shadow-lg border-dark d-none mb-3" style="z-index:10;">
+  <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
+    <h6 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Tracker KM — <span id="trackerVehicleNo"></span></h6>
+    <button type="button" class="btn-close btn-close-white" id="trackerCloseBtn"></button>
+  </div>
+  <div class="card-body">
+    <div id="trackerLoading" class="text-center py-3"><span class="spinner-border spinner-border-sm"></span> Loading...</div>
+    <div id="trackerContent" class="d-none">
+      <input type="hidden" id="trackerRecId">
+      <div class="row g-3">
+        <div class="col-md-4"><label class="form-label text-muted small mb-0">ID</label><input class="form-control form-control-sm" id="trId" readonly></div>
+        <div class="col-md-4"><label class="form-label text-muted small mb-0">RegNo</label><input class="form-control form-control-sm" id="trRegNo" readonly></div>
+        <div class="col-md-4"></div>
+        <div class="col-md-3"><label class="form-label text-muted small mb-0">DateFrom</label><input class="form-control form-control-sm" id="trDateFrom" readonly></div>
+        <div class="col-md-3"><label class="form-label text-muted small mb-0">TimeFrom</label><input class="form-control form-control-sm" id="trTimeFrom" readonly></div>
+        <div class="col-md-3"><label class="form-label text-muted small mb-0">DateTo</label><input class="form-control form-control-sm" id="trDateTo" readonly></div>
+        <div class="col-md-3"><label class="form-label text-muted small mb-0">TimeTo</label><input class="form-control form-control-sm" id="trTimeTo" readonly></div>
+        <div class="col-md-4"><label class="form-label text-muted small mb-0">Mileage</label><input class="form-control form-control-sm" id="trMileage" readonly></div>
+        <div class="col-md-4"><label class="form-label text-muted small mb-0">PtoP</label><input class="form-control form-control-sm" id="trPtoP" readonly></div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold text-primary small mb-0">Selected KM <i class="bi bi-pencil-square"></i></label>
+          <input type="number" step="0.01" min="0" class="form-control form-control-sm border-primary" id="trSelectedKm">
+          <div class="text-muted" style="font-size:.7rem;margin-top:2px;" id="trAutoHint"></div>
         </div>
-        <div id="trackerEmpty" class="text-center py-4 text-muted d-none"><i class="bi bi-inbox me-1"></i>No mileage record for this vehicle/date.</div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary btn-sm" id="trackerSaveBtn" disabled><i class="bi bi-save me-1"></i>Save</button>
-        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
+    <div id="trackerEmpty" class="text-center py-3 text-muted d-none"><i class="bi bi-inbox me-1"></i>No mileage record for this vehicle/date.</div>
+  </div>
+  <div class="card-footer py-2 d-flex justify-content-end gap-2">
+    <button class="btn btn-primary btn-sm" id="trackerSaveBtn" disabled><i class="bi bi-save me-1"></i>Save</button>
+    <button class="btn btn-secondary btn-sm" id="trackerCloseBtnFooter">Close</button>
   </div>
 </div>
 
@@ -287,9 +269,23 @@
     }
   }
 
-  /* ── EMG Detail Modal ───────────────────────────────────── */
-  var emgModal = document.getElementById('emgModal');
+  /* ── Helpers ─────────────────────────────────────────────── */
+  function _he(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+  var emgPanel = document.getElementById('emgPanel');
+  var trackerPanel = document.getElementById('trackerPanel');
+
+  function _hidePanel(panel) { panel.classList.add('d-none'); }
+  function _showPanel(panel) {
+    _hidePanel(emgPanel); _hidePanel(trackerPanel);
+    panel.classList.remove('d-none');
+    panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+
+  /* ── EMG Detail Panel ──────────────────────────────────── */
   var _emgData = [];
+  document.getElementById('emgCloseBtn').addEventListener('click', function() { _hidePanel(emgPanel); });
+  document.getElementById('emgCloseBtnFooter').addEventListener('click', function() { _hidePanel(emgPanel); });
+
   document.querySelectorAll('.emg-link').forEach(function(a) {
     a.addEventListener('click', function(e) {
       e.preventDefault();
@@ -300,7 +296,7 @@
       document.getElementById('emgEmpty').classList.add('d-none');
       document.getElementById('emgCount').textContent = '';
       _emgData = [];
-      bootstrap.Modal.getOrCreateInstance(emgModal).show();
+      _showPanel(emgPanel);
       fetch('/api/task-report/emg-detail?date=' + encodeURIComponent(dt) + '&vehicle_no=' + encodeURIComponent(vno))
         .then(function(r) { return r.json(); })
         .then(function(rows) {
@@ -326,8 +322,6 @@
         });
     });
   });
-
-  function _he(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
   document.getElementById('emgExportBtn').addEventListener('click', function() {
     if (!_emgData.length) return;
@@ -357,9 +351,11 @@
     w.print();
   });
 
-  /* ── Tracker Detail / Edit Modal ────────────────────────── */
-  var trackerModal = document.getElementById('trackerModal');
+  /* ── Tracker Detail / Edit Panel ───────────────────────── */
   var _trackerLinkEl = null;
+  document.getElementById('trackerCloseBtn').addEventListener('click', function() { _hidePanel(trackerPanel); });
+  document.getElementById('trackerCloseBtnFooter').addEventListener('click', function() { _hidePanel(trackerPanel); });
+
   document.querySelectorAll('.tracker-link').forEach(function(a) {
     a.addEventListener('click', function(e) {
       e.preventDefault();
@@ -370,7 +366,7 @@
       document.getElementById('trackerContent').classList.add('d-none');
       document.getElementById('trackerEmpty').classList.add('d-none');
       document.getElementById('trackerSaveBtn').disabled = true;
-      bootstrap.Modal.getOrCreateInstance(trackerModal).show();
+      _showPanel(trackerPanel);
       fetch('/api/task-report/tracker-detail?date=' + encodeURIComponent(dt) + '&vehicle_no=' + encodeURIComponent(vno))
         .then(function(r) { return r.json(); })
         .then(function(d) {
@@ -417,7 +413,7 @@
           var row = _trackerLinkEl.closest('tr');
           if (row) { row.dataset.tracker = d.effective_km; updateRow(row); }
         }
-        bootstrap.Modal.getOrCreateInstance(trackerModal).hide();
+        _hidePanel(trackerPanel);
       } else {
         alert('Error: ' + (d.error || 'Unknown'));
         btn.disabled = false;
