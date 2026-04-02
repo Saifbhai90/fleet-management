@@ -12327,7 +12327,12 @@ def task_report_list():
             VehicleDailyTask.vehicle_id == t.vehicle_id,
             VehicleDailyTask.task_date < task_d
         ).order_by(VehicleDailyTask.task_date.desc()).first()
-        start_reading = float(prev.close_reading) if prev else 0
+        if prev and prev.close_reading is not None:
+            start_reading = float(prev.close_reading)
+        elif t.start_reading is not None:
+            start_reading = float(t.start_reading)
+        else:
+            start_reading = 0
         close_reading = float(t.close_reading)
         kms_driven = close_reading - start_reading
         if kms_driven < 0:
@@ -12565,30 +12570,38 @@ def task_report_new():
         for v in vehicles:
             close_val = request.form.get('vehicle_%s_close_reading' % v.id)
             tasks_val = request.form.get('vehicle_%s_tasks_count' % v.id)
+            start_val = request.form.get('vehicle_%s_start_reading' % v.id)
             try:
                 close_reading = float(close_val) if close_val not in (None, '') else None
             except (TypeError, ValueError):
                 close_reading = None
             tasks_count = int(float(tasks_val)) if tasks_val not in (None, '') else 0
+            try:
+                user_start = float(start_val) if start_val not in (None, '') else None
+            except (TypeError, ValueError):
+                user_start = None
             if close_reading is None:
                 missing.append(v.vehicle_no)
             else:
-                to_save.append((v, close_reading, tasks_count))
+                to_save.append((v, close_reading, tasks_count, user_start))
         if missing:
             flash('Sab vehicles ke liye Close Reading zaroori hai. Missing: ' + ', '.join(missing), 'danger')
             view_date = task_date
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
             projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all() if district_id else []
             return render_template('task_report_new.html', rows=rows, view_date=view_date, district_id=district_id, project_id=project_id, districts=districts, projects=projects)
-        for v, close_reading, tasks_count in to_save:
+        for v, close_reading, tasks_count, user_start in to_save:
             existing = VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first()
             if existing:
                 existing.close_reading = close_reading
                 existing.tasks_count = tasks_count
+                if user_start is not None:
+                    existing.start_reading = user_start
             else:
                 db.session.add(VehicleDailyTask(
                     vehicle_id=v.id, project_id=project_id or None, district_id=district_id or None,
                     task_date=task_date, close_reading=close_reading, tasks_count=tasks_count,
+                    start_reading=user_start,
                 ))
         try:
             db.session.commit()
@@ -12623,7 +12636,8 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
             VehicleDailyTask.vehicle_id == v.id,
             VehicleDailyTask.task_date < task_date
         ).order_by(VehicleDailyTask.task_date.desc()).first()
-        start_reading = float(prev.close_reading) if prev else 0
+        has_prev = prev is not None and prev.close_reading is not None
+        start_reading = float(prev.close_reading) if has_prev else 0
         emg_tasks = EmergencyTaskRecord.query.filter(
             EmergencyTaskRecord.task_date == task_date,
             EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
@@ -12632,11 +12646,14 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
         _mil_rec = VehicleMileageRecord.query.filter_by(task_date=task_date, reg_no=v.vehicle_no).first()
         tracker_km = _mil_rec.effective_km() if _mil_rec else 0
         existing = VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first()
+        if existing and existing.start_reading is not None and not has_prev:
+            start_reading = float(existing.start_reading)
         existing_close = float(existing.close_reading) if existing and existing.close_reading is not None else None
         existing_tasks = existing.tasks_count if existing else None
         if form:
             key_close = 'vehicle_%s_close_reading' % v.id
             key_tasks = 'vehicle_%s_tasks_count' % v.id
+            key_start = 'vehicle_%s_start_reading' % v.id
             if key_close in form and form[key_close] not in (None, ''):
                 try:
                     existing_close = float(form[key_close])
@@ -12647,9 +12664,15 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
                     existing_tasks = int(float(form[key_tasks]))
                 except (TypeError, ValueError):
                     pass
+            if not has_prev and key_start in form and form[key_start] not in (None, ''):
+                try:
+                    start_reading = float(form[key_start])
+                except (TypeError, ValueError):
+                    pass
         rows.append({
             'vehicle': v,
             'start_reading': start_reading,
+            'start_editable': not has_prev,
             'emg_tasks': emg_tasks,
             'tracker_km': round(tracker_km, 2),
             'close_reading': existing_close,

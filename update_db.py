@@ -103,6 +103,9 @@ def update_database_schema():
             ('penalty_record', 'source_type', 'VARCHAR(30)'),
             ('penalty_record', 'source_id', 'INTEGER'),
 
+            # VehicleDailyTask - editable start reading
+            ('vehicle_daily_task', 'start_reading', 'NUMERIC(12,2)'),
+
             # NEW: Driver Status Change table columns (agar table bana to columns bhi check)
             ('driver_status_change', 'driver_id', 'INTEGER NOT NULL REFERENCES driver(id)'),
             ('driver_status_change', 'action_type', 'VARCHAR(20) NOT NULL'),

@@ -84,7 +84,15 @@
                 <td>{{ row.vehicle.parking_station.name if row.vehicle.parking_station else '-' }}</td>
                 <td>{{ row.vehicle.vehicle_type or '-' }}</td>
                 <td class="fw-medium">{{ row.vehicle.vehicle_no }}</td>
+                {% if row.start_editable %}
+                <td class="text-end">
+                  <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_start_reading"
+                         class="form-control form-control-sm text-end start-input" style="min-width:90px;"
+                         value="{% if row.start_reading %}{{ "%.0f"|format(row.start_reading) }}{% endif %}" placeholder="Start">
+                </td>
+                {% else %}
                 <td class="text-end start-reading">{{ "%.0f"|format(row.start_reading) }}</td>
+                {% endif %}
                 <td class="text-end">
                   <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_close_reading"
                          class="form-control form-control-sm text-end close-input" style="min-width:90px;"
@@ -233,7 +241,9 @@
   }
 
   function updateRow(row) {
-    var start = parseFloat(row.dataset.start) || 0;
+    var startInp = row.querySelector('.start-input');
+    var start = startInp ? (startInp.value.trim() === '' ? 0 : parseFloat(startInp.value)) : (parseFloat(row.dataset.start) || 0);
+    if (startInp) row.dataset.start = start;
     var tracker = parseFloat(row.dataset.tracker) || 0;
     var emg = parseFloat(row.dataset.emg) || 0;
     var closeInp = row.querySelector('.close-input');

@@ -197,6 +197,7 @@ if _run_startup_tasks:
                 ('vehicle_move_without_task', 'driver_id', 'INTEGER REFERENCES driver(id)'),
                 ('penalty_record', 'source_type', 'VARCHAR(30)'),
                 ('penalty_record', 'source_id', 'INTEGER'),
+                ('vehicle_daily_task', 'start_reading', 'NUMERIC(12,2)'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():

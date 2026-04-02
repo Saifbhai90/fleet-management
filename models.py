@@ -497,6 +497,7 @@ class VehicleDailyTask(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
     district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
     task_date = db.Column(db.Date, nullable=False)
+    start_reading = db.Column(db.Numeric(12, 2), nullable=True)
     close_reading = db.Column(db.Numeric(12, 2), nullable=False)
     tasks_count = db.Column(db.Integer, default=1)
     remarks = db.Column(db.Text, nullable=True)
