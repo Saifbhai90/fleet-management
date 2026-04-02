@@ -50,6 +50,8 @@
     <div class="card-header bg-dark text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="fw-semibold">Report from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
       <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-outline-light btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-printer me-1"></i>Print</button>
+        <button class="btn btn-outline-light btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
         <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width:70px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
           <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
           <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
@@ -426,6 +428,71 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 })();
 window._fleetAfterFilter = function(){ if(typeof updateListTotals==='function') updateListTotals(); };
 document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('taskReportTable'); });
+
+/* ── Print visible table ── */
+document.getElementById('btnPrintReport').addEventListener('click', function() {
+  var tbl = document.getElementById('taskReportTable');
+  var title = 'Vehicles Daily Task Report — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}';
+  var clone = tbl.cloneNode(true);
+  clone.querySelectorAll('.ft-filter-wrap').forEach(function(el){ el.remove(); });
+  var rows = clone.querySelectorAll('tbody tr');
+  rows.forEach(function(r){ if(r.style.display==='none') r.remove(); });
+  var w = window.open('', '_blank', 'width=1200,height=800');
+  w.document.write('<!DOCTYPE html><html><head><title>' + title + '</title>');
+  w.document.write('<style>');
+  w.document.write('@page{size:A4 landscape;margin:8mm;}');
+  w.document.write('body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:0;}');
+  w.document.write('h3{text-align:center;margin:6px 0 10px;}');
+  w.document.write('table{width:100%;border-collapse:collapse;}');
+  w.document.write('th,td{border:1px solid #555;padding:3px 5px;text-align:left;white-space:nowrap;}');
+  w.document.write('th{background:#e9ecef;font-size:9px;}');
+  w.document.write('tfoot td{font-weight:bold;background:#f8f9fa;}');
+  w.document.write('.text-end{text-align:right;}.text-center{text-align:center;}');
+  w.document.write('.text-danger{color:#dc3545;}.fw-bold{font-weight:700;}');
+  w.document.write('</style></head><body>');
+  w.document.write('<h3>' + title + '</h3>');
+  w.document.write(clone.outerHTML);
+  w.document.write('</body></html>');
+  w.document.close();
+  w.focus();
+  setTimeout(function(){ w.print(); }, 300);
+});
+
+/* ── Export visible table to Excel (CSV) ── */
+document.getElementById('btnExportReport').addEventListener('click', function() {
+  var tbl = document.getElementById('taskReportTable');
+  var headers = [];
+  tbl.querySelectorAll('thead th').forEach(function(th){
+    var t = th.cloneNode(true);
+    t.querySelectorAll('.ft-filter-wrap').forEach(function(el){ el.remove(); });
+    headers.push(t.textContent.trim());
+  });
+  var csvRows = [headers.join(',')];
+  tbl.querySelectorAll('tbody tr.data-row').forEach(function(tr){
+    if(tr.style.display==='none') return;
+    var cells = [];
+    tr.querySelectorAll('td').forEach(function(td){
+      var val = td.textContent.trim().replace(/"/g,'""');
+      cells.push('"' + val + '"');
+    });
+    csvRows.push(cells.join(','));
+  });
+  var foot = tbl.querySelector('tfoot tr');
+  if(foot){
+    var fc = [];
+    foot.querySelectorAll('td').forEach(function(td){
+      var val = td.textContent.trim().replace(/"/g,'""');
+      fc.push('"' + val + '"');
+    });
+    csvRows.push(fc.join(','));
+  }
+  var csv = '\uFEFF' + csvRows.join('\n');
+  var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Daily_Task_Report_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.csv';
+  a.click();
+});
 </script>
 
 {% endblock %}
