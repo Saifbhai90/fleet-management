@@ -67,9 +67,20 @@ textarea.form-control { height: auto !important; }
 
                 <form method="POST" id="transferForm">
                     {{ form.hidden_tag() }}
+                    <input type="hidden" name="is_shift_only" id="is_shift_only" value="0">
+
+                    <div class="d-flex align-items-center gap-3 mb-3 p-3" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1.5px solid #f59e0b;border-radius:10px;">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="shiftOnlyToggle" style="width:48px;height:24px;cursor:pointer;">
+                            <label class="form-check-label fw-bold ms-2" for="shiftOnlyToggle" style="color:#92400e;cursor:pointer;">
+                                <i class="bi bi-arrow-repeat me-1"></i>Shift Change Only
+                            </label>
+                        </div>
+                        <small class="text-muted" id="shiftOnlyHint">Toggle ON to only change the driver's shift (same vehicle)</small>
+                    </div>
 
                     <!-- FROM Section -->
-                    <div class="zone-box from-zone">
+                    <div class="zone-box from-zone" id="fromZone">
                         <div class="zone-title text-danger"><i class="bi bi-geo-alt-fill"></i> Current Location (FROM)</div>
                         <div class="row g-2">
                             <div class="col-md-6">
@@ -91,8 +102,8 @@ textarea.form-control { height: auto !important; }
                         </div>
                     </div>
 
-                    <!-- TO Section -->
-                    <div class="zone-box to-zone">
+                    <!-- TO Section (location fields) -->
+                    <div class="zone-box to-zone" id="toLocationZone">
                         <div class="zone-title text-success"><i class="bi bi-geo-fill"></i> New Destination (TO)</div>
                         <div class="row g-2">
                             <div class="col-md-6">
@@ -107,6 +118,13 @@ textarea.form-control { height: auto !important; }
                                 <label class="form-label">New Vehicle</label>
                                 {{ form.new_vehicle_id(class="form-select search-select", id="new_vehicle") }}
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Shift + Date (always visible) -->
+                    <div class="zone-box to-zone" id="shiftDateZone">
+                        <div class="zone-title text-success" id="shiftZoneTitle"><i class="bi bi-clock-fill"></i> <span>Shift &amp; Date</span></div>
+                        <div class="row g-2">
                             <div class="col-md-6">
                                 <label class="form-label">New Shift</label>
                                 {{ form.new_shift(class="form-select search-select", id="new_shift") }}
@@ -128,7 +146,7 @@ textarea.form-control { height: auto !important; }
                     </div>
 
                     <button type="submit" class="btn-transfer" id="submitBtn" disabled>
-                        <i class="bi bi-check-circle me-1"></i> Confirm Driver Transfer
+                        <i class="bi bi-check-circle me-1"></i> <span id="submitText">Confirm Driver Transfer</span>
                     </button>
                 </form>
             </div>
@@ -160,6 +178,83 @@ textarea.form-control { height: auto !important; }
   var newVehicle   = document.getElementById('new_vehicle');
   var newShift     = document.getElementById('new_shift');
   var submitBtn    = document.getElementById('submitBtn');
+  var shiftOnlyToggle = document.getElementById('shiftOnlyToggle');
+  var shiftOnlyField = document.getElementById('is_shift_only');
+  var toLocationZone = document.getElementById('toLocationZone');
+  var submitText   = document.getElementById('submitText');
+  var shiftZoneTitle = document.getElementById('shiftZoneTitle');
+
+  var isShiftOnly = false;
+
+  function setShiftOnlyMode(on) {
+    isShiftOnly = on;
+    shiftOnlyField.value = on ? '1' : '0';
+    toLocationZone.style.display = on ? 'none' : '';
+    submitText.textContent = on ? 'Confirm Shift Change' : 'Confirm Driver Transfer';
+    shiftZoneTitle.querySelector('span').textContent = on ? 'New Shift & Date' : 'Shift & Date';
+
+    if (on) {
+      var vid = fromVehicle ? fromVehicle.value : '';
+      if (vid) {
+        loadShiftsForVehicle(vid);
+      }
+    }
+    checkSubmitReady();
+  }
+
+  function loadShiftsForVehicle(vid) {
+    if (!vid) return;
+    fetch('/get_available_shifts/' + vid).then(function(r){return r.json();}).then(function(data){
+      var shiftWarn = document.getElementById('shift_warning');
+      var warnText  = document.getElementById('warning_text');
+
+      var currentDriverId = driverId ? driverId.value : '';
+      if (isShiftOnly && currentDriverId) {
+        fetch('/get_driver_current_info/' + currentDriverId).then(function(r){return r.json();}).then(function(info){
+          var otherShift = info.shift === 'Morning' ? 'Night' : 'Morning';
+          var shiftAvail = data.some(function(s) { return s.id === otherShift; });
+          if (shiftWarn) shiftWarn.classList.add('d-none');
+          var html = '<option value="">-- Select Shift --</option>';
+          html += '<option value="' + otherShift + '">' + otherShift + '</option>';
+          rebuildSel(newShift, html);
+        }).catch(function() {
+          buildShiftOptions(data, shiftWarn, warnText);
+        });
+      } else {
+        buildShiftOptions(data, shiftWarn, warnText);
+      }
+    });
+  }
+
+  function buildShiftOptions(data, shiftWarn, warnText) {
+    if (data.length === 0) {
+      if (shiftWarn) shiftWarn.classList.remove('d-none');
+      if (warnText) warnText.textContent = 'No shift available on this vehicle.';
+      rebuildSel(newShift, '<option value="">Full</option>');
+      if (submitBtn) submitBtn.disabled = true;
+    } else {
+      if (shiftWarn) shiftWarn.classList.add('d-none');
+      var html = '<option value="">-- Select Shift --</option>';
+      data.forEach(function(s){ html += '<option value="' + s.id + '">' + s.name + '</option>'; });
+      rebuildSel(newShift, html);
+    }
+  }
+
+  function checkSubmitReady() {
+    if (!submitBtn) return;
+    var hasShift = newShift && newShift.value;
+    if (isShiftOnly) {
+      submitBtn.disabled = !(driverId && driverId.value && hasShift);
+    } else {
+      submitBtn.disabled = !hasShift;
+    }
+  }
+
+  if (shiftOnlyToggle) {
+    shiftOnlyToggle.addEventListener('change', function() {
+      setShiftOnlyMode(this.checked);
+    });
+  }
 
   if (fromProject) {
     fromProject.addEventListener('change', function() {
@@ -194,12 +289,20 @@ textarea.form-control { height: auto !important; }
         d.forEach(function(x){ html += '<option value="' + x.id + '">' + x.name + '</option>'; });
         rebuildSel(driverId, html);
       });
+      if (isShiftOnly && vid) {
+        loadShiftsForVehicle(vid);
+      }
     });
   }
 
   if (driverId) {
     driverId.addEventListener('change', function() {
       if (typeof loadDriverInsight === 'function') loadDriverInsight(this.value);
+      if (isShiftOnly) {
+        var vid = fromVehicle ? fromVehicle.value : '';
+        if (vid) loadShiftsForVehicle(vid);
+      }
+      checkSubmitReady();
     });
   }
 
@@ -229,29 +332,14 @@ textarea.form-control { height: auto !important; }
 
   if (newVehicle) {
     newVehicle.addEventListener('change', function() {
-      var vid = this.value;
-      if (!vid) return;
-      fetch('/get_available_shifts/' + vid).then(function(r){return r.json();}).then(function(data){
-        var shiftWarn = document.getElementById('shift_warning');
-        var warnText  = document.getElementById('warning_text');
-        if (data.length === 0) {
-          if (shiftWarn) shiftWarn.classList.remove('d-none');
-          if (warnText) warnText.textContent = 'Target vehicle is full — no shift available.';
-          rebuildSel(newShift, '<option value="">Full</option>');
-          if (submitBtn) submitBtn.disabled = true;
-        } else {
-          if (shiftWarn) shiftWarn.classList.add('d-none');
-          var html = '<option value="">-- Select Shift --</option>';
-          data.forEach(function(s){ html += '<option value="' + s.id + '">' + s.name + '</option>'; });
-          rebuildSel(newShift, html);
-        }
-      });
+      if (isShiftOnly) return;
+      loadShiftsForVehicle(this.value);
     });
   }
 
   if (newShift) {
     newShift.addEventListener('change', function() {
-      if (submitBtn) submitBtn.disabled = !this.value;
+      checkSubmitReady();
     });
   }
 })();

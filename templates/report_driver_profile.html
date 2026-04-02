@@ -2083,6 +2083,7 @@
     <div class="jh-summary">
       {% if jh_counts.assignment %}<span class="jh-chip jh-chip-assign"><i class="bi bi-plus-circle-fill"></i><span class="jh-num">{{ jh_counts.assignment }}</span> Assignment{{ 's' if jh_counts.assignment > 1 }}</span>{% endif %}
       {% if jh_counts.transfer %}<span class="jh-chip jh-chip-transfer"><i class="bi bi-shuffle"></i><span class="jh-num">{{ jh_counts.transfer }}</span> Transfer{{ 's' if jh_counts.transfer > 1 }}</span>{% endif %}
+      {% if jh_counts.shift_change %}<span class="jh-chip" style="background:#fef3c7;color:#92400e;"><i class="bi bi-arrow-repeat"></i><span class="jh-num" style="color:#d97706;">{{ jh_counts.shift_change }}</span> Shift Change{{ 's' if jh_counts.shift_change > 1 }}</span>{% endif %}
       {% if jh_counts.left %}<span class="jh-chip jh-chip-left"><i class="bi bi-box-arrow-right"></i><span class="jh-num">{{ jh_counts.left }}</span> Left</span>{% endif %}
       {% if jh_counts.rejoin %}<span class="jh-chip jh-chip-rejoin"><i class="bi bi-arrow-return-left"></i><span class="jh-num">{{ jh_counts.rejoin }}</span> Rejoin{{ 's' if jh_counts.rejoin > 1 }}</span>{% endif %}
     </div>
@@ -2112,7 +2113,7 @@
             </div>
           </div>
 
-        {# ── Transfer ── #}
+        {# ── Transfer / Shift Change ── #}
         {% elif item.type == 'transfer' %}
           {% set t = item.data %}
           <div class="timeline-item">
@@ -2120,10 +2121,19 @@
             <div class="timeline-card transfer">
               <div class="timeline-meta">
                 <span class="timeline-date transfer">{{ item.date|ddmmyyyy }}</span>
+                {% if t.is_shift_only %}
+                <span class="timeline-badge" style="background:#f59e0b;color:#fff;"><i class="bi bi-arrow-repeat"></i> Shift Change</span>
+                {% else %}
                 <span class="timeline-badge badge-transfer"><i class="bi bi-shuffle"></i> Transfer</span>
+                {% endif %}
                 {% if item.duration_days is not none %}{% set dy=item.duration_days//365 %}{% set dm=(item.duration_days%365)//30 %}{% set dd=(item.duration_days%365)%30 %}<span class="timeline-duration"><i class="bi bi-calendar-range"></i> {% if dy %}{{ dy }}y {% endif %}{% if dm %}{{ dm }}m {% endif %}{{ dd }}d</span>{% endif %}
               </div>
               <div class="timeline-detail">
+                {% if t.is_shift_only %}
+                <i class="bi bi-arrow-repeat text-warning me-1" style="font-size:.78rem;"></i>
+                Vehicle: <strong>{{ t.new_vehicle.vehicle_no if t.new_vehicle else '—' }}</strong>
+                <br><i class="bi bi-clock text-muted me-1" style="font-size:.78rem;"></i>Shift: {{ t.old_shift or '—' }} &rarr; <strong>{{ t.new_shift or '—' }}</strong>
+                {% else %}
                 <i class="bi bi-arrow-left-right text-warning me-1" style="font-size:.78rem;"></i>
                 {{ t.old_vehicle.vehicle_no if t.old_vehicle else '—' }}
                 &nbsp;<i class="bi bi-arrow-right text-warning" style="font-size:.75rem;"></i>&nbsp;
@@ -2132,6 +2142,7 @@
                 {% if t.new_project %}<br><i class="bi bi-building text-muted me-1" style="font-size:.78rem;"></i>Project: <strong>{{ t.new_project.name }}</strong>{% endif %}
                 {% if t.new_district %}<br><i class="bi bi-geo-alt text-muted me-1" style="font-size:.78rem;"></i>District: {{ t.new_district.name }}{% endif %}
                 {% if t.old_shift or t.new_shift %}<br><i class="bi bi-clock text-muted me-1" style="font-size:.78rem;"></i>Shift: {{ t.old_shift or '—' }} &rarr; <strong>{{ t.new_shift or '—' }}</strong>{% endif %}
+                {% endif %}
                 {% if t.remarks %}<div class="remarks"><i class="bi bi-chat-left-text me-1"></i>{{ t.remarks }}</div>{% endif %}
               </div>
             </div>

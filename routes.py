@@ -6539,16 +6539,28 @@ def get_driver_details(driver_id):
         new_veh = t.new_vehicle.vehicle_no if t.new_vehicle else '-'
         if t.new_vehicle and t.new_vehicle.model:
             new_veh += f" ({t.new_vehicle.model})"
-        history.append({
-            'date_sort': t.transfer_date.isoformat(),
-            'date':  t.transfer_date.strftime('%d-%m-%Y'),
-            'type':  'transfer',
-            'title': 'TRANSFER',
-            'line1': f"To Vehicle: {new_veh}",
-            'line2': f"Project: {t.new_project.name if t.new_project else '-'}",
-            'line3': f"District: {t.new_district.name if t.new_district else '-'} | Shift: {t.new_shift or '-'}",
-            'remarks': t.remarks or '',
-        })
+        if t.is_shift_only:
+            history.append({
+                'date_sort': t.transfer_date.isoformat(),
+                'date':  t.transfer_date.strftime('%d-%m-%Y'),
+                'type':  'shift_change',
+                'title': 'SHIFT CHANGE',
+                'line1': f"Vehicle: {new_veh}",
+                'line2': f"Shift: {t.old_shift or '-'} → {t.new_shift or '-'}",
+                'line3': f"Project: {t.new_project.name if t.new_project else '-'} | District: {t.new_district.name if t.new_district else '-'}",
+                'remarks': t.remarks or '',
+            })
+        else:
+            history.append({
+                'date_sort': t.transfer_date.isoformat(),
+                'date':  t.transfer_date.strftime('%d-%m-%Y'),
+                'type':  'transfer',
+                'title': 'TRANSFER',
+                'line1': f"To Vehicle: {new_veh}",
+                'line2': f"Project: {t.new_project.name if t.new_project else '-'}",
+                'line3': f"District: {t.new_district.name if t.new_district else '-'} | Shift: {t.new_shift or '-'}",
+                'remarks': t.remarks or '',
+            })
 
     # 3. Status Changes (left / rejoin)
     for sc in sorted(d.status_changes, key=lambda x: x.change_date):
@@ -7843,58 +7855,109 @@ def driver_transfer_new():
                 ).order_by(Vehicle.vehicle_no).all()
                 form.new_vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicles]
 
+    is_shift_only = request.form.get('is_shift_only') == '1'
+
+    if is_shift_only and request.method == 'POST':
+        form.new_project_id.data = form.from_project_id.data
+        form.new_district_id.data = form.from_district_id.data
+        form.new_vehicle_id.data = form.from_vehicle_id.data
+
+        if form.new_project_id.data and form.new_project_id.data != 0:
+            districts = District.query.join(project_district).filter(
+                project_district.c.project_id == form.new_project_id.data
+            ).order_by(District.name).all()
+            form.new_district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
+            if form.new_district_id.data and form.new_district_id.data != 0:
+                vehicles = Vehicle.query.filter_by(
+                    project_id=form.new_project_id.data, district_id=form.new_district_id.data
+                ).order_by(Vehicle.vehicle_no).all()
+                form.new_vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicles]
+
     if form.validate_on_submit():
         try:
             driver = Driver.query.get_or_404(form.driver_id.data)
-            new_vehicle = Vehicle.query.get_or_404(form.new_vehicle_id.data)
 
-            # Capacity check
-            existing_count = Driver.query.filter(
-                Driver.vehicle_id == new_vehicle.id,
-                Driver.id != driver.id
-            ).count()
+            if is_shift_only:
+                target_vehicle = driver.vehicle
+                if not target_vehicle:
+                    flash("Driver is not assigned to any vehicle.", "danger")
+                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
 
-            if existing_count >= (new_vehicle.driver_capacity or 1):
-                flash(f"Vehicle {new_vehicle.vehicle_no} is full (capacity reached).", "danger")
-                return render_template('driver_transfer_new.html', form=form)
+                shift_taken = Driver.query.filter(
+                    Driver.vehicle_id == target_vehicle.id,
+                    Driver.shift == form.new_shift.data,
+                    Driver.id != driver.id
+                ).first()
+                if shift_taken:
+                    flash(f"Shift '{form.new_shift.data}' already assigned in vehicle {target_vehicle.vehicle_no}.", "danger")
+                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
 
-            # Shift already taken check
-            shift_taken = Driver.query.filter(
-                Driver.vehicle_id == new_vehicle.id,
-                Driver.shift == form.new_shift.data,
-                Driver.id != driver.id
-            ).first()
+                transfer = DriverTransfer(
+                    driver_id=driver.id,
+                    old_project_id=driver.project_id,
+                    old_vehicle_id=driver.vehicle_id,
+                    old_shift=driver.shift,
+                    old_district_id=driver.district_id,
+                    new_project_id=driver.project_id,
+                    new_vehicle_id=driver.vehicle_id,
+                    new_shift=form.new_shift.data,
+                    new_district_id=driver.district_id,
+                    transfer_date=form.transfer_date.data,
+                    is_shift_only=True,
+                    remarks=form.remarks.data or f'Shift changed from {driver.shift} to {form.new_shift.data}'
+                )
+                db.session.add(transfer)
+                driver.shift = form.new_shift.data
+                db.session.commit()
 
-            if shift_taken:
-                flash(f"Shift '{form.new_shift.data}' already assigned in vehicle {new_vehicle.vehicle_no}.", "danger")
-                return render_template('driver_transfer_new.html', form=form)
+                flash(f"Driver '{driver.name}' shift changed to '{form.new_shift.data}' successfully.", "success")
+                return redirect(url_for('driver_transfers'))
+            else:
+                new_vehicle = Vehicle.query.get_or_404(form.new_vehicle_id.data)
 
-            # Create transfer record with OLD and NEW values
-            transfer = DriverTransfer(
-                driver_id=driver.id,
-                old_project_id=driver.project_id,
-                old_vehicle_id=driver.vehicle_id,
-                old_shift=driver.shift,
-                old_district_id=driver.district_id,
-                new_project_id=form.new_project_id.data,
-                new_vehicle_id=new_vehicle.id,
-                new_shift=form.new_shift.data,
-                new_district_id=form.new_district_id.data,
-                transfer_date=form.transfer_date.data,
-                remarks=form.remarks.data
-            )
-            db.session.add(transfer)
+                existing_count = Driver.query.filter(
+                    Driver.vehicle_id == new_vehicle.id,
+                    Driver.id != driver.id
+                ).count()
 
-            # Update driver's current assignment
-            driver.project_id = form.new_project_id.data
-            driver.district_id = form.new_district_id.data
-            driver.vehicle_id = new_vehicle.id
-            driver.shift = form.new_shift.data
+                if existing_count >= (new_vehicle.driver_capacity or 1):
+                    flash(f"Vehicle {new_vehicle.vehicle_no} is full (capacity reached).", "danger")
+                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
 
-            db.session.commit()
+                shift_taken = Driver.query.filter(
+                    Driver.vehicle_id == new_vehicle.id,
+                    Driver.shift == form.new_shift.data,
+                    Driver.id != driver.id
+                ).first()
 
-            flash(f"Driver '{driver.name}' successfully transferred to vehicle '{new_vehicle.vehicle_no}'.", "success")
-            return redirect(url_for('driver_transfers'))
+                if shift_taken:
+                    flash(f"Shift '{form.new_shift.data}' already assigned in vehicle {new_vehicle.vehicle_no}.", "danger")
+                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+
+                transfer = DriverTransfer(
+                    driver_id=driver.id,
+                    old_project_id=driver.project_id,
+                    old_vehicle_id=driver.vehicle_id,
+                    old_shift=driver.shift,
+                    old_district_id=driver.district_id,
+                    new_project_id=form.new_project_id.data,
+                    new_vehicle_id=new_vehicle.id,
+                    new_shift=form.new_shift.data,
+                    new_district_id=form.new_district_id.data,
+                    transfer_date=form.transfer_date.data,
+                    remarks=form.remarks.data
+                )
+                db.session.add(transfer)
+
+                driver.project_id = form.new_project_id.data
+                driver.district_id = form.new_district_id.data
+                driver.vehicle_id = new_vehicle.id
+                driver.shift = form.new_shift.data
+
+                db.session.commit()
+
+                flash(f"Driver '{driver.name}' successfully transferred to vehicle '{new_vehicle.vehicle_no}'.", "success")
+                return redirect(url_for('driver_transfers'))
 
         except Exception as e:
             db.session.rollback()
@@ -7989,30 +8052,32 @@ def driver_transfers_export():
     header_format = workbook.add_format({'bold': True, 'bg_color': '#9c27b0', 'font_color': 'white', 'border': 1})
     cell_format = workbook.add_format({'border': 1, 'text_wrap': True})
     
-    headers = ['Sr No', 'Driver Name', 'Driver ID', 'Old Project', 'Old District', 'Old Vehicle', 'Old Shift', 'New Project', 'New District', 'New Vehicle', 'New Shift', 'Transfer Date', 'Remarks']
+    headers = ['Sr No', 'Type', 'Driver Name', 'Driver ID', 'Old Project', 'Old District', 'Old Vehicle', 'Old Shift', 'New Project', 'New District', 'New Vehicle', 'New Shift', 'Transfer Date', 'Remarks']
     for col, header in enumerate(headers):
         worksheet.write(0, col, header, header_format)
     
     for idx, t in enumerate(transfers, start=1):
         worksheet.write(idx, 0, idx, cell_format)
-        worksheet.write(idx, 1, t.driver.name if t.driver else '', cell_format)
-        worksheet.write(idx, 2, t.driver.driver_id if t.driver else '', cell_format)
-        worksheet.write(idx, 3, t.old_project.name if t.old_project else 'Initial', cell_format)
-        worksheet.write(idx, 4, t.old_vehicle.district.name if t.old_vehicle and t.old_vehicle.district else '-', cell_format)
-        worksheet.write(idx, 5, t.old_vehicle.vehicle_no if t.old_vehicle else '-', cell_format)
-        worksheet.write(idx, 6, t.old_shift or '-', cell_format)
-        worksheet.write(idx, 7, t.new_project.name if t.new_project else '-', cell_format)
-        worksheet.write(idx, 8, t.new_vehicle.district.name if t.new_vehicle and t.new_vehicle.district else '-', cell_format)
-        worksheet.write(idx, 9, t.new_vehicle.vehicle_no if t.new_vehicle else '-', cell_format)
-        worksheet.write(idx, 10, t.new_shift or '-', cell_format)
-        worksheet.write(idx, 11, t.transfer_date.strftime('%d %b, %Y') if t.transfer_date else '', cell_format)
-        worksheet.write(idx, 12, t.remarks or '', cell_format)
+        worksheet.write(idx, 1, 'Shift Change' if t.is_shift_only else 'Transfer', cell_format)
+        worksheet.write(idx, 2, t.driver.name if t.driver else '', cell_format)
+        worksheet.write(idx, 3, t.driver.driver_id if t.driver else '', cell_format)
+        worksheet.write(idx, 4, t.old_project.name if t.old_project else 'Initial', cell_format)
+        worksheet.write(idx, 5, t.old_vehicle.district.name if t.old_vehicle and t.old_vehicle.district else '-', cell_format)
+        worksheet.write(idx, 6, t.old_vehicle.vehicle_no if t.old_vehicle else '-', cell_format)
+        worksheet.write(idx, 7, t.old_shift or '-', cell_format)
+        worksheet.write(idx, 8, t.new_project.name if t.new_project else '-', cell_format)
+        worksheet.write(idx, 9, t.new_vehicle.district.name if t.new_vehicle and t.new_vehicle.district else '-', cell_format)
+        worksheet.write(idx, 10, t.new_vehicle.vehicle_no if t.new_vehicle else '-', cell_format)
+        worksheet.write(idx, 11, t.new_shift or '-', cell_format)
+        worksheet.write(idx, 12, t.transfer_date.strftime('%d %b, %Y') if t.transfer_date else '', cell_format)
+        worksheet.write(idx, 13, t.remarks or '', cell_format)
     
     worksheet.set_column(0, 0, 8)
-    worksheet.set_column(1, 2, 15)
-    worksheet.set_column(3, 10, 18)
-    worksheet.set_column(11, 11, 15)
-    worksheet.set_column(12, 12, 30)
+    worksheet.set_column(1, 1, 14)
+    worksheet.set_column(2, 3, 15)
+    worksheet.set_column(4, 11, 18)
+    worksheet.set_column(12, 12, 15)
+    worksheet.set_column(13, 13, 30)
     
     workbook.close()
     output.seek(0)
@@ -11727,6 +11792,7 @@ def driver_attendance_tra_report():
 
             transfer_rec = DriverTransfer.query.filter(
                 DriverTransfer.driver_id == d.id,
+                db.or_(DriverTransfer.is_shift_only == False, DriverTransfer.is_shift_only.is_(None)),
             ).order_by(DriverTransfer.transfer_date.desc()).first()
 
             transfer_in_rec = DriverTransfer.query.filter(
@@ -11734,6 +11800,7 @@ def driver_attendance_tra_report():
                 DriverTransfer.new_vehicle_id == d.vehicle_id,
                 DriverTransfer.transfer_date >= start_d,
                 DriverTransfer.transfer_date <= end_d,
+                db.or_(DriverTransfer.is_shift_only == False, DriverTransfer.is_shift_only.is_(None)),
             ).order_by(DriverTransfer.transfer_date.desc()).first()
 
             transfer_out_rec = DriverTransfer.query.filter(
@@ -11741,6 +11808,7 @@ def driver_attendance_tra_report():
                 DriverTransfer.old_vehicle_id == d.vehicle_id,
                 DriverTransfer.transfer_date >= start_d,
                 DriverTransfer.transfer_date <= end_d,
+                db.or_(DriverTransfer.is_shift_only == False, DriverTransfer.is_shift_only.is_(None)),
             ).order_by(DriverTransfer.transfer_date.desc()).first()
 
             maint_days = 0
@@ -11808,6 +11876,7 @@ def driver_attendance_tra_report():
                         DriverTransfer.new_vehicle_id == vehicle.id,
                         DriverTransfer.transfer_date >= start_d,
                         DriverTransfer.transfer_date <= end_d,
+                        db.or_(DriverTransfer.is_shift_only == False, DriverTransfer.is_shift_only.is_(None)),
                     ).order_by(DriverTransfer.transfer_date.desc()).first()
                     if p_transfer_in and p_transfer_in.transfer_date > p_start:
                         p_start = p_transfer_in.transfer_date
@@ -11825,6 +11894,7 @@ def driver_attendance_tra_report():
                         DriverTransfer.old_vehicle_id == vehicle.id,
                         DriverTransfer.transfer_date >= start_d,
                         DriverTransfer.transfer_date <= end_d,
+                        db.or_(DriverTransfer.is_shift_only == False, DriverTransfer.is_shift_only.is_(None)),
                     ).order_by(DriverTransfer.transfer_date.desc()).first()
                     if p_transfer_out and p_transfer_out.transfer_date:
                         p_last = p_transfer_out.transfer_date - timedelta(days=1)
@@ -15281,12 +15351,15 @@ def report_driver_profile(driver_id):
                   driver.license_front_path, driver.license_back_path, driver.document_path]
     doc_uploaded = sum(1 for d in doc_fields if d)
     doc_total = len(doc_fields)
-    jh_counts = {'assignment': 0, 'transfer': 0, 'left': 0, 'rejoin': 0}
+    jh_counts = {'assignment': 0, 'transfer': 0, 'shift_change': 0, 'left': 0, 'rejoin': 0}
     for h in job_history:
         if h['type'] == 'assignment':
             jh_counts['assignment'] += 1
         elif h['type'] == 'transfer':
-            jh_counts['transfer'] += 1
+            if h['data'].is_shift_only:
+                jh_counts['shift_change'] += 1
+            else:
+                jh_counts['transfer'] += 1
         elif h['type'] == 'status':
             if h['data'].action_type == 'left':
                 jh_counts['left'] += 1

@@ -61,6 +61,7 @@ def update_database_schema():
             # Driver Transfer table
             ('driver_transfer', 'old_district_id', 'INTEGER REFERENCES district(id)'),
             ('driver_transfer', 'new_district_id', 'INTEGER REFERENCES district(id)'),
+            ('driver_transfer', 'is_shift_only', 'BOOLEAN DEFAULT 0 NOT NULL'),
 
             # NEW: Driver Status Change table columns (agar table bana to columns bhi check)
             ('driver_status_change', 'driver_id', 'INTEGER NOT NULL REFERENCES driver(id)'),

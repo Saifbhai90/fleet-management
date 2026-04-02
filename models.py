@@ -396,6 +396,7 @@ class DriverTransfer(db.Model):
     new_district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=False)  # ← yeh column
     
     transfer_date = db.Column(db.Date, nullable=False, default=date.today, index=True)
+    is_shift_only = db.Column(db.Boolean, default=False, nullable=False)
     remarks = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=pk_now)
 

@@ -295,10 +295,19 @@
             <td>
               <span style="font-weight:600;">{{ h.driver.name }}</span>
               <span style="font-size:0.7rem;color:var(--text-light);display:block;">{{ h.driver.driver_id }}</span>
+              {% if h.is_shift_only %}<span style="font-size:0.6rem;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:4px;font-weight:700;">Shift Change</span>{% endif %}
             </td>
+          {% if h.is_shift_only %}
+            <td colspan="3" class="text-center">
+              <span class="driver-shift" style="font-size:0.6rem;background:#dc2626;color:#fff;">{{ h.old_shift or '—' }}</span>
+              <span class="transfer-arrow">→</span>
+              <span class="driver-shift" style="font-size:0.6rem;background:#16a34a;color:#fff;">{{ h.new_shift or '—' }}</span>
+            </td>
+          {% else %}
             <td>{{ h.old_vehicle.vehicle_no if h.old_vehicle else '—' }} {% if h.old_shift %}<span class="driver-shift" style="font-size:0.6rem;">{{ h.old_shift }}</span>{% endif %}</td>
             <td class="transfer-arrow text-center">→</td>
             <td>{{ h.new_vehicle.vehicle_no if h.new_vehicle else '—' }} {% if h.new_shift %}<span class="driver-shift" style="font-size:0.6rem;">{{ h.new_shift }}</span>{% endif %}</td>
+          {% endif %}
             <td style="font-size:0.75rem;color:var(--text-light);">{{ h.remarks or '—' }}</td>
           </tr>
           {% endfor %}

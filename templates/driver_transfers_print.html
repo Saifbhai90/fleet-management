@@ -52,7 +52,18 @@
                 <td>
                     <div class="driver-name">{{ t.driver.name if t.driver else '-' }}</div>
                     <div class="driver-sub">{{ t.driver.driver_id if t.driver else '-' }}</div>
+                    {% if t.is_shift_only %}<div style="font-size:0.62rem;color:#92400e;font-weight:700;">⟳ Shift Change</div>{% endif %}
                 </td>
+              {% if t.is_shift_only %}
+                <td colspan="3" class="text-center">
+                    <div class="flow-box" style="background:#fef9c3;">
+                        <span class="flow-item"><i class="bi bi-truck me-1"></i><strong>{{ t.new_vehicle.vehicle_no if t.new_vehicle else '-' }}</strong></span>
+                        <span class="shift-old">{{ t.old_shift or '-' }}</span>
+                        <span class="flow-arrow" style="font-size:0.9rem;">→</span>
+                        <span class="shift-new">{{ t.new_shift or '-' }}</span>
+                    </div>
+                </td>
+              {% else %}
                 <td>
                     <div class="flow-box">
                         <span class="flow-item"><i class="bi bi-folder2 me-1"></i>{{ t.old_project.name if t.old_project else 'Initial' }}</span>
@@ -70,6 +81,7 @@
                         {% if t.new_shift %}<span class="shift-new">{{ t.new_shift }}</span>{% endif %}
                     </div>
                 </td>
+              {% endif %}
                 <td>{{ t.transfer_date.strftime('%d %b %Y') if t.transfer_date else '-' }}</td>
                 <td style="font-size:0.78rem;color:#546e7a;">{{ t.remarks or '-' }}</td>
             </tr>

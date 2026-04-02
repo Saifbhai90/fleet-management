@@ -184,8 +184,21 @@
                         <td>
                             <div><i class="bi bi-person-badge me-1 text-info"></i><strong>{{ t.driver.name if t.driver else '(Deleted)' }}</strong></div>
                             <small class="text-muted">ID: {{ t.driver.driver_id if t.driver else '-' }}</small>
+                            {% if t.is_shift_only %}<br><span class="badge bg-warning text-dark" style="font-size:.65rem;"><i class="bi bi-arrow-repeat me-1"></i>Shift Change</span>{% endif %}
                         </td>
                         <td>
+                          {% if t.is_shift_only %}
+                            <div class="transfer-flow">
+                                <div class="flow-badge" style="text-align:center;width:100%;">
+                                    <div><i class="bi bi-truck me-1"></i><strong>{{ t.new_vehicle.vehicle_no if t.new_vehicle else '-' }}</strong></div>
+                                    <div class="mt-1">
+                                        <span class="badge-sm badge-danger">{{ t.old_shift or '-' }}</span>
+                                        <i class="bi bi-arrow-right mx-1 text-warning"></i>
+                                        <span class="badge-sm badge-success">{{ t.new_shift or '-' }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                          {% else %}
                             <div class="transfer-flow">
                                 <div class="flow-badge">
                                     <div><i class="bi bi-folder2 me-1"></i>{{ t.old_project.name if t.old_project else 'Initial' }}</div>
@@ -201,6 +214,7 @@
                                     <div><i class="bi bi-clock me-1"></i><span class="badge-sm badge-success">{{ t.new_shift if t.new_shift else '-' }}</span></div>
                                 </div>
                             </div>
+                          {% endif %}
                         </td>
                         <td>
                             <small><i class="bi bi-calendar-check me-1"></i>{{ t.transfer_date.strftime('%d-%m-%Y') }}</small>
