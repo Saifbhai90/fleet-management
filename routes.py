@@ -12505,11 +12505,7 @@ def task_report_logbook_view():
         'total_kms': agg['total_kms'],
         'project_name': project_name,
     }
-    if project_name == 'RAS-1034':
-        return render_template('logbook_cover_ras.html', **data)
-    if project_name == 'COW-1034':
-        return render_template('logbook_cover_cow.html', **data)
-    return render_template('logbook_cover_ras.html', **data)
+    return render_template('verification_claim_report.html', rows=[data], project_name=project_name)
 
 
 @app.route('/task-report/logbook-view-all')
@@ -12554,7 +12550,7 @@ def task_report_logbook_view_all():
     if not rows_with_data:
         flash('Is period mein kisi vehicle ke paas task data nahi mila.', 'warning')
         return redirect(url_for('task_report_logbook_cover', from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), district_id=district_id, project_id=project_id))
-    return render_template('logbook_cover_all.html', rows=rows_with_data, project_name=project_name)
+    return render_template('verification_claim_report.html', rows=rows_with_data, project_name=project_name)
 
 
 @app.route('/task-report/new', methods=['GET', 'POST'])

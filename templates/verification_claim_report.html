@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verification of Claims - {{ project_name }} {% if rows|length == 1 %}- {{ rows[0].vehicle_no }}{% endif %}</title>
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #e9ecef; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .no-print {
+    position: sticky; top: 0; z-index: 100; background: #212529; color: #fff;
+    padding: 10px 24px; display: flex; align-items: center; gap: 12px;
+    font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  }
+  .no-print a, .no-print button {
+    color: #fff; background: transparent; border: 1px solid rgba(255,255,255,.4);
+    border-radius: 6px; padding: 5px 16px; text-decoration: none; cursor: pointer;
+    font-size: 13px; transition: background .2s;
+  }
+  .no-print a:hover, .no-print button:hover { background: rgba(255,255,255,.15); }
+
+  .a4-page {
+    position: relative;
+    width: 210mm; height: 297mm;
+    margin: 20px auto;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(0,0,0,.2);
+  }
+
+  .a4-page .field {
+    position: absolute;
+    font-weight: 600;
+    color: #111;
+    white-space: nowrap;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     RAS-1034 Template Field Positions
+     Image: official letterhead with table at ~40%
+     ═══════════════════════════════════════════════════ */
+  .ras-page { background-image: url('/static/images/templates/ras_template.jpg'); }
+
+  .ras-page .f-vehicle   { top: 35.5%;  left: 32%;    font-size: 11pt; }
+  .ras-page .f-from-date { top: 35.5%;  left: 67%;    font-size: 11pt; }
+  .ras-page .f-to-date   { top: 35.5%;  left: 83.5%;  font-size: 11pt; }
+
+  .ras-page .f-task-val    { top: 42.5%;  left: 55%;  font-size: 10pt; text-align: right; width: 10%; }
+  .ras-page .f-open-val    { top: 45.2%;  left: 55%;  font-size: 10pt; text-align: right; width: 10%; }
+  .ras-page .f-open-date   { top: 45.2%;  left: 69%;  font-size: 9pt; }
+  .ras-page .f-close-val   { top: 47.8%;  left: 55%;  font-size: 10pt; text-align: right; width: 10%; }
+  .ras-page .f-close-date  { top: 47.8%;  left: 69%;  font-size: 9pt; }
+  .ras-page .f-total-val   { top: 50.4%;  left: 55%;  font-size: 10pt; text-align: right; width: 10%; }
+
+  /* ═══════════════════════════════════════════════════
+     COW-1034 Template Field Positions
+     Image: company letterhead with table at ~50%
+     ═══════════════════════════════════════════════════ */
+  .cow-page { background-image: url('/static/images/templates/cow_template.jpg'); }
+
+  .cow-page .f-vehicle       { top: 40.2%;  left: 26%;    font-size: 11pt; }
+  .cow-page .f-from-date     { top: 40.2%;  left: 54%;    font-size: 11pt; }
+  .cow-page .f-to-date       { top: 40.2%;  left: 73%;    font-size: 11pt; }
+  .cow-page .f-district-name { top: 44.0%;  left: 22%;    font-size: 11pt; }
+  .cow-page .f-tehsil-name   { top: 44.0%;  left: 63%;    font-size: 11pt; }
+
+  .cow-page .f-task-val    { top: 51.5%;  left: 51%;  font-size: 10pt; text-align: right; width: 12%; }
+  .cow-page .f-open-val    { top: 56.0%;  left: 51%;  font-size: 10pt; text-align: right; width: 12%; }
+  .cow-page .f-close-val   { top: 60.5%;  left: 51%;  font-size: 10pt; text-align: right; width: 12%; }
+  .cow-page .f-total-val   { top: 65.0%;  left: 51%;  font-size: 10pt; text-align: right; width: 12%; }
+
+  .cow-page .f-task-date   { top: 51.5%;  left: 72%;  font-size: 9pt; }
+  .cow-page .f-open-date   { top: 56.0%;  left: 72%;  font-size: 9pt; }
+  .cow-page .f-close-date  { top: 60.5%;  left: 72%;  font-size: 9pt; }
+  .cow-page .f-total-date  { top: 65.0%;  left: 72%;  font-size: 9pt; }
+
+  @media print {
+    body { background: #fff; }
+    .no-print { display: none !important; }
+    .a4-page {
+      margin: 0; box-shadow: none;
+      page-break-after: always;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .a4-page:last-child { page-break-after: auto; }
+  }
+
+  /* ── Calibration overlay (dev only, hidden by default) ── */
+  .calibration-grid {
+    display: none;
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 50;
+  }
+  .calibration-grid.visible {
+    display: block;
+    background:
+      repeating-linear-gradient(0deg,   transparent, transparent 9%, rgba(255,0,0,.08) 9%, rgba(255,0,0,.08) 10%),
+      repeating-linear-gradient(90deg,  transparent, transparent 9%, rgba(0,0,255,.08) 9%, rgba(0,0,255,.08) 10%);
+  }
+</style>
+</head>
+<body>
+
+<div class="no-print">
+  <strong>Verification of Claims</strong>
+  <span style="opacity:.6;">{{ project_name }} &middot; {{ rows|length }} vehicle{{ 's' if rows|length != 1 }}</span>
+  <a href="javascript:window.print();"><i class="bi bi-printer me-1"></i>Print / PDF</a>
+  <a href="javascript:window.close();">Close</a>
+  <button onclick="document.querySelectorAll('.calibration-grid').forEach(function(g){g.classList.toggle('visible')});" style="margin-left:auto;opacity:.5;font-size:11px;">Grid</button>
+</div>
+
+{% for row in rows %}
+<div class="a4-page {{ 'cow-page' if project_name == 'COW-1034' else 'ras-page' }}">
+  <div class="calibration-grid"></div>
+
+  {% if project_name == 'COW-1034' %}
+    {# ── COW-1034 fields ── #}
+    <span class="field f-vehicle">{{ row.vehicle_no }}</span>
+    <span class="field f-from-date">{{ row.from_date|ddmmyyyy }}</span>
+    <span class="field f-to-date">{{ row.to_date|ddmmyyyy }}</span>
+    <span class="field f-district-name">{{ row.district_name }}</span>
+    <span class="field f-tehsil-name">{{ row.tehsil_name }}</span>
+
+    <span class="field f-task-val">{{ row.total_task }}</span>
+    <span class="field f-open-val">{{ "%.0f"|format(row.start_reading) }}</span>
+    <span class="field f-close-val">{{ "%.0f"|format(row.close_reading) }}</span>
+    <span class="field f-total-val">{{ row.total_kms }}</span>
+
+    <span class="field f-task-date"></span>
+    <span class="field f-open-date"></span>
+    <span class="field f-close-date">{{ row.from_date|ddmmyyyy }}</span>
+    <span class="field f-total-date">{{ row.to_date|ddmmyyyy }}</span>
+  {% else %}
+    {# ── RAS-1034 fields ── #}
+    <span class="field f-vehicle">{{ row.vehicle_no }}</span>
+    <span class="field f-from-date">{{ row.from_date|ddmmyyyy }}</span>
+    <span class="field f-to-date">{{ row.to_date|ddmmyyyy }}</span>
+
+    <span class="field f-task-val">{{ row.total_task }}</span>
+    <span class="field f-open-val">{{ "%.0f"|format(row.start_reading) }}</span>
+    <span class="field f-open-date">{{ row.from_date|ddmmyyyy }}</span>
+    <span class="field f-close-val">{{ "%.0f"|format(row.close_reading) }}</span>
+    <span class="field f-close-date">{{ row.to_date|ddmmyyyy }}</span>
+    <span class="field f-total-val">{{ row.total_kms }}</span>
+  {% endif %}
+</div>
+{% endfor %}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+</body>
+</html>
