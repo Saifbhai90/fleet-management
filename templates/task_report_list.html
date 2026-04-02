@@ -85,7 +85,8 @@
           </thead>
           <tbody>
             {% for row in rows %}
-            <tr class="{% if row.vehicle.vehicle_type and 'USG' in row.vehicle.vehicle_type %}table-secondary{% endif %}" style="font-size:.82rem;">
+            <tr class="data-row {% if row.vehicle.vehicle_type and 'USG' in row.vehicle.vehicle_type %}table-secondary{% endif %}" style="font-size:.82rem;"
+                data-kms="{{ row.kms_driven }}" data-tasks="{{ row.tasks_count }}" data-emg="{{ row.emg_tasks }}" data-tracker="{{ row.tracker_km }}" data-kmsdiff="{{ row.kms_diff }}" data-pct="{% if row.pct_diff is not none %}{{ row.pct_diff }}{% endif %}">
               <td class="ps-3">{{ loop.index }}</td>
               <td style="white-space:nowrap;">{{ row.task_date|ddmmyyyy }}</td>
               <td>{{ row.vehicle.district.name if row.vehicle.district else '-' }}</td>
@@ -127,13 +128,13 @@
           <tfoot class="table-light fw-bold" style="font-size:.82rem;">
             <tr>
               <td colspan="9" class="ps-3 text-end">Total</td>
-              <td class="text-end">{{ "%.2f"|format(total_kms) }}</td>
-              <td class="text-center">{{ total_tasks }}</td>
-              <td class="text-center">{{ total_emg }}</td>
-              <td class="text-center {% if total_task_diff != 0 %}text-danger{% endif %}">{{ total_task_diff }}</td>
-              <td class="text-end">{{ "%.2f"|format(total_tracker) }}</td>
-              <td class="text-end">{{ "%.2f"|format(total_diff) }}</td>
-              <td class="text-end">{% if total_pct is not none %}{{ total_pct }}%{% else %}—{% endif %}</td>
+              <td class="text-end" id="ftKms">{{ "%.2f"|format(total_kms) }}</td>
+              <td class="text-center" id="ftTasks">{{ total_tasks }}</td>
+              <td class="text-center" id="ftEmg">{{ total_emg }}</td>
+              <td class="text-center" id="ftTaskDiff">{{ total_task_diff }}</td>
+              <td class="text-end" id="ftTracker">{{ "%.2f"|format(total_tracker) }}</td>
+              <td class="text-end" id="ftDiff">{{ "%.2f"|format(total_diff) }}</td>
+              <td class="text-end" id="ftPct">{% if total_pct is not none %}{{ total_pct }}%{% else %}—{% endif %}</td>
             </tr>
           </tfoot>
           {% endif %}
@@ -178,7 +179,31 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
         });
       }
       if (noDataRow) noDataRow.style.display = (dataRows.length === 0 || (q && visible === 0)) ? '' : 'none';
+      updateListTotals();
     });
+  }
+  function updateListTotals() {
+    var rows = table ? table.querySelectorAll('tbody tr.data-row') : [];
+    var tKms=0, tTasks=0, tEmg=0, tTracker=0, tDiff=0, tKmsValid=0;
+    rows.forEach(function(r) {
+      if (r.style.display === 'none') return;
+      tKms += parseFloat(r.dataset.kms) || 0;
+      tTasks += parseInt(r.dataset.tasks) || 0;
+      tEmg += parseInt(r.dataset.emg) || 0;
+      tTracker += parseFloat(r.dataset.tracker) || 0;
+      tDiff += parseFloat(r.dataset.kmsdiff) || 0;
+      tKmsValid += parseFloat(r.dataset.kms) || 0;
+    });
+    var tTaskDiff = tTasks - tEmg;
+    var tPct = tKmsValid ? ((tDiff / tKmsValid) * 100).toFixed(1) : null;
+    var s = function(id, v, cls) { var e = document.getElementById(id); if(e){ e.textContent = v; if(cls!==undefined) e.className=cls; }};
+    s('ftKms', tKms ? tKms.toFixed(2) : '-', 'text-end');
+    s('ftTasks', tTasks || '-', 'text-center');
+    s('ftEmg', tEmg || '-', 'text-center');
+    s('ftTaskDiff', tTaskDiff, 'text-center' + (tTaskDiff !== 0 ? ' text-danger fw-bold' : ''));
+    s('ftTracker', tTracker ? tTracker.toFixed(2) : '-', 'text-end');
+    s('ftDiff', tDiff ? tDiff.toFixed(2) : '-', 'text-end');
+    s('ftPct', tPct !== null ? tPct + '%' : '—', 'text-end');
   }
   /* ── Helpers ─────────────────────────────────────────────── */
   function _he(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }

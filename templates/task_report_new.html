@@ -275,7 +275,9 @@
   }
 
   function updateTotals() {
-    var rows = batchTable ? batchTable.querySelectorAll('.task-row') : [];
+    var allRows = batchTable ? batchTable.querySelectorAll('.task-row') : [];
+    var rows = [];
+    allRows.forEach(function(r) { if (r.style.display !== 'none') rows.push(r); });
     var tKms = 0, tTasks = 0, tEmg = 0, tTaskDiff = 0, tTracker = 0, tDiff = 0, validKms = 0, hasTaskDiff = false;
     rows.forEach(function(r) {
       var kd = parseFloat(r.querySelector('.kms-driven').textContent);
@@ -331,6 +333,7 @@
         batchTable.querySelectorAll('.task-row').forEach(function(row) {
           row.style.display = (!q || window.fleetMultiWordMatch(row.innerText || row.textContent, q)) ? '' : 'none';
         });
+        updateTotals();
       });
     }
   }
