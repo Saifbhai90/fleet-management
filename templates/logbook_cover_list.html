@@ -44,21 +44,21 @@
   </div>
 
   {% if rows %}
-  <div class="d-flex justify-content-end align-items-center mb-2">
-    <span class="text-muted small me-2">Per Page:</span>
-    <select class="form-select form-select-sm" style="width:80px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
-      <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
-      <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
-      <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-      <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-    </select>
-  </div>
   <div class="card shadow border-0 rounded-3 overflow-hidden">
     <div class="card-header bg-primary text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="fw-semibold">Vehicles for period {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
-      <a href="{{ url_for('task_report_logbook_view_all', from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), district_id=form.district_id.data or 0, project_id=form.project_id.data or 0) }}" target="_blank" class="btn btn-light btn-sm">
-        <i class="bi bi-journal-bookmark-fill me-1"></i>View All (Print All)
-      </a>
+      <div class="d-flex align-items-center gap-2">
+        <select class="form-select form-select-sm bg-primary text-white border-light border-opacity-25" style="width:70px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
+          <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+          <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+          <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+        </select>
+        <input type="text" id="logbookCoverSearch" class="form-control form-control-sm" placeholder="Search..." style="max-width:180px;" autocomplete="off">
+        <a href="{{ url_for('task_report_logbook_view_all', from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), district_id=form.district_id.data or 0, project_id=form.project_id.data or 0) }}" target="_blank" class="btn btn-light btn-sm text-nowrap">
+          <i class="bi bi-journal-bookmark-fill me-1"></i>View All
+        </a>
+      </div>
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
@@ -149,6 +149,16 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     });
   }
 })();
-document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('logbookCoverTable'); });
+document.addEventListener('DOMContentLoaded', function(){
+  if(window.fleetTableEnhance) window.fleetTableEnhance('logbookCoverTable');
+  var _lcSearch = document.getElementById('logbookCoverSearch');
+  if (_lcSearch) {
+    _lcSearch.addEventListener('input', function(){
+      var q = this.value;
+      var rows = document.querySelectorAll('#logbookCoverTable tbody tr');
+      rows.forEach(function(r){ r.style.display = window.fleetMultiWordMatch(r.textContent, q) ? '' : 'none'; });
+    });
+  }
+});
 </script>
 {% endblock %}
