@@ -109,8 +109,8 @@
                   <span class="badge bg-dark" style="cursor:pointer;font-size:.8rem;">{{ row.tracker_km }}</span>
                 </a>
               </td>
-              <td class="text-end {% if row.kms_diff > 5 %}text-danger fw-bold{% elif row.kms_diff < 0 %}text-warning{% endif %}">{{ row.kms_diff }}</td>
-              <td class="text-end {% if row.pct_diff is not none %}{% if row.pct_diff > 5 %}text-danger fw-bold{% elif row.pct_diff < 0 %}text-warning{% endif %}{% endif %}">
+              <td class="text-end {% if row.pct_diff is not none and row.pct_diff >= 10 %}text-danger fw-bold{% elif row.kms_diff < 0 %}text-warning{% endif %}">{{ row.kms_diff }}</td>
+              <td class="text-end {% if row.pct_diff is not none %}{% if row.pct_diff >= 10 %}text-danger fw-bold{% elif row.pct_diff < 0 %}text-warning{% endif %}{% endif %}">
                 {% if row.pct_diff is not none %}{{ row.pct_diff }}%{% else %}Driven KM Zero{% endif %}
               </td>
             </tr>

@@ -266,9 +266,11 @@
     }
 
     row.querySelector('.kms-diff').textContent = isNaN(kmsDiff) ? '-' : kmsDiff.toFixed(2);
-    row.querySelector('.kms-diff').className = 'text-end kms-diff' + (kmsDiff > 5 ? ' text-danger fw-bold' : (kmsDiff < 0 ? ' text-warning' : ''));
     row.querySelector('.pct-diff').textContent = pctDiff;
-    row.querySelector('.pct-diff').className = 'text-end pct-diff' + (typeof pctDiff === 'string' && pctDiff !== '-' && pctDiff !== 'Driven KM Zero' ? (parseFloat(pctDiff) > 5 ? ' text-danger fw-bold' : (parseFloat(pctDiff) < 0 ? ' text-warning' : '')) : '');
+    var pctVal = (typeof pctDiff === 'string' && pctDiff !== '-' && pctDiff !== 'Driven KM Zero') ? parseFloat(pctDiff) : NaN;
+    var pctRed = !isNaN(pctVal) && pctVal >= 10;
+    row.querySelector('.pct-diff').className = 'text-end pct-diff' + (pctRed ? ' text-danger fw-bold' : (!isNaN(pctVal) && pctVal < 0 ? ' text-warning' : ''));
+    row.querySelector('.kms-diff').className = 'text-end kms-diff' + (pctRed ? ' text-danger fw-bold' : (!isNaN(kmsDiff) && kmsDiff < 0 ? ' text-warning' : ''));
   }
 
   function updateTotals() {
