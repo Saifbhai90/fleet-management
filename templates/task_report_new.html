@@ -93,7 +93,7 @@
                 <td class="text-center">
                   <input type="number" min="0" name="vehicle_{{ row.vehicle.id }}_tasks_count"
                          class="form-control form-control-sm text-center" style="min-width:60px;"
-                         value="{{ row.tasks_count }}">
+                         value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="0">
                 </td>
                 <td class="text-center">{{ row.emg_tasks }}</td>
                 <td class="text-end">{{ row.tracker_km }}</td>

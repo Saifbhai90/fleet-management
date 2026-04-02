@@ -12332,9 +12332,15 @@ def task_report_list():
         kms_driven = close_reading - start_reading
         if kms_driven < 0:
             kms_driven = 0
-        emg_tasks = EmergencyTaskRecord.query.filter_by(task_date=task_d, amb_reg_no=v.vehicle_no).count()
-        tracker_km = db.session.query(db.func.coalesce(db.func.sum(VehicleMileageRecord.mileage), 0)).filter_by(task_date=task_d, reg_no=v.vehicle_no).scalar()
-        tracker_km = float(tracker_km)
+        emg_tasks = EmergencyTaskRecord.query.filter(
+            EmergencyTaskRecord.task_date == task_d,
+            EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
+            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+        ).count()
+        _mil_row = db.session.query(
+            VehicleMileageRecord.mileage, VehicleMileageRecord.ptop
+        ).filter_by(task_date=task_d, reg_no=v.vehicle_no).first()
+        tracker_km = float(max(_mil_row.mileage or 0, _mil_row.ptop or 0)) if _mil_row else 0
         kms_diff = kms_driven - tracker_km
         pct_diff = round((kms_diff / kms_driven) * 100, 1) if kms_driven and kms_driven != 0 else None
         rows.append({
@@ -12565,7 +12571,7 @@ def task_report_new():
                 close_reading = float(close_val) if close_val not in (None, '') else None
             except (TypeError, ValueError):
                 close_reading = None
-            tasks_count = int(float(tasks_val)) if tasks_val not in (None, '') else 1
+            tasks_count = int(float(tasks_val)) if tasks_val not in (None, '') else 0
             if close_reading is None:
                 missing.append(v.vehicle_no)
             else:
@@ -12620,11 +12626,18 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
             VehicleDailyTask.task_date < task_date
         ).order_by(VehicleDailyTask.task_date.desc()).first()
         start_reading = float(prev.close_reading) if prev else 0
-        emg_tasks = EmergencyTaskRecord.query.filter_by(task_date=task_date, amb_reg_no=v.vehicle_no).count()
-        tracker_km = float(db.session.query(db.func.coalesce(db.func.sum(VehicleMileageRecord.mileage), 0)).filter_by(task_date=task_date, reg_no=v.vehicle_no).scalar())
+        emg_tasks = EmergencyTaskRecord.query.filter(
+            EmergencyTaskRecord.task_date == task_date,
+            EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
+            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+        ).count()
+        _mil_row = db.session.query(
+            VehicleMileageRecord.mileage, VehicleMileageRecord.ptop
+        ).filter_by(task_date=task_date, reg_no=v.vehicle_no).first()
+        tracker_km = float(max(_mil_row.mileage or 0, _mil_row.ptop or 0)) if _mil_row else 0
         existing = VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first()
         existing_close = float(existing.close_reading) if existing and existing.close_reading is not None else None
-        existing_tasks = existing.tasks_count if existing else 1
+        existing_tasks = existing.tasks_count if existing else None
         if form:
             key_close = 'vehicle_%s_close_reading' % v.id
             key_tasks = 'vehicle_%s_tasks_count' % v.id
