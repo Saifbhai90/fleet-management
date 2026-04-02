@@ -184,6 +184,12 @@ if _run_startup_tasks:
             db.create_all()
         except Exception as _e:
             print(f"db.create_all() warning (non-fatal): {_e}")
+        # Auto-run update_db schema additions (add missing columns)
+        try:
+            from update_db import update_database_schema
+            update_database_schema()
+        except Exception as _e:
+            print(f"update_db warning (non-fatal): {_e}")
         # Auto-run pending Alembic migrations so Render PostgreSQL stays in sync
         try:
             from flask_migrate import upgrade as _migrate_upgrade
