@@ -12337,10 +12337,8 @@ def task_report_list():
             EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
             EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
         ).count()
-        _mil_row = db.session.query(
-            VehicleMileageRecord.mileage, VehicleMileageRecord.ptop
-        ).filter_by(task_date=task_d, reg_no=v.vehicle_no).first()
-        tracker_km = float(max(_mil_row.mileage or 0, _mil_row.ptop or 0)) if _mil_row else 0
+        _mil_rec = VehicleMileageRecord.query.filter_by(task_date=task_d, reg_no=v.vehicle_no).first()
+        tracker_km = _mil_rec.effective_km() if _mil_rec else 0
         kms_diff = kms_driven - tracker_km
         pct_diff = round((kms_diff / kms_driven) * 100, 1) if kms_driven and kms_driven != 0 else None
         rows.append({
@@ -12631,10 +12629,8 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
             EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
             EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
         ).count()
-        _mil_row = db.session.query(
-            VehicleMileageRecord.mileage, VehicleMileageRecord.ptop
-        ).filter_by(task_date=task_date, reg_no=v.vehicle_no).first()
-        tracker_km = float(max(_mil_row.mileage or 0, _mil_row.ptop or 0)) if _mil_row else 0
+        _mil_rec = VehicleMileageRecord.query.filter_by(task_date=task_date, reg_no=v.vehicle_no).first()
+        tracker_km = _mil_rec.effective_km() if _mil_rec else 0
         existing = VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first()
         existing_close = float(existing.close_reading) if existing and existing.close_reading is not None else None
         existing_tasks = existing.tasks_count if existing else None
@@ -12660,6 +12656,75 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
             'tasks_count': existing_tasks,
         })
     return rows
+
+
+@app.route('/api/task-report/emg-detail')
+def api_emg_detail():
+    """Return EMG task rows (Green+Yellow) for a given vehicle + date."""
+    task_date = parse_date(request.args.get('date'))
+    vehicle_no = (request.args.get('vehicle_no') or '').strip()
+    if not task_date or not vehicle_no:
+        return jsonify([])
+    rows = EmergencyTaskRecord.query.filter(
+        EmergencyTaskRecord.task_date == task_date,
+        EmergencyTaskRecord.amb_reg_no == vehicle_no,
+        EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+    ).order_by(EmergencyTaskRecord.id).all()
+    return jsonify([{
+        'task_id': r.task_id_ext or '',
+        'phone': r.phone or '',
+        'name': r.name or '',
+        'amb_reg_no': r.amb_reg_no or '',
+        'received_by': r.received_by or '',
+        'category': r.category or '',
+        'facility_name': r.facility_name or '',
+        'created_date': r.excel_created_date or '',
+        'completed_date_time': r.completed_date_time or '',
+    } for r in rows])
+
+
+@app.route('/api/task-report/tracker-detail')
+def api_tracker_detail():
+    """Return mileage record for a given vehicle + date."""
+    task_date = parse_date(request.args.get('date'))
+    vehicle_no = (request.args.get('vehicle_no') or '').strip()
+    if not task_date or not vehicle_no:
+        return jsonify({})
+    rec = VehicleMileageRecord.query.filter_by(task_date=task_date, reg_no=vehicle_no).first()
+    if not rec:
+        return jsonify({})
+    return jsonify({
+        'id': rec.id,
+        'reg_no': rec.reg_no or '',
+        'date_from': rec.date_time_c or '',
+        'time_from': rec.date_time_d or '',
+        'date_to': rec.date_time_e or '',
+        'time_to': rec.date_time_f or '',
+        'mileage': float(rec.mileage or 0),
+        'ptop': float(rec.ptop or 0),
+        'selected_km': float(rec.selected_km) if rec.selected_km is not None else None,
+        'effective_km': rec.effective_km(),
+    })
+
+
+@app.route('/api/task-report/tracker-save', methods=['POST'])
+def api_tracker_save():
+    """Save user-edited tracker KM override."""
+    data = request.get_json(silent=True) or {}
+    rec_id = data.get('id')
+    new_val = data.get('selected_km')
+    if not rec_id:
+        return jsonify({'ok': False, 'error': 'Missing record id'}), 400
+    rec = VehicleMileageRecord.query.get(rec_id)
+    if not rec:
+        return jsonify({'ok': False, 'error': 'Record not found'}), 404
+    try:
+        rec.selected_km = float(new_val) if new_val not in (None, '', 'null') else None
+        db.session.commit()
+        return jsonify({'ok': True, 'effective_km': rec.effective_km()})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/task-report/upload/emergency', methods=['GET', 'POST'])

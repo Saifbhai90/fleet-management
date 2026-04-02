@@ -88,6 +88,9 @@ def update_database_schema():
             ('driver_transfer', 'new_district_id', 'INTEGER REFERENCES district(id)'),
             ('driver_transfer', 'is_shift_only', 'BOOLEAN DEFAULT 0 NOT NULL'),
 
+            # Vehicle Mileage Record - user override
+            ('vehicle_mileage_record', 'selected_km', 'NUMERIC(12,2)'),
+
             # NEW: Driver Status Change table columns (agar table bana to columns bhi check)
             ('driver_status_change', 'driver_id', 'INTEGER NOT NULL REFERENCES driver(id)'),
             ('driver_status_change', 'action_type', 'VARCHAR(20) NOT NULL'),

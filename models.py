@@ -593,6 +593,12 @@ class VehicleMileageRecord(db.Model):
     date_time_f = db.Column(db.String(50))           # F: Date/time
     mileage = db.Column(db.Numeric(12, 2), default=0)  # G: Mileage (Running KMs)
     ptop = db.Column(db.Numeric(12, 2), default=0)     # H: PtoP (Running KMs)
+    selected_km = db.Column(db.Numeric(12, 2), nullable=True)  # user override; NULL = auto MAX(mileage,ptop)
+
+    def effective_km(self):
+        if self.selected_km is not None:
+            return float(self.selected_km)
+        return float(max(self.mileage or 0, self.ptop or 0))
 
     def __repr__(self):
         return f'<VehicleMileageRecord {self.reg_no} {self.task_date}>'

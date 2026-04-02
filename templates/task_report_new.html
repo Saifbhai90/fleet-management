@@ -95,8 +95,16 @@
                          class="form-control form-control-sm text-center" style="min-width:60px;"
                          value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="0">
                 </td>
-                <td class="text-center">{{ row.emg_tasks }}</td>
-                <td class="text-end">{{ row.tracker_km }}</td>
+                <td class="text-center">
+                  <a href="#" class="emg-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
+                    <span class="badge {% if row.emg_tasks %}bg-info text-dark{% else %}bg-secondary{% endif %}" style="cursor:pointer;font-size:.8rem;">{{ row.emg_tasks }}</span>
+                  </a>
+                </td>
+                <td class="text-end">
+                  <a href="#" class="tracker-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
+                    <span class="badge bg-dark" style="cursor:pointer;font-size:.8rem;">{{ row.tracker_km }}</span>
+                  </a>
+                </td>
                 <td class="text-end kms-diff">-</td>
                 <td class="text-end pct-diff">-</td>
               </tr>
@@ -118,6 +126,88 @@
     <i class="bi bi-info-circle me-2"></i>Date, District aur Project select karke <strong>Load Vehicles</strong> par click karein. Us ke baad saari vehicles ki list yahan aayegi, jahan aap Close Reading aur Task's enter karke ek hi baar Save kar sakte hain.
   </div>
   {% endif %}
+</div>
+
+<!-- EMG Detail Modal -->
+<div class="modal fade" id="emgModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-info bg-opacity-10">
+        <h5 class="modal-title"><i class="bi bi-clipboard2-pulse me-2"></i>EMG Tasks — <span id="emgVehicleNo"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0" id="emgDetailTable">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-3">#</th>
+                <th>TaskId</th>
+                <th>Phone</th>
+                <th>Name</th>
+                <th>Vehicle</th>
+                <th>ReceivedBy</th>
+                <th>Category</th>
+                <th>FacilityName</th>
+                <th>CreatedDate</th>
+                <th>CompletedDateTime</th>
+              </tr>
+            </thead>
+            <tbody id="emgDetailBody"></tbody>
+          </table>
+        </div>
+        <div id="emgLoading" class="text-center py-4 d-none"><div class="spinner-border spinner-border-sm text-info"></div> Loading...</div>
+        <div id="emgEmpty" class="text-center py-4 text-muted d-none"><i class="bi bi-inbox me-1"></i>No EMG tasks found.</div>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <span class="text-muted small" id="emgCount"></span>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-success btn-sm" id="emgExportBtn"><i class="bi bi-file-earmark-excel me-1"></i>Export to Excel</button>
+          <button class="btn btn-outline-secondary btn-sm" id="emgPrintBtn"><i class="bi bi-printer me-1"></i>Print</button>
+          <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tracker Detail / Edit Modal -->
+<div class="modal fade" id="trackerModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title"><i class="bi bi-speedometer2 me-2"></i>Tracker KM — <span id="trackerVehicleNo"></span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="trackerLoading" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div> Loading...</div>
+        <div id="trackerContent" class="d-none">
+          <input type="hidden" id="trackerRecId">
+          <div class="row g-3 mb-3">
+            <div class="col-md-4"><label class="form-label text-muted small">ID</label><input class="form-control form-control-sm" id="trId" readonly></div>
+            <div class="col-md-4"><label class="form-label text-muted small">RegNo</label><input class="form-control form-control-sm" id="trRegNo" readonly></div>
+            <div class="col-md-4"></div>
+            <div class="col-md-3"><label class="form-label text-muted small">DateFrom</label><input class="form-control form-control-sm" id="trDateFrom" readonly></div>
+            <div class="col-md-3"><label class="form-label text-muted small">TimeFrom</label><input class="form-control form-control-sm" id="trTimeFrom" readonly></div>
+            <div class="col-md-3"><label class="form-label text-muted small">DateTo</label><input class="form-control form-control-sm" id="trDateTo" readonly></div>
+            <div class="col-md-3"><label class="form-label text-muted small">TimeTo</label><input class="form-control form-control-sm" id="trTimeTo" readonly></div>
+            <div class="col-md-4"><label class="form-label text-muted small">Mileage</label><input class="form-control form-control-sm" id="trMileage" readonly></div>
+            <div class="col-md-4"><label class="form-label text-muted small">PtoP</label><input class="form-control form-control-sm" id="trPtoP" readonly></div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold text-primary small">Selected KM <i class="bi bi-pencil-square"></i></label>
+              <input type="number" step="0.01" min="0" class="form-control form-control-sm border-primary" id="trSelectedKm">
+              <div class="text-muted" style="font-size:.7rem;margin-top:2px;" id="trAutoHint"></div>
+            </div>
+          </div>
+        </div>
+        <div id="trackerEmpty" class="text-center py-4 text-muted d-none"><i class="bi bi-inbox me-1"></i>No mileage record for this vehicle/date.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary btn-sm" id="trackerSaveBtn" disabled><i class="bi bi-save me-1"></i>Save</button>
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -196,6 +286,149 @@
       });
     }
   }
+
+  /* ── EMG Detail Modal ───────────────────────────────────── */
+  var emgModal = document.getElementById('emgModal');
+  var _emgData = [];
+  document.querySelectorAll('.emg-link').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      var vno = this.dataset.vno, dt = this.dataset.date;
+      document.getElementById('emgVehicleNo').textContent = vno;
+      document.getElementById('emgDetailBody').innerHTML = '';
+      document.getElementById('emgLoading').classList.remove('d-none');
+      document.getElementById('emgEmpty').classList.add('d-none');
+      document.getElementById('emgCount').textContent = '';
+      _emgData = [];
+      bootstrap.Modal.getOrCreateInstance(emgModal).show();
+      fetch('/api/task-report/emg-detail?date=' + encodeURIComponent(dt) + '&vehicle_no=' + encodeURIComponent(vno))
+        .then(function(r) { return r.json(); })
+        .then(function(rows) {
+          document.getElementById('emgLoading').classList.add('d-none');
+          _emgData = rows;
+          if (!rows.length) { document.getElementById('emgEmpty').classList.remove('d-none'); return; }
+          var tb = document.getElementById('emgDetailBody');
+          rows.forEach(function(r, i) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td class="ps-3">' + (i + 1) + '</td>' +
+              '<td>' + _he(r.task_id) + '</td>' +
+              '<td>' + _he(r.phone) + '</td>' +
+              '<td>' + _he(r.name) + '</td>' +
+              '<td>' + _he(r.amb_reg_no) + '</td>' +
+              '<td>' + _he(r.received_by) + '</td>' +
+              '<td><span class="badge ' + (r.category === 'Green' ? 'bg-success' : 'bg-warning text-dark') + '">' + _he(r.category) + '</span></td>' +
+              '<td>' + _he(r.facility_name) + '</td>' +
+              '<td>' + _he(r.created_date) + '</td>' +
+              '<td>' + _he(r.completed_date_time) + '</td>';
+            tb.appendChild(tr);
+          });
+          document.getElementById('emgCount').textContent = 'Total: ' + rows.length + ' tasks';
+        });
+    });
+  });
+
+  function _he(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  document.getElementById('emgExportBtn').addEventListener('click', function() {
+    if (!_emgData.length) return;
+    var headers = ['TaskId','Phone','Name','Vehicle','ReceivedBy','Category','FacilityName','CreatedDate','CompletedDateTime'];
+    var keys = ['task_id','phone','name','amb_reg_no','received_by','category','facility_name','created_date','completed_date_time'];
+    var csv = '\uFEFF' + headers.join(',') + '\n';
+    _emgData.forEach(function(r) {
+      csv += keys.map(function(k) { return '"' + (r[k] || '').replace(/"/g, '""') + '"'; }).join(',') + '\n';
+    });
+    var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'EMG_Tasks_' + (document.getElementById('emgVehicleNo').textContent || '') + '.csv';
+    link.click();
+  });
+
+  document.getElementById('emgPrintBtn').addEventListener('click', function() {
+    var tbl = document.getElementById('emgDetailTable');
+    var w = window.open('', '_blank', 'width=900,height=600');
+    w.document.write('<html><head><title>EMG Tasks - ' + document.getElementById('emgVehicleNo').textContent + '</title>');
+    w.document.write('<style>table{width:100%;border-collapse:collapse;font-size:12px;}th,td{border:1px solid #333;padding:4px 6px;text-align:left;}th{background:#e9ecef;}</style>');
+    w.document.write('</head><body>');
+    w.document.write('<h3>EMG Tasks — ' + document.getElementById('emgVehicleNo').textContent + '</h3>');
+    w.document.write(tbl.outerHTML);
+    w.document.write('</body></html>');
+    w.document.close();
+    w.print();
+  });
+
+  /* ── Tracker Detail / Edit Modal ────────────────────────── */
+  var trackerModal = document.getElementById('trackerModal');
+  var _trackerLinkEl = null;
+  document.querySelectorAll('.tracker-link').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      _trackerLinkEl = this;
+      var vno = this.dataset.vno, dt = this.dataset.date;
+      document.getElementById('trackerVehicleNo').textContent = vno;
+      document.getElementById('trackerLoading').classList.remove('d-none');
+      document.getElementById('trackerContent').classList.add('d-none');
+      document.getElementById('trackerEmpty').classList.add('d-none');
+      document.getElementById('trackerSaveBtn').disabled = true;
+      bootstrap.Modal.getOrCreateInstance(trackerModal).show();
+      fetch('/api/task-report/tracker-detail?date=' + encodeURIComponent(dt) + '&vehicle_no=' + encodeURIComponent(vno))
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          document.getElementById('trackerLoading').classList.add('d-none');
+          if (!d.id) { document.getElementById('trackerEmpty').classList.remove('d-none'); return; }
+          document.getElementById('trackerContent').classList.remove('d-none');
+          document.getElementById('trackerRecId').value = d.id;
+          document.getElementById('trId').value = d.id;
+          document.getElementById('trRegNo').value = d.reg_no;
+          document.getElementById('trDateFrom').value = d.date_from;
+          document.getElementById('trTimeFrom').value = d.time_from;
+          document.getElementById('trDateTo').value = d.date_to;
+          document.getElementById('trTimeTo').value = d.time_to;
+          document.getElementById('trMileage').value = d.mileage;
+          document.getElementById('trPtoP').value = d.ptop;
+          var autoVal = Math.max(d.mileage || 0, d.ptop || 0);
+          var selKm = document.getElementById('trSelectedKm');
+          selKm.value = d.selected_km !== null ? d.selected_km : autoVal;
+          document.getElementById('trAutoHint').textContent = 'Auto = MAX(Mileage, PtoP) = ' + autoVal.toFixed(2);
+          document.getElementById('trackerSaveBtn').disabled = false;
+        });
+    });
+  });
+
+  document.getElementById('trackerSaveBtn').addEventListener('click', function() {
+    var btn = this;
+    var recId = document.getElementById('trackerRecId').value;
+    var val = document.getElementById('trSelectedKm').value;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+    fetch('/api/task-report/tracker-save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id: parseInt(recId), selected_km: val !== '' ? parseFloat(val) : null})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      btn.innerHTML = '<i class="bi bi-save me-1"></i>Save';
+      if (d.ok) {
+        btn.disabled = false;
+        if (_trackerLinkEl) {
+          var badge = _trackerLinkEl.querySelector('.badge');
+          if (badge) badge.textContent = d.effective_km;
+          var row = _trackerLinkEl.closest('tr');
+          if (row) { row.dataset.tracker = d.effective_km; updateRow(row); }
+        }
+        bootstrap.Modal.getOrCreateInstance(trackerModal).hide();
+      } else {
+        alert('Error: ' + (d.error || 'Unknown'));
+        btn.disabled = false;
+      }
+    })
+    .catch(function(e) {
+      btn.innerHTML = '<i class="bi bi-save me-1"></i>Save';
+      btn.disabled = false;
+      alert('Save failed: ' + e);
+    });
+  });
 })();
 </script>
 {% endblock %}

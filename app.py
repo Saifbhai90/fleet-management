@@ -190,6 +190,7 @@ if _run_startup_tasks:
             _inspector = _sa_inspect(db.engine)
             _col_additions = [
                 ('driver_transfer', 'is_shift_only', 'BOOLEAN DEFAULT FALSE'),
+                ('vehicle_mileage_record', 'selected_km', 'NUMERIC(12,2)'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():
