@@ -4,6 +4,10 @@
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-journal-text me-2 text-primary"></i>Logbook Cover Page</h2>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print"><i class="bi bi-printer me-1"></i>Print</button>
+      <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+    </div>
   </div>
 
   <div class="card shadow-sm border-0 rounded-3 mb-4">
@@ -151,6 +155,7 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 })();
 document.addEventListener('DOMContentLoaded', function(){
   if(window.fleetTableEnhance) window.fleetTableEnhance('logbookCoverTable');
+  window.fleetPrintExport && window.fleetPrintExport('logbookCoverTable','Logbook Cover Page — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}','Logbook_Cover_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.csv');
   var _lcSearch = document.getElementById('logbookCoverSearch');
   if (_lcSearch) {
     _lcSearch.addEventListener('input', function(){
