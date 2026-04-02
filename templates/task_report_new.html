@@ -344,6 +344,7 @@
   function _showPanel(panel) {
     _hidePanel(emgPanel); _hidePanel(trackerPanel);
     panel.classList.remove('d-none');
+    window.scrollTo({top: 0, behavior: 'smooth'});
   }
 
   /* ── EMG Detail Panel ──────────────────────────────────── */

@@ -63,31 +63,31 @@
     <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0" id="taskReportTable">
-          <thead class="table-light">
+          <thead class="table-light" style="font-size:.82rem;">
             <tr>
-              <th class="ps-4">#</th>
-              <th>Date</th>
+              <th class="ps-3">#</th>
+              <th style="white-space:nowrap;">Date</th>
               <th>District</th>
               <th>Tehsil</th>
-              <th>Parking Place</th>
-              <th>Vehicle Type</th>
-              <th>Vehicle No</th>
-              <th class="text-end">Start Reading</th>
-              <th class="text-end">Close Reading</th>
-              <th class="text-end">KMs Driven</th>
+              <th>Parking</th>
+              <th>V.Type</th>
+              <th style="white-space:nowrap;">Vehicle No</th>
+              <th class="text-end" style="white-space:nowrap;">Start</th>
+              <th class="text-end" style="white-space:nowrap;">Close</th>
+              <th class="text-end" style="white-space:nowrap;">KMs Driven</th>
               <th class="text-center">Task's</th>
-              <th class="text-center">EMG,Tasks (admin)</th>
-              <th class="text-center">Task Diff</th>
-              <th class="text-end">Tracker Driven KMs</th>
-              <th class="text-end">KMs Difference</th>
-              <th class="text-end">% Of Difference</th>
+              <th class="text-center" style="white-space:nowrap;">EMG</th>
+              <th class="text-center" style="white-space:nowrap;">Task Diff</th>
+              <th class="text-end" style="white-space:nowrap;">Tracker KM</th>
+              <th class="text-end" style="white-space:nowrap;">KMs Diff</th>
+              <th class="text-end" style="white-space:nowrap;">% Diff</th>
             </tr>
           </thead>
           <tbody>
             {% for row in rows %}
-            <tr class="{% if row.vehicle.vehicle_type and 'USG' in row.vehicle.vehicle_type %}table-secondary{% endif %}">
-              <td class="ps-4">{{ loop.index }}</td>
-              <td>{{ row.task_date|ddmmyyyy }}</td>
+            <tr class="{% if row.vehicle.vehicle_type and 'USG' in row.vehicle.vehicle_type %}table-secondary{% endif %}" style="font-size:.82rem;">
+              <td class="ps-3">{{ loop.index }}</td>
+              <td style="white-space:nowrap;">{{ row.task_date|ddmmyyyy }}</td>
               <td>{{ row.vehicle.district.name if row.vehicle.district else '-' }}</td>
               <td>{{ row.vehicle.parking_station.tehsil if row.vehicle.parking_station else '-' }}</td>
               <td>{{ row.vehicle.parking_station.name if row.vehicle.parking_station else '-' }}</td>
@@ -124,14 +124,15 @@
             {% endfor %}
           </tbody>
           {% if rows %}
-          <tfoot class="table-light fw-bold">
+          <tfoot class="table-light fw-bold" style="font-size:.82rem;">
             <tr>
-              <td colspan="9" class="ps-4">Total</td>
-              <td class="text-end">{{ total_kms }}</td>
+              <td colspan="9" class="ps-3 text-end">Total</td>
+              <td class="text-end">{{ "%.2f"|format(total_kms) }}</td>
               <td class="text-center">{{ total_tasks }}</td>
-              <td></td>
-              <td class="text-end">{{ total_tracker }}</td>
-              <td class="text-end">{{ total_diff }}</td>
+              <td class="text-center">{{ total_emg }}</td>
+              <td class="text-center {% if total_task_diff != 0 %}text-danger{% endif %}">{{ total_task_diff }}</td>
+              <td class="text-end">{{ "%.2f"|format(total_tracker) }}</td>
+              <td class="text-end">{{ "%.2f"|format(total_diff) }}</td>
               <td class="text-end">{% if total_pct is not none %}{{ total_pct }}%{% else %}—{% endif %}</td>
             </tr>
           </tfoot>
@@ -188,6 +189,7 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
   function _showPanel(panel) {
     _hidePanel(emgPanel); _hidePanel(trackerPanel);
     panel.classList.remove('d-none');
+    window.scrollTo({top: 0, behavior: 'smooth'});
   }
 
   /* ── EMG Detail Panel ──────────────────────────────────── */

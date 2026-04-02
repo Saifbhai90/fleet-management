@@ -12355,14 +12355,19 @@ def task_report_list():
         })
     total_kms = sum(r['kms_driven'] for r in rows)
     total_tracker = sum(r['tracker_km'] for r in rows)
-    total_diff = total_kms - total_tracker
+    total_diff = round(total_kms - total_tracker, 2)
     total_pct = round((total_diff / total_kms * 100), 1) if total_kms else None
     total_tasks = sum(r['tasks_count'] for r in rows)
+    total_emg = sum(r['emg_tasks'] for r in rows)
+    total_task_diff = total_tasks - total_emg
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
-    return render_template('task_report_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date,                           total_kms=total_kms, total_tracker=total_tracker, total_diff=total_diff, total_pct=total_pct, total_tasks=total_tasks, pagination=pagination, per_page=per_page)
+    return render_template('task_report_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date,
+                           total_kms=total_kms, total_tracker=total_tracker, total_diff=total_diff, total_pct=total_pct,
+                           total_tasks=total_tasks, total_emg=total_emg, total_task_diff=total_task_diff,
+                           pagination=pagination, per_page=per_page)
 
 
 def _logbook_vehicle_aggregate(vehicle_id, from_date, to_date):
