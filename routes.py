@@ -7617,8 +7617,21 @@ def get_assigned_drivers(project_id):
 @app.route('/get_driver_current_info/<int:driver_id>')
 def get_driver_current_info(driver_id):
     d = Driver.query.get(driver_id)
-    if not d or not d.vehicle: return jsonify({"info": "Not Assigned"})
-    return jsonify({"info": f"{d.vehicle.vehicle_no} ({d.shift} Shift)"})
+    if not d or not d.vehicle: return jsonify({"info": "Not Assigned", "shift": None, "vehicle_id": None, "capacity": 1})
+    cap = d.vehicle.driver_capacity or 1
+    partner = None
+    if cap >= 2:
+        p = Driver.query.filter(Driver.vehicle_id == d.vehicle_id, Driver.id != d.id).first()
+        if p:
+            partner = {"id": p.id, "name": p.name, "shift": p.shift or ''}
+    return jsonify({
+        "info": f"{d.vehicle.vehicle_no} ({d.shift} Shift)",
+        "shift": d.shift or '',
+        "vehicle_id": d.vehicle_id,
+        "vehicle_no": d.vehicle.vehicle_no if d.vehicle else '',
+        "capacity": cap,
+        "partner": partner,
+    })
 
 @app.route('/get_available_shifts/<int:vehicle_id>')
 def get_available_shifts(vehicle_id):
@@ -7863,6 +7876,11 @@ def driver_transfer_new():
         transfer_date_raw = (request.form.get('transfer_date') or '').strip()
         remarks_val = (request.form.get('remarks') or '').strip()
 
+        if driver_id_val and transfer_date_raw:
+            if not new_shift_val:
+                _drv = Driver.query.get(driver_id_val)
+                if _drv and _drv.shift:
+                    new_shift_val = 'Night' if _drv.shift == 'Morning' else 'Morning'
         if driver_id_val and new_shift_val and transfer_date_raw:
             try:
                 from datetime import datetime as _dt
