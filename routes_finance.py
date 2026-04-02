@@ -1185,24 +1185,20 @@ def journal_vouchers_list():
     per_page = int(request.args.get('per_page', request.form.get('per_page', 20)))
     page = int(request.args.get('page', 1))
 
-    if request.method == 'POST':
-        try:
-            fd = request.form.get('from_date', '')
-            td = request.form.get('to_date', '')
-            if fd:
-                from_date = datetime.strptime(fd, '%d-%m-%Y').date()
-            if td:
-                to_date = datetime.strptime(td, '%d-%m-%Y').date()
-        except ValueError:
-            pass
-    else:
-        try:
-            if request.args.get('from_date'):
-                from_date = datetime.strptime(request.args['from_date'], '%d-%m-%Y').date()
-            if request.args.get('to_date'):
-                to_date = datetime.strptime(request.args['to_date'], '%d-%m-%Y').date()
-        except ValueError:
-            pass
+    def _parse_date(val, fallback):
+        if not val:
+            return fallback
+        for fmt in ('%Y-%m-%d', '%d-%m-%Y'):
+            try:
+                return datetime.strptime(val, fmt).date()
+            except ValueError:
+                continue
+        return fallback
+
+    fd = request.values.get('from_date', '')
+    td = request.values.get('to_date', '')
+    from_date = _parse_date(fd, from_date)
+    to_date = _parse_date(td, to_date)
 
     entries = JournalEntry.query.filter(
         JournalEntry.entry_date.between(from_date, to_date),

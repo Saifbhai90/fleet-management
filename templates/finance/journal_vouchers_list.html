@@ -8,7 +8,7 @@
         <div class="d-flex align-items-center gap-2">
             <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print"><i class="bi bi-printer me-1"></i>Print</button>
             <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
-            <a href="{{ url_for('journal_voucher_add') }}" class="btn btn-warning btn-sm text-dark">
+            <a href="{{ url_for('accounts_jv') }}" class="btn btn-warning btn-sm text-dark">
                 <i class="bi bi-plus-circle me-1"></i>New JV
             </a>
         </div>
@@ -24,11 +24,11 @@
             <form method="GET" action="" class="row g-2 align-items-end">
                 <div class="col-6 col-md-3">
                     <label class="form-label form-label-sm mb-1">From Date</label>
-                    <input type="date" name="from_date" value="{{ from_date }}" class="form-control form-control-sm">
+                    <input type="date" name="from_date" value="{{ from_date.strftime('%Y-%m-%d') if from_date else '' }}" class="form-control form-control-sm">
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label form-label-sm mb-1">To Date</label>
-                    <input type="date" name="to_date" value="{{ to_date }}" class="form-control form-control-sm">
+                    <input type="date" name="to_date" value="{{ to_date.strftime('%Y-%m-%d') if to_date else '' }}" class="form-control form-control-sm">
                 </div>
                 <div class="col-6 col-md-3 d-flex gap-1">
                     <button type="submit" class="btn btn-warning btn-sm text-dark flex-fill">
@@ -76,7 +76,7 @@
                     <tbody>
                         {% set items = entries.items if entries.items is defined else entries %}
                         {% for jv in items %}
-                        <tr style="cursor:pointer;" onclick="window.location='{{ url_for('journal_voucher_edit', pk=jv.id) }}'">
+                        <tr>
                             <td class="text-center text-muted small">{{ ((entries.page - 1) * per_page + loop.index) if entries.page is defined else loop.index }}</td>
                             <td><span class="fw-semibold">{{ jv.entry_number|default(jv.id) }}</span></td>
                             <td>{{ jv.entry_date|ddmmyyyy }}</td>
