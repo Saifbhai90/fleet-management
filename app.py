@@ -184,12 +184,22 @@ if _run_startup_tasks:
             db.create_all()
         except Exception as _e:
             print(f"db.create_all() warning (non-fatal): {_e}")
-        # Auto-run update_db schema additions (add missing columns)
+        # Auto-add missing columns to existing tables
         try:
-            from update_db import update_database_schema
-            update_database_schema()
+            from sqlalchemy import inspect as _sa_inspect, text as _sa_text
+            _inspector = _sa_inspect(db.engine)
+            _col_additions = [
+                ('driver_transfer', 'is_shift_only', 'BOOLEAN DEFAULT FALSE'),
+            ]
+            for _tbl, _col, _coltype in _col_additions:
+                if _tbl in _inspector.get_table_names():
+                    _existing = [c['name'] for c in _inspector.get_columns(_tbl)]
+                    if _col not in _existing:
+                        db.session.execute(_sa_text(f'ALTER TABLE {_tbl} ADD COLUMN {_col} {_coltype}'))
+                        db.session.commit()
+                        print(f"Added column {_tbl}.{_col}")
         except Exception as _e:
-            print(f"update_db warning (non-fatal): {_e}")
+            print(f"Column migration warning (non-fatal): {_e}")
         # Auto-run pending Alembic migrations so Render PostgreSQL stays in sync
         try:
             from flask_migrate import upgrade as _migrate_upgrade
