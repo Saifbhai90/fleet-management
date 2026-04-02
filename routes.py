@@ -12670,16 +12670,28 @@ def api_emg_detail():
         EmergencyTaskRecord.amb_reg_no == vehicle_no,
         EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
     ).order_by(EmergencyTaskRecord.id).all()
+    def _fmt_dt(s):
+        if not s:
+            return ''
+        from datetime import datetime as _dt
+        for fmt in ('%Y-%m-%d %H:%M:%S', '%d %b %Y %H:%M:%S', '%Y-%m-%d %H:%M', '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M'):
+            try:
+                d = _dt.strptime(s.strip(), fmt)
+                return d.strftime('%d-%m-%Y %I:%M %p')
+            except (ValueError, AttributeError):
+                continue
+        return s
     return jsonify([{
         'task_id': r.task_id_ext or '',
         'phone': r.phone or '',
         'name': r.name or '',
+        'address': r.address or '',
         'amb_reg_no': r.amb_reg_no or '',
         'received_by': r.received_by or '',
         'category': r.category or '',
         'facility_name': r.facility_name or '',
-        'created_date': r.excel_created_date or '',
-        'completed_date_time': r.completed_date_time or '',
+        'created_date': _fmt_dt(r.excel_created_date),
+        'completed_date_time': _fmt_dt(r.completed_date_time),
     } for r in rows])
 
 
@@ -12693,13 +12705,33 @@ def api_tracker_detail():
     rec = VehicleMileageRecord.query.filter_by(task_date=task_date, reg_no=vehicle_no).first()
     if not rec:
         return jsonify({})
+    def _fmt_d(s):
+        if not s:
+            return ''
+        from datetime import datetime as _dt
+        for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M', '%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y %H:%M:%S'):
+            try:
+                return _dt.strptime(s.strip(), fmt).strftime('%d-%m-%Y')
+            except (ValueError, AttributeError):
+                continue
+        return s
+    def _fmt_t(s):
+        if not s:
+            return ''
+        from datetime import datetime as _dt
+        for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M', '%H:%M:%S', '%H:%M', '%d/%m/%Y %H:%M:%S'):
+            try:
+                return _dt.strptime(s.strip(), fmt).strftime('%I:%M %p')
+            except (ValueError, AttributeError):
+                continue
+        return s
     return jsonify({
         'id': rec.id,
         'reg_no': rec.reg_no or '',
-        'date_from': rec.date_time_c or '',
-        'time_from': rec.date_time_d or '',
-        'date_to': rec.date_time_e or '',
-        'time_to': rec.date_time_f or '',
+        'date_from': _fmt_d(rec.date_time_c),
+        'time_from': _fmt_t(rec.date_time_c),
+        'date_to': _fmt_d(rec.date_time_e),
+        'time_to': _fmt_t(rec.date_time_e),
         'mileage': float(rec.mileage or 0),
         'ptop': float(rec.ptop or 0),
         'selected_km': float(rec.selected_km) if rec.selected_km is not None else None,

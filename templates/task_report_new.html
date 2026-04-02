@@ -110,6 +110,17 @@
               </tr>
               {% endfor %}
             </tbody>
+            <tfoot class="table-light fw-bold" id="batchTotals">
+              <tr>
+                <td colspan="8" class="ps-4 text-end">Total</td>
+                <td class="text-end" id="totalKmsDriven">-</td>
+                <td class="text-center" id="totalTasks">-</td>
+                <td class="text-center" id="totalEmg">-</td>
+                <td class="text-end" id="totalTracker">-</td>
+                <td class="text-end" id="totalKmsDiff">-</td>
+                <td class="text-end" id="totalPctDiff">-</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -138,7 +149,7 @@
     <table class="table table-sm table-hover align-middle mb-0" id="emgDetailTable">
       <thead class="table-light sticky-top">
         <tr>
-          <th class="ps-3">#</th><th>TaskId</th><th>Phone</th><th>Name</th><th>Vehicle</th>
+          <th class="ps-3">#</th><th>TaskId</th><th>Phone</th><th>Name</th><th>Address</th><th>Vehicle</th>
           <th>ReceivedBy</th><th>Category</th><th>FacilityName</th><th>CreatedDate</th><th>CompletedDateTime</th>
         </tr>
       </thead>
@@ -233,6 +244,28 @@
     row.querySelector('.pct-diff').className = 'text-end pct-diff' + (typeof pctDiff === 'string' && pctDiff !== '-' && pctDiff !== 'Driven KM Zero' ? (parseFloat(pctDiff) > 5 ? ' text-danger fw-bold' : (parseFloat(pctDiff) < 0 ? ' text-warning' : '')) : '');
   }
 
+  function updateTotals() {
+    var rows = batchTable ? batchTable.querySelectorAll('.task-row') : [];
+    var tKms = 0, tTasks = 0, tEmg = 0, tTracker = 0, tDiff = 0, validKms = 0;
+    rows.forEach(function(r) {
+      var kd = parseFloat(r.querySelector('.kms-driven').textContent);
+      if (!isNaN(kd)) { tKms += kd; validKms += kd; }
+      var ti = r.querySelector('input[name*="_tasks_count"]');
+      if (ti && ti.value) tTasks += parseInt(ti.value) || 0;
+      tEmg += parseFloat(r.dataset.emg) || 0;
+      tTracker += parseFloat(r.dataset.tracker) || 0;
+      var df = parseFloat(r.querySelector('.kms-diff').textContent);
+      if (!isNaN(df)) tDiff += df;
+    });
+    var el = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+    el('totalKmsDriven', tKms ? tKms.toFixed(2) : '-');
+    el('totalTasks', tTasks || '-');
+    el('totalEmg', tEmg || '-');
+    el('totalTracker', tTracker ? tTracker.toFixed(2) : '-');
+    el('totalKmsDiff', tDiff ? tDiff.toFixed(2) : '-');
+    el('totalPctDiff', validKms ? ((tDiff / validKms) * 100).toFixed(1) + '%' : '-');
+  }
+
   var batchTable = document.getElementById('batchTable');
   if (batchTable) {
     batchTable.addEventListener('input', function(e) {
@@ -240,8 +273,10 @@
         var row = e.target.closest('tr');
         if (row) updateRow(row);
       }
+      updateTotals();
     });
     batchTable.querySelectorAll('.task-row').forEach(updateRow);
+    updateTotals();
 
     document.getElementById('batchForm').addEventListener('submit', function(e) {
       var empty = [];
@@ -309,6 +344,7 @@
               '<td>' + _he(r.task_id) + '</td>' +
               '<td>' + _he(r.phone) + '</td>' +
               '<td>' + _he(r.name) + '</td>' +
+              '<td>' + _he(r.address) + '</td>' +
               '<td>' + _he(r.amb_reg_no) + '</td>' +
               '<td>' + _he(r.received_by) + '</td>' +
               '<td><span class="badge ' + (r.category === 'Green' ? 'bg-success' : 'bg-warning text-dark') + '">' + _he(r.category) + '</span></td>' +
@@ -324,8 +360,8 @@
 
   document.getElementById('emgExportBtn').addEventListener('click', function() {
     if (!_emgData.length) return;
-    var headers = ['TaskId','Phone','Name','Vehicle','ReceivedBy','Category','FacilityName','CreatedDate','CompletedDateTime'];
-    var keys = ['task_id','phone','name','amb_reg_no','received_by','category','facility_name','created_date','completed_date_time'];
+    var headers = ['TaskId','Phone','Name','Address','Vehicle','ReceivedBy','Category','FacilityName','CreatedDate','CompletedDateTime'];
+    var keys = ['task_id','phone','name','address','amb_reg_no','received_by','category','facility_name','created_date','completed_date_time'];
     var csv = '\uFEFF' + headers.join(',') + '\n';
     _emgData.forEach(function(r) {
       csv += keys.map(function(k) { return '"' + (r[k] || '').replace(/"/g, '""') + '"'; }).join(',') + '\n';
