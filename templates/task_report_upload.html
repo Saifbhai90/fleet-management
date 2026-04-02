@@ -29,7 +29,7 @@
             <small class="text-muted">Tracker Driven KMs (admin) ke liye</small>
           </div>
           <div class="col-12">
-            <button type="submit" class="btn btn-primary">
+            <button type="submit" class="btn btn-primary" id="uploadBtn">
               <i class="bi bi-upload me-1"></i>Upload Both
             </button>
           </div>
@@ -38,4 +38,41 @@
     </div>
   </div>
 </div>
+
+<div id="uploadOverlay" class="d-none" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;display:flex;align-items:center;justify-content:center;">
+  <div class="card shadow-lg border-0" style="width:400px;max-width:90%;">
+    <div class="card-body text-center py-5">
+      <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem;" role="status"></div>
+      <h5 class="mb-2">Uploading & Processing...</h5>
+      <p class="text-muted small mb-3">Excel files parse ho rahi hain. Please wait.</p>
+      <div class="progress" style="height:6px;">
+        <div id="uploadProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:5%;"></div>
+      </div>
+      <small class="text-muted mt-2 d-block" id="uploadPct">5%</small>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var form = document.querySelector('form[enctype]');
+  if (!form) return;
+  form.addEventListener('submit', function() {
+    var overlay = document.getElementById('uploadOverlay');
+    overlay.classList.remove('d-none');
+    overlay.style.display = 'flex';
+    var bar = document.getElementById('uploadProgress');
+    var pct = document.getElementById('uploadPct');
+    var w = 5, target = 90;
+    var iv = setInterval(function() {
+      var step = Math.max(0.3, (target - w) * 0.04);
+      w = Math.min(w + step, target);
+      bar.style.width = w.toFixed(0) + '%';
+      pct.textContent = w.toFixed(0) + '%';
+    }, 300);
+    setTimeout(function() { target = 95; }, 8000);
+    window._uploadInterval = iv;
+  });
+})();
+</script>
 {% endblock %}
