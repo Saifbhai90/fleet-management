@@ -465,7 +465,7 @@
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
     fetch('/api/task-report/tracker-save', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
       body: JSON.stringify({id: parseInt(recId), selected_km: val !== '' ? parseFloat(val) : null})
     })
     .then(function(r) { return r.json(); })
