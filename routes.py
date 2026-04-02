@@ -7617,16 +7617,21 @@ def get_assigned_drivers(project_id):
 @app.route('/get_driver_current_info/<int:driver_id>')
 def get_driver_current_info(driver_id):
     d = Driver.query.get(driver_id)
-    if not d or not d.vehicle: return jsonify({"info": "Not Assigned", "shift": None, "vehicle_id": None, "capacity": 1})
+    if not d or not d.vehicle:
+        return jsonify({"info": "Not Assigned", "shift": None, "vehicle_id": None, "capacity": 1, "partner": None})
     cap = d.vehicle.driver_capacity or 1
+    cur_shift = (d.shift or '').strip()
     partner = None
     if cap >= 2:
-        p = Driver.query.filter(Driver.vehicle_id == d.vehicle_id, Driver.id != d.id).first()
+        p = Driver.query.filter(
+            Driver.vehicle_id == d.vehicle_id, Driver.id != d.id,
+            Driver.status == 'Active'
+        ).first()
         if p:
-            partner = {"id": p.id, "name": p.name, "shift": p.shift or ''}
+            partner = {"id": p.id, "name": p.name, "shift": (p.shift or '').strip()}
     return jsonify({
-        "info": f"{d.vehicle.vehicle_no} ({d.shift} Shift)",
-        "shift": d.shift or '',
+        "info": f"{d.vehicle.vehicle_no} ({cur_shift} Shift)" if cur_shift else f"{d.vehicle.vehicle_no}",
+        "shift": cur_shift,
         "vehicle_id": d.vehicle_id,
         "vehicle_no": d.vehicle.vehicle_no if d.vehicle else '',
         "capacity": cap,
@@ -7872,15 +7877,17 @@ def driver_transfer_new():
 
     if is_shift_only and request.method == 'POST':
         driver_id_val = request.form.get('driver_id', type=int) or 0
-        new_shift_val = (request.form.get('new_shift') or '').strip()
         transfer_date_raw = (request.form.get('transfer_date') or '').strip()
         remarks_val = (request.form.get('remarks') or '').strip()
 
         if driver_id_val and transfer_date_raw:
-            if not new_shift_val:
-                _drv = Driver.query.get(driver_id_val)
-                if _drv and _drv.shift:
-                    new_shift_val = 'Night' if _drv.shift == 'Morning' else 'Morning'
+            _drv = Driver.query.get(driver_id_val)
+            if _drv and _drv.shift:
+                new_shift_val = 'Night' if _drv.shift.strip().lower() == 'morning' else 'Morning'
+            else:
+                new_shift_val = (request.form.get('new_shift') or '').strip()
+        else:
+            new_shift_val = (request.form.get('new_shift') or '').strip()
         if driver_id_val and new_shift_val and transfer_date_raw:
             try:
                 from datetime import datetime as _dt
@@ -12255,7 +12262,7 @@ def get_vehicles_by_project_district():
     return jsonify([{'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or ''} for v in vehicles])
 
 
-@app.route('/task-report')
+@app.route('/task-report', methods=['GET', 'POST'])
 def task_report_list():
     from auth_utils import get_user_context
     
@@ -12917,7 +12924,7 @@ def task_report_upload():
 # ────────────────────────────────────────────────
 # Red Task Report
 # ────────────────────────────────────────────────
-@app.route('/red-task')
+@app.route('/red-task', methods=['GET', 'POST'])
 def red_task_list():
     form = RedTaskFilterForm()
     form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
@@ -13043,7 +13050,7 @@ def red_task_edit(pk):
 # ────────────────────────────────────────────────
 # Vehicle Move without Task Report
 # ────────────────────────────────────────────────
-@app.route('/vehicle-move-without-task')
+@app.route('/vehicle-move-without-task', methods=['GET', 'POST'])
 def without_task_list():
     form = VehicleMoveWithoutTaskFilterForm()
     form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]

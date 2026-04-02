@@ -32,6 +32,8 @@
         select.search-select { display: none; }
         /* Full-width TS wrapper */
         .ts-wrapper { width: 100%; }
+        /* Body-level dropdown must sit above cards/tables/modals */
+        body > .ts-dropdown { z-index: 1060 !important; }
         /* Highlighted (active) option — strong ERP-style blue */
         .ts-dropdown .active {
             background-color: #0d6efd !important;
@@ -3008,6 +3010,7 @@
                     openOnFocus: false,
                     selectOnTab: true,
                     maxOptions: 300,
+                    dropdownParent: 'body',
                     placeholder: placeholder,
                     render: {
                         /* Triggered by TomSelect when a text search finds nothing */

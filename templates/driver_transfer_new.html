@@ -172,6 +172,9 @@ textarea.form-control { height: auto !important; }
     if (el.tomselect) { el.tomselect.destroy(); }
     el.innerHTML = html;
     initSearchableDropdowns(el.parentNode);
+    if (el === driverId && el.tomselect) {
+      el.tomselect.on('change', _onDriverChange);
+    }
   }
   function resetSel(el, placeholder) {
     rebuildSel(el, '<option value="">' + (placeholder || '-- Select --') + '</option>');
@@ -216,40 +219,59 @@ textarea.form-control { height: auto !important; }
     checkSubmitReady();
   }
 
+  var _swapValid = false;
+
+  function _getDriverIdVal() {
+    if (!driverId) return '';
+    if (driverId.tomselect) return driverId.tomselect.getValue() || '';
+    return driverId.value || '';
+  }
+
   function loadSwapPreview() {
-    var did = driverId ? driverId.value : '';
-    if (!did) {
+    _swapValid = false;
+    var did = _getDriverIdVal();
+    if (!did || did === '0') {
       swapContent.innerHTML = '<span class="text-muted small">Select a driver to see swap preview</span>';
       if (newShift) rebuildSel(newShift, '<option value="">--</option>');
       checkSubmitReady();
       return;
     }
 
+    swapContent.innerHTML = '<span class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>Loading...</span>';
+
     fetch('/get_driver_current_info/' + did).then(function(r){ return r.json(); }).then(function(info) {
-      var curShift = info.shift || '';
+      var curShift = (info.shift || '').trim();
       var cap = info.capacity || 1;
       var partner = info.partner;
 
       if (cap < 2) {
         swapContent.innerHTML = '<div class="text-danger small"><i class="bi bi-exclamation-triangle me-1"></i>Vehicle capacity is 1 — shift change not applicable.</div>';
         if (newShift) rebuildSel(newShift, '<option value="">N/A</option>');
-        if (submitBtn) submitBtn.disabled = true;
+        checkSubmitReady();
         return;
       }
 
       if (!curShift) {
-        swapContent.innerHTML = '<div class="text-danger small"><i class="bi bi-exclamation-triangle me-1"></i>Driver has no shift assigned.</div>';
+        swapContent.innerHTML = '<div class="text-danger small"><i class="bi bi-exclamation-triangle me-1"></i>Driver has no shift assigned in database.</div>';
         if (newShift) rebuildSel(newShift, '<option value="">N/A</option>');
-        if (submitBtn) submitBtn.disabled = true;
+        checkSubmitReady();
         return;
       }
 
-      var otherShift = curShift === 'Morning' ? 'Night' : 'Morning';
+      var otherShift = curShift.toLowerCase() === 'morning' ? 'Night' : 'Morning';
       rebuildSel(newShift, '<option value="' + otherShift + '" selected>' + otherShift + '</option>');
+      _swapValid = true;
 
       var driverName = '';
-      var driverEl = driverId.options ? driverId.options[driverId.selectedIndex] : null;
-      if (driverEl) driverName = driverEl.textContent.split('(')[0].trim();
+      try {
+        if (driverId.tomselect) {
+          var item = driverId.tomselect.getItem(driverId.tomselect.getValue());
+          if (item) driverName = item.textContent.split('(')[0].trim();
+        } else if (driverId.options && driverId.selectedIndex >= 0) {
+          driverName = driverId.options[driverId.selectedIndex].textContent.split('(')[0].trim();
+        }
+      } catch(e) {}
+      if (!driverName) driverName = 'Selected Driver';
 
       var html = '<div class="d-flex align-items-center justify-content-center gap-3 flex-wrap">';
       html += '<div class="text-center p-2" style="background:#fff;border-radius:8px;border:1px solid #e5e7eb;min-width:160px;">';
@@ -263,7 +285,7 @@ textarea.form-control { height: auto !important; }
         html += '<i class="bi bi-arrow-left-right text-warning" style="font-size:1.4rem;"></i>';
         html += '<div class="text-center p-2" style="background:#fff;border-radius:8px;border:1px solid #e5e7eb;min-width:160px;">';
         html += '<div class="fw-bold" style="font-size:.82rem;">' + partner.name + '</div>';
-        html += '<div><span class="badge bg-danger" style="font-size:.7rem;">' + partner.shift + '</span>';
+        html += '<div><span class="badge bg-danger" style="font-size:.7rem;">' + (partner.shift || curShift) + '</span>';
         html += ' <i class="bi bi-arrow-right text-warning"></i> ';
         html += '<span class="badge bg-success" style="font-size:.7rem;">' + curShift + '</span></div>';
         html += '</div>';
@@ -274,18 +296,17 @@ textarea.form-control { height: auto !important; }
       html += '</div>';
       swapContent.innerHTML = html;
       checkSubmitReady();
-    }).catch(function() {
+    }).catch(function(err) {
       swapContent.innerHTML = '<span class="text-danger small">Could not load driver info.</span>';
+      checkSubmitReady();
     });
   }
 
   function checkSubmitReady() {
     if (!submitBtn) return;
     if (isShiftOnly) {
-      var hasDriver = driverId && driverId.value;
-      var hasShiftVal = newShift && newShift.value && newShift.value !== 'N/A' && newShift.value !== '';
-      var hasDate = document.querySelector('[name="transfer_date"]') && document.querySelector('[name="transfer_date"]').value;
-      submitBtn.disabled = !(hasDriver && hasShiftVal);
+      var hasDriver = !!_getDriverIdVal() && _getDriverIdVal() !== '0';
+      submitBtn.disabled = !(hasDriver && _swapValid);
     } else {
       submitBtn.disabled = !(newShift && newShift.value);
     }
@@ -333,12 +354,14 @@ textarea.form-control { height: auto !important; }
     });
   }
 
+  function _onDriverChange() {
+    var val = _getDriverIdVal();
+    if (typeof loadDriverInsight === 'function') loadDriverInsight(val);
+    if (isShiftOnly) loadSwapPreview();
+    checkSubmitReady();
+  }
   if (driverId) {
-    driverId.addEventListener('change', function() {
-      if (typeof loadDriverInsight === 'function') loadDriverInsight(this.value);
-      if (isShiftOnly) loadSwapPreview();
-      checkSubmitReady();
-    });
+    driverId.addEventListener('change', _onDriverChange);
   }
 
   if (newProject) {
