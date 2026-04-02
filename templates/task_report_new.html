@@ -69,6 +69,7 @@
                 <th class="text-end">KMs Driven</th>
                 <th class="text-center">Task's</th>
                 <th class="text-center">EMG (admin)</th>
+                <th class="text-center">Task Diff</th>
                 <th class="text-end">Tracker KM</th>
                 <th class="text-end">KMs Diff</th>
                 <th class="text-end">% Diff</th>
@@ -100,6 +101,7 @@
                     <span class="badge {% if row.emg_tasks %}bg-info text-dark{% else %}bg-secondary{% endif %}" style="cursor:pointer;font-size:.8rem;">{{ row.emg_tasks }}</span>
                   </a>
                 </td>
+                <td class="text-center task-diff">-</td>
                 <td class="text-end">
                   <a href="#" class="tracker-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
                     <span class="badge bg-dark" style="cursor:pointer;font-size:.8rem;">{{ row.tracker_km }}</span>
@@ -116,6 +118,7 @@
                 <td class="text-end" id="totalKmsDriven">-</td>
                 <td class="text-center" id="totalTasks">-</td>
                 <td class="text-center" id="totalEmg">-</td>
+                <td class="text-center" id="totalTaskDiff">-</td>
                 <td class="text-end" id="totalTracker">-</td>
                 <td class="text-end" id="totalKmsDiff">-</td>
                 <td class="text-end" id="totalPctDiff">-</td>
@@ -232,12 +235,26 @@
   function updateRow(row) {
     var start = parseFloat(row.dataset.start) || 0;
     var tracker = parseFloat(row.dataset.tracker) || 0;
+    var emg = parseFloat(row.dataset.emg) || 0;
     var closeInp = row.querySelector('.close-input');
     var close = closeInp.value.trim() === '' ? NaN : parseFloat(closeInp.value);
     var kmsDriven = (close >= start ? close - start : 0);
     var kmsDiff = (isNaN(close) ? NaN : kmsDriven - tracker);
     var pctDiff = (kmsDriven && kmsDriven !== 0 && !isNaN(kmsDiff)) ? ((kmsDiff / kmsDriven) * 100).toFixed(1) + '%' : (isNaN(close) ? '-' : 'Driven KM Zero');
     row.querySelector('.kms-driven').textContent = isNaN(close) ? '-' : kmsDriven.toFixed(2);
+
+    var taskInp = row.querySelector('input[name*="_tasks_count"]');
+    var tasks = (taskInp && taskInp.value.trim() !== '') ? parseInt(taskInp.value) || 0 : null;
+    var tdCell = row.querySelector('.task-diff');
+    if (tasks !== null) {
+      var td = tasks - emg;
+      tdCell.textContent = td;
+      tdCell.className = 'text-center task-diff' + (td !== 0 ? ' text-danger fw-bold' : '');
+    } else {
+      tdCell.textContent = '-';
+      tdCell.className = 'text-center task-diff';
+    }
+
     row.querySelector('.kms-diff').textContent = isNaN(kmsDiff) ? '-' : kmsDiff.toFixed(2);
     row.querySelector('.kms-diff').className = 'text-end kms-diff' + (kmsDiff > 5 ? ' text-danger fw-bold' : (kmsDiff < 0 ? ' text-warning' : ''));
     row.querySelector('.pct-diff').textContent = pctDiff;
@@ -246,21 +263,24 @@
 
   function updateTotals() {
     var rows = batchTable ? batchTable.querySelectorAll('.task-row') : [];
-    var tKms = 0, tTasks = 0, tEmg = 0, tTracker = 0, tDiff = 0, validKms = 0;
+    var tKms = 0, tTasks = 0, tEmg = 0, tTaskDiff = 0, tTracker = 0, tDiff = 0, validKms = 0, hasTaskDiff = false;
     rows.forEach(function(r) {
       var kd = parseFloat(r.querySelector('.kms-driven').textContent);
       if (!isNaN(kd)) { tKms += kd; validKms += kd; }
       var ti = r.querySelector('input[name*="_tasks_count"]');
       if (ti && ti.value) tTasks += parseInt(ti.value) || 0;
       tEmg += parseFloat(r.dataset.emg) || 0;
+      var tdVal = parseInt(r.querySelector('.task-diff').textContent);
+      if (!isNaN(tdVal)) { tTaskDiff += tdVal; hasTaskDiff = true; }
       tTracker += parseFloat(r.dataset.tracker) || 0;
       var df = parseFloat(r.querySelector('.kms-diff').textContent);
       if (!isNaN(df)) tDiff += df;
     });
-    var el = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+    var el = function(id, v, cls) { var e = document.getElementById(id); if (e) { e.textContent = v; if (cls !== undefined) e.className = cls; } };
     el('totalKmsDriven', tKms ? tKms.toFixed(2) : '-');
     el('totalTasks', tTasks || '-');
     el('totalEmg', tEmg || '-');
+    el('totalTaskDiff', hasTaskDiff ? tTaskDiff : '-', 'text-center' + (tTaskDiff !== 0 ? ' text-danger fw-bold' : ''));
     el('totalTracker', tTracker ? tTracker.toFixed(2) : '-');
     el('totalKmsDiff', tDiff ? tDiff.toFixed(2) : '-');
     el('totalPctDiff', validKms ? ((tDiff / validKms) * 100).toFixed(1) + '%' : '-');
@@ -269,10 +289,8 @@
   var batchTable = document.getElementById('batchTable');
   if (batchTable) {
     batchTable.addEventListener('input', function(e) {
-      if (e.target.classList.contains('close-input')) {
-        var row = e.target.closest('tr');
-        if (row) updateRow(row);
-      }
+      var row = e.target.closest('tr.task-row');
+      if (row) updateRow(row);
       updateTotals();
     });
     batchTable.querySelectorAll('.task-row').forEach(updateRow);

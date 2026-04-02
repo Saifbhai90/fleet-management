@@ -77,6 +77,7 @@
               <th class="text-end">KMs Driven</th>
               <th class="text-center">Task's</th>
               <th class="text-center">EMG,Tasks (admin)</th>
+              <th class="text-center">Task Diff</th>
               <th class="text-end">Tracker Driven KMs</th>
               <th class="text-end">KMs Difference</th>
               <th class="text-end">% Of Difference</th>
@@ -101,6 +102,8 @@
                   <span class="badge {% if row.emg_tasks %}bg-info text-dark{% else %}bg-secondary{% endif %}" style="cursor:pointer;font-size:.8rem;">{{ row.emg_tasks }}</span>
                 </a>
               </td>
+              {% set task_diff = (row.tasks_count|int) - (row.emg_tasks|int) %}
+              <td class="text-center {% if task_diff != 0 %}text-danger fw-bold{% endif %}">{{ task_diff }}</td>
               <td class="text-end">
                 <a href="#" class="tracker-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ row.task_date.strftime('%d-%m-%Y') }}">
                   <span class="badge bg-dark" style="cursor:pointer;font-size:.8rem;">{{ row.tracker_km }}</span>
@@ -113,7 +116,7 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="15" class="text-center py-5 text-muted">
+              <td colspan="16" class="text-center py-5 text-muted">
                 <i class="bi bi-clipboard2-data display-6 d-block mb-2"></i>
                 No task entries for this date/filter. <a href="{{ url_for('task_report_new') }}">Add entry</a> or change filter.
               </td>
