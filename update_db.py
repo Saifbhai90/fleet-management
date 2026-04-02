@@ -91,6 +91,18 @@ def update_database_schema():
             # Vehicle Mileage Record - user override
             ('vehicle_mileage_record', 'selected_km', 'NUMERIC(12,2)'),
 
+            # Red Task - fine amount and driver link
+            ('red_task', 'fine_amount', 'NUMERIC(12,2) DEFAULT 0'),
+            ('red_task', 'driver_id', 'INTEGER REFERENCES driver(id)'),
+
+            # Vehicle Move Without Task - fine amount and driver link
+            ('vehicle_move_without_task', 'fine_amount', 'NUMERIC(12,2) DEFAULT 0'),
+            ('vehicle_move_without_task', 'driver_id', 'INTEGER REFERENCES driver(id)'),
+
+            # Penalty Record - source tracking
+            ('penalty_record', 'source_type', 'VARCHAR(30)'),
+            ('penalty_record', 'source_id', 'INTEGER'),
+
             # NEW: Driver Status Change table columns (agar table bana to columns bhi check)
             ('driver_status_change', 'driver_id', 'INTEGER NOT NULL REFERENCES driver(id)'),
             ('driver_status_change', 'action_type', 'VARCHAR(20) NOT NULL'),

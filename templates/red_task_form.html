@@ -7,72 +7,130 @@
     <a href="{{ url_for('red_task_list') }}" class="btn btn-outline-secondary btn-sm">Back to Red Task Report</a>
   </div>
 
-  <div class="card shadow border-0 rounded-3">
+  <div class="card shadow border-0 rounded-3 mb-4">
     <div class="card-body">
-      <form method="POST" action="" class="row g-3">
-        {{ form.hidden_tag() }}
-        <div class="col-md-4">
+      <form method="GET" action="{{ url_for('red_task_new') }}" id="filterForm" class="row g-3 align-items-end">
+        <div class="col-md-2">
           <label class="form-label">Date <span class="text-danger">*</span></label>
-          {{ form.task_date(class="form-control datepicker") }}
+          <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
         </div>
-        <div class="col-md-4">
-          <label class="form-label">Task ID</label>
-          {{ form.task_id(class="form-control") }}
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">District Name</label>
-          {{ form.district_id(class="form-select search-select", id="districtSelect") }}
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Project</label>
-          {{ form.project_id(class="form-select search-select", id="projectSelect") }}
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Vehicle #</label>
-          {{ form.vehicle_id(class="form-select search-select") }}
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Driver Name</label>
-          {{ form.driver_name(class="form-control") }}
-        </div>
-        <div class="col-12">
-          <label class="form-label">Reason of Red Task</label>
-          {{ form.reason(class="form-control") }}
-        </div>
-        <div class="col-12">
-          <label class="form-label">Call to DTO / according to CRC</label>
-          <div class="d-flex gap-3">
-            {% for subfield in form.call_to_dto %}
-            <div class="form-check">
-              {{ subfield(class="form-check-input") }}
-              <label class="form-check-label" for="{{ subfield.id }}">{{ subfield.label.text }}</label>
-            </div>
+        <div class="col-md-3">
+          <label class="form-label">District <span class="text-danger">*</span></label>
+          <select name="district_id" id="districtSelect" class="form-select search-select" required>
+            <option value="0">-- Select District --</option>
+            {% for d in districts %}
+              <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
             {% endfor %}
-          </div>
+          </select>
         </div>
-        <div class="col-12">
-          <label class="form-label">According to DTO Investigation</label>
-          {{ form.dto_investigation(class="form-control") }}
+        <div class="col-md-3">
+          <label class="form-label">Project <span class="text-danger">*</span></label>
+          <select name="project_id" id="projectSelect" class="form-select search-select" required>
+            <option value="0">-- Select Project --</option>
+            {% for p in projects %}
+              <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
         </div>
-        <div class="col-md-4">
-          <label class="form-label">Action Against Red Task</label>
-          {{ form.action(class="form-select search-select") }}
-        </div>
-        <div class="col-12">
-          <hr>
-          {{ form.submit(class="btn btn-danger") }}
-          <a href="{{ url_for('red_task_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-danger w-100">
+            <i class="bi bi-list-ul me-1"></i>Load Red Tasks
+          </button>
         </div>
       </form>
     </div>
   </div>
+
+  {% if rows %}
+  <form method="POST" id="batchForm">
+    <input type="hidden" name="save_batch" value="1">
+    <input type="hidden" name="task_date" value="{{ view_date.strftime('%d-%m-%Y') }}">
+    <input type="hidden" name="district_id" value="{{ district_id }}">
+    <input type="hidden" name="project_id" value="{{ project_id }}">
+
+    <div class="card shadow border-0 rounded-3 overflow-hidden">
+      <div class="card-header bg-danger text-white py-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <span class="fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Red Tasks from Emergency Report — {{ view_date.strftime('%d-%m-%Y') }}</span>
+        <span class="badge bg-light text-danger">{{ rows|length }} records</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" id="redTaskTable">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">#</th>
+              <th>Vehicle</th>
+              <th>Task ID</th>
+              <th style="min-width:200px;">Reason (SubCategory)</th>
+              <th style="min-width:160px;">Driver Name</th>
+              <th style="min-width:100px;">Call to DTO/CRC</th>
+              <th style="min-width:200px;">DTO Investigation</th>
+              <th style="min-width:100px;">Fine Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td class="ps-3">{{ loop.index }}</td>
+              <td class="fw-medium">{{ row.emg.amb_reg_no }}</td>
+              <td>
+                <input type="hidden" name="row_{{ loop.index0 }}_vehicle_id" value="{{ row.vehicle.id if row.vehicle else '' }}">
+                <input type="hidden" name="row_{{ loop.index0 }}_task_id" value="{{ row.emg.task_id_ext or '' }}">
+                <span class="text-muted small">{{ row.emg.task_id_ext or '-' }}</span>
+              </td>
+              <td>
+                <input type="hidden" name="row_{{ loop.index0 }}_reason" value="{{ row.emg.sub_category or '' }}">
+                <span class="small">{{ row.emg.sub_category or '-' }}</span>
+              </td>
+              <td>
+                <select name="row_{{ loop.index0 }}_driver_id" class="form-select form-select-sm">
+                  <option value="">-- Select --</option>
+                  {% for drv in row.drivers %}
+                  <option value="{{ drv.id }}">{{ drv.name }} ({{ drv.shift or '-' }})</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td>
+                <select name="row_{{ loop.index0 }}_call_to_dto" class="form-select form-select-sm">
+                  <option value="">--</option>
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                </select>
+              </td>
+              <td>
+                <input type="text" name="row_{{ loop.index0 }}_dto_investigation" class="form-control form-control-sm" placeholder="Investigation details">
+              </td>
+              <td>
+                <input type="number" step="0.01" min="0" name="row_{{ loop.index0 }}_fine_amount" class="form-control form-control-sm text-end" value="0" placeholder="0">
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer bg-light d-flex justify-content-between align-items-center">
+        <span class="text-muted small">Fine > 0 will auto-create a Driver Penalty Record.</span>
+        <button type="submit" class="btn btn-danger px-4">
+          <i class="bi bi-save me-1"></i>Save All Red Tasks
+        </button>
+      </div>
+    </div>
+  </form>
+  {% elif district_id and project_id %}
+  <div class="alert alert-warning">
+    <i class="bi bi-info-circle me-2"></i>No Red category tasks found in Emergency Task Report for this date/district/project. Make sure the Emergency Task Report Excel has been uploaded for <strong>{{ view_date.strftime('%d-%m-%Y') }}</strong>.
+  </div>
+  {% else %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i>Date, District aur Project select karke <strong>Load Red Tasks</strong> par click karein. Emergency Task Report se Red category tasks yahan show honge.
+  </div>
+  {% endif %}
 </div>
+
 <script>
 (function() {
-  var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
-  if (districtSelect && projectSelect) {
-    districtSelect.addEventListener('change', function() {
+  if (projectSelect && document.getElementById('districtSelect')) {
+    document.getElementById('districtSelect').addEventListener('change', function() {
       var did = this.value;
       if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
       projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';

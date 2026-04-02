@@ -620,11 +620,14 @@ class RedTask(db.Model):
     call_to_dto = db.Column(db.String(10), nullable=True)   # Yes / No
     dto_investigation = db.Column(db.Text, nullable=True)   # According to DTO Investigation
     action = db.Column(db.String(100), nullable=True)       # Action Against Red Task (No, Fine, etc.)
+    fine_amount = db.Column(db.Numeric(12, 2), default=0)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
 
     district = db.relationship('District', backref='red_tasks', lazy='select')
     project = db.relationship('Project', backref='red_tasks', lazy='select')
     vehicle = db.relationship('Vehicle', backref='red_tasks', lazy='select')
+    driver = db.relationship('Driver', backref='red_tasks', lazy='select')
 
     def __repr__(self):
         return f'<RedTask {self.task_id or self.id} {self.task_date}>'
@@ -648,11 +651,14 @@ class VehicleMoveWithoutTask(db.Model):
     t_km = db.Column(db.Numeric(12, 2), nullable=True)       # Task KM
     remarks = db.Column(db.Text, nullable=True)
     fine = db.Column(db.String(50), nullable=True)            # "No" or amount e.g. "500"
+    fine_amount = db.Column(db.Numeric(12, 2), default=0)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
 
     district = db.relationship('District', backref='move_without_tasks', lazy='select')
     project = db.relationship('Project', backref='move_without_tasks', lazy='select')
     vehicle = db.relationship('Vehicle', backref='move_without_tasks', lazy='select')
+    driver = db.relationship('Driver', backref='move_without_tasks', lazy='select')
 
     def __repr__(self):
         return f'<VehicleMoveWithoutTask {self.vehicle_id} {self.move_date}>'
@@ -671,6 +677,8 @@ class PenaltyRecord(db.Model):
     record_date = db.Column(db.Date, nullable=False)
     fine = db.Column(db.String(100), nullable=True)   # amount or text
     remarks = db.Column(db.Text, nullable=True)
+    source_type = db.Column(db.String(30), nullable=True)  # 'red_task' or 'without_task'
+    source_id = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
 
     district = db.relationship('District', backref='penalty_records', lazy='select')

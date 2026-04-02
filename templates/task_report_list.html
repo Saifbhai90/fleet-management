@@ -185,7 +185,6 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
   function _showPanel(panel) {
     _hidePanel(emgPanel); _hidePanel(trackerPanel);
     panel.classList.remove('d-none');
-    panel.scrollIntoView({behavior:'smooth', block:'nearest'});
   }
 
   /* ── EMG Detail Panel ──────────────────────────────────── */
@@ -334,7 +333,7 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 </script>
 
 <!-- EMG Detail Panel (inline, no backdrop) -->
-<div id="emgPanel" class="card shadow-lg border-info d-none mb-3" style="z-index:10;">
+<div id="emgPanel" class="card shadow-lg border-info d-none" style="position:fixed;top:120px;left:50%;transform:translateX(-50%);width:92%;max-width:1100px;z-index:1055;box-shadow:0 8px 32px rgba(0,0,0,.25)!important;">
   <div class="card-header bg-info bg-opacity-10 d-flex justify-content-between align-items-center py-2">
     <h6 class="mb-0"><i class="bi bi-clipboard2-pulse me-2"></i>EMG Tasks — <span id="emgVehicleNo"></span></h6>
     <button type="button" class="btn-close" id="emgCloseBtn"></button>
@@ -363,7 +362,7 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 </div>
 
 <!-- Tracker Detail / Edit Panel (inline, no backdrop) -->
-<div id="trackerPanel" class="card shadow-lg border-dark d-none mb-3" style="z-index:10;">
+<div id="trackerPanel" class="card shadow-lg border-dark d-none" style="position:fixed;top:140px;left:50%;transform:translateX(-50%);width:80%;max-width:800px;z-index:1055;box-shadow:0 8px 32px rgba(0,0,0,.25)!important;">
   <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
     <h6 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Tracker KM — <span id="trackerVehicleNo"></span></h6>
     <button type="button" class="btn-close btn-close-white" id="trackerCloseBtn"></button>

@@ -191,6 +191,12 @@ if _run_startup_tasks:
             _col_additions = [
                 ('driver_transfer', 'is_shift_only', 'BOOLEAN DEFAULT FALSE'),
                 ('vehicle_mileage_record', 'selected_km', 'NUMERIC(12,2)'),
+                ('red_task', 'fine_amount', 'NUMERIC(12,2) DEFAULT 0'),
+                ('red_task', 'driver_id', 'INTEGER REFERENCES driver(id)'),
+                ('vehicle_move_without_task', 'fine_amount', 'NUMERIC(12,2) DEFAULT 0'),
+                ('vehicle_move_without_task', 'driver_id', 'INTEGER REFERENCES driver(id)'),
+                ('penalty_record', 'source_type', 'VARCHAR(30)'),
+                ('penalty_record', 'source_id', 'INTEGER'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():
