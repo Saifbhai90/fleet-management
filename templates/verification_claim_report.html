@@ -47,12 +47,12 @@
   .ras-page .f-from-date { top: 40.5%;  left: 68%;    font-size: 12pt; }
   .ras-page .f-to-date   { top: 40.5%;  left: 81.5%;  font-size: 12pt; }
 
-  .ras-page .f-task-val    { top: 45.8%;  left: 52%;   font-size: 11pt; }
-  .ras-page .f-open-val    { top: 47.6%;  left: 55%;   font-size: 11pt; }
+  .ras-page .f-task-val    { top: 45.8%;  left: 60%;   font-size: 11pt; }
+  .ras-page .f-open-val    { top: 47.6%;  left: 58%;   font-size: 11pt; }
   .ras-page .f-open-date   { top: 47.6%;  left: 77%;   font-size: 11pt; }
-  .ras-page .f-close-val   { top: 49.5%;  left: 55%;   font-size: 11pt; }
+  .ras-page .f-close-val   { top: 49.5%;  left: 58%;   font-size: 11pt; }
   .ras-page .f-close-date  { top: 49.5%;  left: 77%;   font-size: 11pt; }
-  .ras-page .f-total-val   { top: 51.4%;  left: 54%;   font-size: 11pt; }
+  .ras-page .f-total-val   { top: 51.4%;  left: 60%;   font-size: 11pt; }
 
   /* ═══════════════════════════════════════════════════
      COW-1034 Template Field Positions
@@ -72,7 +72,7 @@
 
   .cow-page .f-task-date   { top: 51.8%;  left: 71%;   font-size: 13pt; }
   .cow-page .f-open-date   { top: 55%;    left: 71%;   font-size: 13pt; }
-  .cow-page .f-close-date  { top: 58.5%;  left: 71%;   font-size: 13pt; }
+  .cow-page .f-close-date  { top: 58.8%;  left: 71%;   font-size: 13pt; }
   .cow-page .f-total-date  { top: 62%;    left: 71%;   font-size: 13pt; }
 
   @media print {
@@ -125,7 +125,7 @@
     <span class="field f-task-val">{{ row.total_task }}</span>
     <span class="field f-open-val">{{ "%.0f"|format(row.start_reading) }}</span>
     <span class="field f-close-val">{{ "%.0f"|format(row.close_reading) }}</span>
-    <span class="field f-total-val">{{ row.total_kms }}</span>
+    <span class="field f-total-val">{{ "%.0f"|format(row.total_kms) }}</span>
 
     <span class="field f-task-date"></span>
     <span class="field f-open-date"></span>
@@ -142,7 +142,7 @@
     <span class="field f-open-date">{{ row.from_date|ddmmyyyy }}</span>
     <span class="field f-close-val">{{ "%.0f"|format(row.close_reading) }}</span>
     <span class="field f-close-date">{{ row.to_date|ddmmyyyy }}</span>
-    <span class="field f-total-val">{{ row.total_kms }}</span>
+    <span class="field f-total-val">{{ "%.0f"|format(row.total_kms) }}</span>
   {% endif %}
 </div>
 {% endfor %}
