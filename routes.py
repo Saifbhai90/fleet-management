@@ -12895,6 +12895,23 @@ _EMG_HEADER_MAP = {
 }
 
 
+import re as _re
+
+_VEHICLE_SUFFIX_RE = _re.compile(
+    r'[\s\-]+(COW|USG\+P|USG|RAS|MNHC|EMS|NHP)\s*$',
+    _re.IGNORECASE,
+)
+
+def _normalize_vehicle_no(raw):
+    """Strip known project suffixes from vehicle numbers in uploaded reports.
+    e.g. 'LEG-17-2191 COW' -> 'LEG-17-2191', 'GBD-24-395-COW' -> 'GBD-24-395'
+    """
+    if not raw:
+        return raw
+    s = str(raw).strip()
+    return _VEHICLE_SUFFIX_RE.sub('', s).strip()
+
+
 def _read_rows_auto(file_obj):
     """Read rows from uploaded file; auto-detect XLSX vs TSV/CSV."""
     import io, openpyxl
@@ -12940,6 +12957,8 @@ def _parse_emergency_excel(f, task_date):
             vals[field] = str(raw_val).strip() if raw_val is not None and str(raw_val).strip() else None
         if not vals.get('amb_reg_no') and not vals.get('task_id_ext'):
             continue
+        if vals.get('amb_reg_no'):
+            vals['amb_reg_no'] = _normalize_vehicle_no(vals['amb_reg_no'])
         rec = EmergencyTaskRecord(task_date=task_date, upload_date=today, **vals)
         db.session.add(rec)
         count += 1
@@ -12998,7 +13017,7 @@ def _parse_mileage_excel(f, task_date):
     for row in all_rows[header_row_idx + 1:]:
         if not row or (reg_col < len(row) and row[reg_col] is None):
             continue
-        v_no = str(row[reg_col]).strip() if reg_col < len(row) and row[reg_col] else ''
+        v_no = _normalize_vehicle_no(str(row[reg_col]).strip()) if reg_col < len(row) and row[reg_col] else ''
         if not v_no:
             continue
 
