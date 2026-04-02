@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <title>Verification of Claims - {{ project_name }} {% if rows|length == 1 %}- {{ rows[0].vehicle_no }}{% endif %}</title>
 <style>
   @page { size: A4 portrait; margin: 0mm; }
@@ -76,15 +77,20 @@
   .cow-page .f-total-date  { top: 58.8%;  left: 71%;   font-size: 13pt; }
 
   @media print {
-    html, body { margin: 0; padding: 0; background: #fff; }
+    html, body { margin: 0; padding: 0; background: #fff; overflow: hidden; }
     .no-print { display: none !important; }
     .a4-page {
+      width: 210mm; height: 297mm;
       margin: 0; padding: 0; box-shadow: none;
+      overflow: hidden;
       page-break-inside: avoid;
       page-break-after: always;
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
-    .a4-page:last-child { page-break-after: avoid; }
+    .a4-page:last-of-type {
+      page-break-after: auto !important;
+      margin-bottom: 0 !important;
+    }
   }
 
   /* ── Calibration overlay (dev only, hidden by default) ── */
@@ -146,8 +152,5 @@
     <span class="field f-total-val">{{ "%.0f"|format(row.total_kms) }}</span>
   {% endif %}
 </div>
-{% endfor %}
-
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-</body>
+{% endfor %}</body>
 </html>
