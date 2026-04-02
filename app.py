@@ -200,6 +200,25 @@ if _run_startup_tasks:
                         print(f"Added column {_tbl}.{_col}")
         except Exception as _e:
             print(f"Column migration warning (non-fatal): {_e}")
+
+        # Recreate emergency_task_record / vehicle_mileage_record when schema changed
+        try:
+            from sqlalchemy import inspect as _sa_inspect2, text as _sa_text2
+            _insp = _sa_inspect2(db.engine)
+            _tables_to_recreate = {
+                'emergency_task_record': {'amb_reg_no', 'task_id_ext', 'request_from'},
+                'vehicle_mileage_record': {'reg_no', 'mileage', 'ptop'},
+            }
+            for _tname, _required_cols in _tables_to_recreate.items():
+                if _tname in _insp.get_table_names():
+                    _existing_cols = {c['name'] for c in _insp.get_columns(_tname)}
+                    if not _required_cols.issubset(_existing_cols):
+                        db.session.execute(_sa_text2(f'DROP TABLE IF EXISTS {_tname}'))
+                        db.session.commit()
+                        print(f"Dropped outdated table {_tname} (will be recreated by create_all)")
+            db.create_all()
+        except Exception as _e:
+            print(f"Table recreation warning (non-fatal): {_e}")
         # Auto-run pending Alembic migrations so Render PostgreSQL stays in sync
         try:
             from flask_migrate import upgrade as _migrate_upgrade

@@ -30,9 +30,34 @@ def update_database_schema():
         errors = 0
 
         # ────────────────────────────────────────────────
+        # STEP 0: RECREATE TABLES WITH SCHEMA CHANGES
+        # ────────────────────────────────────────────────
+        print("[STEP 0] Checking tables that need full recreation...")
+        tables_to_recreate = {
+            'emergency_task_record': {'amb_reg_no', 'task_id_ext', 'request_from'},
+            'vehicle_mileage_record': {'reg_no', 'mileage', 'ptop'},
+        }
+        for tname, required_cols in tables_to_recreate.items():
+            if table_exists(tname):
+                existing_cols = {c['name'] for c in inspect(db.engine).get_columns(tname)}
+                if not required_cols.issubset(existing_cols):
+                    try:
+                        db.session.execute(text(f'DROP TABLE IF EXISTS {tname}'))
+                        db.session.commit()
+                        print(f" [DROPPED] Outdated table '{tname}' (will be recreated)")
+                    except Exception as e:
+                        print(f" [ERROR] Could not drop '{tname}': {e}")
+                        db.session.rollback()
+                        errors += 1
+                else:
+                    print(f" [OK] Table '{tname}' schema is current")
+            else:
+                print(f" [INFO] Table '{tname}' does not exist yet")
+
+        # ────────────────────────────────────────────────
         # STEP 1: CREATE ALL MISSING TABLES
         # ────────────────────────────────────────────────
-        print("[STEP 1] Creating missing tables...")
+        print("\n[STEP 1] Creating missing tables...")
         try:
             db.create_all()
             print("[SUCCESS] All missing tables created (if any).\n")

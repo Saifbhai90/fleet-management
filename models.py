@@ -514,26 +514,88 @@ class EmergencyTaskRecord(db.Model):
     __tablename__ = 'emergency_task_record'
     id = db.Column(db.Integer, primary_key=True)
     task_date = db.Column(db.Date, nullable=False)
-    vehicle_no = db.Column(db.String(50), nullable=False)
-    emg_tasks_count = db.Column(db.Integer, default=0)
     upload_date = db.Column(db.Date, nullable=False)
     created_at = db.Column(db.DateTime, default=pk_now)
 
+    task_id_ext = db.Column(db.String(50))           # A: TaskId
+    request_from = db.Column(db.String(100))         # B: RequestFrom
+    phone = db.Column(db.String(50))                 # C: Phone
+    cli = db.Column(db.String(50))                   # D: CLI
+    name = db.Column(db.String(200))                 # E: Name
+    husband = db.Column(db.String(200))              # F: Husband
+    address = db.Column(db.Text)                     # G: Address
+    location = db.Column(db.Text)                    # H: Location
+    house_color = db.Column(db.String(100))          # I: HouseColor
+    door_color = db.Column(db.String(100))           # J: DoorColor
+    nearest_landmark = db.Column(db.String(200))     # K: NearestLandmark
+    edd = db.Column(db.String(50))                   # L: EDD
+    clinical_details = db.Column(db.Text)            # M: ClinicalDetails
+    district_name = db.Column(db.String(100))        # N: DistrictName
+    tehsil_name = db.Column(db.String(100))          # O: TehsilName
+    uc_name = db.Column(db.String(100))              # P: UCname
+    amb_reg_no = db.Column(db.String(50))            # Q: ambRegNo
+    status = db.Column(db.String(50))                # R: Status
+    received_by = db.Column(db.String(200))          # S: ReceivedBy
+    category = db.Column(db.String(50))              # T: Category
+    sub_category = db.Column(db.Text)                # U: SubCategory
+    facility_name = db.Column(db.String(200))        # V: FacilityName
+    facility_code = db.Column(db.String(50))         # W: FacilityCode
+    facility_type = db.Column(db.String(100))        # X: facilityType
+    change_facility_comments = db.Column(db.Text)    # Y: ChangeFacilityComments
+    excel_created_date = db.Column(db.String(50))    # Z: CreatedDate
+    completed_date_time = db.Column(db.String(50))   # AA: CompletedDateTime
+    first_transfer_created_date = db.Column(db.String(50))       # AB
+    first_transfer_clinical_details = db.Column(db.Text)         # AC
+    first_transfer_facility_name = db.Column(db.String(200))     # AD
+    first_transfer_facility_type = db.Column(db.String(100))     # AE
+    first_transfer_doctor_detail = db.Column(db.Text)            # AF
+    second_transfer_created_date = db.Column(db.String(50))      # AG
+    second_transfer_clinical_details = db.Column(db.Text)        # AH
+    second_transfer_facility_name = db.Column(db.String(200))    # AI
+    second_transfer_facility_type = db.Column(db.String(100))    # AJ
+    second_transfer_doctor_detail = db.Column(db.Text)           # AK
+    created_by = db.Column(db.String(200))           # AL: CreatedBy
+    created_date1 = db.Column(db.String(50))         # AM: CreatedDate1
+    created_time = db.Column(db.String(50))          # AN: CreatedTime
+    pregnancy_month = db.Column(db.String(50))       # AO: PregnancyMonth
+    closing_remarks = db.Column(db.Text)             # AP: ClosingRemarks
+    pregnancy_month_closing = db.Column(db.String(50))  # AQ
+    cli_closing = db.Column(db.String(50))           # AR: cliClosing
+    task_closed_by = db.Column(db.String(200))       # AS: TaskClosedBy
+    patient_cnic = db.Column(db.String(50))          # AT: PatientCNIC
+    patient_admission_no = db.Column(db.String(50))  # AU: PatientAdmissionNo
+    request_for = db.Column(db.String(200))          # AV: RequestFor
+    closed_by = db.Column(db.String(200))            # AW: Closed_By
+    caller_name = db.Column(db.String(200))          # AX: CallerName
+    task_start_lat = db.Column(db.String(30))        # AY: taskStartLat
+    task_start_lon = db.Column(db.String(30))        # AZ: taskStartLon
+    task_end_lat = db.Column(db.String(30))          # BA: taskEndLat
+    task_end_lon = db.Column(db.String(30))          # BB: taskEndLon
+    ras_cow = db.Column(db.String(20))               # BC: rasCow
+    distance_in_km = db.Column(db.String(30))        # BD: distanceInKM
+    nearrest_health_facility = db.Column(db.String(200))  # BE: nearrestHealthFacility
+
     def __repr__(self):
-        return f'<EmergencyTaskRecord {self.vehicle_no} {self.task_date}>'
+        return f'<EmergencyTaskRecord {self.amb_reg_no} {self.task_date}>'
 
 
 class VehicleMileageRecord(db.Model):
     __tablename__ = 'vehicle_mileage_record'
     id = db.Column(db.Integer, primary_key=True)
     task_date = db.Column(db.Date, nullable=False)
-    vehicle_no = db.Column(db.String(50), nullable=False)
-    tracker_km = db.Column(db.Numeric(12, 2), default=0)
     upload_date = db.Column(db.Date, nullable=False)
     created_at = db.Column(db.DateTime, default=pk_now)
 
+    reg_no = db.Column(db.String(50))                # B: RegNo
+    date_time_c = db.Column(db.String(50))           # C: Date/time
+    date_time_d = db.Column(db.String(50))           # D: Date/time
+    date_time_e = db.Column(db.String(50))           # E: Date/time
+    date_time_f = db.Column(db.String(50))           # F: Date/time
+    mileage = db.Column(db.Numeric(12, 2), default=0)  # G: Mileage (Running KMs)
+    ptop = db.Column(db.Numeric(12, 2), default=0)     # H: PtoP (Running KMs)
+
     def __repr__(self):
-        return f'<VehicleMileageRecord {self.vehicle_no} {self.task_date}>'
+        return f'<VehicleMileageRecord {self.reg_no} {self.task_date}>'
 
 
 # ────────────────────────────────────────────────

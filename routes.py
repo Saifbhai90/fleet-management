@@ -12325,10 +12325,9 @@ def task_report_list():
         kms_driven = close_reading - start_reading
         if kms_driven < 0:
             kms_driven = 0
-        emg_rec = EmergencyTaskRecord.query.filter_by(task_date=task_d, vehicle_no=v.vehicle_no).first()
-        emg_tasks = emg_rec.emg_tasks_count if emg_rec else 0
-        mileage_rec = VehicleMileageRecord.query.filter_by(task_date=task_d, vehicle_no=v.vehicle_no).first()
-        tracker_km = float(mileage_rec.tracker_km) if mileage_rec else 0
+        emg_tasks = EmergencyTaskRecord.query.filter_by(task_date=task_d, amb_reg_no=v.vehicle_no).count()
+        tracker_km = db.session.query(db.func.coalesce(db.func.sum(VehicleMileageRecord.mileage), 0)).filter_by(task_date=task_d, reg_no=v.vehicle_no).scalar()
+        tracker_km = float(tracker_km)
         kms_diff = kms_driven - tracker_km
         pct_diff = round((kms_diff / kms_driven) * 100, 1) if kms_driven and kms_driven != 0 else None
         rows.append({
@@ -12614,10 +12613,8 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
             VehicleDailyTask.task_date < task_date
         ).order_by(VehicleDailyTask.task_date.desc()).first()
         start_reading = float(prev.close_reading) if prev else 0
-        emg_rec = EmergencyTaskRecord.query.filter_by(task_date=task_date, vehicle_no=v.vehicle_no).first()
-        emg_tasks = emg_rec.emg_tasks_count if emg_rec else 0
-        mileage_rec = VehicleMileageRecord.query.filter_by(task_date=task_date, vehicle_no=v.vehicle_no).first()
-        tracker_km = float(mileage_rec.tracker_km) if mileage_rec else 0
+        emg_tasks = EmergencyTaskRecord.query.filter_by(task_date=task_date, amb_reg_no=v.vehicle_no).count()
+        tracker_km = float(db.session.query(db.func.coalesce(db.func.sum(VehicleMileageRecord.mileage), 0)).filter_by(task_date=task_date, reg_no=v.vehicle_no).scalar())
         existing = VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first()
         existing_close = float(existing.close_reading) if existing and existing.close_reading is not None else None
         existing_tasks = existing.tasks_count if existing else 1
@@ -12655,43 +12652,9 @@ def task_report_upload_emergency():
             return redirect(url_for('task_report_upload_emergency'))
         task_date = form.task_date.data
         try:
-            import openpyxl
-            wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
-            ws = wb.active
-            rows = list(ws.iter_rows(min_row=1, values_only=True))
-            wb.close()
-            if not rows:
-                flash('Excel file is empty.', 'warning')
-                return redirect(url_for('task_report_upload_emergency'))
-            headers = [str(c).strip().lower() if c else '' for c in rows[0]]
-            vehicle_col = emg_col = 0
-            for i, h in enumerate(headers):
-                if 'vehicle' in h and ('no' in h or 'number' in h or '#' in h):
-                    vehicle_col = i
-                if 'emg' in h or 'emergency' in h:
-                    emg_col = i
-            if emg_col == 0 and len(headers) > 1:
-                emg_col = 1
-            count = 0
-            for row in rows[1:]:
-                if not row or row[vehicle_col] is None:
-                    continue
-                v_no = str(row[vehicle_col]).strip() if row[vehicle_col] else ''
-                if not v_no:
-                    continue
-                try:
-                    emg_val = int(float(row[emg_col])) if len(row) > emg_col and row[emg_col] is not None else 0
-                except (TypeError, ValueError):
-                    emg_val = 0
-                existing = EmergencyTaskRecord.query.filter_by(task_date=task_date, vehicle_no=v_no).first()
-                if existing:
-                    existing.emg_tasks_count = emg_val
-                    existing.upload_date = pk_date()
-                else:
-                    db.session.add(EmergencyTaskRecord(task_date=task_date, vehicle_no=v_no, emg_tasks_count=emg_val, upload_date=pk_date()))
-                count += 1
+            c = _parse_emergency_excel(f, task_date)
             db.session.commit()
-            flash(f'EmergencyTaskReport uploaded: {count} record(s).', 'success')
+            flash(f'EmergencyTaskReport uploaded: {c} record(s).', 'success')
             return redirect(url_for('task_report_list', date=task_date.strftime('%d-%m-%Y')))
         except Exception as e:
             db.session.rollback()
@@ -12709,43 +12672,9 @@ def task_report_upload_mileage():
             return redirect(url_for('task_report_upload_mileage'))
         task_date = form.task_date.data
         try:
-            import openpyxl
-            wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
-            ws = wb.active
-            rows = list(ws.iter_rows(min_row=1, values_only=True))
-            wb.close()
-            if not rows:
-                flash('Excel file is empty.', 'warning')
-                return redirect(url_for('task_report_upload_mileage'))
-            headers = [str(c).strip().lower() if c else '' for c in rows[0]]
-            vehicle_col = km_col = 0
-            for i, h in enumerate(headers):
-                if 'vehicle' in h and ('no' in h or 'number' in h or '#' in h):
-                    vehicle_col = i
-                if 'km' in h or 'mileage' in h or 'tracker' in h:
-                    km_col = i
-            if km_col == 0 and len(headers) > 1:
-                km_col = 1
-            count = 0
-            for row in rows[1:]:
-                if not row or row[vehicle_col] is None:
-                    continue
-                v_no = str(row[vehicle_col]).strip() if row[vehicle_col] else ''
-                if not v_no:
-                    continue
-                try:
-                    km_val = float(row[km_col]) if len(row) > km_col and row[km_col] is not None else 0
-                except (TypeError, ValueError):
-                    km_val = 0
-                existing = VehicleMileageRecord.query.filter_by(task_date=task_date, vehicle_no=v_no).first()
-                if existing:
-                    existing.tracker_km = km_val
-                    existing.upload_date = pk_date()
-                else:
-                    db.session.add(VehicleMileageRecord(task_date=task_date, vehicle_no=v_no, tracker_km=km_val, upload_date=pk_date()))
-                count += 1
+            c = _parse_mileage_excel(f, task_date)
             db.session.commit()
-            flash(f'Vehicle Mileage report uploaded: {count} record(s).', 'success')
+            flash(f'Vehicle Mileage report uploaded: {c} record(s).', 'success')
             return redirect(url_for('task_report_list', date=task_date.strftime('%d-%m-%Y')))
         except Exception as e:
             db.session.rollback()
@@ -12753,78 +12682,203 @@ def task_report_upload_mileage():
     return render_template('task_report_upload_mileage.html', form=form)
 
 
+# Excel header -> model field mapping for EmergencyTaskRecord
+_EMG_HEADER_MAP = {
+    'taskid': 'task_id_ext',
+    'requestfrom': 'request_from',
+    'phone': 'phone',
+    'cli': 'cli',
+    'name': 'name',
+    'husband': 'husband',
+    'address': 'address',
+    'location': 'location',
+    'housecolor': 'house_color',
+    'doorcolor': 'door_color',
+    'nearestlandmark': 'nearest_landmark',
+    'edd': 'edd',
+    'clinicaldetails': 'clinical_details',
+    'districtname': 'district_name',
+    'tehsilname': 'tehsil_name',
+    'ucname': 'uc_name',
+    'ambregno': 'amb_reg_no',
+    'status': 'status',
+    'receivedby': 'received_by',
+    'category': 'category',
+    'subcategory': 'sub_category',
+    'facilityname': 'facility_name',
+    'facilitycode': 'facility_code',
+    'facilitytype': 'facility_type',
+    'changefacilitycomments': 'change_facility_comments',
+    'createddate': 'excel_created_date',
+    'completeddatetime': 'completed_date_time',
+    'firsttranfercreateddate': 'first_transfer_created_date',
+    'firsttranferclinicaldetails': 'first_transfer_clinical_details',
+    'firsttranferfacilityname': 'first_transfer_facility_name',
+    'firsttranferfacilitytype': 'first_transfer_facility_type',
+    'firsttranferdoctordetail': 'first_transfer_doctor_detail',
+    'secondtranfercreateddate': 'second_transfer_created_date',
+    'secondtranferclinicaldetails': 'second_transfer_clinical_details',
+    'secondtranferfacilityname': 'second_transfer_facility_name',
+    'secondtranferfacilitytype': 'second_transfer_facility_type',
+    'secondtranferdoctordetail': 'second_transfer_doctor_detail',
+    'createdby': 'created_by',
+    'createddate1': 'created_date1',
+    'createdtime': 'created_time',
+    'pregnancymonth': 'pregnancy_month',
+    'closingremarks': 'closing_remarks',
+    'pregnancymonthclosing': 'pregnancy_month_closing',
+    'cliclosing': 'cli_closing',
+    'taskclosedby': 'task_closed_by',
+    'patientcnic': 'patient_cnic',
+    'patientadmissionno': 'patient_admission_no',
+    'requestfor': 'request_for',
+    'closed_by': 'closed_by',
+    'callername': 'caller_name',
+    'taskstartlat': 'task_start_lat',
+    'taskstartlon': 'task_start_lon',
+    'taskendlat': 'task_end_lat',
+    'taskendlon': 'task_end_lon',
+    'rascow': 'ras_cow',
+    'distanceinkm': 'distance_in_km',
+    'nearresthealthfacility': 'nearrest_health_facility',
+}
+
+
+def _read_rows_auto(file_obj):
+    """Read rows from uploaded file; auto-detect XLSX vs TSV/CSV."""
+    import io, openpyxl
+    raw = file_obj.read()
+    file_obj.seek(0)
+    if raw[:4] == b'PK\x03\x04':
+        wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        ws = wb.active
+        rows = [list(r) for r in ws.iter_rows(min_row=1, values_only=True)]
+        wb.close()
+        return rows
+    text = raw.decode('utf-8', errors='replace')
+    lines = [l for l in text.splitlines() if l.strip()]
+    if not lines:
+        return []
+    sep = '\t' if '\t' in lines[0] else ','
+    return [line.split(sep) for line in lines]
+
+
 def _parse_emergency_excel(f, task_date):
-    import openpyxl
-    wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
-    ws = wb.active
-    rows = list(ws.iter_rows(min_row=1, values_only=True))
-    wb.close()
+    """Parse EmergencyTaskReport (XLSX or TSV) and store all columns."""
+    rows = _read_rows_auto(f)
     if not rows:
         return 0
-    headers = [str(c).strip().lower() if c else '' for c in rows[0]]
-    vehicle_col = emg_col = 0
-    for i, h in enumerate(headers):
-        if 'vehicle' in h and ('no' in h or 'number' in h or '#' in h):
-            vehicle_col = i
-        if 'emg' in h or 'emergency' in h:
-            emg_col = i
-    if emg_col == 0 and len(headers) > 1:
-        emg_col = 1
+    headers_raw = [str(c).strip() if c else '' for c in rows[0]]
+    norm = lambda s: ''.join(ch for ch in s.lower() if ch.isalnum() or ch == '_')
+    col_map = {}
+    for idx, h in enumerate(headers_raw):
+        key = norm(h)
+        if key in _EMG_HEADER_MAP:
+            col_map[idx] = _EMG_HEADER_MAP[key]
+    if not col_map:
+        raise ValueError("No recognised column headers found in EmergencyTaskReport file.")
+
+    EmergencyTaskRecord.query.filter_by(task_date=task_date).delete()
+
     count = 0
+    today = pk_date()
     for row in rows[1:]:
-        if not row or row[vehicle_col] is None:
+        vals = {}
+        for idx, field in col_map.items():
+            raw_val = row[idx] if idx < len(row) else None
+            vals[field] = str(raw_val).strip() if raw_val is not None and str(raw_val).strip() else None
+        if not vals.get('amb_reg_no') and not vals.get('task_id_ext'):
             continue
-        v_no = str(row[vehicle_col]).strip() if row[vehicle_col] else ''
-        if not v_no:
-            continue
-        try:
-            emg_val = int(float(row[emg_col])) if len(row) > emg_col and row[emg_col] is not None else 0
-        except (TypeError, ValueError):
-            emg_val = 0
-        existing = EmergencyTaskRecord.query.filter_by(task_date=task_date, vehicle_no=v_no).first()
-        if existing:
-            existing.emg_tasks_count = emg_val
-            existing.upload_date = pk_date()
-        else:
-            db.session.add(EmergencyTaskRecord(task_date=task_date, vehicle_no=v_no, emg_tasks_count=emg_val, upload_date=pk_date()))
+        rec = EmergencyTaskRecord(task_date=task_date, upload_date=today, **vals)
+        db.session.add(rec)
         count += 1
     return count
 
 
 def _parse_mileage_excel(f, task_date):
-    import openpyxl
-    wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
+    """Parse Vehicle Mileage Report (XLSX with headers at row 10)."""
+    import io, openpyxl
+    raw = f.read()
+    f.seek(0)
+    wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
     ws = wb.active
-    rows = list(ws.iter_rows(min_row=1, values_only=True))
+    all_rows = [list(r) for r in ws.iter_rows(min_row=1, values_only=True)]
     wb.close()
-    if not rows:
+    if not all_rows:
         return 0
-    headers = [str(c).strip().lower() if c else '' for c in rows[0]]
-    vehicle_col = km_col = 0
-    for i, h in enumerate(headers):
-        if 'vehicle' in h and ('no' in h or 'number' in h or '#' in h):
-            vehicle_col = i
-        if 'km' in h or 'mileage' in h or 'tracker' in h:
-            km_col = i
-    if km_col == 0 and len(headers) > 1:
-        km_col = 1
+
+    header_row_idx = None
+    for ri, row in enumerate(all_rows):
+        for cell in row:
+            if cell and 'regno' in str(cell).lower().replace(' ', '').replace('_', ''):
+                header_row_idx = ri
+                break
+        if header_row_idx is not None:
+            break
+    if header_row_idx is None:
+        header_row_idx = 9
+
+    headers = all_rows[header_row_idx] if header_row_idx < len(all_rows) else []
+    norm_headers = [str(h).strip().lower().replace(' ', '').replace('_', '') if h else '' for h in headers]
+
+    reg_col = mil_col = ptop_col = None
+    dt_cols = []
+    for i, nh in enumerate(norm_headers):
+        if 'regno' in nh:
+            reg_col = i
+        elif nh in ('mileage', 'runningkms', 'runningkm') or 'mileage' in nh:
+            mil_col = i
+        elif 'ptop' in nh:
+            ptop_col = i
+        elif 'date' in nh or 'time' in nh:
+            dt_cols.append(i)
+
+    if reg_col is None:
+        reg_col = 1
+    if mil_col is None:
+        mil_col = 6
+    if ptop_col is None:
+        ptop_col = 7
+
+    VehicleMileageRecord.query.filter_by(task_date=task_date).delete()
+
     count = 0
-    for row in rows[1:]:
-        if not row or row[vehicle_col] is None:
+    today = pk_date()
+    for row in all_rows[header_row_idx + 1:]:
+        if not row or (reg_col < len(row) and row[reg_col] is None):
             continue
-        v_no = str(row[vehicle_col]).strip() if row[vehicle_col] else ''
+        v_no = str(row[reg_col]).strip() if reg_col < len(row) and row[reg_col] else ''
         if not v_no:
             continue
-        try:
-            km_val = float(row[km_col]) if len(row) > km_col and row[km_col] is not None else 0
-        except (TypeError, ValueError):
-            km_val = 0
-        existing = VehicleMileageRecord.query.filter_by(task_date=task_date, vehicle_no=v_no).first()
-        if existing:
-            existing.tracker_km = km_val
-            existing.upload_date = pk_date()
-        else:
-            db.session.add(VehicleMileageRecord(task_date=task_date, vehicle_no=v_no, tracker_km=km_val, upload_date=pk_date()))
+
+        def _safe_float(val):
+            if val is None:
+                return 0
+            try:
+                return float(val)
+            except (TypeError, ValueError):
+                return 0
+
+        def _safe_str(val):
+            return str(val).strip() if val is not None and str(val).strip() else None
+
+        dt_c = _safe_str(row[dt_cols[0]]) if len(dt_cols) > 0 and dt_cols[0] < len(row) else None
+        dt_d = _safe_str(row[dt_cols[1]]) if len(dt_cols) > 1 and dt_cols[1] < len(row) else None
+        dt_e = _safe_str(row[dt_cols[2]]) if len(dt_cols) > 2 and dt_cols[2] < len(row) else None
+        dt_f = _safe_str(row[dt_cols[3]]) if len(dt_cols) > 3 and dt_cols[3] < len(row) else None
+
+        rec = VehicleMileageRecord(
+            task_date=task_date,
+            upload_date=today,
+            reg_no=v_no,
+            date_time_c=dt_c,
+            date_time_d=dt_d,
+            date_time_e=dt_e,
+            date_time_f=dt_f,
+            mileage=_safe_float(row[mil_col]) if mil_col < len(row) else 0,
+            ptop=_safe_float(row[ptop_col]) if ptop_col < len(row) else 0,
+        )
+        db.session.add(rec)
         count += 1
     return count
 
