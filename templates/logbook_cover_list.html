@@ -62,7 +62,7 @@
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
+        <table class="table table-hover align-middle mb-0" id="logbookCoverTable">
           <thead class="table-light">
             <tr>
               <th class="ps-4">#</th>
@@ -149,5 +149,6 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     });
   }
 })();
+if (window.fleetTableEnhance) window.fleetTableEnhance('logbookCoverTable');
 </script>
 {% endblock %}

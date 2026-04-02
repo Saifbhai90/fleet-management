@@ -496,5 +496,7 @@
     });
   });
 })();
+window._fleetAfterFilter = function(){ if(typeof updateTotals==='function') updateTotals(); };
+if (window.fleetTableEnhance) window.fleetTableEnhance('batchTable');
 </script>
 {% endblock %}

@@ -12385,7 +12385,12 @@ def _logbook_vehicle_aggregate(vehicle_id, from_date, to_date):
         VehicleDailyTask.vehicle_id == vehicle_id,
         VehicleDailyTask.task_date < from_date
     ).order_by(VehicleDailyTask.task_date.desc()).first()
-    start_reading = float(prev.close_reading) if prev else 0
+    if prev and prev.close_reading is not None:
+        start_reading = float(prev.close_reading)
+    elif first.start_reading is not None:
+        start_reading = float(first.start_reading)
+    else:
+        start_reading = 0
     close_reading = float(last.close_reading)
     total_kms = close_reading - start_reading
     if total_kms < 0:
@@ -12624,8 +12629,12 @@ def task_report_new():
     projects = []
     if district_id:
         projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
-    if district_id and project_id:
-        q = Vehicle.query.filter(Vehicle.project_id == project_id)
+    else:
+        projects = Project.query.order_by(Project.name).all()
+    if district_id or project_id:
+        q = Vehicle.query
+        if project_id:
+            q = q.filter(Vehicle.project_id == project_id)
         if district_id:
             q = q.filter(Vehicle.district_id == district_id)
         vehicles = q.order_by(Vehicle.vehicle_no).all()
@@ -13172,13 +13181,15 @@ def red_task_new():
         return redirect(url_for('red_task_list'))
 
     rows = []
-    if district_id and project_id:
-        vehicle_nos = [v.vehicle_no for v in Vehicle.query.filter_by(
-            district_id=district_id, project_id=project_id
-        ).all()]
-        veh_map = {v.vehicle_no: v for v in Vehicle.query.filter_by(
-            district_id=district_id, project_id=project_id
-        ).all()}
+    if district_id or project_id:
+        vq = Vehicle.query
+        if district_id:
+            vq = vq.filter_by(district_id=district_id)
+        if project_id:
+            vq = vq.filter_by(project_id=project_id)
+        _vehs = vq.all()
+        vehicle_nos = [v.vehicle_no for v in _vehs]
+        veh_map = {v.vehicle_no: v for v in _vehs}
         emg_recs = EmergencyTaskRecord.query.filter(
             EmergencyTaskRecord.task_date == view_date,
             EmergencyTaskRecord.amb_reg_no.in_(vehicle_nos),
@@ -13376,12 +13387,13 @@ def without_task_new():
         return redirect(url_for('without_task_list'))
 
     rows = []
-    if district_id and project_id:
-        tasks = VehicleDailyTask.query.filter(
-            VehicleDailyTask.task_date == view_date,
-            VehicleDailyTask.district_id == district_id,
-            VehicleDailyTask.project_id == project_id,
-        ).all()
+    if district_id or project_id:
+        tq = VehicleDailyTask.query.filter(VehicleDailyTask.task_date == view_date)
+        if district_id:
+            tq = tq.filter(VehicleDailyTask.district_id == district_id)
+        if project_id:
+            tq = tq.filter(VehicleDailyTask.project_id == project_id)
+        tasks = tq.all()
         for t in tasks:
             v = t.vehicle
             if not v:
@@ -13390,7 +13402,12 @@ def without_task_new():
                 VehicleDailyTask.vehicle_id == t.vehicle_id,
                 VehicleDailyTask.task_date < view_date
             ).order_by(VehicleDailyTask.task_date.desc()).first()
-            start_reading = float(prev.close_reading) if prev else 0
+            if prev and prev.close_reading is not None:
+                start_reading = float(prev.close_reading)
+            elif t.start_reading is not None:
+                start_reading = float(t.start_reading)
+            else:
+                start_reading = 0
             close_reading = float(t.close_reading) if t.close_reading else 0
             kms_driven = close_reading - start_reading
             if kms_driven < 0:

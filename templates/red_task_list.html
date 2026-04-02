@@ -46,19 +46,18 @@
     </div>
   </div>
 
-  <div class="d-flex justify-content-end align-items-center mb-2">
-    <span class="text-muted small me-2">Per Page:</span>
-    <select class="form-select form-select-sm" style="width:80px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
-      <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
-      <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
-      <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-      <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-    </select>
-  </div>
   <div class="card shadow border-0 rounded-3 overflow-hidden">
     <div class="card-header bg-danger text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="fw-semibold">Report from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
-      <input type="text" id="redTaskSearch" class="form-control form-control-sm" placeholder="Search in list (real-time)..." style="max-width: 220px;" autocomplete="off">
+      <div class="d-flex align-items-center gap-2">
+        <select class="form-select form-select-sm bg-danger text-white border-light border-opacity-25" style="width:70px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
+          <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+          <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+          <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+        </select>
+        <input type="text" id="redTaskSearch" class="form-control form-control-sm" placeholder="Search..." style="max-width:180px;" autocomplete="off">
+      </div>
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
@@ -174,5 +173,6 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     }
   }
 })();
+if (window.fleetTableEnhance) window.fleetTableEnhance('redTaskTable');
 </script>
 {% endblock %}
