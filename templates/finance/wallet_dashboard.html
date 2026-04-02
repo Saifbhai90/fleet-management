@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}Wallet Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+        <h2 class="mb-0"><i class="bi bi-wallet2 me-2 text-primary"></i>Wallet Dashboard</h2>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print"><i class="bi bi-printer me-1"></i>Print</button>
+            <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+        </div>
+    </div>
+
+    <div class="section-heading bg-primary">
+        <i class="bi bi-wallet2 me-2"></i>Wallet Dashboard
+    </div>
+
+    <!-- Filter Form -->
+    <div class="card shadow-sm border-0 mt-3 mb-3">
+        <div class="card-body py-2">
+            <form method="GET" action="" class="row g-2 align-items-end">
+                <div class="col-6 col-md-3">
+                    <label class="form-label form-label-sm mb-1">District</label>
+                    {{ form.district_id(class="form-select form-select-sm search-select") if form.district_id is defined else '' }}
+                    {% if form.district_id is not defined %}
+                    <select name="district_id" class="form-select form-select-sm">
+                        <option value="0">-- All Districts --</option>
+                    </select>
+                    {% endif %}
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label form-label-sm mb-1">Project</label>
+                    {{ form.project_id(class="form-select form-select-sm search-select") if form.project_id is defined else '' }}
+                    {% if form.project_id is not defined %}
+                    <select name="project_id" class="form-select form-select-sm">
+                        <option value="0">-- All Projects --</option>
+                    </select>
+                    {% endif %}
+                </div>
+                <div class="col-6 col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm flex-fill">
+                        <i class="bi bi-funnel me-1"></i>Filter
+                    </button>
+                    <a href="{{ url_for('wallet_dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-lg-3">
+            <div class="card shadow-sm border-0 border-start border-primary border-4">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0 me-3">
+                            <div class="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center" style="width:48px;height:48px;">
+                                <i class="bi bi-people-fill text-primary fs-5"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Total Wallets</div>
+                            <div class="fs-4 fw-bold">{{ summary.total_wallets|default(0) }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card shadow-sm border-0 border-start border-success border-4">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0 me-3">
+                            <div class="bg-success bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center" style="width:48px;height:48px;">
+                                <i class="bi bi-cash-stack text-success fs-5"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Total Funds</div>
+                            <div class="fs-4 fw-bold text-success">{{ "{:,.2f}".format(summary.total_funds|default(0)) }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card shadow-sm border-0 border-start border-danger border-4">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0 me-3">
+                            <div class="bg-danger bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center" style="width:48px;height:48px;">
+                                <i class="bi bi-graph-down-arrow text-danger fs-5"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Total Expenses</div>
+                            <div class="fs-4 fw-bold text-danger">{{ "{:,.2f}".format(summary.total_expenses|default(0)) }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card shadow-sm border-0 border-start border-warning border-4">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0 me-3">
+                            <div class="bg-warning bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center" style="width:48px;height:48px;">
+                                <i class="bi bi-wallet-fill text-warning fs-5"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Net Outstanding</div>
+                            <div class="fs-4 fw-bold text-warning">{{ "{:,.2f}".format(summary.net_outstanding|default(0)) }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table Card -->
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <label class="mb-0 small">Show</label>
+                <select id="walletPerPage" class="form-select form-select-sm" style="width:auto;" onchange="var u=new URLSearchParams(window.location.search);u.set('per_page',this.value);u.set('page','1');window.location.search=u.toString();">
+                    {% for val in [25,50,100,200] %}
+                    <option value="{{ val }}" {% if per_page|default(25) == val %}selected{% endif %}>{{ val }}</option>
+                    {% endfor %}
+                </select>
+                <label class="mb-0 small">entries</label>
+            </div>
+            <div>
+                <input type="text" id="walletSearch" class="form-control form-control-sm" placeholder="Search..." style="width:200px;">
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="data-table-wrapper">
+                <table class="table table-hover compact-table mb-0" id="walletTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-center" style="width:46px;">#</th>
+                            <th>Person Name</th>
+                            <th>Post / Role</th>
+                            <th>Type</th>
+                            <th>District</th>
+                            <th>Project</th>
+                            <th class="text-end">Wallet Balance</th>
+                            <th class="text-end">Total Received</th>
+                            <th class="text-end">Total Spent</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for w in wallets %}
+                        <tr>
+                            <td class="text-center text-muted small">{{ loop.index }}</td>
+                            <td class="fw-semibold">{{ w.person_name }}</td>
+                            <td>{{ w.post|default('-') }}</td>
+                            <td>
+                                {% if w.person_type == 'Driver' %}
+                                    <span class="badge bg-info">Driver</span>
+                                {% else %}
+                                    <span class="badge bg-primary">Employee</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ w.district_name|default('-') }}</td>
+                            <td>{{ w.project_name|default('-') }}</td>
+                            <td class="text-end fw-bold {% if w.balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                {{ "{:,.2f}".format(w.balance) }}
+                            </td>
+                            <td class="text-end">{{ "{:,.2f}".format(w.total_received|default(0)) }}</td>
+                            <td class="text-end">{{ "{:,.2f}".format(w.total_spent|default(0)) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center py-5 text-muted">
+                                <i class="bi bi-wallet2 display-6 d-block mb-2 opacity-25"></i>
+                                No wallet records found.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    if(window.fleetTableEnhance) window.fleetTableEnhance('walletTable');
+    window.fleetPrintExport && window.fleetPrintExport('walletTable','Wallet Dashboard','Wallet_Dashboard.csv');
+
+    var searchInput = document.getElementById('walletSearch');
+    if(searchInput){
+        searchInput.addEventListener('keyup', function(){
+            var filter = this.value.toLowerCase();
+            var rows = document.querySelectorAll('#walletTable tbody tr');
+            rows.forEach(function(row){ row.style.display = row.textContent.toLowerCase().indexOf(filter) > -1 ? '' : 'none'; });
+        });
+    }
+});
+</script>
+{% endblock %}

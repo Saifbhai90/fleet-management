@@ -105,6 +105,8 @@ def update_database_schema():
 
             # VehicleDailyTask - editable start reading
             ('vehicle_daily_task', 'start_reading', 'NUMERIC(12,2)'),
+            ('employee', 'wallet_account_id', 'INTEGER REFERENCES account(id)'),
+            ('driver', 'wallet_account_id', 'INTEGER REFERENCES account(id)'),
 
             # NEW: Driver Status Change table columns (agar table bana to columns bhi check)
             ('driver_status_change', 'driver_id', 'INTEGER NOT NULL REFERENCES driver(id)'),

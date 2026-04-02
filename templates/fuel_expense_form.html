@@ -203,6 +203,13 @@
     </div>
 
     <div class="form-section">
+      <div class="row g-3 mb-3">
+        <div class="col-md-6 field-group">
+          <label class="form-label fw-bold">Expense By (Wallet Deduction)</label>
+          {{ form.expense_by(class="form-select search-select") }}
+          <small class="text-muted">Select person whose wallet should be debited for this expense</small>
+        </div>
+      </div>
       <div class="action-bar">
         <a href="{{ url_for('fuel_expense_list') }}" class="btn btn-outline-secondary btn-cancel">Cancel</a>
         {{ form.submit(class="btn btn-primary btn-save") }}

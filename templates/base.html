@@ -1528,7 +1528,7 @@
         {% set task_report_endpoints = ['task_report_upload', 'task_report_list', 'task_report_new', 'task_report_upload_emergency', 'task_report_upload_mileage', 'task_report_upload_both', 'red_task_list', 'red_task_new', 'red_task_edit', 'without_task_list', 'without_task_new', 'without_task_edit', 'task_report_logbook_cover', 'task_report_logbook_view', 'task_report_logbook_view_all'] %}
         {% set expenses_endpoints = ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form', 'employee_expense_list', 'employee_expense_form'] %}
         {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai', 'active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print', 'driver_seat_available_report', 'driver_seat_available_export', 'driver_seat_available_print', 'missing_documents_report', 'missing_documents_report_print'] %}
-        {% set accounts_endpoints = ['accounts_quick_payment', 'accounts_quick_receipt', 'accounts_bank_entry', 'accounts_jv', 'accounts_future_entry', 'accounts_balance_sheet', 'accounts_account_ledger'] %}
+        {% set accounts_endpoints = ['accounts_quick_payment', 'accounts_quick_receipt', 'accounts_bank_entry', 'accounts_jv', 'journal_vouchers_list', 'accounts_future_entry', 'accounts_balance_sheet', 'accounts_account_ledger', 'chart_of_accounts_list', 'chart_of_accounts_add', 'chart_of_accounts_edit', 'fund_transfer_add', 'fund_transfers_list', 'fund_transfer_edit', 'wallet_dashboard', 'journal_voucher_add'] %}
         {% set _req_from = request.args.get('from', '') %}
         {% set _req_ref = request.args.get('ref', '') %}
         {% set _profile_endpoints = ['report_driver_profile', 'report_vehicle_profile', 'employee_profile_print'] %}
@@ -1815,31 +1815,33 @@
             </a>
             <div class="collapse collapse-item-container {% if accounts_open %}show{% endif %}"
                  id="accountsMenu" data-bs-parent="#sidebarAccordion">
+                <a href="{{ url_for('wallet_dashboard') }}" class="collapse-item {% if request.endpoint == 'wallet_dashboard' %}active-link{% endif %}">
+                    <i class="bi bi-wallet2 text-primary"></i><span>Wallet Dashboard</span>
+                </a>
+                <a href="{{ url_for('chart_of_accounts_list') }}" class="collapse-item {% if request.endpoint in ['chart_of_accounts_list', 'chart_of_accounts_add', 'chart_of_accounts_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-diagram-3 text-info"></i><span>Chart of Accounts</span>
+                </a>
+                <a href="{{ url_for('fund_transfers_list') }}" class="collapse-item {% if request.endpoint in ['fund_transfers_list', 'fund_transfer_add', 'fund_transfer_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-arrow-left-right text-success"></i><span>Fund Transfer</span>
+                </a>
                 {% if can_see_page('accounts_quick_payment') %}
-                <a href="{{ url_for('accounts_quick_payment') }}" class="collapse-item {% if request.endpoint == 'accounts_quick_payment' %}active-link{% endif %}">
+                <a href="{{ url_for('accounts_quick_payment') }}" class="collapse-item {% if request.endpoint in ['accounts_quick_payment', 'payment_vouchers_list', 'payment_voucher_edit'] %}active-link{% endif %}">
                     <i class="bi bi-cash-stack text-success"></i><span>Payment Voucher</span>
                 </a>
                 {% endif %}
                 {% if can_see_page('accounts_quick_receipt') %}
-                <a href="{{ url_for('accounts_quick_receipt') }}" class="collapse-item {% if request.endpoint == 'accounts_quick_receipt' %}active-link{% endif %}">
+                <a href="{{ url_for('accounts_quick_receipt') }}" class="collapse-item {% if request.endpoint in ['accounts_quick_receipt', 'receipt_vouchers_list'] %}active-link{% endif %}">
                     <i class="bi bi-cash-coin text-primary"></i><span>Receipt Voucher</span>
                 </a>
                 {% endif %}
                 {% if can_see_page('accounts_bank_entry') %}
-                <a href="{{ url_for('accounts_bank_entry') }}" class="collapse-item {% if request.endpoint == 'accounts_bank_entry' %}active-link{% endif %}">
+                <a href="{{ url_for('accounts_bank_entry') }}" class="collapse-item {% if request.endpoint in ['accounts_bank_entry', 'bank_entries_list'] %}active-link{% endif %}">
                     <i class="bi bi-bank2 text-info"></i><span>Bank Entry</span>
                 </a>
                 {% endif %}
-                {% if can_see_page('accounts_jv') %}
-                <a href="{{ url_for('accounts_jv') }}" class="collapse-item {% if request.endpoint == 'accounts_jv' %}active-link{% endif %}">
+                <a href="{{ url_for('journal_vouchers_list') }}" class="collapse-item {% if request.endpoint in ['accounts_jv', 'journal_vouchers_list', 'journal_voucher_add'] %}active-link{% endif %}">
                     <i class="bi bi-journal-text text-warning"></i><span>Journal Voucher</span>
                 </a>
-                {% endif %}
-                {% if can_see_page('accounts_future_entry') %}
-                <a href="{{ url_for('accounts_future_entry') }}" class="collapse-item {% if request.endpoint == 'accounts_future_entry' %}active-link{% endif %}">
-                    <i class="bi bi-calendar-plus text-secondary"></i><span>Future Dated Entries</span>
-                </a>
-                {% endif %}
                 {% if can_see_page('accounts_balance_sheet') %}
                 <a href="{{ url_for('accounts_balance_sheet') }}" class="collapse-item {% if request.endpoint == 'accounts_balance_sheet' %}active-link{% endif %}">
                     <i class="bi bi-file-earmark-bar-graph text-info"></i><span>Balance Sheet</span>
@@ -3310,6 +3312,76 @@
                 document.querySelectorAll('.ft-filter-dd.show').forEach(function(d){ d.classList.remove('show'); });
             }
         });
+    };
+
+    window.fleetPrintExport = function(tableId, title, csvFilename) {
+        var printBtn = document.getElementById('btnPrintReport');
+        var exportBtn = document.getElementById('btnExportReport');
+        if (!printBtn && !exportBtn) return;
+        if (printBtn) {
+            printBtn.addEventListener('click', function() {
+                var tbl = document.getElementById(tableId);
+                if (!tbl) return;
+                var clone = tbl.cloneNode(true);
+                clone.querySelectorAll('.ft-filter-wrap').forEach(function(el){ el.remove(); });
+                clone.querySelectorAll('tbody tr').forEach(function(r){ if(r.style.display==='none') r.remove(); });
+                var w = window.open('', '_blank', 'width=1200,height=800');
+                w.document.write('<!DOCTYPE html><html><head><title>' + title + '</title>');
+                w.document.write('<style>');
+                w.document.write('@page{size:A4 landscape;margin:8mm;}');
+                w.document.write('body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:0;}');
+                w.document.write('h3{text-align:center;margin:6px 0 10px;}');
+                w.document.write('table{width:100%;border-collapse:collapse;}');
+                w.document.write('th,td{border:1px solid #555;padding:3px 5px;text-align:left;white-space:nowrap;}');
+                w.document.write('th{background:#e9ecef;font-size:9px;}');
+                w.document.write('tfoot td{font-weight:bold;background:#f8f9fa;}');
+                w.document.write('.text-end{text-align:right;}.text-center{text-align:center;}');
+                w.document.write('.text-danger{color:#dc3545;}.fw-bold{font-weight:700;}');
+                w.document.write('</style></head><body>');
+                w.document.write('<h3>' + title + '</h3>');
+                w.document.write(clone.outerHTML);
+                w.document.write('</body></html>');
+                w.document.close();
+                w.focus();
+                setTimeout(function(){ w.print(); }, 300);
+            });
+        }
+        if (exportBtn) {
+            exportBtn.addEventListener('click', function() {
+                var tbl = document.getElementById(tableId);
+                if (!tbl) return;
+                var headers = [];
+                tbl.querySelectorAll('thead th').forEach(function(th){
+                    var t = th.cloneNode(true);
+                    t.querySelectorAll('.ft-filter-wrap').forEach(function(el){ el.remove(); });
+                    headers.push('"' + t.textContent.trim().replace(/"/g,'""') + '"');
+                });
+                var csvRows = [headers.join(',')];
+                tbl.querySelectorAll('tbody tr').forEach(function(tr){
+                    if(tr.style.display==='none') return;
+                    if(tr.classList.contains('no-data-row')) return;
+                    var cells = [];
+                    tr.querySelectorAll('td').forEach(function(td){
+                        cells.push('"' + td.textContent.trim().replace(/"/g,'""') + '"');
+                    });
+                    csvRows.push(cells.join(','));
+                });
+                var foot = tbl.querySelector('tfoot tr');
+                if(foot){
+                    var fc = [];
+                    foot.querySelectorAll('td').forEach(function(td){
+                        fc.push('"' + td.textContent.trim().replace(/"/g,'""') + '"');
+                    });
+                    csvRows.push(fc.join(','));
+                }
+                var csv = '\uFEFF' + csvRows.join('\n');
+                var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = csvFilename;
+                a.click();
+            });
+        }
     };
 
     // Initialize Components

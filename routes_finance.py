@@ -3,13 +3,16 @@ Finance & Accounting Routes
 All routes for vouchers, journal entries, ledgers, and financial reports
 """
 from flask import render_template, request, redirect, url_for, flash, jsonify, session
-from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, 
-                    BankEntry, EmployeeExpense, District, Project, Party, Employee, User)
+from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
+                    BankEntry, EmployeeExpense, District, Project, Party, Employee, Driver, User,
+                    FundTransfer)
 from forms import (PaymentVoucherForm, ReceiptVoucherForm, BankEntryForm, JournalVoucherForm,
-                   EmployeeExpenseForm, AccountLedgerFilterForm, BalanceSheetFilterForm)
+                   EmployeeExpenseForm, AccountLedgerFilterForm, BalanceSheetFilterForm,
+                   AccountForm, FundTransferForm, FundTransferFilterForm, WalletDashboardFilterForm)
 from finance_utils import (generate_entry_number, create_journal_entry, create_payment_voucher_journal,
-                           create_receipt_voucher_journal, create_bank_entry_journal, 
-                           get_account_ledger, get_dto_wallet_summary, get_account_balance)
+                           create_receipt_voucher_journal, create_bank_entry_journal,
+                           get_account_ledger, get_dto_wallet_summary, get_account_balance,
+                           ensure_wallet_account, create_fund_transfer_journal)
 from permissions_config import can_see_page
 from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
@@ -694,3 +697,517 @@ def employee_expense_delete(pk):
         flash(f'Error deleting expense: {str(e)}', 'danger')
     
     return redirect(url_for('employee_expense_list'))
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# CHART OF ACCOUNTS
+# ════════════════════════════════════════════════════════════════════════════════
+
+def chart_of_accounts_list():
+    auth_check = check_auth('chart_of_accounts')
+    if auth_check:
+        return auth_check
+    accounts = Account.query.order_by(Account.code).all()
+    return render_template('finance/chart_of_accounts.html',
+                           title='Chart of Accounts', accounts=accounts)
+
+
+def chart_of_accounts_add():
+    auth_check = check_auth('chart_of_accounts')
+    if auth_check:
+        return auth_check
+
+    form = AccountForm()
+    _populate_account_form(form)
+
+    if form.validate_on_submit():
+        try:
+            acct = Account(
+                code=form.code.data.strip(),
+                name=form.name.data.strip(),
+                account_type=form.account_type.data,
+                parent_id=form.parent_id.data or None,
+                opening_balance=form.opening_balance.data or 0,
+                current_balance=form.opening_balance.data or 0,
+                district_id=form.district_id.data or None,
+                project_id=form.project_id.data or None,
+                description=form.description.data,
+                is_active=form.is_active.data,
+            )
+            db.session.add(acct)
+            db.session.commit()
+            flash('Account created successfully!', 'success')
+            return redirect(url_for('chart_of_accounts_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error: {e}', 'danger')
+
+    return render_template('finance/account_form.html', form=form, title='Add Account')
+
+
+def chart_of_accounts_edit(pk):
+    auth_check = check_auth('chart_of_accounts')
+    if auth_check:
+        return auth_check
+
+    acct = Account.query.get_or_404(pk)
+    form = AccountForm(obj=acct)
+    _populate_account_form(form)
+
+    if form.validate_on_submit():
+        try:
+            acct.code = form.code.data.strip()
+            acct.name = form.name.data.strip()
+            acct.account_type = form.account_type.data
+            acct.parent_id = form.parent_id.data or None
+            acct.opening_balance = form.opening_balance.data or 0
+            acct.district_id = form.district_id.data or None
+            acct.project_id = form.project_id.data or None
+            acct.description = form.description.data
+            acct.is_active = form.is_active.data
+            db.session.commit()
+            flash('Account updated successfully!', 'success')
+            return redirect(url_for('chart_of_accounts_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error: {e}', 'danger')
+
+    return render_template('finance/account_form.html', form=form, title='Edit Account')
+
+
+def chart_of_accounts_toggle(pk):
+    auth_check = check_auth('chart_of_accounts')
+    if auth_check:
+        return auth_check
+    acct = Account.query.get_or_404(pk)
+    acct.is_active = not acct.is_active
+    db.session.commit()
+    flash(f'Account {"activated" if acct.is_active else "deactivated"}.', 'success')
+    return redirect(url_for('chart_of_accounts_list'))
+
+
+def _populate_account_form(form):
+    all_accounts = Account.query.filter_by(is_active=True).order_by(Account.code).all()
+    form.parent_id.choices = [(0, '-- No Parent --')] + [(a.id, f"{a.code} - {a.name}") for a in all_accounts]
+    districts = District.query.order_by(District.name).all()
+    form.district_id.choices = [(0, '-- None --')] + [(d.id, d.name) for d in districts]
+    projects = Project.query.order_by(Project.name).all()
+    form.project_id.choices = [(0, '-- None --')] + [(p.id, p.name) for p in projects]
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# FUND TRANSFER (Bank-like wallet system)
+# ════════════════════════════════════════════════════════════════════════════════
+
+def _person_choices():
+    choices = [('', '-- Select Person --')]
+    for e in Employee.query.filter_by(status='Active').order_by(Employee.name).all():
+        post_label = e.post.full_name if e.post else 'Staff'
+        choices.append((f'emp-{e.id}', f"{e.name} ({post_label})"))
+    for d in Driver.query.filter_by(status='Active').order_by(Driver.name).all():
+        choices.append((f'drv-{d.id}', f"{d.name} (Driver)"))
+    return choices
+
+
+def _parse_person(val):
+    if not val:
+        return None, None
+    parts = val.split('-', 1)
+    if len(parts) == 2 and parts[1].isdigit():
+        return parts[0], int(parts[1])
+    return None, None
+
+
+def fund_transfer_add():
+    auth_check = check_auth('fund_transfer')
+    if auth_check:
+        return auth_check
+
+    form = FundTransferForm()
+    choices = _person_choices()
+    form.from_person.choices = choices
+    form.to_person.choices = choices
+    _populate_transfer_filters(form)
+
+    if form.validate_on_submit():
+        try:
+            from_type, from_id = _parse_person(form.from_person.data)
+            to_type, to_id = _parse_person(form.to_person.data)
+            if not from_type or not to_type:
+                flash('Please select both sender and receiver.', 'danger')
+                return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer')
+
+            from_wallet = ensure_wallet_account(from_type, from_id)
+            to_wallet = ensure_wallet_account(to_type, to_id)
+
+            transfer = FundTransfer(
+                transfer_number=generate_entry_number('FT', form.transfer_date.data),
+                transfer_date=form.transfer_date.data,
+                from_employee_id=from_id if from_type == 'emp' else None,
+                from_driver_id=from_id if from_type == 'drv' else None,
+                to_employee_id=to_id if to_type == 'emp' else None,
+                to_driver_id=to_id if to_type == 'drv' else None,
+                amount=form.amount.data,
+                payment_mode=form.payment_mode.data,
+                reference_no=form.reference_no.data,
+                description=form.description.data,
+                district_id=form.district_id.data or None,
+                project_id=form.project_id.data or None,
+                created_by_user_id=session.get('user_id'),
+            )
+            db.session.add(transfer)
+            db.session.flush()
+
+            je = create_fund_transfer_journal(transfer, from_wallet, to_wallet)
+            transfer.journal_entry_id = je.id
+            db.session.commit()
+            flash('Fund Transfer created successfully!', 'success')
+            return redirect(url_for('fund_transfers_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error: {e}', 'danger')
+
+    return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer')
+
+
+def fund_transfer_edit(pk):
+    auth_check = check_auth('fund_transfer')
+    if auth_check:
+        return auth_check
+
+    transfer = FundTransfer.query.get_or_404(pk)
+    form = FundTransferForm()
+    choices = _person_choices()
+    form.from_person.choices = choices
+    form.to_person.choices = choices
+    _populate_transfer_filters(form)
+
+    if request.method == 'GET':
+        form.transfer_date.data = transfer.transfer_date
+        form.amount.data = transfer.amount
+        form.payment_mode.data = transfer.payment_mode
+        form.reference_no.data = transfer.reference_no
+        form.description.data = transfer.description
+        form.district_id.data = transfer.district_id or 0
+        form.project_id.data = transfer.project_id or 0
+        if transfer.from_employee_id:
+            form.from_person.data = f'emp-{transfer.from_employee_id}'
+        elif transfer.from_driver_id:
+            form.from_person.data = f'drv-{transfer.from_driver_id}'
+        if transfer.to_employee_id:
+            form.to_person.data = f'emp-{transfer.to_employee_id}'
+        elif transfer.to_driver_id:
+            form.to_person.data = f'drv-{transfer.to_driver_id}'
+
+    if form.validate_on_submit():
+        try:
+            if transfer.journal_entry_id:
+                old_je = JournalEntry.query.get(transfer.journal_entry_id)
+                if old_je:
+                    for line in old_je.lines:
+                        db.session.delete(line)
+                    db.session.delete(old_je)
+                    db.session.flush()
+
+            from_type, from_id = _parse_person(form.from_person.data)
+            to_type, to_id = _parse_person(form.to_person.data)
+            from_wallet = ensure_wallet_account(from_type, from_id)
+            to_wallet = ensure_wallet_account(to_type, to_id)
+
+            transfer.transfer_date = form.transfer_date.data
+            transfer.from_employee_id = from_id if from_type == 'emp' else None
+            transfer.from_driver_id = from_id if from_type == 'drv' else None
+            transfer.to_employee_id = to_id if to_type == 'emp' else None
+            transfer.to_driver_id = to_id if to_type == 'drv' else None
+            transfer.amount = form.amount.data
+            transfer.payment_mode = form.payment_mode.data
+            transfer.reference_no = form.reference_no.data
+            transfer.description = form.description.data
+            transfer.district_id = form.district_id.data or None
+            transfer.project_id = form.project_id.data or None
+            db.session.flush()
+
+            je = create_fund_transfer_journal(transfer, from_wallet, to_wallet)
+            transfer.journal_entry_id = je.id
+            db.session.commit()
+            flash('Fund Transfer updated!', 'success')
+            return redirect(url_for('fund_transfers_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error: {e}', 'danger')
+
+    return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer')
+
+
+def fund_transfer_delete(pk):
+    auth_check = check_auth('fund_transfer')
+    if auth_check:
+        return auth_check
+    transfer = FundTransfer.query.get_or_404(pk)
+    try:
+        if transfer.journal_entry_id:
+            je = JournalEntry.query.get(transfer.journal_entry_id)
+            if je:
+                for line in je.lines:
+                    db.session.delete(line)
+                db.session.delete(je)
+        db.session.delete(transfer)
+        db.session.commit()
+        flash('Fund Transfer deleted.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {e}', 'danger')
+    return redirect(url_for('fund_transfers_list'))
+
+
+def fund_transfers_list():
+    auth_check = check_auth('fund_transfer')
+    if auth_check:
+        return auth_check
+
+    form = FundTransferFilterForm()
+    choices = _person_choices()
+    form.person.choices = choices
+    _populate_transfer_filters(form)
+
+    today = pk_date()
+    from_date = today.replace(day=1)
+    to_date = today
+    per_page = int(request.args.get('per_page', request.form.get('per_page', 20)))
+    page = int(request.args.get('page', 1))
+
+    if request.method == 'POST' and form.validate():
+        from_date = form.from_date.data or from_date
+        to_date = form.to_date.data or to_date
+    elif request.method == 'GET':
+        try:
+            if request.args.get('from_date'):
+                from_date = datetime.strptime(request.args['from_date'], '%d-%m-%Y').date()
+            if request.args.get('to_date'):
+                to_date = datetime.strptime(request.args['to_date'], '%d-%m-%Y').date()
+        except ValueError:
+            pass
+
+    form.from_date.data = from_date
+    form.to_date.data = to_date
+
+    query = FundTransfer.query.filter(
+        FundTransfer.transfer_date.between(from_date, to_date)
+    ).order_by(FundTransfer.transfer_date.desc(), FundTransfer.id.desc())
+
+    if form.district_id.data and form.district_id.data > 0:
+        query = query.filter_by(district_id=form.district_id.data)
+    if form.project_id.data and form.project_id.data > 0:
+        query = query.filter_by(project_id=form.project_id.data)
+
+    transfers = query.paginate(page=page, per_page=per_page, error_out=False)
+    return render_template('finance/fund_transfers_list.html',
+                           form=form, transfers=transfers,
+                           from_date=from_date, to_date=to_date, per_page=per_page)
+
+
+def _populate_transfer_filters(form):
+    districts = District.query.order_by(District.name).all()
+    form.district_id.choices = [(0, '-- All --')] + [(d.id, d.name) for d in districts]
+    projects = Project.query.order_by(Project.name).all()
+    form.project_id.choices = [(0, '-- All --')] + [(p.id, p.name) for p in projects]
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# WALLET DASHBOARD
+# ════════════════════════════════════════════════════════════════════════════════
+
+def wallet_dashboard():
+    auth_check = check_auth('wallet_dashboard')
+    if auth_check:
+        return auth_check
+
+    form = WalletDashboardFilterForm()
+    districts = District.query.order_by(District.name).all()
+    form.district_id.choices = [(0, '-- All --')] + [(d.id, d.name) for d in districts]
+    projects = Project.query.order_by(Project.name).all()
+    form.project_id.choices = [(0, '-- All --')] + [(p.id, p.name) for p in projects]
+
+    wallets = []
+    total_funds = Decimal('0')
+    total_expenses = Decimal('0')
+
+    employees = Employee.query.filter(Employee.wallet_account_id.isnot(None)).all()
+    for emp in employees:
+        acct = Account.query.get(emp.wallet_account_id) if emp.wallet_account_id else None
+        if not acct:
+            continue
+        bal = acct.current_balance or Decimal('0')
+        received = _sum_transfers_received('emp', emp.id)
+        spent = _sum_expenses_from_wallet(acct.id)
+        wallets.append({
+            'person_name': emp.name,
+            'person_type': 'Employee',
+            'post': emp.post.full_name if emp.post else '—',
+            'district_name': ', '.join(d.name for d in emp.districts) or '—',
+            'project_name': ', '.join(p.name for p in emp.projects) or '—',
+            'balance': bal,
+            'total_received': received,
+            'total_spent': spent,
+        })
+        if bal > 0:
+            total_funds += bal
+        else:
+            total_expenses += abs(bal)
+
+    drivers = Driver.query.filter(Driver.wallet_account_id.isnot(None)).all()
+    for drv in drivers:
+        acct = Account.query.get(drv.wallet_account_id) if drv.wallet_account_id else None
+        if not acct:
+            continue
+        bal = acct.current_balance or Decimal('0')
+        received = _sum_transfers_received('drv', drv.id)
+        spent = _sum_expenses_from_wallet(acct.id)
+        wallets.append({
+            'person_name': drv.name,
+            'person_type': 'Driver',
+            'post': 'Driver',
+            'district_name': drv.district.name if drv.district else '—',
+            'project_name': '—',
+            'balance': bal,
+            'total_received': received,
+            'total_spent': spent,
+        })
+        if bal > 0:
+            total_funds += bal
+        else:
+            total_expenses += abs(bal)
+
+    summary = {
+        'total_wallets': len(wallets),
+        'total_funds': total_funds,
+        'total_expenses': total_expenses,
+        'net_outstanding': total_funds - total_expenses,
+    }
+
+    return render_template('finance/wallet_dashboard.html',
+                           form=form, wallets=wallets, summary=summary)
+
+
+def _sum_transfers_received(person_type, person_id):
+    if person_type == 'emp':
+        total = db.session.query(db.func.coalesce(db.func.sum(FundTransfer.amount), 0)).filter(
+            FundTransfer.to_employee_id == person_id).scalar()
+    else:
+        total = db.session.query(db.func.coalesce(db.func.sum(FundTransfer.amount), 0)).filter(
+            FundTransfer.to_driver_id == person_id).scalar()
+    return Decimal(str(total))
+
+
+def _sum_expenses_from_wallet(wallet_account_id):
+    total = db.session.query(
+        db.func.coalesce(db.func.sum(JournalEntryLine.credit), 0)
+    ).join(JournalEntry).filter(
+        JournalEntryLine.account_id == wallet_account_id,
+        JournalEntry.entry_type == 'Expense',
+        JournalEntry.is_posted == True,
+    ).scalar()
+    return Decimal(str(total))
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# JOURNAL VOUCHER (replace placeholder)
+# ════════════════════════════════════════════════════════════════════════════════
+
+def journal_voucher_add():
+    auth_check = check_auth('accounts_jv')
+    if auth_check:
+        return auth_check
+
+    form = JournalVoucherForm()
+    districts = District.query.order_by(District.name).all()
+    form.district_id.choices = [(0, '-- None --')] + [(d.id, d.name) for d in districts]
+    projects = Project.query.order_by(Project.name).all()
+    form.project_id.choices = [(0, '-- None --')] + [(p.id, p.name) for p in projects]
+    accounts = [(a.id, f"{a.code} - {a.name}") for a in
+                Account.query.filter_by(is_active=True).order_by(Account.code).all()]
+
+    if request.method == 'POST' and form.validate():
+        try:
+            line_accounts = request.form.getlist('line_account_id')
+            line_debits = request.form.getlist('line_debit')
+            line_credits = request.form.getlist('line_credit')
+            line_descs = request.form.getlist('line_description')
+
+            lines = []
+            for i in range(len(line_accounts)):
+                acct_id = int(line_accounts[i]) if line_accounts[i] else 0
+                debit = Decimal(line_debits[i] or '0')
+                credit = Decimal(line_credits[i] or '0')
+                if acct_id and (debit or credit):
+                    lines.append({
+                        'account_id': acct_id,
+                        'debit': debit,
+                        'credit': credit,
+                        'description': line_descs[i] if i < len(line_descs) else '',
+                    })
+
+            if not lines:
+                flash('Please add at least one journal line.', 'danger')
+            else:
+                je = create_journal_entry(
+                    entry_type='Journal',
+                    entry_date=form.entry_date.data,
+                    description=form.description.data,
+                    lines=lines,
+                    district_id=form.district_id.data or None,
+                    project_id=form.project_id.data or None,
+                    reference_type='Manual',
+                    created_by_user_id=session.get('user_id'),
+                )
+                db.session.commit()
+                flash(f'Journal Voucher {je.entry_number} created!', 'success')
+                return redirect(url_for('journal_vouchers_list'))
+        except ValueError as e:
+            db.session.rollback()
+            flash(f'Validation error: {e}', 'danger')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error: {e}', 'danger')
+
+    return render_template('finance/journal_voucher_form.html',
+                           form=form, title='New Journal Voucher', accounts=accounts)
+
+
+def journal_vouchers_list():
+    auth_check = check_auth('accounts_jv')
+    if auth_check:
+        return auth_check
+
+    today = pk_date()
+    from_date = today.replace(day=1)
+    to_date = today
+    per_page = int(request.args.get('per_page', request.form.get('per_page', 20)))
+    page = int(request.args.get('page', 1))
+
+    if request.method == 'POST':
+        try:
+            fd = request.form.get('from_date', '')
+            td = request.form.get('to_date', '')
+            if fd:
+                from_date = datetime.strptime(fd, '%d-%m-%Y').date()
+            if td:
+                to_date = datetime.strptime(td, '%d-%m-%Y').date()
+        except ValueError:
+            pass
+    else:
+        try:
+            if request.args.get('from_date'):
+                from_date = datetime.strptime(request.args['from_date'], '%d-%m-%Y').date()
+            if request.args.get('to_date'):
+                to_date = datetime.strptime(request.args['to_date'], '%d-%m-%Y').date()
+        except ValueError:
+            pass
+
+    entries = JournalEntry.query.filter(
+        JournalEntry.entry_date.between(from_date, to_date),
+    ).order_by(JournalEntry.entry_date.desc(), JournalEntry.id.desc()
+    ).paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('finance/journal_vouchers_list.html',
+                           entries=entries, from_date=from_date, to_date=to_date, per_page=per_page)

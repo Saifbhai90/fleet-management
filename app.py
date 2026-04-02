@@ -198,6 +198,8 @@ if _run_startup_tasks:
                 ('penalty_record', 'source_type', 'VARCHAR(30)'),
                 ('penalty_record', 'source_id', 'INTEGER'),
                 ('vehicle_daily_task', 'start_reading', 'NUMERIC(12,2)'),
+                ('employee', 'wallet_account_id', 'INTEGER REFERENCES account(id)'),
+                ('driver', 'wallet_account_id', 'INTEGER REFERENCES account(id)'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():
@@ -331,7 +333,11 @@ from routes_finance import (
     accounts_quick_receipt, receipt_vouchers_list,
     accounts_bank_entry, bank_entries_list,
     accounts_account_ledger, accounts_balance_sheet,
-    employee_expense_form, employee_expense_list, employee_expense_delete
+    employee_expense_form, employee_expense_list, employee_expense_delete,
+    chart_of_accounts_list, chart_of_accounts_add, chart_of_accounts_edit, chart_of_accounts_toggle,
+    fund_transfer_add, fund_transfer_edit, fund_transfer_delete, fund_transfers_list,
+    wallet_dashboard,
+    journal_voucher_add, journal_vouchers_list,
 )  # noqa: E402
 
 from routes_payroll import (
@@ -362,6 +368,25 @@ app.add_url_rule('/accounts/employee-expense/add', 'employee_expense_form', empl
 app.add_url_rule('/accounts/employee-expense/<int:pk>/edit', 'employee_expense_form_edit', employee_expense_form, methods=['GET', 'POST'])
 app.add_url_rule('/accounts/employee-expenses', 'employee_expense_list', employee_expense_list)
 app.add_url_rule('/accounts/employee-expense/<int:pk>/delete', 'employee_expense_delete', employee_expense_delete, methods=['POST'])
+
+# Chart of Accounts
+app.add_url_rule('/accounts/chart', 'chart_of_accounts_list', chart_of_accounts_list)
+app.add_url_rule('/accounts/chart/add', 'chart_of_accounts_add', chart_of_accounts_add, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/chart/<int:pk>/edit', 'chart_of_accounts_edit', chart_of_accounts_edit, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/chart/<int:pk>/toggle', 'chart_of_accounts_toggle', chart_of_accounts_toggle, methods=['POST'])
+
+# Fund Transfer
+app.add_url_rule('/accounts/fund-transfer', 'fund_transfer_add', fund_transfer_add, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/fund-transfers', 'fund_transfers_list', fund_transfers_list, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/fund-transfer/<int:pk>/edit', 'fund_transfer_edit', fund_transfer_edit, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/fund-transfer/<int:pk>/delete', 'fund_transfer_delete', fund_transfer_delete, methods=['POST'])
+
+# Wallet Dashboard
+app.add_url_rule('/accounts/wallet-dashboard', 'wallet_dashboard', wallet_dashboard, methods=['GET', 'POST'])
+
+# Journal Voucher (replace placeholder)
+app.add_url_rule('/accounts/jv', 'accounts_jv', journal_voucher_add, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/jv/list', 'journal_vouchers_list', journal_vouchers_list, methods=['GET', 'POST'])
 
 # ── Payroll Module ──────────────────────────────────────────────────────────
 app.add_url_rule('/payroll/salary-config', 'payroll_salary_config_list', payroll_salary_config_list)

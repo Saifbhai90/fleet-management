@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="section-heading bg-info">
+        <i class="bi bi-diagram-3 me-2"></i>{{ title }}
+    </div>
+
+    <div class="card shadow-sm border-0 mt-3">
+        <div class="card-body p-4">
+            <form method="POST" class="needs-validation" novalidate>
+                {{ form.hidden_tag() }}
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        {{ form.code.label(class="form-label fw-bold") }}
+                        {{ form.code(class="form-control") }}
+                    </div>
+
+                    <div class="col-md-8">
+                        {{ form.name.label(class="form-label fw-bold") }}
+                        {{ form.name(class="form-control") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.account_type.label(class="form-label fw-bold") }}
+                        {{ form.account_type(class="form-select search-select") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.parent_id.label(class="form-label fw-bold") }}
+                        {{ form.parent_id(class="form-select search-select") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.opening_balance.label(class="form-label fw-bold") }}
+                        {{ form.opening_balance(class="form-control", inputmode="decimal") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.district_id.label(class="form-label fw-bold") }}
+                        {{ form.district_id(class="form-select search-select") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.project_id.label(class="form-label fw-bold") }}
+                        {{ form.project_id(class="form-select search-select") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.is_active.label(class="form-label fw-bold") }}
+                        {{ form.is_active(class="form-select") }}
+                    </div>
+
+                    <div class="col-12">
+                        {{ form.description.label(class="form-label fw-bold") }}
+                        {{ form.description(class="form-control", rows="3") }}
+                    </div>
+                </div>
+
+                <div class="mt-4 d-flex gap-2">
+                    {{ form.submit(class="btn btn-info px-4") }}
+                    <a href="{{ url_for('chart_of_accounts_list') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

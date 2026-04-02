@@ -2,7 +2,7 @@
 Finance & Accounting Utility Functions
 Helper functions for voucher number generation, journal entry creation, and balance updates
 """
-from models import db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence
+from models import db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence, Employee, Driver
 from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
 from decimal import Decimal
@@ -547,3 +547,75 @@ def create_expense_journal(expense_type, expense_obj, expense_account_code, part
     )
     
     return je
+
+
+def ensure_wallet_account(person_type, person_id):
+    """
+    Ensure the employee/driver has a wallet Account. If not, auto-create one
+    under the 'Employee Wallets' parent (code 1200).
+    """
+    if person_type == 'employee':
+        person = Employee.query.get(person_id)
+        if not person:
+            raise ValueError(f"Employee {person_id} not found")
+        if person.wallet_account_id:
+            acct = Account.query.get(person.wallet_account_id)
+            if acct:
+                return acct
+    elif person_type == 'driver':
+        person = Driver.query.get(person_id)
+        if not person:
+            raise ValueError(f"Driver {person_id} not found")
+        if person.wallet_account_id:
+            acct = Account.query.get(person.wallet_account_id)
+            if acct:
+                return acct
+    else:
+        raise ValueError(f"Unknown person_type: {person_type}")
+
+    parent = Account.query.filter_by(code='1200').first()
+    parent_id = parent.id if parent else None
+
+    max_code_row = db.session.query(db.func.max(Account.code)).filter(
+        Account.code.between('1200', '1299')
+    ).scalar()
+    next_code = str(int(max_code_row) + 1) if max_code_row and max_code_row >= '1200' else '1201'
+
+    label = 'EMP' if person_type == 'employee' else 'DRV'
+    wallet = Account(
+        code=next_code,
+        name=f"Wallet - {person.name} ({label}-{person.id})",
+        account_type='Asset',
+        parent_id=parent_id,
+        is_active=True,
+        opening_balance=0,
+        current_balance=0,
+        description=f"Auto-created wallet for {person.name}",
+    )
+    db.session.add(wallet)
+    db.session.flush()
+
+    person.wallet_account_id = wallet.id
+    db.session.flush()
+    return wallet
+
+
+def create_fund_transfer_journal(transfer_obj, from_wallet, to_wallet):
+    """Create journal entry for a fund transfer: Debit receiver wallet, Credit sender wallet."""
+    lines = [
+        {'account_id': to_wallet.id, 'debit': transfer_obj.amount, 'credit': 0,
+         'description': f"Fund received from {transfer_obj.from_name}"},
+        {'account_id': from_wallet.id, 'debit': 0, 'credit': transfer_obj.amount,
+         'description': f"Fund sent to {transfer_obj.to_name}"},
+    ]
+    return create_journal_entry(
+        entry_type='Journal',
+        entry_date=transfer_obj.transfer_date,
+        description=f"Fund Transfer {transfer_obj.transfer_number}",
+        lines=lines,
+        district_id=transfer_obj.district_id,
+        project_id=transfer_obj.project_id,
+        reference_type='FundTransfer',
+        reference_id=transfer_obj.id,
+        created_by_user_id=transfer_obj.created_by_user_id,
+    )

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Chart of Accounts{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+        <h2 class="mb-0"><i class="bi bi-diagram-3 me-2 text-info"></i>Chart of Accounts</h2>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print"><i class="bi bi-printer me-1"></i>Print</button>
+            <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+            <a href="{{ url_for('chart_of_accounts_add') }}" class="btn btn-info btn-sm">
+                <i class="bi bi-plus-circle me-1"></i>Add Account
+            </a>
+        </div>
+    </div>
+
+    <div class="section-heading bg-info">
+        <i class="bi bi-diagram-3 me-2"></i>Chart of Accounts
+    </div>
+
+    <div class="card shadow-sm border-0 mt-3">
+        <div class="card-header bg-info text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <label class="mb-0 small">Show</label>
+                <select id="coaPerPage" class="form-select form-select-sm" style="width:auto;" onchange="var u=new URLSearchParams(window.location.search);u.set('per_page',this.value);u.set('page','1');window.location.search=u.toString();">
+                    {% for val in [25,50,100,200] %}
+                    <option value="{{ val }}" {% if per_page|default(25) == val %}selected{% endif %}>{{ val }}</option>
+                    {% endfor %}
+                </select>
+                <label class="mb-0 small">entries</label>
+            </div>
+            <div>
+                <input type="text" id="coaSearch" class="form-control form-control-sm" placeholder="Search..." style="width:200px;">
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="data-table-wrapper">
+                <table class="table table-hover compact-table mb-0" id="coaTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Code</th>
+                            <th>Account Name</th>
+                            <th>Type</th>
+                            <th>Parent</th>
+                            <th class="text-end">Balance</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for account in accounts %}
+                        <tr>
+                            <td>{{ account.code }}</td>
+                            <td {% if account.parent_id %}style="padding-left: 2.5rem;"{% endif %}>
+                                {% if account.parent_id %}<i class="bi bi-arrow-return-right text-muted me-1"></i>{% endif %}
+                                {{ account.name }}
+                            </td>
+                            <td>
+                                {% set type_colors = {'Asset': 'primary', 'Liability': 'warning', 'Equity': 'success', 'Revenue': 'info', 'Expense': 'danger'} %}
+                                <span class="badge bg-{{ type_colors.get(account.account_type, 'secondary') }}">
+                                    {{ account.account_type }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if account.parent %}
+                                    {{ account.parent.name }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end fw-semibold">{{ "{:,.2f}".format(account.current_balance) }}</td>
+                            <td class="text-center">
+                                {% if account.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <a href="{{ url_for('chart_of_accounts_edit', pk=account.id) }}" class="btn btn-sm btn-edit-compact" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="bi bi-diagram-3 display-6 d-block mb-2 opacity-25"></i>
+                                No accounts found.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    if(window.fleetTableEnhance) window.fleetTableEnhance('coaTable');
+    window.fleetPrintExport && window.fleetPrintExport('coaTable','Chart of Accounts','Chart_of_Accounts.csv');
+
+    var searchInput = document.getElementById('coaSearch');
+    if(searchInput){
+        searchInput.addEventListener('keyup', function(){
+            var filter = this.value.toLowerCase();
+            var rows = document.querySelectorAll('#coaTable tbody tr');
+            rows.forEach(function(row){
+                row.style.display = row.textContent.toLowerCase().indexOf(filter) > -1 ? '' : 'none';
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

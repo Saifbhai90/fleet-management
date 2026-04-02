@@ -149,8 +149,10 @@ class Employee(db.Model):
 
     created_at = db.Column(db.DateTime, default=pk_now)
 
+    wallet_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=True)
+
     post = db.relationship('EmployeePost', backref='employees')
-    # Multiple projects and districts (assignment from this form)
+    wallet_account = db.relationship('Account', foreign_keys=[wallet_account_id], backref='wallet_employee', lazy='select')
     projects = db.relationship('Project', secondary=employee_project, backref=db.backref('employees', lazy='dynamic'), lazy='dynamic')
     districts = db.relationship('District', secondary=employee_district, backref=db.backref('employees', lazy='dynamic'), lazy='dynamic')
     documents = db.relationship('EmployeeDocument', backref='employee', lazy=True, cascade='all, delete-orphan')
@@ -233,8 +235,12 @@ class Driver(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
     vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=True, index=True)
     district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)
+    wallet_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=True)
+
     district = db.relationship('District', backref='drivers', lazy=True)
     vehicle = db.relationship('Vehicle', backref=db.backref('drivers', lazy=True), foreign_keys=[vehicle_id], lazy=True)
+    wallet_account = db.relationship('Account', foreign_keys=[wallet_account_id], backref='wallet_driver', lazy='select')
+
     def __repr__(self):
         return f'<Driver {self.name}>'
 
@@ -1761,6 +1767,58 @@ class SystemSetting(db.Model):
             db.session.add(row)
         db.session.commit()
         return row
+
+
+# ────────────────────────────────────────────────
+# Fund Transfer (bank-like wallet transfers)
+# ────────────────────────────────────────────────
+class FundTransfer(db.Model):
+    __tablename__ = 'fund_transfer'
+
+    id = db.Column(db.Integer, primary_key=True)
+    transfer_number = db.Column(db.String(30), unique=True, nullable=False)
+    transfer_date = db.Column(db.Date, nullable=False, index=True)
+    from_employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=True)
+    from_driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True)
+    to_employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=True)
+    to_driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True)
+    amount = db.Column(db.Numeric(15, 2), nullable=False)
+    payment_mode = db.Column(db.String(30), nullable=False, default='Cash')
+    reference_no = db.Column(db.String(50), nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    from_employee = db.relationship('Employee', foreign_keys=[from_employee_id], backref='sent_transfers', lazy='select')
+    from_driver = db.relationship('Driver', foreign_keys=[from_driver_id], backref='sent_transfers', lazy='select')
+    to_employee = db.relationship('Employee', foreign_keys=[to_employee_id], backref='received_transfers', lazy='select')
+    to_driver = db.relationship('Driver', foreign_keys=[to_driver_id], backref='received_transfers', lazy='select')
+    district = db.relationship('District', backref='fund_transfers', lazy='select')
+    project = db.relationship('Project', backref='fund_transfers', lazy='select')
+    journal_entry = db.relationship('JournalEntry', backref='fund_transfer', lazy='select')
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id], backref='created_fund_transfers', lazy='select')
+
+    @property
+    def from_name(self):
+        if self.from_employee:
+            return self.from_employee.name
+        if self.from_driver:
+            return self.from_driver.name
+        return '—'
+
+    @property
+    def to_name(self):
+        if self.to_employee:
+            return self.to_employee.name
+        if self.to_driver:
+            return self.to_driver.name
+        return '—'
+
+    def __repr__(self):
+        return f'<FundTransfer {self.transfer_number} {self.amount}>'
 
 
 # ────────────────────────────────────────────────

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="section-heading bg-success">
+        <i class="bi bi-arrow-left-right me-2"></i>{{ title }}
+    </div>
+
+    <div class="card shadow-sm border-0 mt-3">
+        <div class="card-body p-4">
+            <form method="POST" class="needs-validation" novalidate>
+                {{ form.hidden_tag() }}
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        {{ form.transfer_date.label(class="form-label fw-bold") }}
+                        {{ form.transfer_date(class="form-control") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.from_person.label(class="form-label fw-bold") }}
+                        {{ form.from_person(class="form-select search-select") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.to_person.label(class="form-label fw-bold") }}
+                        {{ form.to_person(class="form-select search-select") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.amount.label(class="form-label fw-bold") }}
+                        {{ form.amount(class="form-control", inputmode="decimal") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.payment_mode.label(class="form-label fw-bold") }}
+                        {{ form.payment_mode(class="form-select search-select") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.reference_no.label(class="form-label fw-bold") }}
+                        {{ form.reference_no(class="form-control") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.district_id.label(class="form-label fw-bold") }}
+                        {{ form.district_id(class="form-select search-select") }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.project_id.label(class="form-label fw-bold") }}
+                        {{ form.project_id(class="form-select search-select") }}
+                    </div>
+
+                    <div class="col-12">
+                        {{ form.description.label(class="form-label fw-bold") }}
+                        {{ form.description(class="form-control", rows="3") }}
+                    </div>
+                </div>
+
+                <div class="mt-4 d-flex gap-2">
+                    {{ form.submit(class="btn btn-success px-4") }}
+                    <a href="{{ url_for('fund_transfers_list') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

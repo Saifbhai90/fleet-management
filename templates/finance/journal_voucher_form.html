@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="section-heading bg-warning">
+        <i class="bi bi-journal-text me-2"></i>{{ title }}
+    </div>
+
+    <div class="card shadow-sm border-0 mt-3">
+        <div class="card-body p-4">
+            <form method="POST" id="jvForm" class="needs-validation" novalidate>
+                {{ form.hidden_tag() if form is defined and form.hidden_tag is defined }}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        {% if form is defined and form.entry_date is defined %}
+                            {{ form.entry_date.label(class="form-label fw-bold") }}
+                            {{ form.entry_date(class="form-control") }}
+                        {% else %}
+                            <label class="form-label fw-bold">Entry Date</label>
+                            <input type="date" name="entry_date" class="form-control" value="{{ entry_date|default('') }}" required>
+                        {% endif %}
+                    </div>
+
+                    <div class="col-md-8">
+                        {% if form is defined and form.description is defined %}
+                            {{ form.description.label(class="form-label fw-bold") }}
+                            {{ form.description(class="form-control") }}
+                        {% else %}
+                            <label class="form-label fw-bold">Description</label>
+                            <input type="text" name="description" class="form-control" value="{{ description|default('') }}">
+                        {% endif %}
+                    </div>
+
+                    <div class="col-md-4">
+                        {% if form is defined and form.district_id is defined %}
+                            {{ form.district_id.label(class="form-label fw-bold") }}
+                            {{ form.district_id(class="form-select search-select") }}
+                        {% else %}
+                            <label class="form-label fw-bold">District</label>
+                            <select name="district_id" class="form-select search-select">
+                                <option value="">-- Select --</option>
+                            </select>
+                        {% endif %}
+                    </div>
+
+                    <div class="col-md-4">
+                        {% if form is defined and form.project_id is defined %}
+                            {{ form.project_id.label(class="form-label fw-bold") }}
+                            {{ form.project_id(class="form-select search-select") }}
+                        {% else %}
+                            <label class="form-label fw-bold">Project</label>
+                            <select name="project_id" class="form-select search-select">
+                                <option value="">-- Select --</option>
+                            </select>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Journal Lines -->
+                <div class="card border mb-3">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-list-columns-reverse me-1"></i>Journal Lines</h6>
+                        <button type="button" class="btn btn-warning btn-sm" id="btnAddLine">
+                            <i class="bi bi-plus-circle me-1"></i>Add Line
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-bordered mb-0" id="jvLinesTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="min-width:250px;">Account</th>
+                                        <th style="width:150px;" class="text-end">Debit</th>
+                                        <th style="width:150px;" class="text-end">Credit</th>
+                                        <th style="min-width:200px;">Description</th>
+                                        <th style="width:60px;" class="text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="jvLinesBody">
+                                    {% if lines is defined and lines %}
+                                        {% for line in lines %}
+                                        <tr class="jv-line">
+                                            <td>
+                                                <select name="lines[{{ loop.index0 }}].account_id" class="form-select form-select-sm search-select" required>
+                                                    <option value="">-- Select Account --</option>
+                                                    {% for acc in accounts %}
+                                                    <option value="{{ acc[0] }}" {% if acc[0] == line.account_id %}selected{% endif %}>{{ acc[1] }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </td>
+                                            <td><input type="number" name="lines[{{ loop.index0 }}].debit" class="form-control form-control-sm text-end jv-debit" step="0.01" min="0" value="{{ line.debit|default(0) }}" oninput="updateTotals()"></td>
+                                            <td><input type="number" name="lines[{{ loop.index0 }}].credit" class="form-control form-control-sm text-end jv-credit" step="0.01" min="0" value="{{ line.credit|default(0) }}" oninput="updateTotals()"></td>
+                                            <td><input type="text" name="lines[{{ loop.index0 }}].description" class="form-control form-control-sm" value="{{ line.description|default('') }}"></td>
+                                            <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-line" title="Remove"><i class="bi bi-x-lg"></i></button></td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% endif %}
+                                </tbody>
+                                <tfoot class="table-warning">
+                                    <tr class="fw-bold">
+                                        <td class="text-end">Totals</td>
+                                        <td class="text-end" id="totalDebit">0.00</td>
+                                        <td class="text-end" id="totalCredit">0.00</td>
+                                        <td colspan="2">
+                                            <span id="balanceWarning" class="text-danger small d-none">
+                                                <i class="bi bi-exclamation-triangle me-1"></i>Debits and Credits must be equal
+                                            </span>
+                                            <span id="balanceOk" class="text-success small d-none">
+                                                <i class="bi bi-check-circle me-1"></i>Balanced
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 d-flex gap-2">
+                    <button type="submit" class="btn btn-warning px-4" id="btnSubmitJV">
+                        <i class="bi bi-check-circle me-1"></i>Save Journal Voucher
+                    </button>
+                    <a href="{{ url_for('journal_vouchers_list') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+var lineIndex = document.querySelectorAll('#jvLinesBody .jv-line').length;
+var accountOptions = '<option value="">-- Select Account --</option>';
+{% for acc in accounts %}
+accountOptions += '<option value="{{ acc[0] }}">{{ acc[1]|e }}</option>';
+{% endfor %}
+
+function addLine(){
+    var row = document.createElement('tr');
+    row.className = 'jv-line';
+    row.innerHTML =
+        '<td><select name="lines['+lineIndex+'].account_id" class="form-select form-select-sm search-select" required>'+accountOptions+'</select></td>'+
+        '<td><input type="number" name="lines['+lineIndex+'].debit" class="form-control form-control-sm text-end jv-debit" step="0.01" min="0" value="0" oninput="updateTotals()"></td>'+
+        '<td><input type="number" name="lines['+lineIndex+'].credit" class="form-control form-control-sm text-end jv-credit" step="0.01" min="0" value="0" oninput="updateTotals()"></td>'+
+        '<td><input type="text" name="lines['+lineIndex+'].description" class="form-control form-control-sm"></td>'+
+        '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-line" title="Remove"><i class="bi bi-x-lg"></i></button></td>';
+    document.getElementById('jvLinesBody').appendChild(row);
+    lineIndex++;
+
+    if(window.initSearchSelect){
+        row.querySelectorAll('.search-select').forEach(function(el){ window.initSearchSelect(el); });
+    }
+    updateTotals();
+}
+
+function removeLine(btn){
+    var row = btn.closest('tr');
+    if(document.querySelectorAll('#jvLinesBody .jv-line').length > 1){
+        row.remove();
+        reindexLines();
+        updateTotals();
+    }
+}
+
+function reindexLines(){
+    var rows = document.querySelectorAll('#jvLinesBody .jv-line');
+    rows.forEach(function(row, idx){
+        row.querySelectorAll('[name]').forEach(function(el){
+            el.name = el.name.replace(/lines\[\d+\]/, 'lines['+idx+']');
+        });
+    });
+    lineIndex = rows.length;
+}
+
+function updateTotals(){
+    var debits = document.querySelectorAll('.jv-debit');
+    var credits = document.querySelectorAll('.jv-credit');
+    var totalDebit = 0, totalCredit = 0;
+    debits.forEach(function(el){ totalDebit += parseFloat(el.value) || 0; });
+    credits.forEach(function(el){ totalCredit += parseFloat(el.value) || 0; });
+
+    document.getElementById('totalDebit').textContent = totalDebit.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    document.getElementById('totalCredit').textContent = totalCredit.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+    var warn = document.getElementById('balanceWarning');
+    var ok = document.getElementById('balanceOk');
+    if(totalDebit > 0 || totalCredit > 0){
+        if(Math.abs(totalDebit - totalCredit) < 0.01){
+            warn.classList.add('d-none');
+            ok.classList.remove('d-none');
+        } else {
+            warn.classList.remove('d-none');
+            ok.classList.add('d-none');
+        }
+    } else {
+        warn.classList.add('d-none');
+        ok.classList.add('d-none');
+    }
+}
+
+document.getElementById('btnAddLine').addEventListener('click', addLine);
+
+document.getElementById('jvLinesBody').addEventListener('click', function(e){
+    var btn = e.target.closest('.btn-remove-line');
+    if(btn) removeLine(btn);
+});
+
+document.getElementById('jvForm').addEventListener('submit', function(e){
+    updateTotals();
+    var debits = 0, credits = 0;
+    document.querySelectorAll('.jv-debit').forEach(function(el){ debits += parseFloat(el.value) || 0; });
+    document.querySelectorAll('.jv-credit').forEach(function(el){ credits += parseFloat(el.value) || 0; });
+    if(Math.abs(debits - credits) >= 0.01){
+        e.preventDefault();
+        alert('Total Debits must equal Total Credits before saving.');
+        return false;
+    }
+    if(document.querySelectorAll('#jvLinesBody .jv-line').length === 0){
+        e.preventDefault();
+        alert('Please add at least one journal line.');
+        return false;
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function(){
+    if(document.querySelectorAll('#jvLinesBody .jv-line').length === 0){
+        addLine();
+        addLine();
+    }
+    updateTotals();
+});
+</script>
+{% endblock %}

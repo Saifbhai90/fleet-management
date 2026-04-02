@@ -1000,6 +1000,7 @@ class FuelExpenseForm(FlaskForm):
     current_reading = DecimalField('Current Reading', validators=[DataRequired()], render_kw={"class": "form-control", "step": "0.01"})
     amount = DecimalField('Amount', validators=[Optional()], render_kw={"class": "form-control", "step": "0.01"})
     fuel_price = DecimalField('Fuel Price', validators=[Optional()], render_kw={"class": "form-control", "step": "0.01"})
+    expense_by = SelectField('Expense By (Wallet)', coerce=str, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('Save')
 
 
@@ -1027,6 +1028,7 @@ class OilExpenseForm(FlaskForm):
     current_reading = DecimalField('Current Reading', validators=[Optional()],
                                    render_kw={"class": "form-control", "step": "0.01"})
     remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 2})
+    expense_by = SelectField('Expense By (Wallet)', coerce=str, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('Save')
 
 
@@ -1052,6 +1054,7 @@ class MaintenanceExpenseForm(FlaskForm):
     current_reading = DecimalField('Current Reading', validators=[Optional()],
                                    render_kw={"class": "form-control", "step": "0.01"})
     remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 2})
+    expense_by = SelectField('Expense By (Wallet)', coerce=str, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('Save')
 
 
@@ -1195,6 +1198,77 @@ class BalanceSheetFilterForm(FlaskForm):
     as_of_date = DateField('As of Date', format='%d-%m-%Y', validators=[Optional()],
                           render_kw={"class": "form-control datepicker", "placeholder": "Select date"})
     submit = SubmitField('Generate Balance Sheet')
+
+
+class AccountForm(FlaskForm):
+    """Chart of Accounts add/edit"""
+    code = StringField('Account Code', validators=[DataRequired(), Length(max=20)],
+                       render_kw={"class": "form-control", "placeholder": "e.g. 1110"})
+    name = StringField('Account Name', validators=[DataRequired(), Length(max=200)],
+                       render_kw={"class": "form-control", "placeholder": "e.g. Cash in Hand"})
+    account_type = SelectField('Account Type', choices=[
+        ('Asset', 'Asset'), ('Liability', 'Liability'), ('Equity', 'Equity'),
+        ('Revenue', 'Revenue'), ('Expense', 'Expense'),
+    ], validators=[DataRequired()], render_kw={'class': 'form-select'})
+    parent_id = SelectField('Parent Account', coerce=int, validators=[Optional()],
+                            choices=[], render_kw={'class': 'form-select search-select'})
+    opening_balance = DecimalField('Opening Balance', default=0, validators=[Optional()],
+                                  render_kw={"class": "form-control", "placeholder": "0.00"})
+    district_id = SelectField('District', coerce=int, validators=[Optional()],
+                              choices=[], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()],
+                             choices=[], render_kw={'class': 'form-select search-select'})
+    description = TextAreaField('Description', validators=[Optional()],
+                                render_kw={"class": "form-control", "rows": 2})
+    is_active = BooleanField('Active', default=True)
+    submit = SubmitField('Save Account')
+
+
+class FundTransferForm(FlaskForm):
+    """Fund Transfer between any two people (bank-like)"""
+    transfer_date = DateField('Transfer Date', format='%d-%m-%Y', validators=[DataRequired()],
+                              render_kw={"class": "form-control datepicker"})
+    from_person = SelectField('From (Sender)', coerce=str, validators=[DataRequired()],
+                              choices=[], render_kw={'class': 'form-select search-select'})
+    to_person = SelectField('To (Receiver)', coerce=str, validators=[DataRequired()],
+                            choices=[], render_kw={'class': 'form-select search-select'})
+    amount = DecimalField('Amount', validators=[DataRequired(), NumberRange(min=0.01)],
+                         render_kw={"class": "form-control", "placeholder": "0.00", "step": "0.01"})
+    payment_mode = SelectField('Payment Mode', choices=[
+        ('Cash', 'Cash'), ('Bank Transfer', 'Bank Transfer'),
+        ('Cheque', 'Cheque'), ('Online', 'Online Payment'),
+    ], validators=[DataRequired()], render_kw={'class': 'form-select'})
+    reference_no = StringField('Reference / Cheque No', validators=[Optional(), Length(max=50)],
+                               render_kw={"class": "form-control"})
+    description = TextAreaField('Description', validators=[Optional()],
+                                render_kw={"class": "form-control", "rows": 2})
+    district_id = SelectField('District', coerce=int, validators=[Optional()],
+                              choices=[], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()],
+                             choices=[], render_kw={'class': 'form-select search-select'})
+    submit = SubmitField('Save Transfer')
+
+
+class FundTransferFilterForm(FlaskForm):
+    from_date = DateField('From Date', format='%d-%m-%Y', validators=[Optional()],
+                          render_kw={"class": "form-control datepicker"})
+    to_date = DateField('To Date', format='%d-%m-%Y', validators=[Optional()],
+                        render_kw={"class": "form-control datepicker"})
+    person = SelectField('Person', coerce=str, validators=[Optional()],
+                         choices=[], render_kw={'class': 'form-select search-select'})
+    district_id = SelectField('District', coerce=int, validators=[Optional()],
+                              choices=[], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()],
+                             choices=[], render_kw={'class': 'form-select search-select'})
+    submit = SubmitField('View Report')
+
+
+class WalletDashboardFilterForm(FlaskForm):
+    district_id = SelectField('District', coerce=int, validators=[Optional()],
+                              choices=[], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()],
+                             choices=[], render_kw={'class': 'form-select search-select'})
+    submit = SubmitField('Filter')
 
 
 # ────────────────────────────────────────────────────

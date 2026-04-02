@@ -2187,10 +2187,6 @@ def whats_new():
 # ────────────────────────────────────────────────
 # Placeholder routes removed - finance routes now active
 
-@app.route('/accounts/jv')
-def accounts_jv():
-    return render_template('accounts_placeholder.html', title='JV (Journal Voucher)', description='Manual journal voucher entry. (Coming soon)')
-
 @app.route('/accounts/future-entry')
 def accounts_future_entry():
     return render_template('accounts_placeholder.html', title='Future Entry', description='Future-dated entries. (Coming soon)')
@@ -14370,6 +14366,32 @@ def fuel_expense_list():
 
 
 @app.route('/expenses/fuel/add', methods=['GET', 'POST'])
+def _expense_by_choices():
+    choices = [('', '-- None (No Wallet Deduction) --')]
+    for e in Employee.query.filter_by(status='Active').order_by(Employee.name).all():
+        post_label = e.post.full_name if e.post else 'Staff'
+        choices.append((f'emp-{e.id}', f"{e.name} ({post_label})"))
+    for d in Driver.query.filter_by(status='Active').order_by(Driver.name).all():
+        choices.append((f'drv-{d.id}', f"{d.name} (Driver)"))
+    return choices
+
+
+def _deduct_from_wallet(expense_type, expense_obj, expense_code, expense_by_val):
+    if not expense_by_val:
+        return
+    parts = expense_by_val.split('-', 1)
+    if len(parts) != 2 or not parts[1].isdigit():
+        return
+    person_type = 'employee' if parts[0] == 'emp' else 'driver'
+    person_id = int(parts[1])
+    try:
+        from finance_utils import ensure_wallet_account, create_expense_journal
+        wallet = ensure_wallet_account(person_type, person_id)
+        create_expense_journal(expense_type, expense_obj, expense_code, wallet.id)
+    except Exception as e:
+        print(f"Wallet deduction failed for {expense_type}: {e}")
+
+
 def fuel_expense_add():
     form = FuelExpenseForm()
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
@@ -14377,6 +14399,7 @@ def fuel_expense_add():
     form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
     pumps = Party.query.filter_by(party_type='Pump').order_by(Party.name).all()
     form.fuel_pump_id.choices = [(0, '-- Select Pump --')] + [(p.id, p.name) for p in pumps]
+    form.expense_by.choices = _expense_by_choices()
     if request.method == 'GET':
         district_id = request.args.get('district_id', type=int)
         project_id = request.args.get('project_id', type=int)
@@ -14442,7 +14465,7 @@ def fuel_expense_add():
         db.session.add(rec)
         db.session.flush()
         
-        # Create journal entry for fuel expense
+        # Create journal entry for fuel expense (party ledger)
         try:
             from finance_utils import create_expense_journal
             from models import Account
@@ -14453,7 +14476,9 @@ def fuel_expense_add():
                     je = create_expense_journal('FuelExpense', rec, '5110', party_account.id)
         except Exception as e:
             print(f"Journal entry creation failed for fuel expense: {e}")
-        
+
+        _deduct_from_wallet('FuelExpense', rec, '5110', form.expense_by.data)
+
         db.session.commit()
         flash('Fuel expense saved.', 'success')
         return redirect(url_for('fuel_expense_list'))
@@ -14464,6 +14489,7 @@ def fuel_expense_add():
 def fuel_expense_edit(pk):
     rec = FuelExpense.query.get_or_404(pk)
     form = FuelExpenseForm(obj=rec)
+    form.expense_by.choices = _expense_by_choices()
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     if rec.district_id:
         projects = Project.query.join(project_district).filter(project_district.c.district_id == rec.district_id).order_by(Project.name).all()
@@ -14714,6 +14740,7 @@ def oil_expense_list():
 def oil_expense_form(pk=None):
     rec = OilExpense.query.get_or_404(pk) if pk else None
     form = OilExpenseForm(obj=rec)
+    form.expense_by.choices = _expense_by_choices()
     products_for_oil = Product.query.filter(
         db.or_(
             Product.used_in_forms.is_(None),
@@ -14863,6 +14890,12 @@ def oil_expense_form(pk=None):
                 rel_path = os.path.join('oil_expense', str(rec.id), unique)
                 att = OilExpenseAttachment(oil_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
                 db.session.add(att)
+
+            items_total = sum(float(it.amount or 0) for it in rec.items)
+            if items_total > 0 and form.expense_by.data:
+                rec.total_amount = items_total
+                _deduct_from_wallet('OilExpense', rec, '5120', form.expense_by.data)
+
             db.session.commit()
 
         flash('Oil expense saved.', 'success')
@@ -14998,6 +15031,7 @@ def maintenance_expense_list():
 def maintenance_expense_form(pk=None):
     rec = MaintenanceExpense.query.get_or_404(pk) if pk else None
     form = MaintenanceExpenseForm(obj=rec)
+    form.expense_by.choices = _expense_by_choices()
     products_for_maintenance = Product.query.filter(
         db.or_(
             Product.used_in_forms.is_(None),
@@ -15123,6 +15157,12 @@ def maintenance_expense_form(pk=None):
                 rel_path = os.path.join('maintenance_expense', str(rec.id), unique)
                 att = MaintenanceExpenseAttachment(maintenance_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
                 db.session.add(att)
+
+            items_total = sum(float(it.amount or 0) for it in rec.items)
+            if items_total > 0 and form.expense_by.data:
+                rec.total_amount = items_total
+                _deduct_from_wallet('MaintenanceExpense', rec, '5130', form.expense_by.data)
+
             db.session.commit()
         flash('Maintenance expense saved.', 'success')
         return redirect(url_for('maintenance_expense_list'))
