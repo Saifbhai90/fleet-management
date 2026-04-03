@@ -1094,6 +1094,31 @@ def _parse_person(val):
     return None, None
 
 
+def _upload_ft_attachment(file_storage):
+    """Upload fund-transfer attachment image to R2, return public URL or None."""
+    if not file_storage or not getattr(file_storage, 'filename', None):
+        return None
+    try:
+        from r2_storage import upload_image_file as _r2_up, R2_PUBLIC_URL, R2_ACCESS_KEY_ID, R2_ENDPOINT_URL, R2_BUCKET_NAME
+        if not all([R2_PUBLIC_URL, R2_ACCESS_KEY_ID, R2_ENDPOINT_URL, R2_BUCKET_NAME]):
+            return None
+        file_storage.seek(0)
+        return _r2_up(file_storage, folder='fund_transfers')
+    except Exception:
+        return None
+
+
+def _delete_ft_attachment(url):
+    """Delete old attachment from R2 if it exists."""
+    if not url:
+        return
+    try:
+        from r2_storage import delete_file_by_url
+        delete_file_by_url(url)
+    except Exception:
+        pass
+
+
 def fund_transfer_add():
     auth_check = check_auth('fund_transfer')
     if auth_check:
@@ -1111,10 +1136,13 @@ def fund_transfer_add():
             to_type, to_id = _parse_person(form.to_person.data)
             if not from_type or not to_type:
                 flash('Please select both sender and receiver.', 'danger')
-                return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer')
+                return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer',
+                           existing_attachment=None)
 
             from_wallet = ensure_wallet_account(from_type, from_id)
             to_wallet = ensure_wallet_account(to_type, to_id)
+
+            attachment_url = _upload_ft_attachment(request.files.get('attachment'))
 
             transfer = FundTransfer(
                 transfer_number=generate_entry_number('FT', form.transfer_date.data),
@@ -1131,6 +1159,7 @@ def fund_transfer_add():
                 payment_mode=form.payment_mode.data,
                 reference_no=form.reference_no.data,
                 description=form.description.data,
+                attachment=attachment_url,
                 district_id=form.district_id.data or None,
                 project_id=form.project_id.data or None,
                 created_by_user_id=session.get('user_id'),
@@ -1147,7 +1176,8 @@ def fund_transfer_add():
             db.session.rollback()
             flash(f'Error: {e}', 'danger')
 
-    return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer')
+    return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer',
+                           existing_attachment=None)
 
 
 def fund_transfer_edit(pk):
@@ -1217,6 +1247,15 @@ def fund_transfer_edit(pk):
             transfer.description = form.description.data
             transfer.district_id = form.district_id.data or None
             transfer.project_id = form.project_id.data or None
+
+            if request.form.get('remove_attachment') == '1':
+                _delete_ft_attachment(transfer.attachment)
+                transfer.attachment = None
+            new_att = _upload_ft_attachment(request.files.get('attachment'))
+            if new_att:
+                _delete_ft_attachment(transfer.attachment)
+                transfer.attachment = new_att
+
             db.session.flush()
 
             je = create_fund_transfer_journal(transfer, from_wallet, to_wallet)
@@ -1228,7 +1267,8 @@ def fund_transfer_edit(pk):
             db.session.rollback()
             flash(f'Error: {e}', 'danger')
 
-    return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer')
+    return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
+                           existing_attachment=transfer.attachment)
 
 
 def fund_transfer_delete(pk):

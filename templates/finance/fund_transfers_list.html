@@ -99,6 +99,7 @@
                             <th>Reference</th>
                             <th>District</th>
                             <th>Project</th>
+                            <th class="text-center">Att.</th>
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
@@ -116,6 +117,11 @@
                             <td>{{ ft.district.name if ft.district else '-' }}</td>
                             <td>{{ ft.project.name if ft.project else '-' }}</td>
                             <td class="text-center">
+                                {% if ft.attachment %}
+                                <a href="{{ ft.attachment }}" target="_blank" title="View Attachment"><i class="bi bi-paperclip text-success"></i></a>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td class="text-center">
                                 <a href="{{ url_for('fund_transfer_edit', pk=ft.id) }}" class="btn btn-sm btn-edit-compact" title="Edit">
                                     <i class="bi bi-pencil"></i>
                                 </a>
@@ -129,7 +135,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="10" class="text-center py-5 text-muted">
+                            <td colspan="11" class="text-center py-5 text-muted">
                                 <i class="bi bi-arrow-left-right display-6 d-block mb-2 opacity-25"></i>
                                 No fund transfers found{% if from_date or to_date %} for the selected filters{% endif %}.
                             </td>

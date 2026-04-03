@@ -2,6 +2,17 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
+<style>
+.ft-upload-zone{border:2px dashed #ccc;border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative;min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fafbfc}
+.ft-upload-zone:hover,.ft-upload-zone.drag-over{border-color:#198754;background:#f0faf4}
+.ft-upload-zone .ft-placeholder{color:#888;font-size:.88rem}
+.ft-upload-zone .ft-placeholder i{font-size:1.6rem;color:#aaa;display:block;margin-bottom:6px}
+.ft-preview-wrap{position:relative;display:inline-block;max-width:260px}
+.ft-preview-wrap img{max-width:260px;max-height:180px;border-radius:6px;object-fit:contain;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.ft-preview-wrap .ft-remove{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;background:#dc3545;color:#fff;border:none;font-size:.75rem;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.ft-paste-hint{font-size:.76rem;color:#999;margin-top:6px}
+</style>
+
 <div class="container-fluid py-3">
     <div class="section-heading bg-success">
         <i class="bi bi-arrow-left-right me-2"></i>{{ title }}
@@ -9,7 +20,7 @@
 
     <div class="card shadow-sm border-0 mt-3">
         <div class="card-body p-4">
-            <form method="POST" class="needs-validation" novalidate>
+            <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
                 {{ form.hidden_tag() }}
 
                 <div class="row g-3">
@@ -57,6 +68,38 @@
                         {{ form.description.label(class="form-label fw-bold") }}
                         {{ form.description(class="form-control", rows="3") }}
                     </div>
+
+                    {# ── Attachment upload (browse + drag + paste) ── #}
+                    <div class="col-12">
+                        <label class="form-label fw-bold">Attachment (Image)</label>
+                        <div class="ft-upload-zone" id="ftUploadZone" tabindex="0">
+                            <input type="file" name="attachment" id="ftFileInput" accept="image/*"
+                                   style="display:none">
+                            <div id="ftPlaceholder" class="ft-placeholder">
+                                <i class="bi bi-cloud-arrow-up"></i>
+                                Click to browse, drag &amp; drop, or paste an image
+                            </div>
+                            <div id="ftPreview" style="display:none" class="ft-preview-wrap">
+                                <img id="ftPreviewImg" src="" alt="preview">
+                                <button type="button" class="ft-remove" id="ftRemoveBtn" title="Remove">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                            <div class="ft-paste-hint">Ctrl+V to paste from clipboard</div>
+                        </div>
+                        {% if existing_attachment %}
+                        <div class="mt-2" id="ftExisting">
+                            <small class="text-muted">Current:</small>
+                            <a href="{{ existing_attachment }}" target="_blank" class="ms-1">
+                                <img src="{{ existing_attachment }}" style="max-height:60px;border-radius:4px" alt="current">
+                            </a>
+                            <label class="ms-2 text-danger" style="font-size:.8rem;cursor:pointer">
+                                <input type="checkbox" name="remove_attachment" value="1" class="form-check-input form-check-input-sm me-1">
+                                Remove
+                            </label>
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
 
                 <div class="mt-4 d-flex gap-2">
@@ -67,4 +110,73 @@
         </div>
     </div>
 </div>
+<script>
+(function(){
+    var zone = document.getElementById('ftUploadZone'),
+        inp  = document.getElementById('ftFileInput'),
+        ph   = document.getElementById('ftPlaceholder'),
+        prev = document.getElementById('ftPreview'),
+        img  = document.getElementById('ftPreviewImg'),
+        rmBtn= document.getElementById('ftRemoveBtn');
+
+    function showPreview(file){
+        if(!file || !file.type.startsWith('image/')) return;
+        var reader = new FileReader();
+        reader.onload = function(e){
+            img.src = e.target.result;
+            ph.style.display = 'none';
+            prev.style.display = 'inline-block';
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function clearPreview(){
+        inp.value = '';
+        img.src = '';
+        prev.style.display = 'none';
+        ph.style.display = '';
+        var dt = new DataTransfer();
+        inp.files = dt.files;
+    }
+
+    zone.addEventListener('click', function(e){
+        if(e.target.closest('.ft-remove')) return;
+        inp.click();
+    });
+
+    inp.addEventListener('change', function(){
+        if(this.files && this.files[0]) showPreview(this.files[0]);
+    });
+
+    zone.addEventListener('dragover', function(e){ e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', function(){ zone.classList.remove('drag-over'); });
+    zone.addEventListener('drop', function(e){
+        e.preventDefault(); zone.classList.remove('drag-over');
+        var files = e.dataTransfer.files;
+        if(files && files[0] && files[0].type.startsWith('image/')){
+            var dt = new DataTransfer();
+            dt.items.add(files[0]);
+            inp.files = dt.files;
+            showPreview(files[0]);
+        }
+    });
+
+    document.addEventListener('paste', function(e){
+        var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for(var i=0;i<items.length;i++){
+            if(items[i].type.indexOf('image') !== -1){
+                var blob = items[i].getAsFile();
+                var dt = new DataTransfer();
+                dt.items.add(blob);
+                inp.files = dt.files;
+                showPreview(blob);
+                e.preventDefault();
+                break;
+            }
+        }
+    });
+
+    rmBtn.addEventListener('click', function(e){ e.stopPropagation(); clearPreview(); });
+})();
+</script>
 {% endblock %}

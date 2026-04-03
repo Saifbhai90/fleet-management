@@ -1247,6 +1247,8 @@ class FundTransferForm(FlaskForm):
                               choices=[], render_kw={'class': 'form-select search-select'})
     project_id = SelectField('Project', coerce=int, validators=[Optional()],
                              choices=[], render_kw={'class': 'form-select search-select'})
+    attachment = FileField('Attachment (Image)', validators=[Optional(),
+                           FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], 'Images only!')])
     submit = SubmitField('Save Transfer')
 
 
