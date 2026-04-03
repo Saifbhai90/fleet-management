@@ -70,12 +70,14 @@
           </thead>
           <tbody>
             {% for row in rows %}
-            <tr>
-              <td class="ps-3">{{ loop.index }}</td>
+            {% set s = row.saved %}
+            <tr{% if s %} class="table-info"{% endif %}>
+              <td class="ps-3">{{ loop.index }}{% if s %} <i class="bi bi-check-circle-fill text-success" title="Previously saved"></i>{% endif %}</td>
               <td class="fw-medium">{{ row.emg.amb_reg_no }}</td>
               <td>
                 <input type="hidden" name="row_{{ loop.index0 }}_vehicle_id" value="{{ row.vehicle.id if row.vehicle else '' }}">
                 <input type="hidden" name="row_{{ loop.index0 }}_task_id" value="{{ row.emg.task_id_ext or '' }}">
+                <input type="hidden" name="row_{{ loop.index0 }}_emg_id" value="{{ row.emg.id }}">
                 <span class="text-muted small">{{ row.emg.task_id_ext or '-' }}</span>
               </td>
               <td>
@@ -86,22 +88,22 @@
                 <select name="row_{{ loop.index0 }}_driver_id" class="form-select form-select-sm">
                   <option value="">-- Select --</option>
                   {% for drv in row.drivers %}
-                  <option value="{{ drv.id }}">{{ drv.name }} ({{ drv.shift or '-' }})</option>
+                  <option value="{{ drv.id }}" {% if s and s.driver_id == drv.id %}selected{% endif %}>{{ drv.name }} ({{ drv.shift or '-' }})</option>
                   {% endfor %}
                 </select>
               </td>
               <td>
                 <select name="row_{{ loop.index0 }}_call_to_dto" class="form-select form-select-sm">
                   <option value="">--</option>
-                  <option value="Yes">Yes</option>
-                  <option value="No">No</option>
+                  <option value="Yes" {% if s and s.call_to_dto == 'Yes' %}selected{% endif %}>Yes</option>
+                  <option value="No" {% if s and s.call_to_dto == 'No' %}selected{% endif %}>No</option>
                 </select>
               </td>
               <td>
-                <input type="text" name="row_{{ loop.index0 }}_dto_investigation" class="form-control form-control-sm" placeholder="Investigation details">
+                <input type="text" name="row_{{ loop.index0 }}_dto_investigation" class="form-control form-control-sm" placeholder="Investigation details" value="{{ s.dto_investigation or '' if s else '' }}">
               </td>
               <td>
-                <input type="number" step="0.01" min="0" name="row_{{ loop.index0 }}_fine_amount" class="form-control form-control-sm text-end" value="0" placeholder="0">
+                <input type="number" step="0.01" min="0" name="row_{{ loop.index0 }}_fine_amount" class="form-control form-control-sm text-end" value="{{ s.fine_amount|float if s and s.fine_amount else 0 }}" placeholder="0">
               </td>
             </tr>
             {% endfor %}

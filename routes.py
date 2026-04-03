@@ -13156,6 +13156,9 @@ def red_task_new():
             if veh_id_raw is None:
                 break
             veh_id = int(veh_id_raw) if veh_id_raw else None
+            _veh = Vehicle.query.get(veh_id) if veh_id else None
+            row_did = did or (_veh.district_id if _veh else None)
+            row_pid = pid or (_veh.project_id if _veh else None)
             driver_id = int(request.form.get(f'row_{idx}_driver_id') or 0) or None
             reason = (request.form.get(f'row_{idx}_reason') or '').strip() or None
             task_id_ext = (request.form.get(f'row_{idx}_task_id') or '').strip() or None
@@ -13170,19 +13173,36 @@ def red_task_new():
                 drv = Driver.query.get(driver_id)
                 if drv:
                     driver_name_val = drv.name
-            rec = RedTask(
-                task_date=task_date, task_id=task_id_ext, district_id=did, project_id=pid,
-                vehicle_id=veh_id, driver_id=driver_id, driver_name=driver_name_val,
-                reason=reason, call_to_dto=call_to_dto,
-                dto_investigation=dto_investigation,
-                action='Fine' if fine_amt > 0 else 'No',
-                fine_amount=fine_amt,
-            )
-            db.session.add(rec)
+            emg_rec_id = request.form.get(f'row_{idx}_emg_id')
+            existing = None
+            if emg_rec_id:
+                existing = RedTask.query.filter_by(task_date=task_date, vehicle_id=veh_id, task_id=task_id_ext).first()
+            if existing:
+                existing.district_id = row_did
+                existing.project_id = row_pid
+                existing.driver_id = driver_id
+                existing.driver_name = driver_name_val
+                existing.reason = reason
+                existing.call_to_dto = call_to_dto
+                existing.dto_investigation = dto_investigation
+                existing.action = 'Fine' if fine_amt > 0 else 'No'
+                existing.fine_amount = fine_amt
+                rec = existing
+            else:
+                rec = RedTask(
+                    task_date=task_date, task_id=task_id_ext, district_id=row_did, project_id=row_pid,
+                    vehicle_id=veh_id, driver_id=driver_id, driver_name=driver_name_val,
+                    reason=reason, call_to_dto=call_to_dto,
+                    dto_investigation=dto_investigation,
+                    action='Fine' if fine_amt > 0 else 'No',
+                    fine_amount=fine_amt,
+                )
+                db.session.add(rec)
             db.session.flush()
+            PenaltyRecord.query.filter_by(source_type='red_task', source_id=rec.id).delete()
             if fine_amt > 0 and driver_id:
                 pen = PenaltyRecord(
-                    district_id=did, project_id=pid, vehicle_id=veh_id,
+                    district_id=row_did, project_id=row_pid, vehicle_id=veh_id,
                     driver_id=driver_id, record_date=task_date,
                     fine=str(fine_amt), remarks='Red Task Fine',
                     source_type='red_task', source_id=rec.id,
@@ -13210,15 +13230,26 @@ def red_task_new():
             EmergencyTaskRecord.amb_reg_no.in_(vehicle_nos) if vehicle_nos else EmergencyTaskRecord.id > 0,
             EmergencyTaskRecord.category == 'Red',
         ).all()
+        saved_recs = RedTask.query.filter_by(task_date=view_date)
+        if district_id:
+            saved_recs = saved_recs.filter_by(district_id=district_id)
+        if project_id:
+            saved_recs = saved_recs.filter_by(project_id=project_id)
+        saved_map = {}
+        for sr in saved_recs.all():
+            key = (sr.vehicle_id, sr.task_id or '')
+            saved_map[key] = sr
         for e in emg_recs:
             veh = veh_map.get(e.amb_reg_no)
             drivers = []
             if veh:
                 drivers = Driver.query.filter_by(vehicle_id=veh.id, status='Active').all()
+            saved = saved_map.get((veh.id if veh else None, e.task_id_ext or ''))
             rows.append({
                 'emg': e,
                 'vehicle': veh,
                 'drivers': drivers,
+                'saved': saved,
             })
     return render_template('red_task_form.html', rows=rows, view_date=view_date,
                            district_id=district_id, project_id=project_id,
@@ -13358,15 +13389,9 @@ def without_task_new():
             if veh_id_raw is None:
                 break
             veh_id = int(veh_id_raw) if veh_id_raw else None
-            row_did = did
-            row_pid = pid
-            if veh_id and (not row_did or not row_pid):
-                _veh = Vehicle.query.get(veh_id)
-                if _veh:
-                    if not row_did:
-                        row_did = _veh.district_id
-                    if not row_pid:
-                        row_pid = _veh.project_id
+            _veh = Vehicle.query.get(veh_id) if veh_id else None
+            row_did = did or (_veh.district_id if _veh else None)
+            row_pid = pid or (_veh.project_id if _veh else None)
             try:
                 km_in = float(request.form.get(f'row_{idx}_km_in') or 0)
             except (ValueError, TypeError):
@@ -13393,15 +13418,32 @@ def without_task_new():
                 driver_id = int(request.form.get(f'row_{idx}_driver_id') or 0) or None
             except (ValueError, TypeError):
                 driver_id = None
-            rec = VehicleMoveWithoutTask(
-                move_date=move_date, district_id=row_did, project_id=row_pid, vehicle_id=veh_id,
-                km_in=km_in, km_out=km_out, d_km=d_km,
-                logbook_task=logbook_task, emg_task=0, t_km=t_km,
-                remarks=remarks, fine=str(fine_amt) if fine_amt > 0 else 'No',
-                fine_amount=fine_amt, driver_id=driver_id,
-            )
-            db.session.add(rec)
+            existing = VehicleMoveWithoutTask.query.filter_by(vehicle_id=veh_id, move_date=move_date).first()
+            if existing:
+                existing.district_id = row_did
+                existing.project_id = row_pid
+                existing.km_in = km_in
+                existing.km_out = km_out
+                existing.d_km = d_km
+                existing.logbook_task = logbook_task
+                existing.emg_task = 0
+                existing.t_km = t_km
+                existing.remarks = remarks
+                existing.fine = str(fine_amt) if fine_amt > 0 else 'No'
+                existing.fine_amount = fine_amt
+                existing.driver_id = driver_id
+                rec = existing
+            else:
+                rec = VehicleMoveWithoutTask(
+                    move_date=move_date, district_id=row_did, project_id=row_pid, vehicle_id=veh_id,
+                    km_in=km_in, km_out=km_out, d_km=d_km,
+                    logbook_task=logbook_task, emg_task=0, t_km=t_km,
+                    remarks=remarks, fine=str(fine_amt) if fine_amt > 0 else 'No',
+                    fine_amount=fine_amt, driver_id=driver_id,
+                )
+                db.session.add(rec)
             db.session.flush()
+            PenaltyRecord.query.filter_by(source_type='without_task', source_id=rec.id).delete()
             if fine_amt > 0 and driver_id:
                 pen = PenaltyRecord(
                     district_id=row_did, project_id=row_pid, vehicle_id=veh_id,
@@ -13419,16 +13461,29 @@ def without_task_new():
     rows = []
     _has_filter = date_str != ''
     if _has_filter or district_id or project_id:
+        saved_recs = VehicleMoveWithoutTask.query.filter(
+            VehicleMoveWithoutTask.move_date == view_date
+        )
+        if district_id:
+            saved_recs = saved_recs.filter(VehicleMoveWithoutTask.district_id == district_id)
+        if project_id:
+            saved_recs = saved_recs.filter(VehicleMoveWithoutTask.project_id == project_id)
+        saved_map = {r.vehicle_id: r for r in saved_recs.all()}
+
         tq = VehicleDailyTask.query.filter(VehicleDailyTask.task_date == view_date)
         if district_id:
             tq = tq.filter(VehicleDailyTask.district_id == district_id)
         if project_id:
             tq = tq.filter(VehicleDailyTask.project_id == project_id)
         tasks = tq.all()
+        seen_vids = set()
         for t in tasks:
             v = t.vehicle
             if not v:
                 continue
+            if v.id in seen_vids:
+                continue
+            seen_vids.add(v.id)
             prev = VehicleDailyTask.query.filter(
                 VehicleDailyTask.vehicle_id == t.vehicle_id,
                 VehicleDailyTask.task_date < view_date
@@ -13452,6 +13507,7 @@ def without_task_new():
                 _mil_rec = VehicleMileageRecord.query.filter_by(task_date=view_date, reg_no=v.vehicle_no).first()
                 tracker_km = _mil_rec.effective_km() if _mil_rec else 0
                 assigned_drivers = Driver.query.filter_by(vehicle_id=v.id, status='Active').order_by(Driver.name).all()
+                saved = saved_map.get(v.id)
                 rows.append({
                     'vehicle': v,
                     'start_reading': start_reading,
@@ -13460,6 +13516,24 @@ def without_task_new():
                     'logbook_task': t.tasks_count or 0,
                     'tracker_km': round(tracker_km, 2),
                     'drivers': assigned_drivers,
+                    'saved': saved,
+                })
+
+        for vid, sr in saved_map.items():
+            if vid not in seen_vids:
+                v = sr.vehicle
+                if not v:
+                    continue
+                assigned_drivers = Driver.query.filter_by(vehicle_id=v.id, status='Active').order_by(Driver.name).all()
+                rows.append({
+                    'vehicle': v,
+                    'start_reading': float(sr.km_in or 0),
+                    'close_reading': float(sr.km_out or 0),
+                    'kms_driven': float(sr.d_km or 0),
+                    'logbook_task': sr.logbook_task or 0,
+                    'tracker_km': float(sr.t_km or 0),
+                    'drivers': assigned_drivers,
+                    'saved': sr,
                 })
     return render_template('without_task_form.html', rows=rows, view_date=view_date,
                            district_id=district_id, project_id=project_id,
