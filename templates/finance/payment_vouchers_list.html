@@ -25,11 +25,11 @@
             <form method="GET" class="row g-2 align-items-end">
                 <div class="col-6 col-md-2">
                     <label class="form-label form-label-sm mb-1">From Date</label>
-                    <input type="date" name="from_date" class="form-control form-control-sm" value="{{ from_date }}">
+                    <input type="text" name="from_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ from_date }}" autocomplete="off">
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label form-label-sm mb-1">To Date</label>
-                    <input type="date" name="to_date" class="form-control form-control-sm" value="{{ to_date }}">
+                    <input type="text" name="to_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ to_date }}" autocomplete="off">
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label form-label-sm mb-1">District</label>

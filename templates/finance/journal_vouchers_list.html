@@ -24,11 +24,11 @@
             <form method="GET" action="" class="row g-2 align-items-end">
                 <div class="col-6 col-md-3">
                     <label class="form-label form-label-sm mb-1">From Date</label>
-                    <input type="date" name="from_date" value="{{ from_date.strftime('%Y-%m-%d') if from_date else '' }}" class="form-control form-control-sm">
+                    <input type="text" name="from_date" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label form-label-sm mb-1">To Date</label>
-                    <input type="date" name="to_date" value="{{ to_date.strftime('%Y-%m-%d') if to_date else '' }}" class="form-control form-control-sm">
+                    <input type="text" name="to_date" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
                 </div>
                 <div class="col-6 col-md-3 d-flex gap-1">
                     <button type="submit" class="btn btn-warning btn-sm text-dark flex-fill">

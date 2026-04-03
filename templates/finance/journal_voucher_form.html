@@ -17,10 +17,10 @@
                     <div class="col-md-4">
                         {% if form is defined and form.entry_date is defined %}
                             {{ form.entry_date.label(class="form-label fw-bold") }}
-                            {{ form.entry_date(class="form-control") }}
+                            {{ form.entry_date(class="form-control datepicker") }}
                         {% else %}
                             <label class="form-label fw-bold">Entry Date</label>
-                            <input type="date" name="entry_date" class="form-control" value="{{ entry_date|default('') }}" required>
+                            <input type="text" name="entry_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ entry_date|default('') }}" required autocomplete="off">
                         {% endif %}
                     </div>
 

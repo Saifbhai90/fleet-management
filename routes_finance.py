@@ -113,18 +113,22 @@ def payment_vouchers_list():
     query = PaymentVoucher.query
     
     if from_date:
-        try:
-            fd = datetime.strptime(from_date, '%Y-%m-%d').date()
-            query = query.filter(PaymentVoucher.payment_date >= fd)
-        except:
-            pass
-    
+        for _fmt in ('%d-%m-%Y', '%Y-%m-%d'):
+            try:
+                fd = datetime.strptime(from_date, _fmt).date()
+                query = query.filter(PaymentVoucher.payment_date >= fd)
+                break
+            except ValueError:
+                continue
+
     if to_date:
-        try:
-            td = datetime.strptime(to_date, '%Y-%m-%d').date()
-            query = query.filter(PaymentVoucher.payment_date <= td)
-        except:
-            pass
+        for _fmt in ('%d-%m-%Y', '%Y-%m-%d'):
+            try:
+                td = datetime.strptime(to_date, _fmt).date()
+                query = query.filter(PaymentVoucher.payment_date <= td)
+                break
+            except ValueError:
+                continue
     
     if district_id > 0:
         query = query.filter(PaymentVoucher.district_id == district_id)
@@ -307,18 +311,22 @@ def receipt_vouchers_list():
     query = ReceiptVoucher.query
     
     if from_date:
-        try:
-            fd = datetime.strptime(from_date, '%Y-%m-%d').date()
-            query = query.filter(ReceiptVoucher.receipt_date >= fd)
-        except:
-            pass
-    
+        for _fmt in ('%d-%m-%Y', '%Y-%m-%d'):
+            try:
+                fd = datetime.strptime(from_date, _fmt).date()
+                query = query.filter(ReceiptVoucher.receipt_date >= fd)
+                break
+            except ValueError:
+                continue
+
     if to_date:
-        try:
-            td = datetime.strptime(to_date, '%Y-%m-%d').date()
-            query = query.filter(ReceiptVoucher.receipt_date <= td)
-        except:
-            pass
+        for _fmt in ('%d-%m-%Y', '%Y-%m-%d'):
+            try:
+                td = datetime.strptime(to_date, _fmt).date()
+                query = query.filter(ReceiptVoucher.receipt_date <= td)
+                break
+            except ValueError:
+                continue
     
     sort_by = request.args.get('sort_by', 'receipt_date')
     sort_order = request.args.get('sort_order', 'desc')
@@ -413,18 +421,22 @@ def bank_entries_list():
     query = BankEntry.query
     
     if from_date:
-        try:
-            fd = datetime.strptime(from_date, '%Y-%m-%d').date()
-            query = query.filter(BankEntry.entry_date >= fd)
-        except:
-            pass
-    
+        for _fmt in ('%d-%m-%Y', '%Y-%m-%d'):
+            try:
+                fd = datetime.strptime(from_date, _fmt).date()
+                query = query.filter(BankEntry.entry_date >= fd)
+                break
+            except ValueError:
+                continue
+
     if to_date:
-        try:
-            td = datetime.strptime(to_date, '%Y-%m-%d').date()
-            query = query.filter(BankEntry.entry_date <= td)
-        except:
-            pass
+        for _fmt in ('%d-%m-%Y', '%Y-%m-%d'):
+            try:
+                td = datetime.strptime(to_date, _fmt).date()
+                query = query.filter(BankEntry.entry_date <= td)
+                break
+            except ValueError:
+                continue
     
     search = (request.args.get('search') or '').strip()
     if search:
@@ -665,18 +677,22 @@ def employee_expense_list():
     query = EmployeeExpense.query
     
     if from_date:
-        try:
-            fd = datetime.strptime(from_date, '%Y-%m-%d').date()
-            query = query.filter(EmployeeExpense.expense_date >= fd)
-        except:
-            pass
-    
+        for _fmt in ('%d-%m-%Y', '%Y-%m-%d'):
+            try:
+                fd = datetime.strptime(from_date, _fmt).date()
+                query = query.filter(EmployeeExpense.expense_date >= fd)
+                break
+            except ValueError:
+                continue
+
     if to_date:
-        try:
-            td = datetime.strptime(to_date, '%Y-%m-%d').date()
-            query = query.filter(EmployeeExpense.expense_date <= td)
-        except:
-            pass
+        for _fmt in ('%d-%m-%Y', '%Y-%m-%d'):
+            try:
+                td = datetime.strptime(to_date, _fmt).date()
+                query = query.filter(EmployeeExpense.expense_date <= td)
+                break
+            except ValueError:
+                continue
     
     if district_id > 0:
         query = query.filter(EmployeeExpense.district_id == district_id)
