@@ -471,6 +471,18 @@
             display: inline-block;
             text-align: center;
         }
+        .sidebar-subheader {
+            font-size: .72rem;
+            text-transform: uppercase;
+            color: rgba(255,255,255,.45);
+            padding: 10px 16px 4px 36px;
+            letter-spacing: .5px;
+            pointer-events: none;
+            margin-top: 4px;
+            border-top: 1px solid rgba(255,255,255,.08);
+        }
+        .sidebar-subheader:first-child { border-top: none; margin-top: 0; }
+        .sidebar.collapsed .sidebar-subheader { display: none; }
         /* Main Content */
         .main-content { margin-left: 300px; margin-top: 60px; padding: 25px; transition: 0.3s; }
         .main-content.expanded { margin-left: 70px; }
@@ -1568,6 +1580,7 @@
             </a>
             <div class="collapse collapse-item-container {% if master_open %}show{% endif %}"
                  id="masterMenu" data-bs-parent="#sidebarAccordion">
+                <div class="sidebar-subheader">Organization</div>
                 {% if can_see_page('companies') %}
                 <a href="{{ url_for('companies') }}" class="collapse-item {% if request.endpoint == 'companies' and request.args.get('mode') != 'report' %}active-link{% endif %}">
                     <i class="bi bi-building"></i><span>Companies</span>
@@ -1583,6 +1596,7 @@
                     <i class="bi bi-geo-alt"></i><span>Districts</span>
                 </a>
                 {% endif %}
+                <div class="sidebar-subheader">Fleet</div>
                 {% if can_see_page('vehicles') %}
                 <a href="{{ url_for('vehicles_list') }}" class="collapse-item {% if request.endpoint == 'vehicles_list' or (request.endpoint == 'report_vehicle_profile' and _came_from_master) %}active-link{% endif %}">
                     <i class="bi bi-truck"></i><span>Vehicles</span>
@@ -1593,11 +1607,7 @@
                     <i class="bi bi-p-square"></i><span>Parking Stations</span>
                 </a>
                 {% endif %}
-                {% if can_see_page('driver_post') %}
-                <a href="{{ url_for('driver_post_list') }}" class="collapse-item {% if request.endpoint in ['driver_post_list', 'driver_post_form'] %}active-link{% endif %}">
-                    <i class="bi bi-person-vcard"></i><span>Designations</span>
-                </a>
-                {% endif %}
+                <div class="sidebar-subheader">People</div>
                 {% if can_see_page('employees') %}
                 <a href="{{ url_for('employees_list') }}" class="collapse-item {% if request.endpoint in ['employees_list', 'employee_form'] or (request.endpoint == 'employee_profile_print' and _came_from_master) %}active-link{% endif %}">
                     <i class="bi bi-people-fill"></i><span>Employees</span>
@@ -1606,6 +1616,11 @@
                 {% if can_see_page('drivers') %}
                 <a href="{{ url_for('drivers_list') }}" class="collapse-item {% if request.endpoint == 'drivers_list' or (request.endpoint == 'report_driver_profile' and _came_from_master) %}active-link{% endif %}">
                     <i class="bi bi-person-badge"></i><span>Drivers</span>
+                </a>
+                {% endif %}
+                {% if can_see_page('driver_post') %}
+                <a href="{{ url_for('driver_post_list') }}" class="collapse-item {% if request.endpoint in ['driver_post_list', 'driver_post_form'] %}active-link{% endif %}">
+                    <i class="bi bi-person-vcard"></i><span>Designations</span>
                 </a>
                 {% endif %}
                 {% if can_see_page('party') %}
@@ -1721,6 +1736,7 @@
             </a>
             <div class="collapse collapse-item-container {% if attendance_open %}show{% endif %}"
                  id="attendanceMenu" data-bs-parent="#sidebarAccordion">
+                <div class="sidebar-subheader">Check In / Out</div>
                 {% if can_see_page('driver_attendance_checkin') %}
                 <a href="{{ url_for('driver_attendance_checkin') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_checkin' %}active-link{% endif %}">
                     <i class="bi bi-geo-alt-fill text-success"></i><span>Check In (GPS & Camera)</span>
@@ -1741,11 +1757,7 @@
                     <i class="bi bi-box-arrow-right text-warning"></i><span>Missing Check out</span>
                 </a>
                 {% endif %}
-                {% if can_see_page('driver_attendance_tra_report') %}
-                <a href="{{ url_for('driver_attendance_tra_report') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_tra_report' %}active-link{% endif %}">
-                    <i class="bi bi-clipboard-data text-primary"></i><span>TRA Attendance Sheet</span>
-                </a>
-                {% endif %}
+                <div class="sidebar-subheader">Management</div>
                 {% if can_see_page('driver_attendance_mark') %}
                 <a href="{{ url_for('driver_attendance_mark') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_mark' %}active-link{% endif %}">
                     <i class="bi bi-pencil-square text-primary"></i><span>Leave / Late / Half Day / Off</span>
@@ -1759,6 +1771,12 @@
                 {% if can_see_page('leave_request_list') %}
                 <a href="{{ url_for('leave_request_list') }}" class="collapse-item {% if request.endpoint in ['leave_request_list', 'leave_request_new'] %}active-link{% endif %}">
                     <i class="bi bi-calendar2-check text-info"></i><span>Leave Requests</span>
+                </a>
+                {% endif %}
+                <div class="sidebar-subheader">Reports</div>
+                {% if can_see_page('driver_attendance_tra_report') %}
+                <a href="{{ url_for('driver_attendance_tra_report') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_tra_report' %}active-link{% endif %}">
+                    <i class="bi bi-clipboard-data text-primary"></i><span>TRA Attendance Sheet</span>
                 </a>
                 {% endif %}
                 {% if can_see_page('driver_attendance_list') %}
@@ -1778,13 +1796,20 @@
             </a>
             <div class="collapse collapse-item-container {% if task_report_open %}show{% endif %}"
                  id="taskReportMenu" data-bs-parent="#sidebarAccordion">
+                <div class="sidebar-subheader">Data Entry</div>
                 {% if can_see_page('task_report_upload') %}
                 <a href="{{ url_for('task_report_upload') }}" class="collapse-item {% if request.endpoint in ['task_report_upload', 'task_report_upload_emergency', 'task_report_upload_mileage', 'task_report_upload_both'] %}active-link{% endif %}">
                     <i class="bi bi-file-earmark-excel"></i><span>Workbook Upload</span>
                 </a>
                 {% endif %}
                 {% if can_see_page('task_report_list') %}
-                <a href="{{ url_for('task_report_list') }}" class="collapse-item {% if request.endpoint == 'task_report_list' or request.endpoint == 'task_report_new' %}active-link{% endif %}">
+                <a href="{{ url_for('task_report_new') }}" class="collapse-item {% if request.endpoint == 'task_report_new' %}active-link{% endif %}">
+                    <i class="bi bi-pencil-square"></i><span>New Task Entry</span>
+                </a>
+                {% endif %}
+                <div class="sidebar-subheader">Reports</div>
+                {% if can_see_page('task_report_list') %}
+                <a href="{{ url_for('task_report_list') }}" class="collapse-item {% if request.endpoint == 'task_report_list' %}active-link{% endif %}">
                     <i class="bi bi-table"></i><span>Daily Task Report</span>
                 </a>
                 {% endif %}
@@ -1815,12 +1840,14 @@
             </a>
             <div class="collapse collapse-item-container {% if accounts_open %}show{% endif %}"
                  id="accountsMenu" data-bs-parent="#sidebarAccordion">
+                <div class="sidebar-subheader">Dashboard</div>
                 <a href="{{ url_for('wallet_dashboard') }}" class="collapse-item {% if request.endpoint == 'wallet_dashboard' %}active-link{% endif %}">
                     <i class="bi bi-wallet2 text-primary"></i><span>Wallet Dashboard</span>
                 </a>
                 <a href="{{ url_for('chart_of_accounts_list') }}" class="collapse-item {% if request.endpoint in ['chart_of_accounts_list', 'chart_of_accounts_add', 'chart_of_accounts_edit'] %}active-link{% endif %}">
                     <i class="bi bi-diagram-3 text-info"></i><span>Chart of Accounts</span>
                 </a>
+                <div class="sidebar-subheader">Transactions</div>
                 <a href="{{ url_for('fund_transfers_list') }}" class="collapse-item {% if request.endpoint in ['fund_transfers_list', 'fund_transfer_add', 'fund_transfer_edit'] %}active-link{% endif %}">
                     <i class="bi bi-arrow-left-right text-success"></i><span>Fund Transfer</span>
                 </a>
@@ -1842,6 +1869,7 @@
                 <a href="{{ url_for('journal_vouchers_list') }}" class="collapse-item {% if request.endpoint in ['accounts_jv', 'journal_vouchers_list'] %}active-link{% endif %}">
                     <i class="bi bi-journal-text text-warning"></i><span>Journal Voucher</span>
                 </a>
+                <div class="sidebar-subheader">Reports</div>
                 {% if can_see_page('accounts_balance_sheet') %}
                 <a href="{{ url_for('accounts_balance_sheet') }}" class="collapse-item {% if request.endpoint == 'accounts_balance_sheet' %}active-link{% endif %}">
                     <i class="bi bi-file-earmark-bar-graph text-info"></i><span>Balance Sheet</span>
