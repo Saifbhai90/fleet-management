@@ -1298,29 +1298,32 @@ def fund_transfers_list():
         return auth_check
 
     form = FundTransferFilterForm()
-    choices = _person_choices()
+    choices = [('0', '-- All Persons --')] + _person_choices()[1:]
     form.person.choices = choices
     _populate_transfer_filters(form)
 
     from_date = None
     to_date = None
-    per_page = int(request.args.get('per_page', request.form.get('per_page', 20)))
+    per_page = int(request.args.get('per_page', 25))
     page = int(request.args.get('page', 1))
 
-    if request.method == 'POST' and form.validate():
-        from_date = form.from_date.data
-        to_date = form.to_date.data
-    elif request.method == 'GET':
-        try:
-            if request.args.get('from_date'):
-                from_date = datetime.strptime(request.args['from_date'], '%d-%m-%Y').date()
-            if request.args.get('to_date'):
-                to_date = datetime.strptime(request.args['to_date'], '%d-%m-%Y').date()
-        except ValueError:
-            pass
+    try:
+        if request.args.get('from_date'):
+            from_date = datetime.strptime(request.args['from_date'], '%d-%m-%Y').date()
+        if request.args.get('to_date'):
+            to_date = datetime.strptime(request.args['to_date'], '%d-%m-%Y').date()
+    except ValueError:
+        pass
+
+    person_val = request.args.get('person', '0')
+    district_val = int(request.args.get('district_id', 0) or 0)
+    project_val = int(request.args.get('project_id', 0) or 0)
 
     form.from_date.data = from_date
     form.to_date.data = to_date
+    form.person.data = person_val
+    form.district_id.data = district_val
+    form.project_id.data = project_val
 
     query = FundTransfer.query
     if from_date and to_date:
@@ -1329,12 +1332,31 @@ def fund_transfers_list():
         query = query.filter(FundTransfer.transfer_date >= from_date)
     elif to_date:
         query = query.filter(FundTransfer.transfer_date <= to_date)
-    query = query.order_by(FundTransfer.transfer_date.desc(), FundTransfer.id.desc())
 
-    if form.district_id.data and form.district_id.data > 0:
-        query = query.filter_by(district_id=form.district_id.data)
-    if form.project_id.data and form.project_id.data > 0:
-        query = query.filter_by(project_id=form.project_id.data)
+    if person_val and person_val != '0':
+        p_type, p_id = _parse_person(person_val)
+        if p_type and p_id:
+            if p_type == 'emp':
+                query = query.filter(or_(
+                    FundTransfer.from_employee_id == p_id,
+                    FundTransfer.to_employee_id == p_id))
+            elif p_type == 'drv':
+                query = query.filter(or_(
+                    FundTransfer.from_driver_id == p_id,
+                    FundTransfer.to_driver_id == p_id))
+            elif p_type == 'pty':
+                query = query.filter(or_(
+                    FundTransfer.from_party_id == p_id,
+                    FundTransfer.to_party_id == p_id))
+            elif p_type == 'com':
+                query = query.filter(or_(
+                    FundTransfer.from_company_id == p_id,
+                    FundTransfer.to_company_id == p_id))
+
+    if district_val and district_val > 0:
+        query = query.filter_by(district_id=district_val)
+    if project_val and project_val > 0:
+        query = query.filter_by(project_id=project_val)
 
     search = (request.args.get('search') or '').strip()
     if search:
@@ -1345,8 +1367,10 @@ def fund_transfers_list():
                 FundTransfer.transfer_number.ilike(like),
                 FundTransfer.description.ilike(like),
                 FundTransfer.payment_mode.ilike(like),
+                FundTransfer.reference_no.ilike(like),
             ))
 
+    query = query.order_by(FundTransfer.transfer_date.desc(), FundTransfer.id.desc())
     transfers = query.paginate(page=page, per_page=per_page, error_out=False)
     return render_template('finance/fund_transfers_list.html',
                            form=form, transfers=transfers,
