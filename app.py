@@ -58,7 +58,7 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 }
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB max upload
-app.config['TEMPLATES_AUTO_RELOAD'] = True  # Force template reload on every request
+app.config['TEMPLATES_AUTO_RELOAD'] = os.environ.get('FLASK_DEBUG', '0') == '1'
 
 # Backup: optional path to save backups; email via env MAIL_*
 app.config['BACKUP_PATH'] = os.environ.get('BACKUP_PATH', '')  # empty = no save-to-path
@@ -118,9 +118,12 @@ app.jinja_env.filters['phone_fmt'] = format_phone
 from urllib.parse import quote as _url_quote
 app.jinja_env.filters['url_quote'] = lambda s: _url_quote(str(s), safe='')
 
+_notif_cache = {}
+
 @app.context_processor
 def inject_notification_badge():
-    """Unread notification count for current user (per-user read via NotificationRead). Excludes Parking full."""
+    """Unread notification count for current user. Cached 60s per user to avoid per-request queries."""
+    import time as _time
     try:
         from flask import session
         from sqlalchemy import and_, or_
@@ -128,14 +131,19 @@ def inject_notification_badge():
         user_id = session.get('user_id')
         if not user_id:
             return dict(unread_notification_count=0)
+        cache_key = f'notif_{user_id}'
+        cached = _notif_cache.get(cache_key)
+        if cached and (_time.time() - cached[1]) < 60:
+            return dict(unread_notification_count=cached[0])
         subq = db.session.query(NotificationRead.notification_id).filter(NotificationRead.user_id == user_id)
-        # Exclude "Parking full" notifications from count
         parking_full = and_(
             Notification.title.ilike('%parking%'),
             or_(Notification.title.ilike('%full%'), db.func.coalesce(Notification.message, '').ilike('%full%'))
         )
         count = Notification.query.filter(~Notification.id.in_(subq)).filter(~parking_full).count()
-    except Exception:
+        _notif_cache[cache_key] = (count, _time.time())
+    except Exception as e:
+        app.logger.warning('Notification badge error: %s', e)
         count = 0
     return dict(unread_notification_count=count)
 
@@ -157,16 +165,22 @@ def inject_current_permissions():
     return dict(current_permissions=perms, current_user_is_master=is_master, can_see_page=can_see_p, can_see_section=can_see_s)
 
 
+_districts_cache = {'data': None, 'ts': 0}
+
 @app.context_processor
 def inject_all_districts():
-    """
-    Provide all district names to templates for dropdown/typeahead.
-    """
+    """Provide all district names to templates. Cached 120s to avoid per-request DB hit."""
+    import time as _time
     try:
+        if _districts_cache['data'] is not None and (_time.time() - _districts_cache['ts']) < 120:
+            return dict(all_districts=_districts_cache['data'])
         from models import District
         districts = District.query.order_by(District.name).all()
-    except Exception:
-        districts = []
+        _districts_cache['data'] = districts
+        _districts_cache['ts'] = _time.time()
+    except Exception as e:
+        app.logger.warning('Districts injection error: %s', e)
+        districts = _districts_cache.get('data') or []
     return dict(all_districts=districts)
 
 @app.context_processor
@@ -283,39 +297,45 @@ if _run_startup_tasks:
         except Exception as e:
             print("DB schema fallback skip:", e)
         print("Database ready.")
-        # Create indexes for sorting columns (IF NOT EXISTS = safe for existing DBs)
+        # Create indexes (IF NOT EXISTS = safe for both SQLite and PostgreSQL)
         try:
-            if uri and 'sqlite' in uri:
-                with db.engine.connect() as conn:
-                    indexes = [
-                        "CREATE INDEX IF NOT EXISTS ix_project_start_date ON project (start_date)",
-                        "CREATE INDEX IF NOT EXISTS ix_project_status ON project (status)",
-                        "CREATE INDEX IF NOT EXISTS ix_driver_phone1 ON driver (phone1)",
-                        "CREATE INDEX IF NOT EXISTS ix_driver_district ON driver (driver_district)",
-                        "CREATE INDEX IF NOT EXISTS ix_vehicle_model ON vehicle (model)",
-                        "CREATE INDEX IF NOT EXISTS ix_vehicle_type ON vehicle (vehicle_type)",
-                        "CREATE INDEX IF NOT EXISTS ix_vehicle_active_date ON vehicle (active_date)",
-                        "CREATE INDEX IF NOT EXISTS ix_parking_district ON parking_station (district)",
-                        "CREATE INDEX IF NOT EXISTS ix_parking_tehsil ON parking_station (tehsil)",
-                        "CREATE INDEX IF NOT EXISTS ix_parking_capacity ON parking_station (capacity)",
-                        "CREATE INDEX IF NOT EXISTS ix_parking_create_date ON parking_station (create_date)",
-                        "CREATE INDEX IF NOT EXISTS ix_district_province ON district (province)",
-                        "CREATE INDEX IF NOT EXISTS ix_district_created_at ON district (created_at)",
-                        # Performance-critical indexes identified in audit (B-07/08/09 + report queries)
-                        "CREATE INDEX IF NOT EXISTS ix_driver_status ON driver (status)",
-                        "CREATE INDEX IF NOT EXISTS ix_fuel_expense_fueling_date ON fuel_expense (fueling_date)",
-                        "CREATE INDEX IF NOT EXISTS ix_fuel_expense_vehicle_id ON fuel_expense (vehicle_id)",
-                        "CREATE INDEX IF NOT EXISTS ix_journal_entry_project_id ON journal_entry (project_id)",
-                        "CREATE INDEX IF NOT EXISTS ix_journal_entry_entry_type ON journal_entry (entry_type)",
-                        "CREATE INDEX IF NOT EXISTS ix_driver_attendance_date ON driver_attendance (attendance_date)",
-                        "CREATE INDEX IF NOT EXISTS ix_driver_attendance_driver_id ON driver_attendance (driver_id)",
-                        "CREATE INDEX IF NOT EXISTS ix_account_account_type ON account (account_type)",
-                        "CREATE INDEX IF NOT EXISTS ix_activity_log_created_at ON activity_log (created_at)",
-                    ]
-                    for idx_sql in indexes:
+            with db.engine.connect() as conn:
+                indexes = [
+                    "CREATE INDEX IF NOT EXISTS ix_project_start_date ON project (start_date)",
+                    "CREATE INDEX IF NOT EXISTS ix_project_status ON project (status)",
+                    "CREATE INDEX IF NOT EXISTS ix_driver_phone1 ON driver (phone1)",
+                    "CREATE INDEX IF NOT EXISTS ix_driver_district ON driver (driver_district)",
+                    "CREATE INDEX IF NOT EXISTS ix_vehicle_model ON vehicle (model)",
+                    "CREATE INDEX IF NOT EXISTS ix_vehicle_type ON vehicle (vehicle_type)",
+                    "CREATE INDEX IF NOT EXISTS ix_vehicle_active_date ON vehicle (active_date)",
+                    "CREATE INDEX IF NOT EXISTS ix_parking_district ON parking_station (district)",
+                    "CREATE INDEX IF NOT EXISTS ix_parking_tehsil ON parking_station (tehsil)",
+                    "CREATE INDEX IF NOT EXISTS ix_parking_capacity ON parking_station (capacity)",
+                    "CREATE INDEX IF NOT EXISTS ix_parking_create_date ON parking_station (create_date)",
+                    "CREATE INDEX IF NOT EXISTS ix_district_province ON district (province)",
+                    "CREATE INDEX IF NOT EXISTS ix_district_created_at ON district (created_at)",
+                    "CREATE INDEX IF NOT EXISTS ix_driver_status ON driver (status)",
+                    "CREATE INDEX IF NOT EXISTS ix_fuel_expense_fueling_date ON fuel_expense (fueling_date)",
+                    "CREATE INDEX IF NOT EXISTS ix_fuel_expense_vehicle_id ON fuel_expense (vehicle_id)",
+                    "CREATE INDEX IF NOT EXISTS ix_journal_entry_project_id ON journal_entry (project_id)",
+                    "CREATE INDEX IF NOT EXISTS ix_journal_entry_entry_type ON journal_entry (entry_type)",
+                    "CREATE INDEX IF NOT EXISTS ix_driver_attendance_date ON driver_attendance (attendance_date)",
+                    "CREATE INDEX IF NOT EXISTS ix_driver_attendance_driver_id ON driver_attendance (driver_id)",
+                    "CREATE INDEX IF NOT EXISTS ix_account_account_type ON account (account_type)",
+                    "CREATE INDEX IF NOT EXISTS ix_activity_log_created_at ON activity_log (created_at)",
+                    "CREATE INDEX IF NOT EXISTS ix_emergency_task_record_task_date ON emergency_task_record (task_date)",
+                    "CREATE INDEX IF NOT EXISTS ix_emergency_task_record_amb_reg_no ON emergency_task_record (amb_reg_no)",
+                    "CREATE INDEX IF NOT EXISTS ix_vehicle_mileage_record_task_date ON vehicle_mileage_record (task_date)",
+                    "CREATE INDEX IF NOT EXISTS ix_vehicle_mileage_record_reg_no ON vehicle_mileage_record (reg_no)",
+                    "CREATE INDEX IF NOT EXISTS ix_notification_created_at ON notification (created_at)",
+                ]
+                for idx_sql in indexes:
+                    try:
                         conn.execute(db.text(idx_sql))
-                    conn.commit()
-                    print("Sorting indexes created/verified.")
+                    except Exception:
+                        pass
+                conn.commit()
+                print("Sorting indexes created/verified.")
         except Exception as e:
             print("Index creation skip:", e)
         # Seed default permissions, Admin role, and admin user (if none exist)
@@ -445,8 +465,8 @@ if _run_startup_tasks and app.config.get('BACKUP_SCHEDULE_ENABLED'):
             'cron', hour=hour, minute=minute, id='fleet_backup'
         )
         _backup_scheduler.start()
-    except Exception:
-        pass
+    except Exception as e:
+        app.logger.warning('Backup scheduler failed to start: %s', e)
 
 
 if __name__ == '__main__':

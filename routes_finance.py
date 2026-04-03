@@ -1344,9 +1344,41 @@ def wallet_dashboard():
     total_funds = Decimal('0')
     total_expenses = Decimal('0')
 
+    emp_recv = dict(db.session.query(
+        FundTransfer.to_employee_id,
+        db.func.coalesce(db.func.sum(FundTransfer.amount), 0)
+    ).filter(FundTransfer.to_employee_id.isnot(None)).group_by(FundTransfer.to_employee_id).all())
+    drv_recv = dict(db.session.query(
+        FundTransfer.to_driver_id,
+        db.func.coalesce(db.func.sum(FundTransfer.amount), 0)
+    ).filter(FundTransfer.to_driver_id.isnot(None)).group_by(FundTransfer.to_driver_id).all())
+    wallet_spent = dict(db.session.query(
+        JournalEntryLine.account_id,
+        db.func.coalesce(db.func.sum(JournalEntryLine.credit), 0)
+    ).join(JournalEntry).filter(
+        JournalEntry.entry_type == 'Expense',
+        JournalEntry.is_posted == True,
+    ).group_by(JournalEntryLine.account_id).all())
+
+    all_acct_ids = set()
     employees = Employee.query.filter(Employee.wallet_account_id.isnot(None)).all()
+    drv_query = Driver.query.filter(Driver.wallet_account_id.isnot(None))
+    if filter_district:
+        drv_query = drv_query.filter(Driver.district_id == filter_district)
+    if filter_project:
+        drv_query = drv_query.filter(Driver.project_id == filter_project)
+    drivers = drv_query.all()
     for emp in employees:
-        acct = Account.query.get(emp.wallet_account_id) if emp.wallet_account_id else None
+        all_acct_ids.add(emp.wallet_account_id)
+    for drv in drivers:
+        all_acct_ids.add(drv.wallet_account_id)
+    acct_map = {a.id: a for a in Account.query.filter(Account.id.in_(all_acct_ids)).all()} if all_acct_ids else {}
+
+    proj_ids = {drv.project_id for drv in drivers if drv.project_id}
+    proj_map = {p.id: p.name for p in Project.query.filter(Project.id.in_(proj_ids)).all()} if proj_ids else {}
+
+    for emp in employees:
+        acct = acct_map.get(emp.wallet_account_id)
         if not acct:
             continue
         emp_districts = [d.name for d in emp.districts]
@@ -1358,8 +1390,8 @@ def wallet_dashboard():
         if filter_project and filter_project not in emp_project_ids:
             continue
         bal = acct.current_balance or Decimal('0')
-        received = _sum_transfers_received('emp', emp.id)
-        spent = _sum_expenses_from_wallet(acct.id)
+        received = Decimal(str(emp_recv.get(emp.id, 0)))
+        spent = Decimal(str(wallet_spent.get(acct.id, 0)))
         wallets.append({
             'person_name': emp.name,
             'person_type': 'Employee',
@@ -1376,26 +1408,19 @@ def wallet_dashboard():
         else:
             total_expenses += abs(bal)
 
-    drv_query = Driver.query.filter(Driver.wallet_account_id.isnot(None))
-    if filter_district:
-        drv_query = drv_query.filter(Driver.district_id == filter_district)
-    if filter_project:
-        drv_query = drv_query.filter(Driver.project_id == filter_project)
-    drivers = drv_query.all()
     for drv in drivers:
-        acct = Account.query.get(drv.wallet_account_id) if drv.wallet_account_id else None
+        acct = acct_map.get(drv.wallet_account_id)
         if not acct:
             continue
         bal = acct.current_balance or Decimal('0')
-        received = _sum_transfers_received('drv', drv.id)
-        spent = _sum_expenses_from_wallet(acct.id)
-        drv_project = Project.query.get(drv.project_id) if drv.project_id else None
+        received = Decimal(str(drv_recv.get(drv.id, 0)))
+        spent = Decimal(str(wallet_spent.get(acct.id, 0)))
         wallets.append({
             'person_name': drv.name,
             'person_type': 'Driver',
             'post': 'Driver',
             'district_name': drv.district.name if drv.district else '—',
-            'project_name': drv_project.name if drv_project else '—',
+            'project_name': proj_map.get(drv.project_id, '—'),
             'balance': bal,
             'total_received': received,
             'total_spent': spent,

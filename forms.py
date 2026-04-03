@@ -554,7 +554,7 @@ class DriverAttendanceFilterForm(FlaskForm):
 
 class DriverAttendanceReportForm(FlaskForm):
     month = IntegerField('Month', validators=[DataRequired(), NumberRange(min=1, max=12)])
-    year = IntegerField('Year', validators=[DataRequired(), NumberRange(min=2020, max=2030)])
+    year = IntegerField('Year', validators=[DataRequired(), NumberRange(min=2020, max=2050)])
     project_id = SelectField('Project (optional)', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
     district_id = SelectField('District (optional)', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
     search = StringField('Search', validators=[Optional(), Length(max=100)])

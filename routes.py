@@ -319,17 +319,19 @@ def api_fleet_map_pins():
         ).group_by(DriverAttendance.driver_id).subquery()
 
         rows = db.session.query(
-            DriverAttendance, Driver
+            DriverAttendance, Driver, Vehicle, Project
         ).join(
             latest_subq, DriverAttendance.id == latest_subq.c.max_id
         ).join(
             Driver, Driver.id == DriverAttendance.driver_id
+        ).outerjoin(
+            Vehicle, Vehicle.id == Driver.vehicle_id
+        ).outerjoin(
+            Project, Project.id == DriverAttendance.project_id
         ).filter(Driver.status == 'Active').all()
 
         pins = []
-        for att, drv in rows:
-            veh = Vehicle.query.get(drv.vehicle_id) if drv.vehicle_id else None
-            proj = Project.query.get(att.project_id) if att.project_id else None
+        for att, drv, veh, proj in rows:
             pins.append({
                 'lat': float(att.check_in_latitude),
                 'lng': float(att.check_in_longitude),
@@ -351,12 +353,13 @@ def api_check_cnic():
     if not cnic or len(digits) != 13:
         return jsonify({'exists': False, 'message': ''})
     exclude = request.args.get('exclude_driver_id', type=int)
-    drivers = Driver.query.filter(Driver.cnic_no.isnot(None), Driver.cnic_no != '').all()
-    for d in drivers:
-        if exclude and d.id == exclude:
-            continue
-        if _cnic_digits(d.cnic_no) == digits:
-            return jsonify({'exists': True, 'message': f'CNIC already registered for driver: {d.name} ({d.driver_id})'})
+    query = db.session.query(Driver.id, Driver.name, Driver.driver_id, Driver.cnic_no).filter(
+        Driver.cnic_no.isnot(None), Driver.cnic_no != '')
+    if exclude:
+        query = query.filter(Driver.id != exclude)
+    for row in query.yield_per(200):
+        if _cnic_digits(row.cnic_no) == digits:
+            return jsonify({'exists': True, 'message': f'CNIC already registered for driver: {row.name} ({row.driver_id})'})
     return jsonify({'exists': False, 'message': ''})
 
 @app.route('/api/check-license')
