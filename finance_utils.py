@@ -631,10 +631,35 @@ def ensure_wallet_account(person_type, person_id):
     return wallet
 
 
+def _ensure_salary_expense_account(transfer_obj):
+    """Return the correct salary expense account based on receiver type.
+    Driver → 5401 (Driver Salaries), Employee → 5402 (Employee Salaries)."""
+    if transfer_obj.to_driver_id:
+        code, name, parent_code = '5401', 'Driver Salaries', '5400'
+    else:
+        code, name, parent_code = '5402', 'Employee Salaries', '5400'
+
+    acct = Account.query.filter_by(code=code).first()
+    if acct:
+        return acct
+
+    parent = Account.query.filter_by(code=parent_code).first()
+    if not parent:
+        parent = Account.query.filter_by(code='5000').first()
+    acct = Account(
+        code=code, name=name, account_type='Expense',
+        parent_id=parent.id if parent else None,
+        is_active=True, opening_balance=0, current_balance=0,
+        description=f'{name} – auto-created')
+    db.session.add(acct)
+    db.session.flush()
+    return acct
+
+
 def create_fund_transfer_journal(transfer_obj, from_wallet, to_wallet):
     """Create journal entry for a fund transfer: Debit receiver wallet, Credit sender wallet.
     If is_salary is True, add neutralizing lines so receiver balance stays zero
-    and Salary Payable (code 2101) gets credited."""
+    and the salary expense (5401/5402) is recorded."""
     lines = [
         {'account_id': to_wallet.id, 'debit': transfer_obj.amount, 'credit': 0,
          'description': f"Fund received from {transfer_obj.from_name}"},
@@ -643,22 +668,12 @@ def create_fund_transfer_journal(transfer_obj, from_wallet, to_wallet):
     ]
 
     if getattr(transfer_obj, 'is_salary', False):
-        salary_payable = Account.query.filter_by(code='2101').first()
-        if not salary_payable:
-            salary_payable = Account(
-                code='2101', name='Salary Payable', account_type='Liability',
-                is_active=True, opening_balance=0, current_balance=0,
-                description='Salary payments settled – auto-created')
-            parent = Account.query.filter_by(code='2100').first()
-            if parent:
-                salary_payable.parent_id = parent.id
-            db.session.add(salary_payable)
-            db.session.flush()
+        salary_expense = _ensure_salary_expense_account(transfer_obj)
 
         lines.extend([
             {'account_id': to_wallet.id, 'debit': 0, 'credit': transfer_obj.amount,
              'description': f"Salary settled – balance neutralized"},
-            {'account_id': salary_payable.id, 'debit': transfer_obj.amount, 'credit': 0,
+            {'account_id': salary_expense.id, 'debit': transfer_obj.amount, 'credit': 0,
              'description': f"Salary paid to {transfer_obj.to_name}"},
         ])
 
