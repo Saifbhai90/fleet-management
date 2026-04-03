@@ -2314,9 +2314,30 @@
     // ── Table Column Sort & Excel-like Filter ──
     (function(){
       var _styleInjected = false;
-      function _closeAllDd(){ document.querySelectorAll('.ft-filter-dd').forEach(function(d){ d.remove(); }); }
-      window.addEventListener('scroll', _closeAllDd, true);
-      window.addEventListener('resize', _closeAllDd);
+      var _openDd = null; // track the single open dropdown
+      var _openDdBtn = null; // track which button opened it
+
+      function _closeAllDd(){
+        document.querySelectorAll('.ft-filter-dd').forEach(function(d){ d.remove(); });
+        _openDd = null; _openDdBtn = null;
+      }
+
+      function _repositionDd(){
+        if(!_openDd || !_openDdBtn) return;
+        var rect = _openDdBtn.getBoundingClientRect();
+        var ddW = _openDd.offsetWidth, ddH = _openDd.offsetHeight;
+        var posLeft = rect.left;
+        var posTop = rect.bottom + 2;
+        if(posLeft + ddW > window.innerWidth - 8) posLeft = rect.right - ddW;
+        if(posLeft < 4) posLeft = 4;
+        if(posTop + ddH > window.innerHeight - 8) posTop = rect.top - ddH - 2;
+        if(posTop < 4) posTop = 4;
+        _openDd.style.left = posLeft + 'px';
+        _openDd.style.top = posTop + 'px';
+      }
+
+      window.addEventListener('scroll', _repositionDd, true);
+      window.addEventListener('resize', _repositionDd);
 
       window.fleetTableEnhance = function(tableId) {
         var tbl = document.getElementById(tableId);
@@ -2327,7 +2348,8 @@
         var tbody = tbl.querySelector('tbody');
         if (!tbody) return;
         var _sortCol = -1, _sortAsc = true;
-        var _filters = {};
+        var _filters = {};       // ci -> Set of allowed values (checkbox filter)
+        var _numFilters = {};    // ci -> {type, val1, val2} (number filter)
 
         if (!_styleInjected) {
           _styleInjected = true;
@@ -2341,13 +2363,30 @@
             '.ft-filter-btn:hover{opacity:.85;color:#0d6efd;transform:scale(1.15);}' +
             '.ft-filter-btn.active{opacity:1;color:#0d6efd;}' +
             '.ft-filter-dd{position:fixed;z-index:99999;background:#fff;border:1px solid #bbb;border-radius:3px;' +
-            'box-shadow:0 4px 16px rgba(0,0,0,.25);min-width:180px;max-width:280px;font-size:12px;font-weight:normal;color:#222;}' +
+            'box-shadow:0 4px 16px rgba(0,0,0,.25);min-width:190px;max-width:290px;font-size:12px;font-weight:normal;color:#222;}' +
+            '.ft-filter-dd .ft-dd-header{padding:4px 7px;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;justify-content:space-between;}' +
+            '.ft-filter-dd .ft-dd-header span{font-weight:600;font-size:11px;color:#333;}' +
+            '.ft-filter-dd .ft-dd-clear{font-size:10px;color:#dc3545;cursor:pointer;text-decoration:underline;padding:0 2px;}' +
+            '.ft-filter-dd .ft-dd-clear:hover{color:#a71d2a;}' +
             '.ft-filter-dd .ft-dd-search{padding:5px 7px;border-bottom:1px solid #e0e0e0;}' +
             '.ft-filter-dd .ft-dd-search input{width:100%;padding:3px 6px;border:1px solid #bbb;border-radius:2px;font-size:11px;outline:none;}' +
             '.ft-filter-dd .ft-dd-search input:focus{border-color:#86b7fe;box-shadow:0 0 0 2px rgba(13,110,253,.12);}' +
+            '.ft-filter-dd .ft-dd-numtoggle{padding:4px 7px;border-bottom:1px solid #e0e0e0;cursor:pointer;font-size:11px;color:#0d6efd;display:flex;align-items:center;gap:4px;user-select:none;}' +
+            '.ft-filter-dd .ft-dd-numtoggle:hover{background:#f0f5ff;}' +
+            '.ft-filter-dd .ft-dd-numtoggle i{font-size:9px;}' +
+            '.ft-filter-dd .ft-dd-numpanel{border-bottom:1px solid #e0e0e0;padding:6px 7px;background:#f8f9fa;display:none;}' +
+            '.ft-filter-dd .ft-dd-numpanel.open{display:block;}' +
+            '.ft-filter-dd .ft-dd-numpanel .ft-nf-row{display:flex;align-items:center;gap:5px;padding:3px 0;cursor:pointer;font-size:11px;color:#333;border-radius:2px;padding-left:3px;padding-right:3px;}' +
+            '.ft-filter-dd .ft-dd-numpanel .ft-nf-row:hover{background:#e8f0fe;}' +
+            '.ft-filter-dd .ft-dd-numpanel .ft-nf-row.active-nf{background:#d4e4fd;font-weight:600;}' +
+            '.ft-filter-dd .ft-dd-numinput{display:none;padding:5px 7px;border-bottom:1px solid #e0e0e0;background:#f8f9fa;}' +
+            '.ft-filter-dd .ft-dd-numinput.open{display:flex;flex-direction:column;gap:4px;}' +
+            '.ft-filter-dd .ft-dd-numinput label{font-size:10px;font-weight:600;color:#555;margin:0;}' +
+            '.ft-filter-dd .ft-dd-numinput input{padding:3px 6px;border:1px solid #bbb;border-radius:2px;font-size:11px;outline:none;width:100%;}' +
+            '.ft-filter-dd .ft-dd-numinput input:focus{border-color:#86b7fe;box-shadow:0 0 0 2px rgba(13,110,253,.12);}' +
             '.ft-filter-dd .ft-dd-selall{padding:3px 7px;border-bottom:1px solid #e0e0e0;font-size:11px;color:#444;}' +
             '.ft-filter-dd .ft-dd-selall label{cursor:pointer;margin:0;display:flex;align-items:center;gap:4px;}' +
-            '.ft-filter-dd .ft-dd-list{max-height:200px;overflow-y:auto;padding:1px 0;}' +
+            '.ft-filter-dd .ft-dd-list{max-height:180px;overflow-y:auto;padding:1px 0;}' +
             '.ft-filter-dd .ft-dd-list label{display:flex;align-items:center;gap:5px;padding:2px 7px;cursor:pointer;white-space:nowrap;margin:0;font-weight:normal;}' +
             '.ft-filter-dd .ft-dd-list label:hover{background:#e8f0fe;}' +
             '.ft-filter-dd .ft-dd-list input[type=checkbox]{margin:0;accent-color:#0d6efd;}' +
@@ -2362,6 +2401,18 @@
 
         function getRows() { return Array.from(tbody.querySelectorAll('tr')).filter(function(r){return r.cells.length > 1;}); }
         function getCellVal(row, ci) { var c = row.cells[ci]; return c ? (c.textContent || '').trim() : ''; }
+        function numVal(s) { return parseFloat((s||'').replace(/[,%]/g,'')); }
+
+        function _colIsNumeric(ci){
+          var rows = getRows(), nums=0, total=0;
+          rows.forEach(function(r){
+            var v = getCellVal(r,ci);
+            if(v === '' || v === '-') return;
+            total++;
+            if(!isNaN(numVal(v))) nums++;
+          });
+          return total > 0 && nums / total >= 0.6;
+        }
 
         ths.forEach(function(th, ci) {
             th.classList.add('ft-sort');
@@ -2381,7 +2432,7 @@
                 var rows = getRows();
                 rows.sort(function(a,b) {
                     var va = getCellVal(a, ci), vb = getCellVal(b, ci);
-                    var na = parseFloat(va.replace(/[,%]/g,'')), nb = parseFloat(vb.replace(/[,%]/g,''));
+                    var na = numVal(va), nb = numVal(vb);
                     if (!isNaN(na) && !isNaN(nb)) return _sortAsc ? na - nb : nb - na;
                     return _sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
                 });
@@ -2393,17 +2444,41 @@
                 _closeAllDd();
                 var dd = document.createElement('div');
                 dd.className = 'ft-filter-dd';
+                dd.addEventListener('wheel', function(ev){ ev.stopPropagation(); });
                 document.body.appendChild(dd);
+                _openDd = dd; _openDdBtn = fbtn;
 
                 var vals = {}, rows = getRows();
                 rows.forEach(function(r){ var v = getCellVal(r, ci); vals[v] = true; });
                 var sorted = Object.keys(vals).sort(function(a,b){
-                    var na = parseFloat(a.replace(/[,%]/g,'')), nb = parseFloat(b.replace(/[,%]/g,''));
+                    var na = numVal(a), nb = numVal(b);
                     if (!isNaN(na) && !isNaN(nb)) return na - nb;
                     return a.localeCompare(b);
                 });
                 var activeSet = _filters[ci] || null;
+                var isNumCol = _colIsNumeric(ci);
 
+                // --- Header with clear ---
+                var headerDiv = document.createElement('div');
+                headerDiv.className = 'ft-dd-header';
+                var headerTitle = document.createElement('span');
+                headerTitle.textContent = 'Filter: ' + (th.childNodes[0] ? th.childNodes[0].textContent.trim() : '');
+                headerDiv.appendChild(headerTitle);
+                var hasFilter = !!_filters[ci] || !!_numFilters[ci];
+                if(hasFilter){
+                  var clearBtn = document.createElement('span');
+                  clearBtn.className = 'ft-dd-clear'; clearBtn.textContent = 'Clear Filter';
+                  clearBtn.addEventListener('click', function(ev){
+                    ev.stopPropagation();
+                    delete _filters[ci]; delete _numFilters[ci];
+                    fbtn.classList.remove('active');
+                    applyFilters(); dd.remove();
+                  });
+                  headerDiv.appendChild(clearBtn);
+                }
+                dd.appendChild(headerDiv);
+
+                // --- Search ---
                 var searchDiv = document.createElement('div');
                 searchDiv.className = 'ft-dd-search';
                 var searchInp = document.createElement('input');
@@ -2411,6 +2486,116 @@
                 searchDiv.appendChild(searchInp);
                 dd.appendChild(searchDiv);
 
+                // --- Number Filters (only for numeric columns) ---
+                var numPanel = null, numInputPanel = null, _activeNfType = (_numFilters[ci]||{}).type || null;
+                if(isNumCol){
+                  var numToggle = document.createElement('div');
+                  numToggle.className = 'ft-dd-numtoggle';
+                  numToggle.innerHTML = '<i class="bi bi-123"></i> Number Filters <i class="bi bi-chevron-right" style="margin-left:auto;font-size:8px;"></i>';
+                  dd.appendChild(numToggle);
+
+                  numPanel = document.createElement('div');
+                  numPanel.className = 'ft-dd-numpanel';
+                  dd.appendChild(numPanel);
+
+                  numInputPanel = document.createElement('div');
+                  numInputPanel.className = 'ft-dd-numinput';
+                  dd.appendChild(numInputPanel);
+
+                  var nfTypes = [
+                    {key:'eq',label:'Equals...'},
+                    {key:'neq',label:'Does Not Equal...'},
+                    {key:'gt',label:'Greater Than...'},
+                    {key:'gte',label:'Greater Than Or Equal To...'},
+                    {key:'lt',label:'Less Than...'},
+                    {key:'lte',label:'Less Than Or Equal To...'},
+                    {key:'between',label:'Between...'},
+                    {key:'top10',label:'Top 10...'},
+                    {key:'above',label:'Above Average'},
+                    {key:'below',label:'Below Average'},
+                    {key:'custom',label:'Custom Filter...'}
+                  ];
+
+                  nfTypes.forEach(function(nf){
+                    var row = document.createElement('div');
+                    row.className = 'ft-nf-row' + (_activeNfType === nf.key ? ' active-nf' : '');
+                    row.textContent = nf.label;
+                    row.addEventListener('click', function(ev){
+                      ev.stopPropagation();
+                      numPanel.querySelectorAll('.ft-nf-row').forEach(function(r){r.classList.remove('active-nf');});
+                      row.classList.add('active-nf');
+                      _showNumInput(nf.key);
+                    });
+                    numPanel.appendChild(row);
+                  });
+
+                  numToggle.addEventListener('click', function(ev){
+                    ev.stopPropagation();
+                    var isOpen = numPanel.classList.contains('open');
+                    numPanel.classList.toggle('open');
+                    if(!isOpen && !numInputPanel.classList.contains('open')){
+                      numInputPanel.classList.remove('open');
+                    }
+                    numToggle.querySelector('.bi-chevron-right,.bi-chevron-down').className =
+                      numPanel.classList.contains('open') ? 'bi bi-chevron-down' : 'bi bi-chevron-right';
+                    setTimeout(_repositionDd, 10);
+                  });
+
+                  function _showNumInput(key){
+                    numInputPanel.innerHTML = '';
+                    numInputPanel.classList.add('open');
+                    var existNf = _numFilters[ci] || {};
+                    if(key === 'above' || key === 'below'){
+                      var allNums = [];
+                      rows.forEach(function(r){ var n = numVal(getCellVal(r,ci)); if(!isNaN(n)) allNums.push(n); });
+                      var avg = allNums.length ? allNums.reduce(function(a,b){return a+b;},0)/allNums.length : 0;
+                      numInputPanel.innerHTML = '<div style="font-size:11px;padding:2px 0;">Average: <strong>'+avg.toFixed(2)+'</strong></div>' +
+                        '<div style="font-size:10px;color:#666;">Click OK to apply "'+key+' average" filter</div>';
+                      numInputPanel._nfKey = key; numInputPanel._nfVal1 = avg;
+                    } else if(key === 'top10'){
+                      var lbl1 = document.createElement('label'); lbl1.textContent = 'Show Top N:';
+                      var inp1 = document.createElement('input'); inp1.type = 'number'; inp1.value = existNf.type===key ? existNf.val1 : 10; inp1.min = 1;
+                      numInputPanel.appendChild(lbl1); numInputPanel.appendChild(inp1);
+                      numInputPanel._nfKey = key; numInputPanel._inp1 = inp1;
+                    } else if(key === 'between'){
+                      var lbl1 = document.createElement('label'); lbl1.textContent = 'From:';
+                      var inp1 = document.createElement('input'); inp1.type = 'number'; inp1.value = existNf.type===key ? existNf.val1 : '';
+                      var lbl2 = document.createElement('label'); lbl2.textContent = 'To:';
+                      var inp2 = document.createElement('input'); inp2.type = 'number'; inp2.value = existNf.type===key ? existNf.val2 : '';
+                      numInputPanel.appendChild(lbl1); numInputPanel.appendChild(inp1);
+                      numInputPanel.appendChild(lbl2); numInputPanel.appendChild(inp2);
+                      numInputPanel._nfKey = key; numInputPanel._inp1 = inp1; numInputPanel._inp2 = inp2;
+                    } else if(key === 'custom'){
+                      var ops = ['eq','neq','gt','gte','lt','lte'];
+                      var opLabels = {'eq':'=','neq':'≠','gt':'>','gte':'≥','lt':'<','lte':'≤'};
+                      var sel = document.createElement('select'); sel.style.cssText = 'padding:3px 4px;font-size:11px;border:1px solid #bbb;border-radius:2px;width:100%;';
+                      ops.forEach(function(o){ var opt = document.createElement('option'); opt.value=o; opt.textContent = opLabels[o]+' '+o; sel.appendChild(opt); });
+                      if(existNf.type==='custom') sel.value = existNf.op || 'eq';
+                      var lbl1 = document.createElement('label'); lbl1.textContent = 'Condition:';
+                      var inp1 = document.createElement('input'); inp1.type = 'number'; inp1.value = existNf.type===key ? existNf.val1 : '';
+                      numInputPanel.appendChild(lbl1); numInputPanel.appendChild(sel);
+                      var lbl2 = document.createElement('label'); lbl2.textContent = 'Value:';
+                      numInputPanel.appendChild(lbl2); numInputPanel.appendChild(inp1);
+                      numInputPanel._nfKey = key; numInputPanel._sel = sel; numInputPanel._inp1 = inp1;
+                    } else {
+                      var labels = {eq:'Equals:',neq:'Does Not Equal:',gt:'Greater Than:',gte:'Greater Than Or Equal To:',lt:'Less Than:',lte:'Less Than Or Equal To:'};
+                      var lbl1 = document.createElement('label'); lbl1.textContent = labels[key] || 'Value:';
+                      var inp1 = document.createElement('input'); inp1.type = 'number'; inp1.value = existNf.type===key ? existNf.val1 : '';
+                      numInputPanel.appendChild(lbl1); numInputPanel.appendChild(inp1);
+                      numInputPanel._nfKey = key; numInputPanel._inp1 = inp1;
+                      setTimeout(function(){ inp1.focus(); },20);
+                    }
+                    setTimeout(_repositionDd, 10);
+                  }
+
+                  if(_activeNfType){
+                    numPanel.classList.add('open');
+                    numToggle.querySelector('.bi-chevron-right').className = 'bi bi-chevron-down';
+                    _showNumInput(_activeNfType);
+                  }
+                }
+
+                // --- Select All ---
                 var selAllDiv = document.createElement('div');
                 selAllDiv.className = 'ft-dd-selall';
                 var selAllLbl = document.createElement('label');
@@ -2421,6 +2606,7 @@
                 selAllDiv.appendChild(selAllLbl);
                 dd.appendChild(selAllDiv);
 
+                // --- Value list ---
                 var listDiv = document.createElement('div');
                 listDiv.className = 'ft-dd-list';
                 dd.appendChild(listDiv);
@@ -2445,6 +2631,7 @@
                     listDiv.querySelectorAll('input[type=checkbox]').forEach(function(c){ c.checked = this.checked; }.bind(this));
                 });
 
+                // --- Footer ---
                 var footDiv = document.createElement('div');
                 footDiv.className = 'ft-dd-foot';
                 var btnOk = document.createElement('button');
@@ -2454,17 +2641,44 @@
                 footDiv.appendChild(btnOk); footDiv.appendChild(btnCancel);
                 dd.appendChild(footDiv);
 
-                btnCancel.addEventListener('click', function(e){ e.stopPropagation(); dd.remove(); });
-                btnOk.addEventListener('click', function(e) {
-                    e.stopPropagation();
+                btnCancel.addEventListener('click', function(ev){ ev.stopPropagation(); dd.remove(); _openDd=null; _openDdBtn=null; });
+                btnOk.addEventListener('click', function(ev) {
+                    ev.stopPropagation();
+
+                    // Number filter takes precedence if set
+                    if(numInputPanel && numInputPanel._nfKey){
+                      var nk = numInputPanel._nfKey;
+                      if(nk === 'above' || nk === 'below'){
+                        _numFilters[ci] = {type:nk, val1:numInputPanel._nfVal1};
+                      } else if(nk === 'top10'){
+                        _numFilters[ci] = {type:'top10', val1: parseInt(numInputPanel._inp1.value)||10};
+                      } else if(nk === 'between'){
+                        var v1 = parseFloat(numInputPanel._inp1.value), v2 = parseFloat(numInputPanel._inp2.value);
+                        if(!isNaN(v1) && !isNaN(v2)){ _numFilters[ci] = {type:'between', val1:Math.min(v1,v2), val2:Math.max(v1,v2)}; }
+                        else { delete _numFilters[ci]; }
+                      } else if(nk === 'custom'){
+                        var cv = parseFloat(numInputPanel._inp1.value);
+                        if(!isNaN(cv)){ _numFilters[ci] = {type:'custom', op:numInputPanel._sel.value, val1:cv}; }
+                        else { delete _numFilters[ci]; }
+                      } else {
+                        var sv = parseFloat(numInputPanel._inp1.value);
+                        if(!isNaN(sv)){ _numFilters[ci] = {type:nk, val1:sv}; }
+                        else { delete _numFilters[ci]; }
+                      }
+                    }
+
+                    // Checkbox filter
                     var sel = new Set();
                     listDiv.querySelectorAll('input[type=checkbox]:checked').forEach(function(c){ sel.add(c.value); });
-                    if (sel.size === sorted.length || sel.size === 0) { delete _filters[ci]; fbtn.classList.remove('active'); }
-                    else { _filters[ci] = sel; fbtn.classList.add('active'); }
+                    if (sel.size === sorted.length || sel.size === 0) { delete _filters[ci]; }
+                    else { _filters[ci] = sel; }
+
+                    fbtn.classList.toggle('active', !!_filters[ci] || !!_numFilters[ci]);
                     applyFilters();
-                    dd.remove();
+                    dd.remove(); _openDd=null; _openDdBtn=null;
                 });
 
+                // --- Position ---
                 var rect = fbtn.getBoundingClientRect();
                 dd.style.visibility = 'hidden'; dd.style.display = 'block';
                 var ddW = dd.offsetWidth, ddH = dd.offsetHeight;
@@ -2482,12 +2696,67 @@
             });
         });
 
+        function _numFilterPass(ci, cellVal){
+          var nf = _numFilters[ci];
+          if(!nf) return true;
+          var n = numVal(cellVal);
+          if(isNaN(n)) return false;
+          switch(nf.type){
+            case 'eq': return n === nf.val1;
+            case 'neq': return n !== nf.val1;
+            case 'gt': return n > nf.val1;
+            case 'gte': return n >= nf.val1;
+            case 'lt': return n < nf.val1;
+            case 'lte': return n <= nf.val1;
+            case 'between': return n >= nf.val1 && n <= nf.val2;
+            case 'above': return n > nf.val1;
+            case 'below': return n < nf.val1;
+            case 'custom':
+              var op = nf.op || 'eq';
+              if(op==='eq') return n===nf.val1;
+              if(op==='neq') return n!==nf.val1;
+              if(op==='gt') return n>nf.val1;
+              if(op==='gte') return n>=nf.val1;
+              if(op==='lt') return n<nf.val1;
+              if(op==='lte') return n<=nf.val1;
+              return true;
+            default: return true;
+          }
+        }
+
         function applyFilters() {
             var rows = getRows();
-            rows.forEach(function(r) {
+            // Top-10 pre-pass: collect indices
+            var top10Sets = {};
+            for(var ci in _numFilters){
+              if(_numFilters[ci].type === 'top10'){
+                var n = _numFilters[ci].val1 || 10;
+                var pairs = [];
+                rows.forEach(function(r,i){
+                  var v = numVal(getCellVal(r, parseInt(ci)));
+                  if(!isNaN(v)) pairs.push({idx:i, val:v});
+                });
+                pairs.sort(function(a,b){return b.val-a.val;});
+                var s = new Set();
+                pairs.slice(0,n).forEach(function(p){s.add(p.idx);});
+                top10Sets[ci] = s;
+              }
+            }
+
+            rows.forEach(function(r, ri) {
                 var show = true;
                 for (var ci in _filters) {
                     if (!_filters[ci].has(getCellVal(r, parseInt(ci)))) { show = false; break; }
+                }
+                if(show){
+                  for(var ci in _numFilters){
+                    var nf = _numFilters[ci];
+                    if(nf.type === 'top10'){
+                      if(!top10Sets[ci] || !top10Sets[ci].has(ri)){ show = false; break; }
+                    } else {
+                      if(!_numFilterPass(parseInt(ci), getCellVal(r, parseInt(ci)))){ show = false; break; }
+                    }
+                  }
                 }
                 r.style.display = show ? '' : 'none';
             });
