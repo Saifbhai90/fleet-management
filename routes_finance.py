@@ -6,7 +6,7 @@ from flask import render_template, request, redirect, url_for, flash, jsonify, s
 from sqlalchemy import or_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
-                    FundTransfer)
+                    FundTransfer, BankAccountDirectory)
 from forms import (PaymentVoucherForm, ReceiptVoucherForm, BankEntryForm, JournalVoucherForm,
                    EmployeeExpenseForm, AccountLedgerFilterForm, BalanceSheetFilterForm,
                    AccountForm, FundTransferForm, FundTransferFilterForm, WalletDashboardFilterForm)
@@ -1629,3 +1629,51 @@ def journal_vouchers_list():
 
     return render_template('finance/journal_vouchers_list.html',
                            entries=entries, from_date=from_date, to_date=to_date, per_page=per_page, search=search)
+
+
+# ──────────────────────────────────────────────────────
+# Bank Account Directory – JSON API (for Fund Transfer panel)
+# ──────────────────────────────────────────────────────
+
+def bank_directory_list_api():
+    """Return all entries, optionally filtered by search query."""
+    q = (request.args.get('q') or '').strip()
+    query = BankAccountDirectory.query
+    if q:
+        tokens = [t.lower() for t in q.split() if t]
+        for tok in tokens:
+            like = f'%{tok}%'
+            query = query.filter(or_(
+                BankAccountDirectory.bank_name.ilike(like),
+                BankAccountDirectory.account_no.ilike(like),
+                BankAccountDirectory.account_title.ilike(like),
+            ))
+    items = query.order_by(BankAccountDirectory.id.desc()).limit(200).all()
+    return jsonify([i.to_dict() for i in items])
+
+
+def bank_directory_add_api():
+    """Add a new bank account entry."""
+    data = request.get_json(silent=True) or {}
+    bank_name = (data.get('bank_name') or '').strip()
+    account_no = (data.get('account_no') or '').strip()
+    account_title = (data.get('account_title') or '').strip()
+    if not bank_name and not account_no and not account_title:
+        return jsonify({'error': 'At least one field is required.'}), 400
+    entry = BankAccountDirectory(
+        bank_name=bank_name or None,
+        account_no=account_no or None,
+        account_title=account_title or None,
+        created_by_user_id=session.get('user_id'),
+    )
+    db.session.add(entry)
+    db.session.commit()
+    return jsonify(entry.to_dict()), 201
+
+
+def bank_directory_delete_api(pk):
+    """Delete a bank account entry."""
+    entry = BankAccountDirectory.query.get_or_404(pk)
+    db.session.delete(entry)
+    db.session.commit()
+    return jsonify({'ok': True})

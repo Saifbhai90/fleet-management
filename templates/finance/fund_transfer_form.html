@@ -3,14 +3,44 @@
 
 {% block content %}
 <style>
-.ft-upload-zone{border:2px dashed #ccc;border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative;min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fafbfc}
+/* Upload zone */
+.ft-upload-zone{border:2px dashed #ccc;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative;min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fafbfc}
 .ft-upload-zone:hover,.ft-upload-zone.drag-over{border-color:#198754;background:#f0faf4}
-.ft-upload-zone .ft-placeholder{color:#888;font-size:.88rem}
-.ft-upload-zone .ft-placeholder i{font-size:1.6rem;color:#aaa;display:block;margin-bottom:6px}
-.ft-preview-wrap{position:relative;display:inline-block;max-width:260px}
-.ft-preview-wrap img{max-width:260px;max-height:180px;border-radius:6px;object-fit:contain;box-shadow:0 1px 4px rgba(0,0,0,.12)}
-.ft-preview-wrap .ft-remove{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;background:#dc3545;color:#fff;border:none;font-size:.75rem;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.2)}
-.ft-paste-hint{font-size:.76rem;color:#999;margin-top:6px}
+.ft-upload-zone .ft-placeholder{color:#888;font-size:.85rem}
+.ft-upload-zone .ft-placeholder i{font-size:1.5rem;color:#aaa;display:block;margin-bottom:4px}
+.ft-preview-wrap{position:relative;display:inline-block;max-width:220px}
+.ft-preview-wrap img{max-width:220px;max-height:150px;border-radius:6px;object-fit:contain;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.ft-preview-wrap .ft-remove{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:#dc3545;color:#fff;border:none;font-size:.7rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.ft-paste-hint{font-size:.72rem;color:#999;margin-top:4px}
+
+/* Bank Directory Panel */
+.bd-panel{position:sticky;top:16px}
+.bd-panel .card{border-radius:12px;overflow:hidden;box-shadow:0 3px 18px rgba(0,0,0,.1)}
+.bd-header{background:linear-gradient(135deg,#1565C0 0%,#1e88e5 55%,#42a5f5 100%);color:#fff;padding:.85rem 1rem}
+.bd-header h6{margin:0;font-size:.92rem;font-weight:700}
+.bd-header small{opacity:.82;font-size:.72rem}
+.bd-search{padding:.65rem .85rem;background:#f8f9fa;border-bottom:1px solid #e9ecef}
+.bd-search input{font-size:.82rem;border-radius:20px;padding:.35rem .85rem;border:1px solid #d0d7de}
+.bd-search input:focus{border-color:#1e88e5;box-shadow:0 0 0 .15rem rgba(30,136,229,.18)}
+.bd-body{max-height:380px;overflow-y:auto;padding:0}
+.bd-body::-webkit-scrollbar{width:5px}
+.bd-body::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
+.bd-entry{padding:.6rem .85rem;border-bottom:1px solid #f0f0f0;font-size:.8rem;display:flex;align-items:flex-start;gap:8px;transition:background .15s}
+.bd-entry:hover{background:#f0f7ff}
+.bd-entry:last-child{border-bottom:none}
+.bd-entry .bd-icon{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#e3f2fd,#bbdefb);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#1565c0;font-size:.85rem}
+.bd-entry .bd-info{flex:1;min-width:0}
+.bd-entry .bd-bank{font-weight:600;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bd-entry .bd-acct{color:#666;font-size:.75rem;font-family:'Courier New',monospace;letter-spacing:.3px}
+.bd-entry .bd-title{color:#888;font-size:.72rem;margin-top:1px}
+.bd-entry .bd-del{opacity:0;transition:opacity .15s;border:none;background:none;color:#dc3545;font-size:.78rem;padding:2px 4px;cursor:pointer;flex-shrink:0;align-self:center}
+.bd-entry:hover .bd-del{opacity:1}
+.bd-add-area{padding:.7rem .85rem;background:#fafbfc;border-top:1px solid #e9ecef}
+.bd-add-area input{font-size:.78rem;padding:.3rem .6rem;border-radius:5px}
+.bd-add-area .btn{font-size:.78rem;padding:.3rem .7rem}
+.bd-empty{padding:2rem 1rem;text-align:center;color:#aaa;font-size:.82rem}
+.bd-empty i{font-size:2rem;display:block;margin-bottom:6px;opacity:.4}
+.bd-count{font-size:.68rem;color:rgba(255,255,255,.7);float:right;margin-top:2px}
 </style>
 
 <div class="container-fluid py-3">
@@ -18,100 +48,146 @@
         <i class="bi bi-arrow-left-right me-2"></i>{{ title }}
     </div>
 
-    <div class="card shadow-sm border-0 mt-3">
-        <div class="card-body p-4">
-            <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
-                {{ form.hidden_tag() }}
+    <div class="row mt-3">
+        {# ── LEFT: Fund Transfer Form ── #}
+        <div class="col-lg-7 col-xl-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4">
+                    <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                        {{ form.hidden_tag() }}
 
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        {{ form.transfer_date.label(class="form-label fw-bold") }}
-                        {{ form.transfer_date(class="form-control datepicker") }}
-                    </div>
-
-                    <div class="col-md-4">
-                        {{ form.from_person.label(class="form-label fw-bold") }}
-                        {{ form.from_person(class="form-select search-select") }}
-                    </div>
-
-                    <div class="col-md-4">
-                        {{ form.to_person.label(class="form-label fw-bold") }}
-                        {{ form.to_person(class="form-select search-select") }}
-                    </div>
-
-                    <div class="col-md-4">
-                        {{ form.amount.label(class="form-label fw-bold") }}
-                        {{ form.amount(class="form-control", inputmode="decimal") }}
-                    </div>
-
-                    <div class="col-md-4">
-                        {{ form.payment_mode.label(class="form-label fw-bold") }}
-                        {{ form.payment_mode(class="form-select search-select") }}
-                    </div>
-
-                    <div class="col-md-4">
-                        {{ form.reference_no.label(class="form-label fw-bold") }}
-                        {{ form.reference_no(class="form-control") }}
-                    </div>
-
-                    <div class="col-md-4">
-                        {{ form.district_id.label(class="form-label fw-bold") }}
-                        {{ form.district_id(class="form-select search-select") }}
-                    </div>
-
-                    <div class="col-md-4">
-                        {{ form.project_id.label(class="form-label fw-bold") }}
-                        {{ form.project_id(class="form-select search-select") }}
-                    </div>
-
-                    <div class="col-12">
-                        {{ form.description.label(class="form-label fw-bold") }}
-                        {{ form.description(class="form-control", rows="3") }}
-                    </div>
-
-                    {# ── Attachment upload (browse + drag + paste) ── #}
-                    <div class="col-12">
-                        <label class="form-label fw-bold">Attachment (Image)</label>
-                        <div class="ft-upload-zone" id="ftUploadZone" tabindex="0">
-                            <input type="file" name="attachment" id="ftFileInput" accept="image/*"
-                                   style="display:none">
-                            <div id="ftPlaceholder" class="ft-placeholder">
-                                <i class="bi bi-cloud-arrow-up"></i>
-                                Click to browse, drag &amp; drop, or paste an image
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                {{ form.transfer_date.label(class="form-label fw-bold") }}
+                                {{ form.transfer_date(class="form-control datepicker") }}
                             </div>
-                            <div id="ftPreview" style="display:none" class="ft-preview-wrap">
-                                <img id="ftPreviewImg" src="" alt="preview">
-                                <button type="button" class="ft-remove" id="ftRemoveBtn" title="Remove">
-                                    <i class="bi bi-x"></i>
-                                </button>
+                            <div class="col-md-4">
+                                {{ form.from_person.label(class="form-label fw-bold") }}
+                                {{ form.from_person(class="form-select search-select") }}
                             </div>
-                            <div class="ft-paste-hint">Ctrl+V to paste from clipboard</div>
+                            <div class="col-md-4">
+                                {{ form.to_person.label(class="form-label fw-bold") }}
+                                {{ form.to_person(class="form-select search-select") }}
+                            </div>
+                            <div class="col-md-4">
+                                {{ form.amount.label(class="form-label fw-bold") }}
+                                {{ form.amount(class="form-control", inputmode="decimal") }}
+                            </div>
+                            <div class="col-md-4">
+                                {{ form.payment_mode.label(class="form-label fw-bold") }}
+                                {{ form.payment_mode(class="form-select search-select") }}
+                            </div>
+                            <div class="col-md-4">
+                                {{ form.reference_no.label(class="form-label fw-bold") }}
+                                {{ form.reference_no(class="form-control") }}
+                            </div>
+                            <div class="col-md-4">
+                                {{ form.district_id.label(class="form-label fw-bold") }}
+                                {{ form.district_id(class="form-select search-select") }}
+                            </div>
+                            <div class="col-md-4">
+                                {{ form.project_id.label(class="form-label fw-bold") }}
+                                {{ form.project_id(class="form-select search-select") }}
+                            </div>
+                            <div class="col-12">
+                                {{ form.description.label(class="form-label fw-bold") }}
+                                {{ form.description(class="form-control", rows="2") }}
+                            </div>
+
+                            {# ── Attachment upload ── #}
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Attachment (Image)</label>
+                                <div class="ft-upload-zone" id="ftUploadZone" tabindex="0">
+                                    <input type="file" name="attachment" id="ftFileInput" accept="image/*" style="display:none">
+                                    <div id="ftPlaceholder" class="ft-placeholder">
+                                        <i class="bi bi-cloud-arrow-up"></i>
+                                        Click to browse, drag &amp; drop, or paste an image
+                                    </div>
+                                    <div id="ftPreview" style="display:none" class="ft-preview-wrap">
+                                        <img id="ftPreviewImg" src="" alt="preview">
+                                        <button type="button" class="ft-remove" id="ftRemoveBtn" title="Remove"><i class="bi bi-x"></i></button>
+                                    </div>
+                                    <div class="ft-paste-hint">Ctrl+V to paste from clipboard</div>
+                                </div>
+                                {% if existing_attachment %}
+                                <div class="mt-2" id="ftExisting">
+                                    <small class="text-muted">Current:</small>
+                                    <a href="{{ existing_attachment }}" target="_blank" class="ms-1">
+                                        <img src="{{ existing_attachment }}" style="max-height:50px;border-radius:4px" alt="current">
+                                    </a>
+                                    <label class="ms-2 text-danger" style="font-size:.78rem;cursor:pointer">
+                                        <input type="checkbox" name="remove_attachment" value="1" class="form-check-input form-check-input-sm me-1">Remove
+                                    </label>
+                                </div>
+                                {% endif %}
+                            </div>
                         </div>
-                        {% if existing_attachment %}
-                        <div class="mt-2" id="ftExisting">
-                            <small class="text-muted">Current:</small>
-                            <a href="{{ existing_attachment }}" target="_blank" class="ms-1">
-                                <img src="{{ existing_attachment }}" style="max-height:60px;border-radius:4px" alt="current">
-                            </a>
-                            <label class="ms-2 text-danger" style="font-size:.8rem;cursor:pointer">
-                                <input type="checkbox" name="remove_attachment" value="1" class="form-check-input form-check-input-sm me-1">
-                                Remove
-                            </label>
+
+                        <div class="mt-4 d-flex gap-2">
+                            {{ form.submit(class="btn btn-success px-4") }}
+                            <a href="{{ url_for('fund_transfers_list') }}" class="btn btn-secondary">Cancel</a>
                         </div>
-                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {# ── RIGHT: Bank Account Directory Panel ── #}
+        <div class="col-lg-5 col-xl-4 mt-3 mt-lg-0">
+            <div class="bd-panel">
+                <div class="card border-0">
+                    <div class="bd-header">
+                        <h6><i class="bi bi-bank me-2"></i>Bank Account Directory <span class="bd-count" id="bdCount"></span></h6>
+                        <small>Quick reference – search by account no, bank or title</small>
+                    </div>
+                    <div class="bd-search">
+                        <input type="text" id="bdSearchInput" class="form-control form-control-sm" placeholder="Search bank, account no, or title..." autocomplete="off">
+                    </div>
+                    <div class="bd-body" id="bdList">
+                        <div class="bd-empty" id="bdEmpty">
+                            <i class="bi bi-bank2"></i>
+                            No accounts saved yet.<br>Add your first entry below.
+                        </div>
+                    </div>
+
+                    {# ── Add new entry form ── #}
+                    <div class="bd-add-area">
+                        <div class="mb-0" id="bdAddToggle">
+                            <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="document.getElementById('bdAddForm').style.display='block';this.parentNode.style.display='none';">
+                                <i class="bi bi-plus-circle me-1"></i>Add Bank Account
+                            </button>
+                        </div>
+                        <div id="bdAddForm" style="display:none">
+                            <div class="row g-2">
+                                <div class="col-12">
+                                    <input type="text" id="bdNewBank" class="form-control form-control-sm" placeholder="Bank Name (e.g. HBL, MCB)">
+                                </div>
+                                <div class="col-12">
+                                    <input type="text" id="bdNewAcct" class="form-control form-control-sm" placeholder="Account Number">
+                                </div>
+                                <div class="col-12">
+                                    <input type="text" id="bdNewTitle" class="form-control form-control-sm" placeholder="Account Title / Holder Name">
+                                </div>
+                                <div class="col-12 d-flex gap-2">
+                                    <button type="button" class="btn btn-primary btn-sm flex-fill" id="bdSaveBtn">
+                                        <i class="bi bi-check-lg me-1"></i>Save
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('bdAddForm').style.display='none';document.getElementById('bdAddToggle').style.display='block';">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-
-                <div class="mt-4 d-flex gap-2">
-                    {{ form.submit(class="btn btn-success px-4") }}
-                    <a href="{{ url_for('fund_transfers_list') }}" class="btn btn-secondary">Cancel</a>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
 </div>
+
 <script>
 (function(){
+    /* ── Image Upload ── */
     var zone = document.getElementById('ftUploadZone'),
         inp  = document.getElementById('ftFileInput'),
         ph   = document.getElementById('ftPlaceholder'),
@@ -122,61 +198,112 @@
     function showPreview(file){
         if(!file || !file.type.startsWith('image/')) return;
         var reader = new FileReader();
-        reader.onload = function(e){
-            img.src = e.target.result;
-            ph.style.display = 'none';
-            prev.style.display = 'inline-block';
-        };
+        reader.onload = function(e){ img.src = e.target.result; ph.style.display='none'; prev.style.display='inline-block'; };
         reader.readAsDataURL(file);
     }
-
     function clearPreview(){
-        inp.value = '';
-        img.src = '';
-        prev.style.display = 'none';
-        ph.style.display = '';
-        var dt = new DataTransfer();
-        inp.files = dt.files;
+        inp.value=''; img.src=''; prev.style.display='none'; ph.style.display='';
+        var dt = new DataTransfer(); inp.files = dt.files;
     }
-
-    zone.addEventListener('click', function(e){
-        if(e.target.closest('.ft-remove')) return;
-        inp.click();
-    });
-
-    inp.addEventListener('change', function(){
-        if(this.files && this.files[0]) showPreview(this.files[0]);
-    });
-
+    zone.addEventListener('click', function(e){ if(e.target.closest('.ft-remove')) return; inp.click(); });
+    inp.addEventListener('change', function(){ if(this.files && this.files[0]) showPreview(this.files[0]); });
     zone.addEventListener('dragover', function(e){ e.preventDefault(); zone.classList.add('drag-over'); });
     zone.addEventListener('dragleave', function(){ zone.classList.remove('drag-over'); });
     zone.addEventListener('drop', function(e){
         e.preventDefault(); zone.classList.remove('drag-over');
-        var files = e.dataTransfer.files;
-        if(files && files[0] && files[0].type.startsWith('image/')){
-            var dt = new DataTransfer();
-            dt.items.add(files[0]);
-            inp.files = dt.files;
-            showPreview(files[0]);
-        }
+        var f = e.dataTransfer.files;
+        if(f && f[0] && f[0].type.startsWith('image/')){ var dt=new DataTransfer(); dt.items.add(f[0]); inp.files=dt.files; showPreview(f[0]); }
     });
-
     document.addEventListener('paste', function(e){
-        var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        var items = (e.clipboardData||e.originalEvent.clipboardData).items;
         for(var i=0;i<items.length;i++){
-            if(items[i].type.indexOf('image') !== -1){
-                var blob = items[i].getAsFile();
-                var dt = new DataTransfer();
-                dt.items.add(blob);
-                inp.files = dt.files;
-                showPreview(blob);
-                e.preventDefault();
-                break;
+            if(items[i].type.indexOf('image')!==-1){
+                var blob=items[i].getAsFile(); var dt=new DataTransfer(); dt.items.add(blob); inp.files=dt.files;
+                showPreview(blob); e.preventDefault(); break;
             }
         }
     });
-
     rmBtn.addEventListener('click', function(e){ e.stopPropagation(); clearPreview(); });
+
+    /* ── Bank Directory Panel ── */
+    var bdList     = document.getElementById('bdList'),
+        bdEmpty    = document.getElementById('bdEmpty'),
+        bdSearch   = document.getElementById('bdSearchInput'),
+        bdCount    = document.getElementById('bdCount'),
+        bdSaveBtn  = document.getElementById('bdSaveBtn'),
+        bdAddForm  = document.getElementById('bdAddForm'),
+        bdAddToggle= document.getElementById('bdAddToggle');
+
+    var _entries = [];
+
+    function renderEntries(items){
+        bdList.querySelectorAll('.bd-entry').forEach(function(el){ el.remove(); });
+        bdEmpty.style.display = items.length ? 'none' : 'block';
+        bdCount.textContent = items.length + ' saved';
+        items.forEach(function(e){
+            var div = document.createElement('div');
+            div.className = 'bd-entry';
+            var bankHtml = e.bank_name ? '<div class="bd-bank">' + esc(e.bank_name) + '</div>' : '';
+            var acctHtml = e.account_no ? '<div class="bd-acct">' + esc(e.account_no) + '</div>' : '';
+            var titleHtml = e.account_title ? '<div class="bd-title"><i class="bi bi-person-fill me-1"></i>' + esc(e.account_title) + '</div>' : '';
+            div.innerHTML =
+                '<div class="bd-icon"><i class="bi bi-bank2"></i></div>' +
+                '<div class="bd-info">' + bankHtml + acctHtml + titleHtml + '</div>' +
+                '<button type="button" class="bd-del" data-id="' + e.id + '" title="Delete"><i class="bi bi-trash"></i></button>';
+            bdList.appendChild(div);
+        });
+    }
+
+    function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+    function loadEntries(q){
+        var url = '/api/bank-directory' + (q ? '?q=' + encodeURIComponent(q) : '');
+        fetch(url).then(function(r){ return r.json(); }).then(function(data){
+            _entries = data;
+            renderEntries(data);
+        });
+    }
+
+    var _searchTimer;
+    bdSearch.addEventListener('input', function(){
+        clearTimeout(_searchTimer);
+        var q = this.value.trim();
+        _searchTimer = setTimeout(function(){ loadEntries(q); }, 250);
+    });
+
+    bdSaveBtn.addEventListener('click', function(){
+        var bank  = document.getElementById('bdNewBank').value.trim(),
+            acct  = document.getElementById('bdNewAcct').value.trim(),
+            title = document.getElementById('bdNewTitle').value.trim();
+        if(!bank && !acct && !title){ alert('Please fill at least one field.'); return; }
+        bdSaveBtn.disabled = true;
+        fetch('/api/bank-directory/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrf_token]').value },
+            body: JSON.stringify({ bank_name: bank, account_no: acct, account_title: title })
+        }).then(function(r){ return r.json(); }).then(function(entry){
+            bdSaveBtn.disabled = false;
+            document.getElementById('bdNewBank').value = '';
+            document.getElementById('bdNewAcct').value = '';
+            document.getElementById('bdNewTitle').value = '';
+            bdAddForm.style.display = 'none';
+            bdAddToggle.style.display = 'block';
+            loadEntries(bdSearch.value.trim());
+        }).catch(function(){ bdSaveBtn.disabled = false; });
+    });
+
+    bdList.addEventListener('click', function(e){
+        var btn = e.target.closest('.bd-del');
+        if(!btn) return;
+        if(!confirm('Delete this bank account entry?')) return;
+        var id = btn.getAttribute('data-id');
+        fetch('/api/bank-directory/' + id + '/delete', {
+            method: 'POST',
+            headers: {'X-CSRFToken': document.querySelector('[name=csrf_token]').value }
+        }).then(function(){ loadEntries(bdSearch.value.trim()); });
+    });
+
+    loadEntries('');
 })();
 </script>
 {% endblock %}

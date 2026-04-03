@@ -367,6 +367,7 @@ from routes_finance import (
     fund_transfer_add, fund_transfer_edit, fund_transfer_delete, fund_transfers_list,
     wallet_dashboard,
     journal_voucher_add, journal_vouchers_list,
+    bank_directory_list_api, bank_directory_add_api, bank_directory_delete_api,
 )  # noqa: E402
 
 from routes_payroll import (
@@ -412,6 +413,11 @@ app.add_url_rule('/accounts/fund-transfer/<int:pk>/delete', 'fund_transfer_delet
 
 # Wallet Dashboard
 app.add_url_rule('/accounts/wallet-dashboard', 'wallet_dashboard', wallet_dashboard, methods=['GET', 'POST'])
+
+# Bank Account Directory API
+app.add_url_rule('/api/bank-directory', 'bank_directory_list', bank_directory_list_api, methods=['GET'])
+app.add_url_rule('/api/bank-directory/add', 'bank_directory_add', bank_directory_add_api, methods=['POST'])
+app.add_url_rule('/api/bank-directory/<int:pk>/delete', 'bank_directory_delete', bank_directory_delete_api, methods=['POST'])
 
 # Journal Voucher (replace placeholder)
 app.add_url_rule('/accounts/jv', 'accounts_jv', journal_voucher_add, methods=['GET', 'POST'])

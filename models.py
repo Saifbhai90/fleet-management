@@ -1867,3 +1867,27 @@ class AppRelease(db.Model):
             return '—'
         mb = self.file_size_bytes / (1024 * 1024)
         return f'{mb:.1f} MB'
+
+
+# ────────────────────────────────────────────────
+# Bank Account Directory (quick-reference notepad)
+# ────────────────────────────────────────────────
+class BankAccountDirectory(db.Model):
+    __tablename__ = 'bank_account_directory'
+
+    id = db.Column(db.Integer, primary_key=True)
+    bank_name = db.Column(db.String(120), nullable=True)
+    account_no = db.Column(db.String(60), nullable=True)
+    account_title = db.Column(db.String(200), nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    created_by = db.relationship('User', backref='bank_directory_entries', lazy='select')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'bank_name': self.bank_name or '',
+            'account_no': self.account_no or '',
+            'account_title': self.account_title or '',
+        }
