@@ -1728,6 +1728,12 @@ def company_form(id=None):
             if not id:
                 db.session.add(company)
             db.session.commit()
+            try:
+                from routes_finance import _auto_create_coa_account
+                _auto_create_coa_account('company', company.id, company.name)
+                db.session.commit()
+            except Exception:
+                pass
             flash('Company saved successfully!', 'success')
             return redirect(url_for('companies'))
         except Exception as e:
@@ -3071,6 +3077,12 @@ def driver_form(id=None):
             if not id:
                 db.session.add(driver)
             db.session.commit()
+            try:
+                from routes_finance import _auto_create_coa_account
+                _auto_create_coa_account('driver', driver.id, driver.name, extra_label=driver.driver_id)
+                db.session.commit()
+            except Exception:
+                pass
             from r2_storage import upload_image_file as _r2_img, upload_pdf_file as _r2_pdf, R2_PUBLIC_URL as _r2_url
             from r2_storage import R2_ACCESS_KEY_ID as _r2_key, R2_ENDPOINT_URL as _r2_ep, R2_BUCKET_NAME as _r2_bkt
             _use_r2 = bool(_r2_url and _r2_key and _r2_ep and _r2_bkt)
@@ -3332,6 +3344,12 @@ def employee_form(id=None):
                     emp.address = (form1.address.data or '').strip()
                     emp.joining_date = form1.joining_date.data
                     db.session.commit()
+                    try:
+                        from routes_finance import _auto_create_coa_account
+                        _auto_create_coa_account('employee', emp.id, emp.name, extra_label=emp.code)
+                        db.session.commit()
+                    except Exception:
+                        pass
                     flash('Step 1 saved. Ab Contact & Job bharo.', 'success')
                     return redirect(url_for('employee_form', id=emp.id, tab=2))
                 except Exception as e:
@@ -3564,6 +3582,12 @@ def employee_assignment_form():
             emp.projects = [Project.query.get(pid) for pid in project_ids if Project.query.get(pid)]
             emp.districts = [District.query.get(did) for did in district_ids if District.query.get(did)]
             db.session.commit()
+            try:
+                from routes_finance import _auto_create_coa_account
+                _auto_create_coa_account('employee', emp.id, emp.name, extra_label=emp.code)
+                db.session.commit()
+            except Exception:
+                pass
 
             session.pop('employee_draft', None)
             session.pop('employee_draft_id', None)
@@ -3794,6 +3818,13 @@ def employees_import():
             for emp in employees_to_add:
                 db.session.add(emp)
             db.session.commit()
+            try:
+                from routes_finance import _auto_create_coa_account
+                for emp in employees_to_add:
+                    _auto_create_coa_account('employee', emp.id, emp.name, extra_label=emp.code)
+                db.session.commit()
+            except Exception:
+                pass
             flash(f'{len(employees_to_add)} employee(s) imported. Ab Assignment aur Documents form se assign karein.', 'success')
             return redirect(url_for('employees_list'))
         except Exception as e:
@@ -13925,6 +13956,12 @@ def party_form(id=None):
         if not id:
             db.session.add(party)
         db.session.commit()
+        try:
+            from routes_finance import _auto_create_coa_account
+            _auto_create_coa_account('party', party.id, party.name, extra_label=party.party_type)
+            db.session.commit()
+        except Exception:
+            pass
         flash('Party saved.', 'success')
         next_url = request.form.get('next') or request.args.get('next') or url_for('party_list')
         return redirect(next_url)

@@ -796,6 +796,192 @@ def _populate_account_form(form):
 
 
 # ════════════════════════════════════════════════════════════════════════════════
+# CHART OF ACCOUNTS — SEED & AUTO-CREATE HELPERS
+# ════════════════════════════════════════════════════════════════════════════════
+
+_COA_SEED = [
+    # (code, name, type, parent_code, description)
+    # ── ASSETS ──
+    ('1000', 'Assets',                       'Asset',     None,   'All asset accounts'),
+    ('1100', 'Cash & Bank',                  'Asset',     '1000', 'Cash in hand, bank accounts'),
+    ('1101', 'Cash in Hand',                 'Asset',     '1100', 'Physical cash held by the company'),
+    ('1102', 'Bank Account - HBL',           'Asset',     '1100', 'Example: Habib Bank Limited account'),
+    ('1200', 'Wallets / Receivables',        'Asset',     '1000', 'Employee, Driver, DTO wallets (advances given)'),
+    ('1300', 'Advance to Parties',           'Asset',     '1000', 'Advances paid to fuel pumps, workshops, vendors'),
+
+    # ── LIABILITIES ──
+    ('2000', 'Liabilities',                  'Liability', None,   'All liability accounts'),
+    ('2100', 'Payables',                     'Liability', '2000', 'Amounts owed to suppliers / parties'),
+    ('2101', 'Salary Payable',               'Liability', '2100', 'Example: Unpaid employee salaries'),
+    ('2200', 'Company Funds Received',       'Liability', '2000', 'Funds received from companies (to be accounted)'),
+
+    # ── EQUITY ──
+    ('3000', 'Equity',                       'Equity',    None,   'Owner equity and retained earnings'),
+    ('3100', 'Owner Capital',                'Equity',    '3000', 'Capital invested by owner'),
+    ('3200', 'Retained Earnings',            'Equity',    '3000', 'Accumulated profits/losses'),
+
+    # ── REVENUE ──
+    ('4000', 'Revenue',                      'Revenue',   None,   'All income accounts'),
+    ('4100', 'Service Income',               'Revenue',   '4000', 'Income from ambulance/transport services'),
+    ('4200', 'Penalty / Fine Income',        'Revenue',   '4000', 'Fines collected from drivers'),
+
+    # ── EXPENSES ──
+    ('5000', 'Expenses',                     'Expense',   None,   'All expense accounts'),
+    ('5100', 'Fuel Expenses',                'Expense',   '5000', 'Diesel, petrol, CNG purchases'),
+    ('5101', 'Diesel',                       'Expense',   '5100', 'Example: Diesel fuel expense'),
+    ('5102', 'Petrol',                       'Expense',   '5100', 'Example: Petrol fuel expense'),
+    ('5200', 'Oil Expenses',                 'Expense',   '5000', 'Engine oil, gear oil, brake oil'),
+    ('5201', 'Engine Oil',                   'Expense',   '5200', 'Example: Engine oil purchase'),
+    ('5300', 'Maintenance Expenses',         'Expense',   '5000', 'Vehicle repairs, spare parts, servicing'),
+    ('5301', 'Spare Parts',                  'Expense',   '5300', 'Example: Spare parts purchase'),
+    ('5302', 'Labour / Workshop Charges',    'Expense',   '5300', 'Example: Mechanic/workshop fees'),
+    ('5400', 'Salary & Wages',              'Expense',   '5000', 'Driver salaries, employee wages'),
+    ('5401', 'Driver Salaries',              'Expense',   '5400', 'Example: Monthly driver salary payments'),
+    ('5402', 'Employee Salaries',            'Expense',   '5400', 'Example: Monthly employee salary payments'),
+    ('5500', 'Operational Expenses',         'Expense',   '5000', 'Day-to-day office/operational costs'),
+    ('5501', 'TCS / Tax Charges',            'Expense',   '5500', 'Example: Tax collected at source'),
+    ('5502', 'Travel Expense',               'Expense',   '5500', 'Example: Travel fare, bus tickets'),
+    ('5503', 'Photocopy / Printing',         'Expense',   '5500', 'Example: Printing, photocopy, stationery'),
+    ('5504', 'Mobile / Phone Recharge',      'Expense',   '5500', 'Example: Phone credit, SIM recharge'),
+    ('5505', 'Courier / Postage',            'Expense',   '5500', 'Example: TCS, Leopards, postal charges'),
+    ('5506', 'Office Supplies / Stationery', 'Expense',   '5500', 'Example: Pens, papers, files'),
+    ('5507', 'Food / Refreshment',           'Expense',   '5500', 'Example: Tea, lunch during duty'),
+    ('5600', 'Miscellaneous Expenses',       'Expense',   '5000', 'Other/uncategorized expenses'),
+
+    # ── PARENT HEADS FOR AUTO-CREATED ACCOUNTS ──
+    ('6000', 'Drivers',                      'Asset',     '1200', 'Auto-created: one sub-account per driver'),
+    ('6500', 'Employees',                    'Asset',     '1200', 'Auto-created: one sub-account per employee'),
+    ('7000', 'Parties / Vendors',            'Liability', '2100', 'Auto-created: one sub-account per party'),
+    ('8000', 'Companies',                    'Liability', '2200', 'Auto-created: one sub-account per company'),
+]
+
+def seed_chart_of_accounts():
+    """Seed default head accounts if not present. Safe to call multiple times."""
+    from models import Company as CompanyModel
+    code_map = {a.code: a for a in Account.query.all()}
+    created = 0
+    for code, name, atype, parent_code, desc in _COA_SEED:
+        if code in code_map:
+            continue
+        parent_id = code_map[parent_code].id if parent_code and parent_code in code_map else None
+        acct = Account(code=code, name=name, account_type=atype,
+                       parent_id=parent_id, is_active=True,
+                       opening_balance=0, current_balance=0, description=desc)
+        db.session.add(acct)
+        db.session.flush()
+        code_map[code] = acct
+        created += 1
+
+    # Auto-create accounts for ALL existing drivers
+    parent_drv = code_map.get('6000')
+    if parent_drv:
+        existing_drv = {a.entity_id for a in Account.query.filter_by(entity_type='driver').all()}
+        for drv in Driver.query.order_by(Driver.id).all():
+            if drv.id not in existing_drv:
+                _auto_create_coa_account('driver', drv.id, drv.name,
+                                         extra_label=drv.driver_id, parent_head=parent_drv,
+                                         _code_map=code_map)
+                created += 1
+
+    # Auto-create accounts for ALL existing employees
+    parent_emp = code_map.get('6500')
+    if parent_emp:
+        existing_emp = {a.entity_id for a in Account.query.filter_by(entity_type='employee').all()}
+        for emp in Employee.query.order_by(Employee.id).all():
+            if emp.id not in existing_emp:
+                _auto_create_coa_account('employee', emp.id, emp.name,
+                                         extra_label=emp.code, parent_head=parent_emp,
+                                         _code_map=code_map)
+                created += 1
+
+    # Auto-create accounts for ALL existing parties
+    parent_pty = code_map.get('7000')
+    if parent_pty:
+        existing_pty = {a.entity_id for a in Account.query.filter_by(entity_type='party').all()}
+        for pty in Party.query.order_by(Party.id).all():
+            if pty.id not in existing_pty:
+                _auto_create_coa_account('party', pty.id, pty.name,
+                                         extra_label=pty.party_type, parent_head=parent_pty,
+                                         _code_map=code_map)
+                created += 1
+
+    # Auto-create accounts for ALL existing companies
+    parent_co = code_map.get('8000')
+    if parent_co:
+        existing_co = {a.entity_id for a in Account.query.filter_by(entity_type='company').all()}
+        for co in CompanyModel.query.order_by(CompanyModel.id).all():
+            if co.id not in existing_co:
+                _auto_create_coa_account('company', co.id, co.name,
+                                         parent_head=parent_co, _code_map=code_map)
+                created += 1
+
+    if created:
+        db.session.commit()
+    return created
+
+
+def _auto_create_coa_account(entity_type, entity_id, entity_name,
+                              extra_label=None, parent_head=None, _code_map=None):
+    """Create an Account sub-entry under the appropriate parent head."""
+    existing = Account.query.filter_by(entity_type=entity_type, entity_id=entity_id).first()
+    if existing:
+        return existing
+
+    parent_codes = {
+        'driver': '6000', 'employee': '6500', 'party': '7000', 'company': '8000',
+    }
+    if not parent_head:
+        parent_head = Account.query.filter_by(code=parent_codes.get(entity_type, '5600')).first()
+    if not parent_head:
+        return None
+
+    prefix = parent_head.code
+    max_sub = db.session.query(db.func.max(Account.code)).filter(
+        Account.entity_type == entity_type
+    ).scalar()
+    if max_sub:
+        try:
+            next_num = int(max_sub) + 1
+        except ValueError:
+            next_num = int(prefix) * 10 + 1
+    else:
+        next_num = int(prefix) * 10 + 1
+    new_code = str(next_num)
+
+    lbl = f" ({extra_label})" if extra_label else ''
+    type_labels = {'driver': 'Driver', 'employee': 'Employee',
+                   'party': 'Vendor', 'company': 'Company'}
+    acct = Account(
+        code=new_code,
+        name=f"{entity_name}{lbl}",
+        account_type=parent_head.account_type,
+        parent_id=parent_head.id,
+        is_active=True,
+        opening_balance=0,
+        current_balance=0,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        description=f"Auto-created for {type_labels.get(entity_type, entity_type)}: {entity_name}",
+    )
+    db.session.add(acct)
+    db.session.flush()
+
+    if _code_map is not None:
+        _code_map[new_code] = acct
+
+    if entity_type == 'driver':
+        drv = Driver.query.get(entity_id)
+        if drv and not drv.wallet_account_id:
+            drv.wallet_account_id = acct.id
+    elif entity_type == 'employee':
+        emp = Employee.query.get(entity_id)
+        if emp and not emp.wallet_account_id:
+            emp.wallet_account_id = acct.id
+
+    return acct
+
+
+# ════════════════════════════════════════════════════════════════════════════════
 # FUND TRANSFER (Bank-like wallet system)
 # ════════════════════════════════════════════════════════════════════════════════
 

@@ -200,6 +200,8 @@ if _run_startup_tasks:
                 ('vehicle_daily_task', 'start_reading', 'NUMERIC(12,2)'),
                 ('employee', 'wallet_account_id', 'INTEGER REFERENCES account(id)'),
                 ('driver', 'wallet_account_id', 'INTEGER REFERENCES account(id)'),
+                ('account', 'entity_type', 'VARCHAR(30)'),
+                ('account', 'entity_id', 'INTEGER'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():
@@ -319,6 +321,16 @@ if _run_startup_tasks:
             print("Auth seed done.")
         except Exception as e:
             print("Auth seed skip or error:", e)
+        # Seed Chart of Accounts default heads + auto-create accounts for existing entities
+        try:
+            from routes_finance import seed_chart_of_accounts
+            _coa_created = seed_chart_of_accounts()
+            if _coa_created:
+                print(f"Chart of Accounts: {_coa_created} account(s) seeded/auto-created.")
+            else:
+                print("Chart of Accounts: already up to date.")
+        except Exception as e:
+            print(f"CoA seed skip or error: {e}")
 
 # Import routes after app & db are ready
 from routes import *  # noqa: E402,F401

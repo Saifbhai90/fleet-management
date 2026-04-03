@@ -54,6 +54,10 @@
                             <td {% if account.parent_id %}style="padding-left: 2.5rem;"{% endif %}>
                                 {% if account.parent_id %}<i class="bi bi-arrow-return-right text-muted me-1"></i>{% endif %}
                                 {{ account.name }}
+                                {% if account.entity_type %}
+                                {% set etype_icons = {'driver': 'bi-person-fill text-primary', 'employee': 'bi-person-badge text-success', 'party': 'bi-shop text-warning', 'company': 'bi-building text-info'} %}
+                                <i class="bi {{ etype_icons.get(account.entity_type, 'bi-tag') }} ms-1" title="Auto: {{ account.entity_type|title }}"></i>
+                                {% endif %}
                             </td>
                             <td>
                                 {% set type_colors = {'Asset': 'primary', 'Liability': 'warning', 'Equity': 'success', 'Revenue': 'info', 'Expense': 'danger'} %}

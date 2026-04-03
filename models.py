@@ -1173,6 +1173,8 @@ class Account(db.Model):
     district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
     party_id = db.Column(db.Integer, db.ForeignKey('party.id'), nullable=True)
+    entity_type = db.Column(db.String(30), nullable=True, index=True)  # driver, employee, party, company
+    entity_id = db.Column(db.Integer, nullable=True)
     
     description = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
