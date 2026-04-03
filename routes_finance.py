@@ -1705,3 +1705,16 @@ def bank_directory_delete_api(pk):
     db.session.delete(entry)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+def ft_description_suggestions_api():
+    """Return unique past Fund Transfer descriptions for autocomplete."""
+    q = (request.args.get('q') or '').strip().lower()
+    query = db.session.query(FundTransfer.description).filter(
+        FundTransfer.description.isnot(None),
+        FundTransfer.description != '',
+    ).distinct().order_by(FundTransfer.description)
+    if q:
+        query = query.filter(FundTransfer.description.ilike(f'%{q}%'))
+    results = query.limit(30).all()
+    return jsonify([r[0] for r in results if r[0]])

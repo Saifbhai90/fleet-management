@@ -13,6 +13,13 @@
 .ft-preview-wrap .ft-remove{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:#dc3545;color:#fff;border:none;font-size:.7rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .ft-paste-hint{font-size:.72rem;color:#999;margin-top:4px}
 
+/* Description autocomplete */
+.desc-suggest-list{position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #dee2e6;border-top:none;border-radius:0 0 8px 8px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:1050;max-height:200px;overflow-y:auto}
+.desc-suggest-list .desc-item{padding:7px 12px;font-size:.84rem;cursor:pointer;border-bottom:1px solid #f5f5f5;transition:background .12s}
+.desc-suggest-list .desc-item:last-child{border-bottom:none}
+.desc-suggest-list .desc-item:hover,.desc-suggest-list .desc-item.active{background:#e8f5e9;color:#1b5e20}
+.desc-suggest-list .desc-item mark{background:#fff3cd;padding:0 1px;border-radius:2px}
+
 /* Bank Directory Panel */
 .bd-panel{position:sticky;top:16px}
 .bd-panel .card{border-radius:12px;overflow:hidden;box-shadow:0 3px 18px rgba(0,0,0,.1)}
@@ -89,9 +96,10 @@
                                 {{ form.project_id.label(class="form-label fw-bold") }}
                                 {{ form.project_id(class="form-select search-select") }}
                             </div>
-                            <div class="col-12">
+                            <div class="col-12" style="position:relative">
                                 {{ form.description.label(class="form-label fw-bold") }}
-                                {{ form.description(class="form-control", rows="2") }}
+                                {{ form.description(class="form-control", rows="2", id="ftDesc", autocomplete="off") }}
+                                <div id="descSuggest" class="desc-suggest-list" style="display:none"></div>
                             </div>
 
                             {# ── Salary checkbox ── #}
@@ -317,6 +325,66 @@
     });
 
     loadEntries('');
+
+    /* ── Description Autocomplete ── */
+    var descBox = document.getElementById('ftDesc'),
+        sugBox  = document.getElementById('descSuggest'),
+        _dTimer, _activeIdx = -1;
+
+    function highlightQ(text, q){
+        if(!q) return esc(text);
+        var safe = esc(text);
+        q.split(/\s+/).filter(Boolean).forEach(function(tok){
+            var re = new RegExp('(' + tok.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')','gi');
+            safe = safe.replace(re,'<mark>$1</mark>');
+        });
+        return safe;
+    }
+
+    function showSuggestions(items, q){
+        sugBox.innerHTML = '';
+        _activeIdx = -1;
+        if(!items.length){ sugBox.style.display='none'; return; }
+        items.forEach(function(txt, i){
+            var d = document.createElement('div');
+            d.className = 'desc-item';
+            d.innerHTML = highlightQ(txt, q);
+            d.setAttribute('data-val', txt);
+            d.addEventListener('mousedown', function(e){
+                e.preventDefault();
+                descBox.value = txt;
+                sugBox.style.display = 'none';
+            });
+            sugBox.appendChild(d);
+        });
+        sugBox.style.display = 'block';
+    }
+
+    descBox.addEventListener('input', function(){
+        clearTimeout(_dTimer);
+        var q = this.value.trim();
+        if(!q){ sugBox.style.display='none'; return; }
+        _dTimer = setTimeout(function(){
+            fetch('/api/ft-descriptions?q=' + encodeURIComponent(q))
+                .then(function(r){ return r.json(); })
+                .then(function(items){ showSuggestions(items, q); });
+        }, 200);
+    });
+
+    descBox.addEventListener('keydown', function(e){
+        var items = sugBox.querySelectorAll('.desc-item');
+        if(!items.length || sugBox.style.display === 'none') return;
+        if(e.key === 'ArrowDown'){ e.preventDefault(); _activeIdx = Math.min(_activeIdx+1, items.length-1); }
+        else if(e.key === 'ArrowUp'){ e.preventDefault(); _activeIdx = Math.max(_activeIdx-1, 0); }
+        else if(e.key === 'Enter' && _activeIdx >= 0){ e.preventDefault(); descBox.value = items[_activeIdx].getAttribute('data-val'); sugBox.style.display='none'; return; }
+        else if(e.key === 'Escape'){ sugBox.style.display='none'; return; }
+        else return;
+        items.forEach(function(el,i){ el.classList.toggle('active', i===_activeIdx); });
+        if(_activeIdx >= 0) items[_activeIdx].scrollIntoView({block:'nearest'});
+    });
+
+    descBox.addEventListener('blur', function(){ setTimeout(function(){ sugBox.style.display='none'; }, 150); });
+    descBox.addEventListener('focus', function(){ if(this.value.trim()) this.dispatchEvent(new Event('input')); });
 })();
 </script>
 {% endblock %}

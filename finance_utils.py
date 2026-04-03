@@ -660,21 +660,26 @@ def create_fund_transfer_journal(transfer_obj, from_wallet, to_wallet):
     """Create journal entry for a fund transfer: Debit receiver wallet, Credit sender wallet.
     If is_salary is True, add neutralizing lines so receiver balance stays zero
     and the salary expense (5401/5402) is recorded."""
+    user_desc = (transfer_obj.description or '').strip()
+    recv_desc = user_desc or f"Fund received from {transfer_obj.from_name}"
+    send_desc = user_desc or f"Fund sent to {transfer_obj.to_name}"
+
     lines = [
         {'account_id': to_wallet.id, 'debit': transfer_obj.amount, 'credit': 0,
-         'description': f"Fund received from {transfer_obj.from_name}"},
+         'description': recv_desc},
         {'account_id': from_wallet.id, 'debit': 0, 'credit': transfer_obj.amount,
-         'description': f"Fund sent to {transfer_obj.to_name}"},
+         'description': send_desc},
     ]
 
     if getattr(transfer_obj, 'is_salary', False):
         salary_expense = _ensure_salary_expense_account(transfer_obj)
+        sal_desc = user_desc or f"Salary paid to {transfer_obj.to_name}"
 
         lines.extend([
             {'account_id': to_wallet.id, 'debit': 0, 'credit': transfer_obj.amount,
-             'description': f"Salary settled – balance neutralized"},
+             'description': sal_desc},
             {'account_id': salary_expense.id, 'debit': transfer_obj.amount, 'credit': 0,
-             'description': f"Salary paid to {transfer_obj.to_name}"},
+             'description': sal_desc},
         ])
 
     desc = f"Fund Transfer {transfer_obj.transfer_number}"
