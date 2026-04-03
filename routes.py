@@ -15981,7 +15981,18 @@ def report_driver_profile(driver_id):
     # Build combined job history sorted oldest first
     job_history = []
     if driver.assign_date:
-        job_history.append({'date': driver.assign_date, 'type': 'assignment', 'data': driver})
+        if transfers:
+            first_t = transfers[0]
+            _assign_snap = type('Snap', (), {
+                'vehicle': first_t.old_vehicle,
+                'project': first_t.old_project,
+                'district': first_t.old_district,
+                'shift': first_t.old_shift,
+                'assign_remarks': driver.assign_remarks,
+            })()
+        else:
+            _assign_snap = driver
+        job_history.append({'date': driver.assign_date, 'type': 'assignment', 'data': _assign_snap})
     for t in transfers:
         job_history.append({'date': t.transfer_date, 'type': 'transfer', 'data': t})
     for s in status_changes:
