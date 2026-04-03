@@ -13311,7 +13311,12 @@ def without_task_list():
     else:
         form.project_id.choices = [(0, '-- All Projects --')]
     form.project_id.data = project_id
-    query = VehicleMoveWithoutTask.query.filter(
+    query = VehicleMoveWithoutTask.query.options(
+        db.joinedload(VehicleMoveWithoutTask.district),
+        db.joinedload(VehicleMoveWithoutTask.project),
+        db.joinedload(VehicleMoveWithoutTask.vehicle),
+        db.joinedload(VehicleMoveWithoutTask.driver),
+    ).filter(
         VehicleMoveWithoutTask.move_date >= from_date,
         VehicleMoveWithoutTask.move_date <= to_date
     )
@@ -13353,6 +13358,15 @@ def without_task_new():
             if veh_id_raw is None:
                 break
             veh_id = int(veh_id_raw) if veh_id_raw else None
+            row_did = did
+            row_pid = pid
+            if veh_id and (not row_did or not row_pid):
+                _veh = Vehicle.query.get(veh_id)
+                if _veh:
+                    if not row_did:
+                        row_did = _veh.district_id
+                    if not row_pid:
+                        row_pid = _veh.project_id
             try:
                 km_in = float(request.form.get(f'row_{idx}_km_in') or 0)
             except (ValueError, TypeError):
@@ -13380,7 +13394,7 @@ def without_task_new():
             except (ValueError, TypeError):
                 driver_id = None
             rec = VehicleMoveWithoutTask(
-                move_date=move_date, district_id=did, project_id=pid, vehicle_id=veh_id,
+                move_date=move_date, district_id=row_did, project_id=row_pid, vehicle_id=veh_id,
                 km_in=km_in, km_out=km_out, d_km=d_km,
                 logbook_task=logbook_task, emg_task=0, t_km=t_km,
                 remarks=remarks, fine=str(fine_amt) if fine_amt > 0 else 'No',
@@ -13390,7 +13404,7 @@ def without_task_new():
             db.session.flush()
             if fine_amt > 0 and driver_id:
                 pen = PenaltyRecord(
-                    district_id=did, project_id=pid, vehicle_id=veh_id,
+                    district_id=row_did, project_id=row_pid, vehicle_id=veh_id,
                     driver_id=driver_id, record_date=move_date,
                     fine=str(fine_amt), remarks='Vehicle Move Without Task Fine',
                     source_type='without_task', source_id=rec.id,
