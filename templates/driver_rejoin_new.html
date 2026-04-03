@@ -172,9 +172,10 @@ textarea.form-control { height: auto !important; }
 (function() {
   function rebuildSel(el, html) {
     if (!el) return;
-    if (el.tomselect) el.tomselect.destroy();
+    if (el.tomselect) { el.tomselect.destroy(); delete el.tomselect; }
     el.innerHTML = html;
-    initSearchableDropdowns(el.parentNode);
+    el.disabled = false;
+    if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(el.parentNode);
   }
 
   var oldProj  = document.getElementById('old_project');
