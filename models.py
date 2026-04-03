@@ -1782,8 +1782,12 @@ class FundTransfer(db.Model):
     transfer_date = db.Column(db.Date, nullable=False, index=True)
     from_employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=True)
     from_driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True)
+    from_party_id = db.Column(db.Integer, db.ForeignKey('party.id'), nullable=True)
+    from_company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=True)
     to_employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=True)
     to_driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True)
+    to_party_id = db.Column(db.Integer, db.ForeignKey('party.id'), nullable=True)
+    to_company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=True)
     amount = db.Column(db.Numeric(15, 2), nullable=False)
     payment_mode = db.Column(db.String(30), nullable=False, default='Cash')
     reference_no = db.Column(db.String(50), nullable=True)
@@ -1796,8 +1800,12 @@ class FundTransfer(db.Model):
 
     from_employee = db.relationship('Employee', foreign_keys=[from_employee_id], backref='sent_transfers', lazy='select')
     from_driver = db.relationship('Driver', foreign_keys=[from_driver_id], backref='sent_transfers', lazy='select')
+    from_party = db.relationship('Party', foreign_keys=[from_party_id], backref='sent_transfers', lazy='select')
+    from_company = db.relationship('Company', foreign_keys=[from_company_id], backref='sent_transfers', lazy='select')
     to_employee = db.relationship('Employee', foreign_keys=[to_employee_id], backref='received_transfers', lazy='select')
     to_driver = db.relationship('Driver', foreign_keys=[to_driver_id], backref='received_transfers', lazy='select')
+    to_party = db.relationship('Party', foreign_keys=[to_party_id], backref='received_transfers', lazy='select')
+    to_company = db.relationship('Company', foreign_keys=[to_company_id], backref='received_transfers', lazy='select')
     district = db.relationship('District', backref='fund_transfers', lazy='select')
     project = db.relationship('Project', backref='fund_transfers', lazy='select')
     journal_entry = db.relationship('JournalEntry', backref='fund_transfer', lazy='select')
@@ -1809,6 +1817,10 @@ class FundTransfer(db.Model):
             return self.from_employee.name
         if self.from_driver:
             return self.from_driver.name
+        if self.from_party:
+            return self.from_party.name
+        if self.from_company:
+            return self.from_company.name
         return '—'
 
     @property
@@ -1817,6 +1829,10 @@ class FundTransfer(db.Model):
             return self.to_employee.name
         if self.to_driver:
             return self.to_driver.name
+        if self.to_party:
+            return self.to_party.name
+        if self.to_company:
+            return self.to_company.name
         return '—'
 
     def __repr__(self):

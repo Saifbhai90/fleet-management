@@ -2,7 +2,7 @@
 Finance & Accounting Utility Functions
 Helper functions for voucher number generation, journal entry creation, and balance updates
 """
-from models import db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence, Employee, Driver
+from models import db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence, Employee, Driver, Party, Company
 from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
 from decimal import Decimal
@@ -551,10 +551,14 @@ def create_expense_journal(expense_type, expense_obj, expense_account_code, part
 
 def ensure_wallet_account(person_type, person_id):
     """
-    Ensure the employee/driver has a wallet Account. If not, auto-create one
-    under the 'Employee Wallets' parent (code 1200).
+    Ensure the entity (employee/driver/party/company) has a wallet Account.
+    If not, auto-create one under the appropriate CoA parent head.
+    Supported person_types: 'employee'/'emp', 'driver'/'drv', 'party'/'pty', 'company'/'com'.
     """
-    if person_type == 'employee':
+    _type_map = {'emp': 'employee', 'drv': 'driver', 'pty': 'party', 'com': 'company'}
+    ptype = _type_map.get(person_type, person_type)
+
+    if ptype == 'employee':
         person = Employee.query.get(person_id)
         if not person:
             raise ValueError(f"Employee {person_id} not found")
@@ -562,7 +566,7 @@ def ensure_wallet_account(person_type, person_id):
             acct = Account.query.get(person.wallet_account_id)
             if acct:
                 return acct
-    elif person_type == 'driver':
+    elif ptype == 'driver':
         person = Driver.query.get(person_id)
         if not person:
             raise ValueError(f"Driver {person_id} not found")
@@ -570,33 +574,60 @@ def ensure_wallet_account(person_type, person_id):
             acct = Account.query.get(person.wallet_account_id)
             if acct:
                 return acct
+    elif ptype == 'party':
+        person = Party.query.get(person_id)
+        if not person:
+            raise ValueError(f"Party {person_id} not found")
+        existing = Account.query.filter_by(entity_type='party', entity_id=person_id).first()
+        if existing:
+            return existing
+    elif ptype == 'company':
+        person = Company.query.get(person_id)
+        if not person:
+            raise ValueError(f"Company {person_id} not found")
+        existing = Account.query.filter_by(entity_type='company', entity_id=person_id).first()
+        if existing:
+            return existing
     else:
         raise ValueError(f"Unknown person_type: {person_type}")
 
-    parent = Account.query.filter_by(code='1200').first()
+    _parent_codes = {
+        'driver': '6000', 'employee': '6500',
+        'party': '7000', 'company': '8000',
+    }
+    _labels = {
+        'driver': 'DRV', 'employee': 'EMP',
+        'party': 'PTY', 'company': 'COM',
+    }
+    parent_code = _parent_codes[ptype]
+    parent = Account.query.filter_by(code=parent_code).first()
     parent_id = parent.id if parent else None
-
+    code_prefix = parent_code
+    code_end = str(int(parent_code) + 999)
     max_code_row = db.session.query(db.func.max(Account.code)).filter(
-        Account.code.between('1200', '1299')
+        Account.code.between(code_prefix, code_end)
     ).scalar()
-    next_code = str(int(max_code_row) + 1) if max_code_row and max_code_row >= '1200' else '1201'
+    next_code = str(int(max_code_row) + 1) if max_code_row and max_code_row >= code_prefix else str(int(code_prefix) + 1)
 
-    label = 'EMP' if person_type == 'employee' else 'DRV'
+    label = _labels[ptype]
     wallet = Account(
         code=next_code,
-        name=f"Wallet - {person.name} ({label}-{person.id})",
-        account_type='Asset',
+        name=f"{person.name} ({label}-{person.id})",
+        account_type=parent.account_type if parent else 'Asset',
         parent_id=parent_id,
         is_active=True,
         opening_balance=0,
         current_balance=0,
         description=f"Auto-created wallet for {person.name}",
+        entity_type=ptype,
+        entity_id=person_id,
     )
     db.session.add(wallet)
     db.session.flush()
 
-    person.wallet_account_id = wallet.id
-    db.session.flush()
+    if ptype in ('employee', 'driver') and hasattr(person, 'wallet_account_id'):
+        person.wallet_account_id = wallet.id
+        db.session.flush()
     return wallet
 
 

@@ -4,7 +4,7 @@ All routes for vouchers, journal entries, ledgers, and financial reports
 """
 from flask import render_template, request, redirect, url_for, flash, jsonify, session
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
-                    BankEntry, EmployeeExpense, District, Project, Party, Employee, Driver, User,
+                    BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
                     FundTransfer)
 from forms import (PaymentVoucherForm, ReceiptVoucherForm, BankEntryForm, JournalVoucherForm,
                    EmployeeExpenseForm, AccountLedgerFilterForm, BalanceSheetFilterForm,
@@ -986,12 +986,16 @@ def _auto_create_coa_account(entity_type, entity_id, entity_name,
 # ════════════════════════════════════════════════════════════════════════════════
 
 def _person_choices():
-    choices = [('', '-- Select Person --')]
+    choices = [('', '-- Select Person / Account --')]
+    for c in Company.query.order_by(Company.name).all():
+        choices.append((f'com-{c.id}', f"{c.name} (Company)"))
     for e in Employee.query.filter_by(status='Active').order_by(Employee.name).all():
         post_label = e.post.full_name if e.post else 'Staff'
         choices.append((f'emp-{e.id}', f"{e.name} ({post_label})"))
     for d in Driver.query.filter_by(status='Active').order_by(Driver.name).all():
         choices.append((f'drv-{d.id}', f"{d.name} (Driver)"))
+    for p in Party.query.order_by(Party.name).all():
+        choices.append((f'pty-{p.id}', f"{p.name} ({p.party_type})"))
     return choices
 
 
@@ -1031,8 +1035,12 @@ def fund_transfer_add():
                 transfer_date=form.transfer_date.data,
                 from_employee_id=from_id if from_type == 'emp' else None,
                 from_driver_id=from_id if from_type == 'drv' else None,
+                from_party_id=from_id if from_type == 'pty' else None,
+                from_company_id=from_id if from_type == 'com' else None,
                 to_employee_id=to_id if to_type == 'emp' else None,
                 to_driver_id=to_id if to_type == 'drv' else None,
+                to_party_id=to_id if to_type == 'pty' else None,
+                to_company_id=to_id if to_type == 'com' else None,
                 amount=form.amount.data,
                 payment_mode=form.payment_mode.data,
                 reference_no=form.reference_no.data,
@@ -1080,10 +1088,18 @@ def fund_transfer_edit(pk):
             form.from_person.data = f'emp-{transfer.from_employee_id}'
         elif transfer.from_driver_id:
             form.from_person.data = f'drv-{transfer.from_driver_id}'
+        elif transfer.from_party_id:
+            form.from_person.data = f'pty-{transfer.from_party_id}'
+        elif transfer.from_company_id:
+            form.from_person.data = f'com-{transfer.from_company_id}'
         if transfer.to_employee_id:
             form.to_person.data = f'emp-{transfer.to_employee_id}'
         elif transfer.to_driver_id:
             form.to_person.data = f'drv-{transfer.to_driver_id}'
+        elif transfer.to_party_id:
+            form.to_person.data = f'pty-{transfer.to_party_id}'
+        elif transfer.to_company_id:
+            form.to_person.data = f'com-{transfer.to_company_id}'
 
     if form.validate_on_submit():
         try:
@@ -1103,8 +1119,12 @@ def fund_transfer_edit(pk):
             transfer.transfer_date = form.transfer_date.data
             transfer.from_employee_id = from_id if from_type == 'emp' else None
             transfer.from_driver_id = from_id if from_type == 'drv' else None
+            transfer.from_party_id = from_id if from_type == 'pty' else None
+            transfer.from_company_id = from_id if from_type == 'com' else None
             transfer.to_employee_id = to_id if to_type == 'emp' else None
             transfer.to_driver_id = to_id if to_type == 'drv' else None
+            transfer.to_party_id = to_id if to_type == 'pty' else None
+            transfer.to_company_id = to_id if to_type == 'com' else None
             transfer.amount = form.amount.data
             transfer.payment_mode = form.payment_mode.data
             transfer.reference_no = form.reference_no.data

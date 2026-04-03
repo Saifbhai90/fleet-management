@@ -108,8 +108,8 @@
                         <tr>
                             <td class="text-center text-muted small">{{ ((transfers.page - 1) * per_page + loop.index) if transfers.page is defined else loop.index }}</td>
                             <td>{{ ft.transfer_date|ddmmyyyy }}</td>
-                            <td>{{ ft.from_person_rel.name if ft.from_person_rel else ft.from_person }}</td>
-                            <td>{{ ft.to_person_rel.name if ft.to_person_rel else ft.to_person }}</td>
+                            <td>{{ ft.from_name }}</td>
+                            <td>{{ ft.to_name }}</td>
                             <td class="text-end fw-semibold">{{ "{:,.2f}".format(ft.amount) }}</td>
                             <td><span class="badge bg-light text-dark border">{{ ft.payment_mode }}</span></td>
                             <td>{{ ft.reference_no or '-' }}</td>

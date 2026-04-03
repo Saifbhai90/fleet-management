@@ -202,6 +202,10 @@ if _run_startup_tasks:
                 ('driver', 'wallet_account_id', 'INTEGER REFERENCES account(id)'),
                 ('account', 'entity_type', 'VARCHAR(30)'),
                 ('account', 'entity_id', 'INTEGER'),
+                ('fund_transfer', 'from_party_id', 'INTEGER REFERENCES party(id)'),
+                ('fund_transfer', 'from_company_id', 'INTEGER REFERENCES company(id)'),
+                ('fund_transfer', 'to_party_id', 'INTEGER REFERENCES party(id)'),
+                ('fund_transfer', 'to_company_id', 'INTEGER REFERENCES company(id)'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():
