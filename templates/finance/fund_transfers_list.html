@@ -6,6 +6,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
         <h2 class="mb-0"><i class="bi bi-arrow-left-right me-2 text-success"></i>Fund Transfers</h2>
         <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#acctVerifyModal" title="Account Verify"><i class="bi bi-bank me-1"></i>Account Verify</button>
             <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
             <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
             <a href="{{ url_for('fund_transfer_add') }}" class="btn btn-success btn-sm">
@@ -160,13 +161,116 @@
         </div>
     </div>
 </div>
+<!-- Account Verify Modal -->
+<div class="modal fade" id="acctVerifyModal" tabindex="-1" aria-labelledby="acctVerifyLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow" style="border-radius:14px;overflow:hidden">
+      <div class="modal-header text-white py-2" style="background:linear-gradient(135deg,#1565C0 0%,#1e88e5 55%,#42a5f5 100%)">
+        <h6 class="modal-title mb-0" id="acctVerifyLabel"><i class="bi bi-bank2 me-2"></i>Account Verify</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="p-3 bg-light border-bottom">
+          <div class="input-group">
+            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" id="avSearchInput" class="form-control border-start-0" placeholder="Search by account number, bank name, or account title..." autocomplete="off" autofocus>
+          </div>
+          <div class="text-muted mt-1" style="font-size:.72rem"><i class="bi bi-info-circle me-1"></i>Type account number from bank statement to find who it belongs to</div>
+        </div>
+        <div id="avResults" style="min-height:120px;max-height:400px;overflow-y:auto;padding:0">
+          <div class="text-center py-5 text-muted" id="avPlaceholder">
+            <i class="bi bi-search display-6 d-block mb-2 opacity-25"></i>
+            <span style="font-size:.88rem">Enter account number or name to search</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <small class="text-muted me-auto" id="avCount"></small>
+        <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.av-entry{padding:.7rem 1rem;border-bottom:1px solid #f0f0f0;display:flex;align-items:flex-start;gap:10px;transition:background .15s}
+.av-entry:hover{background:#f0f7ff}
+.av-entry:last-child{border-bottom:none}
+.av-icon{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#e3f2fd,#bbdefb);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#1565c0;font-size:.95rem}
+.av-info{flex:1;min-width:0}
+.av-bank{font-weight:600;color:#333;font-size:.88rem}
+.av-acct{color:#1565c0;font-size:.82rem;font-family:'Courier New',monospace;letter-spacing:.4px;margin-top:1px}
+.av-title{color:#666;font-size:.78rem;margin-top:2px}
+.av-title i{color:#888}
+.av-no-result{text-align:center;padding:2.5rem 1rem;color:#999}
+.av-no-result i{font-size:2.2rem;display:block;margin-bottom:8px;opacity:.35}
+mark{background:#fff3cd;padding:0 1px;border-radius:2px}
+</style>
+
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 document.addEventListener('DOMContentLoaded', function(){
     if(window.fleetTableEnhance) window.fleetTableEnhance('fundTransferTable');
     window.fleetPrintExport && window.fleetPrintExport('fundTransferTable','Fund Transfers','Fund_Transfers.csv');
 
-    
+    /* ── Account Verify Modal ── */
+    var avInput = document.getElementById('avSearchInput'),
+        avResults = document.getElementById('avResults'),
+        avPlaceholder = document.getElementById('avPlaceholder'),
+        avCount = document.getElementById('avCount'),
+        _avTimer;
+
+    function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+    function highlight(text, q){
+        if(!q || !text) return esc(text);
+        var safe = esc(text);
+        var tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
+        tokens.forEach(function(tok){
+            var re = new RegExp('(' + tok.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi');
+            safe = safe.replace(re, '<mark>$1</mark>');
+        });
+        return safe;
+    }
+
+    function avSearch(q){
+        if(!q){
+            avResults.innerHTML = '';
+            avResults.appendChild(avPlaceholder);
+            avPlaceholder.style.display = 'block';
+            avCount.textContent = '';
+            return;
+        }
+        fetch('/api/bank-directory?q=' + encodeURIComponent(q))
+            .then(function(r){ return r.json(); })
+            .then(function(items){
+                avResults.innerHTML = '';
+                avPlaceholder.style.display = 'none';
+                avCount.textContent = items.length + ' result' + (items.length !== 1 ? 's' : '') + ' found';
+                if(!items.length){
+                    avResults.innerHTML = '<div class="av-no-result"><i class="bi bi-exclamation-circle"></i>No matching account found.<br><small>Try a different account number or name.</small></div>';
+                    return;
+                }
+                items.forEach(function(e){
+                    var div = document.createElement('div');
+                    div.className = 'av-entry';
+                    var bankHtml = e.bank_name ? '<div class="av-bank">' + highlight(e.bank_name, q) + '</div>' : '';
+                    var acctHtml = e.account_no ? '<div class="av-acct"><i class="bi bi-hash me-1"></i>' + highlight(e.account_no, q) + '</div>' : '';
+                    var titleHtml = e.account_title ? '<div class="av-title"><i class="bi bi-person-fill me-1"></i>' + highlight(e.account_title, q) + '</div>' : '';
+                    div.innerHTML = '<div class="av-icon"><i class="bi bi-bank2"></i></div><div class="av-info">' + bankHtml + acctHtml + titleHtml + '</div>';
+                    avResults.appendChild(div);
+                });
+            });
+    }
+
+    avInput.addEventListener('input', function(){
+        clearTimeout(_avTimer);
+        var q = this.value.trim();
+        _avTimer = setTimeout(function(){ avSearch(q); }, 250);
+    });
+
+    var modal = document.getElementById('acctVerifyModal');
+    modal.addEventListener('shown.bs.modal', function(){ avInput.value = ''; avSearch(''); avInput.focus(); });
 });
 </script>
 {% endblock %}
