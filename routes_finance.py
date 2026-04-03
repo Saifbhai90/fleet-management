@@ -1079,7 +1079,8 @@ def _person_choices():
         post_label = e.post.full_name if e.post else 'Staff'
         choices.append((f'emp-{e.id}', f"{e.name} ({post_label})"))
     for d in Driver.query.filter_by(status='Active').order_by(Driver.name).all():
-        choices.append((f'drv-{d.id}', f"{d.name} (Driver)"))
+        veh = f" – {d.vehicle.vehicle_no}" if d.vehicle else ""
+        choices.append((f'drv-{d.id}', f"{d.name}{veh} (Driver)"))
     for p in Party.query.order_by(Party.name).all():
         choices.append((f'pty-{p.id}', f"{p.name} ({p.party_type})"))
     return choices
