@@ -140,38 +140,18 @@
             </div>
         </div>
 
-        <!-- Pagination -->
-        {% if transfers.pages is defined and transfers.pages > 1 %}
         <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
             <div class="d-flex justify-content-between align-items-center">
-                <small class="text-muted">
-                    <i class="bi bi-list-ul me-1"></i>Showing
-                    {{ (transfers.page - 1) * per_page + 1 if items|length > 0 else 0 }}
-                    to {{ (transfers.page - 1) * per_page + items|length }}
-                    of {{ transfers.total }} entries
-                </small>
-                <nav>
-                    <ul class="pagination pagination-sm mb-0">
-                        <li class="page-item {% if not transfers.has_prev %}disabled{% endif %}">
-                            <a class="page-link" style="cursor:pointer" onclick="goPage({{ transfers.prev_num }})"><i class="bi bi-chevron-left"></i></a>
-                        </li>
-                        {% for p in transfers.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-                            {% if p %}
-                            <li class="page-item {% if p == transfers.page %}active{% endif %}">
-                                <a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a>
-                            </li>
-                            {% else %}
-                            <li class="page-item disabled"><span class="page-link">…</span></li>
-                            {% endif %}
-                        {% endfor %}
-                        <li class="page-item {% if not transfers.has_next %}disabled{% endif %}">
-                            <a class="page-link" style="cursor:pointer" onclick="goPage({{ transfers.next_num }})"><i class="bi bi-chevron-right"></i></a>
-                        </li>
-                    </ul>
-                </nav>
+                <small class="text-muted"><i class="bi bi-list-ul me-1"></i>Showing {{ (transfers.page - 1) * per_page + 1 if transfers.items|length > 0 else 0 }} to {{ (transfers.page - 1) * per_page + transfers.items|length }} of {{ transfers.total }} entries</small>
+                {% if transfers.pages > 1 %}
+                <nav><ul class="pagination pagination-sm mb-0">
+                    <li class="page-item {% if not transfers.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ transfers.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
+                    {% for p in transfers.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == transfers.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
+                    <li class="page-item {% if not transfers.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ transfers.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
+                </ul></nav>
+                {% endif %}
             </div>
         </div>
-        {% endif %}
     </div>
 </div>
 <script>
