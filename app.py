@@ -332,9 +332,9 @@ if _run_startup_tasks:
                 for idx_sql in indexes:
                     try:
                         conn.execute(db.text(idx_sql))
+                        conn.commit()
                     except Exception:
-                        pass
-                conn.commit()
+                        conn.rollback()
                 print("Sorting indexes created/verified.")
         except Exception as e:
             print("Index creation skip:", e)
