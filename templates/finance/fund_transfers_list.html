@@ -70,76 +70,83 @@
         </div>
     </div>
 
+    <style>
+    #fundTransferTable{font-size:.76rem}
+    #fundTransferTable thead th{font-size:.72rem;padding:5px 6px;white-space:nowrap;text-transform:uppercase;letter-spacing:.3px;font-weight:700}
+    #fundTransferTable tbody td{padding:4px 6px;vertical-align:middle;white-space:nowrap}
+    #fundTransferTable .desc-cell{white-space:normal;max-width:180px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;line-height:1.3}
+    #fundTransferTable .badge{font-size:.65rem;padding:2px 5px}
+    #fundTransferTable .btn-sm{padding:1px 5px;font-size:.7rem}
+    </style>
+
     <!-- Table Card -->
     <div class="card shadow-sm border-0">
-        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center flex-wrap gap-2 py-1">
             <div class="d-flex align-items-center gap-2">
-                <label class="mb-0 small">Show</label>
-                <select id="ftPerPage" class="form-select form-select-sm" style="width:auto;" onchange="var u=new URLSearchParams(window.location.search);u.set('per_page',this.value);u.set('page','1');window.location.search=u.toString();">
+                <label class="mb-0" style="font-size:.75rem">Show</label>
+                <select id="ftPerPage" class="form-select form-select-sm" style="width:auto;font-size:.75rem;padding:2px 6px;" onchange="var u=new URLSearchParams(window.location.search);u.set('per_page',this.value);u.set('page','1');window.location.search=u.toString();">
                     {% for val in [25,50,100,200] %}
                     <option value="{{ val }}" {% if per_page|default(25) == val %}selected{% endif %}>{{ val }}</option>
                     {% endfor %}
                 </select>
-                <label class="mb-0 small">entries</label>
+                <label class="mb-0" style="font-size:.75rem">entries</label>
             </div>
             <div>
-                <input type="text" id="ftSearch" class="form-control form-control-sm" placeholder="Search all pages..." style="width:200px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
+                <input type="text" id="ftSearch" class="form-control form-control-sm" placeholder="Search all pages..." style="width:180px;font-size:.75rem;padding:3px 8px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
             </div>
         </div>
         <div class="card-body p-0">
-            <div class="data-table-wrapper">
-                <table class="table table-hover compact-table mb-0" id="fundTransferTable">
+            <div class="data-table-wrapper" style="overflow-x:auto">
+                <table class="table table-hover table-bordered mb-0" id="fundTransferTable">
                     <thead class="table-light">
                         <tr>
-                            <th class="text-center" style="width:46px;">#</th>
+                            <th class="text-center" style="width:28px">#</th>
+                            <th>Trans. ID</th>
                             <th>Date</th>
                             <th>From</th>
                             <th>To</th>
                             <th class="text-end">Amount</th>
                             <th>Mode</th>
-                            <th>Reference</th>
+                            <th>Ref.</th>
+                            <th>Description</th>
                             <th>District</th>
                             <th>Project</th>
                             <th class="text-center">Att.</th>
-                            <th class="text-center">Actions</th>
+                            <th class="text-center no-print no-export">Act.</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% set items = transfers.items if transfers.items is defined else transfers %}
                         {% for ft in items %}
                         <tr>
-                            <td class="text-center text-muted small">{{ ((transfers.page - 1) * per_page + loop.index) if transfers.page is defined else loop.index }}</td>
+                            <td class="text-center text-muted">{{ ((transfers.page - 1) * per_page + loop.index) if transfers.page is defined else loop.index }}</td>
+                            <td><span class="text-primary fw-semibold">{{ ft.transfer_number }}</span></td>
                             <td>{{ ft.transfer_date|ddmmyyyy }}</td>
                             <td>{{ ft.from_name }}</td>
                             <td>{{ ft.to_name }}</td>
                             <td class="text-end fw-semibold">{{ "{:,.2f}".format(ft.amount) }}</td>
                             <td>
                                 <span class="badge bg-light text-dark border">{{ ft.payment_mode }}</span>
-                                {% if ft.is_salary %}<span class="badge bg-warning text-dark ms-1" title="Salary Payment"><i class="bi bi-cash-coin"></i> Salary</span>{% endif %}
+                                {% if ft.is_salary %}<span class="badge bg-warning text-dark" title="Salary"><i class="bi bi-cash-coin"></i></span>{% endif %}
                             </td>
                             <td>{{ ft.reference_no or '-' }}</td>
+                            <td><div class="desc-cell" title="{{ ft.description or '' }}">{{ ft.description or '-' }}</div></td>
                             <td>{{ ft.district.name if ft.district else '-' }}</td>
                             <td>{{ ft.project.name if ft.project else '-' }}</td>
                             <td class="text-center">
-                                {% if ft.attachment %}
-                                <a href="{{ ft.attachment }}" target="_blank" title="View Attachment"><i class="bi bi-paperclip text-success"></i></a>
-                                {% else %}-{% endif %}
+                                {% if ft.attachment %}<a href="{{ ft.attachment }}" target="_blank" title="View"><i class="bi bi-paperclip text-success"></i></a>{% else %}-{% endif %}
                             </td>
-                            <td class="text-center">
-                                <a href="{{ url_for('fund_transfer_edit', pk=ft.id) }}" class="btn btn-sm btn-edit-compact" title="Edit">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                <form action="{{ url_for('fund_transfer_delete', pk=ft.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Delete this transfer?')">
+                            <td class="text-center no-print no-export">
+                                <a href="{{ url_for('fund_transfer_edit', pk=ft.id) }}" class="btn btn-sm btn-edit-compact" title="Edit"><i class="bi bi-pencil"></i></a>
+                                <form action="{{ url_for('fund_transfer_delete', pk=ft.id) }}" method="POST" style="display:inline" onsubmit="return confirm('Delete?')">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-delete-compact" title="Delete">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
+                                    <button type="submit" class="btn btn-sm btn-delete-compact" title="Delete"><i class="bi bi-trash"></i></button>
                                 </form>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="11" class="text-center py-5 text-muted">
+                            <td colspan="13" class="text-center py-5 text-muted">
                                 <i class="bi bi-arrow-left-right display-6 d-block mb-2 opacity-25"></i>
                                 No fund transfers found{% if from_date or to_date %} for the selected filters{% endif %}.
                             </td>
@@ -150,11 +157,11 @@
             </div>
         </div>
 
-        <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
+        <div class="card-footer bg-white border-top py-2 px-3">
             <div class="d-flex justify-content-between align-items-center">
-                <small class="text-muted"><i class="bi bi-list-ul me-1"></i>Showing {{ (transfers.page - 1) * per_page + 1 if transfers.items|length > 0 else 0 }} to {{ (transfers.page - 1) * per_page + transfers.items|length }} of {{ transfers.total }} entries</small>
+                <small class="text-muted" style="font-size:.74rem"><i class="bi bi-list-ul me-1"></i>Showing {{ (transfers.page - 1) * per_page + 1 if transfers.items|length > 0 else 0 }}–{{ (transfers.page - 1) * per_page + transfers.items|length }} of {{ transfers.total }}</small>
                 {% if transfers.pages > 1 %}
-                <nav><ul class="pagination pagination-sm mb-0">
+                <nav><ul class="pagination pagination-sm mb-0" style="--bs-pagination-font-size:.72rem">
                     <li class="page-item {% if not transfers.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ transfers.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
                     {% for p in transfers.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == transfers.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
                     <li class="page-item {% if not transfers.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ transfers.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
