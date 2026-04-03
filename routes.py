@@ -13375,11 +13375,10 @@ def without_task_new():
                 fine_amt = float(request.form.get(f'row_{idx}_fine') or 0)
             except (ValueError, TypeError):
                 fine_amt = 0
-            driver_id = None
-            if veh_id:
-                drv = Driver.query.filter_by(vehicle_id=veh_id, status='Active').first()
-                if drv:
-                    driver_id = drv.id
+            try:
+                driver_id = int(request.form.get(f'row_{idx}_driver_id') or 0) or None
+            except (ValueError, TypeError):
+                driver_id = None
             rec = VehicleMoveWithoutTask(
                 move_date=move_date, district_id=did, project_id=pid, vehicle_id=veh_id,
                 km_in=km_in, km_out=km_out, d_km=d_km,
@@ -13438,6 +13437,7 @@ def without_task_new():
             if kms_driven > 0 and emg_count == 0:
                 _mil_rec = VehicleMileageRecord.query.filter_by(task_date=view_date, reg_no=v.vehicle_no).first()
                 tracker_km = _mil_rec.effective_km() if _mil_rec else 0
+                assigned_drivers = Driver.query.filter_by(vehicle_id=v.id, status='Active').order_by(Driver.name).all()
                 rows.append({
                     'vehicle': v,
                     'start_reading': start_reading,
@@ -13445,6 +13445,7 @@ def without_task_new():
                     'kms_driven': round(kms_driven, 2),
                     'logbook_task': t.tasks_count or 0,
                     'tracker_km': round(tracker_km, 2),
+                    'drivers': assigned_drivers,
                 })
     return render_template('without_task_form.html', rows=rows, view_date=view_date,
                            district_id=district_id, project_id=project_id,

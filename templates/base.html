@@ -2280,6 +2280,279 @@
             }
         });
     };
+
+    // ── Global Multi-Word AND Search Helper ──
+    window.fleetMultiWordMatch = function(text, query) {
+        if (!query || !query.trim()) return true;
+        var words = query.toLowerCase().split(/\s+/).filter(Boolean);
+        var lower = (text || '').toLowerCase();
+        for (var i = 0; i < words.length; i++) {
+            if (lower.indexOf(words[i]) === -1) return false;
+        }
+        return true;
+    };
+
+    // ── Table Column Sort & Excel-like Filter ──
+    (function(){
+      var _styleInjected = false;
+      window.fleetTableEnhance = function(tableId) {
+        var tbl = document.getElementById(tableId);
+        if (!tbl) return;
+        var thead = tbl.querySelector('thead');
+        if (!thead) return;
+        var ths = thead.querySelectorAll('th');
+        var tbody = tbl.querySelector('tbody');
+        if (!tbody) return;
+        var _sortCol = -1, _sortAsc = true;
+        var _filters = {};
+
+        if (!_styleInjected) {
+          _styleInjected = true;
+          var _s = document.createElement('style');
+          _s.textContent =
+            '.ft-sort{cursor:pointer;user-select:none;position:relative;padding-right:22px!important;}' +
+            '.ft-sort:after{content:"\\2195";position:absolute;right:4px;top:50%;transform:translateY(-50%);opacity:.25;font-size:.7rem;}' +
+            '.ft-sort.asc:after{content:"\\2191";opacity:.8;color:#0d6efd;}.ft-sort.desc:after{content:"\\2193";opacity:.8;color:#0d6efd;}' +
+            '.ft-filter-wrap{position:relative;display:inline-block;margin-left:3px;vertical-align:middle;}' +
+            '.ft-filter-btn{cursor:pointer;font-size:10px;opacity:.35;vertical-align:middle;padding:2px;transition:all .15s;}' +
+            '.ft-filter-btn:hover{opacity:.85;color:#0d6efd;transform:scale(1.15);}' +
+            '.ft-filter-btn.active{opacity:1;color:#0d6efd;}' +
+            '.ft-filter-dd{display:none;position:fixed;z-index:9999;background:#fff;border:1px solid #c8c8c8;border-radius:4px;' +
+            'box-shadow:0 3px 12px rgba(0,0,0,.22);min-width:180px;max-width:280px;font-size:12px;font-weight:normal;color:#222;}' +
+            '.ft-filter-dd.show{display:block;}' +
+            '.ft-filter-dd .ft-dd-search{padding:6px 8px;border-bottom:1px solid #e5e5e5;}' +
+            '.ft-filter-dd .ft-dd-search input{width:100%;padding:3px 6px;border:1px solid #ccc;border-radius:3px;font-size:11px;outline:none;}' +
+            '.ft-filter-dd .ft-dd-search input:focus{border-color:#86b7fe;box-shadow:0 0 0 2px rgba(13,110,253,.15);}' +
+            '.ft-filter-dd .ft-dd-selall{padding:4px 8px;border-bottom:1px solid #e5e5e5;font-size:11px;color:#555;}' +
+            '.ft-filter-dd .ft-dd-selall label{cursor:pointer;margin:0;}' +
+            '.ft-filter-dd .ft-dd-list{max-height:200px;overflow-y:auto;padding:2px 0;}' +
+            '.ft-filter-dd .ft-dd-list label{display:flex;align-items:center;gap:5px;padding:3px 8px;cursor:pointer;white-space:nowrap;margin:0;font-weight:normal;}' +
+            '.ft-filter-dd .ft-dd-list label:hover{background:#e8f0fe;}' +
+            '.ft-filter-dd .ft-dd-list input[type=checkbox]{margin:0;accent-color:#0d6efd;}' +
+            '.ft-filter-dd .ft-dd-foot{border-top:1px solid #e5e5e5;padding:6px 8px;display:flex;gap:6px;justify-content:flex-end;}' +
+            '.ft-filter-dd .ft-dd-foot button{font-size:11px;padding:2px 12px;border-radius:3px;cursor:pointer;border:1px solid #ccc;background:#fff;transition:all .1s;}' +
+            '.ft-filter-dd .ft-dd-foot button.ft-ok{background:#0d6efd;color:#fff;border-color:#0d6efd;}' +
+            '.ft-filter-dd .ft-dd-foot button.ft-ok:hover{background:#0b5ed7;}' +
+            '.ft-filter-dd .ft-dd-foot button.ft-cancel:hover{background:#f0f0f0;}' +
+            '.ft-filter-dd .ft-dd-list::-webkit-scrollbar{width:6px;}.ft-filter-dd .ft-dd-list::-webkit-scrollbar-thumb{background:#bbb;border-radius:3px;}';
+          document.head.appendChild(_s);
+        }
+
+        function getRows() { return Array.from(tbody.querySelectorAll('tr')).filter(function(r){return r.cells.length > 1;}); }
+        function getCellVal(row, ci) { var c = row.cells[ci]; return c ? (c.textContent || '').trim() : ''; }
+
+        ths.forEach(function(th, ci) {
+            th.classList.add('ft-sort');
+            var wrap = document.createElement('span');
+            wrap.className = 'ft-filter-wrap';
+            var fbtn = document.createElement('i');
+            fbtn.className = 'bi bi-funnel-fill ft-filter-btn';
+            fbtn.title = 'Filter this column';
+            wrap.appendChild(fbtn);
+            th.appendChild(wrap);
+
+            th.addEventListener('click', function(e) {
+                if (e.target.closest('.ft-filter-wrap')) return;
+                if (_sortCol === ci) { _sortAsc = !_sortAsc; } else { _sortCol = ci; _sortAsc = true; }
+                ths.forEach(function(h){ h.classList.remove('asc','desc'); });
+                th.classList.add(_sortAsc ? 'asc' : 'desc');
+                var rows = getRows();
+                rows.sort(function(a,b) {
+                    var va = getCellVal(a, ci), vb = getCellVal(b, ci);
+                    var na = parseFloat(va.replace(/[,%]/g,'')), nb = parseFloat(vb.replace(/[,%]/g,''));
+                    if (!isNaN(na) && !isNaN(nb)) return _sortAsc ? na - nb : nb - na;
+                    return _sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+                });
+                rows.forEach(function(r){ tbody.appendChild(r); });
+            });
+
+            fbtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var existing = document.querySelector('.ft-filter-dd.show');
+                if (existing) { existing.remove(); }
+
+                var dd = document.createElement('div');
+                dd.className = 'ft-filter-dd show';
+                document.body.appendChild(dd);
+
+                var rect = fbtn.getBoundingClientRect();
+                var ddW = 200, ddH = 320;
+                var posLeft = rect.left;
+                var posTop = rect.bottom + 2;
+                if (posLeft + ddW > window.innerWidth) posLeft = rect.right - ddW;
+                if (posLeft < 4) posLeft = 4;
+                if (posTop + ddH > window.innerHeight) posTop = rect.top - ddH - 2;
+                if (posTop < 4) posTop = 4;
+                dd.style.left = posLeft + 'px';
+                dd.style.top = posTop + 'px';
+
+                var vals = {}, rows = getRows();
+                rows.forEach(function(r){ var v = getCellVal(r, ci); vals[v] = true; });
+                var sorted = Object.keys(vals).sort(function(a,b){
+                    var na = parseFloat(a.replace(/[,%]/g,'')), nb = parseFloat(b.replace(/[,%]/g,''));
+                    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+                    return a.localeCompare(b);
+                });
+                var activeSet = _filters[ci] || null;
+
+                var searchDiv = document.createElement('div');
+                searchDiv.className = 'ft-dd-search';
+                var searchInp = document.createElement('input');
+                searchInp.type = 'text'; searchInp.placeholder = 'Search...';
+                searchDiv.appendChild(searchInp);
+                dd.appendChild(searchDiv);
+
+                var selAllDiv = document.createElement('div');
+                selAllDiv.className = 'ft-dd-selall';
+                var selAllLbl = document.createElement('label');
+                var selAllCb = document.createElement('input');
+                selAllCb.type = 'checkbox'; selAllCb.checked = !activeSet;
+                selAllLbl.appendChild(selAllCb);
+                selAllLbl.appendChild(document.createTextNode(' (Select All)'));
+                selAllDiv.appendChild(selAllLbl);
+                dd.appendChild(selAllDiv);
+
+                var listDiv = document.createElement('div');
+                listDiv.className = 'ft-dd-list';
+                dd.appendChild(listDiv);
+
+                function buildItems(filterText) {
+                    listDiv.innerHTML = '';
+                    var ft = (filterText || '').toLowerCase();
+                    sorted.forEach(function(v) {
+                        if (ft && (v || '').toLowerCase().indexOf(ft) === -1) return;
+                        var lbl = document.createElement('label');
+                        var cb = document.createElement('input');
+                        cb.type = 'checkbox'; cb.value = v;
+                        cb.checked = !activeSet || activeSet.has(v);
+                        cb.dataset.val = v;
+                        lbl.appendChild(cb);
+                        lbl.appendChild(document.createTextNode(v || '(Blanks)'));
+                        listDiv.appendChild(lbl);
+                    });
+                }
+                buildItems('');
+
+                searchInp.addEventListener('input', function(){ buildItems(this.value); });
+
+                selAllCb.addEventListener('change', function(){
+                    var chk = this.checked;
+                    listDiv.querySelectorAll('input[type=checkbox]').forEach(function(c){ c.checked = chk; });
+                });
+
+                var footDiv = document.createElement('div');
+                footDiv.className = 'ft-dd-foot';
+                var btnOk = document.createElement('button');
+                btnOk.className = 'ft-ok'; btnOk.textContent = 'OK';
+                var btnCancel = document.createElement('button');
+                btnCancel.className = 'ft-cancel'; btnCancel.textContent = 'Cancel';
+                footDiv.appendChild(btnOk); footDiv.appendChild(btnCancel);
+                dd.appendChild(footDiv);
+
+                btnCancel.addEventListener('click', function(e){ e.stopPropagation(); dd.remove(); });
+                btnOk.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    var sel = new Set();
+                    listDiv.querySelectorAll('input[type=checkbox]:checked').forEach(function(c){ sel.add(c.value); });
+                    if (sel.size === sorted.length || sel.size === 0) { delete _filters[ci]; fbtn.classList.remove('active'); }
+                    else { _filters[ci] = sel; fbtn.classList.add('active'); }
+                    applyFilters();
+                    dd.remove();
+                });
+
+                setTimeout(function(){ searchInp.focus(); }, 50);
+            });
+        });
+
+        function applyFilters() {
+            var rows = getRows();
+            rows.forEach(function(r) {
+                var show = true;
+                for (var ci in _filters) {
+                    if (!_filters[ci].has(getCellVal(r, parseInt(ci)))) { show = false; break; }
+                }
+                r.style.display = show ? '' : 'none';
+            });
+            if (typeof window._fleetAfterFilter === 'function') window._fleetAfterFilter();
+        }
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.ft-filter-dd') && !e.target.closest('.ft-filter-btn')) {
+                document.querySelectorAll('.ft-filter-dd.show').forEach(function(d){ d.remove(); });
+            }
+        });
+      };
+    })();
+
+    // ── Print & Export ──
+    window.fleetPrintExport = function(tableId, title, csvFilename) {
+        var printBtn = document.getElementById('btnPrintReport');
+        var exportBtn = document.getElementById('btnExportReport');
+        if (!printBtn && !exportBtn) return;
+        if (printBtn) {
+            printBtn.addEventListener('click', function() {
+                var tbl = document.getElementById(tableId);
+                if (!tbl) return;
+                var clone = tbl.cloneNode(true);
+                clone.querySelectorAll('.ft-filter-wrap').forEach(function(el){ el.remove(); });
+                clone.querySelectorAll('tbody tr').forEach(function(r){ if(r.style.display==='none') r.remove(); });
+                var w = window.open('', '_blank', 'width=1200,height=800');
+                w.document.write('<!DOCTYPE html><html><head><title>' + title + '</title>');
+                w.document.write('<style>');
+                w.document.write('@page{size:A4 landscape;margin:8mm;}');
+                w.document.write('body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:0;}');
+                w.document.write('h3{text-align:center;margin:6px 0 10px;}');
+                w.document.write('table{width:100%;border-collapse:collapse;}');
+                w.document.write('th,td{border:1px solid #555;padding:3px 5px;text-align:left;white-space:nowrap;}');
+                w.document.write('th{background:#e9ecef;font-size:9px;}');
+                w.document.write('tfoot td{font-weight:bold;background:#f8f9fa;}');
+                w.document.write('.text-end{text-align:right;}.text-center{text-align:center;}');
+                w.document.write('.text-danger{color:#dc3545;}.fw-bold{font-weight:700;}');
+                w.document.write('</style></head><body>');
+                w.document.write('<h3>' + title + '</h3>');
+                w.document.write(clone.outerHTML);
+                w.document.write('</body></html>');
+                w.document.close();
+                w.focus();
+                setTimeout(function(){ w.print(); }, 300);
+            });
+        }
+        if (exportBtn) {
+            exportBtn.addEventListener('click', function() {
+                var tbl = document.getElementById(tableId);
+                if (!tbl) return;
+                var headers = [];
+                tbl.querySelectorAll('thead th').forEach(function(th){
+                    var t = th.cloneNode(true);
+                    t.querySelectorAll('.ft-filter-wrap').forEach(function(el){ el.remove(); });
+                    headers.push('"' + t.textContent.trim().replace(/"/g,'""') + '"');
+                });
+                var csvRows = [headers.join(',')];
+                tbl.querySelectorAll('tbody tr').forEach(function(tr){
+                    if(tr.style.display==='none') return;
+                    if(tr.classList.contains('no-data-row')) return;
+                    var cells = [];
+                    tr.querySelectorAll('td').forEach(function(td){
+                        cells.push('"' + td.textContent.trim().replace(/"/g,'""') + '"');
+                    });
+                    csvRows.push(cells.join(','));
+                });
+                var foot = tbl.querySelector('tfoot tr');
+                if(foot){
+                    var fc = [];
+                    foot.querySelectorAll('td').forEach(function(td){
+                        fc.push('"' + td.textContent.trim().replace(/"/g,'""') + '"');
+                    });
+                    csvRows.push(fc.join(','));
+                }
+                var csv = '\uFEFF' + csvRows.join('\n');
+                var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = csvFilename;
+                a.click();
+            });
+        }
+    };
     </script>
     {% block content %}{% endblock %}
 </div>
@@ -3186,203 +3459,6 @@
             });
         });
     })).observe(document.body, { childList: true, subtree: true });
-
-    // ── Global Multi-Word AND Search Helper (available immediately, no DOM needed) ──
-    window.fleetMultiWordMatch = function(text, query) {
-        if (!query || !query.trim()) return true;
-        var words = query.toLowerCase().split(/\s+/).filter(Boolean);
-        var lower = (text || '').toLowerCase();
-        for (var i = 0; i < words.length; i++) {
-            if (lower.indexOf(words[i]) === -1) return false;
-        }
-        return true;
-    };
-
-    // ── Table Column Sort & Filter (available immediately, executes on DOM when called) ──
-    window.fleetTableEnhance = function(tableId) {
-        var tbl = document.getElementById(tableId);
-        if (!tbl) return;
-        var thead = tbl.querySelector('thead');
-        if (!thead) return;
-        var ths = thead.querySelectorAll('th');
-        var tbody = tbl.querySelector('tbody');
-        if (!tbody) return;
-        var _sortCol = -1, _sortAsc = true;
-        var _filters = {};
-        var _style = document.createElement('style');
-        _style.textContent = '.ft-sort{cursor:pointer;user-select:none;position:relative;padding-right:22px!important;}' +
-          '.ft-sort:after{content:"\\2195";position:absolute;right:4px;top:50%;transform:translateY(-50%);opacity:.3;font-size:.7rem;}' +
-          '.ft-sort.asc:after{content:"\\2191";opacity:.7;}.ft-sort.desc:after{content:"\\2193";opacity:.7;}' +
-          '.ft-filter-wrap{position:relative;display:inline-block;}.ft-filter-btn{cursor:pointer;font-size:.65rem;opacity:.4;margin-left:2px;vertical-align:middle;}' +
-          '.ft-filter-btn:hover,.ft-filter-btn.active{opacity:1;color:#0d6efd;}' +
-          '.ft-filter-dd{display:none;position:absolute;top:100%;left:0;z-index:1070;background:#fff;border:1px solid #dee2e6;border-radius:6px;' +
-          'box-shadow:0 4px 16px rgba(0,0,0,.15);min-width:160px;max-height:220px;overflow-y:auto;padding:6px;font-size:.78rem;font-weight:normal;color:#333;}' +
-          '.ft-filter-dd.show{display:block;}.ft-filter-dd label{display:block;padding:2px 4px;cursor:pointer;white-space:nowrap;}' +
-          '.ft-filter-dd label:hover{background:#f0f0f0;border-radius:3px;}' +
-          '.ft-filter-dd .ft-filter-actions{border-top:1px solid #eee;margin-top:4px;padding-top:4px;display:flex;gap:4px;justify-content:flex-end;}' +
-          '.ft-filter-dd .ft-filter-actions button{font-size:.7rem;padding:1px 8px;}';
-        document.head.appendChild(_style);
-
-        function getRows() { return Array.from(tbody.querySelectorAll('tr')).filter(function(r){return r.cells.length > 1;}); }
-        function getCellVal(row, ci) { var c = row.cells[ci]; return c ? (c.textContent || '').trim() : ''; }
-
-        ths.forEach(function(th, ci) {
-            th.classList.add('ft-sort');
-            var wrap = document.createElement('span');
-            wrap.className = 'ft-filter-wrap';
-            var fbtn = document.createElement('i');
-            fbtn.className = 'bi bi-funnel ft-filter-btn';
-            fbtn.title = 'Filter';
-            var dd = document.createElement('div');
-            dd.className = 'ft-filter-dd';
-            wrap.appendChild(fbtn);
-            wrap.appendChild(dd);
-            th.appendChild(wrap);
-
-            th.addEventListener('click', function(e) {
-                if (e.target.closest('.ft-filter-wrap')) return;
-                if (_sortCol === ci) { _sortAsc = !_sortAsc; } else { _sortCol = ci; _sortAsc = true; }
-                ths.forEach(function(h){ h.classList.remove('asc','desc'); });
-                th.classList.add(_sortAsc ? 'asc' : 'desc');
-                var rows = getRows();
-                rows.sort(function(a,b) {
-                    var va = getCellVal(a, ci), vb = getCellVal(b, ci);
-                    var na = parseFloat(va.replace(/[,%]/g,'')), nb = parseFloat(vb.replace(/[,%]/g,''));
-                    if (!isNaN(na) && !isNaN(nb)) return _sortAsc ? na - nb : nb - na;
-                    return _sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
-                });
-                rows.forEach(function(r){ tbody.appendChild(r); });
-            });
-
-            fbtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                document.querySelectorAll('.ft-filter-dd.show').forEach(function(d){ if(d!==dd) d.classList.remove('show'); });
-                if (dd.classList.contains('show')) { dd.classList.remove('show'); return; }
-                dd.innerHTML = '';
-                var vals = {}, rows = getRows();
-                rows.forEach(function(r){ var v = getCellVal(r, ci); vals[v] = true; });
-                var sorted = Object.keys(vals).sort();
-                var activeSet = _filters[ci] || null;
-                sorted.forEach(function(v) {
-                    var lbl = document.createElement('label');
-                    var cb = document.createElement('input');
-                    cb.type = 'checkbox'; cb.value = v; cb.checked = !activeSet || activeSet.has(v);
-                    cb.style.marginRight = '5px';
-                    lbl.appendChild(cb);
-                    lbl.appendChild(document.createTextNode(v || '(empty)'));
-                    dd.appendChild(lbl);
-                });
-                var acts = document.createElement('div');
-                acts.className = 'ft-filter-actions';
-                var btnAll = document.createElement('button');
-                btnAll.className = 'btn btn-outline-secondary btn-sm';
-                btnAll.textContent = 'All';
-                btnAll.addEventListener('click', function(e){ e.stopPropagation(); dd.querySelectorAll('input').forEach(function(c){c.checked=true;}); });
-                var btnApply = document.createElement('button');
-                btnApply.className = 'btn btn-primary btn-sm';
-                btnApply.textContent = 'Apply';
-                btnApply.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    var sel = new Set();
-                    dd.querySelectorAll('input:checked').forEach(function(c){ sel.add(c.value); });
-                    if (sel.size === sorted.length) { delete _filters[ci]; fbtn.classList.remove('active'); }
-                    else { _filters[ci] = sel; fbtn.classList.add('active'); }
-                    applyFilters();
-                    dd.classList.remove('show');
-                });
-                acts.appendChild(btnAll); acts.appendChild(btnApply);
-                dd.appendChild(acts);
-                dd.classList.add('show');
-            });
-        });
-
-        function applyFilters() {
-            var rows = getRows();
-            rows.forEach(function(r) {
-                var show = true;
-                for (var ci in _filters) {
-                    if (!_filters[ci].has(getCellVal(r, parseInt(ci)))) { show = false; break; }
-                }
-                r.style.display = show ? '' : 'none';
-            });
-            if (typeof window._fleetAfterFilter === 'function') window._fleetAfterFilter();
-        }
-        document.addEventListener('click', function(e) {
-            if (!e.target.closest('.ft-filter-wrap')) {
-                document.querySelectorAll('.ft-filter-dd.show').forEach(function(d){ d.classList.remove('show'); });
-            }
-        });
-    };
-
-    window.fleetPrintExport = function(tableId, title, csvFilename) {
-        var printBtn = document.getElementById('btnPrintReport');
-        var exportBtn = document.getElementById('btnExportReport');
-        if (!printBtn && !exportBtn) return;
-        if (printBtn) {
-            printBtn.addEventListener('click', function() {
-                var tbl = document.getElementById(tableId);
-                if (!tbl) return;
-                var clone = tbl.cloneNode(true);
-                clone.querySelectorAll('.ft-filter-wrap').forEach(function(el){ el.remove(); });
-                clone.querySelectorAll('tbody tr').forEach(function(r){ if(r.style.display==='none') r.remove(); });
-                var w = window.open('', '_blank', 'width=1200,height=800');
-                w.document.write('<!DOCTYPE html><html><head><title>' + title + '</title>');
-                w.document.write('<style>');
-                w.document.write('@page{size:A4 landscape;margin:8mm;}');
-                w.document.write('body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:0;}');
-                w.document.write('h3{text-align:center;margin:6px 0 10px;}');
-                w.document.write('table{width:100%;border-collapse:collapse;}');
-                w.document.write('th,td{border:1px solid #555;padding:3px 5px;text-align:left;white-space:nowrap;}');
-                w.document.write('th{background:#e9ecef;font-size:9px;}');
-                w.document.write('tfoot td{font-weight:bold;background:#f8f9fa;}');
-                w.document.write('.text-end{text-align:right;}.text-center{text-align:center;}');
-                w.document.write('.text-danger{color:#dc3545;}.fw-bold{font-weight:700;}');
-                w.document.write('</style></head><body>');
-                w.document.write('<h3>' + title + '</h3>');
-                w.document.write(clone.outerHTML);
-                w.document.write('</body></html>');
-                w.document.close();
-                w.focus();
-                setTimeout(function(){ w.print(); }, 300);
-            });
-        }
-        if (exportBtn) {
-            exportBtn.addEventListener('click', function() {
-                var tbl = document.getElementById(tableId);
-                if (!tbl) return;
-                var headers = [];
-                tbl.querySelectorAll('thead th').forEach(function(th){
-                    var t = th.cloneNode(true);
-                    t.querySelectorAll('.ft-filter-wrap').forEach(function(el){ el.remove(); });
-                    headers.push('"' + t.textContent.trim().replace(/"/g,'""') + '"');
-                });
-                var csvRows = [headers.join(',')];
-                tbl.querySelectorAll('tbody tr').forEach(function(tr){
-                    if(tr.style.display==='none') return;
-                    if(tr.classList.contains('no-data-row')) return;
-                    var cells = [];
-                    tr.querySelectorAll('td').forEach(function(td){
-                        cells.push('"' + td.textContent.trim().replace(/"/g,'""') + '"');
-                    });
-                    csvRows.push(cells.join(','));
-                });
-                var foot = tbl.querySelector('tfoot tr');
-                if(foot){
-                    var fc = [];
-                    foot.querySelectorAll('td').forEach(function(td){
-                        fc.push('"' + td.textContent.trim().replace(/"/g,'""') + '"');
-                    });
-                    csvRows.push(fc.join(','));
-                }
-                var csv = '\uFEFF' + csvRows.join('\n');
-                var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-                var a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = csvFilename;
-                a.click();
-            });
-        }
-    };
 
     // Initialize Components
     $(document).ready(function() {

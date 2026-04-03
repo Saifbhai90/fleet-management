@@ -73,6 +73,7 @@
               <th>District Name</th>
               <th>Project</th>
               <th>Vehicle#</th>
+              <th>Driver Name</th>
               <th class="text-end">KM IN</th>
               <th class="text-end">KM Out</th>
               <th class="text-end">D.Km</th>
@@ -92,6 +93,7 @@
               <td>{{ row.district.name if row.district else '-' }}</td>
               <td>{{ row.project.name if row.project else '-' }}</td>
               <td class="fw-medium">{{ row.vehicle.vehicle_no if row.vehicle else '-' }}</td>
+              <td>{{ row.driver.name if row.driver else '-' }}</td>
               <td class="text-end">{{ row.km_in if row.km_in is not none else '-' }}</td>
               <td class="text-end">{{ row.km_out if row.km_out is not none else '-' }}</td>
               <td class="text-end">{{ row.d_km if row.d_km is not none else '-' }}</td>
@@ -106,7 +108,7 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="15" class="text-center py-5 text-muted">
+              <td colspan="16" class="text-center py-5 text-muted">
                 <i class="bi bi-truck display-6 d-block mb-2"></i>
                 No entries for this date range. <a href="{{ url_for('without_task_new') }}">Add Entry</a> or change filter.
               </td>

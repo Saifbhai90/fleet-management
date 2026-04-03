@@ -66,6 +66,7 @@
               <th class="text-center">Logbook Task</th>
               <th class="text-center">EMG Task</th>
               <th class="text-end">T.KM (Tracker)</th>
+              <th style="min-width:160px;">Driver</th>
               <th style="min-width:200px;">Remarks</th>
               <th style="min-width:100px;">Fine</th>
             </tr>
@@ -95,6 +96,14 @@
               <td class="text-end">
                 <input type="hidden" name="row_{{ loop.index0 }}_t_km" value="{{ row.tracker_km }}">
                 {{ row.tracker_km }}
+              </td>
+              <td>
+                <select name="row_{{ loop.index0 }}_driver_id" class="form-select form-select-sm">
+                  <option value="">-- Select --</option>
+                  {% for drv in row.drivers %}
+                  <option value="{{ drv.id }}">{{ drv.name }}</option>
+                  {% endfor %}
+                </select>
               </td>
               <td>
                 <input type="text" name="row_{{ loop.index0 }}_remarks" class="form-control form-control-sm" placeholder="Remarks">
