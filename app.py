@@ -165,22 +165,14 @@ def inject_current_permissions():
     return dict(current_permissions=perms, current_user_is_master=is_master, can_see_page=can_see_p, can_see_section=can_see_s)
 
 
-_districts_cache = {'data': None, 'ts': 0}
-
 @app.context_processor
 def inject_all_districts():
-    """Provide all district names to templates. Cached 120s to avoid per-request DB hit."""
-    import time as _time
+    """Provide all district names to templates for dropdown/typeahead."""
     try:
-        if _districts_cache['data'] is not None and (_time.time() - _districts_cache['ts']) < 120:
-            return dict(all_districts=_districts_cache['data'])
         from models import District
         districts = District.query.order_by(District.name).all()
-        _districts_cache['data'] = districts
-        _districts_cache['ts'] = _time.time()
-    except Exception as e:
-        app.logger.warning('Districts injection error: %s', e)
-        districts = _districts_cache.get('data') or []
+    except Exception:
+        districts = []
     return dict(all_districts=districts)
 
 @app.context_processor
