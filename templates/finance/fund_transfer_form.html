@@ -94,6 +94,19 @@
                                 {{ form.description(class="form-control", rows="2") }}
                             </div>
 
+                            {# ── Salary checkbox ── #}
+                            <div class="col-12">
+                                <div class="form-check form-switch ps-0">
+                                    <div class="d-flex align-items-center gap-2 p-2 rounded" style="background:#fff8e1;border:1px solid #ffe082">
+                                        {{ form.is_salary(class="form-check-input ms-0 me-2", role="switch", id="isSalaryCheck") }}
+                                        <label class="form-check-label" for="isSalaryCheck">
+                                            <span class="fw-semibold text-dark"><i class="bi bi-cash-coin me-1"></i>Salary Payment</span>
+                                            <small class="d-block text-muted" style="font-size:.76rem">Receiver ke wallet mein balance accumulate nahi hoga. Statement mein entry show hogi, Salary Payable mein record hoga.</small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
                             {# ── Attachment upload ── #}
                             <div class="col-12">
                                 <label class="form-label fw-bold">Attachment (Image)</label>

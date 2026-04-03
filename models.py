@@ -1796,6 +1796,7 @@ class FundTransfer(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
     journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
     attachment = db.Column(db.String(500), nullable=True)
+    is_salary = db.Column(db.Boolean, default=False, nullable=False)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
 

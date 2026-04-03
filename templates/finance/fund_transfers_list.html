@@ -113,7 +113,10 @@
                             <td>{{ ft.from_name }}</td>
                             <td>{{ ft.to_name }}</td>
                             <td class="text-end fw-semibold">{{ "{:,.2f}".format(ft.amount) }}</td>
-                            <td><span class="badge bg-light text-dark border">{{ ft.payment_mode }}</span></td>
+                            <td>
+                                <span class="badge bg-light text-dark border">{{ ft.payment_mode }}</span>
+                                {% if ft.is_salary %}<span class="badge bg-warning text-dark ms-1" title="Salary Payment"><i class="bi bi-cash-coin"></i> Salary</span>{% endif %}
+                            </td>
                             <td>{{ ft.reference_no or '-' }}</td>
                             <td>{{ ft.district.name if ft.district else '-' }}</td>
                             <td>{{ ft.project.name if ft.project else '-' }}</td>

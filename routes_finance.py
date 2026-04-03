@@ -1160,6 +1160,7 @@ def fund_transfer_add():
                 reference_no=form.reference_no.data,
                 description=form.description.data,
                 attachment=attachment_url,
+                is_salary=form.is_salary.data or False,
                 district_id=form.district_id.data or None,
                 project_id=form.project_id.data or None,
                 created_by_user_id=session.get('user_id'),
@@ -1200,6 +1201,7 @@ def fund_transfer_edit(pk):
         form.description.data = transfer.description
         form.district_id.data = transfer.district_id or 0
         form.project_id.data = transfer.project_id or 0
+        form.is_salary.data = transfer.is_salary
         if transfer.from_employee_id:
             form.from_person.data = f'emp-{transfer.from_employee_id}'
         elif transfer.from_driver_id:
@@ -1247,6 +1249,7 @@ def fund_transfer_edit(pk):
             transfer.description = form.description.data
             transfer.district_id = form.district_id.data or None
             transfer.project_id = form.project_id.data or None
+            transfer.is_salary = form.is_salary.data or False
 
             if request.form.get('remove_attachment') == '1':
                 _delete_ft_attachment(transfer.attachment)

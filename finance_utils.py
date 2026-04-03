@@ -632,17 +632,44 @@ def ensure_wallet_account(person_type, person_id):
 
 
 def create_fund_transfer_journal(transfer_obj, from_wallet, to_wallet):
-    """Create journal entry for a fund transfer: Debit receiver wallet, Credit sender wallet."""
+    """Create journal entry for a fund transfer: Debit receiver wallet, Credit sender wallet.
+    If is_salary is True, add neutralizing lines so receiver balance stays zero
+    and Salary Payable (code 2101) gets credited."""
     lines = [
         {'account_id': to_wallet.id, 'debit': transfer_obj.amount, 'credit': 0,
          'description': f"Fund received from {transfer_obj.from_name}"},
         {'account_id': from_wallet.id, 'debit': 0, 'credit': transfer_obj.amount,
          'description': f"Fund sent to {transfer_obj.to_name}"},
     ]
+
+    if getattr(transfer_obj, 'is_salary', False):
+        salary_payable = Account.query.filter_by(code='2101').first()
+        if not salary_payable:
+            salary_payable = Account(
+                code='2101', name='Salary Payable', account_type='Liability',
+                is_active=True, opening_balance=0, current_balance=0,
+                description='Salary payments settled – auto-created')
+            parent = Account.query.filter_by(code='2100').first()
+            if parent:
+                salary_payable.parent_id = parent.id
+            db.session.add(salary_payable)
+            db.session.flush()
+
+        lines.extend([
+            {'account_id': to_wallet.id, 'debit': 0, 'credit': transfer_obj.amount,
+             'description': f"Salary settled – balance neutralized"},
+            {'account_id': salary_payable.id, 'debit': transfer_obj.amount, 'credit': 0,
+             'description': f"Salary paid to {transfer_obj.to_name}"},
+        ])
+
+    desc = f"Fund Transfer {transfer_obj.transfer_number}"
+    if getattr(transfer_obj, 'is_salary', False):
+        desc = f"Salary Transfer {transfer_obj.transfer_number}"
+
     return create_journal_entry(
         entry_type='Journal',
         entry_date=transfer_obj.transfer_date,
-        description=f"Fund Transfer {transfer_obj.transfer_number}",
+        description=desc,
         lines=lines,
         district_id=transfer_obj.district_id,
         project_id=transfer_obj.project_id,
