@@ -165,8 +165,8 @@
     </div>
 </div>
 <!-- Account Verify Modal -->
-<div class="modal fade" id="acctVerifyModal" tabindex="-1" aria-labelledby="acctVerifyLabel" aria-hidden="true" style="z-index:10600">
-  <div class="modal-dialog modal-lg" style="margin-top:80px">
+<div class="modal fade" id="acctVerifyModal" aria-labelledby="acctVerifyLabel" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true" style="z-index:10600;pointer-events:none">
+  <div class="modal-dialog modal-lg" style="margin-top:80px;pointer-events:auto">
     <div class="modal-content border-0 shadow" style="border-radius:14px;overflow:hidden">
       <div class="modal-header text-white py-2" style="background:linear-gradient(135deg,#1565C0 0%,#1e88e5 55%,#42a5f5 100%)">
         <h6 class="modal-title mb-0" id="acctVerifyLabel"><i class="bi bi-bank2 me-2"></i>Account Verify</h6>
@@ -197,8 +197,6 @@
 
 <style>
 #acctVerifyModal{z-index:10600 !important}
-#acctVerifyModal ~ .modal-backdrop,
-#acctVerifyModal + .modal-backdrop{z-index:10599 !important}
 .av-entry{padding:.7rem 1rem;border-bottom:1px solid #f0f0f0;display:flex;align-items:flex-start;gap:10px;transition:background .15s}
 .av-entry:hover{background:#f0f7ff}
 .av-entry:last-child{border-bottom:none}
@@ -278,8 +276,6 @@ document.addEventListener('DOMContentLoaded', function(){
     var modal = document.getElementById('acctVerifyModal');
     modal.addEventListener('shown.bs.modal', function(){
         avInput.value = ''; avSearch(''); avInput.focus();
-        var bd = document.querySelector('.modal-backdrop');
-        if(bd) bd.style.zIndex = '10599';
     });
 });
 </script>
