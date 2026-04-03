@@ -2516,27 +2516,36 @@
             printBtn.addEventListener('click', function() {
                 printBtn.disabled = true; printBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
                 _fetchAllTable(function(tbl) {
-                    if (!tbl) { printBtn.disabled = false; printBtn.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; return; }
+                    if (!tbl) { printBtn.disabled = false; printBtn.innerHTML = '<i class="bi bi-eye me-1"></i>Print / Preview'; return; }
                     var clone = _cleanTable(tbl);
-                    var w = window.open('', '_blank', 'width=1200,height=800');
+                    var w = window.open('', '_blank');
                     w.document.write('<!DOCTYPE html><html><head><title>' + title + '</title>');
                     w.document.write('<style>');
                     w.document.write('@page{size:A4 landscape;margin:8mm;}');
-                    w.document.write('body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:0;}');
-                    w.document.write('h3{text-align:center;margin:6px 0 10px;}');
+                    w.document.write('body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:8px 12px;}');
+                    w.document.write('.toolbar{position:sticky;top:0;z-index:99;background:#1e293b;color:#fff;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:0 0 6px 6px;box-shadow:0 2px 8px rgba(0,0,0,.2);margin:-8px -12px 12px;}');
+                    w.document.write('.toolbar h4{margin:0;font-size:14px;font-weight:600;}');
+                    w.document.write('.toolbar button{padding:5px 16px;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;}');
+                    w.document.write('.btn-p{background:#3b82f6;color:#fff;}.btn-p:hover{background:#2563eb;}');
+                    w.document.write('.btn-c{background:#64748b;color:#fff;margin-left:6px;}.btn-c:hover{background:#475569;}');
+                    w.document.write('h3{text-align:center;margin:6px 0 10px;font-size:14px;}');
                     w.document.write('table{width:100%;border-collapse:collapse;}');
                     w.document.write('th,td{border:1px solid #555;padding:3px 5px;text-align:left;white-space:nowrap;}');
                     w.document.write('th{background:#e9ecef;font-size:9px;}');
                     w.document.write('tfoot td{font-weight:bold;background:#f8f9fa;}');
                     w.document.write('.text-end{text-align:right;}.text-center{text-align:center;}');
                     w.document.write('.text-danger{color:#dc3545;}.fw-bold{font-weight:700;}.fw-medium{font-weight:500;}');
+                    w.document.write('@media print{.toolbar{display:none!important;}}');
                     w.document.write('</style></head><body>');
+                    w.document.write('<div class="toolbar"><h4>' + title + '</h4><div>');
+                    w.document.write('<button class="btn-p" onclick="window.print()">&#128438; Print</button>');
+                    w.document.write('<button class="btn-c" onclick="window.close()">&#10005; Close</button>');
+                    w.document.write('</div></div>');
                     w.document.write('<h3>' + title + '</h3>');
                     w.document.write(clone.outerHTML);
                     w.document.write('</body></html>');
                     w.document.close(); w.focus();
-                    setTimeout(function(){ w.print(); }, 300);
-                    printBtn.disabled = false; printBtn.innerHTML = '<i class="bi bi-printer me-1"></i>Print';
+                    printBtn.disabled = false; printBtn.innerHTML = '<i class="bi bi-eye me-1"></i>Print / Preview';
                 });
             });
         }

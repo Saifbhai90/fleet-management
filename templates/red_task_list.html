@@ -5,7 +5,7 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2 text-danger"></i>Red Task Report</h2>
     <div class="d-flex align-items-center gap-2">
-      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print"><i class="bi bi-printer me-1"></i>Print</button>
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
       <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
       <a href="{{ url_for('red_task_new') }}" class="btn btn-danger btn-sm">
         <i class="bi bi-plus-circle me-1"></i>Add Red Task
@@ -79,7 +79,6 @@
               <th class="text-center">Call to DTO / according to CRC</th>
               <th>According to DTO Investigation</th>
               <th>Action Against Red Task</th>
-              <th class="text-center">Edit</th>
             </tr>
           </thead>
           <tbody>
@@ -96,13 +95,10 @@
               <td class="text-center">{{ row.call_to_dto or '-' }}</td>
               <td>{{ row.dto_investigation or '-' }}</td>
               <td>{{ row.action or '-' }}</td>
-              <td class="text-center">
-                <a href="{{ url_for('red_task_edit', pk=row.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
-              </td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="12" class="text-center py-5 text-muted">
+              <td colspan="11" class="text-center py-5 text-muted">
                 <i class="bi bi-exclamation-triangle display-6 d-block mb-2"></i>
                 No Red Task entries for this date range. <a href="{{ url_for('red_task_new') }}">Add Red Task</a> or change filter.
               </td>
