@@ -12380,6 +12380,21 @@ def task_report_list():
             'emg_tasks': emg_tasks, 'tracker_km': round(tracker_km, 2),
             'kms_diff': round(kms_diff, 2), 'pct_diff': pct_diff,
         })
+    search = (request.args.get('search') or '').strip()
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        def _match(r):
+            blob = ' '.join([
+                str(r['task_date']), r['vehicle'].vehicle_no,
+                r['vehicle'].district.name if r['vehicle'].district else '',
+                r['vehicle'].parking_station.tehsil if r['vehicle'].parking_station else '',
+                r['vehicle'].parking_station.name if r['vehicle'].parking_station else '',
+                r['vehicle'].vehicle_type or '',
+                str(r['kms_driven']), str(r['tasks_count']), str(r['emg_tasks']),
+            ]).lower()
+            return all(tok in blob for tok in tokens)
+        rows = [r for r in rows if _match(r)]
+
     total_kms = sum(r['kms_driven'] for r in rows)
     total_tracker = sum(r['tracker_km'] for r in rows)
     total_diff = round(total_kms - total_tracker, 2)
@@ -12394,7 +12409,7 @@ def task_report_list():
     return render_template('task_report_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date,
                            total_kms=total_kms, total_tracker=total_tracker, total_diff=total_diff, total_pct=total_pct,
                            total_tasks=total_tasks, total_emg=total_emg, total_task_diff=total_task_diff,
-                           pagination=pagination, per_page=per_page)
+                           pagination=pagination, per_page=per_page, search=search)
 
 
 def _logbook_vehicle_aggregate(vehicle_id, from_date, to_date):
@@ -12491,11 +12506,23 @@ def task_report_logbook_cover():
                     'start_reading': None, 'close_reading': None, 'total_kms': None, 'total_task': None,
                     'project': project, 'project_name': project.name if project else '',
                 })
+    search = (request.args.get('search') or '').strip()
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        def _match(r):
+            blob = ' '.join([
+                r['vehicle'].vehicle_no,
+                r.get('district_name') or '',
+                r.get('tehsil_name') or '',
+                r.get('project_name') or '',
+            ]).lower()
+            return all(tok in blob for tok in tokens)
+        rows = [r for r in rows if _match(r)]
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
-    return render_template('logbook_cover_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page)
+    return render_template('logbook_cover_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search)
 
 
 @app.route('/task-report/logbook-view')
@@ -13154,11 +13181,25 @@ def red_task_list():
     if project_id:
         query = query.filter(RedTask.project_id == project_id)
     rows = query.order_by(RedTask.task_date.desc(), RedTask.id.desc()).all()
+    search = (request.args.get('search') or '').strip()
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        def _match(r):
+            blob = ' '.join([
+                str(r.task_date), r.task_id or '',
+                r.district.name if r.district else '',
+                r.project.name if r.project else '',
+                r.vehicle.vehicle_no if r.vehicle else '',
+                r.reason or '', r.driver_name or '',
+                r.call_to_dto or '', r.dto_investigation or '', r.action or '',
+            ]).lower()
+            return all(tok in blob for tok in tokens)
+        rows = [r for r in rows if _match(r)]
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
-    return render_template('red_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page)
+    return render_template('red_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search)
 
 
 @app.route('/red-task/new', methods=['GET', 'POST'])
@@ -13387,11 +13428,25 @@ def without_task_list():
     if project_id:
         query = query.filter(VehicleMoveWithoutTask.project_id == project_id)
     rows = query.order_by(VehicleMoveWithoutTask.move_date.desc(), VehicleMoveWithoutTask.id.desc()).all()
+    search = (request.args.get('search') or '').strip()
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        def _match(r):
+            blob = ' '.join([
+                str(r.move_date),
+                r.district.name if r.district else '',
+                r.project.name if r.project else '',
+                r.vehicle.vehicle_no if r.vehicle else '',
+                r.driver.name if r.driver else '',
+                r.remarks or '', r.fine or '',
+            ]).lower()
+            return all(tok in blob for tok in tokens)
+        rows = [r for r in rows if _match(r)]
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
-    return render_template('without_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page)
+    return render_template('without_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search)
 
 
 @app.route('/vehicle-move-without-task/new', methods=['GET', 'POST'])
@@ -13670,11 +13725,25 @@ def penalty_record_list():
     if project_id:
         query = query.filter(PenaltyRecord.project_id == project_id)
     rows = query.order_by(PenaltyRecord.record_date.desc(), PenaltyRecord.id.desc()).all()
+    search = (request.args.get('search') or '').strip()
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        def _match(r):
+            blob = ' '.join([
+                str(r.record_date),
+                r.district.name if r.district else '',
+                r.project.name if r.project else '',
+                r.vehicle.vehicle_no if r.vehicle else '',
+                r.driver.name if r.driver else '',
+                r.source_type or '', r.remarks or '',
+            ]).lower()
+            return all(tok in blob for tok in tokens)
+        rows = [r for r in rows if _match(r)]
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
-    return render_template('penalty_record_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, pagination=pagination, per_page=per_page)
+    return render_template('penalty_record_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, pagination=pagination, per_page=per_page, search=search)
 
 
 def _penalty_record_query(from_date, to_date, district_id=0, project_id=0):

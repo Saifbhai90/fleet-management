@@ -60,7 +60,7 @@
           <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
           <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
         </select>
-        <input type="text" id="taskReportSearch" class="form-control form-control-sm" placeholder="Search..." style="max-width:180px;" autocomplete="off">
+        <input type="text" id="taskReportSearch" class="form-control form-control-sm" placeholder="Search all pages..." style="max-width:200px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
       </div>
     </div>
     <div class="card-body p-0">
@@ -228,50 +228,7 @@
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 (function() {
-  var searchInput = document.getElementById('taskReportSearch');
   var table = document.getElementById('taskReportTable');
-  if (searchInput && table) {
-    var tbody = table.querySelector('tbody');
-    var allTr = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
-    var noDataRow = allTr.find(function(tr) { return tr.cells.length === 1; }) || null;
-    var dataRows = allTr.filter(function(tr) { return tr.cells.length > 1; });
-    searchInput.addEventListener('input', function() {
-      var q = this.value.trim();
-      var visible = 0;
-      if (dataRows.length) {
-        dataRows.forEach(function(row) {
-          var show = !q || window.fleetMultiWordMatch(row.innerText || row.textContent, q);
-          row.style.display = show ? '' : 'none';
-          if (show) visible++;
-        });
-      }
-      if (noDataRow) noDataRow.style.display = (dataRows.length === 0 || (q && visible === 0)) ? '' : 'none';
-      updateListTotals();
-    });
-  }
-  function updateListTotals() {
-    var rows = table ? table.querySelectorAll('tbody tr.data-row') : [];
-    var tKms=0, tTasks=0, tEmg=0, tTracker=0, tDiff=0, tKmsValid=0;
-    rows.forEach(function(r) {
-      if (r.style.display === 'none') return;
-      tKms += parseFloat(r.dataset.kms) || 0;
-      tTasks += parseInt(r.dataset.tasks) || 0;
-      tEmg += parseInt(r.dataset.emg) || 0;
-      tTracker += parseFloat(r.dataset.tracker) || 0;
-      tDiff += parseFloat(r.dataset.kmsdiff) || 0;
-      tKmsValid += parseFloat(r.dataset.kms) || 0;
-    });
-    var tTaskDiff = tTasks - tEmg;
-    var tPct = tKmsValid ? ((tDiff / tKmsValid) * 100).toFixed(1) : null;
-    var s = function(id, v, cls) { var e = document.getElementById(id); if(e){ e.textContent = v; if(cls!==undefined) e.className=cls; }};
-    s('ftKms', tKms ? tKms.toFixed(2) : '-', 'text-end');
-    s('ftTasks', tTasks || '-', 'text-center');
-    s('ftEmg', tEmg || '-', 'text-center');
-    s('ftTaskDiff', tTaskDiff, 'text-center' + (tTaskDiff !== 0 ? ' text-danger fw-bold' : ''));
-    s('ftTracker', tTracker ? tTracker.toFixed(2) : '-', 'text-end');
-    s('ftDiff', tDiff ? tDiff.toFixed(2) : '-', 'text-end');
-    s('ftPct', tPct !== null ? tPct + '%' : '—', 'text-end');
-  }
   /* ── Helpers ─────────────────────────────────────────────── */
   function _he(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
   var emgPanel = document.getElementById('emgPanel');
