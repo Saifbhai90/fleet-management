@@ -1959,72 +1959,9 @@
         <!-- Reports & Analytics -->
         {% if can_see_section('reports') %}
         <div>
-            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#reportsMenu" role="button" aria-expanded="{{ 'true' if reports_open else 'false' }}">
-                <i class="bi bi-bar-chart"></i><span>Reports & Analytics</span>
+            <a href="{{ url_for('reports_index') }}" class="{% if request.endpoint in reports_endpoints %}active-link{% endif %}" style="display:flex;align-items:center;padding:.65rem 1rem;text-decoration:none;">
+                <i class="bi bi-bar-chart"></i><span>Report Centre</span>
             </a>
-            <div class="collapse collapse-item-container {% if reports_open %}show{% endif %}"
-                 id="reportsMenu" data-bs-parent="#sidebarAccordion">
-                {% if can_see_page('reports_index') %}
-                <a href="{{ url_for('reports_index') }}" class="collapse-item {% if request.endpoint == 'reports_index' %}active-link{% endif %}">
-                    <i class="bi bi-list-ul"></i><span>Report Centre</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('report_company_profile') %}
-                <a href="{{ url_for('companies', mode='report') }}" class="collapse-item {% if request.endpoint == 'companies' and request.args.get('mode') == 'report' %}active-link{% endif %}">
-                    <i class="bi bi-file-earmark-person"></i><span>Company Profile</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('driver_attendance_report') %}
-                <a href="{{ url_for('driver_attendance_report') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_report' %}active-link{% endif %}">
-                    <i class="bi bi-calendar2-range text-info"></i><span>Attendance Report</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('report_expiry') %}
-                <a href="{{ url_for('report_expiry') }}" class="collapse-item {% if request.endpoint == 'report_expiry' %}active-link{% endif %}">
-                    <i class="bi bi-calendar-x text-warning"></i><span>Document Expiry</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('active_drivers_report') %}
-                <a href="{{ url_for('active_drivers_report') }}" class="collapse-item {% if request.endpoint in ['active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print'] or _came_from_active_drivers %}active-link{% endif %}">
-                    <i class="bi bi-person-lines-fill text-primary"></i><span>Active Driver Summary</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('driver_seat_available_report') %}
-                <a href="{{ url_for('driver_seat_available_report') }}" class="collapse-item {% if request.endpoint in ['driver_seat_available_report', 'driver_seat_available_export', 'driver_seat_available_print'] %}active-link{% endif %}">
-                    <i class="bi bi-car-front-fill text-warning"></i><span>Driver Seat Available</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('missing_documents_report') %}
-                <a href="{{ url_for('missing_documents_report') }}" class="collapse-item {% if request.endpoint == 'missing_documents_report' or _came_from_missing_docs %}active-link{% endif %}">
-                    <i class="bi bi-file-earmark-x text-danger"></i><span>Missing Documents</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('report_vehicle_summary') %}
-                <a href="{{ url_for('report_vehicle_summary') }}" class="collapse-item {% if request.endpoint == 'report_vehicle_summary' %}active-link{% endif %}">
-                    <i class="bi bi-truck"></i><span>Vehicle Summary</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('report_project_summary') %}
-                <a href="{{ url_for('report_project_summary') }}" class="collapse-item {% if request.endpoint == 'report_project_summary' %}active-link{% endif %}">
-                    <i class="bi bi-briefcase"></i><span>Project Summary</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('report_district_summary') %}
-                <a href="{{ url_for('report_district_summary') }}" class="collapse-item {% if request.endpoint == 'report_district_summary' %}active-link{% endif %}">
-                    <i class="bi bi-geo-alt"></i><span>District Summary</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('report_parking_utilization') %}
-                <a href="{{ url_for('report_parking_utilization') }}" class="collapse-item {% if request.endpoint == 'report_parking_utilization' %}active-link{% endif %}">
-                    <i class="bi bi-p-square"></i><span>Parking Utilization</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('report_ai') %}
-                <a href="{{ url_for('report_ai') }}" class="collapse-item {% if request.endpoint == 'report_ai' %}active-link{% endif %}">
-                    <i class="bi bi-robot"></i><span>Create Report with AI</span>
-                </a>
-                {% endif %}
-            </div>
         </div>
         {% endif %}
 

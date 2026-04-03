@@ -1,119 +1,412 @@
 {% extends "base.html" %}
-{% block title %}Reports{% endblock %}
+{% block title %}Report Centre{% endblock %}
 {% block content %}
 <div class="container-fluid">
-  <h2 class="mb-4"><i class="bi bi-bar-chart me-2 text-info"></i>Reports</h2>
-  <div class="row g-3">
-    <div class="col-md-6 col-lg-4">
-      <a href="{{ url_for('companies', mode='report') }}" class="text-decoration-none">
-        <div class="card border-0 shadow-sm h-100 hover-shadow">
-          <div class="card-body">
-            <i class="bi bi-file-earmark-person display-6 text-primary"></i>
-            <h5 class="card-title mt-2">Company Profile</h5>
-            <p class="text-muted small mb-0">Company-wise profile report</p>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-md-6 col-lg-4">
-      <a href="{{ url_for('report_project_summary') }}" class="text-decoration-none">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body">
-            <i class="bi bi-briefcase display-6 text-success"></i>
-            <h5 class="card-title mt-2">Project Summary</h5>
-            <p class="text-muted small mb-0">All projects with vehicle/driver counts</p>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-md-6 col-lg-4">
-      <a href="{{ url_for('report_district_summary') }}" class="text-decoration-none">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body">
-            <i class="bi bi-geo-alt display-6 text-warning"></i>
-            <h5 class="card-title mt-2">District Summary</h5>
-            <p class="text-muted small mb-0">Districts with assignments</p>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-md-6 col-lg-4">
-      <a href="{{ url_for('report_vehicle_summary') }}" class="text-decoration-none">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body">
-            <i class="bi bi-truck display-6 text-info"></i>
-            <h5 class="card-title mt-2">Vehicle Summary</h5>
-            <p class="text-muted small mb-0">All vehicles and current assignment</p>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-md-6 col-lg-4">
-      <a href="{{ url_for('vehicles_list') }}" class="text-decoration-none">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body">
-            <i class="bi bi-file-earmark-text display-6 text-dark"></i>
-            <h5 class="card-title mt-2">Vehicle Profile</h5>
-            <p class="text-muted small mb-0">Full vehicle history: transfers, driver assignments. Open from Vehicles list.</p>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-md-6 col-lg-4">
-      <a href="{{ url_for('report_expiry') }}" class="text-decoration-none">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body">
-            <i class="bi bi-calendar-x display-6 text-danger"></i>
-            <h5 class="card-title mt-2">License / CNIC Expiry</h5>
-            <p class="text-muted small mb-0">Drivers with expiring documents</p>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-md-6 col-lg-4">
-      <a href="{{ url_for('report_parking_utilization') }}" class="text-decoration-none">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body">
-            <i class="bi bi-p-square display-6 text-secondary"></i>
-            <h5 class="card-title mt-2">Parking Utilization</h5>
-            <p class="text-muted small mb-0">Capacity vs occupied by station</p>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-md-6 col-lg-4">
-      <a href="{{ url_for('driver_attendance_report') }}" class="text-decoration-none">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body">
-            <i class="bi bi-calendar2-range display-6 text-primary"></i>
-            <h5 class="card-title mt-2">Attendance Report</h5>
-            <p class="text-muted small mb-0">Monthly driver attendance summary</p>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-md-6 col-lg-4">
-      <a href="{{ url_for('report_ai') }}" class="text-decoration-none">
-        <div class="card border-0 shadow-sm h-100 border-primary">
-          <div class="card-body">
-            <i class="bi bi-magic display-6 text-primary"></i>
-            <h5 class="card-title mt-2">Create report with AI</h5>
-            <p class="text-muted small mb-0">Describe the report you want; get a temp view. Close when done.</p>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-md-6 col-lg-4">
-      <a href="{{ url_for('activity_log_report') }}" class="text-decoration-none">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body">
-            <i class="bi bi-journal-check display-6 text-secondary"></i>
-            <h5 class="card-title mt-2">Activity &amp; Login Log</h5>
-            <p class="text-muted small mb-0">Login sessions (who, when, device, IP) + client activity with device ID and geolocation (lat/long, View on Map). One report, both in one page.</p>
-          </div>
-        </div>
-      </a>
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Report Centre</h4>
+    <div class="position-relative" style="width:260px;">
+      <i class="bi bi-search position-absolute" style="left:10px;top:50%;transform:translateY(-50%);color:#999;"></i>
+      <input type="text" id="reportSearchBox" class="form-control form-control-sm ps-4" placeholder="Search reports..." autocomplete="off">
     </div>
   </div>
-</div>
+
+  <!-- Tab Navigation -->
+  <ul class="nav nav-tabs mb-0" id="reportTabs" role="tablist" style="border-bottom:2px solid #dee2e6;">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active fw-semibold" id="fleet-tab" data-bs-toggle="tab" data-bs-target="#fleet" type="button" role="tab" aria-controls="fleet" aria-selected="true">
+        <i class="bi bi-truck me-1"></i>Fleet & Operations
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link fw-semibold" id="task-tab" data-bs-toggle="tab" data-bs-target="#task" type="button" role="tab" aria-controls="task" aria-selected="false">
+        <i class="bi bi-journal-text me-1"></i>Task & Logbook
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link fw-semibold" id="hr-tab" data-bs-toggle="tab" data-bs-target="#hr" type="button" role="tab" aria-controls="hr" aria-selected="false">
+        <i class="bi bi-people me-1"></i>HR & Workforce
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link fw-semibold" id="finance-tab" data-bs-toggle="tab" data-bs-target="#finance" type="button" role="tab" aria-controls="finance" aria-selected="false">
+        <i class="bi bi-wallet2 me-1"></i>Finance
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link fw-semibold" id="admin-tab" data-bs-toggle="tab" data-bs-target="#admin" type="button" role="tab" aria-controls="admin" aria-selected="false">
+        <i class="bi bi-gear me-1"></i>Administration
+      </button>
+    </li>
+  </ul>
+
+  <!-- Tab Content -->
+  <div class="tab-content border border-top-0 rounded-bottom bg-white p-4" id="reportTabContent">
+
+    <!-- ═══════════════ Fleet & Operations ═══════════════ -->
+    <div class="tab-pane fade show active" id="fleet" role="tabpanel" aria-labelledby="fleet-tab">
+      <div class="row">
+        <!-- Vehicle Reports -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-truck me-1"></i>Vehicle Reports</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('report_vehicle_summary') %}
+            <a href="{{ url_for('report_vehicle_summary') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Vehicle Summary
+            </a>
+            {% endif %}
+            <a href="{{ url_for('vehicles_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Vehicle Profile
+              <small class="text-muted d-block ms-4">Full vehicle history, transfers, driver assignments</small>
+            </a>
+            {% if can_see_page('report_parking_utilization') %}
+            <a href="{{ url_for('report_parking_utilization') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Parking Utilization
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Project / District -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-briefcase me-1"></i>Project & District</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('report_project_summary') %}
+            <a href="{{ url_for('report_project_summary') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Project Summary
+            </a>
+            {% endif %}
+            {% if can_see_page('report_district_summary') %}
+            <a href="{{ url_for('report_district_summary') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>District Summary
+            </a>
+            {% endif %}
+            {% if can_see_page('report_company_profile') %}
+            <a href="{{ url_for('companies', mode='report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Company Profile
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Expense Reports -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-fuel-pump me-1"></i>Expense Reports</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('fuel_expense_list') %}
+            <a href="{{ url_for('fuel_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Fuel Expense Report
+            </a>
+            {% endif %}
+            {% if can_see_page('oil_expense_list') %}
+            <a href="{{ url_for('oil_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Oil Expense Report
+            </a>
+            {% endif %}
+            {% if can_see_page('maintenance_expense_list') %}
+            <a href="{{ url_for('maintenance_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Maintenance Expense Report
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ Task & Logbook ═══════════════ -->
+    <div class="tab-pane fade" id="task" role="tabpanel" aria-labelledby="task-tab">
+      <div class="row">
+        <!-- Daily Task Reports -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-clipboard-data me-1"></i>Daily Task Reports</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('task_report_list') %}
+            <a href="{{ url_for('task_report_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Vehicles Daily Task Report
+            </a>
+            {% endif %}
+            {% if can_see_page('task_report_new') %}
+            <a href="{{ url_for('task_report_new') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>New Task Entry
+            </a>
+            {% endif %}
+            {% if can_see_page('red_task_list') %}
+            <a href="{{ url_for('red_task_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Red Task Justification
+            </a>
+            {% endif %}
+            {% if can_see_page('without_task_list') %}
+            <a href="{{ url_for('without_task_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Vehicle Move Without Task
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Logbook -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-book me-1"></i>Logbook</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('task_report_logbook_cover') %}
+            <a href="{{ url_for('task_report_logbook_cover') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Logbook Cover Pages
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Workbook Upload -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-cloud-upload me-1"></i>Workbook Upload</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('task_report_upload') %}
+            <a href="{{ url_for('task_report_upload') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Upload Workbooks (Admin)
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ HR & Workforce ═══════════════ -->
+    <div class="tab-pane fade" id="hr" role="tabpanel" aria-labelledby="hr-tab">
+      <div class="row">
+        <!-- Driver Reports -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-person-badge me-1"></i>Driver Reports</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('active_drivers_report') %}
+            <a href="{{ url_for('active_drivers_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Active Driver Summary
+            </a>
+            {% endif %}
+            {% if can_see_page('driver_seat_available_report') %}
+            <a href="{{ url_for('driver_seat_available_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Driver Seat Available
+            </a>
+            {% endif %}
+            {% if can_see_page('missing_documents_report') %}
+            <a href="{{ url_for('missing_documents_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Missing Documents
+            </a>
+            {% endif %}
+            {% if can_see_page('penalty_record_list') %}
+            <a href="{{ url_for('penalty_record_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Driver Penalty Records
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Attendance Reports -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-calendar-check me-1"></i>Attendance Reports</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('driver_attendance_report') %}
+            <a href="{{ url_for('driver_attendance_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Attendance Report
+              <small class="text-muted d-block ms-4">Monthly driver attendance summary</small>
+            </a>
+            {% endif %}
+            {% if can_see_page('driver_attendance_tra_report') %}
+            <a href="{{ url_for('driver_attendance_tra_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>TRA Attendance Sheet
+            </a>
+            {% endif %}
+            {% if can_see_page('report_expiry') %}
+            <a href="{{ url_for('report_expiry') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>License / CNIC Expiry
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Workforce -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-person-dash me-1"></i>Workforce</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('driver_job_left_list') %}
+            <a href="{{ url_for('driver_job_left_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Resignation / Exit Report
+            </a>
+            {% endif %}
+            {% if can_see_page('driver_rejoin_list') %}
+            <a href="{{ url_for('driver_rejoin_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Re-employment Report
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ Finance ═══════════════ -->
+    <div class="tab-pane fade" id="finance" role="tabpanel" aria-labelledby="finance-tab">
+      <div class="row">
+        <!-- Books of Account -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-journal-bookmark me-1"></i>Books of Account</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('payment_vouchers_list') %}
+            <a href="{{ url_for('payment_vouchers_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Payment Vouchers
+            </a>
+            {% endif %}
+            {% if can_see_page('receipt_vouchers_list') %}
+            <a href="{{ url_for('receipt_vouchers_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Receipt Vouchers
+            </a>
+            {% endif %}
+            {% if can_see_page('bank_entries_list') %}
+            <a href="{{ url_for('bank_entries_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Bank Entries
+            </a>
+            {% endif %}
+            {% if can_see_page('journal_vouchers_list') %}
+            <a href="{{ url_for('journal_vouchers_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Journal Vouchers
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Ledger & Statements -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-receipt me-1"></i>Ledger & Statements</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('accounts_account_ledger') %}
+            <a href="{{ url_for('accounts_account_ledger') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Account Ledger
+            </a>
+            {% endif %}
+            {% if can_see_page('wallet_dashboard') %}
+            <a href="{{ url_for('wallet_dashboard') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Wallet Dashboard
+            </a>
+            {% endif %}
+            {% if can_see_page('fund_transfers_list') %}
+            <a href="{{ url_for('fund_transfers_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Fund Transfers
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Final Accounts -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-clipboard-data me-1"></i>Final Accounts</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('accounts_balance_sheet') %}
+            <a href="{{ url_for('accounts_balance_sheet') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Balance Sheet
+            </a>
+            {% endif %}
+            {% if can_see_page('chart_of_accounts_list') %}
+            <a href="{{ url_for('chart_of_accounts_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Chart of Accounts
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ Administration ═══════════════ -->
+    <div class="tab-pane fade" id="admin" role="tabpanel" aria-labelledby="admin-tab">
+      <div class="row">
+        <!-- Activity & Logs -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-journal-check me-1"></i>Activity & Logs</h6>
+          <div class="list-group list-group-flush report-link-group">
+            <a href="{{ url_for('activity_log_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Activity & Login Log
+              <small class="text-muted d-block ms-4">Login sessions, device info, IP, geolocation</small>
+            </a>
+          </div>
+        </div>
+        <!-- AI Tools -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-robot me-1"></i>AI Tools</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('report_ai') %}
+            <a href="{{ url_for('report_ai') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Create Report with AI
+              <small class="text-muted d-block ms-4">Describe the report you need</small>
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Book Management -->
+        <div class="col-lg-4 col-md-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-book me-1"></i>Book Management</h6>
+          <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('book_inventory_list') %}
+            <a href="{{ url_for('book_inventory_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Book Inventory
+            </a>
+            {% endif %}
+            {% if can_see_page('book_assignment_list') %}
+            <a href="{{ url_for('book_assignment_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Book Assignments
+            </a>
+            {% endif %}
+            {% if can_see_page('book_pending_returns') %}
+            <a href="{{ url_for('book_pending_returns') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Pending Book Returns
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-content -->
+
+</div><!-- /container-fluid -->
+
+<style>
+#reportTabs .nav-link{
+  color:#555; border:none; padding:.6rem 1.2rem; font-size:.88rem;
+  border-bottom:3px solid transparent; transition:all .2s;
+}
+#reportTabs .nav-link:hover{ color:#0d6efd; background:#f0f6ff; }
+#reportTabs .nav-link.active{
+  color:#0d6efd; background:transparent;
+  border-bottom:3px solid #0d6efd;
+}
+.report-link-group .report-link{
+  font-size:.875rem; color:#333; transition:all .15s;
+}
+.report-link-group .report-link:hover{
+  color:#0d6efd; background:#f8f9ff; padding-left:6px !important;
+}
+.report-link-group .report-link .bi-star{ font-size:.65rem; }
+.report-link-group .report-link small{ font-size:.75rem; line-height:1.2; }
+.tab-content{ min-height:300px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
+.report-link.d-none{ display:none !important; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var searchBox = document.getElementById('reportSearchBox');
+  if(!searchBox) return;
+  searchBox.addEventListener('input', function(){
+    var q = this.value.toLowerCase().trim();
+    document.querySelectorAll('.report-link').forEach(function(el){
+      if(!q){
+        el.classList.remove('d-none');
+      } else {
+        var txt = el.textContent.toLowerCase();
+        el.classList.toggle('d-none', txt.indexOf(q) === -1);
+      }
+    });
+    if(q){
+      document.querySelectorAll('#reportTabContent .tab-pane').forEach(function(pane){
+        var hasVisible = pane.querySelector('.report-link:not(.d-none)');
+        if(hasVisible){
+          var tabId = pane.id;
+          var tabBtn = document.querySelector('#reportTabs button[data-bs-target="#'+tabId+'"]');
+          if(tabBtn && !tabBtn.classList.contains('active')){
+            var tab = new bootstrap.Tab(tabBtn);
+            tab.show();
+          }
+        }
+      });
+    }
+  });
+});
+</script>
 {% endblock %}
