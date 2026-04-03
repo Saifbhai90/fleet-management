@@ -17,41 +17,33 @@
         <i class="bi bi-journal-bookmark-fill me-2"></i>{{ title }}
     </div>
 
-    <div class="card shadow-sm border-0 mt-3">
-        <div class="card-body p-4">
-            <form method="POST">
+    <div class="card shadow-sm border-0 mt-3 mb-3">
+        <div class="card-body py-2">
+            <form method="POST" class="row g-2 align-items-end">
                 {{ form.hidden_tag() }}
-                
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        {{ form.account_id.label(class="form-label fw-bold") }}
-                        {{ form.account_id(class="form-select search-select") }}
-                        <small class="form-text text-muted">Select an account to view its ledger. Leave empty to see all accounts.</small>
-                    </div>
-                    
-                    <div class="col-md-3">
-                        {{ form.from_date.label(class="form-label fw-bold") }}
-                        {{ form.from_date(class="form-control datepicker") }}
-                    </div>
-                    
-                    <div class="col-md-3">
-                        {{ form.to_date.label(class="form-label fw-bold") }}
-                        {{ form.to_date(class="form-control datepicker") }}
-                    </div>
-                    
-                    <div class="col-md-6">
-                        {{ form.district_id.label(class="form-label fw-bold") }}
-                        {{ form.district_id(class="form-select search-select") }}
-                    </div>
-                    
-                    <div class="col-md-6">
-                        {{ form.project_id.label(class="form-label fw-bold") }}
-                        {{ form.project_id(class="form-select search-select") }}
-                    </div>
-                    
-                    <div class="col-12">
-                        {{ form.submit(class="btn btn-warning px-4") }}
-                    </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">Account</label>
+                    {{ form.account_id(class="form-select form-select-sm search-select") }}
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">From Date</label>
+                    {{ form.from_date(class="form-control form-control-sm datepicker") }}
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">To Date</label>
+                    {{ form.to_date(class="form-control form-control-sm datepicker") }}
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">District</label>
+                    {{ form.district_id(class="form-select form-select-sm search-select") }}
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">Project</label>
+                    {{ form.project_id(class="form-select form-select-sm search-select") }}
+                </div>
+                <div class="col-6 col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-warning btn-sm flex-fill"><i class="bi bi-funnel me-1"></i>View Ledger</button>
+                    <a href="{{ url_for('accounts_account_ledger') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i></a>
                 </div>
             </form>
         </div>

@@ -517,12 +517,18 @@ def accounts_balance_sheet():
         return auth_check
     """Balance Sheet Report"""
     form = BalanceSheetFilterForm()
-    
+
     as_of_date = None
     balance_sheet_data = None
-    
+
     if request.method == 'POST' and form.validate_on_submit():
         as_of_date = form.as_of_date.data or pk_date()
+    elif request.method == 'GET' and request.args.get('as_of_date'):
+        try:
+            as_of_date = datetime.strptime(request.args['as_of_date'], '%d-%m-%Y').date()
+        except ValueError:
+            as_of_date = pk_date()
+    if as_of_date:
         
         # Get all accounts grouped by type
         assets      = Account.query.filter_by(account_type='Asset',     is_active=True).order_by(Account.code).all()
@@ -702,25 +708,34 @@ def employee_expense_list():
     
     if category:
         query = query.filter(EmployeeExpense.expense_category == category)
-    
+
+    search = (request.args.get('search') or '').strip()
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        for tok in tokens:
+            like = f'%{tok}%'
+            query = query.filter(or_(
+                EmployeeExpense.description.ilike(like),
+                EmployeeExpense.expense_category.ilike(like),
+                EmployeeExpense.payment_mode.ilike(like),
+            ))
+
     query = query.order_by(EmployeeExpense.expense_date.desc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     expenses = pagination.items
-    
-    # Get filter options
+
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
-    
-    # Calculate totals
+
     total_amount = sum(e.amount for e in expenses)
-    
+
     return render_template('finance/employee_expenses_list.html',
                          expenses=expenses, pagination=pagination,
                          districts=districts, projects=projects,
                          from_date=from_date, to_date=to_date,
                          district_id=district_id, project_id=project_id,
                          category=category, total_amount=total_amount,
-                         page=page, per_page=per_page)
+                         page=page, per_page=per_page, search=search)
 
 
 def employee_expense_delete(pk):
@@ -761,9 +776,24 @@ def chart_of_accounts_list():
     auth_check = check_auth('chart_of_accounts')
     if auth_check:
         return auth_check
-    accounts = Account.query.order_by(Account.code).all()
+    per_page = int(request.args.get('per_page', 50))
+    page = int(request.args.get('page', 1))
+    search = (request.args.get('search') or '').strip()
+
+    query = Account.query.order_by(Account.code)
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        for tok in tokens:
+            like = f'%{tok}%'
+            query = query.filter(or_(
+                Account.code.ilike(like),
+                Account.name.ilike(like),
+                Account.account_type.ilike(like),
+            ))
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     return render_template('finance/chart_of_accounts.html',
-                           title='Chart of Accounts', accounts=accounts)
+                           title='Chart of Accounts', accounts=pagination.items,
+                           pagination=pagination, per_page=per_page, search=search)
 
 
 def chart_of_accounts_add():
@@ -786,7 +816,7 @@ def chart_of_accounts_add():
                 district_id=form.district_id.data or None,
                 project_id=form.project_id.data or None,
                 description=form.description.data,
-                is_active=form.is_active.data,
+                is_active=(form.is_active.data == '1'),
             )
             db.session.add(acct)
             db.session.commit()
@@ -807,6 +837,8 @@ def chart_of_accounts_edit(pk):
     acct = Account.query.get_or_404(pk)
     form = AccountForm(obj=acct)
     _populate_account_form(form)
+    if request.method == 'GET':
+        form.is_active.data = '1' if acct.is_active else '0'
 
     if form.validate_on_submit():
         try:
@@ -818,7 +850,7 @@ def chart_of_accounts_edit(pk):
             acct.district_id = form.district_id.data or None
             acct.project_id = form.project_id.data or None
             acct.description = form.description.data
-            acct.is_active = form.is_active.data
+            acct.is_active = (form.is_active.data == '1')
             db.session.commit()
             flash('Account updated successfully!', 'success')
             return redirect(url_for('chart_of_accounts_list'))
@@ -1230,15 +1262,14 @@ def fund_transfers_list():
     form.person.choices = choices
     _populate_transfer_filters(form)
 
-    today = pk_date()
-    from_date = today.replace(day=1)
-    to_date = today
+    from_date = None
+    to_date = None
     per_page = int(request.args.get('per_page', request.form.get('per_page', 20)))
     page = int(request.args.get('page', 1))
 
     if request.method == 'POST' and form.validate():
-        from_date = form.from_date.data or from_date
-        to_date = form.to_date.data or to_date
+        from_date = form.from_date.data
+        to_date = form.to_date.data
     elif request.method == 'GET':
         try:
             if request.args.get('from_date'):
@@ -1251,9 +1282,14 @@ def fund_transfers_list():
     form.from_date.data = from_date
     form.to_date.data = to_date
 
-    query = FundTransfer.query.filter(
-        FundTransfer.transfer_date.between(from_date, to_date)
-    ).order_by(FundTransfer.transfer_date.desc(), FundTransfer.id.desc())
+    query = FundTransfer.query
+    if from_date and to_date:
+        query = query.filter(FundTransfer.transfer_date.between(from_date, to_date))
+    elif from_date:
+        query = query.filter(FundTransfer.transfer_date >= from_date)
+    elif to_date:
+        query = query.filter(FundTransfer.transfer_date <= to_date)
+    query = query.order_by(FundTransfer.transfer_date.desc(), FundTransfer.id.desc())
 
     if form.district_id.data and form.district_id.data > 0:
         query = query.filter_by(district_id=form.district_id.data)
@@ -1299,6 +1335,11 @@ def wallet_dashboard():
     projects = Project.query.order_by(Project.name).all()
     form.project_id.choices = [(0, '-- All --')] + [(p.id, p.name) for p in projects]
 
+    filter_district = request.args.get('district_id', 0, type=int)
+    filter_project = request.args.get('project_id', 0, type=int)
+    form.district_id.data = filter_district
+    form.project_id.data = filter_project
+
     wallets = []
     total_funds = Decimal('0')
     total_expenses = Decimal('0')
@@ -1308,6 +1349,14 @@ def wallet_dashboard():
         acct = Account.query.get(emp.wallet_account_id) if emp.wallet_account_id else None
         if not acct:
             continue
+        emp_districts = [d.name for d in emp.districts]
+        emp_projects = [p.name for p in emp.projects]
+        emp_district_ids = [d.id for d in emp.districts]
+        emp_project_ids = [p.id for p in emp.projects]
+        if filter_district and filter_district not in emp_district_ids:
+            continue
+        if filter_project and filter_project not in emp_project_ids:
+            continue
         bal = acct.current_balance or Decimal('0')
         received = _sum_transfers_received('emp', emp.id)
         spent = _sum_expenses_from_wallet(acct.id)
@@ -1315,8 +1364,8 @@ def wallet_dashboard():
             'person_name': emp.name,
             'person_type': 'Employee',
             'post': emp.post.full_name if emp.post else '—',
-            'district_name': ', '.join(d.name for d in emp.districts) or '—',
-            'project_name': ', '.join(p.name for p in emp.projects) or '—',
+            'district_name': ', '.join(emp_districts) or '—',
+            'project_name': ', '.join(emp_projects) or '—',
             'balance': bal,
             'total_received': received,
             'total_spent': spent,
@@ -1327,7 +1376,12 @@ def wallet_dashboard():
         else:
             total_expenses += abs(bal)
 
-    drivers = Driver.query.filter(Driver.wallet_account_id.isnot(None)).all()
+    drv_query = Driver.query.filter(Driver.wallet_account_id.isnot(None))
+    if filter_district:
+        drv_query = drv_query.filter(Driver.district_id == filter_district)
+    if filter_project:
+        drv_query = drv_query.filter(Driver.project_id == filter_project)
+    drivers = drv_query.all()
     for drv in drivers:
         acct = Account.query.get(drv.wallet_account_id) if drv.wallet_account_id else None
         if not acct:
@@ -1335,12 +1389,13 @@ def wallet_dashboard():
         bal = acct.current_balance or Decimal('0')
         received = _sum_transfers_received('drv', drv.id)
         spent = _sum_expenses_from_wallet(acct.id)
+        drv_project = Project.query.get(drv.project_id) if drv.project_id else None
         wallets.append({
             'person_name': drv.name,
             'person_type': 'Driver',
             'post': 'Driver',
             'district_name': drv.district.name if drv.district else '—',
-            'project_name': '—',
+            'project_name': drv_project.name if drv_project else '—',
             'balance': bal,
             'total_received': received,
             'total_spent': spent,
@@ -1350,6 +1405,18 @@ def wallet_dashboard():
             total_funds += bal
         else:
             total_expenses += abs(bal)
+
+    search = request.args.get('search', '').strip()
+    if search:
+        tokens = search.lower().split()
+        def _match_wallet(w):
+            blob = ' '.join([
+                w.get('person_name', ''), w.get('person_type', ''),
+                w.get('post', ''), w.get('district_name', ''),
+                w.get('project_name', ''),
+            ]).lower()
+            return all(t in blob for t in tokens)
+        wallets = [w for w in wallets if _match_wallet(w)]
 
     summary = {
         'total_wallets': len(wallets),
@@ -1359,7 +1426,8 @@ def wallet_dashboard():
     }
 
     return render_template('finance/wallet_dashboard.html',
-                           form=form, wallets=wallets, summary=summary)
+                           form=form, wallets=wallets, summary=summary,
+                           search=search)
 
 
 def _sum_transfers_received(person_type, person_id):
@@ -1452,30 +1520,34 @@ def journal_vouchers_list():
     if auth_check:
         return auth_check
 
-    today = pk_date()
-    from_date = today.replace(day=1)
-    to_date = today
+    from_date = None
+    to_date = None
     per_page = int(request.args.get('per_page', request.form.get('per_page', 20)))
     page = int(request.args.get('page', 1))
 
-    def _parse_date(val, fallback):
+    def _parse_date(val):
         if not val:
-            return fallback
+            return None
         for fmt in ('%Y-%m-%d', '%d-%m-%Y'):
             try:
                 return datetime.strptime(val, fmt).date()
             except ValueError:
                 continue
-        return fallback
+        return None
 
     fd = request.values.get('from_date', '')
     td = request.values.get('to_date', '')
-    from_date = _parse_date(fd, from_date)
-    to_date = _parse_date(td, to_date)
+    from_date = _parse_date(fd)
+    to_date = _parse_date(td)
 
-    query = JournalEntry.query.filter(
-        JournalEntry.entry_date.between(from_date, to_date),
-    ).order_by(JournalEntry.entry_date.desc(), JournalEntry.id.desc())
+    query = JournalEntry.query
+    if from_date and to_date:
+        query = query.filter(JournalEntry.entry_date.between(from_date, to_date))
+    elif from_date:
+        query = query.filter(JournalEntry.entry_date >= from_date)
+    elif to_date:
+        query = query.filter(JournalEntry.entry_date <= to_date)
+    query = query.order_by(JournalEntry.entry_date.desc(), JournalEntry.id.desc())
 
     search = (request.args.get('search') or '').strip()
     if search:

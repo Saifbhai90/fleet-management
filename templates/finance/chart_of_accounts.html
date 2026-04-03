@@ -24,13 +24,13 @@
                 <label class="mb-0 small">Show</label>
                 <select id="coaPerPage" class="form-select form-select-sm" style="width:auto;" onchange="var u=new URLSearchParams(window.location.search);u.set('per_page',this.value);u.set('page','1');window.location.search=u.toString();">
                     {% for val in [25,50,100,200] %}
-                    <option value="{{ val }}" {% if per_page|default(25) == val %}selected{% endif %}>{{ val }}</option>
+                    <option value="{{ val }}" {% if per_page|default(50) == val %}selected{% endif %}>{{ val }}</option>
                     {% endfor %}
                 </select>
                 <label class="mb-0 small">entries</label>
             </div>
             <div>
-                <input type="text" id="coaSearch" class="form-control form-control-sm" placeholder="Search..." style="width:200px;">
+                <input type="text" id="coaSearch" class="form-control form-control-sm" placeholder="Search all pages..." style="width:200px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
             </div>
         </div>
         <div class="card-body p-0">
@@ -98,23 +98,27 @@
                 </table>
             </div>
         </div>
+        {% if pagination %}
+        <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <small class="text-muted"><i class="bi bi-list-ul me-1"></i>Showing {{ (pagination.page - 1) * per_page + 1 if accounts|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + accounts|length }} of {{ pagination.total }} entries</small>
+                {% if pagination.pages > 1 %}
+                <nav><ul class="pagination pagination-sm mb-0">
+                    <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
+                    {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
+                    <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
+                </ul></nav>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 <script>
+function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 document.addEventListener('DOMContentLoaded', function(){
     if(window.fleetTableEnhance) window.fleetTableEnhance('coaTable');
     window.fleetPrintExport && window.fleetPrintExport('coaTable','Chart of Accounts','Chart_of_Accounts.csv');
-
-    var searchInput = document.getElementById('coaSearch');
-    if(searchInput){
-        searchInput.addEventListener('keyup', function(){
-            var filter = this.value.toLowerCase();
-            var rows = document.querySelectorAll('#coaTable tbody tr');
-            rows.forEach(function(row){
-                row.style.display = row.textContent.toLowerCase().indexOf(filter) > -1 ? '' : 'none';
-            });
-        });
-    }
 });
 </script>
 {% endblock %}

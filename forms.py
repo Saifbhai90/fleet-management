@@ -1220,7 +1220,8 @@ class AccountForm(FlaskForm):
                              choices=[], render_kw={'class': 'form-select search-select'})
     description = TextAreaField('Description', validators=[Optional()],
                                 render_kw={"class": "form-control", "rows": 2})
-    is_active = BooleanField('Active', default=True)
+    is_active = SelectField('Active', choices=[('1', 'Active'), ('0', 'Inactive')],
+                             default='1', validators=[Optional()])
     submit = SubmitField('Save Account')
 
 

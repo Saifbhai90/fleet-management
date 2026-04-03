@@ -3,6 +3,15 @@
 
 {% block content %}
 <div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+        <h2 class="mb-0"><i class="bi bi-wallet2 me-2 text-warning"></i>Employee Expenses</h2>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+            <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+            <a href="{{ url_for('employee_expense_form') }}" class="btn btn-warning btn-sm text-dark"><i class="bi bi-plus-circle me-1"></i>Add Expense</a>
+        </div>
+    </div>
+
     <div class="section-heading bg-warning">
         <i class="bi bi-wallet2 me-2"></i>Employee Expenses
     </div>
@@ -58,22 +67,24 @@
         </div>
     </div>
 
-    <!-- Table Card -->
     <div class="card shadow-sm border-0">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-            <div>
-                <h6 class="mb-0 d-inline">Employee Expenses</h6>
-                {% if pagination %}
-                <span class="text-muted ms-2 small">({{ pagination.total }} record{{ 's' if pagination.total != 1 }})</span>
-                {% endif %}
+        <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <label class="mb-0 small">Show</label>
+                <select class="form-select form-select-sm" style="width:auto;" onchange="var u=new URLSearchParams(window.location.search);u.set('per_page',this.value);u.set('page','1');window.location.search=u.toString();">
+                    {% for val in [10,20,50,100] %}
+                    <option value="{{ val }}" {% if per_page == val %}selected{% endif %}>{{ val }}</option>
+                    {% endfor %}
+                </select>
+                <label class="mb-0 small">entries</label>
             </div>
-            <a href="{{ url_for('employee_expense_form') }}" class="btn btn-warning btn-sm">
-                <i class="bi bi-plus-circle me-1"></i>Add Expense
-            </a>
+            <div>
+                <input type="text" id="eeSearch" class="form-control form-control-sm" placeholder="Search all pages..." style="max-width:200px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
+            </div>
         </div>
         <div class="card-body p-0">
             <div class="data-table-wrapper">
-                <table class="table table-hover compact-table mb-0">
+                <table class="table table-hover compact-table mb-0" id="eeTable">
                     <thead class="table-light">
                         <tr>
                             <th class="text-center" style="width:46px;">#</th>
@@ -164,5 +175,9 @@
 </div>
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
+document.addEventListener('DOMContentLoaded', function(){
+    if(window.fleetTableEnhance) window.fleetTableEnhance('eeTable');
+    window.fleetPrintExport && window.fleetPrintExport('eeTable','Employee Expenses','Employee_Expenses.csv');
+});
 </script>
 {% endblock %}
