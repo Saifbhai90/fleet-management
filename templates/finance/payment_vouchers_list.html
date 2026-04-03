@@ -3,30 +3,36 @@
 
 {% block content %}
 <div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+        <h2 class="mb-0"><i class="bi bi-cash-stack me-2 text-success"></i>Payment Vouchers</h2>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+            <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+            {% if can_see_page('accounts_quick_payment') %}
+            <a href="{{ url_for('accounts_quick_payment') }}" class="btn btn-success btn-sm">
+                <i class="bi bi-plus-circle me-1"></i>New Payment
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
     <div class="section-heading bg-success">
         <i class="bi bi-cash-stack me-2"></i>Payment Vouchers
     </div>
 
-    <div class="card shadow-sm border-0 mt-3">
-        <div class="card-header bg-light">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <h6 class="mb-0">Filter & Search</h6>
-                {% if can_see_page('accounts_quick_payment') %}
-                <a href="{{ url_for('accounts_quick_payment') }}" class="btn btn-success btn-sm">
-                    <i class="bi bi-plus-circle me-1"></i>New Payment
-                </a>
-                {% endif %}
-            </div>
-        </div>
-        <div class="card-body">
-            <form method="GET" class="row g-2 mb-3">
-                <div class="col-md-3">
-                    <input type="date" name="from_date" class="form-control form-control-sm" value="{{ from_date }}" placeholder="From Date">
+    <div class="card shadow-sm border-0 mt-3 mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">From Date</label>
+                    <input type="date" name="from_date" class="form-control form-control-sm" value="{{ from_date }}">
                 </div>
-                <div class="col-md-3">
-                    <input type="date" name="to_date" class="form-control form-control-sm" value="{{ to_date }}" placeholder="To Date">
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">To Date</label>
+                    <input type="date" name="to_date" class="form-control form-control-sm" value="{{ to_date }}">
                 </div>
-                <div class="col-md-2">
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">District</label>
                     <select name="district_id" class="form-select form-select-sm">
                         <option value="0">All Districts</option>
                         {% for d in districts %}
@@ -34,7 +40,8 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">Project</label>
                     <select name="project_id" class="form-select form-select-sm">
                         <option value="0">All Projects</option>
                         {% for p in projects %}
@@ -42,71 +49,89 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary btn-sm w-100">Apply</button>
+                <div class="col-6 col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm flex-fill"><i class="bi bi-funnel me-1"></i>Filter</button>
+                    <a href="{{ url_for('payment_vouchers_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i></a>
                 </div>
             </form>
+        </div>
+    </div>
 
-            <div class="data-table-wrapper">
-                <table class="table table-hover compact-table">
-                    <thead>
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-dark text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span class="fw-semibold">Payment Vouchers</span>
+            <div class="d-flex align-items-center gap-2">
+                <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width:70px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
+                    {% for val in [10,20,50,100] %}
+                    <option value="{{ val }}" {% if per_page == val %}selected{% endif %}>{{ val }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" id="pvSearch" class="form-control form-control-sm" placeholder="Search all pages..." style="max-width:200px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="pvTable">
+                    <thead class="table-light" style="font-size:.82rem;">
                         <tr>
-                            <th>#</th>
+                            <th class="ps-3">#</th>
                             <th>Voucher No</th>
                             <th>Date</th>
                             <th>From Account</th>
                             <th>To Account</th>
-                            <th>Amount</th>
+                            <th class="text-end">Amount</th>
                             <th>Mode</th>
-                            <th>Actions</th>
+                            <th>Description</th>
+                            <th class="text-center">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody style="font-size:.82rem;">
                         {% for pv in vouchers %}
                         <tr>
-                            <td>{{ loop.index }}</td>
-                            <td>{{ pv.voucher_number }}</td>
+                            <td class="ps-3">{{ (pagination.page - 1) * per_page + loop.index }}</td>
+                            <td class="fw-semibold">{{ pv.voucher_number }}</td>
                             <td>{{ pv.payment_date|ddmmyyyy }}</td>
-                            <td>{{ pv.from_account.name }}</td>
-                            <td>{{ pv.to_account.name }}</td>
-                            <td class="text-end">{{ "{:,.2f}".format(pv.amount) }}</td>
+                            <td>{{ pv.from_account.name if pv.from_account else '-' }}</td>
+                            <td>{{ pv.to_account.name if pv.to_account else '-' }}</td>
+                            <td class="text-end fw-bold">{{ "{:,.2f}".format(pv.amount) }}</td>
                             <td><span class="badge bg-info">{{ pv.payment_mode }}</span></td>
-                            <td>
-                                <a href="{{ url_for('payment_voucher_edit', pk=pv.id) }}" class="btn btn-sm btn-edit-compact" title="Edit">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
+                            <td class="text-truncate" style="max-width:180px;">{{ pv.description or '' }}</td>
+                            <td class="text-center">
+                                <a href="{{ url_for('payment_voucher_edit', pk=pv.id) }}" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil"></i></a>
                                 <form action="{{ url_for('payment_voucher_delete', pk=pv.id) }}" method="POST" style="display:inline;">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-delete-compact" title="Delete" onclick="return confirm('Delete this payment voucher?')">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete" onclick="return confirm('Delete this payment voucher?')"><i class="bi bi-trash"></i></button>
                                 </form>
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="8" class="text-center py-4">No payment vouchers found.</td></tr>
+                        <tr><td colspan="9" class="text-center py-4 text-muted">No payment vouchers found.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
-              <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
-                <div class="d-flex justify-content-between align-items-center">
-            <small class="text-muted"><i class="bi bi-list-ul me-1"></i>Showing
-              {% if pagination %}{{ (pagination.page - 1) * per_page + 1 if vouchers|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + vouchers|length }} of {{ pagination.total }}{% else %}{{ '1' if vouchers|length > 0 else '0' }} to {{ vouchers|length }} of {{ vouchers|length }}{% endif %} entries
-        </small>
-            {% if pagination and pagination.pages > 1 %}
-            <nav><ul class="pagination pagination-sm mb-0">
-                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
-                {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
-                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
-            </ul></nav>
-            {% endif %}
-                </div>
+        <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <small class="text-muted"><i class="bi bi-list-ul me-1"></i>Showing
+                  {% if pagination %}{{ (pagination.page - 1) * per_page + 1 if vouchers|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + vouchers|length }} of {{ pagination.total }}{% endif %} entries
+                </small>
+                {% if pagination and pagination.pages > 1 %}
+                <nav><ul class="pagination pagination-sm mb-0">
+                    <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
+                    {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
+                    <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
+                </ul></nav>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
+document.addEventListener('DOMContentLoaded', function(){
+    if(window.fleetTableEnhance) window.fleetTableEnhance('pvTable');
+    window.fleetPrintExport && window.fleetPrintExport('pvTable','Payment Vouchers','Payment_Vouchers.csv');
+});
 </script>
 {% endblock %}

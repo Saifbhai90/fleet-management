@@ -144,20 +144,31 @@ def payment_vouchers_list():
     else:
         query = query.order_by(PaymentVoucher.payment_date.desc())
     
+    search = (request.args.get('search') or '').strip()
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        from sqlalchemy import or_
+        for tok in tokens:
+            like = f'%{tok}%'
+            query = query.filter(or_(
+                PaymentVoucher.voucher_number.ilike(like),
+                PaymentVoucher.description.ilike(like),
+                PaymentVoucher.payment_mode.ilike(like),
+            ))
+
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     vouchers = pagination.items
-    
-    # Get districts and projects for filter
+
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
-    
-    return render_template('finance/payment_vouchers_list.html', 
+
+    return render_template('finance/payment_vouchers_list.html',
                          vouchers=vouchers, pagination=pagination,
                          districts=districts, projects=projects,
                          from_date=from_date, to_date=to_date,
                          district_id=district_id, project_id=project_id,
                          sort_by=sort_by, sort_order=sort_order,
-                         page=page, per_page=per_page)
+                         page=page, per_page=per_page, search=search)
 
 
 def payment_voucher_edit(pk):
@@ -321,14 +332,26 @@ def receipt_vouchers_list():
     else:
         query = query.order_by(ReceiptVoucher.receipt_date.desc())
     
+    search = (request.args.get('search') or '').strip()
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        from sqlalchemy import or_
+        for tok in tokens:
+            like = f'%{tok}%'
+            query = query.filter(or_(
+                ReceiptVoucher.voucher_number.ilike(like),
+                ReceiptVoucher.description.ilike(like),
+                ReceiptVoucher.receipt_mode.ilike(like),
+            ))
+
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     vouchers = pagination.items
-    
+
     return render_template('finance/receipt_vouchers_list.html',
                          vouchers=vouchers, pagination=pagination,
                          from_date=from_date, to_date=to_date,
                          sort_by=sort_by, sort_order=sort_order,
-                         page=page, per_page=per_page)
+                         page=page, per_page=per_page, search=search)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -404,14 +427,25 @@ def bank_entries_list():
         except:
             pass
     
+    search = (request.args.get('search') or '').strip()
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        from sqlalchemy import or_
+        for tok in tokens:
+            like = f'%{tok}%'
+            query = query.filter(or_(
+                BankEntry.entry_number.ilike(like),
+                BankEntry.description.ilike(like),
+            ))
+
     query = query.order_by(BankEntry.entry_date.desc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     entries = pagination.items
-    
+
     return render_template('finance/bank_entries_list.html',
                          entries=entries, pagination=pagination,
                          from_date=from_date, to_date=to_date,
-                         page=page, per_page=per_page)
+                         page=page, per_page=per_page, search=search)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -437,21 +471,31 @@ def accounts_account_ledger():
     ledger_data = None
     dto_summary = None
     
-    if request.method == 'POST' and form.validate_on_submit():
-        account_id = form.account_id.data
-        from_date = form.from_date.data
-        to_date = form.to_date.data
-        district_id = form.district_id.data if form.district_id.data != 0 else None
-        project_id = form.project_id.data if form.project_id.data != 0 else None
-        
-        if account_id > 0:
+    account_id_param = request.args.get('account_id', 0, type=int)
+    if account_id_param > 0 and request.method == 'GET':
+        form.account_id.data = account_id_param
+
+    if request.method == 'POST' or account_id_param > 0:
+        if request.method == 'POST' and form.validate_on_submit():
+            account_id = form.account_id.data
+            from_date = form.from_date.data
+            to_date = form.to_date.data
+        else:
+            account_id = account_id_param
+            from_date = form.from_date.data
+            to_date = form.to_date.data
+
+        district_id = form.district_id.data if form.district_id.data and form.district_id.data != 0 else None
+        project_id = form.project_id.data if form.project_id.data and form.project_id.data != 0 else None
+
+        if account_id and account_id > 0:
             ledger_data = get_account_ledger(account_id, from_date, to_date)
-            
-            # If this is a DTO wallet account, also get summary
             if ledger_data and ledger_data['account'].name.startswith('DTO Wallet'):
                 if district_id and project_id:
                     dto_summary = get_dto_wallet_summary(district_id, project_id, from_date, to_date)
-    
+        elif request.method == 'POST':
+            flash('Please select an Account to view the ledger.', 'warning')
+
     return render_template('finance/account_ledger.html',
                          form=form, ledger_data=ledger_data, dto_summary=dto_summary,
                          title='Account Ledger')
@@ -1206,10 +1250,22 @@ def fund_transfers_list():
     if form.project_id.data and form.project_id.data > 0:
         query = query.filter_by(project_id=form.project_id.data)
 
+    search = (request.args.get('search') or '').strip()
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        from sqlalchemy import or_
+        for tok in tokens:
+            like = f'%{tok}%'
+            query = query.filter(or_(
+                FundTransfer.transfer_number.ilike(like),
+                FundTransfer.description.ilike(like),
+                FundTransfer.payment_mode.ilike(like),
+            ))
+
     transfers = query.paginate(page=page, per_page=per_page, error_out=False)
     return render_template('finance/fund_transfers_list.html',
                            form=form, transfers=transfers,
-                           from_date=from_date, to_date=to_date, per_page=per_page)
+                           from_date=from_date, to_date=to_date, per_page=per_page, search=search)
 
 
 def _populate_transfer_filters(form):
@@ -1255,6 +1311,7 @@ def wallet_dashboard():
             'balance': bal,
             'total_received': received,
             'total_spent': spent,
+            'account_id': acct.id,
         })
         if bal > 0:
             total_funds += bal
@@ -1278,6 +1335,7 @@ def wallet_dashboard():
             'balance': bal,
             'total_received': received,
             'total_spent': spent,
+            'account_id': acct.id,
         })
         if bal > 0:
             total_funds += bal
@@ -1406,10 +1464,23 @@ def journal_vouchers_list():
     from_date = _parse_date(fd, from_date)
     to_date = _parse_date(td, to_date)
 
-    entries = JournalEntry.query.filter(
+    query = JournalEntry.query.filter(
         JournalEntry.entry_date.between(from_date, to_date),
-    ).order_by(JournalEntry.entry_date.desc(), JournalEntry.id.desc()
-    ).paginate(page=page, per_page=per_page, error_out=False)
+    ).order_by(JournalEntry.entry_date.desc(), JournalEntry.id.desc())
+
+    search = (request.args.get('search') or '').strip()
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        from sqlalchemy import or_
+        for tok in tokens:
+            like = f'%{tok}%'
+            query = query.filter(or_(
+                JournalEntry.entry_number.ilike(like),
+                JournalEntry.description.ilike(like),
+                JournalEntry.entry_type.ilike(like),
+            ))
+
+    entries = query.paginate(page=page, per_page=per_page, error_out=False)
 
     return render_template('finance/journal_vouchers_list.html',
-                           entries=entries, from_date=from_date, to_date=to_date, per_page=per_page)
+                           entries=entries, from_date=from_date, to_date=to_date, per_page=per_page, search=search)

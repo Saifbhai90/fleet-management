@@ -15,27 +15,16 @@
         <i class="bi bi-wallet2 me-2"></i>Wallet Dashboard
     </div>
 
-    <!-- Filter Form -->
     <div class="card shadow-sm border-0 mt-3 mb-3">
         <div class="card-body py-2">
             <form method="GET" action="" class="row g-2 align-items-end">
                 <div class="col-6 col-md-3">
                     <label class="form-label form-label-sm mb-1">District</label>
                     {{ form.district_id(class="form-select form-select-sm search-select") if form.district_id is defined else '' }}
-                    {% if form.district_id is not defined %}
-                    <select name="district_id" class="form-select form-select-sm">
-                        <option value="0">-- All Districts --</option>
-                    </select>
-                    {% endif %}
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label form-label-sm mb-1">Project</label>
                     {{ form.project_id(class="form-select form-select-sm search-select") if form.project_id is defined else '' }}
-                    {% if form.project_id is not defined %}
-                    <select name="project_id" class="form-select form-select-sm">
-                        <option value="0">-- All Projects --</option>
-                    </select>
-                    {% endif %}
                 </div>
                 <div class="col-6 col-md-2 d-flex gap-1">
                     <button type="submit" class="btn btn-primary btn-sm flex-fill">
@@ -49,7 +38,6 @@
         </div>
     </div>
 
-    <!-- Summary Cards -->
     <div class="row g-3 mb-3">
         <div class="col-6 col-lg-3">
             <div class="card shadow-sm border-0 border-start border-primary border-4">
@@ -121,43 +109,36 @@
         </div>
     </div>
 
-    <!-- Table Card -->
     <div class="card shadow-sm border-0">
         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span class="fw-semibold">All Wallets</span>
             <div class="d-flex align-items-center gap-2">
-                <label class="mb-0 small">Show</label>
-                <select id="walletPerPage" class="form-select form-select-sm" style="width:auto;" onchange="var u=new URLSearchParams(window.location.search);u.set('per_page',this.value);u.set('page','1');window.location.search=u.toString();">
-                    {% for val in [25,50,100,200] %}
-                    <option value="{{ val }}" {% if per_page|default(25) == val %}selected{% endif %}>{{ val }}</option>
-                    {% endfor %}
-                </select>
-                <label class="mb-0 small">entries</label>
-            </div>
-            <div>
-                <input type="text" id="walletSearch" class="form-control form-control-sm" placeholder="Search..." style="width:200px;">
+                <input type="text" id="walletSearch" class="form-control form-control-sm" placeholder="Search all pages..." style="max-width:200px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
             </div>
         </div>
         <div class="card-body p-0">
-            <div class="data-table-wrapper">
-                <table class="table table-hover compact-table mb-0" id="walletTable">
-                    <thead class="table-light">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="walletTable">
+                    <thead class="table-light" style="font-size:.82rem;">
                         <tr>
-                            <th class="text-center" style="width:46px;">#</th>
+                            <th class="text-center ps-3" style="width:46px;">#</th>
                             <th>Person Name</th>
                             <th>Post / Role</th>
                             <th>Type</th>
                             <th>District</th>
                             <th>Project</th>
-                            <th class="text-end">Wallet Balance</th>
-                            <th class="text-end">Total Received</th>
-                            <th class="text-end">Total Spent</th>
+                            <th class="text-end">Balance</th>
+                            <th class="text-end">Received</th>
+                            <th class="text-end">Spent</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody style="font-size:.82rem;">
                         {% for w in wallets %}
-                        <tr>
-                            <td class="text-center text-muted small">{{ loop.index }}</td>
-                            <td class="fw-semibold">{{ w.person_name }}</td>
+                        <tr style="cursor:pointer;" onclick="window.location='{{ url_for('accounts_account_ledger', account_id=w.account_id) }}';" title="View Statement">
+                            <td class="text-center text-muted ps-3">{{ loop.index }}</td>
+                            <td class="fw-semibold text-primary">
+                                <i class="bi bi-journal-text me-1"></i>{{ w.person_name }}
+                            </td>
                             <td>{{ w.post|default('-') }}</td>
                             <td>
                                 {% if w.person_type == 'Driver' %}
@@ -192,15 +173,6 @@
 document.addEventListener('DOMContentLoaded', function(){
     if(window.fleetTableEnhance) window.fleetTableEnhance('walletTable');
     window.fleetPrintExport && window.fleetPrintExport('walletTable','Wallet Dashboard','Wallet_Dashboard.csv');
-
-    var searchInput = document.getElementById('walletSearch');
-    if(searchInput){
-        searchInput.addEventListener('keyup', function(){
-            var filter = this.value.toLowerCase();
-            var rows = document.querySelectorAll('#walletTable tbody tr');
-            rows.forEach(function(row){ row.style.display = row.textContent.toLowerCase().indexOf(filter) > -1 ? '' : 'none'; });
-        });
-    }
 });
 </script>
 {% endblock %}

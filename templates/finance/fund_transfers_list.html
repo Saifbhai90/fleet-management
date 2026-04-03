@@ -82,7 +82,7 @@
                 <label class="mb-0 small">entries</label>
             </div>
             <div>
-                <input type="text" id="ftSearch" class="form-control form-control-sm" placeholder="Search..." style="width:200px;">
+                <input type="text" id="ftSearch" class="form-control form-control-sm" placeholder="Search all pages..." style="width:200px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
             </div>
         </div>
         <div class="card-body p-0">
@@ -180,14 +180,7 @@ document.addEventListener('DOMContentLoaded', function(){
     if(window.fleetTableEnhance) window.fleetTableEnhance('fundTransferTable');
     window.fleetPrintExport && window.fleetPrintExport('fundTransferTable','Fund Transfers','Fund_Transfers.csv');
 
-    var searchInput = document.getElementById('ftSearch');
-    if(searchInput){
-        searchInput.addEventListener('keyup', function(){
-            var filter = this.value.toLowerCase();
-            var rows = document.querySelectorAll('#fundTransferTable tbody tr');
-            rows.forEach(function(row){ row.style.display = row.textContent.toLowerCase().indexOf(filter) > -1 ? '' : 'none'; });
-        });
-    }
+    
 });
 </script>
 {% endblock %}

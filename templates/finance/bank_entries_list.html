@@ -3,66 +3,105 @@
 
 {% block content %}
 <div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+        <h2 class="mb-0"><i class="bi bi-bank2 me-2 text-info"></i>Bank Entries</h2>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+            <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+            <a href="{{ url_for('accounts_bank_entry') }}" class="btn btn-info btn-sm text-white">
+                <i class="bi bi-plus-circle me-1"></i>New Bank Entry
+            </a>
+        </div>
+    </div>
+
     <div class="section-heading bg-info">
         <i class="bi bi-bank2 me-2"></i>Bank Entries
     </div>
 
-    <div class="card shadow-sm border-0 mt-3">
-        <div class="card-header bg-light">
-            <div class="d-flex justify-content-between align-items-center">
-                <h6 class="mb-0">All Bank Transfers</h6>
-                <a href="{{ url_for('accounts_bank_entry') }}" class="btn btn-info btn-sm">
-                    <i class="bi bi-plus-circle me-1"></i>New Transfer
-                </a>
+    <div class="card shadow-sm border-0 mt-3 mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-6 col-md-3">
+                    <label class="form-label form-label-sm mb-1">From Date</label>
+                    <input type="date" name="from_date" class="form-control form-control-sm" value="{{ from_date }}">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label form-label-sm mb-1">To Date</label>
+                    <input type="date" name="to_date" class="form-control form-control-sm" value="{{ to_date }}">
+                </div>
+                <div class="col-6 col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm flex-fill"><i class="bi bi-funnel me-1"></i>Filter</button>
+                    <a href="{{ url_for('bank_entries_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i></a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-dark text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span class="fw-semibold">Bank Entries</span>
+            <div class="d-flex align-items-center gap-2">
+                <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width:70px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
+                    {% for val in [10,20,50,100] %}
+                    <option value="{{ val }}" {% if per_page == val %}selected{% endif %}>{{ val }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" id="beSearch" class="form-control form-control-sm" placeholder="Search all pages..." style="max-width:200px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
             </div>
         </div>
-        <div class="card-body">
-            <div class="data-table-wrapper">
-                <table class="table table-hover compact-table">
-                    <thead>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="beTable">
+                    <thead class="table-light" style="font-size:.82rem;">
                         <tr>
-                            <th>#</th>
+                            <th class="ps-3">#</th>
                             <th>Entry No</th>
                             <th>Date</th>
-                            <th>From</th>
-                            <th>To</th>
-                            <th>Amount</th>
+                            <th>From Account</th>
+                            <th>To Account</th>
+                            <th class="text-end">Amount</th>
+                            <th>Description</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody style="font-size:.82rem;">
                         {% for be in entries %}
                         <tr>
-                            <td>{{ loop.index }}</td>
-                            <td>{{ be.entry_number }}</td>
+                            <td class="ps-3">{{ (pagination.page - 1) * per_page + loop.index }}</td>
+                            <td class="fw-semibold">{{ be.entry_number }}</td>
                             <td>{{ be.entry_date|ddmmyyyy }}</td>
-                            <td>{{ be.from_account.name }}</td>
-                            <td>{{ be.to_account.name }}</td>
-                            <td class="text-end">{{ "{:,.2f}".format(be.amount) }}</td>
+                            <td>{{ be.from_account.name if be.from_account else '-' }}</td>
+                            <td>{{ be.to_account.name if be.to_account else '-' }}</td>
+                            <td class="text-end fw-bold">{{ "{:,.2f}".format(be.amount) }}</td>
+                            <td class="text-truncate" style="max-width:200px;">{{ be.description or '' }}</td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="6" class="text-center py-4">No bank entries found.</td></tr>
+                        <tr><td colspan="7" class="text-center py-4 text-muted">No bank entries found.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-            <div class="card-footer bg-white border-top pt-2 pb-2 px-3">
-              <div class="d-flex justify-content-between align-items-center">
+        </div>
+        <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
+            <div class="d-flex justify-content-between align-items-center">
                 <small class="text-muted"><i class="bi bi-list-ul me-1"></i>Showing
-                  {% if pagination %}{{ (pagination.page - 1) * per_page + 1 if entries|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + entries|length }} of {{ pagination.total }}{% else %}{{ '1' if entries|length > 0 else '0' }} to {{ entries|length }} of {{ entries|length }}{% endif %} entries
+                  {% if pagination %}{{ (pagination.page - 1) * per_page + 1 if entries|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + entries|length }} of {{ pagination.total }}{% endif %} entries
                 </small>
                 {% if pagination and pagination.pages > 1 %}
                 <nav><ul class="pagination pagination-sm mb-0">
-                  <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
-                  {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
-                  <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
+                    <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
+                    {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
+                    <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
                 </ul></nav>
                 {% endif %}
-              </div>
             </div>
         </div>
     </div>
 </div>
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
+document.addEventListener('DOMContentLoaded', function(){
+    if(window.fleetTableEnhance) window.fleetTableEnhance('beTable');
+    window.fleetPrintExport && window.fleetPrintExport('beTable','Bank Entries','Bank_Entries.csv');
+});
 </script>
 {% endblock %}
