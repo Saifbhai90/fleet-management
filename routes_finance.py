@@ -1073,16 +1073,46 @@ def _auto_create_coa_account(entity_type, entity_id, entity_name,
 
 def _person_choices():
     choices = [('', '-- Select Person / Account --')]
+
+    _seen_acct_ids = set()
+
     for c in Company.query.order_by(Company.name).all():
         choices.append((f'com-{c.id}', f"{c.name} (Company)"))
+        acct = Account.query.filter_by(entity_type='company', entity_id=c.id).first()
+        if acct:
+            _seen_acct_ids.add(acct.id)
+
     for e in Employee.query.filter_by(status='Active').order_by(Employee.name).all():
         post_label = e.post.full_name if e.post else 'Staff'
         choices.append((f'emp-{e.id}', f"{e.name} ({post_label})"))
+        acct = Account.query.filter_by(entity_type='employee', entity_id=e.id).first()
+        if acct:
+            _seen_acct_ids.add(acct.id)
+
     for d in Driver.query.filter_by(status='Active').order_by(Driver.name).all():
         veh = f" – {d.vehicle.vehicle_no}" if d.vehicle else ""
         choices.append((f'drv-{d.id}', f"{d.name}{veh} (Driver)"))
+        acct = Account.query.filter_by(entity_type='driver', entity_id=d.id).first()
+        if acct:
+            _seen_acct_ids.add(acct.id)
+
     for p in Party.query.order_by(Party.name).all():
         choices.append((f'pty-{p.id}', f"{p.name} ({p.party_type})"))
+        acct = Account.query.filter_by(entity_type='party', entity_id=p.id).first()
+        if acct:
+            _seen_acct_ids.add(acct.id)
+
+    _parent_codes = {'6000', '6500', '7000', '8000'}
+    parent_ids = {a.id for a in Account.query.filter(Account.code.in_(_parent_codes)).all()}
+    if parent_ids:
+        extra = Account.query.filter(
+            Account.parent_id.in_(parent_ids),
+            Account.is_active == True,
+            ~Account.id.in_(_seen_acct_ids) if _seen_acct_ids else True,
+        ).order_by(Account.name).all()
+        for a in extra:
+            choices.append((f'acct-{a.id}', f"{a.name} (Account {a.code})"))
+
     return choices
 
 
@@ -1152,10 +1182,12 @@ def fund_transfer_add():
                 from_driver_id=from_id if from_type == 'drv' else None,
                 from_party_id=from_id if from_type == 'pty' else None,
                 from_company_id=from_id if from_type == 'com' else None,
+                from_account_id=from_id if from_type == 'acct' else None,
                 to_employee_id=to_id if to_type == 'emp' else None,
                 to_driver_id=to_id if to_type == 'drv' else None,
                 to_party_id=to_id if to_type == 'pty' else None,
                 to_company_id=to_id if to_type == 'com' else None,
+                to_account_id=to_id if to_type == 'acct' else None,
                 amount=form.amount.data,
                 payment_mode=form.payment_mode.data,
                 reference_no=form.reference_no.data,
@@ -1211,6 +1243,8 @@ def fund_transfer_edit(pk):
             form.from_person.data = f'pty-{transfer.from_party_id}'
         elif transfer.from_company_id:
             form.from_person.data = f'com-{transfer.from_company_id}'
+        elif transfer.from_account_id:
+            form.from_person.data = f'acct-{transfer.from_account_id}'
         if transfer.to_employee_id:
             form.to_person.data = f'emp-{transfer.to_employee_id}'
         elif transfer.to_driver_id:
@@ -1219,6 +1253,8 @@ def fund_transfer_edit(pk):
             form.to_person.data = f'pty-{transfer.to_party_id}'
         elif transfer.to_company_id:
             form.to_person.data = f'com-{transfer.to_company_id}'
+        elif transfer.to_account_id:
+            form.to_person.data = f'acct-{transfer.to_account_id}'
 
     if form.validate_on_submit():
         try:
@@ -1240,10 +1276,12 @@ def fund_transfer_edit(pk):
             transfer.from_driver_id = from_id if from_type == 'drv' else None
             transfer.from_party_id = from_id if from_type == 'pty' else None
             transfer.from_company_id = from_id if from_type == 'com' else None
+            transfer.from_account_id = from_id if from_type == 'acct' else None
             transfer.to_employee_id = to_id if to_type == 'emp' else None
             transfer.to_driver_id = to_id if to_type == 'drv' else None
             transfer.to_party_id = to_id if to_type == 'pty' else None
             transfer.to_company_id = to_id if to_type == 'com' else None
+            transfer.to_account_id = to_id if to_type == 'acct' else None
             transfer.amount = form.amount.data
             transfer.payment_mode = form.payment_mode.data
             transfer.reference_no = form.reference_no.data
@@ -1356,6 +1394,10 @@ def fund_transfers_list():
                 query = query.filter(or_(
                     FundTransfer.from_company_id == p_id,
                     FundTransfer.to_company_id == p_id))
+            elif p_type == 'acct':
+                query = query.filter(or_(
+                    FundTransfer.from_account_id == p_id,
+                    FundTransfer.to_account_id == p_id))
 
     if district_val and district_val > 0:
         query = query.filter_by(district_id=district_val)

@@ -553,8 +553,14 @@ def ensure_wallet_account(person_type, person_id):
     """
     Ensure the entity (employee/driver/party/company) has a wallet Account.
     If not, auto-create one under the appropriate CoA parent head.
-    Supported person_types: 'employee'/'emp', 'driver'/'drv', 'party'/'pty', 'company'/'com'.
+    Supported person_types: 'employee'/'emp', 'driver'/'drv', 'party'/'pty', 'company'/'com', 'acct'.
     """
+    if person_type == 'acct':
+        acct = Account.query.get(person_id)
+        if not acct:
+            raise ValueError(f"Account {person_id} not found")
+        return acct
+
     _type_map = {'emp': 'employee', 'drv': 'driver', 'pty': 'party', 'com': 'company'}
     ptype = _type_map.get(person_type, person_type)
 

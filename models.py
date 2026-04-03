@@ -1788,6 +1788,8 @@ class FundTransfer(db.Model):
     to_driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True)
     to_party_id = db.Column(db.Integer, db.ForeignKey('party.id'), nullable=True)
     to_company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=True)
+    from_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=True)
+    to_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=True)
     amount = db.Column(db.Numeric(15, 2), nullable=False)
     payment_mode = db.Column(db.String(30), nullable=False, default='Cash')
     reference_no = db.Column(db.String(50), nullable=True)
@@ -1808,6 +1810,8 @@ class FundTransfer(db.Model):
     to_driver = db.relationship('Driver', foreign_keys=[to_driver_id], backref='received_transfers', lazy='select')
     to_party = db.relationship('Party', foreign_keys=[to_party_id], backref='received_transfers', lazy='select')
     to_company = db.relationship('Company', foreign_keys=[to_company_id], backref='received_transfers', lazy='select')
+    from_account = db.relationship('Account', foreign_keys=[from_account_id], backref='sent_fund_transfers', lazy='select')
+    to_account = db.relationship('Account', foreign_keys=[to_account_id], backref='received_fund_transfers', lazy='select')
     district = db.relationship('District', backref='fund_transfers', lazy='select')
     project = db.relationship('Project', backref='fund_transfers', lazy='select')
     journal_entry = db.relationship('JournalEntry', backref='fund_transfer', lazy='select')
@@ -1823,6 +1827,8 @@ class FundTransfer(db.Model):
             return self.from_party.name
         if self.from_company:
             return self.from_company.name
+        if self.from_account_id:
+            return self.from_account.name if self.from_account else '—'
         return '—'
 
     @property
@@ -1835,6 +1841,8 @@ class FundTransfer(db.Model):
             return self.to_party.name
         if self.to_company:
             return self.to_company.name
+        if self.to_account_id:
+            return self.to_account.name if self.to_account else '—'
         return '—'
 
     def __repr__(self):

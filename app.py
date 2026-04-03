@@ -214,6 +214,8 @@ if _run_startup_tasks:
                 ('fund_transfer', 'to_company_id', 'INTEGER REFERENCES company(id)'),
                 ('fund_transfer', 'attachment', 'VARCHAR(500)'),
                 ('fund_transfer', 'is_salary', 'BOOLEAN DEFAULT FALSE'),
+                ('fund_transfer', 'from_account_id', 'INTEGER REFERENCES account(id)'),
+                ('fund_transfer', 'to_account_id', 'INTEGER REFERENCES account(id)'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():
