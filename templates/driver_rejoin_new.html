@@ -277,31 +277,25 @@ textarea.form-control { height: auto !important; }
   if (newVeh) {
     newVeh.addEventListener('change', function() {
       var vid = this.value;
-      if (!vid) return;
+      if (!vid) { rebuildSel(shiftSel, '<option value="">-- Select Shift --</option>'); return; }
       fetch('/api/check_vehicle_shifts/' + vid).then(function(r){return r.json();}).then(function(res){
         var html = '<option value="">-- Select Shift --</option>';
-        rebuildSel(shiftSel, html);
+        var mFree = res.occupied_shifts.indexOf('Morning') === -1;
+        var nFree = res.occupied_shifts.indexOf('Night') === -1;
         if (res.capacity === 1) {
-          if (res.occupied_shifts.indexOf('Morning') !== -1) {
-            if (capInfo) capInfo.innerHTML = '<span class="cap-pill unavailable"><i class="bi bi-x-circle me-1"></i>Full (Morning taken)</span>';
-            if (submitBtn) submitBtn.disabled = true;
-          } else {
-            if (shiftSel) { var o = document.createElement('option'); o.value = 'Morning'; o.textContent = 'Morning'; shiftSel.appendChild(o); }
-            if (capInfo) capInfo.innerHTML = '<span class="cap-pill available"><i class="bi bi-check-circle me-1"></i>Morning Available</span>';
-            if (submitBtn) submitBtn.disabled = false;
-          }
+          if (mFree) html += '<option value="Morning">Morning</option>';
         } else {
-          var m = res.occupied_shifts.indexOf('Morning') === -1;
-          var n = res.occupied_shifts.indexOf('Night') === -1;
-          if (m && shiftSel) { var om = document.createElement('option'); om.value = 'Morning'; om.textContent = 'Morning'; shiftSel.appendChild(om); }
-          if (n && shiftSel) { var on2 = document.createElement('option'); on2.value = 'Night'; on2.textContent = 'Night'; shiftSel.appendChild(on2); }
-          if (!m && !n) {
-            if (capInfo) capInfo.innerHTML = '<span class="cap-pill unavailable"><i class="bi bi-x-circle me-1"></i>Vehicle Full</span>';
-            if (submitBtn) submitBtn.disabled = true;
-          } else {
-            if (capInfo) capInfo.innerHTML = '<span class="cap-pill available"><i class="bi bi-check-circle me-1"></i>Shifts Available</span>';
-            if (submitBtn) submitBtn.disabled = false;
-          }
+          if (mFree) html += '<option value="Morning">Morning</option>';
+          if (nFree) html += '<option value="Night">Night</option>';
+        }
+        rebuildSel(shiftSel, html);
+        if (!mFree && (res.capacity === 1 || !nFree)) {
+          if (capInfo) capInfo.innerHTML = '<span class="cap-pill unavailable"><i class="bi bi-x-circle me-1"></i>Vehicle Full</span>';
+          if (submitBtn) submitBtn.disabled = true;
+        } else {
+          var label = (mFree && nFree) ? 'Shifts Available' : (mFree ? 'Morning Available' : 'Night Available');
+          if (capInfo) capInfo.innerHTML = '<span class="cap-pill available"><i class="bi bi-check-circle me-1"></i>' + label + '</span>';
+          if (submitBtn) submitBtn.disabled = false;
         }
       });
     });
