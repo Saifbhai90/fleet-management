@@ -3,6 +3,7 @@ Finance & Accounting Routes
 All routes for vouchers, journal entries, ledgers, and financial reports
 """
 from flask import render_template, request, redirect, url_for, flash, jsonify, session
+from sqlalchemy import or_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
                     FundTransfer)
@@ -147,7 +148,6 @@ def payment_vouchers_list():
     search = (request.args.get('search') or '').strip()
     if search:
         tokens = [t.lower() for t in search.split() if t]
-        from sqlalchemy import or_
         for tok in tokens:
             like = f'%{tok}%'
             query = query.filter(or_(
@@ -335,7 +335,6 @@ def receipt_vouchers_list():
     search = (request.args.get('search') or '').strip()
     if search:
         tokens = [t.lower() for t in search.split() if t]
-        from sqlalchemy import or_
         for tok in tokens:
             like = f'%{tok}%'
             query = query.filter(or_(
@@ -430,7 +429,6 @@ def bank_entries_list():
     search = (request.args.get('search') or '').strip()
     if search:
         tokens = [t.lower() for t in search.split() if t]
-        from sqlalchemy import or_
         for tok in tokens:
             like = f'%{tok}%'
             query = query.filter(or_(
@@ -475,26 +473,22 @@ def accounts_account_ledger():
     if account_id_param > 0 and request.method == 'GET':
         form.account_id.data = account_id_param
 
-    if request.method == 'POST' or account_id_param > 0:
-        if request.method == 'POST' and form.validate_on_submit():
-            account_id = form.account_id.data
-            from_date = form.from_date.data
-            to_date = form.to_date.data
-        else:
-            account_id = account_id_param
-            from_date = form.from_date.data
-            to_date = form.to_date.data
-
+    if request.method == 'POST' and form.validate_on_submit():
+        account_id = form.account_id.data
+        from_date_val = form.from_date.data
+        to_date_val = form.to_date.data
         district_id = form.district_id.data if form.district_id.data and form.district_id.data != 0 else None
         project_id = form.project_id.data if form.project_id.data and form.project_id.data != 0 else None
 
         if account_id and account_id > 0:
-            ledger_data = get_account_ledger(account_id, from_date, to_date)
+            ledger_data = get_account_ledger(account_id, from_date_val, to_date_val)
             if ledger_data and ledger_data['account'].name.startswith('DTO Wallet'):
                 if district_id and project_id:
-                    dto_summary = get_dto_wallet_summary(district_id, project_id, from_date, to_date)
-        elif request.method == 'POST':
+                    dto_summary = get_dto_wallet_summary(district_id, project_id, from_date_val, to_date_val)
+        else:
             flash('Please select an Account to view the ledger.', 'warning')
+    elif account_id_param > 0:
+        ledger_data = get_account_ledger(account_id_param, None, None)
 
     return render_template('finance/account_ledger.html',
                          form=form, ledger_data=ledger_data, dto_summary=dto_summary,
@@ -1253,7 +1247,6 @@ def fund_transfers_list():
     search = (request.args.get('search') or '').strip()
     if search:
         tokens = [t.lower() for t in search.split() if t]
-        from sqlalchemy import or_
         for tok in tokens:
             like = f'%{tok}%'
             query = query.filter(or_(
@@ -1471,7 +1464,6 @@ def journal_vouchers_list():
     search = (request.args.get('search') or '').strip()
     if search:
         tokens = [t.lower() for t in search.split() if t]
-        from sqlalchemy import or_
         for tok in tokens:
             like = f'%{tok}%'
             query = query.filter(or_(

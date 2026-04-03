@@ -1825,18 +1825,18 @@
                     <i class="bi bi-arrow-left-right text-success"></i><span>Fund Transfer</span>
                 </a>
                 {% if can_see_page('accounts_quick_payment') %}
-                <a href="{{ url_for('accounts_quick_payment') }}" class="collapse-item {% if request.endpoint in ['accounts_quick_payment', 'payment_vouchers_list', 'payment_voucher_edit'] %}active-link{% endif %}">
-                    <i class="bi bi-cash-stack text-success"></i><span>Payment Voucher</span>
+                <a href="{{ url_for('payment_vouchers_list') }}" class="collapse-item {% if request.endpoint in ['accounts_quick_payment', 'payment_vouchers_list', 'payment_voucher_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-cash-stack text-success"></i><span>Payment Vouchers</span>
                 </a>
                 {% endif %}
                 {% if can_see_page('accounts_quick_receipt') %}
-                <a href="{{ url_for('accounts_quick_receipt') }}" class="collapse-item {% if request.endpoint in ['accounts_quick_receipt', 'receipt_vouchers_list'] %}active-link{% endif %}">
-                    <i class="bi bi-cash-coin text-primary"></i><span>Receipt Voucher</span>
+                <a href="{{ url_for('receipt_vouchers_list') }}" class="collapse-item {% if request.endpoint in ['accounts_quick_receipt', 'receipt_vouchers_list'] %}active-link{% endif %}">
+                    <i class="bi bi-cash-coin text-primary"></i><span>Receipt Vouchers</span>
                 </a>
                 {% endif %}
                 {% if can_see_page('accounts_bank_entry') %}
-                <a href="{{ url_for('accounts_bank_entry') }}" class="collapse-item {% if request.endpoint in ['accounts_bank_entry', 'bank_entries_list'] %}active-link{% endif %}">
-                    <i class="bi bi-bank2 text-info"></i><span>Bank Entry</span>
+                <a href="{{ url_for('bank_entries_list') }}" class="collapse-item {% if request.endpoint in ['accounts_bank_entry', 'bank_entries_list'] %}active-link{% endif %}">
+                    <i class="bi bi-bank2 text-info"></i><span>Bank Entries</span>
                 </a>
                 {% endif %}
                 <a href="{{ url_for('journal_vouchers_list') }}" class="collapse-item {% if request.endpoint in ['accounts_jv', 'journal_vouchers_list'] %}active-link{% endif %}">
