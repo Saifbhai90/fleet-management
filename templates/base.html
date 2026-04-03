@@ -471,18 +471,39 @@
             display: inline-block;
             text-align: center;
         }
-        .sidebar-subheader {
-            font-size: .72rem;
-            text-transform: uppercase;
-            color: rgba(255,255,255,.45);
-            padding: 10px 16px 4px 36px;
-            letter-spacing: .5px;
-            pointer-events: none;
-            margin-top: 4px;
-            border-top: 1px solid rgba(255,255,255,.08);
+        /* ── Nested sub-group toggle (2nd-level accordion) ── */
+        .sb-sub-toggle {
+            display: flex; align-items: center; cursor: pointer;
+            padding: 6px 12px 6px 32px; font-size: .78rem; font-weight: 600;
+            text-transform: uppercase; letter-spacing: .4px;
+            color: rgba(255,255,255,.55); transition: color .2s;
+            position: relative; user-select: none;
         }
-        .sidebar-subheader:first-child { border-top: none; margin-top: 0; }
-        .sidebar.collapsed .sidebar-subheader { display: none; }
+        .sb-sub-toggle:hover { color: rgba(255,255,255,.85); }
+        .sb-sub-toggle::before {
+            content: ''; position: absolute; left: 20px; top: 0; bottom: 0;
+            width: 1px; background: rgba(255,255,255,.12);
+        }
+        .sb-sub-toggle::after {
+            content: '\f285'; font-family: 'bootstrap-icons';
+            font-size: .6rem; margin-left: auto; transition: transform .25s;
+            color: rgba(255,255,255,.35);
+        }
+        .sb-sub-toggle:not(.collapsed)::after { transform: rotate(90deg); }
+        .sb-sub-items { padding-left: 0; position: relative; }
+        .sb-sub-items::before {
+            content: ''; position: absolute; left: 20px; top: 0; bottom: 10px;
+            width: 1px; background: rgba(255,255,255,.08);
+        }
+        .sb-sub-items .collapse-item {
+            padding-left: 42px !important; font-size: .82rem; position: relative;
+        }
+        .sb-sub-items .collapse-item::before {
+            content: ''; position: absolute; left: 20px; top: 50%;
+            width: 12px; height: 1px; background: rgba(255,255,255,.12);
+        }
+        .sidebar.collapsed .sb-sub-toggle,
+        .sidebar.collapsed .sb-sub-items { display: none; }
         /* Main Content */
         .main-content { margin-left: 300px; margin-top: 60px; padding: 25px; transition: 0.3s; }
         .main-content.expanded { margin-left: 70px; }
@@ -1578,9 +1599,13 @@
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#masterMenu" role="button" aria-expanded="{{ 'true' if master_open else 'false' }}">
                 <i class="bi bi-folder2-open"></i><span>Master Data</span>
             </a>
+            {% set _m_org = request.endpoint in ['companies','company_form','projects_list','project_form','project_detail','districts_list','district_form'] and (request.endpoint != 'companies' or request.args.get('mode') != 'report') %}
+            {% set _m_fleet = request.endpoint in ['vehicles_list','vehicle_form','parking_list','parking_form','report_vehicle_profile'] %}
+            {% set _m_people = request.endpoint in ['employees_list','employee_form','employee_profile_print','drivers_list','driver_form','report_driver_profile','driver_post_list','driver_post_form','party_list','party_form','product_list','product_form'] %}
             <div class="collapse collapse-item-container {% if master_open %}show{% endif %}"
                  id="masterMenu" data-bs-parent="#sidebarAccordion">
-                <div class="sidebar-subheader">Organization</div>
+                <div class="sb-sub-toggle {% if not _m_org %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#masterOrg" aria-expanded="{{ 'true' if _m_org else 'false' }}">Organization</div>
+                <div class="collapse sb-sub-items {% if _m_org %}show{% endif %}" id="masterOrg" data-bs-parent="#masterMenu">
                 {% if can_see_page('companies') %}
                 <a href="{{ url_for('companies') }}" class="collapse-item {% if request.endpoint == 'companies' and request.args.get('mode') != 'report' %}active-link{% endif %}">
                     <i class="bi bi-building"></i><span>Companies</span>
@@ -1596,7 +1621,9 @@
                     <i class="bi bi-geo-alt"></i><span>Districts</span>
                 </a>
                 {% endif %}
-                <div class="sidebar-subheader">Fleet</div>
+                </div>
+                <div class="sb-sub-toggle {% if not _m_fleet %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#masterFleet" aria-expanded="{{ 'true' if _m_fleet else 'false' }}">Fleet</div>
+                <div class="collapse sb-sub-items {% if _m_fleet %}show{% endif %}" id="masterFleet" data-bs-parent="#masterMenu">
                 {% if can_see_page('vehicles') %}
                 <a href="{{ url_for('vehicles_list') }}" class="collapse-item {% if request.endpoint == 'vehicles_list' or (request.endpoint == 'report_vehicle_profile' and _came_from_master) %}active-link{% endif %}">
                     <i class="bi bi-truck"></i><span>Vehicles</span>
@@ -1607,7 +1634,9 @@
                     <i class="bi bi-p-square"></i><span>Parking Stations</span>
                 </a>
                 {% endif %}
-                <div class="sidebar-subheader">People</div>
+                </div>
+                <div class="sb-sub-toggle {% if not _m_people %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#masterPeople" aria-expanded="{{ 'true' if _m_people else 'false' }}">People</div>
+                <div class="collapse sb-sub-items {% if _m_people %}show{% endif %}" id="masterPeople" data-bs-parent="#masterMenu">
                 {% if can_see_page('employees') %}
                 <a href="{{ url_for('employees_list') }}" class="collapse-item {% if request.endpoint in ['employees_list', 'employee_form'] or (request.endpoint == 'employee_profile_print' and _came_from_master) %}active-link{% endif %}">
                     <i class="bi bi-people-fill"></i><span>Employees</span>
@@ -1633,6 +1662,7 @@
                     <i class="bi bi-box-seam"></i><span>Products</span>
                 </a>
                 {% endif %}
+                </div>
             </div>
         </div>
         {% endif %}
@@ -1734,9 +1764,13 @@
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#attendanceMenu" role="button" aria-expanded="{{ 'true' if attendance_open else 'false' }}">
                 <i class="bi bi-calendar-check"></i><span>Attendance</span>
             </a>
+            {% set _a_cio = request.endpoint in ['driver_attendance_checkin','driver_attendance_checkout','driver_attendance_pending','driver_attendance_missing_checkout'] %}
+            {% set _a_mgmt = request.endpoint in ['driver_attendance_mark','driver_attendance_bulk_off','leave_request_list','leave_request_new'] %}
+            {% set _a_rpt = request.endpoint in ['driver_attendance_tra_report','driver_attendance_list','driver_attendance_report'] %}
             <div class="collapse collapse-item-container {% if attendance_open %}show{% endif %}"
                  id="attendanceMenu" data-bs-parent="#sidebarAccordion">
-                <div class="sidebar-subheader">Check In / Out</div>
+                <div class="sb-sub-toggle {% if not _a_cio %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#attCheckIO" aria-expanded="{{ 'true' if _a_cio else 'false' }}">Check In / Out</div>
+                <div class="collapse sb-sub-items {% if _a_cio %}show{% endif %}" id="attCheckIO" data-bs-parent="#attendanceMenu">
                 {% if can_see_page('driver_attendance_checkin') %}
                 <a href="{{ url_for('driver_attendance_checkin') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_checkin' %}active-link{% endif %}">
                     <i class="bi bi-geo-alt-fill text-success"></i><span>Check In (GPS & Camera)</span>
@@ -1757,7 +1791,9 @@
                     <i class="bi bi-box-arrow-right text-warning"></i><span>Missing Check out</span>
                 </a>
                 {% endif %}
-                <div class="sidebar-subheader">Management</div>
+                </div>
+                <div class="sb-sub-toggle {% if not _a_mgmt %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#attMgmt" aria-expanded="{{ 'true' if _a_mgmt else 'false' }}">Management</div>
+                <div class="collapse sb-sub-items {% if _a_mgmt %}show{% endif %}" id="attMgmt" data-bs-parent="#attendanceMenu">
                 {% if can_see_page('driver_attendance_mark') %}
                 <a href="{{ url_for('driver_attendance_mark') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_mark' %}active-link{% endif %}">
                     <i class="bi bi-pencil-square text-primary"></i><span>Leave / Late / Half Day / Off</span>
@@ -1773,7 +1809,9 @@
                     <i class="bi bi-calendar2-check text-info"></i><span>Leave Requests</span>
                 </a>
                 {% endif %}
-                <div class="sidebar-subheader">Reports</div>
+                </div>
+                <div class="sb-sub-toggle {% if not _a_rpt %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#attReports" aria-expanded="{{ 'true' if _a_rpt else 'false' }}">Reports</div>
+                <div class="collapse sb-sub-items {% if _a_rpt %}show{% endif %}" id="attReports" data-bs-parent="#attendanceMenu">
                 {% if can_see_page('driver_attendance_tra_report') %}
                 <a href="{{ url_for('driver_attendance_tra_report') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_tra_report' %}active-link{% endif %}">
                     <i class="bi bi-clipboard-data text-primary"></i><span>TRA Attendance Sheet</span>
@@ -1784,6 +1822,7 @@
                     <i class="bi bi-list-ul text-primary"></i><span>Attendance List</span>
                 </a>
                 {% endif %}
+                </div>
             </div>
         </div>
         {% endif %}
@@ -1794,9 +1833,12 @@
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#taskReportMenu" role="button" aria-expanded="{{ 'true' if task_report_open else 'false' }}">
                 <i class="bi bi-clipboard2-data"></i><span>Task & Logbook</span>
             </a>
+            {% set _t_entry = request.endpoint in ['task_report_upload','task_report_upload_emergency','task_report_upload_mileage','task_report_upload_both','task_report_new'] %}
+            {% set _t_rpt = request.endpoint in ['task_report_list','red_task_list','red_task_new','red_task_edit','without_task_list','without_task_new','without_task_edit','task_report_logbook_cover','task_report_logbook_view','task_report_logbook_view_all'] %}
             <div class="collapse collapse-item-container {% if task_report_open %}show{% endif %}"
                  id="taskReportMenu" data-bs-parent="#sidebarAccordion">
-                <div class="sidebar-subheader">Data Entry</div>
+                <div class="sb-sub-toggle {% if not _t_entry %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#taskEntry" aria-expanded="{{ 'true' if _t_entry else 'false' }}">Data Entry</div>
+                <div class="collapse sb-sub-items {% if _t_entry %}show{% endif %}" id="taskEntry" data-bs-parent="#taskReportMenu">
                 {% if can_see_page('task_report_upload') %}
                 <a href="{{ url_for('task_report_upload') }}" class="collapse-item {% if request.endpoint in ['task_report_upload', 'task_report_upload_emergency', 'task_report_upload_mileage', 'task_report_upload_both'] %}active-link{% endif %}">
                     <i class="bi bi-file-earmark-excel"></i><span>Workbook Upload</span>
@@ -1807,7 +1849,9 @@
                     <i class="bi bi-pencil-square"></i><span>New Task Entry</span>
                 </a>
                 {% endif %}
-                <div class="sidebar-subheader">Reports</div>
+                </div>
+                <div class="sb-sub-toggle {% if not _t_rpt %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#taskReports" aria-expanded="{{ 'true' if _t_rpt else 'false' }}">Reports</div>
+                <div class="collapse sb-sub-items {% if _t_rpt %}show{% endif %}" id="taskReports" data-bs-parent="#taskReportMenu">
                 {% if can_see_page('task_report_list') %}
                 <a href="{{ url_for('task_report_list') }}" class="collapse-item {% if request.endpoint == 'task_report_list' %}active-link{% endif %}">
                     <i class="bi bi-table"></i><span>Daily Task Report</span>
@@ -1828,6 +1872,7 @@
                     <i class="bi bi-journal-text"></i><span>Logbook Covers</span>
                 </a>
                 {% endif %}
+                </div>
             </div>
         </div>
         {% endif %}
@@ -1838,16 +1883,22 @@
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#accountsMenu" role="button" aria-expanded="{{ 'true' if accounts_open else 'false' }}">
                 <i class="bi bi-bank"></i><span>Finance</span>
             </a>
+            {% set _f_dash = request.endpoint in ['wallet_dashboard','chart_of_accounts_list','chart_of_accounts_add','chart_of_accounts_edit'] %}
+            {% set _f_txn = request.endpoint in ['fund_transfers_list','fund_transfer_add','fund_transfer_edit','accounts_quick_payment','payment_vouchers_list','payment_voucher_edit','accounts_quick_receipt','receipt_vouchers_list','accounts_bank_entry','bank_entries_list','accounts_jv','journal_vouchers_list'] %}
+            {% set _f_rpt = request.endpoint in ['accounts_balance_sheet','accounts_account_ledger'] %}
             <div class="collapse collapse-item-container {% if accounts_open %}show{% endif %}"
                  id="accountsMenu" data-bs-parent="#sidebarAccordion">
-                <div class="sidebar-subheader">Dashboard</div>
+                <div class="sb-sub-toggle {% if not _f_dash %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#finDash" aria-expanded="{{ 'true' if _f_dash else 'false' }}">Dashboard</div>
+                <div class="collapse sb-sub-items {% if _f_dash %}show{% endif %}" id="finDash" data-bs-parent="#accountsMenu">
                 <a href="{{ url_for('wallet_dashboard') }}" class="collapse-item {% if request.endpoint == 'wallet_dashboard' %}active-link{% endif %}">
                     <i class="bi bi-wallet2 text-primary"></i><span>Wallet Dashboard</span>
                 </a>
                 <a href="{{ url_for('chart_of_accounts_list') }}" class="collapse-item {% if request.endpoint in ['chart_of_accounts_list', 'chart_of_accounts_add', 'chart_of_accounts_edit'] %}active-link{% endif %}">
                     <i class="bi bi-diagram-3 text-info"></i><span>Chart of Accounts</span>
                 </a>
-                <div class="sidebar-subheader">Transactions</div>
+                </div>
+                <div class="sb-sub-toggle {% if not _f_txn %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#finTxn" aria-expanded="{{ 'true' if _f_txn else 'false' }}">Transactions</div>
+                <div class="collapse sb-sub-items {% if _f_txn %}show{% endif %}" id="finTxn" data-bs-parent="#accountsMenu">
                 <a href="{{ url_for('fund_transfers_list') }}" class="collapse-item {% if request.endpoint in ['fund_transfers_list', 'fund_transfer_add', 'fund_transfer_edit'] %}active-link{% endif %}">
                     <i class="bi bi-arrow-left-right text-success"></i><span>Fund Transfer</span>
                 </a>
@@ -1869,7 +1920,9 @@
                 <a href="{{ url_for('journal_vouchers_list') }}" class="collapse-item {% if request.endpoint in ['accounts_jv', 'journal_vouchers_list'] %}active-link{% endif %}">
                     <i class="bi bi-journal-text text-warning"></i><span>Journal Voucher</span>
                 </a>
-                <div class="sidebar-subheader">Reports</div>
+                </div>
+                <div class="sb-sub-toggle {% if not _f_rpt %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#finReports" aria-expanded="{{ 'true' if _f_rpt else 'false' }}">Reports</div>
+                <div class="collapse sb-sub-items {% if _f_rpt %}show{% endif %}" id="finReports" data-bs-parent="#accountsMenu">
                 {% if can_see_page('accounts_balance_sheet') %}
                 <a href="{{ url_for('accounts_balance_sheet') }}" class="collapse-item {% if request.endpoint == 'accounts_balance_sheet' %}active-link{% endif %}">
                     <i class="bi bi-file-earmark-bar-graph text-info"></i><span>Balance Sheet</span>
@@ -1880,6 +1933,7 @@
                     <i class="bi bi-journal-bookmark-fill text-warning"></i><span>Account Ledger</span>
                 </a>
                 {% endif %}
+                </div>
             </div>
         </div>
         {% endif %}
