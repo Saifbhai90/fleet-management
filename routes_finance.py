@@ -1788,20 +1788,78 @@ def journal_vouchers_list():
 # ──────────────────────────────────────────────────────
 
 def bank_directory_list_api():
-    """Return all entries, optionally filtered by search query."""
-    q = (request.args.get('q') or '').strip()
-    query = BankAccountDirectory.query
-    if q:
-        tokens = [t.lower() for t in q.split() if t]
-        for tok in tokens:
-            like = f'%{tok}%'
-            query = query.filter(or_(
-                BankAccountDirectory.bank_name.ilike(like),
-                BankAccountDirectory.account_no.ilike(like),
-                BankAccountDirectory.account_title.ilike(like),
-            ))
-    items = query.order_by(BankAccountDirectory.id.desc()).limit(200).all()
-    return jsonify([i.to_dict() for i in items])
+    """Return merged manual + employee + driver bank account entries."""
+    q = (request.args.get('q') or '').strip().lower()
+    tokens = [t for t in q.split() if t]
+
+    def _row(bank_name, account_no, account_title, source, source_label, row_id, can_delete):
+        return {
+            'id': row_id,
+            'bank_name': bank_name or '',
+            'account_no': account_no or '',
+            'account_title': account_title or '',
+            'source': source,
+            'source_label': source_label,
+            'can_delete': can_delete,
+        }
+
+    entries = []
+
+    # Manual quick-reference entries (editable/deletable)
+    manual_items = BankAccountDirectory.query.order_by(BankAccountDirectory.id.desc()).all()
+    for item in manual_items:
+        entries.append(_row(
+            item.bank_name,
+            item.account_no,
+            item.account_title,
+            'manual',
+            'Manual Entry',
+            item.id,
+            True,
+        ))
+
+    # Employee bank accounts (read-only in this panel)
+    employees = Employee.query.order_by(Employee.name).all()
+    for emp in employees:
+        if not (emp.bank_name or emp.account_no or emp.account_title):
+            continue
+        entries.append(_row(
+            emp.bank_name,
+            emp.account_no,
+            emp.account_title or emp.name,
+            'employee',
+            f'Employee: {emp.name}',
+            f'emp-{emp.id}',
+            False,
+        ))
+
+    # Driver bank accounts (read-only in this panel)
+    drivers = Driver.query.order_by(Driver.name).all()
+    for drv in drivers:
+        if not (drv.bank_name or drv.account_no or drv.account_title):
+            continue
+        entries.append(_row(
+            drv.bank_name,
+            drv.account_no,
+            drv.account_title or drv.name,
+            'driver',
+            f'Driver: {drv.name}',
+            f'drv-{drv.id}',
+            False,
+        ))
+
+    if tokens:
+        def _match(row):
+            blob = ' '.join([
+                row.get('bank_name', ''),
+                row.get('account_no', ''),
+                row.get('account_title', ''),
+                row.get('source_label', ''),
+            ]).lower()
+            return all(tok in blob for tok in tokens)
+        entries = [row for row in entries if _match(row)]
+
+    return jsonify(entries[:300])
 
 
 def bank_directory_add_api():
@@ -1820,7 +1878,15 @@ def bank_directory_add_api():
     )
     db.session.add(entry)
     db.session.commit()
-    return jsonify(entry.to_dict()), 201
+    return jsonify({
+        'id': entry.id,
+        'bank_name': entry.bank_name or '',
+        'account_no': entry.account_no or '',
+        'account_title': entry.account_title or '',
+        'source': 'manual',
+        'source_label': 'Manual Entry',
+        'can_delete': True,
+    }), 201
 
 
 def bank_directory_delete_api(pk):
@@ -1829,6 +1895,31 @@ def bank_directory_delete_api(pk):
     db.session.delete(entry)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+def bank_directory_update_api(pk):
+    """Update an existing manual bank account entry."""
+    entry = BankAccountDirectory.query.get_or_404(pk)
+    data = request.get_json(silent=True) or {}
+    bank_name = (data.get('bank_name') or '').strip()
+    account_no = (data.get('account_no') or '').strip()
+    account_title = (data.get('account_title') or '').strip()
+    if not bank_name and not account_no and not account_title:
+        return jsonify({'error': 'At least one field is required.'}), 400
+
+    entry.bank_name = bank_name or None
+    entry.account_no = account_no or None
+    entry.account_title = account_title or None
+    db.session.commit()
+    return jsonify({
+        'id': entry.id,
+        'bank_name': entry.bank_name or '',
+        'account_no': entry.account_no or '',
+        'account_title': entry.account_title or '',
+        'source': 'manual',
+        'source_label': 'Manual Entry',
+        'can_delete': True,
+    })
 
 
 def ft_description_suggestions_api():

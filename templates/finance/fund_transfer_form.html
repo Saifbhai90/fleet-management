@@ -40,8 +40,11 @@
 .bd-entry .bd-bank{font-weight:600;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bd-entry .bd-acct{color:#666;font-size:.75rem;font-family:'Courier New',monospace;letter-spacing:.3px}
 .bd-entry .bd-title{color:#888;font-size:.72rem;margin-top:1px}
-.bd-entry .bd-del{opacity:0;transition:opacity .15s;border:none;background:none;color:#dc3545;font-size:.78rem;padding:2px 4px;cursor:pointer;flex-shrink:0;align-self:center}
-.bd-entry:hover .bd-del{opacity:1}
+.bd-entry .bd-actions{display:flex;gap:2px;align-self:center;flex-shrink:0}
+.bd-entry .bd-edit,.bd-entry .bd-del{opacity:0;transition:opacity .15s;border:none;background:none;font-size:.78rem;padding:2px 4px;cursor:pointer}
+.bd-entry .bd-edit{color:#0d6efd}
+.bd-entry .bd-del{color:#dc3545}
+.bd-entry:hover .bd-edit,.bd-entry:hover .bd-del{opacity:1}
 .bd-add-area{padding:.7rem .85rem;background:#fafbfc;border-top:1px solid #e9ecef}
 .bd-add-area input{font-size:.78rem;padding:.3rem .6rem;border-radius:5px}
 .bd-add-area .btn{font-size:.78rem;padding:.3rem .7rem}
@@ -197,7 +200,7 @@
                                     <button type="button" class="btn btn-primary btn-sm flex-fill" id="bdSaveBtn">
                                         <i class="bi bi-check-lg me-1"></i>Save
                                     </button>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('bdAddForm').style.display='none';document.getElementById('bdAddToggle').style.display='block';">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="bdCancelBtn">
                                         Cancel
                                     </button>
                                 </div>
@@ -256,25 +259,51 @@
         bdSearch   = document.getElementById('bdSearchInput'),
         bdCount    = document.getElementById('bdCount'),
         bdSaveBtn  = document.getElementById('bdSaveBtn'),
+        bdCancelBtn= document.getElementById('bdCancelBtn'),
         bdAddForm  = document.getElementById('bdAddForm'),
         bdAddToggle= document.getElementById('bdAddToggle');
+    var bdNewBank = document.getElementById('bdNewBank'),
+        bdNewAcct = document.getElementById('bdNewAcct'),
+        bdNewTitle = document.getElementById('bdNewTitle');
+    var _editingId = null;
+
+    function resetBankForm(){
+        _editingId = null;
+        bdNewBank.value = '';
+        bdNewAcct.value = '';
+        bdNewTitle.value = '';
+        bdSaveBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Save';
+    }
+
+    function closeBankForm(){
+        resetBankForm();
+        bdAddForm.style.display = 'none';
+        bdAddToggle.style.display = 'block';
+    }
 
     var _entries = [];
 
     function renderEntries(items){
         bdList.querySelectorAll('.bd-entry').forEach(function(el){ el.remove(); });
         bdEmpty.style.display = items.length ? 'none' : 'block';
-        bdCount.textContent = items.length + ' saved';
+        bdCount.textContent = items.length + ' records';
         items.forEach(function(e){
             var div = document.createElement('div');
             div.className = 'bd-entry';
             var bankHtml = e.bank_name ? '<div class="bd-bank">' + esc(e.bank_name) + '</div>' : '';
             var acctHtml = e.account_no ? '<div class="bd-acct">' + esc(e.account_no) + '</div>' : '';
             var titleHtml = e.account_title ? '<div class="bd-title"><i class="bi bi-person-fill me-1"></i>' + esc(e.account_title) + '</div>' : '';
+            var sourceHtml = e.source_label ? '<div class="bd-title"><i class="bi bi-tag me-1"></i>' + esc(e.source_label) + '</div>' : '';
+            var actionsHtml = e.can_delete
+                ? '<div class="bd-actions">' +
+                    '<button type="button" class="bd-edit" data-id="' + e.id + '" title="Edit"><i class="bi bi-pencil"></i></button>' +
+                    '<button type="button" class="bd-del" data-id="' + e.id + '" title="Delete"><i class="bi bi-trash"></i></button>' +
+                  '</div>'
+                : '';
             div.innerHTML =
                 '<div class="bd-icon"><i class="bi bi-bank2"></i></div>' +
-                '<div class="bd-info">' + bankHtml + acctHtml + titleHtml + '</div>' +
-                '<button type="button" class="bd-del" data-id="' + e.id + '" title="Delete"><i class="bi bi-trash"></i></button>';
+                '<div class="bd-info">' + bankHtml + acctHtml + titleHtml + sourceHtml + '</div>' +
+                actionsHtml;
             bdList.appendChild(div);
         });
     }
@@ -297,27 +326,42 @@
     });
 
     bdSaveBtn.addEventListener('click', function(){
-        var bank  = document.getElementById('bdNewBank').value.trim(),
-            acct  = document.getElementById('bdNewAcct').value.trim(),
-            title = document.getElementById('bdNewTitle').value.trim();
+        var bank  = bdNewBank.value.trim(),
+            acct  = bdNewAcct.value.trim(),
+            title = bdNewTitle.value.trim();
         if(!bank && !acct && !title){ alert('Please fill at least one field.'); return; }
         bdSaveBtn.disabled = true;
-        fetch('/api/bank-directory/add', {
+        var isEdit = !!_editingId;
+        var endpoint = isEdit ? ('/api/bank-directory/' + _editingId + '/update') : '/api/bank-directory/add';
+        fetch(endpoint, {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrf_token]').value },
             body: JSON.stringify({ bank_name: bank, account_no: acct, account_title: title })
         }).then(function(r){ return r.json(); }).then(function(entry){
             bdSaveBtn.disabled = false;
-            document.getElementById('bdNewBank').value = '';
-            document.getElementById('bdNewAcct').value = '';
-            document.getElementById('bdNewTitle').value = '';
-            bdAddForm.style.display = 'none';
-            bdAddToggle.style.display = 'block';
+            closeBankForm();
             loadEntries(bdSearch.value.trim());
         }).catch(function(){ bdSaveBtn.disabled = false; });
     });
 
+    bdCancelBtn.addEventListener('click', function(){ closeBankForm(); });
+
     bdList.addEventListener('click', function(e){
+        var editBtn = e.target.closest('.bd-edit');
+        if(editBtn){
+            var editId = editBtn.getAttribute('data-id');
+            var row = (_entries || []).find(function(it){ return String(it.id) === String(editId) && !!it.can_delete; });
+            if(!row) return;
+            _editingId = editId;
+            bdNewBank.value = row.bank_name || '';
+            bdNewAcct.value = row.account_no || '';
+            bdNewTitle.value = row.account_title || '';
+            bdSaveBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Update';
+            bdAddForm.style.display = 'block';
+            bdAddToggle.style.display = 'none';
+            bdNewBank.focus();
+            return;
+        }
         var btn = e.target.closest('.bd-del');
         if(!btn) return;
         if(!confirm('Delete this bank account entry?')) return;

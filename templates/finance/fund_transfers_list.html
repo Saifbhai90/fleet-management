@@ -277,7 +277,8 @@ document.addEventListener('DOMContentLoaded', function(){
                     var bankHtml = e.bank_name ? '<div class="av-bank">' + highlight(e.bank_name, q) + '</div>' : '';
                     var acctHtml = e.account_no ? '<div class="av-acct"><i class="bi bi-hash me-1"></i>' + highlight(e.account_no, q) + '</div>' : '';
                     var titleHtml = e.account_title ? '<div class="av-title"><i class="bi bi-person-fill me-1"></i>' + highlight(e.account_title, q) + '</div>' : '';
-                    div.innerHTML = '<div class="av-icon"><i class="bi bi-bank2"></i></div><div class="av-info">' + bankHtml + acctHtml + titleHtml + '</div>';
+                    var sourceHtml = e.source_label ? '<div class="av-title"><i class="bi bi-tag me-1"></i>' + highlight(e.source_label, q) + '</div>' : '';
+                    div.innerHTML = '<div class="av-icon"><i class="bi bi-bank2"></i></div><div class="av-info">' + bankHtml + acctHtml + titleHtml + sourceHtml + '</div>';
                     avResults.appendChild(div);
                 });
             });
