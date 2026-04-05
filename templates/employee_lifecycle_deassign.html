@@ -36,6 +36,8 @@ textarea.form-control { height: auto !important; }
 }
 .btn-deassign:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(220,38,38,.4); color: #fff; }
 .btn-deassign:disabled { opacity: .5; transform: none; cursor: not-allowed; }
+.btn-load { background: #0f766e; color: #fff; border: none; border-radius: 9px; padding: 9px 22px; font-weight: 700; font-size: .85rem; }
+.btn-load:hover { background: #134e4a; color: #fff; }
 </style>
 {% endblock %}
 
@@ -56,59 +58,88 @@ textarea.form-control { height: auto !important; }
         {% endfor %}{% endif %}
     {% endwith %}
 
+    {% if not sel_emp_id or sel_emp_id == 0 %}
+    {# Step 1: Select Employee #}
+    <div class="form-card">
+        <form method="POST" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="select_employee">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-7">
+                    <label class="form-label">Select Employee</label>
+                    <select name="employee_id" class="form-select search-select">
+                        {% for val, lbl in emp_choices %}
+                        <option value="{{ val }}">{{ lbl }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-load"><i class="bi bi-arrow-right-circle me-1"></i> Load Assignments</button>
+                </div>
+            </div>
+            <p class="text-muted small mt-2 mb-0"><i class="bi bi-info-circle me-1"></i>Employee select karein aur "Load Assignments" dabayein. Uske assigned Projects / Districts dikhenge.</p>
+        </form>
+    </div>
+
+    {% else %}
+    {# Step 2: Show assignments for selected employee #}
+    {% set emp_name = '' %}
+    {% for val, lbl in emp_choices %}{% if val == sel_emp_id %}{% set emp_name = lbl %}{% endif %}{% endfor %}
+
     <div class="status-badge">
         <i class="bi bi-exclamation-triangle-fill fs-5"></i>
-        <span>Employee select karein, uske assigned Projects / Districts dikhenge. Sirf <strong>checked</strong> wale remove honge, baqi safe rahenge.</span>
+        <span>Sirf <strong>checked</strong> wale remove honge, baqi safe rahenge.</span>
     </div>
 
     <div class="form-card">
         <form method="POST" novalidate>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="row g-3">
+            <input type="hidden" name="action" value="remove">
+            <input type="hidden" name="employee_id" value="{{ sel_emp_id }}">
+
+            <div class="row g-3 mb-3">
                 <div class="col-md-6">
-                    <label class="form-label">Select Employee</label>
-                    <select name="employee_id" id="emp_sel" class="form-select search-select">
-                        {% for val, lbl in emp_choices %}
-                        <option value="{{ val }}" {% if sel_emp_id == val %}selected{% endif %}>{{ lbl }}</option>
-                        {% endfor %}
-                    </select>
+                    <label class="form-label">Employee</label>
+                    <div class="form-control" style="background:#f1f5f9;font-weight:600;">{{ emp_name }}</div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Effective Date</label>
                     <input type="text" name="effective_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ sel_date }}">
                 </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <a href="{{ url_for('employee_lifecycle_deassign') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Change Employee</a>
+                </div>
             </div>
 
-            <div id="assignment-area" class="mt-3" style="{% if not cur_projects and not cur_districts %}display:none{% endif %}">
-                <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>Neeche employee ke <strong>currently assigned</strong> Projects aur Districts hain. Jo <strong>remove</strong> karne hain unki checkbox check karein.</p>
-                <div class="row g-3">
-                    <div class="col-12 col-md-6">
-                        <label class="form-label">Assigned Projects (<span id="proj-count">{{ cur_projects|length }}</span>)</label>
-                        <input type="text" class="form-control form-control-sm assignment-search mb-2" placeholder="Search projects..." data-target="assignment-project-list" autocomplete="off">
-                        <div class="assignment-list" id="assignment-project-list">
-                            {% for p in cur_projects %}
-                            <label class="assignment-item"><input type="checkbox" name="project_ids" value="{{ p.id }}" {% if p.id in sel_project_ids %}checked{% endif %}> <span class="assignment-item-text">{{ p.name }}</span></label>
-                            {% endfor %}
-                            {% if not cur_projects %}<p class="empty-msg">No projects assigned.</p>{% endif %}
-                        </div>
-                        <div class="selected-summary-box">
-                            <span class="selected-summary-title"><i class="bi bi-x-circle me-1"></i>Removing Projects:</span>
-                            <div class="selected-summary-list" id="selected-projects-summary">—</div>
-                        </div>
+            <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>Jo Projects / Districts <strong>remove</strong> karne hain unki checkbox check karein.</p>
+
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label class="form-label">Assigned Projects ({{ cur_projects|length }})</label>
+                    <input type="text" class="form-control form-control-sm assignment-search mb-2" placeholder="Search projects..." data-target="assignment-project-list" autocomplete="off">
+                    <div class="assignment-list" id="assignment-project-list">
+                        {% for p in cur_projects %}
+                        <label class="assignment-item"><input type="checkbox" name="project_ids" value="{{ p.id }}" {% if p.id in sel_project_ids %}checked{% endif %}> <span class="assignment-item-text">{{ p.name }}</span></label>
+                        {% endfor %}
+                        {% if not cur_projects %}<p class="empty-msg">No projects assigned to this employee.</p>{% endif %}
                     </div>
-                    <div class="col-12 col-md-6">
-                        <label class="form-label">Assigned Districts (<span id="dist-count">{{ cur_districts|length }}</span>)</label>
-                        <input type="text" class="form-control form-control-sm assignment-search mb-2" placeholder="Search districts..." data-target="assignment-district-list" autocomplete="off">
-                        <div class="assignment-list" id="assignment-district-list">
-                            {% for d in cur_districts %}
-                            <label class="assignment-item"><input type="checkbox" name="district_ids" value="{{ d.id }}" {% if d.id in sel_district_ids %}checked{% endif %}> <span class="assignment-item-text">{{ d.name }}</span></label>
-                            {% endfor %}
-                            {% if not cur_districts %}<p class="empty-msg">No districts assigned.</p>{% endif %}
-                        </div>
-                        <div class="selected-summary-box">
-                            <span class="selected-summary-title"><i class="bi bi-x-circle me-1"></i>Removing Districts:</span>
-                            <div class="selected-summary-list" id="selected-districts-summary">—</div>
-                        </div>
+                    <div class="selected-summary-box">
+                        <span class="selected-summary-title"><i class="bi bi-x-circle me-1"></i>Removing Projects:</span>
+                        <div class="selected-summary-list" id="selected-projects-summary">—</div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label class="form-label">Assigned Districts ({{ cur_districts|length }})</label>
+                    <input type="text" class="form-control form-control-sm assignment-search mb-2" placeholder="Search districts..." data-target="assignment-district-list" autocomplete="off">
+                    <div class="assignment-list" id="assignment-district-list">
+                        {% for d in cur_districts %}
+                        <label class="assignment-item"><input type="checkbox" name="district_ids" value="{{ d.id }}" {% if d.id in sel_district_ids %}checked{% endif %}> <span class="assignment-item-text">{{ d.name }}</span></label>
+                        {% endfor %}
+                        {% if not cur_districts %}<p class="empty-msg">No districts assigned to this employee.</p>{% endif %}
+                    </div>
+                    <div class="selected-summary-box">
+                        <span class="selected-summary-title"><i class="bi bi-x-circle me-1"></i>Removing Districts:</span>
+                        <div class="selected-summary-list" id="selected-districts-summary">—</div>
                     </div>
                 </div>
             </div>
@@ -128,66 +159,13 @@ textarea.form-control { height: auto !important; }
             </div>
         </form>
     </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (function(){
-    var empSel = document.getElementById('emp_sel');
-    var area = document.getElementById('assignment-area');
-    var _lastLoaded = '';
-
-    function loadAssignments(eid){
-        if(!eid || eid==='0'){ area.style.display='none'; _lastLoaded=''; return; }
-        if(eid === _lastLoaded) return;
-        _lastLoaded = eid;
-        fetch('/api/employee/'+eid+'/assignments')
-        .then(function(r){ return r.json(); })
-        .then(function(d){
-            var pl = document.getElementById('assignment-project-list');
-            var dl = document.getElementById('assignment-district-list');
-            var pc = document.getElementById('proj-count');
-            var dc = document.getElementById('dist-count');
-            var html = '';
-            var projects = d.projects||[];
-            var districts = d.districts||[];
-            projects.forEach(function(x){
-                html+='<label class="assignment-item"><input type="checkbox" name="project_ids" value="'+x.id+'"> <span class="assignment-item-text">'+x.name+'</span></label>';
-            });
-            if(pl) pl.innerHTML = html || '<p class="empty-msg">No projects assigned.</p>';
-            if(pc) pc.textContent = projects.length;
-            html = '';
-            districts.forEach(function(x){
-                html+='<label class="assignment-item"><input type="checkbox" name="district_ids" value="'+x.id+'"> <span class="assignment-item-text">'+x.name+'</span></label>';
-            });
-            if(dl) dl.innerHTML = html || '<p class="empty-msg">No districts assigned.</p>';
-            if(dc) dc.textContent = districts.length;
-            area.style.display='';
-            updateSummary();
-        }).catch(function(){ area.style.display='none'; _lastLoaded=''; });
-    }
-
-    function hookTomSelect(){
-        if(empSel && empSel.tomselect){
-            empSel.tomselect.on('change', function(val){ loadAssignments(val); });
-            return true;
-        }
-        return false;
-    }
-
-    if(empSel){
-        empSel.addEventListener('change', function(){ loadAssignments(this.value); });
-        if(!hookTomSelect()){
-            var _tries = 0;
-            var _iv = setInterval(function(){
-                _tries++;
-                if(hookTomSelect() || _tries > 20) clearInterval(_iv);
-            }, 200);
-        }
-        if(empSel.value && empSel.value !== '0') loadAssignments(empSel.value);
-    }
-
     document.querySelectorAll('.assignment-search').forEach(function(inp){
         if(!inp || !inp.dataset.target) return;
         inp.addEventListener('input', function(){
@@ -229,9 +207,10 @@ textarea.form-control { height: auto !important; }
         if(saveBtn) saveBtn.disabled = (total < 1);
     }
 
-    document.addEventListener('change', function(e){
-        if(e.target.closest('#assignment-project-list') || e.target.closest('#assignment-district-list')) updateSummary();
-    });
+    var pl = document.getElementById('assignment-project-list');
+    var dl = document.getElementById('assignment-district-list');
+    if(pl) pl.addEventListener('change', updateSummary);
+    if(dl) dl.addEventListener('change', updateSummary);
     updateSummary();
 })();
 </script>

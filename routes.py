@@ -3680,7 +3680,7 @@ def employee_lifecycle_deassign():
     active_emps = Employee.query.filter(Employee.status != 'Left').order_by(Employee.name).all()
     emp_choices = [(0, '-- Select Employee --')] + [(e.id, f"{e.name} ({e.code})") for e in active_emps]
 
-    sel_emp_id = 0
+    sel_emp_id = request.args.get('employee_id', 0, type=int)
     sel_project_ids = []
     sel_district_ids = []
     sel_date = ''
@@ -3690,42 +3690,47 @@ def employee_lifecycle_deassign():
     cur_districts = []
 
     if request.method == 'POST':
+        action = request.form.get('action', '')
         sel_emp_id = request.form.get('employee_id', 0, type=int)
-        sel_project_ids = [int(x) for x in request.form.getlist('project_ids') if x]
-        sel_district_ids = [int(x) for x in request.form.getlist('district_ids') if x]
-        sel_date = request.form.get('effective_date', '').strip()
-        sel_reason = request.form.get('reason', '').strip()
-        sel_remarks = request.form.get('remarks', '').strip()
 
-        emp = Employee.query.get(sel_emp_id) if sel_emp_id else None
-        if not emp:
-            flash('Employee select karein.', 'danger')
-        elif not sel_project_ids and not sel_district_ids:
-            flash('Kam se kam 1 Project ya 1 District select karein jo remove karna hai.', 'danger')
+        if action == 'select_employee':
+            pass
         else:
-            try:
-                eff_date = parse_date(sel_date) if sel_date else pk_date()
-                removed = 0
-                for pid in sel_project_ids:
-                    proj = Project.query.get(pid)
-                    if proj and proj in emp.projects.all():
-                        emp.projects.remove(proj)
-                        _log_employee_assignment(emp.id, 'deassign_project', project_id=pid,
-                                                 effective_date=eff_date, reason=sel_reason, remarks=sel_remarks)
-                        removed += 1
-                for did in sel_district_ids:
-                    dist = District.query.get(did)
-                    if dist and dist in emp.districts.all():
-                        emp.districts.remove(dist)
-                        _log_employee_assignment(emp.id, 'deassign_district', district_id=did,
-                                                 effective_date=eff_date, reason=sel_reason, remarks=sel_remarks)
-                        removed += 1
-                db.session.commit()
-                flash(f'{removed} assignment(s) removed from {emp.name}.', 'success')
-                return redirect(url_for('employee_lifecycle_deassign_list'))
-            except Exception as e:
-                db.session.rollback()
-                flash(f'Error: {str(e)}', 'danger')
+            sel_project_ids = [int(x) for x in request.form.getlist('project_ids') if x]
+            sel_district_ids = [int(x) for x in request.form.getlist('district_ids') if x]
+            sel_date = request.form.get('effective_date', '').strip()
+            sel_reason = request.form.get('reason', '').strip()
+            sel_remarks = request.form.get('remarks', '').strip()
+
+            emp = Employee.query.get(sel_emp_id) if sel_emp_id else None
+            if not emp:
+                flash('Employee select karein.', 'danger')
+            elif not sel_project_ids and not sel_district_ids:
+                flash('Kam se kam 1 Project ya 1 District select karein jo remove karna hai.', 'danger')
+            else:
+                try:
+                    eff_date = parse_date(sel_date) if sel_date else pk_date()
+                    removed = 0
+                    for pid in sel_project_ids:
+                        proj = Project.query.get(pid)
+                        if proj and proj in emp.projects.all():
+                            emp.projects.remove(proj)
+                            _log_employee_assignment(emp.id, 'deassign_project', project_id=pid,
+                                                     effective_date=eff_date, reason=sel_reason, remarks=sel_remarks)
+                            removed += 1
+                    for did in sel_district_ids:
+                        dist = District.query.get(did)
+                        if dist and dist in emp.districts.all():
+                            emp.districts.remove(dist)
+                            _log_employee_assignment(emp.id, 'deassign_district', district_id=did,
+                                                     effective_date=eff_date, reason=sel_reason, remarks=sel_remarks)
+                            removed += 1
+                    db.session.commit()
+                    flash(f'{removed} assignment(s) removed from {emp.name}.', 'success')
+                    return redirect(url_for('employee_lifecycle_deassign_list'))
+                except Exception as e:
+                    db.session.rollback()
+                    flash(f'Error: {str(e)}', 'danger')
 
     if sel_emp_id:
         emp = Employee.query.get(sel_emp_id)
