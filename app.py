@@ -421,7 +421,7 @@ from routes_finance import (
     wallet_dashboard,
     journal_voucher_add, journal_vouchers_list,
     bank_directory_list_api, bank_directory_add_api, bank_directory_delete_api, bank_directory_update_api,
-    ft_description_suggestions_api,
+    ft_description_suggestions_api, ft_categories_list_api, ft_categories_add_api,
 )  # noqa: E402
 
 from routes_payroll import (
@@ -470,6 +470,8 @@ app.add_url_rule('/accounts/wallet-dashboard', 'wallet_dashboard', wallet_dashbo
 
 # Fund Transfer description autocomplete
 app.add_url_rule('/api/ft-descriptions', 'ft_description_suggestions', ft_description_suggestions_api, methods=['GET'])
+app.add_url_rule('/api/ft-categories', 'ft_categories_list', ft_categories_list_api, methods=['GET'])
+app.add_url_rule('/api/ft-categories/add', 'ft_categories_add', ft_categories_add_api, methods=['POST'])
 
 # Bank Account Directory API
 app.add_url_rule('/api/bank-directory', 'bank_directory_list', bank_directory_list_api, methods=['GET'])

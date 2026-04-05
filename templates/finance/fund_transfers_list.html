@@ -298,7 +298,11 @@ document.addEventListener('DOMContentLoaded', function(){
 
 /* ── Category Multi-Select ── */
 (function(){
-    var CATS = [['Fuel','Fuel'],['Maintenance','Maintenance'],['Oil','Oil'],['Salary','Salary'],['Saman/Purchase','Saman / Purchase'],['Cash Advance','Cash Advance'],['Distribution','Distribution'],['General','General'],['Other','Other']];
+    var CATS = [
+        {% for c in (category_choices or []) %}
+        ['{{ c|e }}','{{ c|e }}']{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
     var pre = '{{ request.args.get("category","") }}'.split(',').filter(function(v){return v;});
     window._catMultiSelect && window._catMultiSelect('catMultiBtn','catHidden', CATS, pre);
 })();

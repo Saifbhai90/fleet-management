@@ -1864,6 +1864,29 @@ class FundTransfer(db.Model):
 
 
 # ────────────────────────────────────────────────
+# Fund Transfer Category (manual master list)
+# ────────────────────────────────────────────────
+class FundTransferCategory(db.Model):
+    __tablename__ = 'fund_transfer_category'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True, index=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    created_by = db.relationship('User', backref='fund_transfer_categories', lazy='select')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name or '',
+        }
+
+    def __repr__(self):
+        return f'<FundTransferCategory {self.name}>'
+
+
+# ────────────────────────────────────────────────
 # App Releases (for admin-managed in-app updates)
 # ────────────────────────────────────────────────
 class AppRelease(db.Model):

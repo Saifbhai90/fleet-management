@@ -101,7 +101,19 @@
                             </div>
                             <div class="col-md-4">
                                 {{ form.category.label(class="form-label fw-bold") }}
-                                {{ form.category(class="form-select") }}
+                                <div class="input-group">
+                                    {{ form.category(class="form-select", id="ftCategorySelect") }}
+                                    <button type="button" class="btn btn-outline-primary" id="ftAddCategoryBtn" title="Add new category">
+                                        <i class="bi bi-plus-lg"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-12" id="ftCategoryCreateWrap" style="display:none">
+                                <div class="d-flex gap-2 align-items-center p-2 rounded" style="background:#f8f9fa;border:1px solid #e9ecef">
+                                    <input type="text" id="ftNewCategoryInput" class="form-control form-control-sm" placeholder="New category name (e.g. Medical, Recovery)">
+                                    <button type="button" class="btn btn-sm btn-primary" id="ftSaveCategoryBtn"><i class="bi bi-check2 me-1"></i>Create</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="ftCancelCategoryBtn">Cancel</button>
+                                </div>
                             </div>
                             <div class="col-12" style="position:relative">
                                 {{ form.description.label(class="form-label fw-bold") }}
@@ -375,6 +387,86 @@
     loadEntries('');
 
     /* ── Description Autocomplete ── */
+    var ftCatSel = document.getElementById('ftCategorySelect'),
+        ftAddCatBtn = document.getElementById('ftAddCategoryBtn'),
+        ftCatWrap = document.getElementById('ftCategoryCreateWrap'),
+        ftNewCatInput = document.getElementById('ftNewCategoryInput'),
+        ftSaveCatBtn = document.getElementById('ftSaveCategoryBtn'),
+        ftCancelCatBtn = document.getElementById('ftCancelCategoryBtn');
+
+    function loadFtCategories(){
+        if(!ftCatSel) return;
+        var currentVal = ftCatSel.value || '';
+        fetch('/api/ft-categories')
+            .then(function(r){ return r.json(); })
+            .then(function(items){
+                ftCatSel.innerHTML = '<option value="">-- Select Category --</option>';
+                (items || []).forEach(function(cat){
+                    var opt = document.createElement('option');
+                    opt.value = cat.name;
+                    opt.textContent = cat.name;
+                    ftCatSel.appendChild(opt);
+                });
+                if(currentVal){
+                    ftCatSel.value = currentVal;
+                }
+                if (window.TomSelect && ftCatSel.tomselect) {
+                    ftCatSel.tomselect.clearOptions();
+                    Array.from(ftCatSel.options).forEach(function(o){
+                        ftCatSel.tomselect.addOption({value: o.value, text: o.textContent});
+                    });
+                    ftCatSel.tomselect.refreshOptions(false);
+                    if(currentVal){ ftCatSel.tomselect.setValue(currentVal, true); }
+                }
+            });
+    }
+
+    function closeFtCategoryCreate(){
+        ftCatWrap.style.display = 'none';
+        ftNewCatInput.value = '';
+    }
+
+    if(ftAddCatBtn){
+        ftAddCatBtn.addEventListener('click', function(){
+            ftCatWrap.style.display = 'block';
+            ftNewCatInput.focus();
+        });
+    }
+    if(ftCancelCatBtn){
+        ftCancelCatBtn.addEventListener('click', closeFtCategoryCreate);
+    }
+    if(ftSaveCatBtn){
+        ftSaveCatBtn.addEventListener('click', function(){
+            var newName = (ftNewCatInput.value || '').trim();
+            if(!newName){ alert('Category name required.'); return; }
+            ftSaveCatBtn.disabled = true;
+            fetch('/api/ft-categories/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrf_token]').value},
+                body: JSON.stringify({name: newName})
+            }).then(function(r){ return r.json(); })
+              .then(function(cat){
+                ftSaveCatBtn.disabled = false;
+                if(!cat || !cat.name){ return; }
+                loadFtCategories();
+                setTimeout(function(){
+                    ftCatSel.value = cat.name;
+                    if(ftCatSel.tomselect){ ftCatSel.tomselect.setValue(cat.name, true); }
+                }, 120);
+                closeFtCategoryCreate();
+            }).catch(function(){
+                ftSaveCatBtn.disabled = false;
+            });
+        });
+        ftNewCatInput.addEventListener('keydown', function(e){
+            if(e.key === 'Enter'){
+                e.preventDefault();
+                ftSaveCatBtn.click();
+            }
+        });
+    }
+    loadFtCategories();
+
     var descBox = document.getElementById('ftDesc'),
         sugBox  = document.getElementById('descSuggest'),
         _dTimer, _activeIdx = -1;

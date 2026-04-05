@@ -6,7 +6,7 @@ from flask import render_template, request, redirect, url_for, flash, jsonify, s
 from sqlalchemy import or_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
-                    FundTransfer, BankAccountDirectory)
+                    FundTransfer, BankAccountDirectory, FundTransferCategory)
 from forms import (PaymentVoucherForm, ReceiptVoucherForm, BankEntryForm, JournalVoucherForm,
                    EmployeeExpenseForm, AccountLedgerFilterForm, BalanceSheetFilterForm,
                    AccountForm, FundTransferForm, FundTransferFilterForm, WalletDashboardFilterForm)
@@ -1081,6 +1081,45 @@ def _auto_create_coa_account(entity_type, entity_id, entity_name,
 # FUND TRANSFER (Bank-like wallet system)
 # ════════════════════════════════════════════════════════════════════════════════
 
+_DEFAULT_FT_CATEGORIES = [
+    'Fuel',
+    'Maintenance',
+    'Oil',
+    'Salary',
+    'Saman/Purchase',
+    'Cash Advance',
+    'Distribution',
+    'General',
+    'Other',
+]
+
+
+def _ensure_fund_transfer_categories_seeded():
+    """Seed default categories once so legacy options remain available."""
+    existing_names = {c.name.strip().lower() for c in FundTransferCategory.query.all() if c.name}
+    created = False
+    for name in _DEFAULT_FT_CATEGORIES:
+        norm = name.strip().lower()
+        if norm in existing_names:
+            continue
+        db.session.add(FundTransferCategory(name=name, created_by_user_id=session.get('user_id')))
+        created = True
+    if created:
+        db.session.commit()
+
+
+def _get_fund_transfer_category_choices(include_all_label=False):
+    """
+    Return category choices for forms.
+    include_all_label=True -> first option: -- All Categories --
+    otherwise -> first option: -- Select Category --
+    """
+    _ensure_fund_transfer_categories_seeded()
+    all_items = FundTransferCategory.query.order_by(FundTransferCategory.name).all()
+    head = ('', '-- All Categories --') if include_all_label else ('', '-- Select Category --')
+    return [head] + [(i.name, i.name) for i in all_items]
+
+
 def _person_choices():
     choices = [('', '-- Select Person / Account --')]
 
@@ -1440,9 +1479,11 @@ def fund_transfers_list():
 
     query = query.order_by(FundTransfer.transfer_date.desc(), FundTransfer.id.desc())
     transfers = query.paginate(page=page, per_page=per_page, error_out=False)
+    category_choices = [name for name, _label in _get_fund_transfer_category_choices(include_all_label=True)[1:]]
     return render_template('finance/fund_transfers_list.html',
                            form=form, transfers=transfers,
-                           from_date=from_date, to_date=to_date, per_page=per_page, search=search)
+                           from_date=from_date, to_date=to_date, per_page=per_page, search=search,
+                           category_choices=category_choices)
 
 
 def _populate_transfer_filters(form):
@@ -1450,6 +1491,9 @@ def _populate_transfer_filters(form):
     form.district_id.choices = [(0, '-- All --')] + [(d.id, d.name) for d in districts]
     projects = Project.query.order_by(Project.name).all()
     form.project_id.choices = [(0, '-- All --')] + [(p.id, p.name) for p in projects]
+    if hasattr(form, 'category'):
+        include_all = form.__class__.__name__ == 'FundTransferFilterForm'
+        form.category.choices = _get_fund_transfer_category_choices(include_all_label=include_all)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -1933,3 +1977,29 @@ def ft_description_suggestions_api():
         query = query.filter(FundTransfer.description.ilike(f'%{q}%'))
     results = query.limit(30).all()
     return jsonify([r[0] for r in results if r[0]])
+
+
+def ft_categories_list_api():
+    """Return available Fund Transfer categories."""
+    _ensure_fund_transfer_categories_seeded()
+    cats = FundTransferCategory.query.order_by(FundTransferCategory.name).all()
+    return jsonify([c.to_dict() for c in cats])
+
+
+def ft_categories_add_api():
+    """Create a new Fund Transfer category from New Transfer form."""
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Category name is required.'}), 400
+
+    existing = FundTransferCategory.query.filter(
+        db.func.lower(FundTransferCategory.name) == name.lower()
+    ).first()
+    if existing:
+        return jsonify(existing.to_dict()), 200
+
+    cat = FundTransferCategory(name=name, created_by_user_id=session.get('user_id'))
+    db.session.add(cat)
+    db.session.commit()
+    return jsonify(cat.to_dict()), 201
