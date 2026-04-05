@@ -5,7 +5,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
-.page-shell { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
+.page-shell { max-width: 960px; margin: 0 auto; padding: 20px 16px 40px; }
 .page-hdr {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
     border-radius: 14px; padding: 14px 22px; margin-bottom: 22px;
@@ -15,10 +15,18 @@ body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
 .form-card { background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 2px 12px rgba(0,0,0,.06); padding: 24px; }
 .form-label { font-size: .82rem; font-weight: 700; color: #334155; margin-bottom: 4px; }
 .form-control, .form-select { border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; font-size: .86rem !important; height: 40px !important; }
-.form-control:focus, .form-select:focus { border-color: #06b6d4 !important; box-shadow: 0 0 0 3px rgba(6,182,212,.12) !important; }
 textarea.form-control { height: auto !important; }
 .ts-wrapper .ts-control { min-height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; }
 .status-badge { background: #ecfeff; border: 1px dashed #67e8f9; border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 16px; font-size: .83rem; color: #0891b2; }
+.assignment-search { max-width: 100%; font-size: .875rem; }
+.assignment-list { border: 1px solid #dee2e6; border-radius: 8px; background: #fff; max-height: 220px; overflow-y: auto; padding: .5rem; }
+.assignment-item { display: block; margin: 0; padding: .4rem .5rem; font-size: .875rem; cursor: pointer; border-radius: 6px; }
+.assignment-item:hover { background: #f0f4ff; }
+.assignment-item input { margin-right: .5rem; vertical-align: middle; }
+.assignment-item.hide-by-search { display: none; }
+.selected-summary-box { background: #e8f4fd; border: 1px solid #b6d4fe; border-radius: 8px; padding: .5rem .75rem; font-size: .85rem; margin-top: 8px; }
+.selected-summary-title { color: #0a58ca; display: block; margin-bottom: .35rem; font-weight: 600; }
+.selected-summary-list { color: #333; max-height: 80px; overflow-y: auto; }
 .btn-rejoin {
     background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
     color: #fff; border: none; border-radius: 10px;
@@ -26,6 +34,7 @@ textarea.form-control { height: auto !important; }
     transition: all .25s; box-shadow: 0 3px 10px rgba(6,182,212,.3);
 }
 .btn-rejoin:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(6,182,212,.4); color: #fff; }
+.btn-rejoin:disabled { opacity: .5; transform: none; cursor: not-allowed; }
 </style>
 {% endblock %}
 
@@ -48,42 +57,121 @@ textarea.form-control { height: auto !important; }
 
     <div class="status-badge">
         <i class="bi bi-info-circle-fill fs-5"></i>
-        <span>Sirf "Left" status wale employees yahan dikhenge. Rejoin ke baad status Active ho jayega.</span>
+        <span>Sirf "Left" status wale employees dikhenge. Rejoin ke baad status Active ho jayega.</span>
     </div>
 
     <div class="form-card">
         <form method="POST" novalidate>
-            {{ form.hidden_tag() }}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">{{ form.employee_id.label.text }}</label>
-                    {{ form.employee_id(class="form-select search-select") }}
+                    <label class="form-label">Select Employee</label>
+                    <select name="employee_id" class="form-select search-select">
+                        {% for val, lbl in emp_choices %}
+                        <option value="{{ val }}" {% if sel_emp_id == val %}selected{% endif %}>{{ lbl }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">{{ form.rejoin_date.label.text }}</label>
-                    {{ form.rejoin_date(class="form-control datepicker") }}
+                    <label class="form-label">Rejoin Date</label>
+                    <input type="text" name="rejoin_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ sel_date }}">
                 </div>
             </div>
-            <div class="row g-3 mt-1">
-                <div class="col-md-6">
-                    <label class="form-label">Districts</label>
-                    {{ form.district_ids(class="form-select search-select", multiple="multiple") }}
+
+            <p class="text-muted small mt-3 mb-2"><i class="bi bi-info-circle me-1"></i><strong>Kam se kam 1 Project AUR 1 District</strong> dono select karein.</p>
+
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label class="form-label">Projects ({{ project_choices|length }})</label>
+                    <input type="text" class="form-control form-control-sm assignment-search mb-2" placeholder="Search projects..." data-target="assignment-project-list" autocomplete="off">
+                    <div class="assignment-list" id="assignment-project-list">
+                        {% for value, label in project_choices %}
+                        <label class="assignment-item"><input type="checkbox" name="project_ids" value="{{ value }}" {% if value in sel_project_ids %}checked{% endif %}> <span class="assignment-item-text">{{ label }}</span></label>
+                        {% endfor %}
+                    </div>
+                    <div class="selected-summary-box">
+                        <span class="selected-summary-title"><i class="bi bi-check2-square me-1"></i>Selected Projects:</span>
+                        <div class="selected-summary-list" id="selected-projects-summary">—</div>
+                    </div>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">Projects</label>
-                    {{ form.project_ids(class="form-select search-select", multiple="multiple") }}
+                <div class="col-12 col-md-6">
+                    <label class="form-label">Districts ({{ district_choices|length }})</label>
+                    <input type="text" class="form-control form-control-sm assignment-search mb-2" placeholder="Search districts..." data-target="assignment-district-list" autocomplete="off">
+                    <div class="assignment-list" id="assignment-district-list">
+                        {% for value, label in district_choices %}
+                        <label class="assignment-item"><input type="checkbox" name="district_ids" value="{{ value }}" {% if value in sel_district_ids %}checked{% endif %}> <span class="assignment-item-text">{{ label }}</span></label>
+                        {% endfor %}
+                    </div>
+                    <div class="selected-summary-box">
+                        <span class="selected-summary-title"><i class="bi bi-check2-square me-1"></i>Selected Districts:</span>
+                        <div class="selected-summary-list" id="selected-districts-summary">—</div>
+                    </div>
                 </div>
             </div>
+
             <div class="row g-3 mt-1">
                 <div class="col-12">
                     <label class="form-label">Remarks</label>
-                    {{ form.remarks(class="form-control", rows="2") }}
+                    <textarea name="remarks" class="form-control" rows="2">{{ sel_remarks }}</textarea>
                 </div>
             </div>
             <div class="mt-4 text-end">
-                <button type="submit" class="btn btn-rejoin"><i class="bi bi-person-check me-1"></i> Confirm Rejoin</button>
+                <button type="submit" class="btn btn-rejoin" id="assignment-save-btn" disabled><i class="bi bi-person-check me-1"></i> Confirm Rejoin</button>
             </div>
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+    document.querySelectorAll('.assignment-search').forEach(function(inp){
+        if(!inp || !inp.dataset.target) return;
+        inp.addEventListener('input', function(){
+            var q = (this.value||'').toLowerCase().trim();
+            var list = document.getElementById(inp.dataset.target);
+            if(!list) return;
+            list.querySelectorAll('.assignment-item').forEach(function(item){
+                var text = (item.querySelector('.assignment-item-text')||item).textContent.toLowerCase();
+                item.classList.toggle('hide-by-search', q && text.indexOf(q)===-1);
+            });
+        });
+    });
+
+    function updateSummary(){
+        var projList = document.getElementById('assignment-project-list');
+        var distList = document.getElementById('assignment-district-list');
+        var projSummary = document.getElementById('selected-projects-summary');
+        var distSummary = document.getElementById('selected-districts-summary');
+        var saveBtn = document.getElementById('assignment-save-btn');
+        var projCount = 0, distCount = 0;
+        if(projList && projSummary){
+            var names=[];
+            projList.querySelectorAll('input[name="project_ids"]:checked').forEach(function(cb){
+                var label=cb.closest('.assignment-item');
+                if(label){var t=label.querySelector('.assignment-item-text'); if(t) names.push(t.textContent.trim());}
+            });
+            projCount = names.length;
+            projSummary.textContent = names.length ? names.join(', ') : '—';
+        }
+        if(distList && distSummary){
+            var names2=[];
+            distList.querySelectorAll('input[name="district_ids"]:checked').forEach(function(cb){
+                var label=cb.closest('.assignment-item');
+                if(label){var t=label.querySelector('.assignment-item-text'); if(t) names2.push(t.textContent.trim());}
+            });
+            distCount = names2.length;
+            distSummary.textContent = names2.length ? names2.join(', ') : '—';
+        }
+        if(saveBtn) saveBtn.disabled = (projCount < 1 || distCount < 1);
+    }
+
+    var pl = document.getElementById('assignment-project-list');
+    var dl = document.getElementById('assignment-district-list');
+    if(pl) pl.addEventListener('change', updateSummary);
+    if(dl) dl.addEventListener('change', updateSummary);
+    updateSummary();
+})();
+</script>
 {% endblock %}

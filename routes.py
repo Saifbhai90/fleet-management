@@ -3677,49 +3677,66 @@ def employee_lifecycle_assign():
 
 @app.route('/employee/lifecycle/deassign', methods=['GET', 'POST'])
 def employee_lifecycle_deassign():
-    form = EmployeeDeassignForm()
     active_emps = Employee.query.filter(Employee.status != 'Left').order_by(Employee.name).all()
-    form.employee_id.choices = [(0, '-- Select Employee --')] + [(e.id, f"{e.name} ({e.code})") for e in active_emps]
-    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
-    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    emp_choices = [(0, '-- Select Employee --')] + [(e.id, f"{e.name} ({e.code})") for e in active_emps]
 
-    if form.validate_on_submit():
-        emp = Employee.query.get(form.employee_id.data)
+    sel_emp_id = 0
+    sel_project_ids = []
+    sel_district_ids = []
+    sel_date = ''
+    sel_reason = ''
+    sel_remarks = ''
+    cur_projects = []
+    cur_districts = []
+
+    if request.method == 'POST':
+        sel_emp_id = request.form.get('employee_id', 0, type=int)
+        sel_project_ids = [int(x) for x in request.form.getlist('project_ids') if x]
+        sel_district_ids = [int(x) for x in request.form.getlist('district_ids') if x]
+        sel_date = request.form.get('effective_date', '').strip()
+        sel_reason = request.form.get('reason', '').strip()
+        sel_remarks = request.form.get('remarks', '').strip()
+
+        emp = Employee.query.get(sel_emp_id) if sel_emp_id else None
         if not emp:
-            flash('Employee not found.', 'danger')
-            return redirect(url_for('employee_lifecycle_deassign'))
-        dtype = form.deassign_type.data
-        try:
-            if dtype == 'district':
-                did = form.district_id.data
-                if not did:
-                    flash('District select karein.', 'danger')
-                    return render_template('employee_lifecycle_deassign.html', form=form, title='Remove Assignment')
-                dist = District.query.get(did)
-                if dist and dist in emp.districts.all():
-                    emp.districts.remove(dist)
-                _log_employee_assignment(emp.id, 'deassign_district', district_id=did,
-                                         effective_date=form.effective_date.data,
-                                         reason=form.reason.data, remarks=form.remarks.data)
-            else:
-                pid = form.project_id.data
-                if not pid:
-                    flash('Project select karein.', 'danger')
-                    return render_template('employee_lifecycle_deassign.html', form=form, title='Remove Assignment')
-                proj = Project.query.get(pid)
-                if proj and proj in emp.projects.all():
-                    emp.projects.remove(proj)
-                _log_employee_assignment(emp.id, 'deassign_project', project_id=pid,
-                                         effective_date=form.effective_date.data,
-                                         reason=form.reason.data, remarks=form.remarks.data)
-            db.session.commit()
-            flash(f'{dtype.title()} removed from {emp.name}.', 'success')
-            return redirect(url_for('employee_lifecycle_deassign_list'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error: {str(e)}', 'danger')
+            flash('Employee select karein.', 'danger')
+        elif not sel_project_ids and not sel_district_ids:
+            flash('Kam se kam 1 Project ya 1 District select karein jo remove karna hai.', 'danger')
+        else:
+            try:
+                eff_date = parse_date(sel_date) if sel_date else pk_date()
+                removed = 0
+                for pid in sel_project_ids:
+                    proj = Project.query.get(pid)
+                    if proj and proj in emp.projects.all():
+                        emp.projects.remove(proj)
+                        _log_employee_assignment(emp.id, 'deassign_project', project_id=pid,
+                                                 effective_date=eff_date, reason=sel_reason, remarks=sel_remarks)
+                        removed += 1
+                for did in sel_district_ids:
+                    dist = District.query.get(did)
+                    if dist and dist in emp.districts.all():
+                        emp.districts.remove(dist)
+                        _log_employee_assignment(emp.id, 'deassign_district', district_id=did,
+                                                 effective_date=eff_date, reason=sel_reason, remarks=sel_remarks)
+                        removed += 1
+                db.session.commit()
+                flash(f'{removed} assignment(s) removed from {emp.name}.', 'success')
+                return redirect(url_for('employee_lifecycle_deassign_list'))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error: {str(e)}', 'danger')
 
-    return render_template('employee_lifecycle_deassign.html', form=form, title='Remove Assignment')
+    if sel_emp_id:
+        emp = Employee.query.get(sel_emp_id)
+        if emp:
+            cur_projects = list(emp.projects)
+            cur_districts = list(emp.districts)
+
+    return render_template('employee_lifecycle_deassign.html', title='Remove Assignment',
+                           emp_choices=emp_choices, cur_projects=cur_projects, cur_districts=cur_districts,
+                           sel_emp_id=sel_emp_id, sel_project_ids=sel_project_ids, sel_district_ids=sel_district_ids,
+                           sel_date=sel_date, sel_reason=sel_reason, sel_remarks=sel_remarks)
 
 
 @app.route('/employee/lifecycle/left', methods=['GET', 'POST'])
@@ -3748,45 +3765,60 @@ def employee_lifecycle_left():
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
 
-    return render_template('employee_lifecycle_left.html', form=form, title='Employee Left')
+    return render_template('employee_lifecycle_left.html', form=form, title='Employee Left',
+                           active_emps=active_emps)
 
 
 @app.route('/employee/lifecycle/rejoin', methods=['GET', 'POST'])
 def employee_lifecycle_rejoin():
-    form = EmployeeRejoinForm()
     left_emps = Employee.query.filter_by(status='Left').order_by(Employee.name).all()
-    form.employee_id.choices = [(0, '-- Select Employee --')] + [(e.id, f"{e.name} ({e.code})") for e in left_emps]
-    form.project_ids.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    form.district_ids.choices = [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    emp_choices = [(0, '-- Select Employee --')] + [(e.id, f"{e.name} ({e.code})") for e in left_emps]
+    projects_list = Project.query.order_by(Project.name).all()
+    districts_list = District.query.order_by(District.name).all()
+    project_choices = [(p.id, p.name) for p in projects_list]
+    district_choices = [(d.id, d.name) for d in districts_list]
 
-    if form.validate_on_submit():
-        emp = Employee.query.get(form.employee_id.data)
+    sel_emp_id = 0
+    sel_project_ids = []
+    sel_district_ids = []
+    sel_date = ''
+    sel_remarks = ''
+
+    if request.method == 'POST':
+        sel_emp_id = request.form.get('employee_id', 0, type=int)
+        sel_project_ids = [int(x) for x in request.form.getlist('project_ids') if x]
+        sel_district_ids = [int(x) for x in request.form.getlist('district_ids') if x]
+        sel_date = request.form.get('rejoin_date', '').strip()
+        sel_remarks = request.form.get('remarks', '').strip()
+
+        emp = Employee.query.get(sel_emp_id) if sel_emp_id else None
         if not emp:
-            flash('Employee not found.', 'danger')
-            return redirect(url_for('employee_lifecycle_rejoin'))
-        try:
-            emp.status = 'Active'
-            project_ids = [x for x in (form.project_ids.data or []) if x]
-            district_ids = [x for x in (form.district_ids.data or []) if x]
-            emp.projects = [Project.query.get(pid) for pid in project_ids if Project.query.get(pid)]
-            emp.districts = [District.query.get(did) for did in district_ids if District.query.get(did)]
-            _log_employee_assignment(emp.id, 'rejoin',
-                                     effective_date=form.rejoin_date.data,
-                                     remarks=form.remarks.data)
-            for pid in project_ids:
-                _log_employee_assignment(emp.id, 'assign_project', project_id=pid,
-                                         effective_date=form.rejoin_date.data)
-            for did in district_ids:
-                _log_employee_assignment(emp.id, 'assign_district', district_id=did,
-                                         effective_date=form.rejoin_date.data)
-            db.session.commit()
-            flash(f'{emp.name} rejoined successfully.', 'success')
-            return redirect(url_for('employee_lifecycle_rejoin_list'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error: {str(e)}', 'danger')
+            flash('Employee select karein.', 'danger')
+        elif not sel_project_ids or not sel_district_ids:
+            flash('Kam se kam 1 Project AUR 1 District dono select karein.', 'danger')
+        else:
+            try:
+                eff_date = parse_date(sel_date) if sel_date else pk_date()
+                emp.status = 'Active'
+                emp.projects = [Project.query.get(pid) for pid in sel_project_ids if Project.query.get(pid)]
+                emp.districts = [District.query.get(did) for did in sel_district_ids if District.query.get(did)]
+                _log_employee_assignment(emp.id, 'rejoin', effective_date=eff_date, remarks=sel_remarks)
+                for pid in sel_project_ids:
+                    _log_employee_assignment(emp.id, 'assign_project', project_id=pid, effective_date=eff_date)
+                for did in sel_district_ids:
+                    _log_employee_assignment(emp.id, 'assign_district', district_id=did, effective_date=eff_date)
+                db.session.commit()
+                flash(f'{emp.name} rejoined successfully.', 'success')
+                return redirect(url_for('employee_lifecycle_rejoin_list'))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error: {str(e)}', 'danger')
 
-    return render_template('employee_lifecycle_rejoin.html', form=form, title='Employee Rejoin')
+    return render_template('employee_lifecycle_rejoin.html', title='Employee Rejoin',
+                           emp_choices=emp_choices, project_choices=project_choices,
+                           district_choices=district_choices, sel_emp_id=sel_emp_id,
+                           sel_project_ids=sel_project_ids, sel_district_ids=sel_district_ids,
+                           sel_date=sel_date, sel_remarks=sel_remarks)
 
 
 @app.route('/employee/lifecycle/history')
@@ -3847,8 +3879,34 @@ def employee_lifecycle_history():
     projects = Project.query.order_by(Project.name).all()
     actions = list(EmployeeAssignment.ACTION_LABELS.items())
 
+    raw_records = pagination.items
+    grouped = []
+    seen = {}
+    for r in raw_records:
+        key = (r.employee_id, r.effective_date, r.action)
+        if key not in seen:
+            seen[key] = {
+                'employee': r.employee,
+                'employee_id': r.employee_id,
+                'effective_date': r.effective_date,
+                'action': r.action,
+                'action_label': r.action_label,
+                'action_color': r.action_color,
+                'districts': [],
+                'projects': [],
+                'reason': r.reason,
+                'remarks': r.remarks,
+                'created_by': r.created_by,
+            }
+            grouped.append(seen[key])
+        entry = seen[key]
+        if r.district and r.district.name not in entry['districts']:
+            entry['districts'].append(r.district.name)
+        if r.project and r.project.name not in entry['projects']:
+            entry['projects'].append(r.project.name)
+
     return render_template('employee_lifecycle_history.html',
-                           records=pagination.items, pagination=pagination,
+                           records=grouped, pagination=pagination,
                            search=search, action_filter=action_filter,
                            district_id=district_id, project_id=project_id,
                            districts=districts, projects=projects,
@@ -4054,8 +4112,34 @@ def _employee_lifecycle_list(action_types, title, add_url, add_label, template_n
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
 
+    raw_records = pagination.items
+    grouped = []
+    seen = {}
+    for r in raw_records:
+        key = (r.employee_id, r.effective_date, r.action)
+        if key not in seen:
+            seen[key] = {
+                'employee': r.employee,
+                'employee_id': r.employee_id,
+                'effective_date': r.effective_date,
+                'action': r.action,
+                'action_label': r.action_label,
+                'action_color': r.action_color,
+                'districts': [],
+                'projects': [],
+                'reason': r.reason,
+                'remarks': r.remarks,
+                'created_by': r.created_by,
+            }
+            grouped.append(seen[key])
+        entry = seen[key]
+        if r.district and r.district.name not in entry['districts']:
+            entry['districts'].append(r.district.name)
+        if r.project and r.project.name not in entry['projects']:
+            entry['projects'].append(r.project.name)
+
     return render_template(template_name,
-                           records=pagination.items, pagination=pagination,
+                           records=grouped, pagination=pagination,
                            search=search, district_id=district_id, project_id=project_id,
                            from_date=from_date, to_date=to_date,
                            districts=districts, projects=projects,

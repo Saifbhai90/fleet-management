@@ -111,8 +111,8 @@
                         <th>Employee</th>
                         <th>Code</th>
                         <th>Action</th>
-                        <th>District</th>
-                        <th>Project</th>
+                        <th>Districts</th>
+                        <th>Projects</th>
                         <th>Date</th>
                         <th>Reason</th>
                         <th>Remarks</th>
@@ -131,8 +131,8 @@
                         </td>
                         <td>{{ r.employee.code if r.employee else '-' }}</td>
                         <td><span class="badge bg-{{ r.action_color }} badge-action">{{ r.action_label }}</span></td>
-                        <td>{{ r.district.name if r.district else '-' }}</td>
-                        <td>{{ r.project.name if r.project else '-' }}</td>
+                        <td>{% if r.districts %}{% for d in r.districts %}<span style="display:inline-block;background:#dbeafe;color:#1e40af;font-size:.72rem;padding:2px 6px;border-radius:4px;margin:1px;">{{ d }}</span>{% endfor %}{% else %}-{% endif %}</td>
+                        <td>{% if r.projects %}{% for p in r.projects %}<span style="display:inline-block;background:#dcfce7;color:#166534;font-size:.72rem;padding:2px 6px;border-radius:4px;margin:1px;">{{ p }}</span>{% endfor %}{% else %}-{% endif %}</td>
                         <td>{{ r.effective_date.strftime('%d-%m-%Y') if r.effective_date else '-' }}</td>
                         <td>{{ r.reason or '-' }}</td>
                         <td title="{{ r.remarks or '' }}">{{ (r.remarks or '-')[:30] }}</td>
