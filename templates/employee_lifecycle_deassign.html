@@ -225,69 +225,83 @@ textarea.da-input{height:auto!important;min-height:42px}
 {% block extra_js %}
 <script>
 (function(){
-    /* ── Search ── */
-    function bindSearch(inputId, listId){
-        var inp = document.getElementById(inputId);
-        var list = document.getElementById(listId);
-        if(!inp || !list) return;
-        inp.addEventListener('input', function(){
-            var q = this.value.toLowerCase().trim();
-            list.querySelectorAll('.da-cb-item').forEach(function(el){
-                var name = el.getAttribute('data-name') || '';
-                el.classList.toggle('da-hide', q.length > 0 && name.indexOf(q) === -1);
-            });
-        });
+    function esc(s){
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
-    bindSearch('search-proj', 'list-proj');
-    bindSearch('search-dist', 'list-dist');
 
-    /* ── Summary + Button ── */
-    function refresh(){
-        var btn = document.getElementById('da-save-btn');
-        var total = 0;
+    function initDeassign(){
+        var form = document.getElementById('deassign-form');
+        if(!form) return;
 
-        ['proj','dist'].forEach(function(key){
-            var listId = 'list-' + key;
-            var bodyId = 'summary-' + key + '-body';
-            var list = document.getElementById(listId);
-            var body = document.getElementById(bodyId);
-            if(!list || !body) return;
-            var names = [];
-            var cbName = key === 'proj' ? 'project_ids' : 'district_ids';
-            list.querySelectorAll('input[name="'+cbName+'"]:checked').forEach(function(cb){
-                var item = cb.closest('.da-cb-item');
-                if(item) {
-                    var sp = item.querySelector('span');
-                    if(sp) names.push(sp.textContent.trim());
-                    item.classList.add('checked');
+        function bindSearch(inp, list){
+            if(!inp || !list) return;
+            function runFilter(){
+                var q = (inp.value || '').toLowerCase().trim();
+                list.querySelectorAll('.da-cb-item').forEach(function(el){
+                    var name = (el.getAttribute('data-name') || '').toLowerCase();
+                    var show = !q || name.indexOf(q) !== -1;
+                    el.classList.toggle('da-hide', !show);
+                });
+            }
+            inp.addEventListener('input', runFilter);
+            inp.addEventListener('keyup', runFilter);
+            inp.addEventListener('paste', function(){ setTimeout(runFilter, 0); });
+        }
+        bindSearch(form.querySelector('#search-proj'), form.querySelector('#list-proj'));
+        bindSearch(form.querySelector('#search-dist'), form.querySelector('#list-dist'));
+
+        function refresh(){
+            var btn = document.getElementById('da-save-btn');
+            var total = 0;
+
+            [['proj','project_ids'],['dist','district_ids']].forEach(function(pair){
+                var key = pair[0], cbName = pair[1];
+                var list = form.querySelector('#list-' + key);
+                var body = form.querySelector('#summary-' + key + '-body');
+                if(!list || !body) return;
+                var names = [];
+                list.querySelectorAll('input[name="'+cbName+'"]').forEach(function(cb){
+                    var item = cb.closest('.da-cb-item');
+                    if(!item) return;
+                    if(cb.checked){
+                        var sp = item.querySelector('span');
+                        if(sp) names.push(sp.textContent.trim());
+                        item.classList.add('checked');
+                    } else {
+                        item.classList.remove('checked');
+                    }
+                });
+                total += names.length;
+                if(names.length){
+                    body.innerHTML = names.map(function(n){ return '<span class="da-badge">'+esc(n)+'</span>'; }).join('');
+                } else {
+                    body.innerHTML = '<span class="da-summary-empty">None selected</span>';
                 }
             });
-            list.querySelectorAll('input[name="'+cbName+'"]:not(:checked)').forEach(function(cb){
-                var item = cb.closest('.da-cb-item');
-                if(item) item.classList.remove('checked');
-            });
-            total += names.length;
-            if(names.length){
-                body.innerHTML = names.map(function(n){ return '<span class="da-badge">'+n+'</span>'; }).join('');
-            } else {
-                body.innerHTML = '<span class="da-summary-empty">None selected</span>';
-            }
-        });
 
-        if(btn){
-            btn.disabled = total < 1;
-            if(total > 0){
-                btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Remove Assignments <span class="da-count-badge">'+total+'</span>';
-            } else {
-                btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Remove Selected Assignments';
+            if(btn){
+                btn.disabled = total < 1;
+                if(total > 0){
+                    btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Remove Assignments <span class="da-count-badge">'+total+'</span>';
+                } else {
+                    btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Remove Selected Assignments';
+                }
             }
         }
+
+        form.addEventListener('change', function(e){
+            if(e.target && e.target.matches && e.target.matches('input[type="checkbox"][name="project_ids"], input[type="checkbox"][name="district_ids"]')){
+                refresh();
+            }
+        });
+        refresh();
     }
 
-    document.querySelectorAll('.da-cb-list input[type=checkbox]').forEach(function(cb){
-        cb.addEventListener('change', refresh);
-    });
-    refresh();
+    if(document.readyState === 'loading'){
+        document.addEventListener('DOMContentLoaded', initDeassign);
+    } else {
+        initDeassign();
+    }
 })();
 </script>
 {% endblock %}
