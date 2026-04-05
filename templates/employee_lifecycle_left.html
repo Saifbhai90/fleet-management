@@ -127,16 +127,17 @@ document.addEventListener('DOMContentLoaded', function(){
         }).catch(function(){ area.style.display='none'; });
     }
 
+    function hookTS(){
+        if(empSel && empSel.tomselect){
+            empSel.tomselect.on('change', function(val){ loadEmpAssign(val); });
+            return true;
+        }
+        return false;
+    }
     if(empSel){
         empSel.addEventListener('change', function(){ loadEmpAssign(this.value); });
-        if(empSel.tomselect){
-            empSel.tomselect.on('change', function(val){ loadEmpAssign(val); });
-        } else {
-            setTimeout(function(){
-                if(empSel.tomselect){
-                    empSel.tomselect.on('change', function(val){ loadEmpAssign(val); });
-                }
-            }, 500);
+        if(!hookTS()){
+            var _tries=0, _iv=setInterval(function(){ _tries++; if(hookTS()||_tries>20) clearInterval(_iv); },200);
         }
         if(empSel.value && empSel.value !== '0') loadEmpAssign(empSel.value);
     }

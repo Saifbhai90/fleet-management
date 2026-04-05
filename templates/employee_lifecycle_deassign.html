@@ -133,12 +133,15 @@ textarea.form-control { height: auto !important; }
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function(){
+(function(){
     var empSel = document.getElementById('emp_sel');
     var area = document.getElementById('assignment-area');
+    var _lastLoaded = '';
 
     function loadAssignments(eid){
-        if(!eid || eid==='0'){ area.style.display='none'; return; }
+        if(!eid || eid==='0'){ area.style.display='none'; _lastLoaded=''; return; }
+        if(eid === _lastLoaded) return;
+        _lastLoaded = eid;
         fetch('/api/employee/'+eid+'/assignments')
         .then(function(r){ return r.json(); })
         .then(function(d){
@@ -162,23 +165,27 @@ document.addEventListener('DOMContentLoaded', function(){
             if(dc) dc.textContent = districts.length;
             area.style.display='';
             updateSummary();
-        }).catch(function(e){ console.error('Load assignments failed:', e); area.style.display='none'; });
+        }).catch(function(){ area.style.display='none'; _lastLoaded=''; });
+    }
+
+    function hookTomSelect(){
+        if(empSel && empSel.tomselect){
+            empSel.tomselect.on('change', function(val){ loadAssignments(val); });
+            return true;
+        }
+        return false;
     }
 
     if(empSel){
         empSel.addEventListener('change', function(){ loadAssignments(this.value); });
-        if(empSel.tomselect){
-            empSel.tomselect.on('change', function(val){ loadAssignments(val); });
-        } else {
-            setTimeout(function(){
-                if(empSel.tomselect){
-                    empSel.tomselect.on('change', function(val){ loadAssignments(val); });
-                }
-            }, 500);
+        if(!hookTomSelect()){
+            var _tries = 0;
+            var _iv = setInterval(function(){
+                _tries++;
+                if(hookTomSelect() || _tries > 20) clearInterval(_iv);
+            }, 200);
         }
-        if(empSel.value && empSel.value !== '0'){
-            loadAssignments(empSel.value);
-        }
+        if(empSel.value && empSel.value !== '0') loadAssignments(empSel.value);
     }
 
     document.querySelectorAll('.assignment-search').forEach(function(inp){
@@ -226,6 +233,6 @@ document.addEventListener('DOMContentLoaded', function(){
         if(e.target.closest('#assignment-project-list') || e.target.closest('#assignment-district-list')) updateSummary();
     });
     updateSummary();
-});
+})();
 </script>
 {% endblock %}
