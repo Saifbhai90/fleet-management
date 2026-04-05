@@ -5,7 +5,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
-.page-shell { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
+.page-shell { max-width: 960px; margin: 0 auto; padding: 20px 16px 40px; }
 .page-hdr {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
     border-radius: 14px; padding: 14px 22px; margin-bottom: 22px;
@@ -18,6 +18,27 @@ body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
 .form-control:focus, .form-select:focus { border-color: #22c55e !important; box-shadow: 0 0 0 3px rgba(34,197,94,.12) !important; }
 textarea.form-control { height: auto !important; }
 .ts-wrapper .ts-control { min-height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; }
+
+.assignment-search { max-width: 100%; font-size: .875rem; padding: .35rem .5rem; }
+.assignment-list {
+    border: 1px solid #dee2e6; border-radius: 8px; background: #fff;
+    max-height: 220px; overflow-y: auto; padding: .5rem;
+}
+.assignment-item {
+    display: block; margin: 0; padding: .4rem .5rem;
+    font-size: .875rem; cursor: pointer; border-radius: 6px;
+}
+.assignment-item:hover { background: #f0f4ff; }
+.assignment-item input { margin-right: .5rem; vertical-align: middle; }
+.assignment-item.hide-by-search { display: none; }
+.selected-summary-box {
+    background: #e8f4fd; border: 1px solid #b6d4fe;
+    border-radius: 8px; padding: .5rem .75rem; font-size: .85rem; margin-top: 8px;
+}
+.selected-summary-title { color: #0a58ca; display: block; margin-bottom: .35rem; font-weight: 600; }
+.selected-summary-list { color: #333; max-height: 80px; overflow-y: auto; }
+.selected-summary-list:empty::before { content: '—'; color: #6c757d; }
+
 .btn-assign {
     background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
     color: #fff; border: none; border-radius: 10px;
@@ -47,39 +68,64 @@ textarea.form-control { height: auto !important; }
 
     <div class="form-card">
         <form method="POST" novalidate>
-            {{ form.hidden_tag() }}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">{{ form.employee_id.label.text }}</label>
-                    {{ form.employee_id(class="form-select search-select") }}
+                    <label class="form-label">Select Employee</label>
+                    <select name="employee_id" class="form-select search-select">
+                        {% for val, lbl in emp_choices %}
+                        <option value="{{ val }}" {% if sel_emp_id == val %}selected{% endif %}>{{ lbl }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">{{ form.assign_type.label.text }}</label>
-                    {{ form.assign_type(class="form-select", id="assign_type") }}
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">{{ form.effective_date.label.text }}</label>
-                    {{ form.effective_date(class="form-control datepicker") }}
+                    <label class="form-label">Effective Date</label>
+                    <input type="text" name="effective_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ sel_date }}">
                 </div>
             </div>
-            <div class="row g-3 mt-1">
-                <div class="col-md-6" id="district_wrap">
-                    <label class="form-label">District</label>
-                    {{ form.district_id(class="form-select search-select") }}
+
+            <p class="text-muted small mt-3 mb-2"><i class="bi bi-info-circle me-1"></i>Search mein naam likhein, list filter ho jayegi. Jis Project / District ko assign karna ho uski <strong>checkbox</strong> check karein.</p>
+
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label class="form-label">Projects ({{ project_choices|length }})</label>
+                    <input type="text" class="form-control form-control-sm assignment-search mb-2" placeholder="Search projects..." data-target="assignment-project-list" autocomplete="off">
+                    <div class="assignment-list" id="assignment-project-list">
+                        {% for value, label in project_choices %}
+                        <label class="assignment-item"><input type="checkbox" name="project_ids" value="{{ value }}" {% if value in sel_project_ids %}checked{% endif %}> <span class="assignment-item-text">{{ label }}</span></label>
+                        {% endfor %}
+                        {% if not project_choices %}<p class="text-muted small mb-0">No projects.</p>{% endif %}
+                    </div>
+                    <div class="selected-summary-box">
+                        <span class="selected-summary-title"><i class="bi bi-check2-square me-1"></i>Selected Projects:</span>
+                        <div class="selected-summary-list" id="selected-projects-summary">—</div>
+                    </div>
                 </div>
-                <div class="col-md-6" id="project_wrap" style="display:none">
-                    <label class="form-label">Project</label>
-                    {{ form.project_id(class="form-select search-select") }}
+                <div class="col-12 col-md-6">
+                    <label class="form-label">Districts ({{ district_choices|length }})</label>
+                    <input type="text" class="form-control form-control-sm assignment-search mb-2" placeholder="Search districts..." data-target="assignment-district-list" autocomplete="off">
+                    <div class="assignment-list" id="assignment-district-list">
+                        {% for value, label in district_choices %}
+                        <label class="assignment-item"><input type="checkbox" name="district_ids" value="{{ value }}" {% if value in sel_district_ids %}checked{% endif %}> <span class="assignment-item-text">{{ label }}</span></label>
+                        {% endfor %}
+                        {% if not district_choices %}<p class="text-muted small mb-0">No districts.</p>{% endif %}
+                    </div>
+                    <div class="selected-summary-box">
+                        <span class="selected-summary-title"><i class="bi bi-check2-square me-1"></i>Selected Districts:</span>
+                        <div class="selected-summary-list" id="selected-districts-summary">—</div>
+                    </div>
                 </div>
             </div>
+
             <div class="row g-3 mt-1">
                 <div class="col-12">
                     <label class="form-label">Remarks</label>
-                    {{ form.remarks(class="form-control", rows="2") }}
+                    <textarea name="remarks" class="form-control" rows="2">{{ sel_remarks }}</textarea>
                 </div>
             </div>
             <div class="mt-4 text-end">
-                <button type="submit" class="btn btn-assign"><i class="bi bi-check-circle me-1"></i> Assign</button>
+                <button type="submit" class="btn btn-assign" id="assignment-save-btn"><i class="bi bi-check-circle me-1"></i> Save Assignment</button>
             </div>
         </form>
     </div>
@@ -88,13 +134,49 @@ textarea.form-control { height: auto !important; }
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function(){
-    var sel = document.getElementById('assign_type');
-    var dw = document.getElementById('district_wrap');
-    var pw = document.getElementById('project_wrap');
-    function toggle(){ if(sel.value==='project'){dw.style.display='none';pw.style.display='';}else{dw.style.display='';pw.style.display='none';} }
-    sel.addEventListener('change', toggle);
-    toggle();
-});
+(function(){
+    document.querySelectorAll('.assignment-search').forEach(function(inp){
+        if(!inp || !inp.dataset.target) return;
+        var listId = inp.dataset.target;
+        inp.addEventListener('input', function(){
+            var q = (this.value||'').toLowerCase().trim();
+            var list = document.getElementById(listId);
+            if(!list) return;
+            list.querySelectorAll('.assignment-item').forEach(function(item){
+                var text = (item.querySelector('.assignment-item-text')||item).textContent.toLowerCase();
+                item.classList.toggle('hide-by-search', q && text.indexOf(q)===-1);
+            });
+        });
+    });
+
+    function updateSummary(){
+        var projList = document.getElementById('assignment-project-list');
+        var distList = document.getElementById('assignment-district-list');
+        var projSummary = document.getElementById('selected-projects-summary');
+        var distSummary = document.getElementById('selected-districts-summary');
+        if(projList && projSummary){
+            var names=[];
+            projList.querySelectorAll('input[name="project_ids"]:checked').forEach(function(cb){
+                var label=cb.closest('.assignment-item');
+                if(label){var t=label.querySelector('.assignment-item-text'); if(t) names.push(t.textContent.trim());}
+            });
+            projSummary.textContent = names.length ? names.join(', ') : '—';
+        }
+        if(distList && distSummary){
+            var names2=[];
+            distList.querySelectorAll('input[name="district_ids"]:checked').forEach(function(cb){
+                var label=cb.closest('.assignment-item');
+                if(label){var t=label.querySelector('.assignment-item-text'); if(t) names2.push(t.textContent.trim());}
+            });
+            distSummary.textContent = names2.length ? names2.join(', ') : '—';
+        }
+    }
+
+    var pl = document.getElementById('assignment-project-list');
+    var dl = document.getElementById('assignment-district-list');
+    if(pl) pl.addEventListener('change', updateSummary);
+    if(dl) dl.addEventListener('change', updateSummary);
+    updateSummary();
+})();
 </script>
 {% endblock %}

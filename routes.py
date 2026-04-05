@@ -3672,47 +3672,73 @@ def _log_employee_assignment(emp_id, action, district_id=None, project_id=None,
 
 @app.route('/employee/lifecycle/assign', methods=['GET', 'POST'])
 def employee_lifecycle_assign():
-    form = EmployeeAssignForm()
     active_emps = Employee.query.filter(Employee.status != 'Left').order_by(Employee.name).all()
-    form.employee_id.choices = [(0, '-- Select Employee --')] + [(e.id, f"{e.name} ({e.code})") for e in active_emps]
-    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
-    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    emp_choices = [(0, '-- Select Employee --')] + [(e.id, f"{e.name} ({e.code})") for e in active_emps]
+    projects_list = Project.query.order_by(Project.name).all()
+    districts_list = District.query.order_by(District.name).all()
+    project_choices = [(p.id, p.name) for p in projects_list]
+    district_choices = [(d.id, d.name) for d in districts_list]
 
-    if form.validate_on_submit():
-        emp = Employee.query.get(form.employee_id.data)
+    sel_emp_id = 0
+    sel_project_ids = []
+    sel_district_ids = []
+    sel_date = ''
+    sel_remarks = ''
+
+    if request.method == 'POST':
+        sel_emp_id = request.form.get('employee_id', 0, type=int)
+        sel_project_ids = [int(x) for x in request.form.getlist('project_ids') if x]
+        sel_district_ids = [int(x) for x in request.form.getlist('district_ids') if x]
+        sel_date = request.form.get('effective_date', '').strip()
+        sel_remarks = request.form.get('remarks', '').strip()
+
+        emp = Employee.query.get(sel_emp_id) if sel_emp_id else None
         if not emp:
-            flash('Employee not found.', 'danger')
-            return redirect(url_for('employee_lifecycle_assign'))
-        atype = form.assign_type.data
-        try:
-            if atype == 'district':
-                did = form.district_id.data
-                if not did:
-                    flash('District select karein.', 'danger')
-                    return render_template('employee_lifecycle_assign.html', form=form, title='Assign District/Project')
-                dist = District.query.get(did)
-                if dist and dist not in emp.districts.all():
-                    emp.districts.append(dist)
-                _log_employee_assignment(emp.id, 'assign_district', district_id=did,
-                                         effective_date=form.effective_date.data, remarks=form.remarks.data)
-            else:
-                pid = form.project_id.data
-                if not pid:
-                    flash('Project select karein.', 'danger')
-                    return render_template('employee_lifecycle_assign.html', form=form, title='Assign District/Project')
-                proj = Project.query.get(pid)
-                if proj and proj not in emp.projects.all():
-                    emp.projects.append(proj)
-                _log_employee_assignment(emp.id, 'assign_project', project_id=pid,
-                                         effective_date=form.effective_date.data, remarks=form.remarks.data)
-            db.session.commit()
-            flash(f'{atype.title()} assigned successfully to {emp.name}.', 'success')
-            return redirect(url_for('employee_lifecycle_assign_list'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error: {str(e)}', 'danger')
+            flash('Employee select karein.', 'danger')
+        elif not sel_project_ids and not sel_district_ids:
+            flash('Kam se kam 1 Project ya 1 District select karein.', 'danger')
+        else:
+            try:
+                eff_date = parse_date(sel_date) if sel_date else pk_date()
+                old_project_ids = set(p.id for p in emp.projects)
+                old_district_ids = set(d.id for d in emp.districts)
+                new_project_ids = set(sel_project_ids)
+                new_district_ids = set(sel_district_ids)
 
-    return render_template('employee_lifecycle_assign.html', form=form, title='Assign District/Project')
+                for pid in sel_project_ids:
+                    proj = Project.query.get(pid)
+                    if proj and proj not in emp.projects.all():
+                        emp.projects.append(proj)
+                for did in sel_district_ids:
+                    dist = District.query.get(did)
+                    if dist and dist not in emp.districts.all():
+                        emp.districts.append(dist)
+
+                for pid in (new_project_ids - old_project_ids):
+                    _log_employee_assignment(emp.id, 'assign_project', project_id=pid,
+                                             effective_date=eff_date, remarks=sel_remarks)
+                for did in (new_district_ids - old_district_ids):
+                    _log_employee_assignment(emp.id, 'assign_district', district_id=did,
+                                             effective_date=eff_date, remarks=sel_remarks)
+
+                db.session.commit()
+                added = len(new_project_ids - old_project_ids) + len(new_district_ids - old_district_ids)
+                flash(f'{added} assignment(s) saved for {emp.name}.', 'success')
+                return redirect(url_for('employee_lifecycle_assign_list'))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error: {str(e)}', 'danger')
+
+    return render_template('employee_lifecycle_assign.html',
+                           title='Assign District/Project',
+                           emp_choices=emp_choices,
+                           project_choices=project_choices,
+                           district_choices=district_choices,
+                           sel_emp_id=sel_emp_id,
+                           sel_project_ids=sel_project_ids,
+                           sel_district_ids=sel_district_ids,
+                           sel_date=sel_date,
+                           sel_remarks=sel_remarks)
 
 
 @app.route('/employee/lifecycle/deassign', methods=['GET', 'POST'])
