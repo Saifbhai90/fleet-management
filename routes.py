@@ -4108,10 +4108,61 @@ def _employee_lifecycle_list(action_types, title, add_url, add_label, template_n
 
 @app.route('/employee/lifecycle/assign/list')
 def employee_lifecycle_assign_list():
-    return _employee_lifecycle_list(
-        ['assign_district', 'assign_project', 'initial'],
-        'Employee Assignments', 'employee_lifecycle_assign', 'New Assignment',
-        'employee_lifecycle_list.html')
+    """Show employees with their current district+project assignments grouped."""
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    ctx = get_user_context(user_id) if user_id else {}
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 25, type=int)
+    search = request.args.get('search', '').strip()
+    district_id = request.args.get('district_id', 0, type=int)
+    project_id = request.args.get('project_id', 0, type=int)
+
+    query = Employee.query
+
+    if search:
+        query = query.filter(or_(Employee.name.ilike(f'%{search}%'), Employee.code.ilike(f'%{search}%')))
+
+    if district_id:
+        sub = db.session.query(employee_district.c.employee_id).filter(employee_district.c.district_id == district_id)
+        query = query.filter(Employee.id.in_(sub))
+    if project_id:
+        sub = db.session.query(employee_project.c.employee_id).filter(employee_project.c.project_id == project_id)
+        query = query.filter(Employee.id.in_(sub))
+
+    if ctx.get('district_ids'):
+        sub = db.session.query(employee_district.c.employee_id).filter(employee_district.c.district_id.in_(ctx['district_ids']))
+        query = query.filter(Employee.id.in_(sub))
+
+    query = query.order_by(Employee.name)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    rows = []
+    for emp in pagination.items:
+        emp_districts = list(emp.districts)
+        emp_projects = list(emp.projects)
+        last_ea = EmployeeAssignment.query.filter(
+            EmployeeAssignment.employee_id == emp.id,
+            EmployeeAssignment.action.in_(['assign_district', 'assign_project', 'initial'])
+        ).order_by(EmployeeAssignment.effective_date.desc()).first()
+        rows.append({
+            'employee': emp,
+            'districts': emp_districts,
+            'projects': emp_projects,
+            'last_date': last_ea.effective_date if last_ea else None,
+            'remarks': last_ea.remarks if last_ea else '',
+            'created_by': last_ea.created_by if last_ea else None,
+        })
+
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+
+    return render_template('employee_lifecycle_assign_list.html',
+                           rows=rows, pagination=pagination,
+                           search=search, district_id=district_id, project_id=project_id,
+                           districts=districts, projects=projects,
+                           per_page=per_page, title='Employee Assignments',
+                           add_url='employee_lifecycle_assign', add_label='New Assignment')
 
 @app.route('/employee/lifecycle/deassign/list')
 def employee_lifecycle_deassign_list():
