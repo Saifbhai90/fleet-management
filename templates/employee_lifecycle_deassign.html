@@ -2,214 +2,292 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block extra_head %}
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
-.page-shell { max-width: 960px; margin: 0 auto; padding: 20px 16px 40px; }
-.page-hdr {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-    border-radius: 14px; padding: 14px 22px; margin-bottom: 22px;
-    display: flex; align-items: center; justify-content: space-between;
-}
-.page-hdr h5 { margin: 0; font-weight: 700; color: #fff; font-size: 1.05rem; }
-.form-card { background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 2px 12px rgba(0,0,0,.06); padding: 24px; }
-.form-label { font-size: .82rem; font-weight: 700; color: #334155; margin-bottom: 4px; }
-.form-control, .form-select { border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; font-size: .86rem !important; height: 40px !important; }
-textarea.form-control { height: auto !important; }
-.ts-wrapper .ts-control { min-height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; }
-.assignment-search { max-width: 100%; font-size: .875rem; }
-.assignment-list { border: 1px solid #fca5a5; border-radius: 8px; background: #fff; max-height: 220px; overflow-y: auto; padding: .5rem; }
-.assignment-item { display: block; margin: 0; padding: .4rem .5rem; font-size: .875rem; cursor: pointer; border-radius: 6px; }
-.assignment-item:hover { background: #fef2f2; }
-.assignment-item input[type=checkbox] { margin-right: .5rem; vertical-align: middle; accent-color: #dc2626; }
-.assignment-item.hide-by-search { display: none; }
-.selected-summary-box { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: .5rem .75rem; font-size: .85rem; margin-top: 8px; }
-.selected-summary-title { color: #dc2626; display: block; margin-bottom: .35rem; font-weight: 600; }
-.selected-summary-list { color: #333; max-height: 80px; overflow-y: auto; }
-.empty-msg { color: #94a3b8; font-size: .82rem; text-align: center; padding: 1rem; }
-.status-badge { background: #fef2f2; border: 1px dashed #fca5a5; border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 16px; font-size: .83rem; color: #dc2626; }
-.emp-display { background: #f1f5f9; font-weight: 600; padding: 8px 14px; border-radius: 9px; border: 1.5px solid #cbd5e1; font-size: .86rem; min-height: 40px; display: flex; align-items: center; }
-.btn-deassign {
-    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
-    color: #fff; border: none; border-radius: 10px;
-    padding: 11px 28px; font-weight: 700; font-size: .9rem;
-    transition: all .25s; box-shadow: 0 3px 10px rgba(220,38,38,.3);
-}
-.btn-deassign:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(220,38,38,.4); color: #fff; }
-.btn-deassign:disabled { opacity: .5; transform: none; cursor: not-allowed; }
-.btn-load { background: #0f766e; color: #fff; border: none; border-radius: 9px; padding: 9px 22px; font-weight: 700; font-size: .85rem; }
-.btn-load:hover { background: #134e4a; color: #fff; }
+:root{--da-primary:#0f172a;--da-danger:#dc2626;--da-danger-soft:#fef2f2;--da-border:#e2e8f0;--da-muted:#64748b;--da-bg:#f8fafc;--da-card:#fff;--da-radius:12px;--da-shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.04)}
+body{background:var(--da-bg);font-family:'Inter',system-ui,-apple-system,sans-serif}
+.da-shell{max-width:880px;margin:0 auto;padding:24px 16px 48px}
+
+.da-hdr{background:linear-gradient(135deg,#0f172a 0%,#1e293b 60%,#334155 100%);border-radius:var(--da-radius);padding:18px 24px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between}
+.da-hdr h4{margin:0;font-weight:800;color:#fff;font-size:1.1rem;letter-spacing:-.02em}
+.da-hdr .btn{font-size:.78rem;font-weight:600;border-radius:8px;padding:6px 14px}
+
+.da-card{background:var(--da-card);border-radius:var(--da-radius);border:1px solid var(--da-border);box-shadow:var(--da-shadow);padding:28px}
+.da-card+.da-card{margin-top:20px}
+
+.da-section-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--da-muted);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #f1f5f9}
+
+.da-label{font-size:.78rem;font-weight:600;color:#334155;margin-bottom:5px;display:block}
+.da-input,.da-select{border-radius:8px!important;border:1.5px solid #cbd5e1!important;font-size:.84rem!important;height:40px!important;transition:border-color .2s,box-shadow .2s}
+.da-input:focus,.da-select:focus{border-color:#6366f1!important;box-shadow:0 0 0 3px rgba(99,102,241,.1)!important}
+textarea.da-input{height:auto!important;min-height:42px}
+.ts-wrapper .ts-control{min-height:40px!important;border-radius:8px!important;border:1.5px solid #cbd5e1!important}
+
+.da-emp-badge{background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1.5px solid #bae6fd;border-radius:10px;padding:10px 16px;font-weight:700;font-size:.88rem;color:#0c4a6e;display:flex;align-items:center;gap:10px}
+.da-emp-badge i{font-size:1.1rem;color:#0284c7}
+
+.da-warn{background:linear-gradient(135deg,#fef2f2,#fff1f2);border:1px solid #fecaca;border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:.82rem;color:#991b1b}
+.da-warn i{font-size:1.15rem;color:var(--da-danger)}
+
+.da-hint{font-size:.78rem;color:var(--da-muted);display:flex;align-items:center;gap:6px;margin-bottom:12px}
+
+.da-assign-col{flex:1;min-width:0}
+.da-assign-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.da-assign-head .da-label{margin:0}
+.da-assign-count{background:#e0e7ff;color:#4338ca;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:20px}
+.da-search{border-radius:8px!important;border:1.5px solid #e2e8f0!important;font-size:.82rem!important;height:36px!important;padding-left:34px!important;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 16 16'%3E%3Cpath fill='%2394a3b8' d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/%3E%3C/svg%3E") no-repeat 12px center;transition:border-color .2s,box-shadow .2s}
+.da-search:focus{border-color:#6366f1!important;box-shadow:0 0 0 3px rgba(99,102,241,.08)!important}
+.da-cb-list{border:1px solid #e2e8f0;border-radius:8px;background:#fafbfc;max-height:200px;overflow-y:auto;padding:4px}
+.da-cb-list::-webkit-scrollbar{width:5px}
+.da-cb-list::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px}
+.da-cb-item{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:2px 0;border-radius:6px;cursor:pointer;font-size:.84rem;color:#1e293b;transition:background .15s}
+.da-cb-item:hover{background:#f1f5f9}
+.da-cb-item.checked{background:#fef2f2;border-left:3px solid var(--da-danger)}
+.da-cb-item input[type=checkbox]{width:16px;height:16px;accent-color:var(--da-danger);cursor:pointer;flex-shrink:0}
+.da-cb-item.da-hide{display:none}
+.da-empty{color:#94a3b8;font-size:.8rem;text-align:center;padding:16px 8px}
+
+.da-summary{background:var(--da-danger-soft);border:1px solid #fecaca;border-radius:8px;padding:8px 12px;margin-top:10px;min-height:38px}
+.da-summary-hd{font-size:.72rem;font-weight:700;color:var(--da-danger);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;display:flex;align-items:center;gap:5px}
+.da-summary-body{font-size:.8rem;color:#374151;line-height:1.5}
+.da-summary .da-badge{display:inline-block;background:#fee2e2;color:#991b1b;font-size:.72rem;font-weight:600;padding:2px 8px;border-radius:4px;margin:2px 2px 2px 0}
+.da-summary-empty{color:#d1d5db;font-style:italic;font-size:.78rem}
+
+.da-btn-remove{background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%);color:#fff;border:none;border-radius:10px;padding:12px 32px;font-weight:700;font-size:.88rem;letter-spacing:-.01em;transition:all .25s;box-shadow:0 4px 14px rgba(185,28,28,.25)}
+.da-btn-remove:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 20px rgba(185,28,28,.35);color:#fff}
+.da-btn-remove:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.da-btn-remove .da-count-badge{background:rgba(255,255,255,.25);padding:1px 8px;border-radius:12px;font-size:.76rem;margin-left:6px}
+
+.da-btn-load{background:linear-gradient(135deg,#0f766e 0%,#115e59 100%);color:#fff;border:none;border-radius:10px;padding:11px 24px;font-weight:700;font-size:.86rem;box-shadow:0 3px 10px rgba(15,118,110,.25);transition:all .2s}
+.da-btn-load:hover{transform:translateY(-1px);box-shadow:0 5px 16px rgba(15,118,110,.35);color:#fff}
+.da-btn-change{background:#fff;border:1.5px solid #cbd5e1;color:#475569;border-radius:8px;padding:8px 16px;font-weight:600;font-size:.82rem;transition:all .2s}
+.da-btn-change:hover{border-color:#6366f1;color:#4338ca;background:#f5f3ff}
+.da-divider{height:1px;background:#f1f5f9;margin:20px 0}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-shell">
-    <div class="page-hdr">
-        <h5><i class="bi bi-person-dash-fill me-2 text-danger"></i>{{ title }}</h5>
-        <a href="{{ url_for('employee_lifecycle_deassign_list') }}" class="btn btn-sm btn-outline-light fw-bold">
+<div class="da-shell">
+    <div class="da-hdr">
+        <h4><i class="bi bi-person-dash-fill me-2" style="color:#f87171"></i>{{ title }}</h4>
+        <a href="{{ url_for('employee_lifecycle_deassign_list') }}" class="btn btn-outline-light">
             <i class="bi bi-arrow-left-circle me-1"></i> Back to List
         </a>
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}{% for cat, msg in messages %}
-            <div class="alert alert-{{ cat }} alert-dismissible fade show mb-3">
+            <div class="alert alert-{{ cat }} alert-dismissible fade show mb-3" style="border-radius:10px;font-size:.85rem">
                 {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         {% endfor %}{% endif %}
     {% endwith %}
 
     {% if not sel_emp_id or sel_emp_id == 0 %}
-    {# ── Step 1: Select Employee ── #}
-    <div class="form-card">
+    {# ═══ Step 1 ═══ #}
+    <div class="da-card">
+        <div class="da-section-title"><i class="bi bi-1-circle me-1"></i>Select Employee</div>
         <form method="POST" novalidate>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="select_employee">
             <div class="row g-3 align-items-end">
-                <div class="col-md-7">
-                    <label class="form-label">Select Employee</label>
-                    <select name="employee_id" class="form-select search-select">
+                <div class="col-md-8">
+                    <label class="da-label">Employee</label>
+                    <select name="employee_id" class="form-select da-select search-select">
                         {% for val, lbl in emp_choices %}
                         <option value="{{ val }}">{{ lbl }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-load"><i class="bi bi-arrow-right-circle me-1"></i> Load Assignments</button>
+                <div class="col-md-4">
+                    <button type="submit" class="da-btn-load w-100"><i class="bi bi-arrow-right-circle me-1"></i> Load Assignments</button>
                 </div>
             </div>
-            <p class="text-muted small mt-2 mb-0"><i class="bi bi-info-circle me-1"></i>Employee select karein aur "Load Assignments" dabayein.</p>
+            <p class="da-hint mt-3"><i class="bi bi-info-circle"></i>Employee select karein aur "Load Assignments" dabayein.</p>
         </form>
     </div>
 
     {% else %}
-    {# ── Step 2: Show assignments ── #}
-    <div class="status-badge">
-        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
-        <span>Sirf <strong>checked</strong> wale remove honge, baqi safe rahenge.</span>
+    {# ═══ Step 2 ═══ #}
+    <div class="da-warn">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span>Sirf <strong>checked</strong> wale remove honge, baqi assignments safe rahenge.</span>
     </div>
 
-    <div class="form-card">
-        <form method="POST" novalidate id="deassign-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="remove">
-            <input type="hidden" name="employee_id" value="{{ sel_emp_id }}">
+    <form method="POST" novalidate id="deassign-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="remove">
+    <input type="hidden" name="employee_id" value="{{ sel_emp_id }}">
 
-            <div class="row g-3 mb-3">
-                <div class="col-md-5">
-                    <label class="form-label">Employee</label>
-                    <div class="emp-display"><i class="bi bi-person-fill me-2 text-primary"></i>{{ emp_name }}</div>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Effective Date</label>
-                    <input type="text" name="effective_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ sel_date }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Reason</label>
-                    <select name="reason" class="form-select">
-                        <option value="">-- Select --</option>
-                        <option value="Resigned" {% if sel_reason == 'Resigned' %}selected{% endif %}>Resigned</option>
-                        <option value="Terminated" {% if sel_reason == 'Terminated' %}selected{% endif %}>Terminated</option>
-                        <option value="Transfer" {% if sel_reason == 'Transfer' %}selected{% endif %}>Transfer</option>
-                        <option value="Restructuring" {% if sel_reason == 'Restructuring' %}selected{% endif %}>Restructuring</option>
-                        <option value="Other" {% if sel_reason == 'Other' %}selected{% endif %}>Other</option>
-                    </select>
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <a href="{{ url_for('employee_lifecycle_deassign') }}" class="btn btn-outline-secondary btn-sm w-100"><i class="bi bi-arrow-left me-1"></i>Change</a>
-                </div>
+    {# ── Employee Info Card ── #}
+    <div class="da-card">
+        <div class="da-section-title"><i class="bi bi-person-badge me-1"></i>Employee Information</div>
+        <div class="row g-3">
+            <div class="col-md-8">
+                <label class="da-label">Employee</label>
+                <div class="da-emp-badge"><i class="bi bi-person-fill"></i>{{ emp_name }}</div>
             </div>
-
-            <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>Jo Projects / Districts <strong>remove</strong> karne hain unki checkbox check karein.</p>
-
-            <div class="row g-3">
-                <div class="col-12 col-md-6">
-                    <label class="form-label">Assigned Projects ({{ cur_projects|length }})</label>
-                    <input type="text" class="form-control form-control-sm assignment-search mb-2" placeholder="Search projects..." data-target="assignment-project-list" autocomplete="off">
-                    <div class="assignment-list" id="assignment-project-list">
-                        {% for p in cur_projects %}
-                        <label class="assignment-item"><input type="checkbox" name="project_ids" value="{{ p.id }}" {% if p.id in sel_project_ids %}checked{% endif %} onchange="window._updateDeassign()"> <span class="assignment-item-text">{{ p.name }}</span></label>
-                        {% endfor %}
-                        {% if not cur_projects %}<p class="empty-msg">No projects assigned.</p>{% endif %}
-                    </div>
-                    <div class="selected-summary-box">
-                        <span class="selected-summary-title"><i class="bi bi-x-circle me-1"></i>Removing Projects:</span>
-                        <div class="selected-summary-list" id="selected-projects-summary">—</div>
-                    </div>
-                </div>
-                <div class="col-12 col-md-6">
-                    <label class="form-label">Assigned Districts ({{ cur_districts|length }})</label>
-                    <input type="text" class="form-control form-control-sm assignment-search mb-2" placeholder="Search districts..." data-target="assignment-district-list" autocomplete="off">
-                    <div class="assignment-list" id="assignment-district-list">
-                        {% for d in cur_districts %}
-                        <label class="assignment-item"><input type="checkbox" name="district_ids" value="{{ d.id }}" {% if d.id in sel_district_ids %}checked{% endif %} onchange="window._updateDeassign()"> <span class="assignment-item-text">{{ d.name }}</span></label>
-                        {% endfor %}
-                        {% if not cur_districts %}<p class="empty-msg">No districts assigned.</p>{% endif %}
-                    </div>
-                    <div class="selected-summary-box">
-                        <span class="selected-summary-title"><i class="bi bi-x-circle me-1"></i>Removing Districts:</span>
-                        <div class="selected-summary-list" id="selected-districts-summary">—</div>
-                    </div>
-                </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <a href="{{ url_for('employee_lifecycle_deassign') }}" class="da-btn-change w-100 text-center"><i class="bi bi-arrow-repeat me-1"></i>Change Employee</a>
             </div>
-
-            <div class="row g-3 mt-2">
-                <div class="col-12">
-                    <label class="form-label">Remarks</label>
-                    <textarea name="remarks" class="form-control" rows="1">{{ sel_remarks }}</textarea>
-                </div>
+        </div>
+        <div class="row g-3 mt-1">
+            <div class="col-md-4">
+                <label class="da-label">Effective Date</label>
+                <input type="text" name="effective_date" class="form-control da-input datepicker" placeholder="dd-mm-yyyy" value="{{ sel_date }}">
             </div>
-            <div class="mt-4 text-end">
-                <button type="submit" class="btn btn-deassign" id="deassign-save-btn"><i class="bi bi-x-circle me-1"></i> Remove Selected Assignments</button>
-            </div>
-        </form>
+        </div>
     </div>
+
+    {# ── Assignments Card ── #}
+    <div class="da-card">
+        <div class="da-section-title"><i class="bi bi-diagram-3 me-1"></i>Current Assignments</div>
+        <p class="da-hint"><i class="bi bi-info-circle"></i>Jo Projects / Districts <strong>remove</strong> karne hain unki checkbox check karein.</p>
+
+        <div class="row g-4">
+            <div class="col-12 col-md-6 da-assign-col">
+                <div class="da-assign-head">
+                    <span class="da-label">Projects</span>
+                    <span class="da-assign-count">{{ cur_projects|length }} assigned</span>
+                </div>
+                <input type="text" class="form-control da-search mb-2" id="search-proj" placeholder="Search projects..." autocomplete="off">
+                <div class="da-cb-list" id="list-proj">
+                    {% for p in cur_projects %}
+                    <label class="da-cb-item" data-name="{{ p.name|lower }}">
+                        <input type="checkbox" name="project_ids" value="{{ p.id }}" {% if p.id in sel_project_ids %}checked{% endif %}>
+                        <span>{{ p.name }}</span>
+                    </label>
+                    {% endfor %}
+                    {% if not cur_projects %}<p class="da-empty">No projects assigned to this employee.</p>{% endif %}
+                </div>
+                <div class="da-summary" id="summary-proj">
+                    <div class="da-summary-hd"><i class="bi bi-x-circle-fill"></i>Removing Projects</div>
+                    <div class="da-summary-body" id="summary-proj-body"><span class="da-summary-empty">None selected</span></div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 da-assign-col">
+                <div class="da-assign-head">
+                    <span class="da-label">Districts</span>
+                    <span class="da-assign-count">{{ cur_districts|length }} assigned</span>
+                </div>
+                <input type="text" class="form-control da-search mb-2" id="search-dist" placeholder="Search districts..." autocomplete="off">
+                <div class="da-cb-list" id="list-dist">
+                    {% for d in cur_districts %}
+                    <label class="da-cb-item" data-name="{{ d.name|lower }}">
+                        <input type="checkbox" name="district_ids" value="{{ d.id }}" {% if d.id in sel_district_ids %}checked{% endif %}>
+                        <span>{{ d.name }}</span>
+                    </label>
+                    {% endfor %}
+                    {% if not cur_districts %}<p class="da-empty">No districts assigned to this employee.</p>{% endif %}
+                </div>
+                <div class="da-summary" id="summary-dist">
+                    <div class="da-summary-hd"><i class="bi bi-x-circle-fill"></i>Removing Districts</div>
+                    <div class="da-summary-body" id="summary-dist-body"><span class="da-summary-empty">None selected</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Reason & Remarks Card ── #}
+    <div class="da-card">
+        <div class="da-section-title"><i class="bi bi-chat-left-text me-1"></i>Reason & Remarks</div>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="da-label">Reason</label>
+                <select name="reason" class="form-select da-select">
+                    <option value="">-- Select Reason --</option>
+                    <option value="Resigned" {% if sel_reason == 'Resigned' %}selected{% endif %}>Resigned</option>
+                    <option value="Terminated" {% if sel_reason == 'Terminated' %}selected{% endif %}>Terminated</option>
+                    <option value="Transfer" {% if sel_reason == 'Transfer' %}selected{% endif %}>Transfer</option>
+                    <option value="Restructuring" {% if sel_reason == 'Restructuring' %}selected{% endif %}>Restructuring</option>
+                    <option value="Other" {% if sel_reason == 'Other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+            <div class="col-md-8">
+                <label class="da-label">Remarks</label>
+                <textarea name="remarks" class="form-control da-input" rows="1" placeholder="Optional remarks...">{{ sel_remarks }}</textarea>
+            </div>
+        </div>
+    </div>
+
+    {# ── Submit ── #}
+    <div class="text-end mt-3">
+        <button type="submit" class="da-btn-remove" id="da-save-btn" disabled>
+            <i class="bi bi-x-circle me-1"></i>Remove Selected Assignments
+        </button>
+    </div>
+    </form>
     {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-document.querySelectorAll('.assignment-search').forEach(function(inp){
-    if(!inp || !inp.dataset.target) return;
-    inp.addEventListener('input', function(){
-        var q = (this.value||'').toLowerCase().trim();
-        var list = document.getElementById(inp.dataset.target);
-        if(!list) return;
-        list.querySelectorAll('.assignment-item').forEach(function(item){
-            var text = (item.querySelector('.assignment-item-text')||item).textContent.toLowerCase();
-            item.classList.toggle('hide-by-search', q && text.indexOf(q)===-1);
+(function(){
+    /* ── Search ── */
+    function bindSearch(inputId, listId){
+        var inp = document.getElementById(inputId);
+        var list = document.getElementById(listId);
+        if(!inp || !list) return;
+        inp.addEventListener('input', function(){
+            var q = this.value.toLowerCase().trim();
+            list.querySelectorAll('.da-cb-item').forEach(function(el){
+                var name = el.getAttribute('data-name') || '';
+                el.classList.toggle('da-hide', q.length > 0 && name.indexOf(q) === -1);
+            });
         });
-    });
-});
-
-window._updateDeassign = function(){
-    var projSummary = document.getElementById('selected-projects-summary');
-    var distSummary = document.getElementById('selected-districts-summary');
-    var saveBtn = document.getElementById('deassign-save-btn');
-
-    var pNames = [];
-    document.querySelectorAll('input[name="project_ids"]:checked').forEach(function(cb){
-        var lbl = cb.closest('.assignment-item');
-        if(lbl){ var t = lbl.querySelector('.assignment-item-text'); if(t) pNames.push(t.textContent.trim()); }
-    });
-    if(projSummary) projSummary.textContent = pNames.length ? pNames.join(', ') : '—';
-
-    var dNames = [];
-    document.querySelectorAll('input[name="district_ids"]:checked').forEach(function(cb){
-        var lbl = cb.closest('.assignment-item');
-        if(lbl){ var t = lbl.querySelector('.assignment-item-text'); if(t) dNames.push(t.textContent.trim()); }
-    });
-    if(distSummary) distSummary.textContent = dNames.length ? dNames.join(', ') : '—';
-
-    if(saveBtn){
-        var total = pNames.length + dNames.length;
-        saveBtn.disabled = (total < 1);
-        saveBtn.innerHTML = total > 0
-            ? '<i class="bi bi-x-circle me-1"></i> Remove ' + total + ' Assignment(s)'
-            : '<i class="bi bi-x-circle me-1"></i> Remove Selected Assignments';
     }
-};
-window._updateDeassign();
+    bindSearch('search-proj', 'list-proj');
+    bindSearch('search-dist', 'list-dist');
+
+    /* ── Summary + Button ── */
+    function refresh(){
+        var btn = document.getElementById('da-save-btn');
+        var total = 0;
+
+        ['proj','dist'].forEach(function(key){
+            var listId = 'list-' + key;
+            var bodyId = 'summary-' + key + '-body';
+            var list = document.getElementById(listId);
+            var body = document.getElementById(bodyId);
+            if(!list || !body) return;
+            var names = [];
+            var cbName = key === 'proj' ? 'project_ids' : 'district_ids';
+            list.querySelectorAll('input[name="'+cbName+'"]:checked').forEach(function(cb){
+                var item = cb.closest('.da-cb-item');
+                if(item) {
+                    var sp = item.querySelector('span');
+                    if(sp) names.push(sp.textContent.trim());
+                    item.classList.add('checked');
+                }
+            });
+            list.querySelectorAll('input[name="'+cbName+'"]:not(:checked)').forEach(function(cb){
+                var item = cb.closest('.da-cb-item');
+                if(item) item.classList.remove('checked');
+            });
+            total += names.length;
+            if(names.length){
+                body.innerHTML = names.map(function(n){ return '<span class="da-badge">'+n+'</span>'; }).join('');
+            } else {
+                body.innerHTML = '<span class="da-summary-empty">None selected</span>';
+            }
+        });
+
+        if(btn){
+            btn.disabled = total < 1;
+            if(total > 0){
+                btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Remove Assignments <span class="da-count-badge">'+total+'</span>';
+            } else {
+                btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Remove Selected Assignments';
+            }
+        }
+    }
+
+    document.querySelectorAll('.da-cb-list input[type=checkbox]').forEach(function(cb){
+        cb.addEventListener('change', refresh);
+    });
+    refresh();
+})();
 </script>
 {% endblock %}
