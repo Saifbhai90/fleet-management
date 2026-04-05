@@ -3832,7 +3832,8 @@ def employee_lifecycle_rejoin():
 @app.route('/employee/lifecycle/history')
 def employee_lifecycle_history():
     from auth_utils import get_user_context
-    ctx = get_user_context()
+    user_id = session.get('user_id')
+    ctx = get_user_context(user_id) if user_id else {}
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 25, type=int)
     search = request.args.get('search', '').strip()
@@ -4003,7 +4004,8 @@ def employee_profile_report(id):
 def _employee_lifecycle_list(action_types, title, add_url, add_label, template_name):
     """Generic list for employee lifecycle filtered by action type(s)."""
     from auth_utils import get_user_context
-    ctx = get_user_context()
+    user_id = session.get('user_id')
+    ctx = get_user_context(user_id) if user_id else {}
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 25, type=int)
     search = request.args.get('search', '').strip()
