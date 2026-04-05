@@ -534,6 +534,72 @@ class DriverRejoinForm(FlaskForm):
             raise ValidationError('Rejoin date cannot be in the future.')
 
 
+# ────────────────────────────────────────────────
+# Employee Lifecycle Forms
+# ────────────────────────────────────────────────
+class EmployeeAssignForm(FlaskForm):
+    employee_id = SelectField('Select Employee', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    assign_type = SelectField('Assign Type', choices=[
+        ('district', 'District'), ('project', 'Project'),
+    ], validators=[DataRequired()], render_kw={'class': 'form-select'})
+    district_id = SelectField('District', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
+    effective_date = DateField('Effective Date', format='%d-%m-%Y', validators=[DataRequired()], render_kw={'placeholder': 'dd-mm-yyyy', 'class': 'form-control datepicker'})
+    remarks = TextAreaField('Remarks', validators=[Optional(), Length(max=500)])
+    submit = SubmitField('Assign')
+
+    def validate_effective_date(self, field):
+        if field.data and field.data > pk_date():
+            raise ValidationError('Date cannot be in the future.')
+
+
+class EmployeeDeassignForm(FlaskForm):
+    employee_id = SelectField('Select Employee', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    deassign_type = SelectField('Remove Type', choices=[
+        ('district', 'District'), ('project', 'Project'),
+    ], validators=[DataRequired()], render_kw={'class': 'form-select'})
+    district_id = SelectField('District', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], render_kw={'class': 'form-select search-select'})
+    effective_date = DateField('Effective Date', format='%d-%m-%Y', validators=[DataRequired()], render_kw={'placeholder': 'dd-mm-yyyy', 'class': 'form-control datepicker'})
+    reason = StringField('Reason', validators=[Optional(), Length(max=150)])
+    remarks = TextAreaField('Remarks', validators=[Optional(), Length(max=500)])
+    submit = SubmitField('Remove Assignment')
+
+    def validate_effective_date(self, field):
+        if field.data and field.data > pk_date():
+            raise ValidationError('Date cannot be in the future.')
+
+
+class EmployeeLeftForm(FlaskForm):
+    employee_id = SelectField('Select Employee', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    reason = SelectField('Leave Reason', choices=[
+        ('', '-- Select Reason --'), ('Resigned', 'Resigned'), ('Terminated', 'Terminated'),
+        ('Retired', 'Retired'), ('Medical Grounds', 'Medical Grounds'),
+        ('End of Contract', 'End of Contract'), ('Transfer Out', 'Transfer Out'), ('Other', 'Other'),
+    ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    other_reason = StringField('Other Reason', validators=[Optional(), Length(max=200)])
+    leave_date = DateField('Leave Date', format='%d-%m-%Y', validators=[DataRequired()], render_kw={'placeholder': 'dd-mm-yyyy', 'class': 'form-control datepicker'})
+    remarks = TextAreaField('Remarks', validators=[Optional(), Length(max=500)])
+    submit = SubmitField('Confirm Left')
+
+    def validate_leave_date(self, field):
+        if field.data and field.data > pk_date():
+            raise ValidationError('Leave date cannot be in the future.')
+
+
+class EmployeeRejoinForm(FlaskForm):
+    employee_id = SelectField('Select Employee', coerce=int, validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
+    project_ids = SelectMultipleField('Projects', coerce=int, validators=[DataRequired(message='Kam se kam 1 Project select karein.')])
+    district_ids = SelectMultipleField('Districts', coerce=int, validators=[DataRequired(message='Kam se kam 1 District select karein.')])
+    rejoin_date = DateField('Rejoin Date', format='%d-%m-%Y', validators=[DataRequired()], render_kw={'placeholder': 'dd-mm-yyyy', 'class': 'form-control datepicker'})
+    remarks = TextAreaField('Remarks', validators=[Optional(), Length(max=500)])
+    submit = SubmitField('Confirm Rejoin')
+
+    def validate_rejoin_date(self, field):
+        if field.data and field.data > pk_date():
+            raise ValidationError('Rejoin date cannot be in the future.')
+
+
 # Driver Attendance (Leave / Late / Half Day / Off form — Present & Absent removed)
 ATTENDANCE_STATUS_CHOICES = [
     ('Leave', 'Leave'),

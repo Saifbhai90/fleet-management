@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
+.page-shell { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
+.page-hdr {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 14px; padding: 14px 22px; margin-bottom: 22px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.page-hdr h5 { margin: 0; font-weight: 700; color: #fff; font-size: 1.05rem; }
+.form-card { background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 2px 12px rgba(0,0,0,.06); padding: 24px; }
+.form-label { font-size: .82rem; font-weight: 700; color: #334155; margin-bottom: 4px; }
+.form-control, .form-select { border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; font-size: .86rem !important; height: 40px !important; }
+.form-control:focus, .form-select:focus { border-color: #22c55e !important; box-shadow: 0 0 0 3px rgba(34,197,94,.12) !important; }
+textarea.form-control { height: auto !important; }
+.ts-wrapper .ts-control { min-height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; }
+.btn-assign {
+    background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+    color: #fff; border: none; border-radius: 10px;
+    padding: 11px 28px; font-weight: 700; font-size: .9rem;
+    transition: all .25s; box-shadow: 0 3px 10px rgba(34,197,94,.3);
+}
+.btn-assign:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(34,197,94,.4); color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+    <div class="page-hdr">
+        <h5><i class="bi bi-person-plus-fill me-2 text-success"></i>{{ title }}</h5>
+        <a href="{{ url_for('employee_lifecycle_history') }}" class="btn btn-sm btn-outline-light fw-bold">
+            <i class="bi bi-arrow-left-circle me-1"></i> History
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for cat, msg in messages %}
+            <div class="alert alert-{{ cat }} alert-dismissible fade show mb-3">
+                {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}{% endif %}
+    {% endwith %}
+
+    <div class="form-card">
+        <form method="POST" novalidate>
+            {{ form.hidden_tag() }}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.employee_id.label.text }}</label>
+                    {{ form.employee_id(class="form-select search-select") }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ form.assign_type.label.text }}</label>
+                    {{ form.assign_type(class="form-select", id="assign_type") }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ form.effective_date.label.text }}</label>
+                    {{ form.effective_date(class="form-control datepicker") }}
+                </div>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-md-6" id="district_wrap">
+                    <label class="form-label">District</label>
+                    {{ form.district_id(class="form-select search-select") }}
+                </div>
+                <div class="col-md-6" id="project_wrap" style="display:none">
+                    <label class="form-label">Project</label>
+                    {{ form.project_id(class="form-select search-select") }}
+                </div>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-12">
+                    <label class="form-label">Remarks</label>
+                    {{ form.remarks(class="form-control", rows="2") }}
+                </div>
+            </div>
+            <div class="mt-4 text-end">
+                <button type="submit" class="btn btn-assign"><i class="bi bi-check-circle me-1"></i> Assign</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    var sel = document.getElementById('assign_type');
+    var dw = document.getElementById('district_wrap');
+    var pw = document.getElementById('project_wrap');
+    function toggle(){ if(sel.value==='project'){dw.style.display='none';pw.style.display='';}else{dw.style.display='';pw.style.display='none';} }
+    sel.addEventListener('change', toggle);
+    toggle();
+});
+</script>
+{% endblock %}

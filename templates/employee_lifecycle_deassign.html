@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
+.page-shell { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
+.page-hdr {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 14px; padding: 14px 22px; margin-bottom: 22px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.page-hdr h5 { margin: 0; font-weight: 700; color: #fff; font-size: 1.05rem; }
+.form-card { background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 2px 12px rgba(0,0,0,.06); padding: 24px; }
+.form-label { font-size: .82rem; font-weight: 700; color: #334155; margin-bottom: 4px; }
+.form-control, .form-select { border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; font-size: .86rem !important; height: 40px !important; }
+.form-control:focus, .form-select:focus { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239,68,68,.12) !important; }
+textarea.form-control { height: auto !important; }
+.ts-wrapper .ts-control { min-height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; }
+.btn-deassign {
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+    color: #fff; border: none; border-radius: 10px;
+    padding: 11px 28px; font-weight: 700; font-size: .9rem;
+    transition: all .25s; box-shadow: 0 3px 10px rgba(220,38,38,.3);
+}
+.btn-deassign:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(220,38,38,.4); color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+    <div class="page-hdr">
+        <h5><i class="bi bi-person-dash-fill me-2 text-danger"></i>{{ title }}</h5>
+        <a href="{{ url_for('employee_lifecycle_history') }}" class="btn btn-sm btn-outline-light fw-bold">
+            <i class="bi bi-arrow-left-circle me-1"></i> History
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for cat, msg in messages %}
+            <div class="alert alert-{{ cat }} alert-dismissible fade show mb-3">
+                {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}{% endif %}
+    {% endwith %}
+
+    <div class="form-card">
+        <form method="POST" novalidate>
+            {{ form.hidden_tag() }}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">{{ form.employee_id.label.text }}</label>
+                    {{ form.employee_id(class="form-select search-select") }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ form.deassign_type.label.text }}</label>
+                    {{ form.deassign_type(class="form-select", id="deassign_type") }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ form.effective_date.label.text }}</label>
+                    {{ form.effective_date(class="form-control datepicker") }}
+                </div>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-md-6" id="district_wrap">
+                    <label class="form-label">District</label>
+                    {{ form.district_id(class="form-select search-select") }}
+                </div>
+                <div class="col-md-6" id="project_wrap" style="display:none">
+                    <label class="form-label">Project</label>
+                    {{ form.project_id(class="form-select search-select") }}
+                </div>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <label class="form-label">Reason</label>
+                    {{ form.reason(class="form-control") }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Remarks</label>
+                    {{ form.remarks(class="form-control", rows="1") }}
+                </div>
+            </div>
+            <div class="mt-4 text-end">
+                <button type="submit" class="btn btn-deassign"><i class="bi bi-x-circle me-1"></i> Remove Assignment</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    var sel = document.getElementById('deassign_type');
+    var dw = document.getElementById('district_wrap');
+    var pw = document.getElementById('project_wrap');
+    function toggle(){ if(sel.value==='project'){dw.style.display='none';pw.style.display='';}else{dw.style.display='';pw.style.display='none';} }
+    sel.addEventListener('change', toggle);
+    toggle();
+
+    var empSel = document.querySelector('[name=employee_id]');
+    if(empSel){
+        empSel.addEventListener('change', function(){
+            var eid = this.value;
+            if(!eid || eid==='0') return;
+            fetch('/api/employee/'+eid+'/assignments')
+            .then(r=>r.json()).then(function(d){
+                var distSel = document.querySelector('[name=district_id]');
+                var projSel = document.querySelector('[name=project_id]');
+                if(distSel){
+                    var opts = '<option value="0">-- Select --</option>';
+                    (d.districts||[]).forEach(function(x){ opts+='<option value="'+x.id+'">'+x.name+'</option>'; });
+                    distSel.innerHTML = opts;
+                    if(distSel.tomselect){ distSel.tomselect.destroy(); new TomSelect(distSel,{allowEmptyOption:true}); }
+                }
+                if(projSel){
+                    var opts2 = '<option value="0">-- Select --</option>';
+                    (d.projects||[]).forEach(function(x){ opts2+='<option value="'+x.id+'">'+x.name+'</option>'; });
+                    projSel.innerHTML = opts2;
+                    if(projSel.tomselect){ projSel.tomselect.destroy(); new TomSelect(projSel,{allowEmptyOption:true}); }
+                }
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

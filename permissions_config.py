@@ -72,6 +72,7 @@ PERMISSION_TREE = {
         ('employees_delete', 'Employees – Delete'),
         ('employees_export', 'Employees – Export'),
         ('employees_print', 'Employees – Print / Preview'),
+        ('employee_lifecycle', 'Employee Lifecycle – Assign / Deassign / Left / Rejoin'),
         ('vehicles_import', 'Vehicles – Import'),
         ('drivers_import', 'Drivers – Import'),
         ('employees_import', 'Employees – Import'),
@@ -369,6 +370,7 @@ PERMISSION_DEPENDENCIES = {
     'employees_delete': ['employees_list'],
     'employees_export': ['employees_list'],
     'employees_print': ['employees_list'],
+    'employee_lifecycle': ['employees_list'],
     # Payroll
     'payroll_config_add': ['payroll_config_list'],
     'payroll_config_edit': ['payroll_config_list'],
@@ -587,6 +589,7 @@ SECTION_PAGE_GROUPS = {
             ('employees_import', 'Import'),
             ('employees_export', 'Export'),
             ('employees_print', 'Print / Preview'),
+            ('employee_lifecycle', 'Lifecycle (Assign/Deassign/Left/Rejoin)'),
         ]),
         ('Drivers', [
             ('drivers_list', 'List / View'),
@@ -911,6 +914,7 @@ PAGE_VISIBLE = {
     'drivers_print': ['drivers_print', 'master'],
     'employees_export': ['employees_export', 'master'],
     'employees_print': ['employees_print', 'master'],
+    'employee_lifecycle': ['employee_lifecycle', 'master', 'employees_list'],
     # Per-action visibility keys for Import buttons
     'vehicles_import': ['vehicles_import'],
     'drivers_import': ['drivers_import'],

@@ -1914,3 +1914,56 @@ class BankAccountDirectory(db.Model):
             'account_no': self.account_no or '',
             'account_title': self.account_title or '',
         }
+
+
+# ────────────────────────────────────────────────
+# Employee Assignment History
+# ────────────────────────────────────────────────
+class EmployeeAssignment(db.Model):
+    __tablename__ = 'employee_assignment'
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    action = db.Column(db.String(30), nullable=False, index=True)
+
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+
+    effective_date = db.Column(db.Date, nullable=False, default=date.today, index=True)
+    reason = db.Column(db.String(150), nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('emp_assignments', lazy='dynamic',
+                               order_by='EmployeeAssignment.effective_date.desc()'))
+    district = db.relationship('District', foreign_keys=[district_id])
+    project = db.relationship('Project', foreign_keys=[project_id])
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id])
+
+    ACTION_LABELS = {
+        'assign_district': 'District Assigned',
+        'deassign_district': 'District Removed',
+        'assign_project': 'Project Assigned',
+        'deassign_project': 'Project Removed',
+        'left': 'Employee Left',
+        'rejoin': 'Employee Rejoined',
+        'initial': 'Initial Assignment',
+    }
+    ACTION_COLORS = {
+        'assign_district': 'success', 'assign_project': 'success',
+        'deassign_district': 'danger', 'deassign_project': 'danger',
+        'left': 'warning', 'rejoin': 'info', 'initial': 'primary',
+    }
+
+    @property
+    def action_label(self):
+        return self.ACTION_LABELS.get(self.action, self.action)
+
+    @property
+    def action_color(self):
+        return self.ACTION_COLORS.get(self.action, 'secondary')
+
+    def __repr__(self):
+        return f'<EmployeeAssignment {self.employee_id} {self.action}>'

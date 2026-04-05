@@ -389,6 +389,33 @@
 
     descBox.addEventListener('blur', function(){ setTimeout(function(){ sugBox.style.display='none'; }, 150); });
     descBox.addEventListener('focus', function(){ if(this.value.trim()) this.dispatchEvent(new Event('input')); });
+
+    /* ── Auto-fill District/Project when Employee selected ── */
+    function autoFillFromPerson(val){
+        if(!val) return;
+        var m = val.match(/^emp-(\d+)$/);
+        if(!m) return;
+        fetch('/api/employee/' + m[1] + '/assignments')
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+                var distSel = document.getElementById('district_id');
+                var projSel = document.getElementById('project_id');
+                if(distSel && data.districts && data.districts.length === 1){
+                    var dv = String(data.districts[0].id);
+                    if(distSel.tomselect){ distSel.tomselect.setValue(dv); }
+                    else { distSel.value = dv; }
+                }
+                if(projSel && data.projects && data.projects.length === 1){
+                    var pv = String(data.projects[0].id);
+                    if(projSel.tomselect){ projSel.tomselect.setValue(pv); }
+                    else { projSel.value = pv; }
+                }
+            }).catch(function(){});
+    }
+    var fromSel = document.getElementById('from_person');
+    var toSel = document.getElementById('to_person');
+    if(fromSel){ fromSel.addEventListener('change', function(){ autoFillFromPerson(this.value); }); }
+    if(toSel){ toSel.addEventListener('change', function(){ autoFillFromPerson(this.value); }); }
 })();
 </script>
 {% endblock %}

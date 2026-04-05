@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand: #0f766e; --brand-dark: #134e4a; --brand-mid: #14b8a6; --accent: #0d9488;
+    --text-dark: #111827; --text-mid: #374151; --text-light: #6b7280;
+    --border: #e5e7eb; --bg-page: #f8fafb; --bg-card: #ffffff; --bg-subtle: #f1f5f4;
+  }
+  .profile-page { background: var(--bg-page); min-height: 100vh; padding: 1.5rem; font-family: 'Inter', system-ui, sans-serif; color: var(--text-dark); }
+  .action-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: .5rem; }
+  .action-bar h4 { margin: 0; font-weight: 700; font-size: 1.05rem; }
+  .btn-action { padding: .42rem 1.1rem; font-size: .82rem; border-radius: 8px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; border: none; cursor: pointer; transition: all .15s; }
+  .btn-back { background: #f1f5f9; color: #475569; }
+  .btn-back:hover { background: #e2e8f0; color: #1e293b; }
+  .btn-print { background: linear-gradient(135deg, var(--brand-dark), var(--accent)); color: #fff; }
+  .profile-header { background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand-mid) 100%); border-radius: 14px; padding: 1.5rem 1.75rem; color: #fff; margin-bottom: .85rem; position: relative; box-shadow: 0 6px 22px rgba(19,78,74,.25); display: flex; align-items: center; }
+  .profile-header .header-icon { width: 72px; height: 72px; border-radius: 50%; background: rgba(255,255,255,.12); border: 2.5px solid rgba(255,255,255,.5); display: flex; align-items: center; justify-content: center; font-size: 1.75rem; color: rgba(255,255,255,.9); margin-right: 1.25rem; flex-shrink: 0; }
+  .profile-header h2 { font-size: 1.55rem; font-weight: 700; margin: 0 0 .15rem; }
+  .profile-header .sub { font-size: .85rem; opacity: .85; margin: 0; }
+  .status-badge { position: absolute; top: 1.25rem; right: 1.5rem; padding: .3rem 1rem; border-radius: 20px; font-size: .73rem; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
+  .status-active { background: rgba(16,185,129,.2); border: 1.5px solid rgba(16,185,129,.5); color: #d1fae5; }
+  .status-left { background: rgba(245,158,11,.2); border: 1.5px solid rgba(245,158,11,.5); color: #fef3c7; }
+  .status-inactive { background: rgba(239,68,68,.2); border: 1.5px solid rgba(239,68,68,.5); color: #fecaca; }
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .6rem; margin-bottom: .85rem; }
+  .stat-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: .85rem 1rem; text-align: center; }
+  .stat-value { font-size: 1rem; font-weight: 700; margin-bottom: .1rem; }
+  .stat-label { font-size: .68rem; color: var(--text-light); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  .stat-icon { font-size: 1.15rem; margin-bottom: .2rem; display: block; }
+  .section-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: .85rem; overflow: hidden; }
+  .section-title { display: flex; align-items: center; gap: .5rem; padding: .75rem 1.25rem; font-size: .82rem; font-weight: 700; color: var(--brand-dark); background: var(--bg-subtle); border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: .06em; }
+  .section-body { padding: 1rem 1.25rem; }
+  .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .15rem 1.5rem; }
+  .info-item { padding: .5rem 0; border-bottom: 1px solid #f3f4f6; }
+  .info-label { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-light); margin-bottom: .1rem; }
+  .info-value { font-size: .88rem; font-weight: 600; word-break: break-word; }
+  .info-value.muted { color: var(--text-light); font-weight: 400; font-style: italic; }
+  .tag-list { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
+  .tag-item { display: inline-flex; align-items: center; gap: 4px; padding: .28rem .75rem; border-radius: 20px; font-size: .75rem; font-weight: 600; }
+  .tag-project { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+  .tag-district { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+
+  /* Timeline */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, var(--brand-mid), var(--border)); }
+  .tl-item { position: relative; margin-bottom: 14px; padding-bottom: 6px; }
+  .tl-dot { position: absolute; left: -23px; top: 4px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 2px var(--border); }
+  .tl-dot-success { background: #22c55e; box-shadow: 0 0 0 2px #bbf7d0; }
+  .tl-dot-danger { background: #ef4444; box-shadow: 0 0 0 2px #fecaca; }
+  .tl-dot-warning { background: #f59e0b; box-shadow: 0 0 0 2px #fef3c7; }
+  .tl-dot-info { background: #06b6d4; box-shadow: 0 0 0 2px #cffafe; }
+  .tl-dot-primary { background: #3b82f6; box-shadow: 0 0 0 2px #bfdbfe; }
+  .tl-dot-secondary { background: #6b7280; box-shadow: 0 0 0 2px #e5e7eb; }
+  .tl-date { font-size: .7rem; font-weight: 700; color: var(--text-light); margin-bottom: 2px; }
+  .tl-action { font-size: .82rem; font-weight: 600; }
+  .tl-detail { font-size: .75rem; color: var(--text-mid); margin-top: 2px; }
+  .tl-badge { display: inline-block; font-size: .65rem; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #fff; }
+
+  @media print {
+    .action-bar, .no-print { display: none !important; }
+    .profile-page { padding: 0; background: #fff; }
+    .section-card { box-shadow: none; break-inside: avoid; }
+  }
+  @media (max-width: 576px) {
+    .profile-header { flex-direction: column; text-align: center; }
+    .profile-header .header-icon { margin: 0 auto .75rem; }
+    .status-badge { position: static; margin-top: .5rem; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+
+<div class="profile-page" id="profile-content">
+  <div class="action-bar no-print">
+    <h4><i class="bi bi-person-badge me-2"></i>Employee Profile</h4>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('employees_list') }}" class="btn-action btn-back"><i class="bi bi-arrow-left"></i>Back</a>
+      <a href="{{ url_for('employee_lifecycle_history') }}" class="btn-action btn-back"><i class="bi bi-clock-history"></i>History</a>
+      <button class="btn-action btn-print" onclick="window.print()"><i class="bi bi-printer"></i>Print</button>
+    </div>
+  </div>
+
+  <div class="profile-header">
+    <div class="header-icon"><i class="bi bi-person-fill"></i></div>
+    <div>
+      <h2>{{ employee.name }}</h2>
+      <p class="sub">
+        <i class="bi bi-hash me-1"></i>{{ employee.code }}
+        {% if employee.post %} · <i class="bi bi-briefcase me-1"></i>{{ employee.post.full_name }}{% endif %}
+        {% if employee.department %} · {{ employee.department }}{% endif %}
+      </p>
+      {% if employee.cnic_no %}
+      <p class="sub" style="opacity:.7;font-size:.78rem;margin-top:.15rem;">
+        <i class="bi bi-credit-card me-1"></i>CNIC: {{ employee.cnic_no }}
+      </p>
+      {% endif %}
+    </div>
+    {% set s = (employee.status or 'Active')|lower %}
+    <span class="status-badge {% if s == 'active' %}status-active{% elif s == 'left' %}status-left{% else %}status-inactive{% endif %}">
+      {{ employee.status or 'Active' }}
+    </span>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#0d9488;"><i class="bi bi-calendar-check"></i></span>
+      <div class="stat-value">{{ employee.joining_date.strftime('%d %b %Y') if employee.joining_date else '—' }}</div>
+      <div class="stat-label">Joining Date</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#6366f1;"><i class="bi bi-diagram-3"></i></span>
+      <div class="stat-value">{{ projects|length }}</div>
+      <div class="stat-label">Projects</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#d97706;"><i class="bi bi-geo-alt"></i></span>
+      <div class="stat-value">{{ districts|length }}</div>
+      <div class="stat-label">Districts</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#dc2626;"><i class="bi bi-file-earmark-text"></i></span>
+      <div class="stat-value">{{ documents|length }}</div>
+      <div class="stat-label">Documents</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon" style="color:#8b5cf6;"><i class="bi bi-clock-history"></i></span>
+      <div class="stat-value">{{ history|length }}</div>
+      <div class="stat-label">Lifecycle Events</div>
+    </div>
+  </div>
+
+  <!-- Personal Info -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-person"></i>Personal Information</div>
+    <div class="section-body">
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Full Name</div><div class="info-value">{{ employee.name or '—' }}</div></div>
+        <div class="info-item"><div class="info-label">Father's Name</div><div class="info-value {% if not employee.father_name %}muted{% endif %}">{{ employee.father_name or 'Not provided' }}</div></div>
+        <div class="info-item"><div class="info-label">Date of Birth</div><div class="info-value {% if not employee.dob %}muted{% endif %}">{{ employee.dob.strftime('%d %b %Y') if employee.dob else 'Not provided' }}</div></div>
+        <div class="info-item"><div class="info-label">Education</div><div class="info-value {% if not employee.education %}muted{% endif %}">{{ employee.education or 'Not provided' }}</div></div>
+        <div class="info-item"><div class="info-label">CNIC Number</div><div class="info-value {% if not employee.cnic_no %}muted{% endif %}">{{ employee.cnic_no or 'Not provided' }}</div></div>
+        <div class="info-item"><div class="info-label">District</div><div class="info-value {% if not employee.district %}muted{% endif %}">{{ employee.district or 'Not provided' }}</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contact & Job -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-briefcase"></i>Contact & Job Details</div>
+    <div class="section-body">
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Post</div><div class="info-value {% if not employee.post %}muted{% endif %}">{{ employee.post.full_name if employee.post else 'Not assigned' }}</div></div>
+        <div class="info-item"><div class="info-label">Department</div><div class="info-value {% if not employee.department %}muted{% endif %}">{{ employee.department or 'Not specified' }}</div></div>
+        <div class="info-item"><div class="info-label">Phone 1</div><div class="info-value {% if not employee.phone1 %}muted{% endif %}">{{ employee.phone1 or 'Not provided' }}</div></div>
+        <div class="info-item"><div class="info-label">Phone 2</div><div class="info-value {% if not employee.phone2 %}muted{% endif %}">{{ employee.phone2 or 'Not provided' }}</div></div>
+        <div class="info-item"><div class="info-label">Email</div><div class="info-value {% if not employee.email %}muted{% endif %}">{{ employee.email or 'Not provided' }}</div></div>
+        <div class="info-item"><div class="info-label">Status</div>
+          <div class="info-value">
+            <span style="display:inline-flex;align-items:center;gap:5px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:{% if s == 'active' %}#10b981{% elif s == 'left' %}#f59e0b{% else %}#ef4444{% endif %};"></span>
+              {{ employee.status or 'Active' }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Banking -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-bank"></i>Banking Details</div>
+    <div class="section-body">
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Bank Name</div><div class="info-value {% if not employee.bank_name %}muted{% endif %}">{{ employee.bank_name or 'Not provided' }}</div></div>
+        <div class="info-item"><div class="info-label">Account Number</div><div class="info-value {% if not employee.account_no %}muted{% endif %}">{{ employee.account_no or 'Not provided' }}</div></div>
+        <div class="info-item"><div class="info-label">Account Title</div><div class="info-value {% if not employee.account_title %}muted{% endif %}">{{ employee.account_title or 'Not provided' }}</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Current Assignment -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-diagram-3"></i>Current Assignment</div>
+    <div class="section-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="info-label" style="margin-bottom:.4rem;">Assigned Projects</div>
+          {% if projects %}<div class="tag-list">{% for p in projects %}<span class="tag-item tag-project"><i class="bi bi-folder2-open"></i>{{ p.name }}</span>{% endfor %}</div>
+          {% else %}<div class="info-value muted">No projects assigned</div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <div class="info-label" style="margin-bottom:.4rem;">Assigned Districts</div>
+          {% if districts %}<div class="tag-list">{% for d in districts %}<span class="tag-item tag-district"><i class="bi bi-pin-map"></i>{{ d.name }}</span>{% endfor %}</div>
+          {% else %}<div class="info-value muted">No districts assigned</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assignment Timeline -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-clock-history"></i>Assignment History Timeline</div>
+    <div class="section-body">
+      {% if history %}
+      <div class="timeline">
+        {% for h in history %}
+        <div class="tl-item">
+          <div class="tl-dot tl-dot-{{ h.action_color }}"></div>
+          <div class="tl-date">{{ h.effective_date.strftime('%d %b %Y') if h.effective_date else '—' }}</div>
+          <div class="tl-action">
+            <span class="tl-badge bg-{{ h.action_color }}">{{ h.action_label }}</span>
+            {% if h.district %} — {{ h.district.name }}{% endif %}
+            {% if h.project %} — {{ h.project.name }}{% endif %}
+          </div>
+          {% if h.reason %}<div class="tl-detail"><strong>Reason:</strong> {{ h.reason }}</div>{% endif %}
+          {% if h.remarks %}<div class="tl-detail">{{ h.remarks }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:1.5rem;color:var(--text-light);font-size:.85rem;">
+        <i class="bi bi-clock" style="font-size:1.5rem;display:block;margin-bottom:.4rem;opacity:.4;"></i>
+        No assignment history recorded yet.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Documents -->
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-file-earmark-text"></i>Documents</div>
+    <div class="section-body" style="padding:0;">
+      {% if documents %}
+      <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+        <thead><tr>
+          <th style="background:var(--bg-subtle);padding:.5rem .85rem;font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-light);border-bottom:1px solid var(--border);">#</th>
+          <th style="background:var(--bg-subtle);padding:.5rem .85rem;font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-light);border-bottom:1px solid var(--border);">Title</th>
+          <th style="background:var(--bg-subtle);padding:.5rem .85rem;font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-light);border-bottom:1px solid var(--border);">Date</th>
+        </tr></thead>
+        <tbody>
+          {% for doc in documents %}
+          <tr><td style="padding:.55rem .85rem;border-bottom:1px solid #f3f4f6;">{{ loop.index }}</td>
+          <td style="padding:.55rem .85rem;border-bottom:1px solid #f3f4f6;"><i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ doc.title or doc.file_path.split('/')|last }}</td>
+          <td style="padding:.55rem .85rem;border-bottom:1px solid #f3f4f6;">{{ doc.created_at.strftime('%d %b %Y') if doc.created_at else '—' }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div style="text-align:center;padding:1.5rem;color:var(--text-light);font-size:.85rem;"><i class="bi bi-folder2-open" style="font-size:1.5rem;display:block;margin-bottom:.4rem;opacity:.4;"></i>No documents uploaded</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if employee.remarks %}
+  <div class="section-card">
+    <div class="section-title"><i class="bi bi-chat-square-text"></i>Remarks</div>
+    <div class="section-body">
+      <div style="background:#fffbeb;border-left:3px solid #f59e0b;padding:.65rem 1rem;border-radius:0 8px 8px 0;font-size:.84rem;color:#92400e;">{{ employee.remarks }}</div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

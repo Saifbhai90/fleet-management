@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
+.page-shell { max-width: 1400px; margin: 0 auto; padding: 20px 16px 40px; }
+.page-hdr {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 14px; padding: 14px 22px; margin-bottom: 18px;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+}
+.page-hdr h5 { margin: 0; font-weight: 700; color: #fff; font-size: 1.05rem; }
+.hdr-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.hdr-actions .btn { font-size: .78rem; font-weight: 600; }
+.filter-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 14px 18px; margin-bottom: 14px; }
+.tbl-card { background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+.tbl-card table { margin: 0; font-size: .79rem; }
+.tbl-card th { background: #f8fafc; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
+.tbl-card td { vertical-align: middle; white-space: nowrap; }
+.badge-action { font-size: .7rem; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
+.record-counter { font-size: .78rem; color: #64748b; padding: 8px 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+    <div class="page-hdr">
+        <h5><i class="bi bi-clock-history me-2"></i>{{ title }}</h5>
+        <div class="hdr-actions">
+            <a href="{{ url_for('employee_lifecycle_assign') }}" class="btn btn-success btn-sm"><i class="bi bi-plus-circle me-1"></i>Assign</a>
+            <a href="{{ url_for('employee_lifecycle_deassign') }}" class="btn btn-danger btn-sm"><i class="bi bi-dash-circle me-1"></i>Deassign</a>
+            <a href="{{ url_for('employee_lifecycle_left') }}" class="btn btn-warning btn-sm"><i class="bi bi-person-x me-1"></i>Left</a>
+            <a href="{{ url_for('employee_lifecycle_rejoin') }}" class="btn btn-info btn-sm"><i class="bi bi-person-check me-1"></i>Rejoin</a>
+            <a href="{{ url_for('employee_lifecycle_history_export', search=search, action=action_filter) }}" class="btn btn-outline-light btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Export</a>
+            <a href="{{ url_for('employee_lifecycle_history_print', search=search, action=action_filter) }}" target="_blank" class="btn btn-outline-light btn-sm" onclick="event.preventDefault(); var w=window.open(this.href,'_blank'); w.onload=function(){w.print();}"><i class="bi bi-printer me-1"></i>Print</a>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for cat, msg in messages %}
+            <div class="alert alert-{{ cat }} alert-dismissible fade show mb-2" style="font-size:.82rem;">
+                {{ msg }}<button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}{% endif %}
+    {% endwith %}
+
+    <div class="filter-card">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-auto">
+                <input type="text" name="search" class="form-control form-control-sm" placeholder="Search name/code..." value="{{ search }}" style="width:180px;font-size:.8rem;">
+            </div>
+            <div class="col-auto">
+                <select name="action" class="form-select form-select-sm" style="width:170px;font-size:.8rem;">
+                    <option value="">All Actions</option>
+                    {% for val, lbl in actions %}
+                    <option value="{{ val }}" {% if action_filter == val %}selected{% endif %}>{{ lbl }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="district_id" class="form-select form-select-sm" style="width:160px;font-size:.8rem;">
+                    <option value="0">All Districts</option>
+                    {% for d in districts %}
+                    <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="project_id" class="form-select form-select-sm" style="width:160px;font-size:.8rem;">
+                    <option value="0">All Projects</option>
+                    {% for p in projects %}
+                    <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="per_page" class="form-select form-select-sm" style="width:80px;font-size:.8rem;">
+                    {% for v in [10,25,50,100] %}
+                    <option value="{{ v }}" {% if per_page == v %}selected{% endif %}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-funnel me-1"></i>Filter</button>
+                <a href="{{ url_for('employee_lifecycle_history') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="tbl-card">
+        <div class="table-responsive">
+            <table class="table table-hover table-bordered mb-0 fleet-table" data-enhance="true">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Employee</th>
+                        <th>Code</th>
+                        <th>Action</th>
+                        <th>District</th>
+                        <th>Project</th>
+                        <th>Date</th>
+                        <th>Reason</th>
+                        <th>Remarks</th>
+                        <th>By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in records %}
+                    <tr>
+                        <td>{{ loop.index + (pagination.page - 1) * pagination.per_page }}</td>
+                        <td>
+                            <a href="{{ url_for('employee_profile_report', id=r.employee_id) }}" class="text-decoration-none fw-semibold">
+                                {{ r.employee.name if r.employee else '-' }}
+                            </a>
+                        </td>
+                        <td>{{ r.employee.code if r.employee else '-' }}</td>
+                        <td><span class="badge bg-{{ r.action_color }} badge-action">{{ r.action_label }}</span></td>
+                        <td>{{ r.district.name if r.district else '-' }}</td>
+                        <td>{{ r.project.name if r.project else '-' }}</td>
+                        <td>{{ r.effective_date.strftime('%d-%m-%Y') if r.effective_date else '-' }}</td>
+                        <td>{{ r.reason or '-' }}</td>
+                        <td title="{{ r.remarks or '' }}">{{ (r.remarks or '-')[:40] }}</td>
+                        <td>{{ r.created_by.username if r.created_by else '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="10" class="text-center text-muted py-4">No records found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="record-counter">
+            <span>Showing {{ ((pagination.page-1)*pagination.per_page)+1 if records else 0 }} – {{ ((pagination.page-1)*pagination.per_page) + records|length }} of {{ pagination.total }}</span>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if pagination.has_prev %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('employee_lifecycle_history', page=pagination.prev_num, search=search, action=action_filter, district_id=district_id, project_id=project_id, per_page=per_page) }}">«</a></li>
+                    {% endif %}
+                    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if p %}
+                        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('employee_lifecycle_history', page=p, search=search, action=action_filter, district_id=district_id, project_id=project_id, per_page=per_page) }}">{{ p }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">…</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if pagination.has_next %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('employee_lifecycle_history', page=pagination.next_num, search=search, action=action_filter, district_id=district_id, project_id=project_id, per_page=per_page) }}">»</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+{% endblock %}
