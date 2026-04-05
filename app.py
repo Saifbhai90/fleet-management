@@ -1,5 +1,6 @@
 from flask import Flask
 from models import db
+import models as _all_models  # force full import so db.create_all() sees every table
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 from dotenv import load_dotenv
@@ -190,6 +191,12 @@ if _run_startup_tasks:
             db.create_all()
         except Exception as _e:
             print(f"db.create_all() warning (non-fatal): {_e}")
+        # Ensure new tables exist
+        try:
+            db.create_all()
+        except Exception as _e2:
+            print(f"Second db.create_all() warning: {_e2}")
+
         # Auto-add missing columns to existing tables
         try:
             from sqlalchemy import inspect as _sa_inspect, text as _sa_text

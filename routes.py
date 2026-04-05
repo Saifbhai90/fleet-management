@@ -3840,31 +3840,47 @@ def employee_lifecycle_history():
     district_id = request.args.get('district_id', 0, type=int)
     project_id = request.args.get('project_id', 0, type=int)
 
-    query = EmployeeAssignment.query.options(
-        joinedload(EmployeeAssignment.employee),
-        joinedload(EmployeeAssignment.district),
-        joinedload(EmployeeAssignment.project),
-        joinedload(EmployeeAssignment.created_by),
-    )
-    if search:
-        query = query.join(Employee).filter(
-            or_(Employee.name.ilike(f'%{search}%'), Employee.code.ilike(f'%{search}%'))
-        )
-    if action_filter:
-        query = query.filter(EmployeeAssignment.action == action_filter)
-    if district_id:
-        query = query.filter(EmployeeAssignment.district_id == district_id)
-    if project_id:
-        query = query.filter(EmployeeAssignment.project_id == project_id)
+    try:
+        _insp = inspect(db.engine)
+        if 'employee_assignment' not in _insp.get_table_names():
+            db.create_all()
+    except Exception:
+        pass
 
-    if ctx.get('district_ids'):
-        emp_ids_sub = db.session.query(employee_district.c.employee_id).filter(
-            employee_district.c.district_id.in_(ctx['district_ids'])
+    try:
+        query = EmployeeAssignment.query.options(
+            joinedload(EmployeeAssignment.employee),
+            joinedload(EmployeeAssignment.district),
+            joinedload(EmployeeAssignment.project),
+            joinedload(EmployeeAssignment.created_by),
         )
-        query = query.filter(EmployeeAssignment.employee_id.in_(emp_ids_sub))
+        if search:
+            query = query.join(Employee).filter(
+                or_(Employee.name.ilike(f'%{search}%'), Employee.code.ilike(f'%{search}%'))
+            )
+        if action_filter:
+            query = query.filter(EmployeeAssignment.action == action_filter)
+        if district_id:
+            query = query.filter(EmployeeAssignment.district_id == district_id)
+        if project_id:
+            query = query.filter(EmployeeAssignment.project_id == project_id)
 
-    query = query.order_by(EmployeeAssignment.effective_date.desc(), EmployeeAssignment.created_at.desc())
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        if ctx.get('district_ids'):
+            emp_ids_sub = db.session.query(employee_district.c.employee_id).filter(
+                employee_district.c.district_id.in_(ctx['district_ids'])
+            )
+            query = query.filter(EmployeeAssignment.employee_id.in_(emp_ids_sub))
+
+        query = query.order_by(EmployeeAssignment.effective_date.desc(), EmployeeAssignment.created_at.desc())
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    except OperationalError:
+        db.session.rollback()
+        try:
+            db.create_all()
+            db.session.commit()
+        except Exception:
+            pass
+        pagination = EmployeeAssignment.query.paginate(page=1, per_page=per_page, error_out=False)
 
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
@@ -3883,6 +3899,13 @@ def employee_lifecycle_history():
 def employee_lifecycle_history_export():
     search = request.args.get('search', '').strip()
     action_filter = request.args.get('action', '').strip()
+
+    try:
+        _insp = inspect(db.engine)
+        if 'employee_assignment' not in _insp.get_table_names():
+            db.create_all()
+    except Exception:
+        pass
 
     query = EmployeeAssignment.query.options(
         joinedload(EmployeeAssignment.employee),
@@ -3928,6 +3951,13 @@ def employee_lifecycle_history_print():
     search = request.args.get('search', '').strip()
     action_filter = request.args.get('action', '').strip()
 
+    try:
+        _insp = inspect(db.engine)
+        if 'employee_assignment' not in _insp.get_table_names():
+            db.create_all()
+    except Exception:
+        pass
+
     query = EmployeeAssignment.query.options(
         joinedload(EmployeeAssignment.employee),
         joinedload(EmployeeAssignment.district),
@@ -3952,8 +3982,18 @@ def employee_profile_report(id):
     projects = list(emp.projects)
     districts = list(emp.districts)
     documents = list(emp.documents)
-    history = EmployeeAssignment.query.filter_by(employee_id=emp.id)\
-        .order_by(EmployeeAssignment.effective_date.desc(), EmployeeAssignment.created_at.desc()).all()
+    try:
+        _insp = inspect(db.engine)
+        if 'employee_assignment' not in _insp.get_table_names():
+            db.create_all()
+    except Exception:
+        pass
+    try:
+        history = EmployeeAssignment.query.filter_by(employee_id=emp.id)\
+            .order_by(EmployeeAssignment.effective_date.desc(), EmployeeAssignment.created_at.desc()).all()
+    except Exception:
+        db.session.rollback()
+        history = []
     return render_template('employee_profile_report.html',
                            employee=emp, projects=projects, districts=districts,
                            documents=documents, history=history,
@@ -3972,43 +4012,60 @@ def _employee_lifecycle_list(action_types, title, add_url, add_label, template_n
     from_date = request.args.get('from_date', '').strip()
     to_date = request.args.get('to_date', '').strip()
 
-    query = EmployeeAssignment.query.options(
-        joinedload(EmployeeAssignment.employee),
-        joinedload(EmployeeAssignment.district),
-        joinedload(EmployeeAssignment.project),
-        joinedload(EmployeeAssignment.created_by),
-    ).filter(EmployeeAssignment.action.in_(action_types))
+    try:
+        _insp = inspect(db.engine)
+        if 'employee_assignment' not in _insp.get_table_names():
+            db.create_all()
+    except Exception:
+        pass
 
-    if search:
-        query = query.join(Employee).filter(
-            or_(Employee.name.ilike(f'%{search}%'), Employee.code.ilike(f'%{search}%'))
-        )
-    if district_id:
-        query = query.filter(EmployeeAssignment.district_id == district_id)
-    if project_id:
-        query = query.filter(EmployeeAssignment.project_id == project_id)
-    if from_date:
+    try:
+        query = EmployeeAssignment.query.options(
+            joinedload(EmployeeAssignment.employee),
+            joinedload(EmployeeAssignment.district),
+            joinedload(EmployeeAssignment.project),
+            joinedload(EmployeeAssignment.created_by),
+        ).filter(EmployeeAssignment.action.in_(action_types))
+
+        if search:
+            query = query.join(Employee).filter(
+                or_(Employee.name.ilike(f'%{search}%'), Employee.code.ilike(f'%{search}%'))
+            )
+        if district_id:
+            query = query.filter(EmployeeAssignment.district_id == district_id)
+        if project_id:
+            query = query.filter(EmployeeAssignment.project_id == project_id)
+        if from_date:
+            try:
+                fd = parse_date(from_date)
+                if fd:
+                    query = query.filter(EmployeeAssignment.effective_date >= fd)
+            except Exception:
+                pass
+        if to_date:
+            try:
+                td = parse_date(to_date)
+                if td:
+                    query = query.filter(EmployeeAssignment.effective_date <= td)
+            except Exception:
+                pass
+        if ctx.get('district_ids'):
+            emp_ids_sub = db.session.query(employee_district.c.employee_id).filter(
+                employee_district.c.district_id.in_(ctx['district_ids'])
+            )
+            query = query.filter(EmployeeAssignment.employee_id.in_(emp_ids_sub))
+
+        query = query.order_by(EmployeeAssignment.effective_date.desc(), EmployeeAssignment.created_at.desc())
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    except OperationalError:
+        db.session.rollback()
         try:
-            fd = parse_date(from_date)
-            if fd:
-                query = query.filter(EmployeeAssignment.effective_date >= fd)
+            db.create_all()
+            db.session.commit()
         except Exception:
             pass
-    if to_date:
-        try:
-            td = parse_date(to_date)
-            if td:
-                query = query.filter(EmployeeAssignment.effective_date <= td)
-        except Exception:
-            pass
-    if ctx.get('district_ids'):
-        emp_ids_sub = db.session.query(employee_district.c.employee_id).filter(
-            employee_district.c.district_id.in_(ctx['district_ids'])
-        )
-        query = query.filter(EmployeeAssignment.employee_id.in_(emp_ids_sub))
+        pagination = EmployeeAssignment.query.paginate(page=1, per_page=per_page, error_out=False)
 
-    query = query.order_by(EmployeeAssignment.effective_date.desc(), EmployeeAssignment.created_at.desc())
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
 
