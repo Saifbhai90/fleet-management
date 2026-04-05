@@ -20,8 +20,8 @@
     </div>
 
     <!-- Filter Form -->
-    <div class="card shadow-sm border-0 mt-3 mb-3" style="overflow:visible">
-        <div class="card-body py-2" style="overflow:visible">
+    <div class="card shadow-sm border-0 mt-3 mb-3">
+        <div class="card-body py-2">
             <form method="GET" action="" class="row g-2 align-items-end">
                 <div class="col-6 col-md-2">
                     <label class="form-label form-label-sm mb-1">From Date</label>
@@ -43,15 +43,8 @@
                 <div class="col-6 col-md-2">
                     <label class="form-label form-label-sm mb-1">Category</label>
                     <input type="hidden" name="category" id="catHidden" value="{{ request.args.get('category','') }}">
-                    <div id="catMultiWrap" style="position:relative;z-index:1055">
+                    <div id="catMultiWrap">
                         <button type="button" class="form-select form-select-sm text-start" id="catMultiBtn" style="font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:24px;">-- All Categories --</button>
-                        <div id="catMultiDd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:99999;background:#fff;border:1px solid #bbb;border-radius:4px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-height:240px;overflow-y:auto;padding:4px 0;margin-top:2px;">
-                            <label style="display:flex;align-items:center;gap:5px;padding:3px 8px;cursor:pointer;font-size:.78rem;font-weight:600;border-bottom:1px solid #eee;margin:0;"><input type="checkbox" id="catSelAll" checked> (Select All)</label>
-                            {% set active_cats = request.args.get('category','').split(',') %}
-                            {% for val, lbl in [('Fuel','Fuel'),('Maintenance','Maintenance'),('Oil','Oil'),('Salary','Salary'),('Saman/Purchase','Saman / Purchase'),('Cash Advance','Cash Advance'),('Distribution','Distribution'),('General','General'),('Other','Other')] %}
-                            <label style="display:flex;align-items:center;gap:5px;padding:2px 8px;cursor:pointer;font-size:.78rem;margin:0;"><input type="checkbox" class="catCb" value="{{ val }}" {% if val in active_cats and active_cats[0] %}checked{% endif %}> {{ lbl }}</label>
-                            {% endfor %}
-                        </div>
                     </div>
                 </div>
                 <div class="col-6 col-md-2">
@@ -304,42 +297,9 @@ document.addEventListener('DOMContentLoaded', function(){
 
 /* ── Category Multi-Select ── */
 (function(){
-    var btn = document.getElementById('catMultiBtn');
-    var dd = document.getElementById('catMultiDd');
-    var hidden = document.getElementById('catHidden');
-    var selAll = document.getElementById('catSelAll');
-    var cbs = document.querySelectorAll('.catCb');
-    if(!btn || !dd) return;
-
-    function updateLabel(){
-        var checked = [];
-        cbs.forEach(function(c){ if(c.checked) checked.push(c.value); });
-        hidden.value = checked.join(',');
-        if(checked.length === 0 || checked.length === cbs.length){
-            btn.textContent = '-- All Categories --';
-            hidden.value = '';
-            selAll.checked = true;
-        } else {
-            btn.textContent = checked.join(', ');
-            selAll.checked = false;
-        }
-    }
-    btn.addEventListener('click', function(e){
-        e.stopPropagation();
-        dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
-    });
-    selAll.addEventListener('change', function(){
-        cbs.forEach(function(c){ c.checked = selAll.checked; });
-        updateLabel();
-    });
-    cbs.forEach(function(c){
-        c.addEventListener('change', function(){ updateLabel(); });
-    });
-    document.addEventListener('click', function(e){
-        if(!e.target.closest('#catMultiWrap')) dd.style.display = 'none';
-    });
-    dd.addEventListener('click', function(e){ e.stopPropagation(); });
-    updateLabel();
+    var CATS = [['Fuel','Fuel'],['Maintenance','Maintenance'],['Oil','Oil'],['Salary','Salary'],['Saman/Purchase','Saman / Purchase'],['Cash Advance','Cash Advance'],['Distribution','Distribution'],['General','General'],['Other','Other']];
+    var pre = '{{ request.args.get("category","") }}'.split(',').filter(function(v){return v;});
+    window._catMultiSelect && window._catMultiSelect('catMultiBtn','catHidden', CATS, pre);
 })();
 </script>
 {% endblock %}
