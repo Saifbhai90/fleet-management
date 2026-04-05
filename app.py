@@ -361,6 +361,47 @@ if _run_startup_tasks:
         except Exception as e:
             print(f"CoA seed skip or error: {e}")
 
+        # Backfill EmployeeAssignment for employees with existing M2M assignments but no history
+        try:
+            from models import Employee, EmployeeAssignment, employee_project, employee_district
+            from utils import pk_date as _pk_date
+            _today = _pk_date()
+            _existing_emp_ids = set(
+                r[0] for r in db.session.query(EmployeeAssignment.employee_id).distinct().all()
+            )
+            _all_emps = Employee.query.all()
+            _backfilled = 0
+            for _emp in _all_emps:
+                if _emp.id in _existing_emp_ids:
+                    continue
+                _has_any = False
+                for _proj in _emp.projects:
+                    ea = EmployeeAssignment(
+                        employee_id=_emp.id, action='initial',
+                        project_id=_proj.id, effective_date=_today,
+                        remarks='Auto-backfilled from existing assignment',
+                    )
+                    db.session.add(ea)
+                    _has_any = True
+                for _dist in _emp.districts:
+                    ea = EmployeeAssignment(
+                        employee_id=_emp.id, action='initial',
+                        district_id=_dist.id, effective_date=_today,
+                        remarks='Auto-backfilled from existing assignment',
+                    )
+                    db.session.add(ea)
+                    _has_any = True
+                if _has_any:
+                    _backfilled += 1
+            if _backfilled:
+                db.session.commit()
+                print(f"Employee Assignment backfill: {_backfilled} employee(s) populated.")
+            else:
+                print("Employee Assignment backfill: nothing to do.")
+        except Exception as _e:
+            db.session.rollback()
+            print(f"Employee Assignment backfill skip: {_e}")
+
 # Import routes after app & db are ready
 from routes import *  # noqa: E402,F401
 
