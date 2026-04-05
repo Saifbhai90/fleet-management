@@ -18,7 +18,7 @@ body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
 textarea.form-control { height: auto !important; }
 .ts-wrapper .ts-control { min-height: 40px !important; border-radius: 9px !important; border: 1.5px solid #cbd5e1 !important; }
 .assignment-search { max-width: 100%; font-size: .875rem; }
-.assignment-list { border: 1px solid #dee2e6; border-radius: 8px; background: #fff; max-height: 220px; overflow-y: auto; padding: .5rem; }
+.assignment-list { border: 1px solid #fca5a5; border-radius: 8px; background: #fff; max-height: 220px; overflow-y: auto; padding: .5rem; }
 .assignment-item { display: block; margin: 0; padding: .4rem .5rem; font-size: .875rem; cursor: pointer; border-radius: 6px; }
 .assignment-item:hover { background: #fef2f2; }
 .assignment-item input { margin-right: .5rem; vertical-align: middle; }
@@ -27,6 +27,7 @@ textarea.form-control { height: auto !important; }
 .selected-summary-title { color: #dc2626; display: block; margin-bottom: .35rem; font-weight: 600; }
 .selected-summary-list { color: #333; max-height: 80px; overflow-y: auto; }
 .empty-msg { color: #94a3b8; font-size: .82rem; text-align: center; padding: 1rem; }
+.status-badge { background: #fef2f2; border: 1px dashed #fca5a5; border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 16px; font-size: .83rem; color: #dc2626; }
 .btn-deassign {
     background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
     color: #fff; border: none; border-radius: 10px;
@@ -55,6 +56,11 @@ textarea.form-control { height: auto !important; }
         {% endfor %}{% endif %}
     {% endwith %}
 
+    <div class="status-badge">
+        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+        <span>Employee select karein, uske assigned Projects / Districts dikhenge. Sirf <strong>checked</strong> wale remove honge, baqi safe rahenge.</span>
+    </div>
+
     <div class="form-card">
         <form method="POST" novalidate>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -74,10 +80,11 @@ textarea.form-control { height: auto !important; }
             </div>
 
             <div id="assignment-area" class="mt-3" style="{% if not cur_projects and not cur_districts %}display:none{% endif %}">
-                <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>Jo Projects / Districts <strong>remove</strong> karne hain unki checkbox check karein.</p>
+                <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>Neeche employee ke <strong>currently assigned</strong> Projects aur Districts hain. Jo <strong>remove</strong> karne hain unki checkbox check karein.</p>
                 <div class="row g-3">
                     <div class="col-12 col-md-6">
-                        <label class="form-label">Current Projects</label>
+                        <label class="form-label">Assigned Projects (<span id="proj-count">{{ cur_projects|length }}</span>)</label>
+                        <input type="text" class="form-control form-control-sm assignment-search mb-2" placeholder="Search projects..." data-target="assignment-project-list" autocomplete="off">
                         <div class="assignment-list" id="assignment-project-list">
                             {% for p in cur_projects %}
                             <label class="assignment-item"><input type="checkbox" name="project_ids" value="{{ p.id }}" {% if p.id in sel_project_ids %}checked{% endif %}> <span class="assignment-item-text">{{ p.name }}</span></label>
@@ -85,12 +92,13 @@ textarea.form-control { height: auto !important; }
                             {% if not cur_projects %}<p class="empty-msg">No projects assigned.</p>{% endif %}
                         </div>
                         <div class="selected-summary-box">
-                            <span class="selected-summary-title"><i class="bi bi-x-circle me-1"></i>Removing:</span>
+                            <span class="selected-summary-title"><i class="bi bi-x-circle me-1"></i>Removing Projects:</span>
                             <div class="selected-summary-list" id="selected-projects-summary">—</div>
                         </div>
                     </div>
                     <div class="col-12 col-md-6">
-                        <label class="form-label">Current Districts</label>
+                        <label class="form-label">Assigned Districts (<span id="dist-count">{{ cur_districts|length }}</span>)</label>
+                        <input type="text" class="form-control form-control-sm assignment-search mb-2" placeholder="Search districts..." data-target="assignment-district-list" autocomplete="off">
                         <div class="assignment-list" id="assignment-district-list">
                             {% for d in cur_districts %}
                             <label class="assignment-item"><input type="checkbox" name="district_ids" value="{{ d.id }}" {% if d.id in sel_district_ids %}checked{% endif %}> <span class="assignment-item-text">{{ d.name }}</span></label>
@@ -98,14 +106,14 @@ textarea.form-control { height: auto !important; }
                             {% if not cur_districts %}<p class="empty-msg">No districts assigned.</p>{% endif %}
                         </div>
                         <div class="selected-summary-box">
-                            <span class="selected-summary-title"><i class="bi bi-x-circle me-1"></i>Removing:</span>
+                            <span class="selected-summary-title"><i class="bi bi-x-circle me-1"></i>Removing Districts:</span>
                             <div class="selected-summary-list" id="selected-districts-summary">—</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="row g-3 mt-1">
+            <div class="row g-3 mt-2">
                 <div class="col-md-6">
                     <label class="form-label">Reason</label>
                     <input type="text" name="reason" class="form-control" value="{{ sel_reason }}">
@@ -116,7 +124,7 @@ textarea.form-control { height: auto !important; }
                 </div>
             </div>
             <div class="mt-4 text-end">
-                <button type="submit" class="btn btn-deassign" id="deassign-save-btn" disabled><i class="bi bi-x-circle me-1"></i> Remove Assignment</button>
+                <button type="submit" class="btn btn-deassign" id="deassign-save-btn" disabled><i class="bi bi-x-circle me-1"></i> Remove Selected Assignments</button>
             </div>
         </form>
     </div>
@@ -128,26 +136,51 @@ textarea.form-control { height: auto !important; }
 (function(){
     var empSel = document.getElementById('emp_sel');
     var area = document.getElementById('assignment-area');
-    if(empSel){
-        empSel.addEventListener('change', function(){
-            var eid = this.value;
-            if(!eid || eid==='0'){ area.style.display='none'; return; }
-            fetch('/api/employee/'+eid+'/assignments')
-            .then(function(r){ return r.json(); })
-            .then(function(d){
-                var pl = document.getElementById('assignment-project-list');
-                var dl = document.getElementById('assignment-district-list');
-                var html = '';
-                (d.projects||[]).forEach(function(x){ html+='<label class="assignment-item"><input type="checkbox" name="project_ids" value="'+x.id+'"> <span class="assignment-item-text">'+x.name+'</span></label>'; });
-                if(pl) pl.innerHTML = html || '<p class="empty-msg">No projects assigned.</p>';
-                html = '';
-                (d.districts||[]).forEach(function(x){ html+='<label class="assignment-item"><input type="checkbox" name="district_ids" value="'+x.id+'"> <span class="assignment-item-text">'+x.name+'</span></label>'; });
-                if(dl) dl.innerHTML = html || '<p class="empty-msg">No districts assigned.</p>';
-                area.style.display='';
-                updateSummary();
-            }).catch(function(){ area.style.display='none'; });
-        });
+
+    function loadAssignments(eid){
+        if(!eid || eid==='0'){ area.style.display='none'; return; }
+        fetch('/api/employee/'+eid+'/assignments')
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            var pl = document.getElementById('assignment-project-list');
+            var dl = document.getElementById('assignment-district-list');
+            var pc = document.getElementById('proj-count');
+            var dc = document.getElementById('dist-count');
+            var html = '';
+            var projects = d.projects||[];
+            var districts = d.districts||[];
+            projects.forEach(function(x){
+                html+='<label class="assignment-item"><input type="checkbox" name="project_ids" value="'+x.id+'"> <span class="assignment-item-text">'+x.name+'</span></label>';
+            });
+            if(pl) pl.innerHTML = html || '<p class="empty-msg">No projects assigned.</p>';
+            if(pc) pc.textContent = projects.length;
+            html = '';
+            districts.forEach(function(x){
+                html+='<label class="assignment-item"><input type="checkbox" name="district_ids" value="'+x.id+'"> <span class="assignment-item-text">'+x.name+'</span></label>';
+            });
+            if(dl) dl.innerHTML = html || '<p class="empty-msg">No districts assigned.</p>';
+            if(dc) dc.textContent = districts.length;
+            area.style.display='';
+            updateSummary();
+        }).catch(function(){ area.style.display='none'; });
     }
+
+    if(empSel){
+        empSel.addEventListener('change', function(){ loadAssignments(this.value); });
+    }
+
+    document.querySelectorAll('.assignment-search').forEach(function(inp){
+        if(!inp || !inp.dataset.target) return;
+        inp.addEventListener('input', function(){
+            var q = (this.value||'').toLowerCase().trim();
+            var list = document.getElementById(inp.dataset.target);
+            if(!list) return;
+            list.querySelectorAll('.assignment-item').forEach(function(item){
+                var text = (item.querySelector('.assignment-item-text')||item).textContent.toLowerCase();
+                item.classList.toggle('hide-by-search', q && text.indexOf(q)===-1);
+            });
+        });
+    });
 
     function updateSummary(){
         var projList = document.getElementById('assignment-project-list');
