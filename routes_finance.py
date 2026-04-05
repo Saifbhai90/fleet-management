@@ -1521,7 +1521,7 @@ def wallet_dashboard():
             continue
         if filter_project and filter_project not in emp_project_ids:
             continue
-        bal = acct.current_balance or Decimal('0')
+        bal = Decimal(str(acct.current_balance or 0))
         received = Decimal(str(emp_recv.get(emp.id, 0)))
         spent = Decimal(str(wallet_spent.get(acct.id, 0)))
         wallets.append({
@@ -1540,16 +1540,23 @@ def wallet_dashboard():
         else:
             total_expenses += abs(bal)
 
+    drv_veh_map = {}
+    try:
+        from models import Vehicle
+        veh_ids = {drv.vehicle_id for drv in drivers if drv.vehicle_id}
+        if veh_ids:
+            drv_veh_map = {v.id: (v.vehicle_number or '') for v in Vehicle.query.filter(Vehicle.id.in_(veh_ids)).all()}
+    except Exception:
+        pass
+
     for drv in drivers:
         acct = acct_map.get(drv.wallet_account_id)
         if not acct:
             continue
-        bal = acct.current_balance or Decimal('0')
+        bal = Decimal(str(acct.current_balance or 0))
         received = Decimal(str(drv_recv.get(drv.id, 0)))
         spent = Decimal(str(wallet_spent.get(acct.id, 0)))
-        veh_no = ''
-        if drv.vehicle:
-            veh_no = drv.vehicle.vehicle_number or ''
+        veh_no = drv_veh_map.get(drv.vehicle_id, '')
         wallets.append({
             'person_name': f"{drv.name} ({veh_no})" if veh_no else drv.name,
             'person_type': 'Driver',
@@ -1566,49 +1573,55 @@ def wallet_dashboard():
         else:
             total_expenses += abs(bal)
 
-    party_head = Account.query.filter_by(code='7000').first()
-    if party_head:
-        party_accts = Account.query.filter_by(parent_id=party_head.id, is_active=True).all()
-        for acct in party_accts:
-            bal = acct.current_balance or Decimal('0')
-            spent = Decimal(str(wallet_spent.get(acct.id, 0)))
-            wallets.append({
-                'person_name': acct.name,
-                'person_type': 'Party',
-                'post': 'Vendor / Supplier',
-                'district_name': '—',
-                'project_name': '—',
-                'balance': bal,
-                'total_received': Decimal('0'),
-                'total_spent': spent,
-                'account_id': acct.id,
-            })
-            if bal > 0:
-                total_funds += bal
-            else:
-                total_expenses += abs(bal)
+    try:
+        party_head = Account.query.filter_by(code='7000').first()
+        if party_head:
+            party_accts = Account.query.filter_by(parent_id=party_head.id, is_active=True).all()
+            for acct in party_accts:
+                bal = Decimal(str(acct.current_balance or 0))
+                spent = Decimal(str(wallet_spent.get(acct.id, 0)))
+                wallets.append({
+                    'person_name': acct.name,
+                    'person_type': 'Party',
+                    'post': 'Vendor / Supplier',
+                    'district_name': '—',
+                    'project_name': '—',
+                    'balance': bal,
+                    'total_received': Decimal('0'),
+                    'total_spent': spent,
+                    'account_id': acct.id,
+                })
+                if bal > 0:
+                    total_funds += bal
+                else:
+                    total_expenses += abs(bal)
+    except Exception:
+        pass
 
-    company_head = Account.query.filter_by(code='8000').first()
-    if company_head:
-        company_accts = Account.query.filter_by(parent_id=company_head.id, is_active=True).all()
-        for acct in company_accts:
-            bal = acct.current_balance or Decimal('0')
-            spent = Decimal(str(wallet_spent.get(acct.id, 0)))
-            wallets.append({
-                'person_name': acct.name,
-                'person_type': 'Company',
-                'post': 'Company',
-                'district_name': '—',
-                'project_name': '—',
-                'balance': bal,
-                'total_received': Decimal('0'),
-                'total_spent': spent,
-                'account_id': acct.id,
-            })
-            if bal > 0:
-                total_funds += bal
-            else:
-                total_expenses += abs(bal)
+    try:
+        company_head = Account.query.filter_by(code='8000').first()
+        if company_head:
+            company_accts = Account.query.filter_by(parent_id=company_head.id, is_active=True).all()
+            for acct in company_accts:
+                bal = Decimal(str(acct.current_balance or 0))
+                spent = Decimal(str(wallet_spent.get(acct.id, 0)))
+                wallets.append({
+                    'person_name': acct.name,
+                    'person_type': 'Company',
+                    'post': 'Company',
+                    'district_name': '—',
+                    'project_name': '—',
+                    'balance': bal,
+                    'total_received': Decimal('0'),
+                    'total_spent': spent,
+                    'account_id': acct.id,
+                })
+                if bal > 0:
+                    total_funds += bal
+                else:
+                    total_expenses += abs(bal)
+    except Exception:
+        pass
 
     search = request.args.get('search', '').strip()
     if search:

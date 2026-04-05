@@ -45,7 +45,7 @@
                     <input type="hidden" name="category" id="catHidden" value="{{ request.args.get('category','') }}">
                     <div id="catMultiWrap" style="position:relative;z-index:1055">
                         <button type="button" class="form-select form-select-sm text-start" id="catMultiBtn" style="font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:24px;">-- All Categories --</button>
-                        <div id="catMultiDd" style="display:none;position:fixed;z-index:99999;background:#fff;border:1px solid #bbb;border-radius:4px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-height:240px;overflow-y:auto;padding:4px 0;min-width:180px;">
+                        <div id="catMultiDd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:99999;background:#fff;border:1px solid #bbb;border-radius:4px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-height:240px;overflow-y:auto;padding:4px 0;margin-top:2px;">
                             <label style="display:flex;align-items:center;gap:5px;padding:3px 8px;cursor:pointer;font-size:.78rem;font-weight:600;border-bottom:1px solid #eee;margin:0;"><input type="checkbox" id="catSelAll" checked> (Select All)</label>
                             {% set active_cats = request.args.get('category','').split(',') %}
                             {% for val, lbl in [('Fuel','Fuel'),('Maintenance','Maintenance'),('Oil','Oil'),('Salary','Salary'),('Saman/Purchase','Saman / Purchase'),('Cash Advance','Cash Advance'),('Distribution','Distribution'),('General','General'),('Other','Other')] %}
@@ -324,17 +324,9 @@ document.addEventListener('DOMContentLoaded', function(){
             selAll.checked = false;
         }
     }
-    function positionDd(){
-        var r = btn.getBoundingClientRect();
-        dd.style.left = r.left + 'px';
-        dd.style.top = (r.bottom + 2) + 'px';
-        dd.style.width = Math.max(r.width, 180) + 'px';
-    }
     btn.addEventListener('click', function(e){
         e.stopPropagation();
-        var show = dd.style.display === 'none';
-        dd.style.display = show ? 'block' : 'none';
-        if(show) positionDd();
+        dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
     });
     selAll.addEventListener('change', function(){
         cbs.forEach(function(c){ c.checked = selAll.checked; });
