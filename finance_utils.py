@@ -219,7 +219,7 @@ def get_account_ledger(account_id, from_date=None, to_date=None, category=None):
         account_id: Account ID
         from_date: Start date (optional)
         to_date: End date (optional)
-        category: Transfer category filter (optional) - e.g. 'Fuel', 'Salary'
+        category: Single string or list of category strings (optional)
     
     Returns:
         dict with account, opening_balance, transactions, closing_balance
@@ -243,7 +243,13 @@ def get_account_ledger(account_id, from_date=None, to_date=None, category=None):
     if to_date:
         query = query.filter(JournalEntry.entry_date <= to_date)
     if category:
-        query = query.filter(JournalEntry.category == category)
+        if isinstance(category, list):
+            if len(category) == 1:
+                query = query.filter(JournalEntry.category == category[0])
+            else:
+                query = query.filter(JournalEntry.category.in_(category))
+        else:
+            query = query.filter(JournalEntry.category == category)
     
     query = query.order_by(JournalEntry.entry_date, JournalEntry.id, JournalEntryLine.sort_order)
     

@@ -35,7 +35,16 @@
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label form-label-sm mb-1">Category</label>
-                    {{ form.category(class="form-select form-select-sm") }}
+                    <input type="hidden" name="category" id="catHidden" value="">
+                    <div class="position-relative" id="catMultiWrap">
+                        <div class="form-select form-select-sm" id="catMultiBtn" style="cursor:pointer;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:24px;">-- All Categories --</div>
+                        <div id="catMultiDd" style="display:none;position:absolute;z-index:9999;top:100%;left:0;right:0;background:#fff;border:1px solid #bbb;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.18);max-height:220px;overflow-y:auto;padding:4px 0;margin-top:2px;">
+                            <label style="display:flex;align-items:center;gap:5px;padding:3px 8px;cursor:pointer;font-size:.78rem;font-weight:600;border-bottom:1px solid #eee;margin:0;"><input type="checkbox" id="catSelAll" checked> (Select All)</label>
+                            {% for val, lbl in [('Fuel','Fuel'),('Maintenance','Maintenance'),('Oil','Oil'),('Salary','Salary'),('Saman/Purchase','Saman / Purchase'),('Cash Advance','Cash Advance'),('Distribution','Distribution'),('General','General'),('Other','Other')] %}
+                            <label style="display:flex;align-items:center;gap:5px;padding:2px 8px;cursor:pointer;font-size:.78rem;margin:0;"><input type="checkbox" class="catCb" value="{{ val }}"> {{ lbl }}</label>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label form-label-sm mb-1">District</label>
@@ -160,4 +169,44 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 </script>
 {% endif %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    var btn = document.getElementById('catMultiBtn');
+    var dd = document.getElementById('catMultiDd');
+    var hidden = document.getElementById('catHidden');
+    var selAll = document.getElementById('catSelAll');
+    var cbs = document.querySelectorAll('.catCb');
+    if(!btn || !dd) return;
+
+    function updateLabel(){
+        var checked = [];
+        cbs.forEach(function(c){ if(c.checked) checked.push(c.value); });
+        hidden.value = checked.join(',');
+        if(checked.length === 0 || checked.length === cbs.length){
+            btn.textContent = '-- All Categories --';
+            hidden.value = '';
+            selAll.checked = true;
+        } else {
+            btn.textContent = checked.join(', ');
+            selAll.checked = false;
+        }
+    }
+    btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+    });
+    selAll.addEventListener('change', function(){
+        cbs.forEach(function(c){ c.checked = selAll.checked; });
+        updateLabel();
+    });
+    cbs.forEach(function(c){
+        c.addEventListener('change', function(){ updateLabel(); });
+    });
+    document.addEventListener('click', function(e){
+        if(!e.target.closest('#catMultiWrap')) dd.style.display = 'none';
+    });
+    dd.addEventListener('click', function(e){ e.stopPropagation(); });
+    updateLabel();
+});
+</script>
 {% endblock %}

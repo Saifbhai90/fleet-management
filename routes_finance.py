@@ -489,7 +489,8 @@ def accounts_account_ledger():
         account_id = form.account_id.data
         from_date_val = form.from_date.data
         to_date_val = form.to_date.data
-        category_val = form.category.data if hasattr(form, 'category') and form.category.data else None
+        _raw_cat = request.form.get('category', '')
+        category_val = [c.strip() for c in _raw_cat.split(',') if c.strip()] or None
         district_id = form.district_id.data if form.district_id.data and form.district_id.data != 0 else None
         project_id = form.project_id.data if form.project_id.data and form.project_id.data != 0 else None
 
@@ -1406,7 +1407,11 @@ def fund_transfers_list():
                     FundTransfer.to_account_id == p_id))
 
     if category_val:
-        query = query.filter(FundTransfer.category == category_val)
+        cats = [c.strip() for c in category_val.split(',') if c.strip()]
+        if len(cats) == 1:
+            query = query.filter(FundTransfer.category == cats[0])
+        elif cats:
+            query = query.filter(FundTransfer.category.in_(cats))
     if district_val and district_val > 0:
         query = query.filter_by(district_id=district_val)
     if project_val and project_val > 0:
