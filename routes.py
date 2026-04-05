@@ -3732,15 +3732,18 @@ def employee_lifecycle_deassign():
                     db.session.rollback()
                     flash(f'Error: {str(e)}', 'danger')
 
+    emp_name = ''
     if sel_emp_id:
         emp = Employee.query.get(sel_emp_id)
         if emp:
             cur_projects = list(emp.projects)
             cur_districts = list(emp.districts)
+            emp_name = f"{emp.name} ({emp.code})"
 
     return render_template('employee_lifecycle_deassign.html', title='Remove Assignment',
                            emp_choices=emp_choices, cur_projects=cur_projects, cur_districts=cur_districts,
-                           sel_emp_id=sel_emp_id, sel_project_ids=sel_project_ids, sel_district_ids=sel_district_ids,
+                           sel_emp_id=sel_emp_id, emp_name=emp_name,
+                           sel_project_ids=sel_project_ids, sel_district_ids=sel_district_ids,
                            sel_date=sel_date, sel_reason=sel_reason, sel_remarks=sel_remarks)
 
 
