@@ -109,38 +109,40 @@
             {% endif %}
 
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" id="ledgerTable">
-                    <thead class="table-light" style="font-size:.82rem;">
+                <table class="table table-hover align-middle mb-0" id="ledgerTable" style="font-size:.8rem;">
+                    <thead class="table-light" style="font-size:.78rem;">
                         <tr>
-                            <th class="ps-3">#</th>
+                            <th class="ps-3" style="width:30px">#</th>
                             <th>Date</th>
                             <th>Entry No</th>
                             <th>Category</th>
+                            <th>Account</th>
                             <th>Description</th>
                             <th class="text-end">Debit</th>
                             <th class="text-end">Credit</th>
                             <th class="text-end">Balance</th>
                         </tr>
                     </thead>
-                    <tbody style="font-size:.82rem;">
+                    <tbody>
                         {% for txn in ledger_data.transactions %}
                         <tr>
                             <td class="ps-3 text-muted">{{ loop.index }}</td>
-                            <td>{{ txn.date|ddmmyyyy }}</td>
-                            <td class="fw-semibold">{{ txn.entry_number }}</td>
-                            <td>{% if txn.category %}<span class="badge bg-info text-dark" style="font-size:.72rem">{{ txn.category }}</span>{% else %}-{% endif %}</td>
+                            <td style="white-space:nowrap">{{ txn.date|ddmmyyyy }}</td>
+                            <td class="fw-semibold" style="white-space:nowrap">{{ txn.entry_number }}</td>
+                            <td>{% if txn.category %}<span class="badge bg-info text-dark" style="font-size:.7rem">{{ txn.category }}</span>{% else %}-{% endif %}</td>
+                            <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ txn.contra_account }}">{{ txn.contra_account }}</td>
                             <td>{{ txn.description }}</td>
-                            <td class="text-end {% if txn.debit > 0 %}text-success{% endif %}">{{ "{:,.2f}".format(txn.debit) if txn.debit > 0 else '-' }}</td>
-                            <td class="text-end {% if txn.credit > 0 %}text-danger{% endif %}">{{ "{:,.2f}".format(txn.credit) if txn.credit > 0 else '-' }}</td>
-                            <td class="text-end fw-bold">{{ "{:,.2f}".format(txn.balance) }}</td>
+                            <td class="text-end {% if txn.debit > 0 %}text-success{% endif %}" style="white-space:nowrap">{{ "{:,.2f}".format(txn.debit) if txn.debit > 0 else '-' }}</td>
+                            <td class="text-end {% if txn.credit > 0 %}text-danger{% endif %}" style="white-space:nowrap">{{ "{:,.2f}".format(txn.credit) if txn.credit > 0 else '-' }}</td>
+                            <td class="text-end fw-bold" style="white-space:nowrap">{{ "{:,.2f}".format(txn.balance) }}</td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="8" class="text-center py-4 text-muted">No transactions found for this period.</td></tr>
+                        <tr><td colspan="9" class="text-center py-4 text-muted">No transactions found for this period.</td></tr>
                         {% endfor %}
                     </tbody>
                     <tfoot>
                         <tr class="table-warning fw-bold">
-                            <td colspan="7" class="text-end">Closing Balance:</td>
+                            <td colspan="8" class="text-end">Closing Balance:</td>
                             <td class="text-end">{{ "{:,.2f}".format(ledger_data.closing_balance) }}</td>
                         </tr>
                     </tfoot>

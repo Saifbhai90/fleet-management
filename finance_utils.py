@@ -254,7 +254,23 @@ def get_account_ledger(account_id, from_date=None, to_date=None, category=None):
     query = query.order_by(JournalEntry.entry_date, JournalEntry.id, JournalEntryLine.sort_order)
     
     results = query.all()
-    
+
+    je_ids = list({je.id for _, je in results})
+    contra_map = {}
+    if je_ids:
+        contra_lines = db.session.query(
+            JournalEntryLine.journal_entry_id,
+            Account.code,
+            Account.name
+        ).join(Account).filter(
+            JournalEntryLine.journal_entry_id.in_(je_ids),
+            JournalEntryLine.account_id != account_id
+        ).all()
+        for jeid, code, name in contra_lines:
+            if jeid not in contra_map:
+                contra_map[jeid] = []
+            contra_map[jeid].append(f"{code} - {name}")
+
     transactions = []
     running_balance = opening_balance
     
@@ -268,6 +284,9 @@ def get_account_ledger(account_id, from_date=None, to_date=None, category=None):
             balance_change = credit - debit
         
         running_balance += balance_change
+
+        contras = contra_map.get(je.id, [])
+        contra_str = ', '.join(sorted(set(contras))) if contras else '-'
         
         transactions.append({
             'date': je.entry_date,
@@ -275,6 +294,7 @@ def get_account_ledger(account_id, from_date=None, to_date=None, category=None):
             'entry_type': je.entry_type,
             'description': line.description or je.description,
             'category': je.category or '',
+            'contra_account': contra_str,
             'debit': debit,
             'credit': credit,
             'balance': running_balance,
