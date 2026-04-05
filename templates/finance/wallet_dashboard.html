@@ -143,8 +143,14 @@
                             <td>
                                 {% if w.person_type == 'Driver' %}
                                     <span class="badge bg-info">Driver</span>
-                                {% else %}
+                                {% elif w.person_type == 'Employee' %}
                                     <span class="badge bg-primary">Employee</span>
+                                {% elif w.person_type == 'Party' %}
+                                    <span class="badge bg-warning text-dark">Party</span>
+                                {% elif w.person_type == 'Company' %}
+                                    <span class="badge bg-success">Company</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ w.person_type }}</span>
                                 {% endif %}
                             </td>
                             <td>{{ w.district_name|default('-') }}</td>

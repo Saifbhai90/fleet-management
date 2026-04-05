@@ -72,7 +72,7 @@
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            <td class="text-end fw-semibold">{{ "{:,.2f}".format(account.current_balance) }}</td>
+                            <td class="text-end fw-semibold {% if account.current_balance > 0 %}text-success{% elif account.current_balance < 0 %}text-danger{% else %}text-muted{% endif %}" title="Opening: {{ '{:,.2f}'.format(account.opening_balance or 0) }} | Current: {{ '{:,.2f}'.format(account.current_balance or 0) }}">{{ "{:,.2f}".format(account.current_balance or 0) }}</td>
                             <td class="text-center">
                                 {% if account.is_active %}
                                     <span class="badge bg-success">Active</span>

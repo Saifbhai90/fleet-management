@@ -532,14 +532,14 @@ def accounts_balance_sheet():
             as_of_date = pk_date()
     if as_of_date:
         
-        # Get all accounts grouped by type
         assets      = Account.query.filter_by(account_type='Asset',     is_active=True).order_by(Account.code).all()
         liabilities = Account.query.filter_by(account_type='Liability', is_active=True).order_by(Account.code).all()
         equity      = Account.query.filter_by(account_type='Equity',    is_active=True).order_by(Account.code).all()
+        revenue     = Account.query.filter_by(account_type='Revenue',   is_active=True).order_by(Account.code).all()
+        expenses    = Account.query.filter_by(account_type='Expense',   is_active=True).order_by(Account.code).all()
 
-        # B-09: Replace N+1 get_account_balance() calls with ONE bulk aggregate query
         from sqlalchemy import func as _func
-        all_ids = [a.id for a in assets + liabilities + equity]
+        all_ids = [a.id for a in assets + liabilities + equity + revenue + expenses]
         _bal_rows = db.session.query(
             JournalEntryLine.account_id,
             _func.sum(JournalEntryLine.debit).label('td'),
@@ -562,15 +562,23 @@ def accounts_balance_sheet():
         total_assets      = sum(_bal(a) for a in assets)
         total_liabilities = sum(_bal(a) for a in liabilities)
         total_equity      = sum(_bal(a) for a in equity)
+        total_revenue     = sum(_bal(a) for a in revenue)
+        total_expenses    = sum(_bal(a) for a in expenses)
+        net_income        = total_revenue - total_expenses
 
         balance_sheet_data = {
             'assets':      [(a, _bal(a)) for a in assets],
             'liabilities': [(a, _bal(a)) for a in liabilities],
             'equity':      [(a, _bal(a)) for a in equity],
+            'revenue':     [(a, _bal(a)) for a in revenue],
+            'expenses':    [(a, _bal(a)) for a in expenses],
             'total_assets': total_assets,
             'total_liabilities': total_liabilities,
             'total_equity': total_equity,
-            'balanced': abs(total_assets - (total_liabilities + total_equity)) < Decimal('0.01'),
+            'total_revenue': total_revenue,
+            'total_expenses': total_expenses,
+            'net_income': net_income,
+            'balanced': abs(total_assets - (total_liabilities + total_equity + net_income)) < Decimal('0.01'),
         }
     
     return render_template('finance/balance_sheet.html',
@@ -1539,8 +1547,11 @@ def wallet_dashboard():
         bal = acct.current_balance or Decimal('0')
         received = Decimal(str(drv_recv.get(drv.id, 0)))
         spent = Decimal(str(wallet_spent.get(acct.id, 0)))
+        veh_no = ''
+        if drv.vehicle:
+            veh_no = drv.vehicle.vehicle_number or ''
         wallets.append({
-            'person_name': drv.name,
+            'person_name': f"{drv.name} ({veh_no})" if veh_no else drv.name,
             'person_type': 'Driver',
             'post': 'Driver',
             'district_name': drv.district.name if drv.district else '—',
@@ -1554,6 +1565,50 @@ def wallet_dashboard():
             total_funds += bal
         else:
             total_expenses += abs(bal)
+
+    party_head = Account.query.filter_by(code='7000').first()
+    if party_head:
+        party_accts = Account.query.filter_by(parent_id=party_head.id, is_active=True).all()
+        for acct in party_accts:
+            bal = acct.current_balance or Decimal('0')
+            spent = Decimal(str(wallet_spent.get(acct.id, 0)))
+            wallets.append({
+                'person_name': acct.name,
+                'person_type': 'Party',
+                'post': 'Vendor / Supplier',
+                'district_name': '—',
+                'project_name': '—',
+                'balance': bal,
+                'total_received': Decimal('0'),
+                'total_spent': spent,
+                'account_id': acct.id,
+            })
+            if bal > 0:
+                total_funds += bal
+            else:
+                total_expenses += abs(bal)
+
+    company_head = Account.query.filter_by(code='8000').first()
+    if company_head:
+        company_accts = Account.query.filter_by(parent_id=company_head.id, is_active=True).all()
+        for acct in company_accts:
+            bal = acct.current_balance or Decimal('0')
+            spent = Decimal(str(wallet_spent.get(acct.id, 0)))
+            wallets.append({
+                'person_name': acct.name,
+                'person_type': 'Company',
+                'post': 'Company',
+                'district_name': '—',
+                'project_name': '—',
+                'balance': bal,
+                'total_received': Decimal('0'),
+                'total_spent': spent,
+                'account_id': acct.id,
+            })
+            if bal > 0:
+                total_funds += bal
+            else:
+                total_expenses += abs(bal)
 
     search = request.args.get('search', '').strip()
     if search:

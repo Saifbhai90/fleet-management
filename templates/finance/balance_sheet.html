@@ -22,7 +22,7 @@
             <form method="GET" class="row g-2 align-items-end">
                 <div class="col-6 col-md-3">
                     <label class="form-label form-label-sm mb-1 fw-bold">As of Date</label>
-                    <input type="text" name="as_of_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off" value="{{ as_of_date.strftime('%d-%m-%Y') if as_of_date else '' }}">
+                    <input type="text" name="as_of_date" id="bsDatePicker" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off" value="{{ as_of_date.strftime('%d-%m-%Y') if as_of_date else '' }}">
                 </div>
                 <div class="col-6 col-md-3 d-flex gap-1">
                     <button type="submit" class="btn btn-info btn-sm flex-fill"><i class="bi bi-funnel me-1"></i>Generate</button>
@@ -39,13 +39,18 @@
             <div>
                 <strong>Balance Check:</strong>
                 Assets: {{ "{:,.2f}".format(balance_sheet_data.total_assets) }} |
-                Liabilities + Equity: {{ "{:,.2f}".format(balance_sheet_data.total_liabilities + balance_sheet_data.total_equity) }}
+                Liabilities + Equity + Net Income: {{ "{:,.2f}".format(balance_sheet_data.total_liabilities + balance_sheet_data.total_equity + balance_sheet_data.net_income) }}
                 {% if balance_sheet_data.balanced %}
                 <span class="badge bg-success ms-2">Balanced</span>
                 {% else %}
                 <span class="badge bg-danger ms-2">Not Balanced</span>
                 {% endif %}
             </div>
+        </div>
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-lg-2"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Revenue</small><strong class="text-info">{{ "{:,.2f}".format(balance_sheet_data.total_revenue) }}</strong></div></div></div>
+            <div class="col-6 col-lg-2"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Expenses</small><strong class="text-danger">{{ "{:,.2f}".format(balance_sheet_data.total_expenses) }}</strong></div></div></div>
+            <div class="col-6 col-lg-2"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Net Income</small><strong class="{% if balance_sheet_data.net_income >= 0 %}text-success{% else %}text-danger{% endif %}">{{ "{:,.2f}".format(balance_sheet_data.net_income) }}</strong></div></div></div>
         </div>
 
         {% if as_of_date %}
@@ -98,6 +103,30 @@
                             <td class="text-end pe-3 fw-semibold">{{ "{:,.2f}".format(bal) }}</td>
                         </tr>
                         {% endfor %}
+
+                        <tr class="table-info">
+                            <td class="ps-3 fw-bold" colspan="2"><i class="bi bi-cash-stack me-1"></i>Revenue</td>
+                            <td class="text-end pe-3 fw-bold">{{ "{:,.2f}".format(balance_sheet_data.total_revenue) }}</td>
+                        </tr>
+                        {% for acc, bal in balance_sheet_data.revenue %}
+                        <tr>
+                            <td class="ps-4 text-muted">{{ acc.code }}</td>
+                            <td style="padding-left:2rem;">{{ acc.name }}</td>
+                            <td class="text-end pe-3 fw-semibold">{{ "{:,.2f}".format(bal) }}</td>
+                        </tr>
+                        {% endfor %}
+
+                        <tr style="background:#fff3cd">
+                            <td class="ps-3 fw-bold" colspan="2"><i class="bi bi-receipt-cutoff me-1"></i>Expenses</td>
+                            <td class="text-end pe-3 fw-bold">{{ "{:,.2f}".format(balance_sheet_data.total_expenses) }}</td>
+                        </tr>
+                        {% for acc, bal in balance_sheet_data.expenses %}
+                        <tr>
+                            <td class="ps-4 text-muted">{{ acc.code }}</td>
+                            <td style="padding-left:2rem;">{{ acc.name }}</td>
+                            <td class="text-end pe-3 fw-semibold">{{ "{:,.2f}".format(bal) }}</td>
+                        </tr>
+                        {% endfor %}
                     </tbody>
                     <tfoot class="table-light">
                         <tr class="fw-bold">
@@ -107,6 +136,10 @@
                         <tr class="fw-bold">
                             <td class="ps-3" colspan="2">Total Liabilities + Equity</td>
                             <td class="text-end pe-3 text-danger">{{ "{:,.2f}".format(balance_sheet_data.total_liabilities + balance_sheet_data.total_equity) }}</td>
+                        </tr>
+                        <tr class="fw-bold" style="background:#e8f5e9">
+                            <td class="ps-3" colspan="2">Net Income (Revenue - Expenses)</td>
+                            <td class="text-end pe-3 {% if balance_sheet_data.net_income >= 0 %}text-success{% else %}text-danger{% endif %}">{{ "{:,.2f}".format(balance_sheet_data.net_income) }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -122,6 +155,12 @@
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function(){
+    var dp = document.getElementById('bsDatePicker');
+    if(dp && !dp.value){
+        var d = new Date();
+        dp.value = String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear();
+        if(dp._flatpickr) dp._flatpickr.setDate(d, false);
+    }
     var printBtn = document.getElementById('btnPrintBS');
     var exportBtn = document.getElementById('btnExportBS');
     if(printBtn){
