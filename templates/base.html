@@ -1557,7 +1557,7 @@
         {% set transfer_endpoints = ['project_transfers', 'project_transfer_new', 'project_transfer_edit', 'vehicle_transfers', 'vehicle_transfer_new', 'vehicle_transfer_edit', 'driver_transfers', 'driver_transfer_new', 'driver_transfer_edit'] %}
         {% set driver_status_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'driver_attendance_list', 'driver_attendance_mark', 'driver_attendance_bulk_off', 'driver_attendance_pending', 'driver_attendance_missing_checkout', 'driver_attendance_manual_checkin', 'driver_attendance_manual_checkout', 'driver_attendance_checkin', 'driver_attendance_checkout', 'driver_attendance_tra_report', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
         {% set attendance_endpoints = ['driver_attendance_list', 'driver_attendance_mark', 'driver_attendance_bulk_off', 'driver_attendance_pending', 'driver_attendance_missing_checkout', 'driver_attendance_manual_checkin', 'driver_attendance_manual_checkout', 'driver_attendance_checkin', 'driver_attendance_checkout', 'driver_attendance_tra_report', 'leave_request_list', 'leave_request_new', 'leave_request_review'] %}
-        {% set workforce_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit', 'employee_lifecycle_assign', 'employee_lifecycle_deassign', 'employee_lifecycle_left', 'employee_lifecycle_rejoin', 'employee_lifecycle_history', 'employee_profile_report'] %}
+        {% set workforce_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit', 'employee_lifecycle_assign', 'employee_lifecycle_deassign', 'employee_lifecycle_left', 'employee_lifecycle_rejoin', 'employee_lifecycle_history', 'employee_profile_report', 'employee_lifecycle_assign_list', 'employee_lifecycle_deassign_list', 'employee_lifecycle_left_list', 'employee_lifecycle_rejoin_list'] %}
         {% set task_report_endpoints = ['task_report_upload', 'task_report_list', 'task_report_new', 'task_report_upload_emergency', 'task_report_upload_mileage', 'task_report_upload_both', 'red_task_list', 'red_task_new', 'red_task_edit', 'without_task_list', 'without_task_new', 'without_task_edit', 'task_report_logbook_cover', 'task_report_logbook_view', 'task_report_logbook_view_all'] %}
         {% set expenses_endpoints = ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form', 'employee_expense_list', 'employee_expense_form'] %}
         {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai', 'active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print', 'driver_seat_available_report', 'driver_seat_available_export', 'driver_seat_available_print', 'missing_documents_report', 'missing_documents_report_print'] %}
@@ -1734,7 +1734,7 @@
         <!-- Workforce (Resignation, Rejoin, Penalties, Employee Lifecycle) -->
         {% if can_see_section('driver_status') %}
         {% set _wf_drv = request.endpoint in ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
-        {% set _wf_emp = request.endpoint in ['employee_lifecycle_assign', 'employee_lifecycle_deassign', 'employee_lifecycle_left', 'employee_lifecycle_rejoin', 'employee_lifecycle_history', 'employee_profile_report'] %}
+        {% set _wf_emp = request.endpoint in ['employee_lifecycle_assign', 'employee_lifecycle_deassign', 'employee_lifecycle_left', 'employee_lifecycle_rejoin', 'employee_lifecycle_history', 'employee_profile_report', 'employee_lifecycle_assign_list', 'employee_lifecycle_deassign_list', 'employee_lifecycle_left_list', 'employee_lifecycle_rejoin_list'] %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#workforceMenu" role="button" aria-expanded="{{ 'true' if workforce_open else 'false' }}">
                 <i class="bi bi-person-gear"></i><span>Workforce</span>
@@ -1765,16 +1765,16 @@
                 <a href="{{ url_for('employee_lifecycle_history') }}" class="collapse-item {% if request.endpoint == 'employee_lifecycle_history' %}active-link{% endif %}">
                     <i class="bi bi-clock-history text-primary"></i><span>Assignment History</span>
                 </a>
-                <a href="{{ url_for('employee_lifecycle_assign') }}" class="collapse-item {% if request.endpoint == 'employee_lifecycle_assign' %}active-link{% endif %}">
+                <a href="{{ url_for('employee_lifecycle_assign_list') }}" class="collapse-item {% if request.endpoint in ['employee_lifecycle_assign_list', 'employee_lifecycle_assign'] %}active-link{% endif %}">
                     <i class="bi bi-person-plus text-success"></i><span>Assign</span>
                 </a>
-                <a href="{{ url_for('employee_lifecycle_deassign') }}" class="collapse-item {% if request.endpoint == 'employee_lifecycle_deassign' %}active-link{% endif %}">
+                <a href="{{ url_for('employee_lifecycle_deassign_list') }}" class="collapse-item {% if request.endpoint in ['employee_lifecycle_deassign_list', 'employee_lifecycle_deassign'] %}active-link{% endif %}">
                     <i class="bi bi-person-dash text-danger"></i><span>Deassign</span>
                 </a>
-                <a href="{{ url_for('employee_lifecycle_left') }}" class="collapse-item {% if request.endpoint == 'employee_lifecycle_left' %}active-link{% endif %}">
+                <a href="{{ url_for('employee_lifecycle_left_list') }}" class="collapse-item {% if request.endpoint in ['employee_lifecycle_left_list', 'employee_lifecycle_left'] %}active-link{% endif %}">
                     <i class="bi bi-person-x text-warning"></i><span>Employee Left</span>
                 </a>
-                <a href="{{ url_for('employee_lifecycle_rejoin') }}" class="collapse-item {% if request.endpoint == 'employee_lifecycle_rejoin' %}active-link{% endif %}">
+                <a href="{{ url_for('employee_lifecycle_rejoin_list') }}" class="collapse-item {% if request.endpoint in ['employee_lifecycle_rejoin_list', 'employee_lifecycle_rejoin'] %}active-link{% endif %}">
                     <i class="bi bi-person-check text-info"></i><span>Employee Rejoin</span>
                 </a>
                 {% endif %}

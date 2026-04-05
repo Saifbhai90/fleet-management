@@ -3707,7 +3707,7 @@ def employee_lifecycle_assign():
                                          effective_date=form.effective_date.data, remarks=form.remarks.data)
             db.session.commit()
             flash(f'{atype.title()} assigned successfully to {emp.name}.', 'success')
-            return redirect(url_for('employee_lifecycle_history'))
+            return redirect(url_for('employee_lifecycle_assign_list'))
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
@@ -3754,7 +3754,7 @@ def employee_lifecycle_deassign():
                                          reason=form.reason.data, remarks=form.remarks.data)
             db.session.commit()
             flash(f'{dtype.title()} removed from {emp.name}.', 'success')
-            return redirect(url_for('employee_lifecycle_history'))
+            return redirect(url_for('employee_lifecycle_deassign_list'))
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
@@ -3783,7 +3783,7 @@ def employee_lifecycle_left():
                                      reason=reason_val, remarks=form.remarks.data)
             db.session.commit()
             flash(f'{emp.name} marked as Left.', 'success')
-            return redirect(url_for('employee_lifecycle_history'))
+            return redirect(url_for('employee_lifecycle_left_list'))
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
@@ -3821,7 +3821,7 @@ def employee_lifecycle_rejoin():
                                          effective_date=form.rejoin_date.data)
             db.session.commit()
             flash(f'{emp.name} rejoined successfully.', 'success')
-            return redirect(url_for('employee_lifecycle_history'))
+            return redirect(url_for('employee_lifecycle_rejoin_list'))
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
@@ -3858,10 +3858,10 @@ def employee_lifecycle_history():
         query = query.filter(EmployeeAssignment.project_id == project_id)
 
     if ctx.get('district_ids'):
-        emp_ids_in_dist = db.session.query(employee_district.c.employee_id).filter(
+        emp_ids_sub = db.session.query(employee_district.c.employee_id).filter(
             employee_district.c.district_id.in_(ctx['district_ids'])
-        ).subquery()
-        query = query.filter(EmployeeAssignment.employee_id.in_(db.session.query(emp_ids_in_dist)))
+        )
+        query = query.filter(EmployeeAssignment.employee_id.in_(emp_ids_sub))
 
     query = query.order_by(EmployeeAssignment.effective_date.desc(), EmployeeAssignment.created_at.desc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -3958,6 +3958,96 @@ def employee_profile_report(id):
                            employee=emp, projects=projects, districts=districts,
                            documents=documents, history=history,
                            title=f'Employee Profile – {emp.name}')
+
+
+def _employee_lifecycle_list(action_types, title, add_url, add_label, template_name):
+    """Generic list for employee lifecycle filtered by action type(s)."""
+    from auth_utils import get_user_context
+    ctx = get_user_context()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 25, type=int)
+    search = request.args.get('search', '').strip()
+    district_id = request.args.get('district_id', 0, type=int)
+    project_id = request.args.get('project_id', 0, type=int)
+    from_date = request.args.get('from_date', '').strip()
+    to_date = request.args.get('to_date', '').strip()
+
+    query = EmployeeAssignment.query.options(
+        joinedload(EmployeeAssignment.employee),
+        joinedload(EmployeeAssignment.district),
+        joinedload(EmployeeAssignment.project),
+        joinedload(EmployeeAssignment.created_by),
+    ).filter(EmployeeAssignment.action.in_(action_types))
+
+    if search:
+        query = query.join(Employee).filter(
+            or_(Employee.name.ilike(f'%{search}%'), Employee.code.ilike(f'%{search}%'))
+        )
+    if district_id:
+        query = query.filter(EmployeeAssignment.district_id == district_id)
+    if project_id:
+        query = query.filter(EmployeeAssignment.project_id == project_id)
+    if from_date:
+        try:
+            fd = parse_date(from_date)
+            if fd:
+                query = query.filter(EmployeeAssignment.effective_date >= fd)
+        except Exception:
+            pass
+    if to_date:
+        try:
+            td = parse_date(to_date)
+            if td:
+                query = query.filter(EmployeeAssignment.effective_date <= td)
+        except Exception:
+            pass
+    if ctx.get('district_ids'):
+        emp_ids_sub = db.session.query(employee_district.c.employee_id).filter(
+            employee_district.c.district_id.in_(ctx['district_ids'])
+        )
+        query = query.filter(EmployeeAssignment.employee_id.in_(emp_ids_sub))
+
+    query = query.order_by(EmployeeAssignment.effective_date.desc(), EmployeeAssignment.created_at.desc())
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+
+    return render_template(template_name,
+                           records=pagination.items, pagination=pagination,
+                           search=search, district_id=district_id, project_id=project_id,
+                           from_date=from_date, to_date=to_date,
+                           districts=districts, projects=projects,
+                           per_page=per_page, title=title,
+                           add_url=add_url, add_label=add_label)
+
+
+@app.route('/employee/lifecycle/assign/list')
+def employee_lifecycle_assign_list():
+    return _employee_lifecycle_list(
+        ['assign_district', 'assign_project', 'initial'],
+        'Employee Assignments', 'employee_lifecycle_assign', 'New Assignment',
+        'employee_lifecycle_list.html')
+
+@app.route('/employee/lifecycle/deassign/list')
+def employee_lifecycle_deassign_list():
+    return _employee_lifecycle_list(
+        ['deassign_district', 'deassign_project'],
+        'Employee Deassignments', 'employee_lifecycle_deassign', 'Remove Assignment',
+        'employee_lifecycle_list.html')
+
+@app.route('/employee/lifecycle/left/list')
+def employee_lifecycle_left_list():
+    return _employee_lifecycle_list(
+        ['left'],
+        'Employees Left', 'employee_lifecycle_left', 'Mark Left',
+        'employee_lifecycle_list.html')
+
+@app.route('/employee/lifecycle/rejoin/list')
+def employee_lifecycle_rejoin_list():
+    return _employee_lifecycle_list(
+        ['rejoin'],
+        'Employee Rejoins', 'employee_lifecycle_rejoin', 'Rejoin',
+        'employee_lifecycle_list.html')
 
 
 @app.route('/api/employee/<int:emp_id>/assignments')
