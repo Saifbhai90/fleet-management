@@ -133,7 +133,7 @@ textarea.form-control { height: auto !important; }
 
 {% block extra_js %}
 <script>
-(function(){
+document.addEventListener('DOMContentLoaded', function(){
     var empSel = document.getElementById('emp_sel');
     var area = document.getElementById('assignment-area');
 
@@ -162,11 +162,23 @@ textarea.form-control { height: auto !important; }
             if(dc) dc.textContent = districts.length;
             area.style.display='';
             updateSummary();
-        }).catch(function(){ area.style.display='none'; });
+        }).catch(function(e){ console.error('Load assignments failed:', e); area.style.display='none'; });
     }
 
     if(empSel){
         empSel.addEventListener('change', function(){ loadAssignments(this.value); });
+        if(empSel.tomselect){
+            empSel.tomselect.on('change', function(val){ loadAssignments(val); });
+        } else {
+            setTimeout(function(){
+                if(empSel.tomselect){
+                    empSel.tomselect.on('change', function(val){ loadAssignments(val); });
+                }
+            }, 500);
+        }
+        if(empSel.value && empSel.value !== '0'){
+            loadAssignments(empSel.value);
+        }
     }
 
     document.querySelectorAll('.assignment-search').forEach(function(inp){
@@ -214,6 +226,6 @@ textarea.form-control { height: auto !important; }
         if(e.target.closest('#assignment-project-list') || e.target.closest('#assignment-district-list')) updateSummary();
     });
     updateSummary();
-})();
+});
 </script>
 {% endblock %}

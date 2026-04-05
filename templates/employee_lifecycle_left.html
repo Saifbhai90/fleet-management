@@ -113,20 +113,32 @@ document.addEventListener('DOMContentLoaded', function(){
     var area = document.getElementById('cur-assign-area');
     var curD = document.getElementById('cur-districts');
     var curP = document.getElementById('cur-projects');
+
+    function loadEmpAssign(eid){
+        if(!eid || eid==='0'){ area.style.display='none'; return; }
+        fetch('/api/employee/'+eid+'/assignments')
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            var dNames = (d.districts||[]).map(function(x){ return '<span class="badge-district">'+x.name+'</span>'; });
+            var pNames = (d.projects||[]).map(function(x){ return '<span class="badge-project">'+x.name+'</span>'; });
+            curD.innerHTML = dNames.length ? dNames.join(' ') : '<span class="text-muted">—</span>';
+            curP.innerHTML = pNames.length ? pNames.join(' ') : '<span class="text-muted">—</span>';
+            area.style.display='';
+        }).catch(function(){ area.style.display='none'; });
+    }
+
     if(empSel){
-        empSel.addEventListener('change', function(){
-            var eid = this.value;
-            if(!eid || eid==='0'){ area.style.display='none'; return; }
-            fetch('/api/employee/'+eid+'/assignments')
-            .then(function(r){ return r.json(); })
-            .then(function(d){
-                var dNames = (d.districts||[]).map(function(x){ return '<span class="badge-district">'+x.name+'</span>'; });
-                var pNames = (d.projects||[]).map(function(x){ return '<span class="badge-project">'+x.name+'</span>'; });
-                curD.innerHTML = dNames.length ? dNames.join(' ') : '<span class="text-muted">—</span>';
-                curP.innerHTML = pNames.length ? pNames.join(' ') : '<span class="text-muted">—</span>';
-                area.style.display='';
-            }).catch(function(){ area.style.display='none'; });
-        });
+        empSel.addEventListener('change', function(){ loadEmpAssign(this.value); });
+        if(empSel.tomselect){
+            empSel.tomselect.on('change', function(val){ loadEmpAssign(val); });
+        } else {
+            setTimeout(function(){
+                if(empSel.tomselect){
+                    empSel.tomselect.on('change', function(val){ loadEmpAssign(val); });
+                }
+            }, 500);
+        }
+        if(empSel.value && empSel.value !== '0') loadEmpAssign(empSel.value);
     }
 });
 </script>
