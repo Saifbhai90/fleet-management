@@ -85,7 +85,7 @@ textarea.form-control { height: auto !important; }
                 </div>
             </div>
 
-            <p class="text-muted small mt-3 mb-2"><i class="bi bi-info-circle me-1"></i>Search mein naam likhein, list filter ho jayegi. Jis Project / District ko assign karna ho uski <strong>checkbox</strong> check karein.</p>
+            <p class="text-muted small mt-3 mb-2"><i class="bi bi-info-circle me-1"></i>Search mein naam likhein, list filter ho jayegi. <strong>Kam se kam 1 Project AUR 1 District</strong> dono select karein.</p>
 
             <div class="row g-3">
                 <div class="col-12 col-md-6">
@@ -125,7 +125,7 @@ textarea.form-control { height: auto !important; }
                 </div>
             </div>
             <div class="mt-4 text-end">
-                <button type="submit" class="btn btn-assign" id="assignment-save-btn"><i class="bi bi-check-circle me-1"></i> Save Assignment</button>
+                <button type="submit" class="btn btn-assign" id="assignment-save-btn" disabled><i class="bi bi-check-circle me-1"></i> Save Assignment</button>
             </div>
         </form>
     </div>
@@ -154,12 +154,15 @@ textarea.form-control { height: auto !important; }
         var distList = document.getElementById('assignment-district-list');
         var projSummary = document.getElementById('selected-projects-summary');
         var distSummary = document.getElementById('selected-districts-summary');
+        var saveBtn = document.getElementById('assignment-save-btn');
+        var projCount = 0, distCount = 0;
         if(projList && projSummary){
             var names=[];
             projList.querySelectorAll('input[name="project_ids"]:checked').forEach(function(cb){
                 var label=cb.closest('.assignment-item');
                 if(label){var t=label.querySelector('.assignment-item-text'); if(t) names.push(t.textContent.trim());}
             });
+            projCount = names.length;
             projSummary.textContent = names.length ? names.join(', ') : '—';
         }
         if(distList && distSummary){
@@ -168,8 +171,10 @@ textarea.form-control { height: auto !important; }
                 var label=cb.closest('.assignment-item');
                 if(label){var t=label.querySelector('.assignment-item-text'); if(t) names2.push(t.textContent.trim());}
             });
+            distCount = names2.length;
             distSummary.textContent = names2.length ? names2.join(', ') : '—';
         }
+        if(saveBtn) saveBtn.disabled = (projCount < 1 || distCount < 1);
     }
 
     var pl = document.getElementById('assignment-project-list');

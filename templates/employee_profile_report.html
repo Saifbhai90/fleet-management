@@ -210,9 +210,13 @@
           <div class="tl-date">{{ h.effective_date.strftime('%d %b %Y') if h.effective_date else '—' }}</div>
           <div class="tl-action">
             <span class="tl-badge bg-{{ h.action_color }}">{{ h.action_label }}</span>
-            {% if h.district %} — {{ h.district.name }}{% endif %}
-            {% if h.project %} — {{ h.project.name }}{% endif %}
           </div>
+          {% if h.districts %}
+          <div class="tl-detail"><strong>Districts:</strong> {{ h.districts|join(', ') }}</div>
+          {% endif %}
+          {% if h.projects %}
+          <div class="tl-detail"><strong>Projects:</strong> {{ h.projects|join(', ') }}</div>
+          {% endif %}
           {% if h.reason %}<div class="tl-detail"><strong>Reason:</strong> {{ h.reason }}</div>{% endif %}
           {% if h.remarks %}<div class="tl-detail">{{ h.remarks }}</div>{% endif %}
         </div>

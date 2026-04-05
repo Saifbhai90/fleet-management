@@ -3258,12 +3258,6 @@ def employee_form(id=None):
         (p.id, f"{p.full_name} ({p.short_name})") for p in posts
     ]
 
-    # Projects & Districts for assignment (multi-select): all projects, all districts
-    projects_list = Project.query.order_by(Project.name).all()
-    districts_list = District.query.order_by(District.name).all()
-    project_choices = [(p.id, p.name) for p in projects_list]
-    district_choices = [(d.id, d.name) for d in districts_list]
-
     # Department history (distinct existing departments)
     dept_rows = (
         db.session.query(Employee.department)
@@ -3274,9 +3268,9 @@ def employee_form(id=None):
     )
     departments = [row[0] for row in dept_rows]
 
-    # Tab: 1=Basic, 2=Contact, 3=Assignment, 4=Documents (optional)
+    # Tab: 1=Basic, 2=Contact, 3=Documents (optional)
     tab = request.args.get('tab', 1, type=int)
-    if tab < 1 or tab > 4:
+    if tab < 1 or tab > 3:
         tab = 1
     if not id and tab > 1:
         return redirect(url_for('employee_form', tab=1))
@@ -3289,9 +3283,6 @@ def employee_form(id=None):
     form1 = EmployeeFormStep1()
     form1.post_id.choices = post_choices
     form2 = EmployeeFormStep2()
-    form3 = EmployeeFormStep3()
-    form3.project_ids.choices = project_choices
-    form3.district_ids.choices = district_choices
 
     if emp:
         form1.code.data = emp.code
@@ -3315,8 +3306,6 @@ def employee_form(id=None):
         form2.account_no.data = emp.account_no or ''
         form2.account_title.data = emp.account_title or ''
         form2.remarks.data = emp.remarks or ''
-        form3.project_ids.data = [p.id for p in emp.projects]
-        form3.district_ids.data = [d.id for d in emp.districts]
 
     doc_form = EmployeeDocumentForm()
     employee_documents = list(emp.documents) if emp else []
@@ -3381,68 +3370,12 @@ def employee_form(id=None):
                     db.session.commit()
                     if emp.cnic_no and (emp.status or '').strip() == 'Active':
                         _sync_user_active_by_cnic(emp.cnic_no.strip(), True)
-                    flash('Step 2 saved. Ab Project & District Assignment karein.', 'success')
+                    flash('Step 2 saved. Documents tab par jayein (optional) ya Done dabayein.', 'success')
                     return redirect(url_for('employee_form', id=emp.id, tab=3))
                 except Exception as e:
                     db.session.rollback()
                     flash(f'Error: {str(e)}', 'danger')
             tab = 2
-
-        elif action == 'save_step_3' and emp:
-            form3 = EmployeeFormStep3(request.form)
-            form3.project_ids.choices = project_choices
-            form3.district_ids.choices = district_choices
-            if form3.validate():
-                project_ids = [x for x in (form3.project_ids.data or []) if x]
-                district_ids = [x for x in (form3.district_ids.data or []) if x]
-                if not project_ids or not district_ids:
-                    flash('Kam se kam 1 Project aur 1 District select karein, phir Save & Next dabayein.', 'danger')
-                    tab = 3
-                else:
-                    try:
-                        old_project_ids = set(p.id for p in emp.projects)
-                        old_district_ids = set(d.id for d in emp.districts)
-                        new_project_ids = set(project_ids)
-                        new_district_ids = set(district_ids)
-
-                        emp.projects = [Project.query.get(pid) for pid in project_ids if Project.query.get(pid)]
-                        emp.districts = [District.query.get(did) for did in district_ids if District.query.get(did)]
-
-                        is_initial = not old_project_ids and not old_district_ids
-                        today = pk_date()
-                        if is_initial:
-                            for pid in new_project_ids:
-                                _log_employee_assignment(emp.id, 'initial', project_id=pid, effective_date=today)
-                            for did in new_district_ids:
-                                _log_employee_assignment(emp.id, 'initial', district_id=did, effective_date=today)
-                        else:
-                            for pid in (new_project_ids - old_project_ids):
-                                _log_employee_assignment(emp.id, 'assign_project', project_id=pid, effective_date=today)
-                            for pid in (old_project_ids - new_project_ids):
-                                _log_employee_assignment(emp.id, 'deassign_project', project_id=pid, effective_date=today)
-                            for did in (new_district_ids - old_district_ids):
-                                _log_employee_assignment(emp.id, 'assign_district', district_id=did, effective_date=today)
-                            for did in (old_district_ids - new_district_ids):
-                                _log_employee_assignment(emp.id, 'deassign_district', district_id=did, effective_date=today)
-
-                        db.session.commit()
-                        if emp.cnic_no and (emp.status or '').strip() == 'Active':
-                            post = EmployeePost.query.get(emp.post_id) if emp.post_id else None
-                            role_id = post.role_id if post else None
-                            u = _create_user_for_employee_or_driver(emp.cnic_no.strip(), emp.name, emp.post_id, role_id)
-                            if u:
-                                flash('Assignment save! Ab Documents tab par ja sakte hain (optional) ya Done dabayein.', 'success')
-                            else:
-                                flash('Assignment save! Ab Documents tab (optional) par jayein ya Done dabayein.', 'success')
-                        else:
-                            flash('Assignment save! Ab Documents tab (optional) par jayein ya Done dabayein.', 'success')
-                        return redirect(url_for('employee_form', id=emp.id, tab=4))
-                    except Exception as e:
-                        db.session.rollback()
-                        flash(f'Error: {str(e)}', 'danger')
-                        tab = 3
-            else:
-                tab = 3
 
         elif action == 'add_document' and emp:
             doc_form = EmployeeDocumentForm()
@@ -3468,23 +3401,21 @@ def employee_form(id=None):
                         db.session.add(doc)
                         db.session.commit()
                         flash('Document save ho gaya.', 'success')
-                    return redirect(url_for('employee_form', id=emp.id, tab=4))
+                    return redirect(url_for('employee_form', id=emp.id, tab=3))
                 except Exception as e:
                     db.session.rollback()
                     flash(f'Error: {str(e)}', 'danger')
             else:
                 flash('Pehle file select karein.', 'warning')
-                return redirect(url_for('employee_form', id=emp.id, tab=4))
-            tab = 4
+                return redirect(url_for('employee_form', id=emp.id, tab=3))
+            tab = 3
 
-    form3.project_ids.choices = project_choices
-    form3.district_ids.choices = district_choices
     step1_done = emp is not None
     step2_done = emp is not None
     employee_documents = list(emp.documents) if emp else []
     return render_template(
         'employee_form.html',
-        form1=form1, form2=form2, form3=form3, doc_form=doc_form,
+        form1=form1, form2=form2, doc_form=doc_form,
         title=title, employee=emp, departments=departments,
         tab=tab, step1_done=step1_done, step2_done=step2_done,
         employee_documents=employee_documents,
@@ -3524,7 +3455,7 @@ def employee_document_delete(id, doc_id):
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'danger')
-    return redirect(url_for('employee_form', id=emp.id, tab=4))
+    return redirect(url_for('employee_form', id=emp.id, tab=3))
 
 
 @app.route('/employee/assignment', methods=['GET', 'POST'])
@@ -3695,8 +3626,8 @@ def employee_lifecycle_assign():
         emp = Employee.query.get(sel_emp_id) if sel_emp_id else None
         if not emp:
             flash('Employee select karein.', 'danger')
-        elif not sel_project_ids and not sel_district_ids:
-            flash('Kam se kam 1 Project ya 1 District select karein.', 'danger')
+        elif not sel_project_ids or not sel_district_ids:
+            flash('Kam se kam 1 Project AUR 1 District dono select karein.', 'danger')
         else:
             try:
                 eff_date = parse_date(sel_date) if sel_date else pk_date()
@@ -3714,11 +3645,14 @@ def employee_lifecycle_assign():
                     if dist and dist not in emp.districts.all():
                         emp.districts.append(dist)
 
+                is_initial = not old_project_ids and not old_district_ids
+                action_type = 'initial' if is_initial else 'assign_project'
                 for pid in (new_project_ids - old_project_ids):
-                    _log_employee_assignment(emp.id, 'assign_project', project_id=pid,
+                    _log_employee_assignment(emp.id, action_type, project_id=pid,
                                              effective_date=eff_date, remarks=sel_remarks)
+                action_type_d = 'initial' if is_initial else 'assign_district'
                 for did in (new_district_ids - old_district_ids):
-                    _log_employee_assignment(emp.id, 'assign_district', district_id=did,
+                    _log_employee_assignment(emp.id, action_type_d, district_id=did,
                                              effective_date=eff_date, remarks=sel_remarks)
 
                 db.session.commit()
@@ -4016,14 +3950,37 @@ def employee_profile_report(id):
     except Exception:
         pass
     try:
-        history = EmployeeAssignment.query.filter_by(employee_id=emp.id)\
+        raw_history = EmployeeAssignment.query.filter_by(employee_id=emp.id)\
             .order_by(EmployeeAssignment.effective_date.desc(), EmployeeAssignment.created_at.desc()).all()
     except Exception:
         db.session.rollback()
-        history = []
+        raw_history = []
+
+    grouped_history = []
+    seen_keys = {}
+    for h in raw_history:
+        key = (h.effective_date, h.action)
+        if key not in seen_keys:
+            seen_keys[key] = {
+                'effective_date': h.effective_date,
+                'action': h.action,
+                'action_label': h.action_label,
+                'action_color': h.action_color,
+                'districts': [],
+                'projects': [],
+                'reason': h.reason,
+                'remarks': h.remarks,
+            }
+            grouped_history.append(seen_keys[key])
+        entry = seen_keys[key]
+        if h.district and h.district.name not in entry['districts']:
+            entry['districts'].append(h.district.name)
+        if h.project and h.project.name not in entry['projects']:
+            entry['projects'].append(h.project.name)
+
     return render_template('employee_profile_report.html',
                            employee=emp, projects=projects, districts=districts,
-                           documents=documents, history=history,
+                           documents=documents, history=grouped_history,
                            title=f'Employee Profile – {emp.name}')
 
 
