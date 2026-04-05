@@ -489,11 +489,12 @@ def accounts_account_ledger():
         account_id = form.account_id.data
         from_date_val = form.from_date.data
         to_date_val = form.to_date.data
+        category_val = form.category.data if hasattr(form, 'category') and form.category.data else None
         district_id = form.district_id.data if form.district_id.data and form.district_id.data != 0 else None
         project_id = form.project_id.data if form.project_id.data and form.project_id.data != 0 else None
 
         if account_id and account_id > 0:
-            ledger_data = get_account_ledger(account_id, from_date_val, to_date_val)
+            ledger_data = get_account_ledger(account_id, from_date_val, to_date_val, category=category_val)
             if ledger_data and ledger_data['account'].name.startswith('DTO Wallet'):
                 if district_id and project_id:
                     dto_summary = get_dto_wallet_summary(district_id, project_id, from_date_val, to_date_val)
@@ -1194,6 +1195,7 @@ def fund_transfer_add():
                 description=form.description.data,
                 attachment=attachment_url,
                 is_salary=form.is_salary.data or False,
+                category=form.category.data or None,
                 district_id=form.district_id.data or None,
                 project_id=form.project_id.data or None,
                 created_by_user_id=session.get('user_id'),
@@ -1235,6 +1237,7 @@ def fund_transfer_edit(pk):
         form.district_id.data = transfer.district_id or 0
         form.project_id.data = transfer.project_id or 0
         form.is_salary.data = transfer.is_salary
+        form.category.data = transfer.category or ''
         if transfer.from_employee_id:
             form.from_person.data = f'emp-{transfer.from_employee_id}'
         elif transfer.from_driver_id:
@@ -1289,6 +1292,7 @@ def fund_transfer_edit(pk):
             transfer.district_id = form.district_id.data or None
             transfer.project_id = form.project_id.data or None
             transfer.is_salary = form.is_salary.data or False
+            transfer.category = form.category.data or None
 
             if request.form.get('remove_attachment') == '1':
                 _delete_ft_attachment(transfer.attachment)
@@ -1358,12 +1362,14 @@ def fund_transfers_list():
         pass
 
     person_val = request.args.get('person', '0')
+    category_val = request.args.get('category', '')
     district_val = int(request.args.get('district_id', 0) or 0)
     project_val = int(request.args.get('project_id', 0) or 0)
 
     form.from_date.data = from_date
     form.to_date.data = to_date
     form.person.data = person_val
+    form.category.data = category_val
     form.district_id.data = district_val
     form.project_id.data = project_val
 
@@ -1399,6 +1405,8 @@ def fund_transfers_list():
                     FundTransfer.from_account_id == p_id,
                     FundTransfer.to_account_id == p_id))
 
+    if category_val:
+        query = query.filter(FundTransfer.category == category_val)
     if district_val and district_val > 0:
         query = query.filter_by(district_id=district_val)
     if project_val and project_val > 0:
@@ -1412,6 +1420,7 @@ def fund_transfers_list():
             query = query.filter(or_(
                 FundTransfer.transfer_number.ilike(like),
                 FundTransfer.description.ilike(like),
+                FundTransfer.category.ilike(like),
                 FundTransfer.payment_mode.ilike(like),
                 FundTransfer.reference_no.ilike(like),
             ))

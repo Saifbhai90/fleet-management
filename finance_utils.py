@@ -62,7 +62,7 @@ def generate_entry_number(prefix='JE', entry_date=None):
 
 
 def create_journal_entry(entry_type, entry_date, description, lines, district_id=None, project_id=None, 
-                         reference_type=None, reference_id=None, created_by_user_id=None):
+                         reference_type=None, reference_id=None, created_by_user_id=None, category=None):
     """
     Create a journal entry with lines.
     
@@ -97,6 +97,7 @@ def create_journal_entry(entry_type, entry_date, description, lines, district_id
         created_by_user_id=created_by_user_id,
         district_id=district_id,
         project_id=project_id,
+        category=category,
         is_posted=True,
         posted_at=pk_now()
     )
@@ -210,7 +211,7 @@ def get_account_balance(account_id, as_of_date=None):
     return balance
 
 
-def get_account_ledger(account_id, from_date=None, to_date=None):
+def get_account_ledger(account_id, from_date=None, to_date=None, category=None):
     """
     Get account ledger with all transactions and running balance.
     
@@ -218,26 +219,20 @@ def get_account_ledger(account_id, from_date=None, to_date=None):
         account_id: Account ID
         from_date: Start date (optional)
         to_date: End date (optional)
+        category: Transfer category filter (optional) - e.g. 'Fuel', 'Salary'
     
     Returns:
-        dict: {
-            'account': Account object,
-            'opening_balance': Decimal,
-            'transactions': List of dicts with transaction details,
-            'closing_balance': Decimal
-        }
+        dict with account, opening_balance, transactions, closing_balance
     """
     account = Account.query.get(account_id)
     if not account:
         return None
     
-    # Calculate opening balance
     if from_date:
         opening_balance = get_account_balance(account_id, from_date - timedelta(days=1))
     else:
         opening_balance = Decimal(str(account.opening_balance or 0))
     
-    # Get transactions
     query = db.session.query(JournalEntryLine, JournalEntry).join(JournalEntry).filter(
         JournalEntryLine.account_id == account_id,
         JournalEntry.is_posted == True
@@ -247,6 +242,8 @@ def get_account_ledger(account_id, from_date=None, to_date=None):
         query = query.filter(JournalEntry.entry_date >= from_date)
     if to_date:
         query = query.filter(JournalEntry.entry_date <= to_date)
+    if category:
+        query = query.filter(JournalEntry.category == category)
     
     query = query.order_by(JournalEntry.entry_date, JournalEntry.id, JournalEntryLine.sort_order)
     
@@ -259,7 +256,6 @@ def get_account_ledger(account_id, from_date=None, to_date=None):
         debit = Decimal(str(line.debit or 0))
         credit = Decimal(str(line.credit or 0))
         
-        # Calculate balance change
         if account.account_type in ['Asset', 'Expense']:
             balance_change = debit - credit
         else:
@@ -272,6 +268,7 @@ def get_account_ledger(account_id, from_date=None, to_date=None):
             'entry_number': je.entry_number,
             'entry_type': je.entry_type,
             'description': line.description or je.description,
+            'category': je.category or '',
             'debit': debit,
             'credit': credit,
             'balance': running_balance,
@@ -702,4 +699,5 @@ def create_fund_transfer_journal(transfer_obj, from_wallet, to_wallet):
         reference_type='FundTransfer',
         reference_id=transfer_obj.id,
         created_by_user_id=transfer_obj.created_by_user_id,
+        category=getattr(transfer_obj, 'category', None),
     )

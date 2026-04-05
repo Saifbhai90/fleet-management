@@ -1188,6 +1188,13 @@ class AccountLedgerFilterForm(FlaskForm):
                          render_kw={"class": "form-control datepicker", "placeholder": "Start date"})
     to_date = DateField('To Date', format='%d-%m-%Y', validators=[Optional()],
                        render_kw={"class": "form-control datepicker", "placeholder": "End date"})
+    category = SelectField('Category', validators=[Optional()],
+                           choices=[('', '-- All Categories --'),
+                                    ('Fuel', 'Fuel'), ('Maintenance', 'Maintenance'), ('Oil', 'Oil'),
+                                    ('Salary', 'Salary'), ('Saman/Purchase', 'Saman / Purchase'),
+                                    ('Cash Advance', 'Cash Advance'), ('Distribution', 'Distribution'),
+                                    ('General', 'General'), ('Other', 'Other')],
+                           render_kw={'class': 'form-select form-select-sm'})
     district_id = SelectField('District (Optional)', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     project_id = SelectField('Project (Optional)', coerce=int, validators=[Optional()], choices=[], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('View Ledger')
@@ -1247,6 +1254,13 @@ class FundTransferForm(FlaskForm):
                               choices=[], render_kw={'class': 'form-select search-select'})
     project_id = SelectField('Project', coerce=int, validators=[Optional()],
                              choices=[], render_kw={'class': 'form-select search-select'})
+    category = SelectField('Category / Purpose', validators=[Optional()],
+                           choices=[('', '-- Select Category --'),
+                                    ('Fuel', 'Fuel'), ('Maintenance', 'Maintenance'), ('Oil', 'Oil'),
+                                    ('Salary', 'Salary'), ('Saman/Purchase', 'Saman / Purchase'),
+                                    ('Cash Advance', 'Cash Advance'), ('Distribution', 'Distribution'),
+                                    ('General', 'General'), ('Other', 'Other')],
+                           render_kw={'class': 'form-select'})
     attachment = FileField('Attachment (Image)', validators=[Optional(),
                            FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], 'Images only!')])
     is_salary = BooleanField('Salary Payment (balance will not accumulate in receiver wallet)',
@@ -1261,6 +1275,13 @@ class FundTransferFilterForm(FlaskForm):
                         render_kw={"class": "form-control datepicker"})
     person = SelectField('Person', coerce=str, validators=[Optional()],
                          choices=[], render_kw={'class': 'form-select search-select'})
+    category = SelectField('Category', validators=[Optional()],
+                           choices=[('', '-- All Categories --'),
+                                    ('Fuel', 'Fuel'), ('Maintenance', 'Maintenance'), ('Oil', 'Oil'),
+                                    ('Salary', 'Salary'), ('Saman/Purchase', 'Saman / Purchase'),
+                                    ('Cash Advance', 'Cash Advance'), ('Distribution', 'Distribution'),
+                                    ('General', 'General'), ('Other', 'Other')],
+                           render_kw={'class': 'form-select form-select-sm'})
     district_id = SelectField('District', coerce=int, validators=[Optional()],
                               choices=[], render_kw={'class': 'form-select search-select'})
     project_id = SelectField('Project', coerce=int, validators=[Optional()],

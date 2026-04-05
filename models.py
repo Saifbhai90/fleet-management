@@ -1205,6 +1205,7 @@ class JournalEntry(db.Model):
     # Reference to source transaction (if auto-generated from expense)
     reference_type = db.Column(db.String(50), nullable=True)  # FuelExpense, OilExpense, MaintenanceExpense, EmployeeExpense, Manual
     reference_id = db.Column(db.Integer, nullable=True)
+    category = db.Column(db.String(30), nullable=True, index=True)
     
     # Tracking
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
@@ -1799,8 +1800,21 @@ class FundTransfer(db.Model):
     journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
     attachment = db.Column(db.String(500), nullable=True)
     is_salary = db.Column(db.Boolean, default=False, nullable=False)
+    category = db.Column(db.String(30), nullable=True, index=True)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
+
+    CATEGORY_CHOICES = [
+        ('Fuel', 'Fuel'),
+        ('Maintenance', 'Maintenance'),
+        ('Oil', 'Oil'),
+        ('Salary', 'Salary'),
+        ('Saman/Purchase', 'Saman / Purchase'),
+        ('Cash Advance', 'Cash Advance'),
+        ('Distribution', 'Distribution'),
+        ('General', 'General'),
+        ('Other', 'Other'),
+    ]
 
     from_employee = db.relationship('Employee', foreign_keys=[from_employee_id], backref='sent_transfers', lazy='select')
     from_driver = db.relationship('Driver', foreign_keys=[from_driver_id], backref='sent_transfers', lazy='select')

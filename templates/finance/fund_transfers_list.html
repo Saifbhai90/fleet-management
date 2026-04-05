@@ -41,6 +41,15 @@
                     {% endif %}
                 </div>
                 <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">Category</label>
+                    {{ form.category(class="form-select form-select-sm") if form.category is defined else '' }}
+                    {% if form.category is not defined %}
+                    <select name="category" class="form-select form-select-sm">
+                        <option value="">-- All Categories --</option>
+                    </select>
+                    {% endif %}
+                </div>
+                <div class="col-6 col-md-2">
                     <label class="form-label form-label-sm mb-1">District</label>
                     {{ form.district_id(class="form-select form-select-sm search-select") if form.district_id is defined else '' }}
                     {% if form.district_id is not defined %}
@@ -106,6 +115,7 @@
                             <th>From</th>
                             <th>To</th>
                             <th class="text-end">Amount</th>
+                            <th>Category</th>
                             <th>Mode</th>
                             <th>Ref.</th>
                             <th>Description</th>
@@ -125,6 +135,7 @@
                             <td>{{ ft.from_name }}</td>
                             <td>{{ ft.to_name }}</td>
                             <td class="text-end fw-semibold">{{ "{:,.2f}".format(ft.amount) }}</td>
+                            <td>{% if ft.category %}<span class="badge bg-info text-dark">{{ ft.category }}</span>{% else %}-{% endif %}</td>
                             <td>
                                 <span class="badge bg-light text-dark border">{{ ft.payment_mode }}</span>
                                 {% if ft.is_salary %}<span class="badge bg-warning text-dark" title="Salary"><i class="bi bi-cash-coin"></i></span>{% endif %}
@@ -146,7 +157,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="13" class="text-center py-5 text-muted">
+                            <td colspan="14" class="text-center py-5 text-muted">
                                 <i class="bi bi-arrow-left-right display-6 d-block mb-2 opacity-25"></i>
                                 No fund transfers found{% if from_date or to_date %} for the selected filters{% endif %}.
                             </td>
