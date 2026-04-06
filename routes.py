@@ -79,6 +79,7 @@ from r2_storage import upload_image_file, upload_image_bytes
 from freeze_utils import (
     get_freeze_config,
     save_freeze_config,
+    get_freeze_form_catalog,
     is_freeze_protected_request,
     extract_effective_date,
     evaluate_freeze,
@@ -257,9 +258,9 @@ def _can_manage_freeze_data():
 @app.before_request
 def enforce_data_freeze():
     endpoint = request.endpoint or ''
-    if not is_freeze_protected_request(request, endpoint):
-        return
     cfg = get_freeze_config()
+    if not is_freeze_protected_request(request, endpoint, cfg):
+        return
     if not cfg.get('is_effective'):
         return
     effective_date = extract_effective_date(request)
@@ -278,7 +279,7 @@ def enforce_data_freeze():
         return jsonify({'ok': False, 'message': msg, 'rule': rule_text}), 423
 
     flash(msg, 'danger')
-    return redirect(request.referrer or url_for('freeze_data_settings'))
+    return redirect(request.referrer or url_for('form_control', settings_tab='freeze'))
 
 
 def _endpoint_description(endpoint, method):
@@ -5256,6 +5257,9 @@ def form_control():
 
     from models import AttendanceSettings
     att_settings = AttendanceSettings.query.first()
+    freeze_cfg = get_freeze_config()
+    freeze_forms = get_freeze_form_catalog()
+    freeze_allowed_set = set(freeze_cfg.get('allowed_set') or set())
 
     if request.method == 'GET':
         if glob:
@@ -5263,7 +5267,17 @@ def form_control():
             global_form.morning_end.data = glob.morning_end.strftime('%H:%M') if glob.morning_end else ''
             global_form.night_start.data = glob.night_start.strftime('%H:%M') if glob.night_start else ''
             global_form.night_end.data = glob.night_end.strftime('%H:%M') if glob.night_end else ''
-        return render_template('control_form.html', global_form=global_form, override_form=override_form, overrides=overrides, global_override=glob, att_settings=att_settings)
+        return render_template(
+            'control_form.html',
+            global_form=global_form,
+            override_form=override_form,
+            overrides=overrides,
+            global_override=glob,
+            att_settings=att_settings,
+            freeze_cfg=freeze_cfg,
+            freeze_forms=freeze_forms,
+            freeze_allowed_set=freeze_allowed_set,
+        )
 
     action = request.form.get('action', '')
     def parse_time(s):
@@ -5362,7 +5376,49 @@ def form_control():
         flash(f'{scope.title()} override added.', 'success')
         return redirect(url_for('form_control'))
 
-    return render_template('control_form.html', global_form=global_form, override_form=override_form, overrides=overrides, global_override=glob, att_settings=att_settings)
+    if action == 'save_freeze_data':
+        if not _can_manage_freeze_data():
+            flash('You do not have permission to manage freeze settings.', 'danger')
+            return redirect(url_for('form_control', settings_tab='freeze'))
+
+        enabled = bool(request.form.get('freeze_enabled'))
+        before_date = parse_date(request.form.get('freeze_before_date'))
+        after_date = parse_date(request.form.get('freeze_after_date'))
+        reason = (request.form.get('freeze_reason') or '').strip()
+        selected_apply = set(request.form.getlist('freeze_apply_endpoints'))
+        catalog_codes = {ep for _, ep in freeze_forms}
+        selected_apply = {ep for ep in selected_apply if ep in catalog_codes}
+        selected_allowed = catalog_codes - selected_apply
+
+        if enabled and not (before_date or after_date):
+            flash('Enable freeze ke liye Before Date ya After Date me se kam az kam aik date dena zaroori hai.', 'danger')
+            return redirect(url_for('form_control', settings_tab='freeze'))
+
+        updated_by = (session.get('user') or '').strip()
+        updated_at = pk_now().strftime('%Y-%m-%d %H:%M:%S')
+        save_freeze_config(
+            enabled=enabled,
+            before_date=before_date,
+            after_date=after_date,
+            reason=reason,
+            allowed_endpoints=selected_allowed,
+            updated_by=updated_by,
+            updated_at=updated_at,
+        )
+        flash('Freeze Data settings saved successfully.', 'success')
+        return redirect(url_for('form_control', settings_tab='freeze'))
+
+    return render_template(
+        'control_form.html',
+        global_form=global_form,
+        override_form=override_form,
+        overrides=overrides,
+        global_override=glob,
+        att_settings=att_settings,
+        freeze_cfg=freeze_cfg,
+        freeze_forms=freeze_forms,
+        freeze_allowed_set=freeze_allowed_set,
+    )
 
 
 @app.route('/form-control/override/<int:ov_id>/delete', methods=['POST'])
@@ -5404,40 +5460,7 @@ def form_control_edit_override(ov_id):
 
 @app.route('/settings/freeze-data', methods=['GET', 'POST'])
 def freeze_data_settings():
-    if not _can_manage_freeze_data():
-        flash('You do not have permission to manage freeze settings.', 'danger')
-        return redirect(url_for('dashboard'))
-
-    cfg = get_freeze_config()
-    if request.method == 'POST':
-        enabled = bool(request.form.get('enabled'))
-        lock_before = bool(request.form.get('lock_before'))
-        lock_after = bool(request.form.get('lock_after'))
-        anchor_date = parse_date(request.form.get('anchor_date'))
-        reason = (request.form.get('reason') or '').strip()
-
-        if enabled and not anchor_date:
-            flash('Please select a freeze date before enabling Freeze Data.', 'danger')
-            return render_template('freeze_data_settings.html', cfg=cfg)
-        if enabled and not (lock_before or lock_after):
-            flash('Select at least one direction: before date or after date.', 'danger')
-            return render_template('freeze_data_settings.html', cfg=cfg)
-
-        updated_by = (session.get('user') or '').strip()
-        updated_at = pk_now().strftime('%Y-%m-%d %H:%M:%S')
-        save_freeze_config(
-            enabled=enabled,
-            anchor_date=anchor_date,
-            lock_before=lock_before,
-            lock_after=lock_after,
-            reason=reason,
-            updated_by=updated_by,
-            updated_at=updated_at,
-        )
-        flash('Freeze Data settings saved successfully.', 'success')
-        return redirect(url_for('freeze_data_settings'))
-
-    return render_template('freeze_data_settings.html', cfg=cfg)
+    return redirect(url_for('form_control', settings_tab='freeze'))
 
 
 @app.route('/roles/new', methods=['GET', 'POST'])

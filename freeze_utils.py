@@ -6,16 +6,15 @@ from models import SystemSetting
 from utils import parse_date, pk_date
 
 
+# Global always-safe endpoints (auth/session/report/settings).
 FREEZE_EXEMPT_ENDPOINTS = {
-    # Auth / session / static-safe paths.
     'login',
     'logout',
     'app_logout',
     'biometric_login',
     'set_new_password',
-    # Freeze settings must always remain editable.
+    'form_control',
     'freeze_data_settings',
-    # Reporting + filter posts (should remain open during freeze).
     'accounts_account_ledger',
     'accounts_balance_sheet',
     'fund_transfers_list',
@@ -61,52 +60,154 @@ DATE_FIELD_PRIORITY = (
 )
 
 
+# Enterprise-style catalog: operations forms where freeze validation can apply.
+FREEZE_FORM_CATALOG = [
+    ('Master - Companies', 'company_form'),
+    ('Master - Projects', 'project_form'),
+    ('Master - Districts', 'district_form'),
+    ('Master - Vehicles', 'vehicle_form'),
+    ('Master - Drivers', 'driver_form'),
+    ('Master - Parking', 'parking_form'),
+    ('Master - Employees', 'employee_form'),
+    ('Master - Party', 'party_form'),
+    ('Master - Product', 'product_form'),
+    ('Master - Driver Post', 'driver_post_form'),
+    ('Assignment - Employee Assignment', 'employee_assignment_form'),
+    ('Assignment - Lifecycle Assign', 'employee_lifecycle_assign'),
+    ('Assignment - Lifecycle Deassign', 'employee_lifecycle_deassign'),
+    ('Assignment - Lifecycle Left', 'employee_lifecycle_left'),
+    ('Assignment - Lifecycle Rejoin', 'employee_lifecycle_rejoin'),
+    ('Assignment - Project to Company', 'assign_project_to_company_new'),
+    ('Assignment - Project to District', 'assign_project_to_district_new'),
+    ('Assignment - Vehicle to District', 'assign_vehicle_to_district_new'),
+    ('Assignment - Vehicle to Parking', 'assign_vehicle_to_parking_new'),
+    ('Assignment - Driver to Vehicle', 'assign_driver_to_vehicle_new'),
+    ('Transfers - Project Transfer', 'project_transfer_new'),
+    ('Transfers - Vehicle Transfer', 'vehicle_transfer_new'),
+    ('Transfers - Driver Transfer', 'driver_transfer_new'),
+    ('Transfers - Driver Job Left', 'driver_job_left_new'),
+    ('Transfers - Driver Rejoin', 'driver_rejoin_new'),
+    ('Tasks - Daily Task Upload', 'task_report_upload'),
+    ('Tasks - Daily Task Form', 'task_report_new'),
+    ('Tasks - Red Task Form', 'red_task_new'),
+    ('Tasks - Red Task Edit', 'red_task_edit'),
+    ('Tasks - Without Task Form', 'without_task_new'),
+    ('Tasks - Without Task Edit', 'without_task_edit'),
+    ('Tasks - Penalty Record', 'penalty_record_new'),
+    ('Tasks - Penalty Record Edit', 'penalty_record_edit'),
+    ('Attendance - Checkin', 'driver_attendance_checkin'),
+    ('Attendance - Checkout', 'driver_attendance_checkout'),
+    ('Attendance - Manual Checkin', 'driver_attendance_manual_checkin'),
+    ('Attendance - Manual Checkout', 'driver_attendance_manual_checkout'),
+    ('Attendance - Mark Attendance', 'driver_attendance_mark'),
+    ('Attendance - Bulk OFF', 'driver_attendance_bulk_off'),
+    ('Attendance - Leave Request', 'leave_request_new'),
+    ('Finance - Fund Transfer Add', 'fund_transfer_add'),
+    ('Finance - Fund Transfer Edit', 'fund_transfer_edit'),
+    ('Finance - Payment Voucher', 'accounts_quick_payment'),
+    ('Finance - Payment Voucher Edit', 'payment_voucher_edit'),
+    ('Finance - Receipt Voucher', 'accounts_quick_receipt'),
+    ('Finance - Bank Entry', 'accounts_bank_entry'),
+    ('Finance - Journal Voucher', 'accounts_jv'),
+    ('Finance - Employee Expense Add', 'employee_expense_form'),
+    ('Finance - Employee Expense Edit', 'employee_expense_form_edit'),
+    ('Finance - Chart of Accounts Add', 'chart_of_accounts_add'),
+    ('Finance - Chart of Accounts Edit', 'chart_of_accounts_edit'),
+    ('Finance - Bank Directory Add API', 'bank_directory_add'),
+    ('Finance - Bank Directory Update API', 'bank_directory_update'),
+    ('Finance - Fund Category Add API', 'ft_categories_add'),
+    ('Payroll - Salary Config Form', 'payroll_salary_config_form'),
+    ('Payroll - Payroll Generate', 'payroll_generate'),
+    ('Payroll - Payroll Bulk Generate', 'payroll_bulk_generate'),
+    ('Payroll - Payroll Edit', 'payroll_edit'),
+    ('Payroll - Payroll Recalc', 'payroll_recalc_attendance'),
+    ('Payroll - Payroll Finalize', 'payroll_finalize'),
+    ('Payroll - Payroll Pay', 'payroll_pay'),
+    ('Payroll - Driver Bulk Salary', 'payroll_driver_bulk_salary'),
+    ('Expenses - Fuel Add', 'fuel_expense_new'),
+    ('Expenses - Fuel Edit', 'fuel_expense_edit'),
+    ('Expenses - Oil Add', 'oil_expense_new'),
+    ('Expenses - Oil Edit', 'oil_expense_edit'),
+    ('Expenses - Maintenance Add', 'maintenance_expense_new'),
+    ('Expenses - Maintenance Edit', 'maintenance_expense_edit'),
+    ('Books - Stock Entry', 'book_stock_entry'),
+    ('Books - Stock Edit', 'book_stock_edit'),
+    ('Books - Book Issue', 'book_issue'),
+    ('Books - Book Return', 'book_return'),
+]
+
+
 def _to_bool(v) -> bool:
     return str(v or '').strip().lower() in ('1', 'true', 'yes', 'y', 'on')
 
 
+def _parse_csv_set(raw: str) -> set:
+    txt = (raw or '').strip()
+    if not txt:
+        return set()
+    return {x.strip() for x in txt.split(',') if x.strip()}
+
+
+def _set_to_csv(values: set) -> str:
+    if not values:
+        return ''
+    return ','.join(sorted(values))
+
+
+def get_freeze_form_catalog():
+    return list(FREEZE_FORM_CATALOG)
+
+
 def get_freeze_config() -> dict:
     enabled = _to_bool(SystemSetting.get('freeze_data_enabled', '0'))
-    lock_before = _to_bool(SystemSetting.get('freeze_data_lock_before', '0'))
-    lock_after = _to_bool(SystemSetting.get('freeze_data_lock_after', '1'))
-    anchor_raw = SystemSetting.get('freeze_data_anchor_date')
-    anchor_date = parse_date(anchor_raw)
+    before_raw = SystemSetting.get('freeze_data_before_date')
+    after_raw = SystemSetting.get('freeze_data_after_date')
+    before_date = parse_date(before_raw)
+    after_date = parse_date(after_raw)
     reason = (SystemSetting.get('freeze_data_reason', '') or '').strip()
     updated_by = (SystemSetting.get('freeze_data_updated_by', '') or '').strip()
     updated_at = (SystemSetting.get('freeze_data_updated_at', '') or '').strip()
+    allowed_endpoints = _parse_csv_set(SystemSetting.get('freeze_data_allowed_endpoints', ''))
+    catalog_endpoints = {ep for _, ep in FREEZE_FORM_CATALOG}
+    effective_allowed = {ep for ep in allowed_endpoints if ep in catalog_endpoints}
     return {
         'enabled': enabled,
-        'lock_before': lock_before,
-        'lock_after': lock_after,
-        'anchor_date': anchor_date,
-        'anchor_raw': anchor_raw or '',
-        'anchor_display': anchor_date.strftime('%d-%m-%Y') if anchor_date else '',
+        'before_date': before_date,
+        'before_raw': before_raw or '',
+        'before_display': before_date.strftime('%d-%m-%Y') if before_date else '',
+        'after_date': after_date,
+        'after_raw': after_raw or '',
+        'after_display': after_date.strftime('%d-%m-%Y') if after_date else '',
         'reason': reason,
         'updated_by': updated_by,
         'updated_at': updated_at,
-        'is_effective': bool(enabled and anchor_date and (lock_before or lock_after)),
+        'allowed_endpoints': sorted(effective_allowed),
+        'allowed_set': effective_allowed,
+        'is_effective': bool(enabled and (before_date or after_date)),
     }
 
 
-def save_freeze_config(*, enabled: bool, anchor_date: date, lock_before: bool, lock_after: bool, reason: str, updated_by: str, updated_at: str) -> None:
+def save_freeze_config(*, enabled: bool, before_date: date, after_date: date, reason: str, allowed_endpoints: set, updated_by: str, updated_at: str) -> None:
     SystemSetting.set('freeze_data_enabled', '1' if enabled else '0')
-    SystemSetting.set('freeze_data_anchor_date', anchor_date.isoformat() if anchor_date else '')
-    SystemSetting.set('freeze_data_lock_before', '1' if lock_before else '0')
-    SystemSetting.set('freeze_data_lock_after', '1' if lock_after else '0')
+    SystemSetting.set('freeze_data_before_date', before_date.isoformat() if before_date else '')
+    SystemSetting.set('freeze_data_after_date', after_date.isoformat() if after_date else '')
     SystemSetting.set('freeze_data_reason', (reason or '').strip())
+    SystemSetting.set('freeze_data_allowed_endpoints', _set_to_csv(set(allowed_endpoints or set())))
     SystemSetting.set('freeze_data_updated_by', (updated_by or '').strip())
     SystemSetting.set('freeze_data_updated_at', (updated_at or '').strip())
 
 
-def is_freeze_protected_request(req: Request, endpoint: str) -> bool:
+def is_freeze_protected_request(req: Request, endpoint: str, cfg: dict = None) -> bool:
     if req.method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
         return False
     if not endpoint or endpoint.startswith('static'):
         return False
     if endpoint in FREEZE_EXEMPT_ENDPOINTS:
         return False
-    # Non-mutating report/list posts should pass.
     if any(tok in endpoint for tok in FREEZE_SAFE_ENDPOINT_TOKENS):
+        return False
+    cfg = cfg or {}
+    if endpoint in (cfg.get('allowed_set') or set()):
         return False
     return True
 
@@ -121,12 +222,10 @@ def extract_effective_date(req: Request) -> date:
         payload = req.form
 
     for key in DATE_FIELD_PRIORITY:
-        val = payload.get(key)
-        dt = parse_date(val)
+        dt = parse_date(payload.get(key))
         if dt:
             return dt
 
-    # Fallback: pick first parseable *date-ish* field.
     for key in payload.keys():
         if 'date' not in str(key).lower():
             continue
@@ -134,18 +233,16 @@ def extract_effective_date(req: Request) -> date:
         if dt:
             return dt
 
-    # If the endpoint doesn't submit a business date, fallback to today's date.
     return pk_date()
 
 
 def evaluate_freeze(cfg: dict, effective_date: date):
     if not cfg.get('is_effective') or not effective_date:
         return False, ''
-    anchor = cfg.get('anchor_date')
-    if not anchor:
-        return False, ''
-    if cfg.get('lock_before') and effective_date <= anchor:
-        return True, f'on or before {anchor.strftime("%d-%m-%Y")}'
-    if cfg.get('lock_after') and effective_date >= anchor:
-        return True, f'on or after {anchor.strftime("%d-%m-%Y")}'
+    before_date = cfg.get('before_date')
+    after_date = cfg.get('after_date')
+    if before_date and effective_date <= before_date:
+        return True, f'on or before {before_date.strftime("%d-%m-%Y")}'
+    if after_date and effective_date >= after_date:
+        return True, f'on or after {after_date.strftime("%d-%m-%Y")}'
     return False, ''

@@ -14,6 +14,22 @@
     <br><span class="text-info"><i class="bi bi-info-circle me-1"></i>Priority: Vehicle > District > Project > Global</span>
   </p>
 
+  {% set active_tab = request.args.get('settings_tab', 'attendance') %}
+  <ul class="nav nav-pills mb-3" id="settingsMainTabs">
+    <li class="nav-item">
+      <button type="button" class="nav-link {% if active_tab != 'freeze' %}active{% endif %}" data-settings-tab="attendance">
+        <i class="bi bi-clock-history me-1"></i>Attendance Control
+      </button>
+    </li>
+    <li class="nav-item">
+      <button type="button" class="nav-link {% if active_tab == 'freeze' %}active{% endif %}" data-settings-tab="freeze">
+        <i class="bi bi-snow2 me-1"></i>Freeze Data Control
+      </button>
+    </li>
+  </ul>
+
+  <div id="attendanceControlPane" {% if active_tab == 'freeze' %}style="display:none"{% endif %}>
+
   <!-- ═══════════════ GLOBAL DEFAULT ═══════════════ -->
   <div class="row mb-4">
     <div class="col-lg-10">
@@ -404,8 +420,102 @@
   </div>
 </div>
 
+<div id="freezeControlPane" {% if active_tab != 'freeze' %}style="display:none"{% endif %}>
+  <div class="row mb-4">
+    <div class="col-lg-10">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="bi bi-shield-lock me-2"></i>Enterprise Freeze Data Control</h5>
+          {% if freeze_cfg and freeze_cfg.is_effective %}
+            <span class="badge bg-warning text-dark">ACTIVE</span>
+          {% else %}
+            <span class="badge bg-light text-dark">INACTIVE</span>
+          {% endif %}
+        </div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('form_control', settings_tab='freeze') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="save_freeze_data">
+
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" role="switch" id="freezeEnabled" name="freeze_enabled" value="1" {% if freeze_cfg and freeze_cfg.enabled %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="freezeEnabled">Enable Freeze Data Validation (All Add/Edit Forms)</label>
+            </div>
+
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Freeze BEFORE Date (inclusive)</label>
+                <input type="date" name="freeze_before_date" class="form-control" value="{{ freeze_cfg.before_raw if freeze_cfg else '' }}">
+                <div class="form-text">Is date aur is se pechay ka data add/edit block hoga.</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Freeze AFTER Date (inclusive)</label>
+                <input type="date" name="freeze_after_date" class="form-control" value="{{ freeze_cfg.after_raw if freeze_cfg else '' }}">
+                <div class="form-text">Is date aur is se agay ka data add/edit block hoga.</div>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Freeze Reason / Audit Note</label>
+              <textarea class="form-control" name="freeze_reason" rows="2" placeholder="Month close, audit lock, compliance hold...">{{ freeze_cfg.reason if freeze_cfg else '' }}</textarea>
+            </div>
+
+            <div class="alert alert-light border small">
+              <div class="fw-semibold mb-1"><i class="bi bi-grid-3x3-gap me-1"></i>Per Form Freeze Matrix</div>
+              <div class="text-muted mb-2">Tick = Freeze validation apply hogi. Untick = is form par freeze bypass (admin override).</div>
+              <div class="row g-2">
+                {% for form_label, endpoint_code in freeze_forms %}
+                <div class="col-12 col-md-6">
+                  <label class="form-check-label d-flex align-items-start gap-2 border rounded px-2 py-2">
+                    <input class="form-check-input mt-1" type="checkbox" name="freeze_apply_endpoints" value="{{ endpoint_code }}" {% if endpoint_code not in freeze_allowed_set %}checked{% endif %}>
+                    <span>
+                      <span class="fw-semibold">{{ form_label }}</span><br>
+                      <span class="text-muted small">{{ endpoint_code }}</span>
+                    </span>
+                  </label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check2-circle me-1"></i>Save Freeze Policy
+              </button>
+              <span class="text-muted small align-self-center">
+                Last updated: {{ freeze_cfg.updated_at if freeze_cfg and freeze_cfg.updated_at else '--' }} by {{ freeze_cfg.updated_by if freeze_cfg and freeze_cfg.updated_by else '--' }}
+              </span>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  const tabBtns = document.querySelectorAll('[data-settings-tab]');
+  const attendancePane = document.getElementById('attendanceControlPane');
+  const freezePane = document.getElementById('freezeControlPane');
+  tabBtns.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const t = btn.getAttribute('data-settings-tab');
+      tabBtns.forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      if(t === 'freeze'){
+        attendancePane.style.display = 'none';
+        freezePane.style.display = '';
+        history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=freeze');
+      } else {
+        freezePane.style.display = 'none';
+        attendancePane.style.display = '';
+        history.replaceState({}, '', '{{ url_for("form_control") }}');
+      }
+    });
+  });
+
   const scopeSel = document.getElementById('ov_scope');
   const projWrap = document.getElementById('ov_project_wrap');
   const distWrap = document.getElementById('ov_district_wrap');

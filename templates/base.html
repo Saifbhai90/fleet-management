@@ -2125,9 +2125,6 @@
                 <a href="{{ url_for('admin_app_releases') }}" class="collapse-item {% if request.endpoint == 'admin_app_releases' %}active-link{% endif %}">
                     <i class="bi bi-phone-vibrate text-info"></i><span>App Updates</span>
                 </a>
-                <a href="{{ url_for('freeze_data_settings') }}" class="collapse-item {% if request.endpoint == 'freeze_data_settings' %}active-link{% endif %}">
-                    <i class="bi bi-snow2 text-primary"></i><span>Freeze Data</span>
-                </a>
                 {% endif %}
             </div>
         </div>
@@ -2175,16 +2172,13 @@
           <div>
             <i class="bi bi-shield-lock-fill me-1"></i>
             <strong>Data Freeze Active:</strong>
-            {% if freeze_data_status.lock_before and freeze_data_status.lock_after %}
-              Add/Edit is blocked for all dates around <strong>{{ freeze_data_status.anchor_display }}</strong>.
-            {% elif freeze_data_status.lock_before %}
-              Add/Edit is blocked on or before <strong>{{ freeze_data_status.anchor_display }}</strong>.
-            {% else %}
-              Add/Edit is blocked on or after <strong>{{ freeze_data_status.anchor_display }}</strong>.
-            {% endif %}
+            {% if freeze_data_status.before_display %}On/Before <strong>{{ freeze_data_status.before_display }}</strong>{% endif %}
+            {% if freeze_data_status.before_display and freeze_data_status.after_display %} and {% endif %}
+            {% if freeze_data_status.after_display %}On/After <strong>{{ freeze_data_status.after_display }}</strong>{% endif %}
+            dates are blocked for add/edit.
             {% if freeze_data_status.reason %}<span class="ms-1">Reason: {{ freeze_data_status.reason }}</span>{% endif %}
           </div>
-          <a class="btn btn-sm btn-outline-dark" href="{{ url_for('freeze_data_settings') }}">Review</a>
+          <a class="btn btn-sm btn-outline-dark" href="{{ url_for('form_control', settings_tab='freeze') }}">Review</a>
         </div>
       </div>
     {% endif %}
