@@ -2405,8 +2405,10 @@
 
       window.fleetTableEnhance=function(tableId){
         var tbl=document.getElementById(tableId);if(!tbl)return;
+        if(tbl.dataset && tbl.dataset.ftEnhanced==='1')return;
         var thead=tbl.querySelector('thead');if(!thead)return;
         var ths=thead.querySelectorAll('th'),tbody=tbl.querySelector('tbody');if(!tbody)return;
+        if(tbl.dataset)tbl.dataset.ftEnhanced='1';
         var _sortCol=-1,_sortAsc=true,_filters={},_numFilters={},_txtFilters={},_customFilters={};
         var _allRowsLoaded=false,_allRowsLoading=false,_allRowsCallbacks=[];
         var _initialPageHtml=tbody.innerHTML,_allRowsHtml='',_usingAllRows=false;
@@ -2650,6 +2652,27 @@
         }
         document.addEventListener('click',function(e){if(!e.target.closest('.ft-filter-dd')&&!e.target.closest('.ft-filter-btn')&&!e.target.closest('.ft-af-overlay'))_closeAllDd()});
       };
+
+      window.fleetEnhanceAllListTables=function(root){
+        var scope=root&&root.querySelectorAll?root:document;
+        var seq=0;
+        scope.querySelectorAll('table').forEach(function(tbl){
+          if(tbl.classList.contains('no-fleet-filter')||tbl.getAttribute('data-ft-ignore')==='1')return;
+          if(tbl.dataset&&tbl.dataset.ftEnhanced==='1')return;
+          var thead=tbl.querySelector('thead'),tbody=tbl.querySelector('tbody');
+          if(!thead||!tbody)return;
+          if(thead.querySelectorAll('th').length<2)return;
+          if(tbody.querySelector('input,select,textarea'))return; // Skip editable entry grids.
+          if(!tbl.id){seq+=1;tbl.id='ft_auto_tbl_'+seq;}
+          window.fleetTableEnhance(tbl.id);
+        });
+      };
+
+      if(document.readyState==='loading'){
+        document.addEventListener('DOMContentLoaded',function(){window.fleetEnhanceAllListTables(document)});
+      }else{
+        window.fleetEnhanceAllListTables(document);
+      }
     })();
 
     // ── Reusable Category Multi-Select (body-appended, searchable, badges) ──
