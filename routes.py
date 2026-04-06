@@ -4496,6 +4496,7 @@ def login():
         session.clear()
 
     form = LoginForm()
+    lockout_remaining_seconds = None
     # Show "no access" message at most once when redirected due to permission failure
     if session.pop('show_no_access', None):
         flash('You do not have access to this page.', 'danger')
@@ -4508,16 +4509,35 @@ def login():
 
         _lockout_minutes = 15
         _max_failures = 5
+
+        def _compute_lockout_seconds(uname):
+            try:
+                recent = LoginAttempt.query.filter(
+                    LoginAttempt.username == (uname or '').lower(),
+                    LoginAttempt.success == False,
+                ).order_by(LoginAttempt.created_at.desc()).limit(_max_failures).all()
+                if len(recent) < _max_failures:
+                    return 0
+                oldest_in_top = recent[-1].created_at
+                unlock_at = oldest_in_top + timedelta(minutes=_lockout_minutes)
+                remaining = int((unlock_at - pk_now()).total_seconds())
+                return remaining if remaining > 0 else 0
+            except Exception:
+                return 0
+
         try:
-            _cutoff = pk_now() - timedelta(minutes=_lockout_minutes)
-            _recent_fails = LoginAttempt.query.filter(
-                LoginAttempt.username == username.lower(),
-                LoginAttempt.success == False,
-                LoginAttempt.created_at >= _cutoff
-            ).count()
-            if _recent_fails >= _max_failures:
-                flash(f'Account temporarily locked due to {_max_failures} failed attempts. Try again in {_lockout_minutes} minutes.', 'danger')
-                return redirect(url_for('login'))
+            lockout_remaining_seconds = _compute_lockout_seconds(username)
+            if lockout_remaining_seconds > 0:
+                flash(
+                    f'Account temporarily locked due to {_max_failures} failed attempts. '
+                    f'Try again in {max(1, (lockout_remaining_seconds + 59) // 60)} minute(s).',
+                    'danger'
+                )
+                return render_template(
+                    'login.html',
+                    form=form,
+                    lockout_remaining_seconds=lockout_remaining_seconds
+                )
         except Exception:
             pass
 
@@ -4697,10 +4717,22 @@ def login():
                 success=False,
             ))
             db.session.commit()
+            lockout_remaining_seconds = _compute_lockout_seconds(username)
+            if lockout_remaining_seconds > 0:
+                flash(
+                    f'Account temporarily locked due to {_max_failures} failed attempts. '
+                    f'Try again in {max(1, (lockout_remaining_seconds + 59) // 60)} minute(s).',
+                    'danger'
+                )
+                return render_template(
+                    'login.html',
+                    form=form,
+                    lockout_remaining_seconds=lockout_remaining_seconds
+                )
         except Exception:
             db.session.rollback()
         flash('Invalid user ID or password.', 'danger')
-    return render_template('login.html', form=form)
+    return render_template('login.html', form=form, lockout_remaining_seconds=lockout_remaining_seconds)
 
 
 @app.route('/logout')

@@ -52,6 +52,39 @@
 <div class="lp-section-title" id="loginTitle" style="display:block;">Welcome back</div>
 <div class="lp-section-sub" id="loginSubtitle" style="display:block;">Sign in to your Fleet Manager account</div>
 
+{% if lockout_remaining_seconds and lockout_remaining_seconds > 0 %}
+<div id="lockoutCard"
+     class="mb-3"
+     data-seconds="{{ lockout_remaining_seconds }}"
+     style="border:1px solid #fed7aa;background:linear-gradient(135deg,#fff7ed 0%,#ffedd5 45%,#fff 100%);border-radius:14px;padding:14px 14px 12px;box-shadow:0 10px 22px rgba(251,146,60,.16);">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+    <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+      <div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#f97316;color:#fff;box-shadow:0 4px 12px rgba(249,115,22,.35);">
+        <i class="bi bi-shield-lock-fill"></i>
+      </div>
+      <div style="min-width:0;">
+        <div style="font-weight:700;color:#9a3412;font-size:.9rem;line-height:1.2;">Account Temporarily Locked</div>
+        <div style="font-size:.74rem;color:#c2410c;">Too many failed attempts. Please wait and try again.</div>
+      </div>
+    </div>
+    <div style="position:relative;width:88px;height:88px;flex-shrink:0;">
+      <svg width="88" height="88" viewBox="0 0 88 88" style="transform:rotate(-90deg);filter:drop-shadow(0 4px 10px rgba(249,115,22,.18));">
+        <circle cx="44" cy="44" r="36" fill="none" stroke="#fed7aa" stroke-width="8"></circle>
+        <circle id="lockoutProgressRing" cx="44" cy="44" r="36" fill="none" stroke="#f97316" stroke-linecap="round" stroke-width="8"></circle>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">
+        <div style="font-size:.64rem;color:#9a3412;line-height:1;"><i class="bi bi-watch"></i></div>
+        <div id="lockoutCountdown"
+             style="margin-top:3px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;font-weight:800;font-size:1.08rem;color:#7c2d12;letter-spacing:.04em;line-height:1;">
+          --:--
+        </div>
+        <div style="font-size:.62rem;color:#9a3412;margin-top:3px;line-height:1;">Remaining</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <form method="POST" novalidate autocomplete="off" id="loginForm">
   {{ form.hidden_tag() }}
 
@@ -135,6 +168,73 @@
       btn.disabled = false;
     }, 8000);
   });
+})();
+
+/* ── Lockout Countdown (5 failed attempts) ── */
+(function() {
+  var card = document.getElementById('lockoutCard');
+  if (!card) return;
+
+  var countdownEl = document.getElementById('lockoutCountdown');
+  var progressRing = document.getElementById('lockoutProgressRing');
+  var submitBtn = document.getElementById('loginSubmitBtn');
+  var hblBtn = document.getElementById('hblSavedLoginBtn');
+  var initial = parseInt(card.getAttribute('data-seconds') || '0', 10);
+  if (!initial || initial <= 0) return;
+
+  var left = initial;
+  var ringRadius = 36;
+  var ringCircumference = 2 * Math.PI * ringRadius;
+  if (progressRing) {
+    progressRing.style.strokeDasharray = String(ringCircumference);
+    progressRing.style.strokeDashoffset = '0';
+    progressRing.style.transition = 'stroke-dashoffset .9s linear, stroke .25s ease';
+  }
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.classList.add('loading');
+  }
+  if (hblBtn) {
+    hblBtn.disabled = true;
+    hblBtn.classList.add('loading');
+  }
+
+  function pad(n) { return n < 10 ? ('0' + n) : String(n); }
+  function render() {
+    var mins = Math.floor(left / 60);
+    var secs = left % 60;
+    if (countdownEl) countdownEl.textContent = pad(mins) + ':' + pad(secs);
+    if (progressRing) {
+      var pct = Math.max(0, left / initial);
+      var offset = ringCircumference * (1 - pct);
+      progressRing.style.strokeDashoffset = String(offset);
+    }
+  }
+
+  render();
+  var timer = setInterval(function() {
+    left -= 1;
+    if (left <= 0) {
+      clearInterval(timer);
+      if (countdownEl) countdownEl.textContent = '00:00';
+      if (progressRing) {
+        progressRing.style.strokeDashoffset = String(ringCircumference);
+        progressRing.style.stroke = '#22c55e';
+      }
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('loading');
+      }
+      if (hblBtn) {
+        hblBtn.disabled = false;
+        hblBtn.classList.remove('loading');
+      }
+      card.style.borderColor = '#bbf7d0';
+      card.style.background = 'linear-gradient(135deg,#f0fdf4 0%,#dcfce7 45%,#fff 100%)';
+      return;
+    }
+    render();
+  }, 1000);
 })();
 
 /* ═══════════════════════════════════════════════════════════════════
