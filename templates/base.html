@@ -2408,6 +2408,7 @@
         var thead=tbl.querySelector('thead');if(!thead)return;
         var ths=thead.querySelectorAll('th'),tbody=tbl.querySelector('tbody');if(!tbody)return;
         var _sortCol=-1,_sortAsc=true,_filters={},_numFilters={},_txtFilters={},_customFilters={};
+        var _allRowsLoaded=false,_allRowsLoading=false,_allRowsCallbacks=[];
 
         if(!_styleInjected){_styleInjected=true;var s=document.createElement('style');s.textContent=
           '.ft-sort{cursor:pointer;user-select:none;position:relative;padding-right:18px!important}'+
@@ -2452,10 +2453,44 @@
           document.head.appendChild(s);
         }
 
+        function _isPaginatedView(){return !!document.querySelector('.pagination')}
+        function _runAllRowsCallbacks(){while(_allRowsCallbacks.length){try{(_allRowsCallbacks.shift())()}catch(_e){}}}
+        function _ensureAllRowsLoaded(cb){
+          if(cb)_allRowsCallbacks.push(cb);
+          if(_allRowsLoaded||!_isPaginatedView()){_allRowsLoaded=true;_runAllRowsCallbacks();return}
+          if(_allRowsLoading)return;
+          _allRowsLoading=true;
+          try{
+            var u=new URL(window.location.href);
+            u.searchParams.set('page','1');
+            // High page size so header filter can work across full dataset.
+            u.searchParams.set('per_page','100000');
+            fetch(u.toString(),{credentials:'same-origin'}).then(function(r){return r.text()}).then(function(html){
+              var doc=new DOMParser().parseFromString(html,'text/html');
+              var rt=doc.getElementById(tableId);
+              var rb=rt?rt.querySelector('tbody'):null;
+              if(rb){
+                var rows=Array.from(rb.querySelectorAll('tr')).filter(function(r){return r.cells.length>1});
+                if(rows.length){
+                  tbody.innerHTML='';
+                  rows.forEach(function(r){tbody.appendChild(r.cloneNode(true));});
+                }
+              }
+            }).catch(function(){}).finally(function(){
+              _allRowsLoading=false;_allRowsLoaded=true;_runAllRowsCallbacks();
+              if(typeof window._fleetAfterFilter==='function')window._fleetAfterFilter();
+            });
+          }catch(_e){
+            _allRowsLoading=false;_allRowsLoaded=true;_runAllRowsCallbacks();
+          }
+        }
         function getRows(){return Array.from(tbody.querySelectorAll('tr')).filter(function(r){return r.cells.length>1})}
         function getCellVal(r,ci){var c=r.cells[ci];return c?(c.textContent||'').trim():''}
         function numVal(s){return parseFloat((s||'').replace(/[,%]/g,''))}
         function _colIsNumeric(ci){var rows=getRows(),nums=0,tot=0;rows.forEach(function(r){var v=getCellVal(r,ci);if(v===''||v==='-')return;tot++;if(!isNaN(numVal(v)))nums++});return tot>0&&nums/tot>=0.6}
+
+        // Preload all pages rows once so header filters/search work globally.
+        _ensureAllRowsLoaded();
 
         ths.forEach(function(th,ci){
           th.classList.add('ft-sort');
@@ -2474,6 +2509,10 @@
 
           fbtn.addEventListener('click',function(e){
             e.stopPropagation();_closeAllDd();
+            if(!_allRowsLoaded&&_isPaginatedView()){
+              _ensureAllRowsLoaded(function(){setTimeout(function(){fbtn.click();},0)});
+              return;
+            }
             var dd=document.createElement('div');dd.className='ft-filter-dd';
             dd.addEventListener('wheel',function(ev){ev.stopPropagation()});
             document.body.appendChild(dd);_openDd=dd;_openDdBtn=fbtn;
