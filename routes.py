@@ -5382,6 +5382,7 @@ def form_control():
             return redirect(url_for('form_control', settings_tab='freeze'))
 
         enabled = bool(request.form.get('freeze_enabled'))
+        allow_future_entries = bool(request.form.get('freeze_allow_future_entries'))
         before_date = parse_date(request.form.get('freeze_before_date'))
         after_date = parse_date(request.form.get('freeze_after_date'))
         reason = (request.form.get('freeze_reason') or '').strip()
@@ -5400,6 +5401,7 @@ def form_control():
             enabled=enabled,
             before_date=before_date,
             after_date=after_date,
+            allow_future_entries=allow_future_entries,
             reason=reason,
             allowed_endpoints=selected_allowed,
             updated_by=updated_by,

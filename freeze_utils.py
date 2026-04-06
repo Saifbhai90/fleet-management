@@ -160,6 +160,7 @@ def get_freeze_form_catalog():
 
 def get_freeze_config() -> dict:
     enabled = _to_bool(SystemSetting.get('freeze_data_enabled', '0'))
+    allow_future_entries = _to_bool(SystemSetting.get('freeze_data_allow_future_entries', '1'))
     before_raw = SystemSetting.get('freeze_data_before_date')
     after_raw = SystemSetting.get('freeze_data_after_date')
     before_date = parse_date(before_raw)
@@ -172,6 +173,8 @@ def get_freeze_config() -> dict:
     effective_allowed = {ep for ep in allowed_endpoints if ep in catalog_endpoints}
     return {
         'enabled': enabled,
+        'allow_future_entries': allow_future_entries,
+        'future_lock_active': not allow_future_entries,
         'before_date': before_date,
         'before_raw': before_raw or '',
         'before_display': before_date.strftime('%d-%m-%Y') if before_date else '',
@@ -183,12 +186,13 @@ def get_freeze_config() -> dict:
         'updated_at': updated_at,
         'allowed_endpoints': sorted(effective_allowed),
         'allowed_set': effective_allowed,
-        'is_effective': bool(enabled and (before_date or after_date)),
+        'is_effective': bool((enabled and (before_date or after_date)) or (not allow_future_entries)),
     }
 
 
-def save_freeze_config(*, enabled: bool, before_date: date, after_date: date, reason: str, allowed_endpoints: set, updated_by: str, updated_at: str) -> None:
+def save_freeze_config(*, enabled: bool, before_date: date, after_date: date, allow_future_entries: bool, reason: str, allowed_endpoints: set, updated_by: str, updated_at: str) -> None:
     SystemSetting.set('freeze_data_enabled', '1' if enabled else '0')
+    SystemSetting.set('freeze_data_allow_future_entries', '1' if allow_future_entries else '0')
     SystemSetting.set('freeze_data_before_date', before_date.isoformat() if before_date else '')
     SystemSetting.set('freeze_data_after_date', after_date.isoformat() if after_date else '')
     SystemSetting.set('freeze_data_reason', (reason or '').strip())
@@ -237,7 +241,11 @@ def extract_effective_date(req: Request) -> date:
 
 
 def evaluate_freeze(cfg: dict, effective_date: date):
-    if not cfg.get('is_effective') or not effective_date:
+    if not effective_date:
+        return False, ''
+    if not cfg.get('allow_future_entries', True) and effective_date > pk_date():
+        return True, 'future dates are disabled'
+    if not cfg.get('is_effective'):
         return False, ''
     before_date = cfg.get('before_date')
     after_date = cfg.get('after_date')

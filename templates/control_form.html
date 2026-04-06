@@ -442,6 +442,15 @@
               <label class="form-check-label fw-semibold" for="freezeEnabled">Enable Freeze Data Validation (All Add/Edit Forms)</label>
             </div>
 
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" role="switch" id="freezeAllowFutureEntries" name="freeze_allow_future_entries" value="1" {% if not freeze_cfg or freeze_cfg.allow_future_entries %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="freezeAllowFutureEntries">Allow Working on Future Dates (Current date se agay)</label>
+            </div>
+            <div class="form-text mb-3">
+              <strong>ON:</strong> Future-date entries allowed. &nbsp;
+              <strong>OFF:</strong> Aaj se aagay ki date par add/edit block ho jaye gi.
+            </div>
+
             <div class="row g-3 mb-3">
               <div class="col-md-6">
                 <label class="form-label fw-semibold">Freeze BEFORE Date (inclusive)</label>
