@@ -480,6 +480,8 @@ def accounts_account_ledger():
     
     ledger_data = None
     dto_summary = None
+    category_choices = [name for name, _ in _get_fund_transfer_category_choices(include_all_label=True)[1:]]
+    selected_categories = []
     
     account_id_param = request.args.get('account_id', 0, type=int)
     if account_id_param > 0 and request.method == 'GET':
@@ -491,6 +493,7 @@ def accounts_account_ledger():
         to_date_val = form.to_date.data
         _raw_cat = request.form.get('category', '')
         category_val = [c.strip() for c in _raw_cat.split(',') if c.strip()] or None
+        selected_categories = category_val or []
         district_id = form.district_id.data if form.district_id.data and form.district_id.data != 0 else None
         project_id = form.project_id.data if form.project_id.data and form.project_id.data != 0 else None
 
@@ -506,6 +509,7 @@ def accounts_account_ledger():
 
     return render_template('finance/account_ledger.html',
                          form=form, ledger_data=ledger_data, dto_summary=dto_summary,
+                         category_choices=category_choices, selected_categories=selected_categories,
                          title='Account Ledger')
 
 

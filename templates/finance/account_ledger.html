@@ -167,8 +167,17 @@ document.addEventListener('DOMContentLoaded', function(){
 {% endif %}
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-    var CATS = [['Fuel','Fuel'],['Maintenance','Maintenance'],['Oil','Oil'],['Salary','Salary'],['Saman/Purchase','Saman / Purchase'],['Cash Advance','Cash Advance'],['Distribution','Distribution'],['General','General'],['Other','Other']];
-    window._catMultiSelect && window._catMultiSelect('catMultiBtn','catHidden', CATS, []);
+    var CATS = [
+        {% for c in (category_choices or []) %}
+        ['{{ c|e }}','{{ c|e }}']{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    var PRE = [
+        {% for c in (selected_categories or []) %}
+        '{{ c|e }}'{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    window._catMultiSelect && window._catMultiSelect('catMultiBtn','catHidden', CATS, PRE);
 });
 </script>
 {% endblock %}
