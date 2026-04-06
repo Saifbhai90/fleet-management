@@ -67,6 +67,7 @@
               <th class="text-center">EMG Task</th>
               <th class="text-end">T.KM (Tracker)</th>
               <th style="min-width:160px;">Driver</th>
+              <th class="text-center" style="min-width:90px;">Edit</th>
               <th style="min-width:200px;">Remarks</th>
               <th style="min-width:100px;">Fine</th>
             </tr>
@@ -79,6 +80,7 @@
               <td class="fw-medium">
                 {{ row.vehicle.vehicle_no }}
                 <input type="hidden" name="row_{{ loop.index0 }}_vehicle_id" value="{{ row.vehicle.id }}">
+                <input type="hidden" name="row_{{ loop.index0 }}_edit_mode" id="row_{{ loop.index0 }}_edit_mode" value="{{ '0' if s else '1' }}">
               </td>
               <td class="text-end">
                 <input type="hidden" name="row_{{ loop.index0 }}_km_in" value="{{ row.start_reading }}">
@@ -99,18 +101,31 @@
                 {{ row.tracker_km }}
               </td>
               <td>
-                <select name="row_{{ loop.index0 }}_driver_id" class="form-select form-select-sm">
+                <select name="row_{{ loop.index0 }}_driver_id" id="row_{{ loop.index0 }}_driver_id" class="form-select form-select-sm row-editable-field" {% if s %}disabled{% endif %}>
                   <option value="">-- Select --</option>
                   {% for drv in row.drivers %}
-                  <option value="{{ drv.id }}" {% if s and s.driver_id == drv.id %}selected{% endif %}>{{ drv.name }}</option>
+                  <option value="{{ drv.id }}" {% if s and s.driver_id == drv.id %}selected{% endif %}>
+                    {{ drv.name }}{% if drv.status != 'Active' %} ({{ drv.status }}){% endif %}
+                  </option>
                   {% endfor %}
                 </select>
               </td>
-              <td>
-                <input type="text" name="row_{{ loop.index0 }}_remarks" class="form-control form-control-sm" placeholder="Remarks" value="{{ s.remarks or '' if s else '' }}">
+              <td class="text-center">
+                {% if s %}
+                <button type="button" class="btn btn-sm btn-outline-primary row-edit-btn"
+                        data-row="{{ loop.index0 }}"
+                        title="Enable editing for this row">
+                  <i class="bi bi-pencil-square me-1"></i>Edit
+                </button>
+                {% else %}
+                <span class="badge bg-success">New</span>
+                {% endif %}
               </td>
               <td>
-                <input type="number" step="0.01" min="0" name="row_{{ loop.index0 }}_fine" class="form-control form-control-sm text-end" value="{{ s.fine_amount|float if s and s.fine_amount else 0 }}" placeholder="0">
+                <input type="text" name="row_{{ loop.index0 }}_remarks" id="row_{{ loop.index0 }}_remarks" class="form-control form-control-sm row-editable-field" placeholder="Remarks" value="{{ s.remarks or '' if s else '' }}" {% if s %}disabled{% endif %}>
+              </td>
+              <td>
+                <input type="number" step="0.01" min="0" name="row_{{ loop.index0 }}_fine" id="row_{{ loop.index0 }}_fine" class="form-control form-control-sm text-end row-editable-field" value="{{ s.fine_amount|float if s and s.fine_amount else 0 }}" placeholder="0" {% if s %}disabled{% endif %}>
               </td>
             </tr>
             {% endfor %}
@@ -118,7 +133,11 @@
         </table>
       </div>
       <div class="card-footer bg-light d-flex justify-content-between align-items-center">
-        <span class="text-muted small">Fine > 0 will auto-create a Driver Penalty Record.</span>
+        <span class="text-muted small">
+          Fine > 0 will auto-create a Driver Penalty Record.
+          Saved rows stay locked; click <strong>Edit</strong> to change.
+          If Driver is left blank during edit, previous saved driver will be retained.
+        </span>
         <button type="submit" class="btn btn-warning px-4">
           <i class="bi bi-save me-1"></i>Save All
         </button>
@@ -163,5 +182,27 @@
   }
 })();
 document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('withoutTaskTable'); });
+
+document.addEventListener('click', function(e){
+  var btn = e.target.closest('.row-edit-btn');
+  if(!btn) return;
+  var idx = btn.getAttribute('data-row');
+  if(!idx && idx !== '0') return;
+
+  var editMode = document.getElementById('row_' + idx + '_edit_mode');
+  var driver = document.getElementById('row_' + idx + '_driver_id');
+  var remarks = document.getElementById('row_' + idx + '_remarks');
+  var fine = document.getElementById('row_' + idx + '_fine');
+
+  if(editMode){ editMode.value = '1'; }
+  [driver, remarks, fine].forEach(function(el){
+    if(el){ el.disabled = false; }
+  });
+
+  btn.classList.remove('btn-outline-primary');
+  btn.classList.add('btn-primary');
+  btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Editing';
+  btn.disabled = true;
+});
 </script>
 {% endblock %}

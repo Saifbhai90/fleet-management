@@ -65,6 +65,7 @@
               <th style="min-width:160px;">Driver Name</th>
               <th style="min-width:100px;">Call to DTO/CRC</th>
               <th style="min-width:200px;">DTO Investigation</th>
+              <th class="text-center" style="min-width:90px;">Edit</th>
               <th style="min-width:100px;">Fine Amount</th>
             </tr>
           </thead>
@@ -78,6 +79,7 @@
                 <input type="hidden" name="row_{{ loop.index0 }}_vehicle_id" value="{{ row.vehicle.id if row.vehicle else '' }}">
                 <input type="hidden" name="row_{{ loop.index0 }}_task_id" value="{{ row.emg.task_id_ext or '' }}">
                 <input type="hidden" name="row_{{ loop.index0 }}_emg_id" value="{{ row.emg.id }}">
+                <input type="hidden" name="row_{{ loop.index0 }}_edit_mode" id="row_{{ loop.index0 }}_edit_mode" value="{{ '0' if s else '1' }}">
                 <span class="text-muted small">{{ row.emg.task_id_ext or '-' }}</span>
               </td>
               <td>
@@ -85,25 +87,38 @@
                 <span class="small">{{ row.emg.sub_category or '-' }}</span>
               </td>
               <td>
-                <select name="row_{{ loop.index0 }}_driver_id" class="form-select form-select-sm">
+                <select name="row_{{ loop.index0 }}_driver_id" id="row_{{ loop.index0 }}_driver_id" class="form-select form-select-sm red-editable-field" {% if s %}disabled{% endif %}>
                   <option value="">-- Select --</option>
                   {% for drv in row.drivers %}
-                  <option value="{{ drv.id }}" {% if s and s.driver_id == drv.id %}selected{% endif %}>{{ drv.name }} ({{ drv.shift or '-' }})</option>
+                  <option value="{{ drv.id }}" {% if s and s.driver_id == drv.id %}selected{% endif %}>
+                    {{ drv.name }} ({{ drv.shift or '-' }}){% if drv.status != 'Active' %} - {{ drv.status }}{% endif %}
+                  </option>
                   {% endfor %}
                 </select>
               </td>
               <td>
-                <select name="row_{{ loop.index0 }}_call_to_dto" class="form-select form-select-sm">
+                <select name="row_{{ loop.index0 }}_call_to_dto" id="row_{{ loop.index0 }}_call_to_dto" class="form-select form-select-sm red-editable-field" {% if s %}disabled{% endif %}>
                   <option value="">--</option>
                   <option value="Yes" {% if s and s.call_to_dto == 'Yes' %}selected{% endif %}>Yes</option>
                   <option value="No" {% if s and s.call_to_dto == 'No' %}selected{% endif %}>No</option>
                 </select>
               </td>
               <td>
-                <input type="text" name="row_{{ loop.index0 }}_dto_investigation" class="form-control form-control-sm" placeholder="Investigation details" value="{{ s.dto_investigation or '' if s else '' }}">
+                <input type="text" name="row_{{ loop.index0 }}_dto_investigation" id="row_{{ loop.index0 }}_dto_investigation" class="form-control form-control-sm red-editable-field" placeholder="Investigation details" value="{{ s.dto_investigation or '' if s else '' }}" {% if s %}disabled{% endif %}>
+              </td>
+              <td class="text-center">
+                {% if s %}
+                <button type="button" class="btn btn-sm btn-outline-primary red-row-edit-btn"
+                        data-row="{{ loop.index0 }}"
+                        title="Enable editing for this row">
+                  <i class="bi bi-pencil-square me-1"></i>Edit
+                </button>
+                {% else %}
+                <span class="badge bg-success">New</span>
+                {% endif %}
               </td>
               <td>
-                <input type="number" step="0.01" min="0" name="row_{{ loop.index0 }}_fine_amount" class="form-control form-control-sm text-end" value="{{ s.fine_amount|float if s and s.fine_amount else 0 }}" placeholder="0">
+                <input type="number" step="0.01" min="0" name="row_{{ loop.index0 }}_fine_amount" id="row_{{ loop.index0 }}_fine_amount" class="form-control form-control-sm text-end red-editable-field" value="{{ s.fine_amount|float if s and s.fine_amount else 0 }}" placeholder="0" {% if s %}disabled{% endif %}>
               </td>
             </tr>
             {% endfor %}
@@ -111,7 +126,11 @@
         </table>
       </div>
       <div class="card-footer bg-light d-flex justify-content-between align-items-center">
-        <span class="text-muted small">Fine > 0 will auto-create a Driver Penalty Record.</span>
+        <span class="text-muted small">
+          Fine > 0 will auto-create a Driver Penalty Record.
+          Saved rows stay locked; click <strong>Edit</strong> to change.
+          If Driver is left blank during edit, previous saved driver will be retained.
+        </span>
         <button type="submit" class="btn btn-danger px-4">
           <i class="bi bi-save me-1"></i>Save All Red Tasks
         </button>
@@ -156,5 +175,28 @@
   }
 })();
 document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('redTaskTable'); });
+
+document.addEventListener('click', function(e){
+  var btn = e.target.closest('.red-row-edit-btn');
+  if(!btn) return;
+  var idx = btn.getAttribute('data-row');
+  if(!idx && idx !== '0') return;
+
+  var editMode = document.getElementById('row_' + idx + '_edit_mode');
+  var driver = document.getElementById('row_' + idx + '_driver_id');
+  var callDto = document.getElementById('row_' + idx + '_call_to_dto');
+  var inv = document.getElementById('row_' + idx + '_dto_investigation');
+  var fine = document.getElementById('row_' + idx + '_fine_amount');
+
+  if(editMode){ editMode.value = '1'; }
+  [driver, callDto, inv, fine].forEach(function(el){
+    if(el){ el.disabled = false; }
+  });
+
+  btn.classList.remove('btn-outline-primary');
+  btn.classList.add('btn-primary');
+  btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Editing';
+  btn.disabled = true;
+});
 </script>
 {% endblock %}

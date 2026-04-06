@@ -13856,6 +13856,7 @@ def red_task_new():
             veh_id_raw = request.form.get(f'row_{idx}_vehicle_id')
             if veh_id_raw is None:
                 break
+            edit_mode = request.form.get(f'row_{idx}_edit_mode', '1') == '1'
             veh_id = int(veh_id_raw) if veh_id_raw else None
             _veh = Vehicle.query.get(veh_id) if veh_id else None
             row_did = did or (_veh.district_id if _veh else None)
@@ -13879,9 +13880,20 @@ def red_task_new():
             if emg_rec_id:
                 existing = RedTask.query.filter_by(task_date=task_date, vehicle_id=veh_id, task_id=task_id_ext).first()
             if existing:
+                # Locked row: do not modify unless user explicitly enables edit mode.
+                if not edit_mode:
+                    idx += 1
+                    continue
+                # Extra safety: preserve historical driver if left blank during edit.
+                effective_driver_id = driver_id if driver_id is not None else existing.driver_id
+                if effective_driver_id:
+                    drv_eff = Driver.query.get(effective_driver_id)
+                    driver_name_val = drv_eff.name if drv_eff else existing.driver_name
+                else:
+                    driver_name_val = None
                 existing.district_id = row_did
                 existing.project_id = row_pid
-                existing.driver_id = driver_id
+                existing.driver_id = effective_driver_id
                 existing.driver_name = driver_name_val
                 existing.reason = reason
                 existing.call_to_dto = call_to_dto
@@ -13946,6 +13958,10 @@ def red_task_new():
             if veh:
                 drivers = Driver.query.filter_by(vehicle_id=veh.id, status='Active').all()
             saved = saved_map.get((veh.id if veh else None, e.task_id_ext or ''))
+            if saved and saved.driver_id:
+                _saved_drv = Driver.query.get(saved.driver_id)
+                if _saved_drv and all(d.id != _saved_drv.id for d in drivers):
+                    drivers.append(_saved_drv)
             rows.append({
                 'emg': e,
                 'vehicle': veh,
@@ -14135,6 +14151,12 @@ def without_task_new():
                 driver_id = None
             existing = VehicleMoveWithoutTask.query.filter_by(vehicle_id=veh_id, move_date=move_date).first()
             if existing:
+                # Locked row: keep old record exactly as-is unless user explicitly clicks Edit.
+                if not edit_mode:
+                    idx += 1
+                    continue
+                # Extra safety: if driver is left blank on re-save, preserve the previously saved driver.
+                effective_driver_id = driver_id if driver_id is not None else existing.driver_id
                 existing.district_id = row_did
                 existing.project_id = row_pid
                 existing.km_in = km_in
@@ -14146,7 +14168,7 @@ def without_task_new():
                 existing.remarks = remarks
                 existing.fine = str(fine_amt) if fine_amt > 0 else 'No'
                 existing.fine_amount = fine_amt
-                existing.driver_id = driver_id
+                existing.driver_id = effective_driver_id
                 rec = existing
             else:
                 rec = VehicleMoveWithoutTask(
@@ -14223,6 +14245,11 @@ def without_task_new():
                 tracker_km = _mil_rec.effective_km() if _mil_rec else 0
                 assigned_drivers = Driver.query.filter_by(vehicle_id=v.id, status='Active').order_by(Driver.name).all()
                 saved = saved_map.get(v.id)
+                # Keep historical integrity: include previously saved driver even if now left/unassigned.
+                if saved and saved.driver_id:
+                    _saved_drv = Driver.query.get(saved.driver_id)
+                    if _saved_drv and all(d.id != _saved_drv.id for d in assigned_drivers):
+                        assigned_drivers.append(_saved_drv)
                 rows.append({
                     'vehicle': v,
                     'start_reading': start_reading,
@@ -14240,6 +14267,10 @@ def without_task_new():
                 if not v:
                     continue
                 assigned_drivers = Driver.query.filter_by(vehicle_id=v.id, status='Active').order_by(Driver.name).all()
+                if sr.driver_id:
+                    _saved_drv = Driver.query.get(sr.driver_id)
+                    if _saved_drv and all(d.id != _saved_drv.id for d in assigned_drivers):
+                        assigned_drivers.append(_saved_drv)
                 rows.append({
                     'vehicle': v,
                     'start_reading': float(sr.km_in or 0),
