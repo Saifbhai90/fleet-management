@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Freeze Data Settings{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h4 class="mb-1 fw-bold text-primary"><i class="bi bi-snow2 me-2"></i>Freeze Data Control</h4>
+      <div class="text-muted small">Lock add/edit operations by date across the full system. Reports remain available.</div>
+    </div>
+    {% if cfg.is_effective %}
+      <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2">ACTIVE FREEZE</span>
+    {% else %}
+      <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">INACTIVE</span>
+    {% endif %}
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 pt-3">
+          <h6 class="mb-0 fw-semibold">Freeze Rules</h6>
+        </div>
+        <div class="card-body">
+          <form method="post" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="col-12">
+              <label class="form-label fw-semibold mb-1">Master Switch</label>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="fdEnabled" name="enabled" {% if cfg.enabled %}checked{% endif %}>
+                <label class="form-check-label" for="fdEnabled">Enable Freeze Data Protection</label>
+              </div>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label fw-semibold">Anchor Date</label>
+              <input type="date" class="form-control" id="fdAnchorDate" name="anchor_date" value="{{ cfg.anchor_raw }}">
+              <div class="form-text">This date is used as the freeze boundary.</div>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label fw-semibold">Direction</label>
+              <div class="border rounded p-2">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" id="fdLockBefore" name="lock_before" {% if cfg.lock_before %}checked{% endif %}>
+                  <label class="form-check-label" for="fdLockBefore">Freeze on or before selected date</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="fdLockAfter" name="lock_after" {% if cfg.lock_after %}checked{% endif %}>
+                  <label class="form-check-label" for="fdLockAfter">Freeze on or after selected date</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">Reason / Note (optional)</label>
+              <textarea class="form-control" name="reason" rows="3" placeholder="Month closing, audit lock, compliance hold...">{{ cfg.reason }}</textarea>
+            </div>
+
+            <div class="col-12 d-flex gap-2">
+              <button class="btn btn-primary px-4" type="submit">
+                <i class="bi bi-check2-circle me-1"></i>Save Freeze Settings
+              </button>
+              <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-0 pt-3">
+          <h6 class="mb-0 fw-semibold">Current Status</h6>
+        </div>
+        <div class="card-body">
+          <ul class="list-unstyled small mb-0">
+            <li class="mb-2"><span class="text-muted">Enabled:</span> <strong>{{ 'Yes' if cfg.enabled else 'No' }}</strong></li>
+            <li class="mb-2"><span class="text-muted">Anchor Date:</span> <strong>{{ cfg.anchor_display or '--' }}</strong></li>
+            <li class="mb-2"><span class="text-muted">Freeze Before:</span> <strong>{{ 'Yes' if cfg.lock_before else 'No' }}</strong></li>
+            <li class="mb-2"><span class="text-muted">Freeze After:</span> <strong>{{ 'Yes' if cfg.lock_after else 'No' }}</strong></li>
+            <li class="mb-2"><span class="text-muted">Updated By:</span> <strong>{{ cfg.updated_by or '--' }}</strong></li>
+            <li class="mb-0"><span class="text-muted">Updated At:</span> <strong>{{ cfg.updated_at or '--' }}</strong></li>
+          </ul>
+          <hr>
+          <div class="small text-muted">
+            Freeze rules block create/edit actions system-wide, while list/report pages remain open.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

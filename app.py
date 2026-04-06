@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from datetime import timedelta
 import os
 import sys
+from freeze_utils import get_freeze_config
 
 # Load .env from app folder (so it works even when run from another directory)
 _app_dir = os.path.dirname(os.path.abspath(__file__))
@@ -181,6 +182,16 @@ def inject_server_time():
     """Inject Pakistan server time for the frontend clock."""
     from utils import pk_now
     return dict(server_pk_now=pk_now().strftime('%Y-%m-%dT%H:%M:%S'))
+
+
+@app.context_processor
+def inject_freeze_data_status():
+    """Provide current freeze status to shared layouts/forms."""
+    try:
+        cfg = get_freeze_config()
+    except Exception:
+        cfg = {}
+    return dict(freeze_data_status=cfg)
 
 # Create all tables if not exist (backward compatibility; new changes use migrations)
 _run_startup_tasks = (not app.debug) or (os.environ.get('WERKZEUG_RUN_MAIN') == 'true')

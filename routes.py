@@ -76,6 +76,13 @@ import tempfile
 import time as _time_mod
 from werkzeug.utils import secure_filename
 from r2_storage import upload_image_file, upload_image_bytes
+from freeze_utils import (
+    get_freeze_config,
+    save_freeze_config,
+    is_freeze_protected_request,
+    extract_effective_date,
+    evaluate_freeze,
+)
 
 
 def _multi_word_filter(search_str, *columns):
@@ -238,6 +245,40 @@ def require_login():
             else:
                 session['show_no_access'] = True  # show once on login page, not per-request flash
                 return redirect(url_for('login'))
+
+
+def _can_manage_freeze_data():
+    if session.get('is_master'):
+        return True
+    perms = set(session.get('permissions') or [])
+    return ('users_manage' in perms) or ('settings' in perms) or ('backup' in perms)
+
+
+@app.before_request
+def enforce_data_freeze():
+    endpoint = request.endpoint or ''
+    if not is_freeze_protected_request(request, endpoint):
+        return
+    cfg = get_freeze_config()
+    if not cfg.get('is_effective'):
+        return
+    effective_date = extract_effective_date(request)
+    blocked, rule_text = evaluate_freeze(cfg, effective_date)
+    if not blocked:
+        return
+
+    msg = (
+        f"Data freeze is active ({rule_text}). "
+        f"Selected/derived date {effective_date.strftime('%d-%m-%Y')} cannot be modified."
+    )
+    if cfg.get('reason'):
+        msg += f" Reason: {cfg['reason']}"
+
+    if request.path.startswith('/api/'):
+        return jsonify({'ok': False, 'message': msg, 'rule': rule_text}), 423
+
+    flash(msg, 'danger')
+    return redirect(request.referrer or url_for('freeze_data_settings'))
 
 
 def _endpoint_description(endpoint, method):
@@ -5359,6 +5400,44 @@ def form_control_edit_override(ov_id):
     db.session.commit()
     flash(f'Override "{ov.scope_label}" updated.', 'success')
     return redirect(url_for('form_control'))
+
+
+@app.route('/settings/freeze-data', methods=['GET', 'POST'])
+def freeze_data_settings():
+    if not _can_manage_freeze_data():
+        flash('You do not have permission to manage freeze settings.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    cfg = get_freeze_config()
+    if request.method == 'POST':
+        enabled = bool(request.form.get('enabled'))
+        lock_before = bool(request.form.get('lock_before'))
+        lock_after = bool(request.form.get('lock_after'))
+        anchor_date = parse_date(request.form.get('anchor_date'))
+        reason = (request.form.get('reason') or '').strip()
+
+        if enabled and not anchor_date:
+            flash('Please select a freeze date before enabling Freeze Data.', 'danger')
+            return render_template('freeze_data_settings.html', cfg=cfg)
+        if enabled and not (lock_before or lock_after):
+            flash('Select at least one direction: before date or after date.', 'danger')
+            return render_template('freeze_data_settings.html', cfg=cfg)
+
+        updated_by = (session.get('user') or '').strip()
+        updated_at = pk_now().strftime('%Y-%m-%d %H:%M:%S')
+        save_freeze_config(
+            enabled=enabled,
+            anchor_date=anchor_date,
+            lock_before=lock_before,
+            lock_after=lock_after,
+            reason=reason,
+            updated_by=updated_by,
+            updated_at=updated_at,
+        )
+        flash('Freeze Data settings saved successfully.', 'success')
+        return redirect(url_for('freeze_data_settings'))
+
+    return render_template('freeze_data_settings.html', cfg=cfg)
 
 
 @app.route('/roles/new', methods=['GET', 'POST'])

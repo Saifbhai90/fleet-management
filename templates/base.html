@@ -2125,6 +2125,9 @@
                 <a href="{{ url_for('admin_app_releases') }}" class="collapse-item {% if request.endpoint == 'admin_app_releases' %}active-link{% endif %}">
                     <i class="bi bi-phone-vibrate text-info"></i><span>App Updates</span>
                 </a>
+                <a href="{{ url_for('freeze_data_settings') }}" class="collapse-item {% if request.endpoint == 'freeze_data_settings' %}active-link{% endif %}">
+                    <i class="bi bi-snow2 text-primary"></i><span>Freeze Data</span>
+                </a>
                 {% endif %}
             </div>
         </div>
@@ -2166,6 +2169,25 @@
             </div>
         {% endif %}
     {% endwith %}
+    {% if freeze_data_status and freeze_data_status.is_effective %}
+      <div class="container-fluid pt-2">
+        <div class="alert alert-warning border-0 shadow-sm d-flex align-items-center justify-content-between mb-2">
+          <div>
+            <i class="bi bi-shield-lock-fill me-1"></i>
+            <strong>Data Freeze Active:</strong>
+            {% if freeze_data_status.lock_before and freeze_data_status.lock_after %}
+              Add/Edit is blocked for all dates around <strong>{{ freeze_data_status.anchor_display }}</strong>.
+            {% elif freeze_data_status.lock_before %}
+              Add/Edit is blocked on or before <strong>{{ freeze_data_status.anchor_display }}</strong>.
+            {% else %}
+              Add/Edit is blocked on or after <strong>{{ freeze_data_status.anchor_display }}</strong>.
+            {% endif %}
+            {% if freeze_data_status.reason %}<span class="ms-1">Reason: {{ freeze_data_status.reason }}</span>{% endif %}
+          </div>
+          <a class="btn btn-sm btn-outline-dark" href="{{ url_for('freeze_data_settings') }}">Review</a>
+        </div>
+      </div>
+    {% endif %}
     <style>
     /* ── AJAX Live-Search ─────────────────────────────────────────── */
 
