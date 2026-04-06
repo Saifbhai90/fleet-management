@@ -2409,6 +2409,7 @@
         var ths=thead.querySelectorAll('th'),tbody=tbl.querySelector('tbody');if(!tbody)return;
         var _sortCol=-1,_sortAsc=true,_filters={},_numFilters={},_txtFilters={},_customFilters={};
         var _allRowsLoaded=false,_allRowsLoading=false,_allRowsCallbacks=[];
+        var _initialPageHtml=tbody.innerHTML,_allRowsHtml='',_usingAllRows=false;
 
         if(!_styleInjected){_styleInjected=true;var s=document.createElement('style');s.textContent=
           '.ft-sort{cursor:pointer;user-select:none;position:relative;padding-right:18px!important}'+
@@ -2455,6 +2456,11 @@
 
         function _isPaginatedView(){return !!document.querySelector('.pagination')}
         function _runAllRowsCallbacks(){while(_allRowsCallbacks.length){try{(_allRowsCallbacks.shift())()}catch(_e){}}}
+        function _objHas(o){for(var k in o){if(Object.prototype.hasOwnProperty.call(o,k))return true;}return false}
+        function _hasAnyFilters(){return _objHas(_filters)||_objHas(_numFilters)||_objHas(_txtFilters)||_objHas(_customFilters)}
+        function _restorePageRows(){if(_usingAllRows){tbody.innerHTML=_initialPageHtml;_usingAllRows=false}}
+        function _switchToAllRows(){if(!_usingAllRows&&_allRowsHtml){tbody.innerHTML=_allRowsHtml;_usingAllRows=true}}
+        function _rowsFromHtml(html){if(!html)return[];var t=document.createElement('tbody');t.innerHTML=html;return Array.from(t.querySelectorAll('tr')).filter(function(r){return r.cells.length>1})}
         function _ensureAllRowsLoaded(cb){
           if(cb)_allRowsCallbacks.push(cb);
           if(_allRowsLoaded||!_isPaginatedView()){_allRowsLoaded=true;_runAllRowsCallbacks();return}
@@ -2470,11 +2476,7 @@
               var rt=doc.getElementById(tableId);
               var rb=rt?rt.querySelector('tbody'):null;
               if(rb){
-                var rows=Array.from(rb.querySelectorAll('tr')).filter(function(r){return r.cells.length>1});
-                if(rows.length){
-                  tbody.innerHTML='';
-                  rows.forEach(function(r){tbody.appendChild(r.cloneNode(true));});
-                }
+                _allRowsHtml=rb.innerHTML||'';
               }
             }).catch(function(){}).finally(function(){
               _allRowsLoading=false;_allRowsLoaded=true;_runAllRowsCallbacks();
@@ -2487,10 +2489,7 @@
         function getRows(){return Array.from(tbody.querySelectorAll('tr')).filter(function(r){return r.cells.length>1})}
         function getCellVal(r,ci){var c=r.cells[ci];return c?(c.textContent||'').trim():''}
         function numVal(s){return parseFloat((s||'').replace(/[,%]/g,''))}
-        function _colIsNumeric(ci){var rows=getRows(),nums=0,tot=0;rows.forEach(function(r){var v=getCellVal(r,ci);if(v===''||v==='-')return;tot++;if(!isNaN(numVal(v)))nums++});return tot>0&&nums/tot>=0.6}
-
-        // Preload all pages rows once so header filters/search work globally.
-        _ensureAllRowsLoaded();
+        function _colIsNumeric(ci,rowsIn){var rows=rowsIn||getRows(),nums=0,tot=0;rows.forEach(function(r){var v=getCellVal(r,ci);if(v===''||v==='-')return;tot++;if(!isNaN(numVal(v)))nums++});return tot>0&&nums/tot>=0.6}
 
         ths.forEach(function(th,ci){
           th.classList.add('ft-sort');
@@ -2517,10 +2516,10 @@
             dd.addEventListener('wheel',function(ev){ev.stopPropagation()});
             document.body.appendChild(dd);_openDd=dd;_openDdBtn=fbtn;
 
-            var vals={},rows=getRows();
+            var vals={},rows=_allRowsHtml?_rowsFromHtml(_allRowsHtml):getRows();
             rows.forEach(function(r){var v=getCellVal(r,ci);vals[v]=true});
             var sorted=Object.keys(vals).sort(function(a,b){var na=numVal(a),nb=numVal(b);if(!isNaN(na)&&!isNaN(nb))return na-nb;return a.localeCompare(b)});
-            var activeSet=_filters[ci]||null,isNumCol=_colIsNumeric(ci);
+            var activeSet=_filters[ci]||null,isNumCol=_colIsNumeric(ci,rows);
             var colName=(th.childNodes[0]?th.childNodes[0].textContent.trim():'');
 
             var headerDiv=document.createElement('div');headerDiv.className='ft-dd-header';
@@ -2636,6 +2635,8 @@
         }
 
         function applyFilters(){
+          if(!_hasAnyFilters()){_restorePageRows();if(typeof window._fleetAfterFilter==='function')window._fleetAfterFilter();return}
+          if(_allRowsHtml)_switchToAllRows();
           var rows=getRows(),top10Sets={};
           for(var ci in _numFilters){if(_numFilters[ci].type==='top10'){var n=_numFilters[ci].val1||10,pairs=[];rows.forEach(function(r,i){var v=numVal(getCellVal(r,parseInt(ci)));if(!isNaN(v))pairs.push({idx:i,val:v})});pairs.sort(function(a,b){return b.val-a.val});var s=new Set();pairs.slice(0,n).forEach(function(p){s.add(p.idx)});top10Sets[ci]=s}}
           rows.forEach(function(r,ri){
