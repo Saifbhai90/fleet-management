@@ -35,6 +35,14 @@ def check_auth(permission_code=None):
     return None
 
 
+def _require_workspace_employee_for_expenses():
+    """Expense Management now runs under Employee Workspace context."""
+    if not session.get('workspace_employee_id'):
+        flash('Employee Workspace select karna zaroori hai.', 'warning')
+        return redirect(url_for('workspace_dashboard'))
+    return None
+
+
 # ════════════════════════════════════════════════════════════════════════════════
 # PAYMENT VOUCHER
 # ════════════════════════════════════════════════════════════════════════════════
@@ -596,6 +604,9 @@ def accounts_balance_sheet():
 # ════════════════════════════════════════════════════════════════════════════════
 
 def employee_expense_form(pk=None):
+    _guard = _require_workspace_employee_for_expenses()
+    if _guard:
+        return _guard
     auth_check = check_auth('employee_expense_add' if not pk else 'employee_expense_edit')
     if auth_check:
         return auth_check
@@ -681,6 +692,9 @@ def employee_expense_form(pk=None):
 
 
 def employee_expense_list():
+    _guard = _require_workspace_employee_for_expenses()
+    if _guard:
+        return _guard
     auth_check = check_auth('employee_expense_list')
     if auth_check:
         return auth_check
@@ -753,6 +767,9 @@ def employee_expense_list():
 
 
 def employee_expense_delete(pk):
+    _guard = _require_workspace_employee_for_expenses()
+    if _guard:
+        return _guard
     auth_check = check_auth('employee_expense_delete')
     if auth_check:
         return auth_check

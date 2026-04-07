@@ -263,91 +263,24 @@ def workspace_account_form(pk=None):
 
 
 def workspace_expenses_list():
-    guard, emp = _workspace_guard("workspace_expense_list")
+    guard, _emp = _workspace_guard("workspace_dashboard")
     if guard:
         return guard
-    from_date = parse_date(request.args.get("from_date"))
-    to_date = parse_date(request.args.get("to_date"))
-    q = WorkspaceExpense.query.filter_by(employee_id=emp.id)
-    if from_date:
-        q = q.filter(WorkspaceExpense.expense_date >= from_date)
-    if to_date:
-        q = q.filter(WorkspaceExpense.expense_date <= to_date)
-    rows = q.order_by(WorkspaceExpense.expense_date.desc(), WorkspaceExpense.id.desc()).all()
-    total_amount = sum((r.amount or 0) for r in rows)
-    return render_template(
-        "workspace/expenses_list.html", rows=rows, employee=emp, total_amount=total_amount,
-        from_date=from_date, to_date=to_date
-    )
+    return redirect(url_for("employee_expense_list"))
 
 
 def workspace_expense_form(pk=None):
-    guard, emp = _workspace_guard("workspace_expense_edit" if pk else "workspace_expense_add")
+    guard, _emp = _workspace_guard("workspace_dashboard")
     if guard:
         return guard
-    ensure_workspace_base_accounts(emp.id)
-    row = WorkspaceExpense.query.filter_by(employee_id=emp.id, id=pk).first() if pk else None
-    if pk and not row:
-        flash("Workspace expense not found.", "danger")
-        return redirect(url_for("workspace_expenses_list"))
-
-    parties = WorkspaceParty.query.filter_by(employee_id=emp.id, is_active=True).order_by(WorkspaceParty.name).all()
-    products = WorkspaceProduct.query.filter_by(employee_id=emp.id, is_active=True).order_by(WorkspaceProduct.name).all()
-    drivers = Driver.query.filter_by(status="Active").order_by(Driver.name).all()
-    expense_head = WorkspaceAccount.query.filter_by(employee_id=emp.id, code="5100").first()
-    cash_head = WorkspaceAccount.query.filter_by(employee_id=emp.id, code="1100").first()
-
-    if request.method == "POST":
-        if row and row.month_close_id:
-            flash("Closed month expense cannot be edited.", "danger")
-            return redirect(url_for("workspace_expenses_list"))
-        try:
-            expense_date = parse_date(request.form.get("expense_date"))
-            amount = Decimal(str((request.form.get("amount") or "").strip()))
-        except Exception:
-            flash("Date and amount are required.", "danger")
-            return render_template("workspace/expense_form.html", row=row, employee=emp, parties=parties, products=products, drivers=drivers)
-        if not row:
-            row = WorkspaceExpense(
-                employee_id=emp.id,
-                expense_number=f"WE-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
-                created_by_user_id=session.get("user_id"),
-            )
-            db.session.add(row)
-        else:
-            workspace_reverse_journal_entry(row.journal_entry_id)
-            row.journal_entry_id = None
-        row.expense_date = expense_date or pk_date()
-        row.expense_type = (request.form.get("expense_type") or "General").strip()
-        row.workspace_party_id = request.form.get("workspace_party_id", type=int) or None
-        row.workspace_product_id = request.form.get("workspace_product_id", type=int) or None
-        row.to_driver_id = request.form.get("to_driver_id", type=int) or None
-        row.description = (request.form.get("description") or "").strip()
-        row.amount = amount
-        row.payment_mode = (request.form.get("payment_mode") or "Cash").strip()
-        row.category = (request.form.get("category") or "").strip() or None
-        db.session.flush()
-        je = workspace_post_expense(row, cash_head.id, expense_head.id)
-        row.journal_entry_id = je.id
-        db.session.commit()
-        flash("Workspace expense saved.", "success")
-        return redirect(url_for("workspace_expenses_list"))
-    return render_template("workspace/expense_form.html", row=row, employee=emp, parties=parties, products=products, drivers=drivers)
+    return redirect(url_for("employee_expense_form_edit", pk=pk) if pk else url_for("employee_expense_form"))
 
 
 def workspace_expense_delete(pk):
-    guard, emp = _workspace_guard("workspace_expense_delete")
+    guard, _emp = _workspace_guard("workspace_dashboard")
     if guard:
         return guard
-    row = WorkspaceExpense.query.filter_by(employee_id=emp.id, id=pk).first_or_404()
-    if row.month_close_id:
-        flash("Closed month expense cannot be deleted.", "danger")
-        return redirect(url_for("workspace_expenses_list"))
-    workspace_reverse_journal_entry(row.journal_entry_id)
-    db.session.delete(row)
-    db.session.commit()
-    flash("Workspace expense deleted.", "success")
-    return redirect(url_for("workspace_expenses_list"))
+    return redirect(url_for("employee_expense_delete", pk=pk))
 
 
 def workspace_fund_transfers_list():

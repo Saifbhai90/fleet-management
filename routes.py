@@ -15325,6 +15325,9 @@ def api_fuel_expense_price_hint():
 
 @app.route('/expenses/fuel')
 def fuel_expense_list():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
     from auth_utils import get_user_context
     
     user_id = session.get('user_id')
@@ -15450,8 +15453,19 @@ def _deduct_from_wallet(expense_type, expense_obj, expense_code, expense_by_val)
         print(f"Wallet deduction failed for {expense_type}: {e}")
 
 
+def _require_workspace_employee_for_expense_management():
+    """Expense Management is now part of Employee Workspace."""
+    if not session.get('workspace_employee_id'):
+        flash('Employee Workspace select karna zaroori hai.', 'warning')
+        return redirect(url_for('workspace_dashboard'))
+    return None
+
+
 @app.route('/expenses/fuel/add', methods=['GET', 'POST'])
 def fuel_expense_add():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
     form = FuelExpenseForm()
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     form.project_id.choices = [(0, '-- Select Project --')]
@@ -15546,6 +15560,9 @@ def fuel_expense_add():
 
 @app.route('/expenses/fuel/<int:pk>/edit', methods=['GET', 'POST'])
 def fuel_expense_edit(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
     rec = FuelExpense.query.get_or_404(pk)
     form = FuelExpenseForm(obj=rec)
     form.expense_by.choices = _expense_by_choices()
@@ -15647,6 +15664,9 @@ def fuel_expense_edit(pk):
 
 @app.route('/expenses/fuel/<int:pk>/delete', methods=['POST'])
 def fuel_expense_delete(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
     rec = FuelExpense.query.get_or_404(pk)
     db.session.delete(rec)
     db.session.commit()
@@ -15710,6 +15730,9 @@ def _apply_oil_expense_items_balance(items, reverse=False):
 
 @app.route('/oil-expenses')
 def oil_expense_list():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
     from auth_utils import get_user_context
     
     user_id = session.get('user_id')
@@ -15797,6 +15820,9 @@ def oil_expense_list():
 @app.route('/oil-expense/add', methods=['GET', 'POST'])
 @app.route('/oil-expense/edit/<int:pk>', methods=['GET', 'POST'])
 def oil_expense_form(pk=None):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
     rec = OilExpense.query.get_or_404(pk) if pk else None
     form = OilExpenseForm(obj=rec)
     form.expense_by.choices = _expense_by_choices()
@@ -15964,6 +15990,9 @@ def oil_expense_form(pk=None):
 
 @app.route('/oil-expense/delete/<int:pk>', methods=['POST'])
 def oil_expense_delete(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
     rec = OilExpense.query.get_or_404(pk)
     items = list(rec.items.all())
     _apply_oil_expense_items_balance(items, reverse=True)
@@ -16010,6 +16039,9 @@ def api_maintenance_expense_products():
 
 @app.route('/maintenance-expenses')
 def maintenance_expense_list():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
     from auth_utils import get_user_context
     
     user_id = session.get('user_id')
@@ -16088,6 +16120,9 @@ def maintenance_expense_list():
 @app.route('/maintenance-expense/add', methods=['GET', 'POST'])
 @app.route('/maintenance-expense/edit/<int:pk>', methods=['GET', 'POST'])
 def maintenance_expense_form(pk=None):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
     rec = MaintenanceExpense.query.get_or_404(pk) if pk else None
     form = MaintenanceExpenseForm(obj=rec)
     form.expense_by.choices = _expense_by_choices()
@@ -16230,6 +16265,9 @@ def maintenance_expense_form(pk=None):
 
 @app.route('/maintenance-expense/delete/<int:pk>', methods=['POST'])
 def maintenance_expense_delete(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
     rec = MaintenanceExpense.query.get_or_404(pk)
     for att in rec.attachments:
         full_path = os.path.join(app.config['UPLOAD_FOLDER'], att.file_path)
