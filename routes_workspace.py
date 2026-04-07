@@ -203,11 +203,38 @@ def workspace_home():
     _ensure_workspace_driver_accounts(emp)
     db.session.commit()
     scope = _get_employee_scope_summary(emp)
+    total_expenses = sum((x.amount or 0) for x in WorkspaceExpense.query.filter_by(employee_id=emp.id).all())
+    total_transfers = sum((x.amount or 0) for x in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all())
+
+    # Live ledger position:
+    # Employee wallet gets credited at month-close settlement (company-side entry).
+    # Add closed batch totals back so dashboard does not double-reduce against Total Expenses.
+    wallet_balance = Decimal("0")
+    wallet_acct = Account.query.get(emp.wallet_account_id) if emp.wallet_account_id else None
+    if wallet_acct:
+        wallet_balance = Decimal(str(wallet_acct.current_balance or 0))
+    closed_expense_total = Decimal(
+        str(
+            db.session.query(db.func.coalesce(db.func.sum(WorkspaceMonthClose.total_expense), 0))
+            .filter(
+                WorkspaceMonthClose.employee_id == emp.id,
+                WorkspaceMonthClose.status == "Closed",
+            )
+            .scalar()
+            or 0
+        )
+    )
+    adjusted_ledger_end = wallet_balance + closed_expense_total
+    net_balance = adjusted_ledger_end - Decimal(str(total_expenses or 0))
+
     stats = {
         "parties": WorkspaceParty.query.filter_by(employee_id=emp.id, is_active=True).count(),
         "products": WorkspaceProduct.query.filter_by(employee_id=emp.id, is_active=True).count(),
-        "expenses": sum((x.amount or 0) for x in WorkspaceExpense.query.filter_by(employee_id=emp.id).all()),
-        "transfers": sum((x.amount or 0) for x in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all()),
+        "expenses": total_expenses,
+        "transfers": total_transfers,
+        "ledger_end_balance": adjusted_ledger_end,
+        "net_balance": net_balance,
+        "month_close_adjustment": closed_expense_total,
         "open_closes": WorkspaceMonthClose.query.filter(
             WorkspaceMonthClose.employee_id == emp.id,
             WorkspaceMonthClose.status != "Closed",

@@ -66,11 +66,34 @@
       </div>
 
       <div class="row g-3 mb-3">
-        <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Parties</small><h4 class="mb-0">{{ stats.parties }}</h4></div></div></div>
-        <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Products</small><h4 class="mb-0">{{ stats.products }}</h4></div></div></div>
-        <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Expenses</small><h4 class="mb-0">{{ '%.2f'|format(stats.expenses|float) }}</h4></div></div></div>
-        <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Transfers</small><h4 class="mb-0">{{ '%.2f'|format(stats.transfers|float) }}</h4></div></div></div>
+        <div class="col-lg-2 col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Parties</small><h4 class="mb-0">{{ stats.parties }}</h4></div></div></div>
+        <div class="col-lg-2 col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Products</small><h4 class="mb-0">{{ stats.products }}</h4></div></div></div>
+        <div class="col-lg-2 col-md-4">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+              <small class="text-muted">Account Ledger End Balance</small>
+              <h4 class="mb-0 {{ 'text-danger' if (stats.ledger_end_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((stats.ledger_end_balance or 0)|float) }}</h4>
+              <small class="text-muted">Selected employee ledger (month-close safe)</small>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-2 col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Expenses</small><h4 class="mb-0">{{ '%.2f'|format(stats.expenses|float) }}</h4></div></div></div>
+        <div class="col-lg-2 col-md-4">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+              <small class="text-muted">Net Balance</small>
+              <h4 class="mb-0 {{ 'text-danger' if (stats.net_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((stats.net_balance or 0)|float) }}</h4>
+              <small class="text-muted">Ledger End Balance - Total Expenses</small>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-2 col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Transfers</small><h4 class="mb-0">{{ '%.2f'|format(stats.transfers|float) }}</h4></div></div></div>
       </div>
+      {% if (stats.month_close_adjustment or 0)|float > 0 %}
+      <div class="small text-muted mb-3">
+        Month-close adjustment protected: {{ '%.2f'|format((stats.month_close_adjustment or 0)|float) }} added back in ledger balance to avoid double deduction.
+      </div>
+      {% endif %}
 
       <div class="card border-0 shadow-sm">
         <div class="card-body p-4">
