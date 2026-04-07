@@ -86,7 +86,18 @@
             <tr class="red-task-row">
               <td class="ps-4">{{ loop.index }}</td>
               <td>{{ row.task_date|ddmmyyyy }}</td>
-              <td>{{ row.task_id or '-' }}</td>
+              <td>
+                {% if row.task_id %}
+                <a href="#" class="small fw-semibold red-taskid-link"
+                   data-task-id="{{ row.task_id }}"
+                   data-task-date="{{ row.task_date.strftime('%Y-%m-%d') if row.task_date else '' }}"
+                   data-vno="{{ row.vehicle.vehicle_no if row.vehicle else '' }}">
+                  {{ row.task_id }}
+                </a>
+                {% else %}
+                -
+                {% endif %}
+              </td>
               <td>{{ row.district.name if row.district else '-' }}</td>
               <td>{{ row.project.name if row.project else '-' }}</td>
               <td class="fw-medium">{{ row.vehicle.vehicle_no if row.vehicle else '-' }}</td>
@@ -125,6 +136,24 @@
   </div>
 </div>
 
+<!-- Red Task Detail Panel -->
+<div id="redTaskDetailPanel" class="card shadow-lg border-danger d-none" style="position:fixed;top:120px;left:50%;transform:translateX(-50%);width:92%;max-width:900px;z-index:1055;box-shadow:0 8px 32px rgba(0,0,0,.25)!important;">
+  <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center py-2">
+    <h6 class="mb-0"><i class="bi bi-clipboard2-data me-2"></i>Task Detail — <span id="redTaskDetailTitle"></span></h6>
+    <button type="button" class="btn-close btn-close-white" id="redTaskDetailCloseBtn"></button>
+  </div>
+  <div class="card-body p-3" style="max-height:70vh;overflow-y:auto;">
+    <div id="redTaskDetailLoading" class="text-center py-3 d-none"><span class="spinner-border spinner-border-sm text-danger"></span> Loading...</div>
+    <div id="redTaskDetailEmpty" class="text-center py-3 text-muted d-none"><i class="bi bi-inbox me-1"></i>Task detail not found.</div>
+    <table class="table table-sm table-bordered align-middle mb-0 d-none" id="redTaskDetailTable">
+      <tbody id="redTaskDetailBody"></tbody>
+    </table>
+  </div>
+  <div class="card-footer py-2 d-flex justify-content-end">
+    <button class="btn btn-secondary btn-sm" id="redTaskDetailCloseBtnFooter">Close</button>
+  </div>
+</div>
+
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 (function() {
@@ -156,5 +185,76 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 })();
 document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('redTaskTable'); });
 window.fleetPrintExport && window.fleetPrintExport('redTaskTable','Red Task Report — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}','Red_Task_Report_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.csv');
+
+function _esc(v){var d=document.createElement('div');d.textContent=v||'';return d.innerHTML;}
+function _setDetailRows(data){
+  var rows = [
+    ['Task ID', data.task_id],
+    ['Vehicle No', data.vehicle_no],
+    ['Category', data.category],
+    ['Reason (SubCategory)', data.sub_category],
+    ['Request From', data.request_from],
+    ['Phone', data.phone],
+    ['Name', data.name],
+    ['Address', data.address],
+    ['Received By', data.received_by],
+    ['Facility Name', data.facility_name],
+    ['District', data.district_name],
+    ['Tehsil', data.tehsil_name],
+    ['Status', data.status],
+    ['Created Date', data.created_date],
+    ['Completed Date/Time', data.completed_date_time]
+  ];
+  var body = document.getElementById('redTaskDetailBody');
+  body.innerHTML = '';
+  rows.forEach(function(pair){
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<th style="width:32%;background:#f8f9fa;">'+_esc(pair[0])+'</th><td>'+_esc(pair[1]||'-')+'</td>';
+    body.appendChild(tr);
+  });
+}
+
+document.addEventListener('click', function(e){
+  var link = e.target.closest('.red-taskid-link');
+  if(!link) return;
+  e.preventDefault();
+
+  var taskId = link.getAttribute('data-task-id') || '';
+  var taskDate = link.getAttribute('data-task-date') || '';
+  var vno = link.getAttribute('data-vno') || '';
+  var panel = document.getElementById('redTaskDetailPanel');
+  var loading = document.getElementById('redTaskDetailLoading');
+  var empty = document.getElementById('redTaskDetailEmpty');
+  var table = document.getElementById('redTaskDetailTable');
+  document.getElementById('redTaskDetailTitle').textContent = taskId || 'Task';
+  loading.classList.remove('d-none');
+  empty.classList.add('d-none');
+  table.classList.add('d-none');
+  panel.classList.remove('d-none');
+  window.scrollTo({top: 0, behavior: 'smooth'});
+
+  var qs = new URLSearchParams({task_id: taskId, task_date: taskDate, vehicle_no: vno});
+  fetch('/api/task-report/emg-task-detail?' + qs.toString())
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      loading.classList.add('d-none');
+      if(!data || data.ok === false){
+        empty.classList.remove('d-none');
+        return;
+      }
+      _setDetailRows(data);
+      table.classList.remove('d-none');
+    })
+    .catch(function(){
+      loading.classList.add('d-none');
+      empty.classList.remove('d-none');
+    });
+});
+
+function _closeRedTaskDetailPanel(){
+  document.getElementById('redTaskDetailPanel').classList.add('d-none');
+}
+document.getElementById('redTaskDetailCloseBtn').addEventListener('click', _closeRedTaskDetailPanel);
+document.getElementById('redTaskDetailCloseBtnFooter').addEventListener('click', _closeRedTaskDetailPanel);
 </script>
 {% endblock %}

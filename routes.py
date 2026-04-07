@@ -13560,11 +13560,26 @@ def api_emg_detail():
 
 @app.route('/api/task-report/emg-task-detail')
 def api_emg_task_detail():
-    """Return one Emergency Task detail by record id."""
+    """Return one Emergency Task detail by id or task reference."""
     emg_id = request.args.get('emg_id', type=int)
-    if not emg_id:
-        return jsonify({'ok': False, 'message': 'Missing emg_id'}), 400
-    rec = EmergencyTaskRecord.query.get(emg_id)
+    task_id = (request.args.get('task_id') or '').strip()
+    task_date = parse_date(request.args.get('task_date'))
+    vehicle_no = (request.args.get('vehicle_no') or '').strip()
+
+    rec = None
+    if emg_id:
+        rec = EmergencyTaskRecord.query.get(emg_id)
+    elif task_id and task_date:
+        q = EmergencyTaskRecord.query.filter(
+            EmergencyTaskRecord.task_id_ext == task_id,
+            EmergencyTaskRecord.task_date == task_date,
+        )
+        if vehicle_no:
+            q = q.filter(EmergencyTaskRecord.amb_reg_no == vehicle_no)
+        rec = q.order_by(EmergencyTaskRecord.id.desc()).first()
+    else:
+        return jsonify({'ok': False, 'message': 'Missing emg_id or task reference'}), 400
+
     if not rec:
         return jsonify({'ok': False, 'message': 'Task not found'}), 404
 
