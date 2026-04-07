@@ -83,7 +83,7 @@
             <div class="card-body">
               <small class="text-muted">Net Balance</small>
               <h4 class="mb-0 {{ 'text-danger' if (stats.net_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((stats.net_balance or 0)|float) }}</h4>
-              <small class="text-muted">Ledger End Balance - Total Expenses</small>
+              <small class="text-muted">Total Expenses - Ledger End Balance</small>
               <div class="mt-1 small fw-semibold {% if (stats.net_balance or 0)|float > 0 %}text-success{% elif (stats.net_balance or 0)|float < 0 %}text-danger{% else %}text-secondary{% endif %}">
                 {{ stats.net_balance_status or 'Settled' }}
               </div>

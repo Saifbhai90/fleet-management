@@ -226,11 +226,12 @@ def workspace_home():
         )
     )
     adjusted_ledger_end = wallet_balance + closed_expense_total
-    net_balance = adjusted_ledger_end - Decimal(str(total_expenses or 0))
+    # User convention: Net = Total Expenses - Ledger End Balance
+    net_balance = Decimal(str(total_expenses or 0)) - adjusted_ledger_end
     if net_balance > 0:
-        net_balance_status = "Receivable from Company"
-    elif net_balance < 0:
         net_balance_status = "Payable to Company"
+    elif net_balance < 0:
+        net_balance_status = "Receivable from Company"
     else:
         net_balance_status = "Settled"
 
