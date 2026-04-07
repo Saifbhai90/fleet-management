@@ -2,34 +2,64 @@
 {% block content %}
 <div class="container-fluid py-3">
   {% include "workspace/_nav.html" %}
-  <div class="card border-0 shadow-sm mb-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><i class="bi bi-journal-text me-2 text-primary"></i>Workspace Ledger</h2>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+    </div>
+  </div>
+
+  <div class="section-heading bg-primary">
+    <i class="bi bi-funnel me-2"></i>Ledger Filters
+  </div>
+
+  <div class="card shadow-sm border-0 mt-3 mb-3">
     <div class="card-body">
       <form method="get" class="row g-2 align-items-end">
-        <div class="col-md-4">
-          <label class="form-label">Account</label>
+        <div class="col-lg-4 col-md-6">
+          <label class="form-label fw-semibold">Account</label>
           <select name="account_id" class="form-select search-select">
             {% for a in accounts %}
             <option value="{{ a.id }}" {% if account_id == a.id %}selected{% endif %}>{{ a.code }} - {{ a.name }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2"><label class="form-label">From</label><input type="text" class="form-control datepicker" name="from_date" value="{{ from_date|ddmmyyyy if from_date else '' }}" placeholder="dd-mm-yyyy"></div>
-        <div class="col-md-2"><label class="form-label">To</label><input type="text" class="form-control datepicker" name="to_date" value="{{ to_date|ddmmyyyy if to_date else '' }}" placeholder="dd-mm-yyyy"></div>
-        <div class="col-md-2"><label class="form-label">Category</label><input type="text" class="form-control" name="category" value="{{ category or '' }}"></div>
-        <div class="col-md-2"><button class="btn btn-primary w-100">View</button></div>
+        <div class="col-lg-2 col-md-6">
+          <label class="form-label fw-semibold">From</label>
+          <input type="text" class="form-control datepicker" name="from_date" value="{{ from_date|ddmmyyyy if from_date else '' }}" placeholder="dd-mm-yyyy">
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label class="form-label fw-semibold">To</label>
+          <input type="text" class="form-control datepicker" name="to_date" value="{{ to_date|ddmmyyyy if to_date else '' }}" placeholder="dd-mm-yyyy">
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label class="form-label fw-semibold">Category</label>
+          <input type="text" class="form-control" name="category" value="{{ category or '' }}" placeholder="Optional">
+        </div>
+        <div class="col-lg-2 col-md-12 d-flex gap-2">
+          <button class="btn btn-primary flex-fill"><i class="bi bi-search me-1"></i>View</button>
+          <a href="{{ url_for('workspace_ledger') }}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
+        </div>
       </form>
     </div>
   </div>
 
   {% if ledger %}
+  <div class="row g-3 mb-3">
+    <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Selected Account</small><h6 class="mb-0">{{ ledger.account.code }} - {{ ledger.account.name }}</h6></div></div></div>
+    <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Opening Balance</small><h5 class="mb-0">{{ '%.2f'|format((ledger.opening_balance or 0)|float) }}</h5></div></div></div>
+    <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Closing Balance</small><h5 class="mb-0 {{ 'text-danger' if (ledger.closing_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((ledger.closing_balance or 0)|float) }}</h5></div></div></div>
+  </div>
+
   <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white d-flex justify-content-between">
-      <strong>{{ ledger.account.code }} - {{ ledger.account.name }}</strong>
-      <span>Opening: {{ '%.2f'|format((ledger.opening_balance or 0)|float) }} | Closing: {{ '%.2f'|format((ledger.closing_balance or 0)|float) }}</span>
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+      <strong>Ledger Transactions</strong>
+      <small>{{ ledger.transactions|length }} entries</small>
     </div>
     <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0 js-filter-table">
-        <thead><tr><th>Date</th><th>Entry</th><th>Type</th><th>Description</th><th>Category</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
+      <table class="table table-sm table-hover align-middle mb-0" id="workspaceLedgerTable">
+        <thead class="table-light"><tr><th>Date</th><th>Entry</th><th>Type</th><th>Description</th><th>Category</th><th class="text-end">Debit</th><th class="text-end">Credit</th><th class="text-end">Balance</th></tr></thead>
         <tbody>
           {% for t in ledger.transactions %}
           <tr>
@@ -38,9 +68,9 @@
             <td>{{ t.entry_type }}</td>
             <td>{{ t.description }}</td>
             <td>{{ t.category }}</td>
-            <td>{{ '%.2f'|format((t.debit or 0)|float) }}</td>
-            <td>{{ '%.2f'|format((t.credit or 0)|float) }}</td>
-            <td>{{ '%.2f'|format((t.balance or 0)|float) }}</td>
+            <td class="text-end">{{ '%.2f'|format((t.debit or 0)|float) }}</td>
+            <td class="text-end">{{ '%.2f'|format((t.credit or 0)|float) }}</td>
+            <td class="text-end fw-semibold">{{ '%.2f'|format((t.balance or 0)|float) }}</td>
           </tr>
           {% else %}
           <tr><td colspan="8" class="text-center text-muted py-4">No transactions found.</td></tr>
@@ -51,4 +81,10 @@
   </div>
   {% endif %}
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  if(window.fleetTableEnhance) window.fleetTableEnhance('workspaceLedgerTable');
+  if(window.fleetPrintExport) window.fleetPrintExport('workspaceLedgerTable','Workspace Ledger','Workspace_Ledger.csv');
+});
+</script>
 {% endblock %}

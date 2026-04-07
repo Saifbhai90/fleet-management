@@ -226,8 +226,8 @@ def workspace_home():
         )
     )
     adjusted_ledger_end = wallet_balance + closed_expense_total
-    # User convention: Net = Total Expenses - Ledger End Balance
-    net_balance = Decimal(str(total_expenses or 0)) - adjusted_ledger_end
+    # User convention: Net = Account Ledger End Balance - Total Expenses
+    net_balance = adjusted_ledger_end - Decimal(str(total_expenses or 0))
     if net_balance > 0:
         net_balance_status = "Payable to Company"
     elif net_balance < 0:

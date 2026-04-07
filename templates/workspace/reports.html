@@ -2,16 +2,30 @@
 {% block content %}
 <div class="container-fluid py-3">
   {% include "workspace/_nav.html" %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><i class="bi bi-bar-chart me-2 text-success"></i>Workspace Reports</h2>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Expense Heads</small><h5 class="mb-0">{{ expenses_by_type|length }}</h5></div></div></div>
+    <div class="col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Transfers</small><h5 class="mb-0">{{ '%.2f'|format((transfer_total or 0)|float) }}</h5></div></div></div>
+    <div class="col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Month Close Records</small><h5 class="mb-0">{{ month_closes|length }}</h5></div></div></div>
+  </div>
+
   <div class="row g-3">
     <div class="col-md-6">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white"><strong>Expense Summary by Type</strong></div>
+        <div class="card-header bg-success text-white"><strong>Expense Summary by Type</strong></div>
         <div class="card-body">
-          <table class="table table-sm mb-0">
-            <thead><tr><th>Type</th><th class="text-end">Amount</th></tr></thead>
+          <table class="table table-sm table-hover mb-0" id="workspaceExpenseSummaryTable">
+            <thead class="table-light"><tr><th>Type</th><th class="text-end">Amount</th></tr></thead>
             <tbody>
               {% for k, v in expenses_by_type.items() %}
-              <tr><td>{{ k }}</td><td class="text-end">{{ '%.2f'|format((v or 0)|float) }}</td></tr>
+              <tr><td>{{ k }}</td><td class="text-end fw-semibold">{{ '%.2f'|format((v or 0)|float) }}</td></tr>
               {% else %}
               <tr><td colspan="2" class="text-muted text-center py-3">No data</td></tr>
               {% endfor %}
@@ -22,17 +36,25 @@
     </div>
     <div class="col-md-6">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white"><strong>Transfers + Month Close Overview</strong></div>
+        <div class="card-header bg-primary text-white"><strong>Transfers + Month Close Overview</strong></div>
         <div class="card-body">
-          <p class="mb-3"><strong>Total Transfers:</strong> {{ '%.2f'|format((transfer_total or 0)|float) }}</p>
-          <table class="table table-sm mb-0">
-            <thead><tr><th>Period</th><th>Status</th><th class="text-end">Total</th></tr></thead>
+          <div class="alert alert-light border py-2 mb-3">
+            <strong>Total Transfers:</strong> {{ '%.2f'|format((transfer_total or 0)|float) }}
+          </div>
+          <table class="table table-sm table-hover mb-0" id="workspaceMonthCloseOverviewTable">
+            <thead class="table-light"><tr><th>Period</th><th>Status</th><th class="text-end">Total</th></tr></thead>
             <tbody>
               {% for r in month_closes %}
               <tr>
                 <td>{{ r.period_start|ddmmyyyy }} - {{ r.period_end|ddmmyyyy }}</td>
-                <td>{{ r.status }}</td>
-                <td class="text-end">{{ '%.2f'|format((r.total_expense or 0)|float) }}</td>
+                <td>
+                  {% if r.status == 'Closed' %}
+                  <span class="badge bg-success">Closed</span>
+                  {% else %}
+                  <span class="badge bg-secondary">{{ r.status }}</span>
+                  {% endif %}
+                </td>
+                <td class="text-end fw-semibold">{{ '%.2f'|format((r.total_expense or 0)|float) }}</td>
               </tr>
               {% else %}
               <tr><td colspan="3" class="text-muted text-center py-3">No close data</td></tr>
@@ -44,4 +66,15 @@
     </div>
   </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  if(window.fleetTableEnhance){
+    window.fleetTableEnhance('workspaceExpenseSummaryTable');
+    window.fleetTableEnhance('workspaceMonthCloseOverviewTable');
+  }
+  if(window.fleetPrintExport){
+    window.fleetPrintExport('workspaceExpenseSummaryTable','Workspace Expense Summary','Workspace_Expense_Summary.csv');
+  }
+});
+</script>
 {% endblock %}

@@ -2,14 +2,22 @@
 {% block content %}
 <div class="container-fluid py-3">
   {% include "workspace/_nav.html" %}
-  <div class="card border-0 shadow-sm mb-3">
-    <div class="card-header bg-white"><strong>Month Close & Bridge Posting</strong></div>
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><i class="bi bi-calendar2-check me-2 text-danger"></i>Month Close & Bridge Posting</h2>
+  </div>
+
+  <div class="section-heading bg-danger">
+    <i class="bi bi-lock me-2"></i>Close Current Period
+  </div>
+
+  <div class="card shadow-sm border-0 mt-3 mb-3">
+    <div class="card-header bg-light"><strong>Create Month Close</strong></div>
     <div class="card-body">
       <form method="post" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="col-md-3"><label class="form-label">Period Start</label><input type="text" class="form-control datepicker" name="period_start" placeholder="dd-mm-yyyy" required></div>
-        <div class="col-md-3"><label class="form-label">Period End</label><input type="text" class="form-control datepicker" name="period_end" placeholder="dd-mm-yyyy" required></div>
-        <div class="col-md-4"><label class="form-label">Company Expense Account</label>
+        <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">Period Start</label><input type="text" class="form-control datepicker" name="period_start" placeholder="dd-mm-yyyy" required></div>
+        <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">Period End</label><input type="text" class="form-control datepicker" name="period_end" placeholder="dd-mm-yyyy" required></div>
+        <div class="col-lg-4 col-md-8"><label class="form-label fw-semibold">Company Expense Account</label>
           <select name="company_account_id" class="form-select search-select" required>
             <option value="">-- Select Company Account --</option>
             {% for a in accounts %}
@@ -17,24 +25,33 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2"><label class="form-label">Action</label><button class="btn btn-primary w-100">Close Month</button></div>
-        <div class="col-12"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
+        <div class="col-lg-2 col-md-4"><label class="form-label fw-semibold">Action</label><button class="btn btn-danger w-100"><i class="bi bi-check2-circle me-1"></i>Close Month</button></div>
+        <div class="col-12"><label class="form-label fw-semibold">Notes</label><textarea name="notes" class="form-control" rows="2" placeholder="Optional remarks for this close batch"></textarea></div>
       </form>
     </div>
   </div>
 
   <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white"><strong>Close History</strong></div>
+    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+      <strong>Close History</strong>
+      <small>{{ rows|length }} batches</small>
+    </div>
     <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0 js-filter-table">
-        <thead><tr><th>#</th><th>Period</th><th>Status</th><th>Total Expense</th><th>Company JE</th><th>Closed At</th></tr></thead>
+      <table class="table table-sm table-hover align-middle mb-0" id="workspaceMonthCloseTable">
+        <thead class="table-light"><tr><th>#</th><th>Period</th><th>Status</th><th class="text-end">Total Expense</th><th>Company JE</th><th>Closed At</th></tr></thead>
         <tbody>
           {% for r in rows %}
           <tr>
             <td>{{ r.id }}</td>
             <td>{{ r.period_start|ddmmyyyy }} - {{ r.period_end|ddmmyyyy }}</td>
-            <td>{{ r.status }}</td>
-            <td>{{ '%.2f'|format((r.total_expense or 0)|float) }}</td>
+            <td>
+              {% if r.status == 'Closed' %}
+              <span class="badge bg-success">Closed</span>
+              {% else %}
+              <span class="badge bg-secondary">{{ r.status }}</span>
+              {% endif %}
+            </td>
+            <td class="text-end fw-semibold">{{ '%.2f'|format((r.total_expense or 0)|float) }}</td>
             <td>{{ r.company_journal_entry_id or '-' }}</td>
             <td>{{ r.closed_at|ddmmyyyy if r.closed_at else '-' }}</td>
           </tr>
@@ -46,4 +63,10 @@
     </div>
   </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  if(window.fleetTableEnhance) window.fleetTableEnhance('workspaceMonthCloseTable');
+  if(window.fleetPrintExport) window.fleetPrintExport('workspaceMonthCloseTable','Workspace Month Close History','Workspace_Month_Close_History.csv');
+});
+</script>
 {% endblock %}
