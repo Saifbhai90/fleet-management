@@ -1569,7 +1569,7 @@
 <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
 
 <!-- SIDEBAR -->
-<div class="sidebar shadow {% if workspace_open and request.endpoint != 'workspace_dashboard' %}collapsed{% endif %}" id="sidebar">
+<div class="sidebar shadow {% if workspace_open and request.endpoint != 'workspace_dashboard' and request.cookies.get('workspace_sidebar_open') != '1' %}collapsed{% endif %}" id="sidebar">
     <div id="sidebarAccordion">
         {% set master_endpoints = ['companies', 'company_form', 'projects_list', 'project_detail', 'project_form', 'districts_list', 'district_form', 'vehicles_list', 'vehicle_form', 'parking_list', 'parking_form', 'drivers_list', 'driver_form', 'employees_list', 'employee_form', 'driver_post_list', 'driver_post_form'] %}
         {% set assignment_endpoints = ['assign_project_to_company', 'assign_project_to_district', 'assign_vehicle_to_district', 'assign_vehicle_to_parking_list', 'assign_vehicle_to_parking_new', 'assign_vehicle_to_parking_edit', 'assign_driver_to_vehicle_list', 'assign_driver_to_vehicle_new', 'assign_driver_to_vehicle_edit'] %}
@@ -2139,7 +2139,7 @@
 </div>
 
 <!-- MAIN CONTENT -->
-<div class="main-content {% if workspace_open and request.endpoint != 'workspace_dashboard' %}ws-mini-open expanded{% endif %}" id="mainContent">
+<div class="main-content {% if workspace_open and request.endpoint != 'workspace_dashboard' %}ws-mini-open{% if request.cookies.get('workspace_sidebar_open') != '1' %} expanded{% endif %}{% endif %}" id="mainContent">
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             <div class="flash-message">
@@ -3479,9 +3479,9 @@
         sb.classList.toggle("collapsed");
         mc.classList.toggle("expanded");
         if (sb.classList.contains("collapsed")) {
-            sessionStorage.removeItem('workspaceSidebarKeepOpen');
+            document.cookie = "workspace_sidebar_open=0; path=/; max-age=31536000; SameSite=Lax";
         } else {
-            sessionStorage.setItem('workspaceSidebarKeepOpen', '1');
+            document.cookie = "workspace_sidebar_open=1; path=/; max-age=31536000; SameSite=Lax";
         }
     }
 
@@ -3513,23 +3513,13 @@
     })();
 
     {% if workspace_open %}
-    // Keep main sidebar collapsed inside Employee Workspace for cleaner UI.
+    // In workspace pages, keep sidebar state stable across navigations.
     document.addEventListener('DOMContentLoaded', function() {
         if (window.innerWidth < 992) return;
         var sb = document.getElementById('sidebar');
         var mc = document.getElementById('mainContent');
-        var keepOpen = sessionStorage.getItem('workspaceSidebarKeepOpen') === '1';
-        if (sb && mc) {
-            if (keepOpen) {
-                sb.classList.remove('collapsed');
-                mc.classList.remove('expanded');
-            } else {
-                sb.classList.add('collapsed');
-                mc.classList.add('expanded');
-            }
-        }
 
-        // If user clicks any left-sidebar button, expand sidebar for normal navigation.
+        // If user clicks any left-sidebar item in workspace, expand and persist.
         if (sb) {
             sb.addEventListener('click', function(ev) {
                 var trigger = ev.target.closest('a, .sb-sub-toggle');
@@ -3538,7 +3528,7 @@
                     sb.classList.remove('collapsed');
                     if (mc) mc.classList.remove('expanded');
                 }
-                sessionStorage.setItem('workspaceSidebarKeepOpen', '1');
+                document.cookie = "workspace_sidebar_open=1; path=/; max-age=31536000; SameSite=Lax";
             });
         }
     });
