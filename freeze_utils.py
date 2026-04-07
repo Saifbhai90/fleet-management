@@ -134,6 +134,18 @@ FREEZE_FORM_CATALOG = [
     ('Books - Stock Edit', 'book_stock_edit'),
     ('Books - Book Issue', 'book_issue'),
     ('Books - Book Return', 'book_return'),
+    ('Workspace - Select Employee', 'workspace_select_employee'),
+    ('Workspace - Party Add', 'workspace_party_new'),
+    ('Workspace - Party Edit', 'workspace_party_edit'),
+    ('Workspace - Product Add', 'workspace_product_new'),
+    ('Workspace - Product Edit', 'workspace_product_edit'),
+    ('Workspace - Account Add', 'workspace_account_new'),
+    ('Workspace - Account Edit', 'workspace_account_edit'),
+    ('Workspace - Expense Add', 'workspace_expense_new'),
+    ('Workspace - Expense Edit', 'workspace_expense_edit'),
+    ('Workspace - Transfer Add', 'workspace_fund_transfer_new'),
+    ('Workspace - Transfer Edit', 'workspace_fund_transfer_edit'),
+    ('Workspace - Month Close', 'workspace_month_close'),
 ]
 
 

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  {% include "workspace/_nav.html" %}
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white"><strong>Expense Summary by Type</strong></div>
+        <div class="card-body">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Type</th><th class="text-end">Amount</th></tr></thead>
+            <tbody>
+              {% for k, v in expenses_by_type.items() %}
+              <tr><td>{{ k }}</td><td class="text-end">{{ '%.2f'|format((v or 0)|float) }}</td></tr>
+              {% else %}
+              <tr><td colspan="2" class="text-muted text-center py-3">No data</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white"><strong>Transfers + Month Close Overview</strong></div>
+        <div class="card-body">
+          <p class="mb-3"><strong>Total Transfers:</strong> {{ '%.2f'|format((transfer_total or 0)|float) }}</p>
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Period</th><th>Status</th><th class="text-end">Total</th></tr></thead>
+            <tbody>
+              {% for r in month_closes %}
+              <tr>
+                <td>{{ r.period_start|ddmmyyyy }} - {{ r.period_end|ddmmyyyy }}</td>
+                <td>{{ r.status }}</td>
+                <td class="text-end">{{ '%.2f'|format((r.total_expense or 0)|float) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="3" class="text-muted text-center py-3">No close data</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

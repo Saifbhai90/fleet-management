@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  {% include "workspace/_nav.html" %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white"><strong>{{ 'Edit' if row else 'Add' }} Workspace Product</strong></div>
+    <div class="card-body">
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label">Name</label><input type="text" name="name" class="form-control" value="{{ row.name if row else '' }}" required></div>
+          <div class="col-md-2"><label class="form-label">Unit</label><input type="text" name="unit" class="form-control" value="{{ row.unit if row else '' }}"></div>
+          <div class="col-md-2"><label class="form-label">Used In</label><input type="text" name="used_in_forms" class="form-control" value="{{ row.used_in_forms if row else '' }}"></div>
+          <div class="col-md-2"><label class="form-label">Default Price</label><input type="number" step="0.01" name="default_price" class="form-control" value="{{ row.default_price if row else '' }}"></div>
+          <div class="col-md-3">
+            <label class="form-label">Status</label>
+            <select name="is_active" class="form-select">
+              <option value="1" {% if not row or row.is_active %}selected{% endif %}>Active</option>
+              <option value="0" {% if row and not row.is_active %}selected{% endif %}>Inactive</option>
+            </select>
+          </div>
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Save</button>
+            <a href="{{ url_for('workspace_products_list') }}" class="btn btn-outline-secondary">Back</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

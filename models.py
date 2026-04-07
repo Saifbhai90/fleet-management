@@ -1887,6 +1887,210 @@ class FundTransferCategory(db.Model):
 
 
 # ────────────────────────────────────────────────
+# Employee Financial Workspace (isolated books)
+# ────────────────────────────────────────────────
+class WorkspaceParty(db.Model):
+    __tablename__ = 'workspace_party'
+    __table_args__ = (
+        db.UniqueConstraint('employee_id', 'name', name='uq_workspace_party_employee_name'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=False, index=True)
+    party_type = db.Column(db.String(50), nullable=True)
+    phone = db.Column(db.String(30), nullable=True)
+    address = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('workspace_parties', lazy='dynamic'))
+    created_by = db.relationship('User', backref='workspace_parties_created', lazy='select')
+
+
+class WorkspaceProduct(db.Model):
+    __tablename__ = 'workspace_product'
+    __table_args__ = (
+        db.UniqueConstraint('employee_id', 'name', name='uq_workspace_product_employee_name'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=False, index=True)
+    unit = db.Column(db.String(50), nullable=True)
+    used_in_forms = db.Column(db.String(120), nullable=True)
+    default_price = db.Column(db.Numeric(15, 2), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('workspace_products', lazy='dynamic'))
+    created_by = db.relationship('User', backref='workspace_products_created', lazy='select')
+
+
+class WorkspaceAccount(db.Model):
+    __tablename__ = 'workspace_account'
+    __table_args__ = (
+        db.UniqueConstraint('employee_id', 'code', name='uq_workspace_account_employee_code'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    code = db.Column(db.String(20), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=False)
+    account_type = db.Column(db.String(20), nullable=False)  # Asset, Liability, Equity, Revenue, Expense
+    parent_id = db.Column(db.Integer, db.ForeignKey('workspace_account.id'), nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    opening_balance = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    current_balance = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    entity_type = db.Column(db.String(30), nullable=True, index=True)  # party, driver, cash, expense_head, employee
+    entity_id = db.Column(db.Integer, nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('workspace_accounts', lazy='dynamic'))
+    parent = db.relationship('WorkspaceAccount', remote_side=[id], backref='sub_accounts')
+
+
+class WorkspaceJournalEntry(db.Model):
+    __tablename__ = 'workspace_journal_entry'
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    entry_number = db.Column(db.String(50), nullable=False, index=True)
+    entry_date = db.Column(db.Date, nullable=False, index=True)
+    entry_type = db.Column(db.String(20), nullable=False)  # Transfer, Expense, MonthClose, Journal
+    description = db.Column(db.Text, nullable=True)
+    reference_type = db.Column(db.String(50), nullable=True)
+    reference_id = db.Column(db.Integer, nullable=True)
+    category = db.Column(db.String(30), nullable=True, index=True)
+    is_posted = db.Column(db.Boolean, default=True, nullable=False)
+    posted_at = db.Column(db.DateTime, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    company_journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('workspace_journal_entries', lazy='dynamic'))
+    created_by = db.relationship('User', backref='workspace_journal_entries', lazy='select')
+    company_journal_entry = db.relationship('JournalEntry', backref='workspace_bridge_entries', lazy='select')
+    lines = db.relationship(
+        'WorkspaceJournalEntryLine',
+        backref='journal_entry',
+        lazy='dynamic',
+        cascade='all, delete-orphan',
+        order_by='WorkspaceJournalEntryLine.sort_order',
+    )
+
+
+class WorkspaceJournalEntryLine(db.Model):
+    __tablename__ = 'workspace_journal_entry_line'
+
+    id = db.Column(db.Integer, primary_key=True)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey('workspace_journal_entry.id', ondelete='CASCADE'), nullable=False, index=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('workspace_account.id'), nullable=False, index=True)
+    debit = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    credit = db.Column(db.Numeric(15, 2), default=0, nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    sort_order = db.Column(db.Integer, default=0, nullable=False)
+
+    account = db.relationship('WorkspaceAccount', backref='journal_lines', lazy='select')
+
+
+class WorkspaceExpense(db.Model):
+    __tablename__ = 'workspace_expense'
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    expense_number = db.Column(db.String(40), nullable=False, index=True)
+    expense_date = db.Column(db.Date, nullable=False, index=True)
+    expense_type = db.Column(db.String(40), nullable=False, index=True)
+    workspace_party_id = db.Column(db.Integer, db.ForeignKey('workspace_party.id'), nullable=True)
+    workspace_product_id = db.Column(db.Integer, db.ForeignKey('workspace_product.id'), nullable=True)
+    to_driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True)
+    description = db.Column(db.Text, nullable=False)
+    amount = db.Column(db.Numeric(15, 2), nullable=False)
+    payment_mode = db.Column(db.String(30), nullable=False, default='Cash')
+    category = db.Column(db.String(30), nullable=True, index=True)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey('workspace_journal_entry.id'), nullable=True)
+    month_close_id = db.Column(db.Integer, db.ForeignKey('workspace_month_close.id'), nullable=True, index=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('workspace_expenses', lazy='dynamic'))
+    party = db.relationship('WorkspaceParty', backref='expenses', lazy='select')
+    product = db.relationship('WorkspaceProduct', backref='expenses', lazy='select')
+    driver = db.relationship('Driver', backref='workspace_expenses', lazy='select')
+    journal_entry = db.relationship('WorkspaceJournalEntry', backref='workspace_expense', lazy='select')
+    created_by = db.relationship('User', backref='workspace_expenses_created', lazy='select')
+
+
+class WorkspaceFundTransfer(db.Model):
+    __tablename__ = 'workspace_fund_transfer'
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    transfer_number = db.Column(db.String(40), nullable=False, index=True)
+    transfer_date = db.Column(db.Date, nullable=False, index=True)
+    from_account_id = db.Column(db.Integer, db.ForeignKey('workspace_account.id'), nullable=False)
+    to_account_id = db.Column(db.Integer, db.ForeignKey('workspace_account.id'), nullable=False)
+    to_workspace_party_id = db.Column(db.Integer, db.ForeignKey('workspace_party.id'), nullable=True)
+    to_driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True)
+    amount = db.Column(db.Numeric(15, 2), nullable=False)
+    payment_mode = db.Column(db.String(30), nullable=False, default='Cash')
+    reference_no = db.Column(db.String(50), nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    category = db.Column(db.String(30), nullable=True, index=True)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey('workspace_journal_entry.id'), nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('workspace_fund_transfers', lazy='dynamic'))
+    from_account = db.relationship('WorkspaceAccount', foreign_keys=[from_account_id], backref='workspace_transfers_from', lazy='select')
+    to_account = db.relationship('WorkspaceAccount', foreign_keys=[to_account_id], backref='workspace_transfers_to', lazy='select')
+    to_party = db.relationship('WorkspaceParty', backref='workspace_transfers', lazy='select')
+    to_driver = db.relationship('Driver', backref='workspace_transfers', lazy='select')
+    journal_entry = db.relationship('WorkspaceJournalEntry', backref='workspace_fund_transfer', lazy='select')
+    created_by = db.relationship('User', backref='workspace_fund_transfers_created', lazy='select')
+
+
+class WorkspaceMonthClose(db.Model):
+    __tablename__ = 'workspace_month_close'
+    __table_args__ = (
+        db.UniqueConstraint('employee_id', 'period_start', 'period_end', name='uq_workspace_month_close_period'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    period_start = db.Column(db.Date, nullable=False, index=True)
+    period_end = db.Column(db.Date, nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False, default='Draft')  # Draft, Closed, Reopened
+    total_expense = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    workspace_expense_account_id = db.Column(db.Integer, db.ForeignKey('workspace_account.id'), nullable=True)
+    company_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=True)
+    workspace_journal_entry_id = db.Column(db.Integer, db.ForeignKey('workspace_journal_entry.id'), nullable=True)
+    company_journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
+    closed_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    closed_at = db.Column(db.DateTime, nullable=True)
+    reopened_at = db.Column(db.DateTime, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('workspace_month_closes', lazy='dynamic'))
+    workspace_expense_account = db.relationship('WorkspaceAccount', foreign_keys=[workspace_expense_account_id], backref='month_close_expense_links', lazy='select')
+    company_account = db.relationship('Account', foreign_keys=[company_account_id], backref='workspace_month_close_targets', lazy='select')
+    workspace_journal_entry = db.relationship('WorkspaceJournalEntry', foreign_keys=[workspace_journal_entry_id], backref='month_close_workspace_entry', lazy='select')
+    company_journal_entry = db.relationship('JournalEntry', foreign_keys=[company_journal_entry_id], backref='month_close_company_entry', lazy='select')
+    closed_by = db.relationship('User', backref='workspace_month_closes_done', lazy='select')
+    expenses = db.relationship('WorkspaceExpense', backref='month_close', lazy='dynamic')
+
+
+# ────────────────────────────────────────────────
 # App Releases (for admin-managed in-app updates)
 # ────────────────────────────────────────────────
 class AppRelease(db.Model):

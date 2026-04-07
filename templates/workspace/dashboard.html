@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Employee Financial Workspace</h4>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <form method="post" action="{{ url_for('workspace_select_employee') }}" class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-6">
+          <label class="form-label">Select Employee (Required)</label>
+          <select name="employee_id" class="form-select search-select" required>
+            <option value="">-- Select Employee --</option>
+            {% for e in employees %}
+            <option value="{{ e.id }}" {% if selected_employee and selected_employee.id == e.id %}selected{% endif %}>{{ e.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6 d-flex gap-2">
+          <button type="submit" class="btn btn-primary">Load Workspace</button>
+          <a class="btn btn-outline-secondary" href="{{ url_for('workspace_clear_employee') }}">Clear</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if selected_employee %}
+    {% include "workspace/_nav.html" %}
+    <div class="row g-3">
+      <div class="col-md-3"><div class="card border-0 shadow-sm"><div class="card-body"><small>Parties</small><h5>{{ stats.parties }}</h5></div></div></div>
+      <div class="col-md-3"><div class="card border-0 shadow-sm"><div class="card-body"><small>Products</small><h5>{{ stats.products }}</h5></div></div></div>
+      <div class="col-md-3"><div class="card border-0 shadow-sm"><div class="card-body"><small>Total Expenses</small><h5>{{ '%.2f'|format(stats.expenses|float) }}</h5></div></div></div>
+      <div class="col-md-3"><div class="card border-0 shadow-sm"><div class="card-body"><small>Total Transfers</small><h5>{{ '%.2f'|format(stats.transfers|float) }}</h5></div></div></div>
+    </div>
+  {% else %}
+    <div class="alert alert-info mb-0">Employee select karte hi workspace modules active ho jayenge.</div>
+  {% endif %}
+</div>
+{% endblock %}

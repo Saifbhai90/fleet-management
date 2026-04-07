@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  {% include "workspace/_nav.html" %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between">
+      <strong>Workspace Chart of Accounts</strong>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('workspace_account_new') }}">Add Account</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0 js-filter-table">
+        <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Balance</th><th>Status</th><th class="text-end">Action</th></tr></thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.code }}</td>
+            <td>{{ r.name }}</td>
+            <td>{{ r.account_type }}</td>
+            <td>{{ '%.2f'|format((r.current_balance or 0)|float) }}</td>
+            <td>{{ 'Active' if r.is_active else 'Inactive' }}</td>
+            <td class="text-end"><a href="{{ url_for('workspace_account_edit', pk=r.id) }}" class="btn btn-sm btn-outline-primary">Edit</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -2,7 +2,11 @@
 Finance & Accounting Utility Functions
 Helper functions for voucher number generation, journal entry creation, and balance updates
 """
-from models import db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence, Employee, Driver, Party, Company
+from models import (
+    db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence,
+    Employee, Driver, Party, Company,
+    WorkspaceAccount, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceExpense, WorkspaceMonthClose,
+)
 from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
 from decimal import Decimal
@@ -727,3 +731,355 @@ def create_fund_transfer_journal(transfer_obj, from_wallet, to_wallet):
         created_by_user_id=transfer_obj.created_by_user_id,
         category=getattr(transfer_obj, 'category', None),
     )
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# EMPLOYEE FINANCIAL WORKSPACE (isolated ledger)
+# ════════════════════════════════════════════════════════════════════════════════
+def workspace_generate_entry_number(prefix, entry_date, employee_id):
+    base = generate_entry_number(prefix, entry_date)
+    return f"{base}-E{employee_id}"
+
+
+def ensure_workspace_base_accounts(employee_id):
+    employee = Employee.query.get(employee_id)
+    if not employee:
+        raise ValueError("Selected employee not found")
+
+    required = [
+        ("1000", "Workspace Assets", "Asset", None, "asset_root"),
+        ("1100", "Workspace Cash", "Asset", "1000", "cash"),
+        ("5000", "Workspace Expenses", "Expense", None, "expense_root"),
+        ("5100", "General Expense", "Expense", "5000", "general_expense"),
+    ]
+
+    existing = {
+        a.code: a for a in WorkspaceAccount.query.filter_by(employee_id=employee_id).all()
+    }
+    for code, name, acc_type, parent_code, entity_type in required:
+        if code in existing:
+            continue
+        parent_id = existing[parent_code].id if parent_code and parent_code in existing else None
+        row = WorkspaceAccount(
+            employee_id=employee_id,
+            code=code,
+            name=name,
+            account_type=acc_type,
+            parent_id=parent_id,
+            is_active=True,
+            opening_balance=0,
+            current_balance=0,
+            entity_type=entity_type,
+            description=f"Default workspace account for {employee.name}",
+        )
+        db.session.add(row)
+        db.session.flush()
+        existing[code] = row
+    return existing
+
+
+def ensure_workspace_counterparty_account(employee_id, *, party_id=None, driver_id=None):
+    ensure_workspace_base_accounts(employee_id)
+    if party_id:
+        code = f"210{party_id}"
+        existing = WorkspaceAccount.query.filter_by(employee_id=employee_id, entity_type='party', entity_id=party_id).first()
+        if existing:
+            return existing
+        party = Party.query.get(party_id)
+        if not party:
+            raise ValueError("Party not found")
+        row = WorkspaceAccount(
+            employee_id=employee_id,
+            code=code,
+            name=f"Party - {party.name}",
+            account_type='Asset',
+            parent_id=WorkspaceAccount.query.filter_by(employee_id=employee_id, code='1000').first().id,
+            is_active=True,
+            opening_balance=0,
+            current_balance=0,
+            entity_type='party',
+            entity_id=party_id,
+            description='Workspace counterparty account',
+        )
+        db.session.add(row)
+        db.session.flush()
+        return row
+    if driver_id:
+        code = f"220{driver_id}"
+        existing = WorkspaceAccount.query.filter_by(employee_id=employee_id, entity_type='driver', entity_id=driver_id).first()
+        if existing:
+            return existing
+        driver = Driver.query.get(driver_id)
+        if not driver:
+            raise ValueError("Driver not found")
+        row = WorkspaceAccount(
+            employee_id=employee_id,
+            code=code,
+            name=f"Driver - {driver.name}",
+            account_type='Asset',
+            parent_id=WorkspaceAccount.query.filter_by(employee_id=employee_id, code='1000').first().id,
+            is_active=True,
+            opening_balance=0,
+            current_balance=0,
+            entity_type='driver',
+            entity_id=driver_id,
+            description='Workspace counterparty account',
+        )
+        db.session.add(row)
+        db.session.flush()
+        return row
+    raise ValueError("party_id or driver_id is required")
+
+
+def workspace_create_journal_entry(employee_id, entry_type, entry_date, description, lines,
+                                   reference_type=None, reference_id=None, created_by_user_id=None, category=None):
+    entry_number = workspace_generate_entry_number('WJ', entry_date, employee_id)
+    je = WorkspaceJournalEntry(
+        employee_id=employee_id,
+        entry_number=entry_number,
+        entry_date=entry_date,
+        entry_type=entry_type,
+        description=description,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        category=category,
+        is_posted=True,
+        posted_at=pk_now(),
+        created_by_user_id=created_by_user_id,
+    )
+    db.session.add(je)
+    db.session.flush()
+
+    total_debit = Decimal("0")
+    total_credit = Decimal("0")
+    for idx, line_data in enumerate(lines):
+        debit = Decimal(str(line_data.get('debit', 0) or 0))
+        credit = Decimal(str(line_data.get('credit', 0) or 0))
+        db.session.add(WorkspaceJournalEntryLine(
+            journal_entry_id=je.id,
+            account_id=line_data['account_id'],
+            debit=debit,
+            credit=credit,
+            description=line_data.get('description') or '',
+            sort_order=idx,
+        ))
+        total_debit += debit
+        total_credit += credit
+
+    if abs(total_debit - total_credit) > Decimal('0.01'):
+        raise ValueError("Workspace journal entry not balanced")
+
+    db.session.flush()
+    workspace_update_account_balances(je.id)
+    return je
+
+
+def workspace_update_account_balances(journal_entry_id):
+    lines = WorkspaceJournalEntryLine.query.filter_by(journal_entry_id=journal_entry_id).all()
+    for line in lines:
+        account = db.session.query(WorkspaceAccount).with_for_update().filter_by(id=line.account_id).first()
+        if not account:
+            continue
+        debit = Decimal(str(line.debit or 0))
+        credit = Decimal(str(line.credit or 0))
+        if account.account_type in ['Asset', 'Expense']:
+            delta = debit - credit
+        else:
+            delta = credit - debit
+        account.current_balance = Decimal(str(account.current_balance or 0)) + delta
+        db.session.add(account)
+
+
+def workspace_reverse_journal_entry(journal_entry_id):
+    if not journal_entry_id:
+        return
+    lines = WorkspaceJournalEntryLine.query.filter_by(journal_entry_id=journal_entry_id).all()
+    for line in lines:
+        account = db.session.query(WorkspaceAccount).with_for_update().filter_by(id=line.account_id).first()
+        if not account:
+            continue
+        debit = Decimal(str(line.debit or 0))
+        credit = Decimal(str(line.credit or 0))
+        if account.account_type in ['Asset', 'Expense']:
+            delta = debit - credit
+        else:
+            delta = credit - debit
+        account.current_balance = Decimal(str(account.current_balance or 0)) - delta
+        db.session.add(account)
+    je = WorkspaceJournalEntry.query.get(journal_entry_id)
+    if je:
+        db.session.delete(je)
+
+
+def workspace_get_account_ledger(account_id, from_date=None, to_date=None, category=None):
+    account = WorkspaceAccount.query.get(account_id)
+    if not account:
+        return None
+    opening_balance = Decimal(str(account.opening_balance or 0))
+    q = db.session.query(WorkspaceJournalEntryLine, WorkspaceJournalEntry).join(WorkspaceJournalEntry).filter(
+        WorkspaceJournalEntryLine.account_id == account_id,
+        WorkspaceJournalEntry.is_posted == True,
+    )
+    if from_date:
+        q = q.filter(WorkspaceJournalEntry.entry_date >= from_date)
+    if to_date:
+        q = q.filter(WorkspaceJournalEntry.entry_date <= to_date)
+    if category:
+        q = q.filter(WorkspaceJournalEntry.category == category)
+    q = q.order_by(WorkspaceJournalEntry.entry_date.asc(), WorkspaceJournalEntry.id.asc(), WorkspaceJournalEntryLine.sort_order.asc())
+
+    tx = []
+    running = opening_balance
+    for line, je in q.all():
+        debit = Decimal(str(line.debit or 0))
+        credit = Decimal(str(line.credit or 0))
+        running += (debit - credit) if account.account_type in ['Asset', 'Expense'] else (credit - debit)
+        tx.append({
+            'date': je.entry_date,
+            'entry_number': je.entry_number,
+            'entry_type': je.entry_type,
+            'description': line.description or je.description,
+            'category': je.category or '',
+            'debit': debit,
+            'credit': credit,
+            'balance': running,
+        })
+
+    return {
+        'account': account,
+        'opening_balance': opening_balance,
+        'transactions': tx,
+        'closing_balance': running,
+    }
+
+
+def workspace_post_expense(expense_obj, cash_account_id, expense_account_id):
+    lines = [
+        {
+            'account_id': expense_account_id,
+            'debit': expense_obj.amount,
+            'credit': 0,
+            'description': f"{expense_obj.expense_type} expense",
+        },
+        {
+            'account_id': cash_account_id,
+            'debit': 0,
+            'credit': expense_obj.amount,
+            'description': "Cash out",
+        },
+    ]
+    return workspace_create_journal_entry(
+        employee_id=expense_obj.employee_id,
+        entry_type='Expense',
+        entry_date=expense_obj.expense_date,
+        description=expense_obj.description,
+        lines=lines,
+        reference_type='WorkspaceExpense',
+        reference_id=expense_obj.id,
+        created_by_user_id=expense_obj.created_by_user_id,
+        category=expense_obj.category,
+    )
+
+
+def workspace_post_transfer(transfer_obj):
+    lines = [
+        {
+            'account_id': transfer_obj.to_account_id,
+            'debit': transfer_obj.amount,
+            'credit': 0,
+            'description': f"Transfer received - {transfer_obj.description or ''}",
+        },
+        {
+            'account_id': transfer_obj.from_account_id,
+            'debit': 0,
+            'credit': transfer_obj.amount,
+            'description': f"Transfer paid - {transfer_obj.description or ''}",
+        },
+    ]
+    return workspace_create_journal_entry(
+        employee_id=transfer_obj.employee_id,
+        entry_type='Transfer',
+        entry_date=transfer_obj.transfer_date,
+        description=transfer_obj.description or f"Workspace Transfer {transfer_obj.transfer_number}",
+        lines=lines,
+        reference_type='WorkspaceFundTransfer',
+        reference_id=transfer_obj.id,
+        created_by_user_id=transfer_obj.created_by_user_id,
+        category=transfer_obj.category,
+    )
+
+
+def workspace_close_month(employee_id, period_start, period_end, company_account_id, user_id, notes=''):
+    ensure_workspace_base_accounts(employee_id)
+    expenses = WorkspaceExpense.query.filter(
+        WorkspaceExpense.employee_id == employee_id,
+        WorkspaceExpense.month_close_id.is_(None),
+        WorkspaceExpense.expense_date >= period_start,
+        WorkspaceExpense.expense_date <= period_end,
+    ).all()
+    total = sum(Decimal(str(e.amount or 0)) for e in expenses)
+    if total <= Decimal("0"):
+        raise ValueError("No unclosed workspace expense found in selected period")
+
+    employee = Employee.query.get(employee_id)
+    if not employee:
+        raise ValueError("Employee not found")
+    if not employee.wallet_account_id:
+        raise ValueError("Employee company wallet account is not configured")
+    company_wallet = Account.query.get(employee.wallet_account_id)
+    expense_head = WorkspaceAccount.query.filter_by(employee_id=employee_id, code='5100').first()
+    cash_head = WorkspaceAccount.query.filter_by(employee_id=employee_id, code='1100').first()
+    if not (expense_head and cash_head):
+        raise ValueError("Workspace base accounts are missing")
+
+    close_row = WorkspaceMonthClose(
+        employee_id=employee_id,
+        period_start=period_start,
+        period_end=period_end,
+        status='Closed',
+        total_expense=total,
+        workspace_expense_account_id=expense_head.id,
+        company_account_id=company_account_id,
+        closed_by_user_id=user_id,
+        closed_at=pk_now(),
+        notes=notes or None,
+    )
+    db.session.add(close_row)
+    db.session.flush()
+
+    wje = workspace_create_journal_entry(
+        employee_id=employee_id,
+        entry_type='MonthClose',
+        entry_date=period_end,
+        description=f"Month close {period_start:%d-%m-%Y} to {period_end:%d-%m-%Y}",
+        lines=[
+            {'account_id': expense_head.id, 'debit': 0, 'credit': total, 'description': 'Close expense batch'},
+            {'account_id': cash_head.id, 'debit': total, 'credit': 0, 'description': 'Reverse to workspace cash'},
+        ],
+        reference_type='WorkspaceMonthClose',
+        reference_id=close_row.id,
+        created_by_user_id=user_id,
+        category='MonthClose',
+    )
+    close_row.workspace_journal_entry_id = wje.id
+
+    company_lines = [
+        {'account_id': company_account_id, 'debit': total, 'credit': 0, 'description': f'Workspace month close expense - {employee.name}'},
+        {'account_id': company_wallet.id, 'debit': 0, 'credit': total, 'description': f'Workspace settlement against employee wallet - {employee.name}'},
+    ]
+    company_je = create_journal_entry(
+        entry_type='Journal',
+        entry_date=period_end,
+        description=f"Workspace month close {employee.name} ({period_start:%m/%Y})",
+        lines=company_lines,
+        reference_type='WorkspaceMonthClose',
+        reference_id=close_row.id,
+        created_by_user_id=user_id,
+        category='Workspace Close',
+    )
+    close_row.company_journal_entry_id = company_je.id
+
+    for exp in expenses:
+        exp.month_close_id = close_row.id
+
+    return close_row

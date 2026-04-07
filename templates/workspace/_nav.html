@@ -1,0 +1,18 @@
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_dashboard') }}">Dashboard</a>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_parties_list') }}">Parties</a>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_products_list') }}">Products</a>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_expenses_list') }}">Expenses</a>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_fund_transfers_list') }}">Transfers</a>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_accounts_list') }}">Workspace COA</a>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_ledger') }}">Ledger</a>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_month_close') }}">Month Close</a>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_reports') }}">Reports</a>
+      {% if employee %}
+      <span class="badge bg-success ms-auto">Employee: {{ employee.name }}</span>
+      {% endif %}
+    </div>
+  </div>
+</div>

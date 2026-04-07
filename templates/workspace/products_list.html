@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  {% include "workspace/_nav.html" %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between">
+      <strong>Workspace Products</strong>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('workspace_product_new') }}">Add Product</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0 js-filter-table">
+        <thead>
+          <tr><th>Name</th><th>Unit</th><th>Used In</th><th>Default Price</th><th>Status</th><th class="text-end">Action</th></tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.name }}</td><td>{{ r.unit or '-' }}</td><td>{{ r.used_in_forms or '-' }}</td><td>{{ '%.2f'|format((r.default_price or 0)|float) }}</td>
+            <td>{{ 'Active' if r.is_active else 'Inactive' }}</td>
+            <td class="text-end">
+              <a href="{{ url_for('workspace_product_edit', pk=r.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+              <form method="post" action="{{ url_for('workspace_product_delete', pk=r.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this product?')">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-4">No products found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

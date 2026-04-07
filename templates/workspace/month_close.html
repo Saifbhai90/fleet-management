@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  {% include "workspace/_nav.html" %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white"><strong>Month Close & Bridge Posting</strong></div>
+    <div class="card-body">
+      <form method="post" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-3"><label class="form-label">Period Start</label><input type="date" class="form-control" name="period_start" required></div>
+        <div class="col-md-3"><label class="form-label">Period End</label><input type="date" class="form-control" name="period_end" required></div>
+        <div class="col-md-4"><label class="form-label">Company Expense Account</label>
+          <select name="company_account_id" class="form-select search-select" required>
+            <option value="">-- Select Company Account --</option>
+            {% for a in accounts %}
+            <option value="{{ a.id }}">{{ a.code }} - {{ a.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2"><label class="form-label">Action</label><button class="btn btn-primary w-100">Close Month</button></div>
+        <div class="col-12"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white"><strong>Close History</strong></div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0 js-filter-table">
+        <thead><tr><th>#</th><th>Period</th><th>Status</th><th>Total Expense</th><th>Company JE</th><th>Closed At</th></tr></thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.id }}</td>
+            <td>{{ r.period_start|ddmmyyyy }} - {{ r.period_end|ddmmyyyy }}</td>
+            <td>{{ r.status }}</td>
+            <td>{{ '%.2f'|format((r.total_expense or 0)|float) }}</td>
+            <td>{{ r.company_journal_entry_id or '-' }}</td>
+            <td>{{ r.closed_at|ddmmyyyy if r.closed_at else '-' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-4">No month close records yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

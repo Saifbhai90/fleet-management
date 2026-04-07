@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  {% include "workspace/_nav.html" %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Account</label>
+          <select name="account_id" class="form-select search-select">
+            {% for a in accounts %}
+            <option value="{{ a.id }}" {% if account_id == a.id %}selected{% endif %}>{{ a.code }} - {{ a.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2"><label class="form-label">From</label><input type="date" class="form-control" name="from_date" value="{{ from_date }}"></div>
+        <div class="col-md-2"><label class="form-label">To</label><input type="date" class="form-control" name="to_date" value="{{ to_date }}"></div>
+        <div class="col-md-2"><label class="form-label">Category</label><input type="text" class="form-control" name="category" value="{{ category or '' }}"></div>
+        <div class="col-md-2"><button class="btn btn-primary w-100">View</button></div>
+      </form>
+    </div>
+  </div>
+
+  {% if ledger %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between">
+      <strong>{{ ledger.account.code }} - {{ ledger.account.name }}</strong>
+      <span>Opening: {{ '%.2f'|format((ledger.opening_balance or 0)|float) }} | Closing: {{ '%.2f'|format((ledger.closing_balance or 0)|float) }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0 js-filter-table">
+        <thead><tr><th>Date</th><th>Entry</th><th>Type</th><th>Description</th><th>Category</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
+        <tbody>
+          {% for t in ledger.transactions %}
+          <tr>
+            <td>{{ t.date|ddmmyyyy }}</td>
+            <td>{{ t.entry_number }}</td>
+            <td>{{ t.entry_type }}</td>
+            <td>{{ t.description }}</td>
+            <td>{{ t.category }}</td>
+            <td>{{ '%.2f'|format((t.debit or 0)|float) }}</td>
+            <td>{{ '%.2f'|format((t.credit or 0)|float) }}</td>
+            <td>{{ '%.2f'|format((t.balance or 0)|float) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="text-center text-muted py-4">No transactions found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

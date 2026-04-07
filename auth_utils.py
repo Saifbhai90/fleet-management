@@ -16,6 +16,7 @@ PERMISSION_ATTENDANCE = 'attendance'        # Attendance (Check-in/out, list, et
 PERMISSION_TASK_REPORT = 'task_report'
 PERMISSION_EXPENSES = 'expenses'
 PERMISSION_ACCOUNTS = 'accounts'
+PERMISSION_WORKSPACE = 'workspace'
 PERMISSION_REPORTS = 'reports'
 PERMISSION_PAYROLL = 'payroll'
 PERMISSION_BOOKS = 'books'
@@ -32,6 +33,7 @@ ALL_PERMISSION_CODES = [
     (PERMISSION_TASK_REPORT, 'Task Report', 'Task Report'),
     (PERMISSION_EXPENSES, 'Expenses (Fuel, Oil, Maintenance, Employee)', 'Expenses'),
     (PERMISSION_ACCOUNTS, 'Accounts', 'Accounts'),
+    (PERMISSION_WORKSPACE, 'Employee Financial Workspace', 'Workspace'),
     (PERMISSION_REPORTS, 'Reports', 'Reports'),
     (PERMISSION_PAYROLL, 'Payroll (Salary & Wages)', 'Payroll'),
     (PERMISSION_BOOKS, 'Book Management', 'Books'),
@@ -197,6 +199,32 @@ ENDPOINT_PERMISSION_MAP = [
     ('maintenance_expense_delete', 'maintenance_expense_delete'),
     # Employee Expenses
     ('employee_expense_list', 'employee_expense'),
+    # Employee Workspace
+    ('workspace_dashboard', 'workspace_dashboard'),
+    ('workspace_select_employee', 'workspace_dashboard'),
+    ('workspace_clear_employee', 'workspace_dashboard'),
+    ('workspace_parties_list', 'workspace_party_list'),
+    ('workspace_party_new', 'workspace_party_add'),
+    ('workspace_party_edit', 'workspace_party_edit'),
+    ('workspace_party_delete', 'workspace_party_delete'),
+    ('workspace_products_list', 'workspace_product_list'),
+    ('workspace_product_new', 'workspace_product_add'),
+    ('workspace_product_edit', 'workspace_product_edit'),
+    ('workspace_product_delete', 'workspace_product_delete'),
+    ('workspace_accounts_list', 'workspace_account_list'),
+    ('workspace_account_new', 'workspace_account_add'),
+    ('workspace_account_edit', 'workspace_account_edit'),
+    ('workspace_expenses_list', 'workspace_expense_list'),
+    ('workspace_expense_new', 'workspace_expense_add'),
+    ('workspace_expense_edit', 'workspace_expense_edit'),
+    ('workspace_expense_delete', 'workspace_expense_delete'),
+    ('workspace_fund_transfers_list', 'workspace_transfer_list'),
+    ('workspace_fund_transfer_new', 'workspace_transfer_add'),
+    ('workspace_fund_transfer_edit', 'workspace_transfer_edit'),
+    ('workspace_fund_transfer_delete', 'workspace_transfer_delete'),
+    ('workspace_ledger', 'workspace_ledger'),
+    ('workspace_month_close', 'workspace_month_close'),
+    ('workspace_reports', 'workspace_reports'),
     # Finance
     ('accounts_quick_payment', 'accounts_quick_payment'),
     ('accounts_quick_receipt', 'accounts_quick_receipt'),

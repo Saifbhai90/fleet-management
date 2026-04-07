@@ -193,6 +193,19 @@ def inject_freeze_data_status():
         cfg = {}
     return dict(freeze_data_status=cfg)
 
+
+@app.context_processor
+def inject_workspace_context():
+    """Expose selected workspace employee in templates."""
+    try:
+        from flask import session
+        from models import Employee
+        emp_id = session.get('workspace_employee_id')
+        emp = Employee.query.get(emp_id) if emp_id else None
+    except Exception:
+        emp = None
+    return dict(workspace_selected_employee=emp)
+
 # Create all tables if not exist (backward compatibility; new changes use migrations)
 _run_startup_tasks = (not app.debug) or (os.environ.get('WERKZEUG_RUN_MAIN') == 'true')
 if _run_startup_tasks:
@@ -435,6 +448,16 @@ from routes_finance import (
     ft_description_suggestions_api, ft_categories_list_api, ft_categories_add_api,
 )  # noqa: E402
 
+from routes_workspace import (
+    workspace_dashboard, workspace_select_employee, workspace_clear_employee,
+    workspace_parties_list, workspace_party_form, workspace_party_delete,
+    workspace_products_list, workspace_product_form, workspace_product_delete,
+    workspace_accounts_list, workspace_account_form,
+    workspace_expenses_list, workspace_expense_form, workspace_expense_delete,
+    workspace_fund_transfers_list, workspace_fund_transfer_form, workspace_fund_transfer_delete,
+    workspace_ledger, workspace_month_close, workspace_reports,
+)  # noqa: E402
+
 from routes_payroll import (
     payroll_salary_config_list, payroll_salary_config_form, payroll_salary_config_delete,
     payroll_list, payroll_generate, payroll_view, payroll_edit, payroll_recalc_attendance,
@@ -493,6 +516,33 @@ app.add_url_rule('/api/bank-directory/<int:pk>/update', 'bank_directory_update',
 # Journal Voucher (replace placeholder)
 app.add_url_rule('/accounts/jv', 'accounts_jv', journal_voucher_add, methods=['GET', 'POST'])
 app.add_url_rule('/accounts/jv/list', 'journal_vouchers_list', journal_vouchers_list, methods=['GET', 'POST'])
+
+# Employee Financial Workspace
+app.add_url_rule('/workspace', 'workspace_dashboard', workspace_dashboard)
+app.add_url_rule('/workspace/select-employee', 'workspace_select_employee', workspace_select_employee, methods=['POST'])
+app.add_url_rule('/workspace/clear-employee', 'workspace_clear_employee', workspace_clear_employee)
+app.add_url_rule('/workspace/parties', 'workspace_parties_list', workspace_parties_list)
+app.add_url_rule('/workspace/party/new', 'workspace_party_new', workspace_party_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/party/<int:pk>/edit', 'workspace_party_edit', workspace_party_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/party/<int:pk>/delete', 'workspace_party_delete', workspace_party_delete, methods=['POST'])
+app.add_url_rule('/workspace/products', 'workspace_products_list', workspace_products_list)
+app.add_url_rule('/workspace/product/new', 'workspace_product_new', workspace_product_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/product/<int:pk>/edit', 'workspace_product_edit', workspace_product_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/product/<int:pk>/delete', 'workspace_product_delete', workspace_product_delete, methods=['POST'])
+app.add_url_rule('/workspace/accounts', 'workspace_accounts_list', workspace_accounts_list)
+app.add_url_rule('/workspace/account/new', 'workspace_account_new', workspace_account_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/account/<int:pk>/edit', 'workspace_account_edit', workspace_account_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/expenses', 'workspace_expenses_list', workspace_expenses_list)
+app.add_url_rule('/workspace/expense/new', 'workspace_expense_new', workspace_expense_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/expense/<int:pk>/edit', 'workspace_expense_edit', workspace_expense_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/expense/<int:pk>/delete', 'workspace_expense_delete', workspace_expense_delete, methods=['POST'])
+app.add_url_rule('/workspace/transfers', 'workspace_fund_transfers_list', workspace_fund_transfers_list)
+app.add_url_rule('/workspace/transfer/new', 'workspace_fund_transfer_new', workspace_fund_transfer_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/transfer/<int:pk>/edit', 'workspace_fund_transfer_edit', workspace_fund_transfer_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/transfer/<int:pk>/delete', 'workspace_fund_transfer_delete', workspace_fund_transfer_delete, methods=['POST'])
+app.add_url_rule('/workspace/ledger', 'workspace_ledger', workspace_ledger)
+app.add_url_rule('/workspace/month-close', 'workspace_month_close', workspace_month_close, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/reports', 'workspace_reports', workspace_reports)
 
 # ── Payroll Module ──────────────────────────────────────────────────────────
 app.add_url_rule('/payroll/salary-config', 'payroll_salary_config_list', payroll_salary_config_list)

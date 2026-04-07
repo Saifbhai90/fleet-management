@@ -1552,7 +1552,7 @@
 <!-- SIDEBAR -->
 <div class="sidebar shadow" id="sidebar">
     <div id="sidebarAccordion">
-        {% set master_endpoints = ['companies', 'company_form', 'projects_list', 'project_detail', 'project_form', 'districts_list', 'district_form', 'vehicles_list', 'vehicle_form', 'parking_list', 'parking_form', 'drivers_list', 'driver_form', 'employees_list', 'employee_form', 'driver_post_list', 'driver_post_form', 'party_list', 'party_form', 'product_list', 'product_form'] %}
+        {% set master_endpoints = ['companies', 'company_form', 'projects_list', 'project_detail', 'project_form', 'districts_list', 'district_form', 'vehicles_list', 'vehicle_form', 'parking_list', 'parking_form', 'drivers_list', 'driver_form', 'employees_list', 'employee_form', 'driver_post_list', 'driver_post_form'] %}
         {% set assignment_endpoints = ['assign_project_to_company', 'assign_project_to_district', 'assign_vehicle_to_district', 'assign_vehicle_to_parking_list', 'assign_vehicle_to_parking_new', 'assign_vehicle_to_parking_edit', 'assign_driver_to_vehicle_list', 'assign_driver_to_vehicle_new', 'assign_driver_to_vehicle_edit'] %}
         {% set transfer_endpoints = ['project_transfers', 'project_transfer_new', 'project_transfer_edit', 'vehicle_transfers', 'vehicle_transfer_new', 'vehicle_transfer_edit', 'driver_transfers', 'driver_transfer_new', 'driver_transfer_edit'] %}
         {% set driver_status_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'driver_attendance_list', 'driver_attendance_mark', 'driver_attendance_bulk_off', 'driver_attendance_pending', 'driver_attendance_missing_checkout', 'driver_attendance_manual_checkin', 'driver_attendance_manual_checkout', 'driver_attendance_checkin', 'driver_attendance_checkout', 'driver_attendance_tra_report', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
@@ -1562,6 +1562,7 @@
         {% set expenses_endpoints = ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form', 'employee_expense_list', 'employee_expense_form'] %}
         {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai', 'active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print', 'driver_seat_available_report', 'driver_seat_available_export', 'driver_seat_available_print', 'missing_documents_report', 'missing_documents_report_print'] %}
         {% set accounts_endpoints = ['accounts_quick_payment', 'payment_vouchers_list', 'payment_voucher_edit', 'payment_voucher_delete', 'accounts_quick_receipt', 'receipt_vouchers_list', 'accounts_bank_entry', 'bank_entries_list', 'accounts_jv', 'journal_vouchers_list', 'accounts_future_entry', 'accounts_balance_sheet', 'accounts_account_ledger', 'chart_of_accounts_list', 'chart_of_accounts_add', 'chart_of_accounts_edit', 'fund_transfer_add', 'fund_transfers_list', 'fund_transfer_edit', 'wallet_dashboard', 'employee_expenses_list', 'employee_expense_add', 'employee_expense_edit'] %}
+        {% set workspace_endpoints = ['workspace_dashboard', 'workspace_select_employee', 'workspace_clear_employee', 'workspace_parties_list', 'workspace_party_new', 'workspace_party_edit', 'workspace_products_list', 'workspace_product_new', 'workspace_product_edit', 'workspace_accounts_list', 'workspace_account_new', 'workspace_account_edit', 'workspace_expenses_list', 'workspace_expense_new', 'workspace_expense_edit', 'workspace_fund_transfers_list', 'workspace_fund_transfer_new', 'workspace_fund_transfer_edit', 'workspace_ledger', 'workspace_month_close', 'workspace_reports'] %}
         {% set _req_from = request.args.get('from', '') %}
         {% set _req_ref = request.args.get('ref', '') %}
         {% set _profile_endpoints = ['report_driver_profile', 'report_vehicle_profile', 'employee_profile_print'] %}
@@ -1579,6 +1580,7 @@
         {% set expenses_open = request.endpoint in expenses_endpoints %}
         {% set reports_open = (request.endpoint in reports_endpoints and not _came_from_master) or _came_from_reports or (request.endpoint == 'companies' and request.args.get('mode') == 'report') %}
         {% set accounts_open = request.endpoint in accounts_endpoints %}
+        {% set workspace_open = request.endpoint in workspace_endpoints %}
         {% set payroll_endpoints = ['payroll_salary_config_list', 'payroll_salary_config_form', 'payroll_salary_config_edit', 'payroll_driver_bulk_salary', 'payroll_list', 'payroll_generate', 'payroll_bulk_generate', 'payroll_view', 'payroll_edit', 'payroll_pay', 'payroll_pending', 'payroll_payslip'] %}
         {% set payroll_open = request.endpoint in payroll_endpoints %}
         {% set books_endpoints = ['book_inventory_list', 'book_stock_entry', 'book_stock_edit', 'book_issue', 'book_assignment_list', 'book_return', 'book_pending_returns'] %}
@@ -1601,7 +1603,7 @@
             </a>
             {% set _m_org = request.endpoint in ['companies','company_form','projects_list','project_form','project_detail','districts_list','district_form'] and (request.endpoint != 'companies' or request.args.get('mode') != 'report') %}
             {% set _m_fleet = request.endpoint in ['vehicles_list','vehicle_form','parking_list','parking_form','report_vehicle_profile'] %}
-            {% set _m_people = request.endpoint in ['employees_list','employee_form','employee_profile_print','drivers_list','driver_form','report_driver_profile','driver_post_list','driver_post_form','party_list','party_form','product_list','product_form'] %}
+            {% set _m_people = request.endpoint in ['employees_list','employee_form','employee_profile_print','drivers_list','driver_form','report_driver_profile','driver_post_list','driver_post_form'] %}
             <div class="collapse collapse-item-container {% if master_open %}show{% endif %}"
                  id="masterMenu" data-bs-parent="#sidebarAccordion">
                 <div class="sb-sub-toggle {% if not _m_org %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#masterOrg" aria-expanded="{{ 'true' if _m_org else 'false' }}">Organization</div>
@@ -1650,16 +1652,6 @@
                 {% if can_see_page('driver_post') %}
                 <a href="{{ url_for('driver_post_list') }}" class="collapse-item {% if request.endpoint in ['driver_post_list', 'driver_post_form'] %}active-link{% endif %}">
                     <i class="bi bi-person-vcard"></i><span>Designations</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('party') %}
-                <a href="{{ url_for('party_list') }}" class="collapse-item {% if request.endpoint in ['party_list', 'party_form'] %}active-link{% endif %}">
-                    <i class="bi bi-building"></i><span>Parties</span>
-                </a>
-                {% endif %}
-                {% if can_see_page('product') %}
-                <a href="{{ url_for('product_list') }}" class="collapse-item {% if request.endpoint in ['product_list', 'product_form'] %}active-link{% endif %}">
-                    <i class="bi bi-box-seam"></i><span>Products</span>
                 </a>
                 {% endif %}
                 </div>
@@ -1959,6 +1951,45 @@
                 </a>
                 {% endif %}
                 </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Employee Financial Workspace -->
+        {% if can_see_section('workspace') %}
+        <div>
+            <a class="dropdown-toggle" data-bs-toggle="collapse" href="#workspaceMenu" role="button" aria-expanded="{{ 'true' if workspace_open else 'false' }}">
+                <i class="bi bi-grid-1x2"></i><span>Employee Workspace</span>
+            </a>
+            <div class="collapse collapse-item-container {% if workspace_open %}show{% endif %}"
+                 id="workspaceMenu" data-bs-parent="#sidebarAccordion">
+                <a href="{{ url_for('workspace_dashboard') }}" class="collapse-item {% if request.endpoint == 'workspace_dashboard' %}active-link{% endif %}">
+                    <i class="bi bi-speedometer2 text-primary"></i><span>Dashboard</span>
+                </a>
+                <a href="{{ url_for('workspace_parties_list') }}" class="collapse-item {% if request.endpoint in ['workspace_parties_list', 'workspace_party_new', 'workspace_party_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-building text-info"></i><span>Parties</span>
+                </a>
+                <a href="{{ url_for('workspace_products_list') }}" class="collapse-item {% if request.endpoint in ['workspace_products_list', 'workspace_product_new', 'workspace_product_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-box-seam text-success"></i><span>Products</span>
+                </a>
+                <a href="{{ url_for('workspace_expenses_list') }}" class="collapse-item {% if request.endpoint in ['workspace_expenses_list', 'workspace_expense_new', 'workspace_expense_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-wallet2 text-warning"></i><span>Expenses</span>
+                </a>
+                <a href="{{ url_for('workspace_fund_transfers_list') }}" class="collapse-item {% if request.endpoint in ['workspace_fund_transfers_list', 'workspace_fund_transfer_new', 'workspace_fund_transfer_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-arrow-left-right text-primary"></i><span>Fund Transfers</span>
+                </a>
+                <a href="{{ url_for('workspace_accounts_list') }}" class="collapse-item {% if request.endpoint in ['workspace_accounts_list', 'workspace_account_new', 'workspace_account_edit'] %}active-link{% endif %}">
+                    <i class="bi bi-diagram-3 text-secondary"></i><span>Workspace COA</span>
+                </a>
+                <a href="{{ url_for('workspace_ledger') }}" class="collapse-item {% if request.endpoint == 'workspace_ledger' %}active-link{% endif %}">
+                    <i class="bi bi-journal-text text-info"></i><span>Workspace Ledger</span>
+                </a>
+                <a href="{{ url_for('workspace_month_close') }}" class="collapse-item {% if request.endpoint == 'workspace_month_close' %}active-link{% endif %}">
+                    <i class="bi bi-calendar2-check text-danger"></i><span>Month Close</span>
+                </a>
+                <a href="{{ url_for('workspace_reports') }}" class="collapse-item {% if request.endpoint == 'workspace_reports' %}active-link{% endif %}">
+                    <i class="bi bi-bar-chart text-success"></i><span>Workspace Reports</span>
+                </a>
             </div>
         </div>
         {% endif %}
