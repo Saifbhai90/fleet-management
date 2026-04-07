@@ -3473,8 +3473,16 @@
 
     // Sidebar Toggle
     function toggleSidebar() {
-        document.getElementById("sidebar").classList.toggle("collapsed");
-        document.getElementById("mainContent").classList.toggle("expanded");
+        var sb = document.getElementById("sidebar");
+        var mc = document.getElementById("mainContent");
+        if (!sb || !mc) return;
+        sb.classList.toggle("collapsed");
+        mc.classList.toggle("expanded");
+        if (sb.classList.contains("collapsed")) {
+            sessionStorage.removeItem('workspaceSidebarKeepOpen');
+        } else {
+            sessionStorage.setItem('workspaceSidebarKeepOpen', '1');
+        }
     }
 
     // Mobile: open/close sidebar with overlay
@@ -3510,8 +3518,16 @@
         if (window.innerWidth < 992) return;
         var sb = document.getElementById('sidebar');
         var mc = document.getElementById('mainContent');
-        if (sb && !sb.classList.contains('collapsed')) sb.classList.add('collapsed');
-        if (mc && !mc.classList.contains('expanded')) mc.classList.add('expanded');
+        var keepOpen = sessionStorage.getItem('workspaceSidebarKeepOpen') === '1';
+        if (sb && mc) {
+            if (keepOpen) {
+                sb.classList.remove('collapsed');
+                mc.classList.remove('expanded');
+            } else {
+                sb.classList.add('collapsed');
+                mc.classList.add('expanded');
+            }
+        }
 
         // If user clicks any left-sidebar button, expand sidebar for normal navigation.
         if (sb) {
@@ -3522,6 +3538,7 @@
                     sb.classList.remove('collapsed');
                     if (mc) mc.classList.remove('expanded');
                 }
+                sessionStorage.setItem('workspaceSidebarKeepOpen', '1');
             });
         }
     });
