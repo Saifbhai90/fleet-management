@@ -3549,9 +3549,7 @@
             sessionStorage.setItem(WORKSPACE_MODE_KEY, "1");
             forceCollapsedSidebar();
         } else {
-            if (sessionStorage.getItem(WORKSPACE_MODE_KEY) === "1") {
-                sessionStorage.setItem(WORKSPACE_MODE_KEY, "0");
-            }
+            sessionStorage.removeItem(WORKSPACE_MODE_KEY);
         }
 
         if (!wsEntry) return;
@@ -3575,8 +3573,18 @@
             link.addEventListener('click', function(e){
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
                 var href = link.getAttribute('href') || '';
-                if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0) return;
-                sessionStorage.setItem(WORKSPACE_MODE_KEY, "0");
+                if (!href || href.indexOf('javascript:') === 0) return;
+                sessionStorage.removeItem(WORKSPACE_MODE_KEY);
+                forceExpandedSidebar();
+            });
+        });
+
+        // Parent dropdown/menu toggles must also break lock and expand sidebar.
+        document.querySelectorAll('#sidebar a.dropdown-toggle, #sidebar .sb-sub-toggle').forEach(function(toggleEl){
+            toggleEl.addEventListener('click', function(e){
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                if (toggleEl.id === 'workspaceSidebarEntry') return;
+                sessionStorage.removeItem(WORKSPACE_MODE_KEY);
                 forceExpandedSidebar();
             });
         });
