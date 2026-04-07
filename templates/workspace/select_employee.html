@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="row justify-content-center">
+    <div class="col-xl-6 col-lg-7 col-md-9">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 p-md-5">
+          <div class="text-center mb-4">
+            <h4 class="mb-1">Employee Workspace</h4>
+            <p class="text-muted mb-0">Working start karne ke liye pehle employee select karein.</p>
+          </div>
+          <form method="post" action="{{ url_for('workspace_select_employee') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Select Employee (Required)</label>
+              <select name="employee_id" class="form-select form-select-lg search-select" required autofocus>
+                <option value="">-- Search and Select Employee --</option>
+                {% for e in employees %}
+                <option value="{{ e.id }}" {% if selected_employee and selected_employee.id == e.id %}selected{% endif %}>
+                  {{ e.name }}{% if e.post %} - {{ e.post.full_name }}{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Name type karke employee ko asani se select karein.</div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-lg w-100">
+              <i class="bi bi-check2-circle me-1"></i>Load Workspace Dashboard
+            </button>
+          </form>
+          {% if selected_employee %}
+          <div class="text-center mt-3">
+            <a class="btn btn-link text-decoration-none" href="{{ url_for('workspace_clear_employee') }}">Clear current selection</a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

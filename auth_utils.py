@@ -201,6 +201,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('employee_expense_list', 'employee_expense'),
     # Employee Workspace
     ('workspace_dashboard', 'workspace_dashboard'),
+    ('workspace_home', 'workspace_dashboard'),
     ('workspace_select_employee', 'workspace_dashboard'),
     ('workspace_clear_employee', 'workspace_dashboard'),
     ('workspace_parties_list', 'workspace_party_list'),

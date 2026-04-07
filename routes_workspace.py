@@ -68,28 +68,25 @@ def workspace_dashboard():
     if auth:
         return auth
     employees = _list_employees_for_workspace()
-    emp = _get_workspace_employee()
+    selected_employee = _get_workspace_employee()
+    return render_template("workspace/select_employee.html", employees=employees, selected_employee=selected_employee)
+
+
+def workspace_home():
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
     stats = {
-        "parties": 0,
-        "products": 0,
-        "expenses": Decimal("0"),
-        "transfers": Decimal("0"),
-        "open_closes": 0,
-    }
-    if emp:
-        stats["parties"] = WorkspaceParty.query.filter_by(employee_id=emp.id, is_active=True).count()
-        stats["products"] = WorkspaceProduct.query.filter_by(employee_id=emp.id, is_active=True).count()
-        stats["expenses"] = sum(
-            (x.amount or 0) for x in WorkspaceExpense.query.filter_by(employee_id=emp.id).all()
-        )
-        stats["transfers"] = sum(
-            (x.amount or 0) for x in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all()
-        )
-        stats["open_closes"] = WorkspaceMonthClose.query.filter(
+        "parties": WorkspaceParty.query.filter_by(employee_id=emp.id, is_active=True).count(),
+        "products": WorkspaceProduct.query.filter_by(employee_id=emp.id, is_active=True).count(),
+        "expenses": sum((x.amount or 0) for x in WorkspaceExpense.query.filter_by(employee_id=emp.id).all()),
+        "transfers": sum((x.amount or 0) for x in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all()),
+        "open_closes": WorkspaceMonthClose.query.filter(
             WorkspaceMonthClose.employee_id == emp.id,
             WorkspaceMonthClose.status != "Closed",
-        ).count()
-    return render_template("workspace/dashboard.html", employees=employees, selected_employee=emp, stats=stats)
+        ).count(),
+    }
+    return render_template("workspace/dashboard.html", employee=emp, stats=stats)
 
 
 def workspace_select_employee():
@@ -108,7 +105,7 @@ def workspace_select_employee():
     ensure_workspace_base_accounts(emp.id)
     db.session.commit()
     flash(f"Workspace loaded for {emp.name}.", "success")
-    return redirect(url_for("workspace_dashboard"))
+    return redirect(url_for("workspace_home"))
 
 
 def workspace_clear_employee():

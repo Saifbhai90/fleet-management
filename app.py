@@ -449,7 +449,7 @@ from routes_finance import (
 )  # noqa: E402
 
 from routes_workspace import (
-    workspace_dashboard, workspace_select_employee, workspace_clear_employee,
+    workspace_dashboard, workspace_home, workspace_select_employee, workspace_clear_employee,
     workspace_parties_list, workspace_party_form, workspace_party_delete,
     workspace_products_list, workspace_product_form, workspace_product_delete,
     workspace_accounts_list, workspace_account_form,
@@ -519,6 +519,7 @@ app.add_url_rule('/accounts/jv/list', 'journal_vouchers_list', journal_vouchers_
 
 # Employee Financial Workspace
 app.add_url_rule('/workspace', 'workspace_dashboard', workspace_dashboard)
+app.add_url_rule('/workspace/home', 'workspace_home', workspace_home)
 app.add_url_rule('/workspace/select-employee', 'workspace_select_employee', workspace_select_employee, methods=['POST'])
 app.add_url_rule('/workspace/clear-employee', 'workspace_clear_employee', workspace_clear_employee)
 app.add_url_rule('/workspace/parties', 'workspace_parties_list', workspace_parties_list)
