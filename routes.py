@@ -13393,6 +13393,11 @@ def task_report_new():
         missing = []
         to_save = []
         for v in vehicles:
+            existing = VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first()
+            edit_mode = request.form.get('row_%s_edit_mode' % v.id, '1')
+            if existing and str(edit_mode) != '1':
+                # Locked row: skip update unless explicitly switched to edit mode.
+                continue
             close_val = request.form.get('vehicle_%s_close_reading' % v.id)
             tasks_val = request.form.get('vehicle_%s_tasks_count' % v.id)
             start_val = request.form.get('vehicle_%s_start_reading' % v.id)
@@ -13408,15 +13413,14 @@ def task_report_new():
             if close_reading is None:
                 missing.append(v.vehicle_no)
             else:
-                to_save.append((v, close_reading, tasks_count, user_start))
+                to_save.append((v, existing, close_reading, tasks_count, user_start))
         if missing:
             flash('Sab vehicles ke liye Close Reading zaroori hai. Missing: ' + ', '.join(missing), 'danger')
             view_date = task_date
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
             projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all() if district_id else []
             return render_template('task_report_new.html', rows=rows, view_date=view_date, district_id=district_id, project_id=project_id, districts=districts, projects=projects)
-        for v, close_reading, tasks_count, user_start in to_save:
-            existing = VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first()
+        for v, existing, close_reading, tasks_count, user_start in to_save:
             if existing:
                 existing.close_reading = close_reading
                 existing.tasks_count = tasks_count
@@ -13431,7 +13435,12 @@ def task_report_new():
         try:
             db.session.commit()
             flash('Task entries saved successfully.', 'success')
-            return redirect(url_for('task_report_list', date=task_date.strftime('%d-%m-%Y')))
+            return redirect(url_for(
+                'task_report_new',
+                date=task_date.strftime('%d-%m-%Y'),
+                district_id=district_id,
+                project_id=project_id,
+            ))
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
@@ -13507,6 +13516,7 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
             'tracker_km': round(tracker_km, 2),
             'close_reading': existing_close,
             'tasks_count': existing_tasks,
+            'saved': existing,
         })
     return rows
 
@@ -13546,6 +13556,49 @@ def api_emg_detail():
         'created_date': _fmt_dt(r.excel_created_date),
         'completed_date_time': _fmt_dt(r.completed_date_time),
     } for r in rows])
+
+
+@app.route('/api/task-report/emg-task-detail')
+def api_emg_task_detail():
+    """Return one Emergency Task detail by record id."""
+    emg_id = request.args.get('emg_id', type=int)
+    if not emg_id:
+        return jsonify({'ok': False, 'message': 'Missing emg_id'}), 400
+    rec = EmergencyTaskRecord.query.get(emg_id)
+    if not rec:
+        return jsonify({'ok': False, 'message': 'Task not found'}), 404
+
+    def _fmt_dt(s):
+        if not s:
+            return ''
+        from datetime import datetime as _dt
+        for fmt in ('%Y-%m-%d %H:%M:%S', '%d %b %Y %H:%M:%S', '%Y-%m-%d %H:%M', '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M'):
+            try:
+                d = _dt.strptime(s.strip(), fmt)
+                return d.strftime('%d-%m-%Y %I:%M %p')
+            except (ValueError, AttributeError):
+                continue
+        return s
+
+    return jsonify({
+        'ok': True,
+        'id': rec.id,
+        'task_id': rec.task_id_ext or '',
+        'vehicle_no': rec.amb_reg_no or '',
+        'category': rec.category or '',
+        'sub_category': rec.sub_category or '',
+        'request_from': rec.request_from or '',
+        'phone': rec.phone or '',
+        'name': rec.name or '',
+        'address': rec.address or '',
+        'received_by': rec.received_by or '',
+        'facility_name': rec.facility_name or '',
+        'district_name': rec.district_name or '',
+        'tehsil_name': rec.tehsil_name or '',
+        'status': rec.status or '',
+        'created_date': _fmt_dt(rec.excel_created_date),
+        'completed_date_time': _fmt_dt(rec.completed_date_time),
+    })
 
 
 @app.route('/api/task-report/tracker-detail')

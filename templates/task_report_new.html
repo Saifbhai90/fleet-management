@@ -74,36 +74,39 @@
                 <th class="text-end">Tracker KM</th>
                 <th class="text-end">KMs Diff</th>
                 <th class="text-end">% Diff</th>
+                <th class="text-center">Edit</th>
               </tr>
             </thead>
             <tbody>
               {% for row in rows %}
-              <tr class="task-row" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}">
-                <td class="ps-4">{{ loop.index }}</td>
+              {% set s = row.saved %}
+              <tr class="task-row{% if s %} table-info{% endif %}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}">
+                <td class="ps-4">{{ loop.index }}{% if s %} <i class="bi bi-check-circle-fill text-success" title="Previously saved"></i>{% endif %}</td>
                 <td>{{ row.vehicle.district.name if row.vehicle.district else '-' }}</td>
                 <td>{{ row.vehicle.parking_station.tehsil if row.vehicle.parking_station else '-' }}</td>
                 <td>{{ row.vehicle.parking_station.name if row.vehicle.parking_station else '-' }}</td>
                 <td>{{ row.vehicle.vehicle_type or '-' }}</td>
                 <td class="fw-medium">{{ row.vehicle.vehicle_no }}</td>
+                <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
                 {% if row.start_editable %}
                 <td class="text-end">
                   <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_start_reading"
-                         class="form-control form-control-sm text-end start-input" style="min-width:90px;"
-                         value="{% if row.start_reading %}{{ "%.0f"|format(row.start_reading) }}{% endif %}" placeholder="Start">
+                         class="form-control form-control-sm text-end start-input task-editable-field" data-row="{{ row.vehicle.id }}" style="min-width:90px;"
+                         value="{% if row.start_reading %}{{ "%.0f"|format(row.start_reading) }}{% endif %}" placeholder="Start" {% if s %}disabled{% endif %}>
                 </td>
                 {% else %}
                 <td class="text-end start-reading">{{ "%.0f"|format(row.start_reading) }}</td>
                 {% endif %}
                 <td class="text-end">
                   <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_close_reading"
-                         class="form-control form-control-sm text-end close-input" style="min-width:90px;"
-                         value="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" placeholder="Close">
+                         class="form-control form-control-sm text-end close-input task-editable-field" data-row="{{ row.vehicle.id }}" style="min-width:90px;"
+                         value="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" placeholder="Close" {% if s %}disabled{% endif %}>
                 </td>
                 <td class="text-end kms-driven">-</td>
                 <td class="text-center">
                   <input type="number" min="0" name="vehicle_{{ row.vehicle.id }}_tasks_count"
-                         class="form-control form-control-sm text-center" style="min-width:60px;"
-                         value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="0">
+                         class="form-control form-control-sm text-center task-editable-field" data-row="{{ row.vehicle.id }}" style="min-width:60px;"
+                         value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="0" {% if s %}disabled{% endif %}>
                 </td>
                 <td class="text-center">
                   <a href="#" class="emg-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
@@ -118,12 +121,21 @@
                 </td>
                 <td class="text-end kms-diff">-</td>
                 <td class="text-end pct-diff">-</td>
+                <td class="text-center">
+                  {% if s %}
+                  <button type="button" class="btn btn-sm btn-outline-primary task-row-edit-btn" data-row="{{ row.vehicle.id }}" title="Enable editing for this row">
+                    <i class="bi bi-pencil-square me-1"></i>Edit
+                  </button>
+                  {% else %}
+                  <span class="badge bg-success">New</span>
+                  {% endif %}
+                </td>
               </tr>
               {% endfor %}
             </tbody>
             <tfoot class="table-light fw-bold" id="batchTotals">
               <tr>
-                <td colspan="8" class="ps-4 text-end">Total</td>
+                <td colspan="9" class="ps-4 text-end">Total</td>
                 <td class="text-end" id="totalKmsDriven">-</td>
                 <td class="text-center" id="totalTasks">-</td>
                 <td class="text-center" id="totalEmg">-</td>
@@ -137,7 +149,7 @@
         </div>
       </div>
       <div class="card-footer bg-light d-flex justify-content-between align-items-center">
-        <span class="text-muted small">Sab vehicles ke liye Close Reading fill karein, phir Save karein. Koi bhi gari reh jaye to Save nahi hoga.</span>
+        <span class="text-muted small">Saved rows locked rahengi; last column me <strong>Edit</strong> click karne par hi editable hongi. New rows ke liye Close Reading required hai.</span>
         <button type="submit" class="btn btn-primary px-4" id="saveBtn">
           <i class="bi bi-save me-1"></i>Save All
         </button>
@@ -314,6 +326,9 @@
     document.getElementById('batchForm').addEventListener('submit', function(e) {
       var empty = [];
       batchTable.querySelectorAll('.close-input').forEach(function(inp) {
+        var rowId = inp.getAttribute('data-row');
+        var mode = document.getElementById('row_' + rowId + '_edit_mode');
+        if (mode && mode.value === '0') return; // Locked row skip validation.
         if (!inp.value || inp.value.trim() === '') {
           var vno = inp.closest('tr').querySelector('.fw-medium');
           if (vno) empty.push(vno.textContent);
@@ -498,5 +513,24 @@
 })();
 window._fleetAfterFilter = function(){ if(typeof updateTotals==='function') updateTotals(); };
 document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('batchTable'); });
+
+document.addEventListener('click', function(e){
+  var btn = e.target.closest('.task-row-edit-btn');
+  if(!btn) return;
+  var rowId = btn.getAttribute('data-row');
+  if(!rowId) return;
+
+  var editMode = document.getElementById('row_' + rowId + '_edit_mode');
+  if(editMode) editMode.value = '1';
+
+  document.querySelectorAll('.task-editable-field[data-row="' + rowId + '"]').forEach(function(el){
+    el.disabled = false;
+  });
+
+  btn.classList.remove('btn-outline-primary');
+  btn.classList.add('btn-primary');
+  btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Editing';
+  btn.disabled = true;
+});
 </script>
 {% endblock %}
