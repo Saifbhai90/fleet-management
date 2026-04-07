@@ -1569,7 +1569,9 @@
 <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
 
 <!-- SIDEBAR -->
-<div class="sidebar shadow {% if workspace_open and request.cookies.get('workspace_sidebar_open') != '1' %}collapsed{% endif %}" id="sidebar">
+{% set workspace_endpoints = ['workspace_dashboard', 'workspace_home', 'workspace_select_employee', 'workspace_clear_employee', 'workspace_parties_list', 'workspace_party_new', 'workspace_party_edit', 'workspace_party_import', 'workspace_party_import_template', 'workspace_party_export', 'workspace_party_print', 'workspace_products_list', 'workspace_product_new', 'workspace_product_edit', 'workspace_product_import', 'workspace_product_import_template', 'workspace_product_export', 'workspace_product_print', 'workspace_accounts_list', 'workspace_account_new', 'workspace_account_edit', 'workspace_fund_transfers_list', 'workspace_fund_transfer_new', 'workspace_fund_transfer_edit', 'workspace_ledger', 'workspace_month_close', 'workspace_reports', 'fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form', 'employee_expense_list', 'employee_expense_form', 'employee_expense_form_edit'] %}
+{% set workspace_open = request.endpoint in workspace_endpoints %}
+<div class="sidebar shadow {% if workspace_open or request.cookies.get('workspace_sidebar_open') != '1' %}collapsed{% endif %}" id="sidebar">
     <div id="sidebarAccordion">
         {% set master_endpoints = ['companies', 'company_form', 'projects_list', 'project_detail', 'project_form', 'districts_list', 'district_form', 'vehicles_list', 'vehicle_form', 'parking_list', 'parking_form', 'drivers_list', 'driver_form', 'employees_list', 'employee_form', 'driver_post_list', 'driver_post_form'] %}
         {% set assignment_endpoints = ['assign_project_to_company', 'assign_project_to_district', 'assign_vehicle_to_district', 'assign_vehicle_to_parking_list', 'assign_vehicle_to_parking_new', 'assign_vehicle_to_parking_edit', 'assign_driver_to_vehicle_list', 'assign_driver_to_vehicle_new', 'assign_driver_to_vehicle_edit'] %}
@@ -1580,7 +1582,6 @@
         {% set task_report_endpoints = ['task_report_upload', 'task_report_list', 'task_report_new', 'task_report_upload_emergency', 'task_report_upload_mileage', 'task_report_upload_both', 'red_task_list', 'red_task_new', 'red_task_edit', 'without_task_list', 'without_task_new', 'without_task_edit', 'task_report_logbook_cover', 'task_report_logbook_view', 'task_report_logbook_view_all'] %}
         {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai', 'active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print', 'driver_seat_available_report', 'driver_seat_available_export', 'driver_seat_available_print', 'missing_documents_report', 'missing_documents_report_print'] %}
         {% set accounts_endpoints = ['accounts_quick_payment', 'payment_vouchers_list', 'payment_voucher_edit', 'payment_voucher_delete', 'accounts_quick_receipt', 'receipt_vouchers_list', 'accounts_bank_entry', 'bank_entries_list', 'accounts_jv', 'journal_vouchers_list', 'accounts_future_entry', 'accounts_balance_sheet', 'accounts_account_ledger', 'chart_of_accounts_list', 'chart_of_accounts_add', 'chart_of_accounts_edit', 'fund_transfer_add', 'fund_transfers_list', 'fund_transfer_edit', 'wallet_dashboard', 'employee_expenses_list', 'employee_expense_add', 'employee_expense_edit'] %}
-        {% set workspace_endpoints = ['workspace_dashboard', 'workspace_home', 'workspace_select_employee', 'workspace_clear_employee', 'workspace_parties_list', 'workspace_party_new', 'workspace_party_edit', 'workspace_party_import', 'workspace_party_import_template', 'workspace_party_export', 'workspace_party_print', 'workspace_products_list', 'workspace_product_new', 'workspace_product_edit', 'workspace_product_import', 'workspace_product_import_template', 'workspace_product_export', 'workspace_product_print', 'workspace_accounts_list', 'workspace_account_new', 'workspace_account_edit', 'workspace_fund_transfers_list', 'workspace_fund_transfer_new', 'workspace_fund_transfer_edit', 'workspace_ledger', 'workspace_month_close', 'workspace_reports', 'fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form', 'employee_expense_list', 'employee_expense_form', 'employee_expense_form_edit'] %}
         {% set _req_from = request.args.get('from', '') %}
         {% set _req_ref = request.args.get('ref', '') %}
         {% set _profile_endpoints = ['report_driver_profile', 'report_vehicle_profile', 'employee_profile_print'] %}
@@ -1597,7 +1598,6 @@
         {% set task_report_open = request.endpoint in task_report_endpoints %}
         {% set reports_open = (request.endpoint in reports_endpoints and not _came_from_master) or _came_from_reports or (request.endpoint == 'companies' and request.args.get('mode') == 'report') %}
         {% set accounts_open = request.endpoint in accounts_endpoints %}
-        {% set workspace_open = request.endpoint in workspace_endpoints %}
         {% set payroll_endpoints = ['payroll_salary_config_list', 'payroll_salary_config_form', 'payroll_salary_config_edit', 'payroll_driver_bulk_salary', 'payroll_list', 'payroll_generate', 'payroll_bulk_generate', 'payroll_view', 'payroll_edit', 'payroll_pay', 'payroll_pending', 'payroll_payslip'] %}
         {% set payroll_open = request.endpoint in payroll_endpoints %}
         {% set books_endpoints = ['book_inventory_list', 'book_stock_entry', 'book_stock_edit', 'book_issue', 'book_assignment_list', 'book_return', 'book_pending_returns'] %}
@@ -2139,7 +2139,7 @@
 </div>
 
 <!-- MAIN CONTENT -->
-<div class="main-content {% if workspace_open and request.endpoint != 'workspace_dashboard' %}ws-mini-open{% endif %}{% if workspace_open and request.cookies.get('workspace_sidebar_open') != '1' %} expanded{% endif %}" id="mainContent">
+<div class="main-content {% if workspace_open and request.endpoint != 'workspace_dashboard' %}ws-mini-open{% endif %}{% if workspace_open or request.cookies.get('workspace_sidebar_open') != '1' %} expanded{% endif %}" id="mainContent">
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             <div class="flash-message">
@@ -3471,11 +3471,18 @@
         document.addEventListener('submit', tlbStart, true);
     })();
 
-    // Sidebar Toggle
+    // Sidebar Toggle + Workspace lock behavior
     function toggleSidebar() {
         var sb = document.getElementById("sidebar");
         var mc = document.getElementById("mainContent");
         if (!sb || !mc) return;
+        if (sessionStorage.getItem("isWorkspaceModeActive") === "1") {
+            // Workspace mode lock: keep sidebar collapsed.
+            sb.classList.add("collapsed");
+            mc.classList.add("expanded");
+            document.cookie = "workspace_sidebar_open=0; path=/; max-age=31536000; SameSite=Lax";
+            return;
+        }
         sb.classList.toggle("collapsed");
         mc.classList.toggle("expanded");
         if (sb.classList.contains("collapsed")) {
@@ -3512,18 +3519,66 @@
         });
     })();
 
-    // Entering Employee Workspace from left sidebar should auto-collapse.
+    // Workspace sidebar mode lock:
+    // - Entering workspace => force collapsed, keep locked.
+    // - Navigating to any other left-main menu => unlock and expand.
     document.addEventListener('DOMContentLoaded', function() {
+        var isWorkspacePage = {{ 'true' if workspace_open else 'false' }};
+        var WORKSPACE_MODE_KEY = "isWorkspaceModeActive";
+        var sb = document.getElementById('sidebar');
+        var mc = document.getElementById('mainContent');
         var wsEntry = document.getElementById('workspaceSidebarEntry');
-        if (!wsEntry) return;
-        wsEntry.addEventListener('click', function() {
-            var sb = document.getElementById('sidebar');
-            var mc = document.getElementById('mainContent');
-            document.cookie = "workspace_sidebar_open=0; path=/; max-age=31536000; SameSite=Lax";
+
+        function forceCollapsedSidebar() {
             if (window.innerWidth >= 992 && sb && mc) {
                 sb.classList.add('collapsed');
                 mc.classList.add('expanded');
             }
+            document.cookie = "workspace_sidebar_open=0; path=/; max-age=31536000; SameSite=Lax";
+        }
+
+        function forceExpandedSidebar() {
+            if (window.innerWidth >= 992 && sb && mc) {
+                sb.classList.remove('collapsed');
+                mc.classList.remove('expanded');
+            }
+            document.cookie = "workspace_sidebar_open=1; path=/; max-age=31536000; SameSite=Lax";
+        }
+
+        if (isWorkspacePage) {
+            sessionStorage.setItem(WORKSPACE_MODE_KEY, "1");
+            forceCollapsedSidebar();
+        } else {
+            if (sessionStorage.getItem(WORKSPACE_MODE_KEY) === "1") {
+                sessionStorage.setItem(WORKSPACE_MODE_KEY, "0");
+            }
+        }
+
+        if (!wsEntry) return;
+
+        wsEntry.addEventListener('click', function(e) {
+            // Keep browser default behavior for modified clicks/new-tab actions.
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            sessionStorage.setItem(WORKSPACE_MODE_KEY, "1");
+            forceCollapsedSidebar();
+            // Navigate explicitly after cookie write so next page always receives collapsed state.
+            var href = wsEntry.getAttribute('href');
+            if (href) {
+                e.preventDefault();
+                setTimeout(function() { window.location.href = href; }, 20);
+            }
+        });
+
+        // Leaving workspace through left sidebar main menus should unlock and re-open.
+        document.querySelectorAll('#sidebar a[href]').forEach(function(link){
+            if (link.id === 'workspaceSidebarEntry') return;
+            link.addEventListener('click', function(e){
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                var href = link.getAttribute('href') || '';
+                if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0) return;
+                sessionStorage.setItem(WORKSPACE_MODE_KEY, "0");
+                forceExpandedSidebar();
+            });
         });
     });
 
