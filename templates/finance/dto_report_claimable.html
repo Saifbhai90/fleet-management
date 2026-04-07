@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Claimable vs Non-Claimable{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <h4 class="mb-3"><i class="bi bi-check2-square me-2 text-primary"></i>Claimable vs Non-Claimable</h4>
+  <form method="get" class="card card-body mb-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label">DTO Profile</label>
+        <select class="form-select" name="dto_profile_id">
+          {% for p in profiles %}
+            <option value="{{ p.id }}" {% if p.id == profile_id %}selected{% endif %}>{{ p.dto_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2"><button class="btn btn-primary w-100">Load</button></div>
+    </div>
+  </form>
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-sm table-striped mb-0">
+        <thead><tr><th>Date</th><th>Txn No</th><th>Counterparty</th><th>Direction</th><th>Amount</th><th>Claimable</th><th>Claim Status</th></tr></thead>
+        <tbody>
+          {% for t in txns %}
+          <tr>
+            <td>{{ t.txn_date|ddmmyyyy }}</td>
+            <td>{{ t.txn_number }}</td>
+            <td>{{ t.counterparty_name }}</td>
+            <td>{{ t.direction }}</td>
+            <td>{{ '{:,.2f}'.format(t.amount or 0) }}</td>
+            <td>{{ 'Yes' if t.is_company_claimable else 'No' }}</td>
+            <td>{{ t.claim_status }}</td>
+          </tr>
+          {% else %}<tr><td colspan="7" class="text-center text-muted py-3">No records</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}DTO Aging Report{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <h4 class="mb-3"><i class="bi bi-hourglass-split me-2 text-primary"></i>DTO Aging Report</h4>
+  <form method="get" class="card card-body mb-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label">DTO Profile</label>
+        <select class="form-select" name="dto_profile_id">
+          {% for p in profiles %}
+            <option value="{{ p.id }}" {% if p.id == profile_id %}selected{% endif %}>{{ p.dto_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2"><button class="btn btn-primary w-100">Load</button></div>
+    </div>
+  </form>
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header fw-semibold">Payable Aging</div>
+        <div class="card-body">
+          <div class="d-flex justify-content-between"><span>0-7</span><strong>{{ '{:,.2f}'.format(payable['0_7'] or 0) }}</strong></div>
+          <div class="d-flex justify-content-between"><span>8-15</span><strong>{{ '{:,.2f}'.format(payable['8_15'] or 0) }}</strong></div>
+          <div class="d-flex justify-content-between"><span>16-30</span><strong>{{ '{:,.2f}'.format(payable['16_30'] or 0) }}</strong></div>
+          <div class="d-flex justify-content-between"><span>31+</span><strong>{{ '{:,.2f}'.format(payable['31_plus'] or 0) }}</strong></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header fw-semibold">Receivable Aging</div>
+        <div class="card-body">
+          <div class="d-flex justify-content-between"><span>0-7</span><strong>{{ '{:,.2f}'.format(receivable['0_7'] or 0) }}</strong></div>
+          <div class="d-flex justify-content-between"><span>8-15</span><strong>{{ '{:,.2f}'.format(receivable['8_15'] or 0) }}</strong></div>
+          <div class="d-flex justify-content-between"><span>16-30</span><strong>{{ '{:,.2f}'.format(receivable['16_30'] or 0) }}</strong></div>
+          <div class="d-flex justify-content-between"><span>31+</span><strong>{{ '{:,.2f}'.format(receivable['31_plus'] or 0) }}</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

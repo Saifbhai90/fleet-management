@@ -6,7 +6,8 @@ from flask import render_template, request, redirect, url_for, flash, jsonify, s
 from sqlalchemy import or_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
-                    FundTransfer, BankAccountDirectory, FundTransferCategory)
+                    FundTransfer, BankAccountDirectory, FundTransferCategory, DtoProfile,
+                    DtoCounterparty, DtoTxn, DtoSettlement, DtoSettlementLine)
 from forms import (PaymentVoucherForm, ReceiptVoucherForm, BankEntryForm, JournalVoucherForm,
                    EmployeeExpenseForm, AccountLedgerFilterForm, BalanceSheetFilterForm,
                    AccountForm, FundTransferForm, FundTransferFilterForm, WalletDashboardFilterForm)
@@ -14,6 +15,11 @@ from finance_utils import (generate_entry_number, create_journal_entry, create_p
                            create_receipt_voucher_journal, create_bank_entry_journal,
                            get_account_ledger, get_dto_wallet_summary, get_account_balance,
                            ensure_wallet_account, create_fund_transfer_journal)
+from dto_working_utils import (
+    VALID_COUNTERPARTY_TYPES, VALID_DIRECTIONS, VALID_MODES, VALID_NATURES,
+    cancel_settlement, create_settlement, generate_dto_txn_number, get_aging_buckets,
+    get_open_summary, get_working_ledger, post_settlement_to_books, validate_dto_txn_payload,
+)
 from permissions_config import can_see_page
 from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
@@ -2007,3 +2013,559 @@ def ft_categories_add_api():
     db.session.add(cat)
     db.session.commit()
     return jsonify(cat.to_dict()), 201
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# DTO WORKING LEDGER (OFF-BOOK DOMAIN)
+# ════════════════════════════════════════════════════════════════════════════════
+
+def _dto_auth():
+    """DTO module permission gate (kept under Finance permission tree)."""
+    return check_auth('fund_transfer')
+
+
+def _dto_parse_date(raw):
+    if not raw:
+        return None
+    for fmt in ('%Y-%m-%d', '%d-%m-%Y'):
+        try:
+            return datetime.strptime(raw, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _dto_parse_int(raw, default=None):
+    try:
+        return int(raw)
+    except Exception:
+        return default
+
+
+def _dto_upload_attachment(file_storage):
+    if not file_storage or not getattr(file_storage, 'filename', None):
+        return None
+    filename = secure_filename(file_storage.filename or '')
+    if not filename:
+        return None
+    stamp = pk_now().strftime('%Y%m%d_%H%M%S')
+    upload_folder = os.path.join('static', 'uploads', 'dto_working')
+    os.makedirs(upload_folder, exist_ok=True)
+    final_name = f"dto_{stamp}_{filename}"
+    full_path = os.path.join(upload_folder, final_name)
+    file_storage.save(full_path)
+    return f"uploads/dto_working/{final_name}"
+
+
+def _dto_pick_scope():
+    if DtoProfile.query.count() == 0:
+        seeded = 0
+        dto_emps = Employee.query.filter_by(status='Active').all()
+        for emp in dto_emps:
+            post_name = ((emp.post.full_name if emp.post else '') or '').strip().lower()
+            if 'dto' not in post_name:
+                continue
+            dist = emp.districts.first() if hasattr(emp, 'districts') else None
+            if not dist:
+                continue
+            prof = DtoProfile(
+                employee_id=emp.id,
+                district_id=dist.id,
+                project_id=(emp.projects.first().id if hasattr(emp, 'projects') and emp.projects.first() else None),
+                is_active=True,
+                created_by_user_id=session.get('user_id'),
+            )
+            db.session.add(prof)
+            seeded += 1
+        if seeded:
+            db.session.commit()
+    profiles = DtoProfile.query.filter_by(is_active=True).order_by(DtoProfile.id.desc()).all()
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+    return profiles, districts, projects
+
+
+def dto_working_dashboard():
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+
+    profiles, districts, projects = _dto_pick_scope()
+    profile_id = request.args.get('dto_profile_id', type=int) or (profiles[0].id if profiles else 0)
+    summary = {'payable': Decimal('0'), 'receivable': Decimal('0'), 'net': Decimal('0')}
+    aging_payable = {'0_7': Decimal('0'), '8_15': Decimal('0'), '16_30': Decimal('0'), '31_plus': Decimal('0')}
+    aging_receivable = {'0_7': Decimal('0'), '8_15': Decimal('0'), '16_30': Decimal('0'), '31_plus': Decimal('0')}
+    latest = []
+
+    if profile_id:
+        summary = get_open_summary(profile_id)
+        aging_payable = get_aging_buckets(profile_id, direction='Payable')
+        aging_receivable = get_aging_buckets(profile_id, direction='Receivable')
+        latest = DtoTxn.query.filter_by(dto_profile_id=profile_id).order_by(DtoTxn.txn_date.desc(), DtoTxn.id.desc()).limit(10).all()
+
+    return render_template(
+        'finance/dto_working_dashboard.html',
+        title='DTO Working Dashboard',
+        profiles=profiles,
+        districts=districts,
+        projects=projects,
+        profile_id=profile_id,
+        summary=summary,
+        aging_payable=aging_payable,
+        aging_receivable=aging_receivable,
+        latest=latest,
+    )
+
+
+def dto_txn_form(pk=None):
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+
+    txn = DtoTxn.query.get_or_404(pk) if pk else None
+    if txn and txn.status in ('Settled', 'Cancelled'):
+        flash('Settled/Cancelled transaction cannot be edited.', 'warning')
+        return redirect(url_for('dto_txn_list'))
+
+    profiles, districts, projects = _dto_pick_scope()
+    selected_profile_id = (txn.dto_profile_id if txn else None) or request.values.get('dto_profile_id', type=int) or (profiles[0].id if profiles else 0)
+    counterparties = DtoCounterparty.query.filter_by(dto_profile_id=selected_profile_id, is_active=True).order_by(DtoCounterparty.name).all() if selected_profile_id else []
+
+    if request.method == 'POST':
+        payload = {
+            'counterparty_type': (request.form.get('counterparty_type') or '').strip(),
+            'mode': (request.form.get('mode') or '').strip(),
+            'txn_nature': (request.form.get('txn_nature') or '').strip(),
+            'direction': (request.form.get('direction') or '').strip(),
+            'amount': request.form.get('amount'),
+            'attachment_path': txn.attachment_path if txn else None,
+        }
+        attachment = request.files.get('attachment')
+        uploaded_path = _dto_upload_attachment(attachment) if attachment else None
+        if uploaded_path:
+            payload['attachment_path'] = uploaded_path
+        errors = validate_dto_txn_payload(payload, require_attachment_for_credit=True)
+
+        profile_id = _dto_parse_int(request.form.get('dto_profile_id'))
+        district_id = _dto_parse_int(request.form.get('district_id'))
+        if not profile_id:
+            errors.append('DTO profile is required.')
+        if not district_id:
+            errors.append('District is required.')
+
+        counterparty_name = (request.form.get('counterparty_name') or '').strip()
+        if not counterparty_name:
+            errors.append('Counterparty name is required.')
+
+        txn_date = _dto_parse_date(request.form.get('txn_date'))
+        if not txn_date:
+            errors.append('Transaction date is invalid.')
+
+        if errors:
+            for e in errors:
+                flash(e, 'danger')
+        else:
+            try:
+                if not txn:
+                    txn = DtoTxn(
+                        txn_number=generate_dto_txn_number(txn_date),
+                        created_by_user_id=session.get('user_id'),
+                        status='Draft',
+                        claim_status='Unclaimed',
+                    )
+                    db.session.add(txn)
+
+                # Optional upsert counterparty
+                counterparty_id = _dto_parse_int(request.form.get('counterparty_id'))
+                counterparty = None
+                if counterparty_id:
+                    counterparty = DtoCounterparty.query.get(counterparty_id)
+                if not counterparty:
+                    counterparty = DtoCounterparty.query.filter(
+                        DtoCounterparty.dto_profile_id == profile_id,
+                        DtoCounterparty.counterparty_type == payload['counterparty_type'],
+                        db.func.lower(DtoCounterparty.name) == counterparty_name.lower(),
+                    ).first()
+                if not counterparty:
+                    counterparty = DtoCounterparty(
+                        dto_profile_id=profile_id,
+                        counterparty_type=payload['counterparty_type'],
+                        name=counterparty_name,
+                        is_active=True,
+                    )
+                    db.session.add(counterparty)
+                    db.session.flush()
+
+                txn.txn_date = txn_date
+                txn.district_id = district_id
+                txn.project_id = _dto_parse_int(request.form.get('project_id'))
+                txn.dto_profile_id = profile_id
+                txn.counterparty_id = counterparty.id
+                txn.counterparty_type = payload['counterparty_type']
+                txn.counterparty_name = counterparty_name
+                txn.mode = payload['mode']
+                txn.txn_nature = payload['txn_nature']
+                txn.direction = payload['direction']
+                txn.amount = Decimal(str(payload['amount'] or 0))
+                txn.due_date = _dto_parse_date(request.form.get('due_date'))
+                txn.is_company_claimable = bool(request.form.get('is_company_claimable'))
+                txn.reference_no = (request.form.get('reference_no') or '').strip() or None
+                txn.notes = (request.form.get('notes') or '').strip() or None
+                txn.attachment_path = payload['attachment_path'] or txn.attachment_path
+                if txn.is_company_claimable and txn.claim_status == 'Unclaimed':
+                    txn.claim_status = 'Unclaimed'
+                db.session.add(txn)
+                db.session.commit()
+                flash(f'DTO transaction {txn.txn_number} saved.', 'success')
+                return redirect(url_for('dto_txn_list', dto_profile_id=txn.dto_profile_id))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error saving DTO transaction: {e}', 'danger')
+
+    return render_template(
+        'finance/dto_txn_form.html',
+        title='Edit DTO Transaction' if txn else 'New DTO Transaction',
+        txn=txn,
+        profiles=profiles,
+        districts=districts,
+        projects=projects,
+        counterparties=counterparties,
+        valid_counterparty_types=VALID_COUNTERPARTY_TYPES,
+        valid_modes=VALID_MODES,
+        valid_natures=VALID_NATURES,
+        valid_directions=VALID_DIRECTIONS,
+        selected_profile_id=selected_profile_id,
+    )
+
+
+def dto_txn_list():
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+
+    profiles, districts, projects = _dto_pick_scope()
+    profile_id = request.args.get('dto_profile_id', type=int) or (profiles[0].id if profiles else 0)
+    from_date = _dto_parse_date(request.args.get('from_date'))
+    to_date = _dto_parse_date(request.args.get('to_date'))
+    district_id = request.args.get('district_id', type=int) or None
+    project_id = request.args.get('project_id', type=int) or None
+    direction = (request.args.get('direction') or '').strip() or None
+    status = (request.args.get('status') or '').strip() or None
+    counterparty_type = (request.args.get('counterparty_type') or '').strip() or None
+    claimable = request.args.get('claimable')
+    claimable_bool = None
+    if claimable == '1':
+        claimable_bool = True
+    elif claimable == '0':
+        claimable_bool = False
+
+    ledger = {'rows': [], 'closing_balance': Decimal('0'), 'count': 0}
+    if profile_id:
+        ledger = get_working_ledger(
+            profile_id,
+            from_date=from_date,
+            to_date=to_date,
+            district_id=district_id,
+            project_id=project_id,
+            direction=direction,
+            status=status,
+            claimable=claimable_bool,
+            counterparty_type=counterparty_type,
+        )
+
+    return render_template(
+        'finance/dto_txn_list.html',
+        title='DTO Working Transactions',
+        profiles=profiles,
+        districts=districts,
+        projects=projects,
+        profile_id=profile_id,
+        rows=ledger['rows'],
+        closing_balance=ledger['closing_balance'],
+        count=ledger['count'],
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        direction=direction,
+        status=status,
+        counterparty_type=counterparty_type,
+        claimable=claimable,
+        valid_counterparty_types=VALID_COUNTERPARTY_TYPES,
+        valid_directions=VALID_DIRECTIONS,
+        valid_statuses=('Draft', 'Verified', 'Settled', 'Cancelled'),
+    )
+
+
+def dto_counterparty_list():
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    profiles, _, _ = _dto_pick_scope()
+    profile_id = request.values.get('dto_profile_id', type=int) or (profiles[0].id if profiles else 0)
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        ctype = (request.form.get('counterparty_type') or '').strip()
+        if not profile_id or not name or ctype not in VALID_COUNTERPARTY_TYPES:
+            flash('Counterparty name/type/profile are required.', 'danger')
+        else:
+            ex = DtoCounterparty.query.filter(
+                DtoCounterparty.dto_profile_id == profile_id,
+                DtoCounterparty.counterparty_type == ctype,
+                db.func.lower(DtoCounterparty.name) == name.lower(),
+            ).first()
+            if ex:
+                flash('Counterparty already exists.', 'warning')
+            else:
+                row = DtoCounterparty(
+                    dto_profile_id=profile_id,
+                    counterparty_type=ctype,
+                    name=name,
+                    phone=(request.form.get('phone') or '').strip() or None,
+                    account_ref=(request.form.get('account_ref') or '').strip() or None,
+                    is_active=True,
+                )
+                db.session.add(row)
+                db.session.commit()
+                flash('Counterparty added.', 'success')
+        return redirect(url_for('dto_counterparty_list', dto_profile_id=profile_id))
+
+    rows = DtoCounterparty.query.filter_by(dto_profile_id=profile_id).order_by(DtoCounterparty.name.asc()).all() if profile_id else []
+    return render_template(
+        'finance/dto_counterparty_list.html',
+        title='DTO Counterparty Master',
+        profiles=profiles,
+        profile_id=profile_id,
+        rows=rows,
+        valid_counterparty_types=VALID_COUNTERPARTY_TYPES,
+    )
+
+
+def dto_counterparty_toggle(pk):
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    row = DtoCounterparty.query.get_or_404(pk)
+    row.is_active = not row.is_active
+    db.session.add(row)
+    db.session.commit()
+    flash('Counterparty status updated.', 'success')
+    return redirect(url_for('dto_counterparty_list', dto_profile_id=row.dto_profile_id))
+
+
+def dto_txn_verify(pk):
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    txn = DtoTxn.query.get_or_404(pk)
+    if txn.status not in ('Draft', 'Verified'):
+        flash('Only Draft/Verified transactions can be verified.', 'warning')
+        return redirect(url_for('dto_txn_list', dto_profile_id=txn.dto_profile_id))
+    txn.status = 'Verified'
+    txn.verified_by_user_id = session.get('user_id')
+    txn.verified_at = pk_now()
+    db.session.add(txn)
+    db.session.commit()
+    flash(f'{txn.txn_number} verified.', 'success')
+    return redirect(url_for('dto_txn_list', dto_profile_id=txn.dto_profile_id))
+
+
+def dto_txn_delete(pk):
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    txn = DtoTxn.query.get_or_404(pk)
+    if txn.status == 'Settled':
+        flash('Settled transaction cannot be cancelled.', 'danger')
+        return redirect(url_for('dto_txn_list', dto_profile_id=txn.dto_profile_id))
+    txn.status = 'Cancelled'
+    txn.updated_at = pk_now()
+    db.session.add(txn)
+    db.session.commit()
+    flash(f'{txn.txn_number} cancelled.', 'success')
+    return redirect(url_for('dto_txn_list', dto_profile_id=txn.dto_profile_id))
+
+
+def dto_settlement_new():
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+
+    profiles, districts, projects = _dto_pick_scope()
+    profile_id = request.values.get('dto_profile_id', type=int) or (profiles[0].id if profiles else 0)
+    selected_txn_ids = []
+
+    query = DtoTxn.query.filter(
+        DtoTxn.dto_profile_id == profile_id,
+        DtoTxn.is_company_claimable == True,
+        DtoTxn.status.in_(('Draft', 'Verified')),
+        or_(DtoTxn.settlement_id.is_(None), DtoTxn.claim_status == 'Unclaimed'),
+    ) if profile_id else DtoTxn.query.filter(False)
+    candidates = query.order_by(DtoTxn.txn_date.asc(), DtoTxn.id.asc()).all()
+
+    if request.method == 'POST':
+        selected_txn_ids = [int(x) for x in request.form.getlist('txn_ids') if str(x).isdigit()]
+        settlement_date = _dto_parse_date(request.form.get('settlement_date')) or pk_date()
+        description = (request.form.get('description') or '').strip()
+        if not selected_txn_ids:
+            flash('Select at least one transaction.', 'warning')
+        else:
+            try:
+                settlement = create_settlement(
+                    dto_profile_id=profile_id,
+                    settlement_date=settlement_date,
+                    txn_ids=selected_txn_ids,
+                    created_by_user_id=session.get('user_id'),
+                    description=description,
+                )
+                db.session.commit()
+                flash(f'Settlement {settlement.settlement_number} created in Draft.', 'success')
+                return redirect(url_for('dto_settlement_list', dto_profile_id=profile_id))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error creating settlement: {e}', 'danger')
+
+    return render_template(
+        'finance/dto_settlement_form.html',
+        title='Create DTO Settlement',
+        profiles=profiles,
+        districts=districts,
+        projects=projects,
+        profile_id=profile_id,
+        candidates=candidates,
+        selected_txn_ids=selected_txn_ids,
+    )
+
+
+def dto_settlement_list():
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    profiles, _, _ = _dto_pick_scope()
+    profile_id = request.args.get('dto_profile_id', type=int) or (profiles[0].id if profiles else 0)
+    status = (request.args.get('status') or '').strip()
+
+    query = DtoSettlement.query
+    if profile_id:
+        query = query.filter(DtoSettlement.dto_profile_id == profile_id)
+    if status:
+        query = query.filter(DtoSettlement.status == status)
+    settlements = query.order_by(DtoSettlement.settlement_date.desc(), DtoSettlement.id.desc()).all()
+    return render_template(
+        'finance/dto_settlement_list.html',
+        title='DTO Settlements',
+        profiles=profiles,
+        profile_id=profile_id,
+        status=status,
+        settlements=settlements,
+    )
+
+
+def dto_settlement_post(pk):
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    settlement = DtoSettlement.query.get_or_404(pk)
+    try:
+        post_settlement_to_books(settlement, session.get('user_id'))
+        db.session.commit()
+        flash(f'Settlement {settlement.settlement_number} posted to company books.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Posting failed: {e}', 'danger')
+    return redirect(url_for('dto_settlement_list', dto_profile_id=settlement.dto_profile_id))
+
+
+def dto_settlement_cancel(pk):
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    settlement = DtoSettlement.query.get_or_404(pk)
+    try:
+        cancel_settlement(settlement, session.get('user_id'))
+        db.session.commit()
+        flash(f'Settlement {settlement.settlement_number} cancelled.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Cancel failed: {e}', 'danger')
+    return redirect(url_for('dto_settlement_list', dto_profile_id=settlement.dto_profile_id))
+
+
+def dto_report_payables():
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    profile_id = request.args.get('dto_profile_id', type=int)
+    profiles, _, _ = _dto_pick_scope()
+    if not profile_id and profiles:
+        profile_id = profiles[0].id
+    txns = DtoTxn.query.filter_by(dto_profile_id=profile_id, direction='Payable').order_by(DtoTxn.txn_date.desc()).all() if profile_id else []
+    return render_template('finance/dto_report_payables.html', title='DTO Party Payable Report', profiles=profiles, profile_id=profile_id, txns=txns)
+
+
+def dto_report_receivables():
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    profile_id = request.args.get('dto_profile_id', type=int)
+    profiles, _, _ = _dto_pick_scope()
+    if not profile_id and profiles:
+        profile_id = profiles[0].id
+    txns = DtoTxn.query.filter_by(dto_profile_id=profile_id, direction='Receivable').order_by(DtoTxn.txn_date.desc()).all() if profile_id else []
+    return render_template('finance/dto_report_receivables.html', title='DTO Driver Receivable Report', profiles=profiles, profile_id=profile_id, txns=txns)
+
+
+def dto_report_aging():
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    profile_id = request.args.get('dto_profile_id', type=int)
+    profiles, _, _ = _dto_pick_scope()
+    if not profile_id and profiles:
+        profile_id = profiles[0].id
+    payable = get_aging_buckets(profile_id, direction='Payable') if profile_id else {}
+    receivable = get_aging_buckets(profile_id, direction='Receivable') if profile_id else {}
+    return render_template('finance/dto_report_aging.html', title='DTO Aging Report', profiles=profiles, profile_id=profile_id, payable=payable, receivable=receivable)
+
+
+def dto_report_claimable():
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    profile_id = request.args.get('dto_profile_id', type=int)
+    profiles, _, _ = _dto_pick_scope()
+    if not profile_id and profiles:
+        profile_id = profiles[0].id
+    query = DtoTxn.query.filter(DtoTxn.is_company_claimable == True)
+    if profile_id:
+        query = query.filter(DtoTxn.dto_profile_id == profile_id)
+    txns = query.order_by(DtoTxn.txn_date.desc()).all()
+    return render_template('finance/dto_report_claimable.html', title='Claimable vs Non-Claimable', profiles=profiles, profile_id=profile_id, txns=txns)
+
+
+def dto_report_settlement():
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    profile_id = request.args.get('dto_profile_id', type=int)
+    profiles, _, _ = _dto_pick_scope()
+    if not profile_id and profiles:
+        profile_id = profiles[0].id
+    query = DtoSettlement.query
+    if profile_id:
+        query = query.filter(DtoSettlement.dto_profile_id == profile_id)
+    settlements = query.order_by(DtoSettlement.settlement_date.desc()).all()
+    return render_template('finance/dto_report_settlement.html', title='DTO Settlement Trail', profiles=profiles, profile_id=profile_id, settlements=settlements)
+
+
+def dto_report_snapshot():
+    auth_check = _dto_auth()
+    if auth_check:
+        return auth_check
+    profile_id = request.args.get('dto_profile_id', type=int)
+    as_of_date = _dto_parse_date(request.args.get('as_of_date')) or pk_date()
+    profiles, _, _ = _dto_pick_scope()
+    if not profile_id and profiles:
+        profile_id = profiles[0].id
+    summary = get_open_summary(profile_id, as_of_date=as_of_date) if profile_id else {'payable': Decimal('0'), 'receivable': Decimal('0'), 'net': Decimal('0')}
+    return render_template('finance/dto_report_snapshot.html', title='DTO Open Balance Snapshot', profiles=profiles, profile_id=profile_id, as_of_date=as_of_date, summary=summary)
