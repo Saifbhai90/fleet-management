@@ -109,7 +109,7 @@
           <div class="ws-section-title">Master Modules</div>
           <div class="row g-3 mb-3">
             {% if can_see_page('workspace_party_list') %}
-            <div class="col-lg-4 col-md-6">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('workspace_parties_list') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-primary-subtle text-primary mb-2"><i class="bi bi-building"></i></div>
                 <div class="fw-semibold">Parties</div>
@@ -118,7 +118,7 @@
             </div>
             {% endif %}
             {% if can_see_page('workspace_product_list') %}
-            <div class="col-lg-4 col-md-6">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('workspace_products_list') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-success-subtle text-success mb-2"><i class="bi bi-box-seam"></i></div>
                 <div class="fw-semibold">Products</div>
@@ -131,7 +131,7 @@
           <div class="ws-section-title">Expense Management</div>
           <div class="row g-3 mb-3">
             {% if can_see_page('fuel_expense') %}
-            <div class="col-lg-4 col-md-6">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('fuel_expense_list') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-primary-subtle text-primary mb-2"><i class="bi bi-fuel-pump"></i></div>
                 <div class="fw-semibold">Fuel Expense</div>
@@ -140,7 +140,7 @@
             </div>
             {% endif %}
             {% if can_see_page('oil_expense') %}
-            <div class="col-lg-4 col-md-6">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('oil_expense_list') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-info-subtle text-info mb-2"><i class="bi bi-droplet"></i></div>
                 <div class="fw-semibold">Oil & Lubricants</div>
@@ -149,7 +149,7 @@
             </div>
             {% endif %}
             {% if can_see_page('maintenance_expense') %}
-            <div class="col-lg-4 col-md-6">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('maintenance_expense_list') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-warning-subtle text-warning mb-2"><i class="bi bi-wrench"></i></div>
                 <div class="fw-semibold">Maintenance</div>
@@ -158,7 +158,7 @@
             </div>
             {% endif %}
             {% if can_see_page('employee_expense') %}
-            <div class="col-lg-4 col-md-6">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('employee_expense_list') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-primary-subtle text-primary mb-2"><i class="bi bi-person-badge"></i></div>
                 <div class="fw-semibold">Employee Expense</div>
@@ -171,7 +171,7 @@
           <div class="ws-section-title">Finance, Ledger & Closing</div>
           <div class="row g-3">
             {% if can_see_page('workspace_account_list') %}
-            <div class="col-lg-4 col-md-6">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('workspace_accounts_list') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-secondary-subtle text-secondary mb-2"><i class="bi bi-diagram-3"></i></div>
                 <div class="fw-semibold">Workspace COA</div>
@@ -180,7 +180,7 @@
             </div>
             {% endif %}
             {% if can_see_page('workspace_transfer_list') %}
-            <div class="col-lg-4 col-md-6">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('workspace_fund_transfers_list') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-primary-subtle text-primary mb-2"><i class="bi bi-arrow-left-right"></i></div>
                 <div class="fw-semibold">Fund Transfers</div>
@@ -189,7 +189,7 @@
             </div>
             {% endif %}
             {% if can_see_page('workspace_ledger') %}
-            <div class="col-lg-4 col-md-6">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('workspace_ledger') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-dark-subtle text-dark mb-2"><i class="bi bi-journal-text"></i></div>
                 <div class="fw-semibold">Workspace Ledger</div>
@@ -198,7 +198,7 @@
             </div>
             {% endif %}
             {% if can_see_page('workspace_month_close') %}
-            <div class="col-lg-4 col-md-6">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('workspace_month_close') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-danger-subtle text-danger mb-2"><i class="bi bi-calendar2-check"></i></div>
                 <div class="fw-semibold">Month Close</div>
@@ -207,7 +207,7 @@
             </div>
             {% endif %}
             {% if can_see_page('workspace_reports') %}
-            <div class="col-lg-4 col-md-6">
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('workspace_reports') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-success-subtle text-success mb-2"><i class="bi bi-bar-chart"></i></div>
                 <div class="fw-semibold">Reports</div>

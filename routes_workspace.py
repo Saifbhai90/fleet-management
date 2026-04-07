@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from flask import flash, redirect, render_template, request, session, url_for, make_response
+from flask import flash, redirect, render_template, request, session, url_for, make_response, jsonify
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import aliased
 
@@ -1124,3 +1124,34 @@ def workspace_reports():
         transfer_total=transfer_total,
         month_closes=month_closes,
     )
+
+
+def workspace_transfer_description_suggestions_api():
+    guard, emp = _workspace_guard("workspace_transfer_add")
+    if guard:
+        return jsonify([])
+    q = (request.args.get("q") or "").strip()
+    query = WorkspaceFundTransfer.query.filter(
+        WorkspaceFundTransfer.employee_id == emp.id,
+        WorkspaceFundTransfer.description.isnot(None),
+        WorkspaceFundTransfer.description != "",
+    )
+    if q:
+        words = [w.strip() for w in q.split() if w.strip()]
+        for w in words:
+            query = query.filter(WorkspaceFundTransfer.description.ilike(f"%{w}%"))
+    rows = query.order_by(WorkspaceFundTransfer.id.desc()).limit(200).all()
+    out = []
+    seen = set()
+    for r in rows:
+        d = (r.description or "").strip()
+        if not d:
+            continue
+        key = d.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(d)
+        if len(out) >= 20:
+            break
+    return jsonify(out)
