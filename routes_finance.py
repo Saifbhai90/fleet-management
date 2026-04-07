@@ -6,14 +6,15 @@ from flask import render_template, request, redirect, url_for, flash, jsonify, s
 from sqlalchemy import or_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
-                    FundTransfer, BankAccountDirectory, FundTransferCategory)
+                    FundTransfer, BankAccountDirectory, FundTransferCategory, WorkspaceAccount, WorkspaceJournalEntry)
 from forms import (PaymentVoucherForm, ReceiptVoucherForm, BankEntryForm, JournalVoucherForm,
                    EmployeeExpenseForm, AccountLedgerFilterForm, BalanceSheetFilterForm,
                    AccountForm, FundTransferForm, FundTransferFilterForm, WalletDashboardFilterForm)
 from finance_utils import (generate_entry_number, create_journal_entry, create_payment_voucher_journal,
                            create_receipt_voucher_journal, create_bank_entry_journal,
                            get_account_ledger, get_dto_wallet_summary, get_account_balance,
-                           ensure_wallet_account, create_fund_transfer_journal)
+                           ensure_wallet_account, create_fund_transfer_journal,
+                           ensure_workspace_base_accounts, workspace_create_journal_entry, workspace_reverse_journal_entry)
 from permissions_config import can_see_page
 from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
@@ -41,6 +42,49 @@ def _require_workspace_employee_for_expenses():
         flash('Employee Workspace select karna zaroori hai.', 'warning')
         return redirect(url_for('workspace_dashboard'))
     return None
+
+
+def _workspace_employee_id():
+    return session.get('workspace_employee_id')
+
+
+def _reverse_workspace_employee_expense_journals(expense_id, workspace_employee_id):
+    if not expense_id or not workspace_employee_id:
+        return
+    rows = WorkspaceJournalEntry.query.filter_by(
+        employee_id=workspace_employee_id,
+        reference_type='EmployeeExpense',
+        reference_id=expense_id
+    ).all()
+    for je in rows:
+        workspace_reverse_journal_entry(je.id)
+
+
+def _post_workspace_employee_expense_journal(expense, workspace_employee_id):
+    if not workspace_employee_id or not expense:
+        return None
+    ensure_workspace_base_accounts(workspace_employee_id)
+    expense_head = WorkspaceAccount.query.filter_by(employee_id=workspace_employee_id, code='5100').first()
+    cash_head = WorkspaceAccount.query.filter_by(employee_id=workspace_employee_id, code='1100').first()
+    if not (expense_head and cash_head):
+        return None
+    amount_val = Decimal(str(expense.amount or 0))
+    if amount_val <= Decimal('0'):
+        return None
+    return workspace_create_journal_entry(
+        employee_id=workspace_employee_id,
+        entry_type='Expense',
+        entry_date=expense.expense_date,
+        description=f"Employee Expense - {expense.description or expense.expense_category}",
+        lines=[
+            {'account_id': expense_head.id, 'debit': amount_val, 'credit': 0, 'description': expense.expense_category or 'Employee Expense'},
+            {'account_id': cash_head.id, 'debit': 0, 'credit': amount_val, 'description': expense.payment_mode or 'Cash out'},
+        ],
+        reference_type='EmployeeExpense',
+        reference_id=expense.id,
+        created_by_user_id=expense.created_by_user_id,
+        category=expense.expense_category,
+    )
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -607,6 +651,7 @@ def employee_expense_form(pk=None):
     _guard = _require_workspace_employee_for_expenses()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id()
     auth_check = check_auth('employee_expense_add' if not pk else 'employee_expense_edit')
     if auth_check:
         return auth_check
@@ -614,13 +659,16 @@ def employee_expense_form(pk=None):
     expense = None
     if pk:
         expense = EmployeeExpense.query.get_or_404(pk)
+        if workspace_employee_id and expense.employee_id and expense.employee_id != workspace_employee_id:
+            flash('This employee expense does not belong to selected workspace employee.', 'danger')
+            return redirect(url_for('employee_expense_list'))
         form = EmployeeExpenseForm(obj=expense)
     else:
         form = EmployeeExpenseForm()
     
     # Populate choices
-    employees = Employee.query.filter_by(status='Active').order_by(Employee.name).all()
-    form.employee_id.choices = [(0, '-- Select Employee (Optional) --')] + [(e.id, e.name) for e in employees]
+    workspace_emp = Employee.query.get(workspace_employee_id) if workspace_employee_id else None
+    form.employee_id.choices = [(workspace_employee_id, workspace_emp.name if workspace_emp else 'Selected Employee')] if workspace_employee_id else []
     
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
@@ -633,7 +681,7 @@ def employee_expense_form(pk=None):
                 expense = EmployeeExpense()
             
             expense.expense_date = form.expense_date.data
-            expense.employee_id = form.employee_id.data if form.employee_id.data != 0 else None
+            expense.employee_id = workspace_employee_id
             expense.user_id = session.get('user_id')
             expense.district_id = form.district_id.data if form.district_id.data != 0 else None
             expense.project_id = form.project_id.data if form.project_id.data != 0 else None
@@ -659,25 +707,15 @@ def employee_expense_form(pk=None):
                 db.session.add(expense)
             
             db.session.flush()
-            
-            # Create journal entry (Debit: Expense, Credit: Cash or Employee Advance)
-            # Find appropriate expense account based on category
-            expense_account_map = {
-                'Travel': '5210',
-                'Office': '5220',
-                'Communication': '5230',
-                'Other': '5240'
-            }
-            expense_account_code = expense_account_map.get(expense.expense_category, '5240')
-            expense_account = Account.query.filter_by(code=expense_account_code).first()
-            
-            # Use Cash account as credit
-            cash_account = Account.query.filter_by(code='1110').first()
-            
-            if expense_account and cash_account:
-                from finance_utils import create_expense_journal
-                je = create_expense_journal('EmployeeExpense', expense, expense_account_code, cash_account.id)
-                expense.journal_entry_id = je.id
+
+            # Reverse legacy company journal (if any) + previous workspace journal, then post fresh workspace JE.
+            if expense.journal_entry_id:
+                old_je = JournalEntry.query.get(expense.journal_entry_id)
+                if old_je:
+                    db.session.delete(old_je)
+                expense.journal_entry_id = None
+            _reverse_workspace_employee_expense_journals(expense.id, workspace_employee_id)
+            _post_workspace_employee_expense_journal(expense, workspace_employee_id)
             
             db.session.commit()
             flash(f'Employee Expense saved successfully!', 'success')
@@ -695,6 +733,7 @@ def employee_expense_list():
     _guard = _require_workspace_employee_for_expenses()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id()
     auth_check = check_auth('employee_expense_list')
     if auth_check:
         return auth_check
@@ -709,6 +748,8 @@ def employee_expense_list():
     category = request.args.get('category', '')
     
     query = EmployeeExpense.query
+    if workspace_employee_id:
+        query = query.filter(EmployeeExpense.employee_id == workspace_employee_id)
     
     if from_date:
         for _fmt in ('%d-%m-%Y', '%Y-%m-%d'):
@@ -770,11 +811,15 @@ def employee_expense_delete(pk):
     _guard = _require_workspace_employee_for_expenses()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id()
     auth_check = check_auth('employee_expense_delete')
     if auth_check:
         return auth_check
     """Delete Employee Expense"""
     expense = EmployeeExpense.query.get_or_404(pk)
+    if workspace_employee_id and expense.employee_id and expense.employee_id != workspace_employee_id:
+        flash('This employee expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('employee_expense_list'))
     
     try:
         # Delete journal entry
@@ -782,6 +827,7 @@ def employee_expense_delete(pk):
             je = JournalEntry.query.get(expense.journal_entry_id)
             if je:
                 db.session.delete(je)
+        _reverse_workspace_employee_expense_journals(expense.id, workspace_employee_id)
         
         # Delete receipt file if exists
         if expense.receipt_path:

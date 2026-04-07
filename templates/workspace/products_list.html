@@ -1,36 +1,199 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="container-fluid py-3">
+<style>
+  .page-header-gradient { background: #fff; margin-bottom: .85rem; }
+  .page-header-gradient h3 { color: #2c3e50; margin: 0; font-size: 1.25rem; font-weight: 700; }
+  .page-header-gradient .subtitle { color: #6c757d; font-size: .82rem; margin-top: .15rem; }
+  .top-btn-compact { padding: .35rem .75rem; font-size: .8rem; border-radius: 5px; font-weight: 500; }
+  .btn-success-compact { background: #43a047; color: #fff; border: none; }
+  .btn-outline-compact { background: #fb8c00; color: #fff; border: none; }
+  .btn-outline-compact:hover, .btn-success-compact:hover { color: #fff; filter: brightness(0.95); }
+  .filter-bar { background: #fff; border-radius: 6px; padding: .7rem .85rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: .75rem; }
+  .filter-lbl { font-size: .7rem; font-weight: 600; color: #455a64; margin-bottom: 2px; }
+  .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: .35rem .6rem; font-size: .8rem; }
+  .section-heading { background: #5e35b1; color: #fff; padding: .55rem .85rem; font-size: .9rem; font-weight: 600; border-radius: 4px 4px 0 0; margin: 0; }
+  .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .compact-table { font-size: .8rem; margin: 0; }
+  .compact-table thead th { background: #f7f7f7; border-bottom: 2px solid #5e35b1; font-size: .72rem; text-transform: uppercase; letter-spacing: .2px; color: #2c3e50; padding: .45rem .5rem; white-space: nowrap; }
+  .compact-table tbody td { padding: .45rem .5rem; vertical-align: middle; }
+  .compact-table tbody tr:hover { background: #ede7f6; }
+  .sr-badge { background: #5e35b1; color: #fff; border-radius: 3px; padding: .1rem .35rem; font-size: .68rem; font-weight: 700; }
+  .btn-compact { padding: .2rem .45rem; font-size: .72rem; border-radius: 3px; }
+  .btn-edit-compact { background: #ffc107; color: #000; border: none; }
+  .btn-delete-compact { background: #dc3545; color: #fff; border: none; }
+  .table-footer { background: #f8f9fa; padding: .7rem .9rem; border-top: 1px solid #eceff1; font-size: .78rem; color: #546e7a; }
+  .search-wrap { position: relative; display: inline-block; }
+  .search-wrap input { padding-right: 24px; }
+  .search-clear { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); border: none; background: none; color: rgba(255,255,255,.8); display: none; }
+</style>
+
+<div class="container-fluid py-2 px-3 px-md-4">
   {% include "workspace/_nav.html" %}
-  <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white d-flex justify-content-between">
-      <strong>Workspace Products</strong>
-      <a class="btn btn-sm btn-primary" href="{{ url_for('workspace_product_new') }}">Add Product</a>
+
+  <div class="page-header-gradient">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <h3><i class="bi bi-box-seam me-2"></i>Workspace Products</h3>
+        <p class="subtitle mb-0">Employee scoped products with import/export and clean listing controls.</p>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('workspace_product_import') }}" class="btn btn-outline-compact top-btn-compact"><i class="bi bi-upload me-1"></i>Import</a>
+        <a href="{{ url_for('workspace_product_export', search=search) }}" class="btn btn-outline-compact top-btn-compact"><i class="bi bi-file-earmark-excel me-1"></i>Export</a>
+        <a href="{{ url_for('workspace_product_print', search=search) }}" target="_blank" class="btn btn-outline-compact top-btn-compact"><i class="bi bi-eye me-1"></i>Preview</a>
+        <a href="{{ url_for('workspace_product_new') }}" class="btn btn-success-compact top-btn-compact"><i class="bi bi-plus-lg me-1"></i>Add Product</a>
+      </div>
     </div>
+  </div>
+
+  <div class="filter-bar">
+    <form method="GET" action="{{ url_for('workspace_products_list') }}">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-11">
+          <div class="filter-lbl">Quick Search</div>
+          <input type="text" name="search" class="form-control filter-input" value="{{ search }}" placeholder="Search name, unit, forms, remarks...">
+        </div>
+        <div class="col-12 col-md-1 d-grid">
+          <button type="submit" class="btn btn-dark btn-sm"><i class="bi bi-search"></i></button>
+        </div>
+      </div>
+      <input type="hidden" name="per_page" value="{{ per_page }}">
+    </form>
+  </div>
+
+  <div class="data-table-wrapper">
+    <div class="section-heading d-flex justify-content-between align-items-center gap-2">
+      <span><i class="bi bi-list-ul me-1"></i>Product List</span>
+      <div class="d-flex align-items-center gap-2">
+        <div class="search-wrap">
+          <input type="text" id="headerSearch" class="form-control form-control-sm" value="{{ search }}" placeholder="Search..." style="width:200px;font-size:.78rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.5);">
+          <button type="button" class="search-clear" id="searchClear">&times;</button>
+        </div>
+        <select id="perPageSelect" class="form-select form-select-sm" style="width:auto;font-size:.78rem;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.5);">
+          <option value="10" {% if per_page == 10 %}selected{% endif %}>10 / page</option>
+          <option value="20" {% if per_page == 20 %}selected{% endif %}>20 / page</option>
+          <option value="50" {% if per_page == 50 %}selected{% endif %}>50 / page</option>
+          <option value="100" {% if per_page == 100 %}selected{% endif %}>100 / page</option>
+        </select>
+      </div>
+    </div>
+
     <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0 js-filter-table">
+      <table class="table table-sm compact-table align-middle mb-0">
         <thead>
-          <tr><th>Name</th><th>Unit</th><th>Used In</th><th>Default Price</th><th>Remarks</th><th>Status</th><th class="text-end">Action</th></tr>
+          <tr>
+            <th style="width:4%;">Sr #</th>
+            <th><a class="text-reset text-decoration-none" href="{{ url_for('workspace_products_list', page=1, per_page=per_page, search=search, sort_by='name', sort_order='desc' if sort_by=='name' and sort_order=='asc' else 'asc') }}">Name</a></th>
+            <th><a class="text-reset text-decoration-none" href="{{ url_for('workspace_products_list', page=1, per_page=per_page, search=search, sort_by='unit', sort_order='desc' if sort_by=='unit' and sort_order=='asc' else 'asc') }}">Unit</a></th>
+            <th><a class="text-reset text-decoration-none" href="{{ url_for('workspace_products_list', page=1, per_page=per_page, search=search, sort_by='used_in_forms', sort_order='desc' if sort_by=='used_in_forms' and sort_order=='asc' else 'asc') }}">Used In</a></th>
+            <th>Default Price</th>
+            <th>Remarks</th>
+            <th>Status</th>
+            <th class="text-end" style="width:12%;">Actions</th>
+          </tr>
         </thead>
         <tbody>
           {% for r in rows %}
           <tr>
-            <td>{{ r.name }}</td><td>{{ r.unit or '-' }}</td><td>{{ r.used_in_forms or '-' }}</td><td>{{ '%.2f'|format((r.default_price or 0)|float) }}</td><td>{{ r.remarks or '-' }}</td>
-            <td>{{ 'Active' if r.is_active else 'Inactive' }}</td>
+            <td class="text-center"><span class="sr-badge">{{ loop.index + ((pagination.page - 1) * pagination.per_page) }}</span></td>
+            <td class="fw-semibold">{{ r.name }}</td>
+            <td>{{ r.unit or '-' }}</td>
+            <td>{{ r.used_in_forms or '-' }}</td>
+            <td>{{ '%.2f'|format((r.default_price or 0)|float) }}</td>
+            <td>{{ r.remarks or '-' }}</td>
+            <td>
+              {% if r.is_active %}
+                <span class="badge bg-success-subtle text-success border">Active</span>
+              {% else %}
+                <span class="badge bg-secondary-subtle text-secondary border">Inactive</span>
+              {% endif %}
+            </td>
             <td class="text-end">
-              <a href="{{ url_for('workspace_product_edit', pk=r.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+              <a href="{{ url_for('workspace_product_edit', pk=r.id) }}" class="btn btn-sm btn-edit-compact btn-compact me-1" title="Edit"><i class="bi bi-pencil-square"></i></a>
               <form method="post" action="{{ url_for('workspace_product_delete', pk=r.id) }}" class="d-inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this product?')">Delete</button>
+                <button type="submit" class="btn btn-sm btn-delete-compact btn-compact" onclick="return confirm('Delete this product?')" title="Delete"><i class="bi bi-trash"></i></button>
               </form>
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="7" class="text-center text-muted py-4">No products found.</td></tr>
+          <tr><td colspan="8" class="text-center text-muted py-4">No products found for selected employee.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+
+    <div class="table-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        Showing
+        {% if pagination.total > 0 %}
+          {{ (pagination.page - 1) * pagination.per_page + 1 }} to {{ (pagination.page - 1) * pagination.per_page + rows|length }}
+        {% else %}
+          0 to 0
+        {% endif %}
+        of {{ pagination.total }} records
+      </div>
+      <nav>
+        <ul class="pagination pagination-sm mb-0">
+          {% if pagination.has_prev %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('workspace_products_list', page=pagination.prev_num, per_page=per_page, search=search, sort_by=sort_by, sort_order=sort_order) }}"><i class="bi bi-chevron-left"></i></a></li>
+          {% else %}
+          <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-left"></i></span></li>
+          {% endif %}
+          {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+              <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('workspace_products_list', page=p, per_page=per_page, search=search, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+              </li>
+            {% else %}
+              <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
+          {% endfor %}
+          {% if pagination.has_next %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('workspace_products_list', page=pagination.next_num, per_page=per_page, search=search, sort_by=sort_by, sort_order=sort_order) }}"><i class="bi bi-chevron-right"></i></a></li>
+          {% else %}
+          <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-right"></i></span></li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
   </div>
 </div>
+
+<script>
+  (function () {
+    var searchInput = document.getElementById('headerSearch');
+    var searchClear = document.getElementById('searchClear');
+    var perPageSelect = document.getElementById('perPageSelect');
+    if (searchInput) {
+      searchInput.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        var u = new URL(window.location.href);
+        u.searchParams.set('search', searchInput.value.trim());
+        u.searchParams.set('page', '1');
+        window.location.href = u.toString();
+      });
+      searchInput.addEventListener('input', function () {
+        if (searchClear) searchClear.style.display = searchInput.value ? 'block' : 'none';
+      });
+      if (searchInput.value && searchClear) searchClear.style.display = 'block';
+    }
+    if (searchClear) {
+      searchClear.addEventListener('click', function () {
+        var u = new URL(window.location.href);
+        u.searchParams.set('search', '');
+        u.searchParams.set('page', '1');
+        window.location.href = u.toString();
+      });
+    }
+    if (perPageSelect) {
+      perPageSelect.addEventListener('change', function () {
+        var u = new URL(window.location.href);
+        u.searchParams.set('per_page', perPageSelect.value);
+        u.searchParams.set('page', '1');
+        window.location.href = u.toString();
+      });
+    }
+  })();
+</script>
 {% endblock %}

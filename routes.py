@@ -9,6 +9,7 @@ from models import (
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
     Party, Product, FuelExpense, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
+    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry,
     Notification, NotificationRead,
     User, Role, Permission,
     LoginLog, ActivityLog, ClientActivityLog,
@@ -58,6 +59,7 @@ from forms import (
 )
 from datetime import datetime, date, time, timezone
 from datetime import timedelta
+from decimal import Decimal
 import csv
 from io import StringIO, BytesIO
 import io
@@ -83,6 +85,12 @@ from freeze_utils import (
     is_freeze_protected_request,
     extract_effective_date,
     evaluate_freeze,
+)
+from finance_utils import (
+    ensure_workspace_base_accounts,
+    ensure_workspace_counterparty_account,
+    workspace_create_journal_entry,
+    workspace_reverse_journal_entry,
 )
 
 
@@ -14837,68 +14845,15 @@ def driver_post_print():
 
 @app.route('/parties')
 def party_list():
-    search = request.args.get('search', '').strip()
-    party_type = request.args.get('type', '').strip()
-    per_page_default = session.get('per_page_default', 20)
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', per_page_default, type=int)
-    sort_by = request.args.get('sort_by', 'name')
-    sort_order = request.args.get('sort_order', 'asc')
-
-    query = Party.query
-    if party_type:
-        query = query.filter(Party.party_type == party_type)
-    if search:
-        flt = _multi_word_filter(search, Party.name)
-        if flt is not None:
-            query = query.filter(flt)
-    
-    # Apply sorting based on sort_by column
-    if sort_by == 'party_type':
-        order_col = Party.party_type.asc() if sort_order == 'asc' else Party.party_type.desc()
-    elif sort_by == 'district':
-        order_col = Party.district_id.asc() if sort_order == 'asc' else Party.district_id.desc()
-    else:  # default to name
-        order_col = Party.name.asc() if sort_order == 'asc' else Party.name.desc()
-    
-    pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
-    parties = pagination.items
-    session['per_page_default'] = per_page
-    return render_template('party_list.html', parties=parties, search=search, party_type=party_type,
-                           pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
+    flash('Master Party module removed. Please use Employee Workspace > Parties.', 'info')
+    return redirect(url_for('workspace_parties_list'))
 
 
 @app.route('/party/add', methods=['GET', 'POST'])
 @app.route('/party/edit/<int:id>', methods=['GET', 'POST'])
 def party_form(id=None):
-    party = Party.query.get_or_404(id) if id else None
-    form = PartyForm(obj=party)
-    # District list se options (District model)
-    districts = District.query.order_by(District.name).all()
-    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
-    if request.method == 'GET' and request.args.get('type'):
-        form.party_type.data = request.args.get('type')
-    if party and getattr(party, 'district_id', None) is None:
-        form.district_id.data = 0
-    if form.validate_on_submit():
-        if not party:
-            party = Party()
-        form.populate_obj(party)
-        if form.district_id.data in (None, 0):
-            party.district_id = None
-        if not id:
-            db.session.add(party)
-        db.session.commit()
-        try:
-            from routes_finance import _auto_create_coa_account
-            _auto_create_coa_account('party', party.id, party.name, extra_label=party.party_type)
-            db.session.commit()
-        except Exception:
-            pass
-        flash('Party saved.', 'success')
-        next_url = request.form.get('next') or request.args.get('next') or url_for('party_list')
-        return redirect(next_url)
-    return render_template('party_form.html', form=form, party=party, title='Edit Party' if id else 'Create Party Name')
+    flash('Master Party form removed. Please use Employee Workspace > Add Workspace Party.', 'info')
+    return redirect(url_for('workspace_party_new'))
 
 
 @app.route('/party/delete/<int:id>', methods=['POST'])
@@ -15282,16 +15237,21 @@ def api_fuel_expense_price_hint():
     """Return last 2 entries for current pump + fuel_type, and 2 other pumps' latest entry (same fuel_type) for price reference."""
     fuel_type = request.args.get('fuel_type', '').strip()
     fuel_pump_id = request.args.get('fuel_pump_id', type=int)
+    employee_id = _workspace_employee_id_for_expenses()
     if fuel_type not in ('Diesel', 'Super'):
         return jsonify({'current_pump': [], 'other_pumps': []})
     current_pump = []
     if fuel_pump_id:
-        rows = FuelExpense.query.filter(
-            FuelExpense.fuel_pump_id == fuel_pump_id,
+        q = FuelExpense.query.filter(
+            FuelExpense.workspace_pump_id == fuel_pump_id,
             FuelExpense.fuel_type == fuel_type,
             FuelExpense.fuel_price.isnot(None)
-        ).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).limit(2).all()
-        pump_name = Party.query.get(fuel_pump_id).name if Party.query.get(fuel_pump_id) else ''
+        )
+        if employee_id:
+            q = q.filter(FuelExpense.employee_id == employee_id)
+        rows = q.order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).limit(2).all()
+        pump = WorkspaceParty.query.get(fuel_pump_id)
+        pump_name = pump.name if pump else ''
         for r in rows:
             current_pump.append({
                 'fuel_price': float(r.fuel_price),
@@ -15299,22 +15259,27 @@ def api_fuel_expense_price_hint():
                 'pump_name': pump_name,
             })
     other_pumps = []
-    q_other = db.session.query(FuelExpense.fuel_pump_id).filter(
+    q_other = db.session.query(FuelExpense.workspace_pump_id).filter(
         FuelExpense.fuel_type == fuel_type,
         FuelExpense.fuel_price.isnot(None),
-        FuelExpense.fuel_pump_id.isnot(None),
+        FuelExpense.workspace_pump_id.isnot(None),
     )
+    if employee_id:
+        q_other = q_other.filter(FuelExpense.employee_id == employee_id)
     if fuel_pump_id:
-        q_other = q_other.filter(FuelExpense.fuel_pump_id != fuel_pump_id)
+        q_other = q_other.filter(FuelExpense.workspace_pump_id != fuel_pump_id)
     other_pump_ids = [x[0] for x in q_other.distinct().limit(2).all() if x[0]]
     for pid in other_pump_ids:
-        last_row = FuelExpense.query.filter(
-            FuelExpense.fuel_pump_id == pid,
+        q = FuelExpense.query.filter(
+            FuelExpense.workspace_pump_id == pid,
             FuelExpense.fuel_type == fuel_type,
             FuelExpense.fuel_price.isnot(None)
-        ).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
+        )
+        if employee_id:
+            q = q.filter(FuelExpense.employee_id == employee_id)
+        last_row = q.order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
         if last_row:
-            p = Party.query.get(pid)
+            p = WorkspaceParty.query.get(pid)
             other_pumps.append({
                 'pump_name': p.name if p else '',
                 'fuel_price': float(last_row.fuel_price),
@@ -15328,6 +15293,7 @@ def fuel_expense_list():
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     from auth_utils import get_user_context
     
     user_id = session.get('user_id')
@@ -15386,6 +15352,13 @@ def fuel_expense_list():
         FuelExpense.fueling_date >= from_d,
         FuelExpense.fueling_date <= to_d
     )
+    if workspace_employee_id:
+        query = query.filter(
+            db.or_(
+                FuelExpense.employee_id == workspace_employee_id,
+                FuelExpense.employee_id.is_(None),
+            )
+        )
     
     # Apply user data scope
     if not is_master_or_admin:
@@ -15461,16 +15434,71 @@ def _require_workspace_employee_for_expense_management():
     return None
 
 
+def _workspace_employee_id_for_expenses():
+    return session.get('workspace_employee_id')
+
+
+def _workspace_reverse_expense_journals(reference_type, reference_id, employee_id):
+    if not employee_id:
+        return
+    rows = WorkspaceJournalEntry.query.filter_by(
+        employee_id=employee_id,
+        reference_type=reference_type,
+        reference_id=reference_id
+    ).all()
+    for je in rows:
+        workspace_reverse_journal_entry(je.id)
+
+
+def _workspace_post_expense_journal(employee_id, reference_type, reference_id, expense_date, amount, description, category_code, workspace_party_id=None):
+    if not employee_id:
+        return None
+    amount_val = Decimal(str(amount or 0))
+    if amount_val <= Decimal("0"):
+        return None
+
+    ensure_workspace_base_accounts(employee_id)
+    expense_head = WorkspaceAccount.query.filter_by(employee_id=employee_id, code='5100').first()
+    cash_head = WorkspaceAccount.query.filter_by(employee_id=employee_id, code='1100').first()
+    if not (expense_head and cash_head):
+        return None
+
+    credit_account_id = cash_head.id
+    if workspace_party_id:
+        try:
+            party_acct = ensure_workspace_counterparty_account(employee_id, party_id=workspace_party_id)
+            if party_acct:
+                credit_account_id = party_acct.id
+        except Exception:
+            pass
+
+    return workspace_create_journal_entry(
+        employee_id=employee_id,
+        entry_type='Expense',
+        entry_date=expense_date or pk_date(),
+        description=description or reference_type,
+        lines=[
+            {'account_id': expense_head.id, 'debit': amount_val, 'credit': 0, 'description': description or 'Expense posted'},
+            {'account_id': credit_account_id, 'debit': 0, 'credit': amount_val, 'description': 'Expense settled'},
+        ],
+        reference_type=reference_type,
+        reference_id=reference_id,
+        created_by_user_id=session.get('user_id'),
+        category=category_code,
+    )
+
+
 @app.route('/expenses/fuel/add', methods=['GET', 'POST'])
 def fuel_expense_add():
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     form = FuelExpenseForm()
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     form.project_id.choices = [(0, '-- Select Project --')]
     form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
-    pumps = Party.query.filter_by(party_type='Pump').order_by(Party.name).all()
+    pumps = WorkspaceParty.query.filter_by(employee_id=workspace_employee_id, party_type='Pump').order_by(WorkspaceParty.name).all()
     form.fuel_pump_id.choices = [(0, '-- Select Pump --')] + [(p.id, p.name) for p in pumps]
     form.expense_by.choices = _expense_by_choices()
     if request.method == 'GET':
@@ -15504,9 +15532,9 @@ def fuel_expense_add():
         payment_type = (form.payment_type.data or '').strip() or None
         slip_no = (form.slip_no.data or '').strip() or None
         fuel_type = (form.fuel_type.data or '').strip() or None
-        fuel_pump_id = form.fuel_pump_id.data or None
-        if fuel_pump_id == 0:
-            fuel_pump_id = None
+        workspace_pump_id = form.fuel_pump_id.data or None
+        if workspace_pump_id == 0:
+            workspace_pump_id = None
         previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
         if previous_reading is None:
@@ -15529,28 +15557,25 @@ def fuel_expense_add():
             meter_reading_matched = 'No'
         rec = FuelExpense(
             district_id=district_id, project_id=project_id, vehicle_id=vehicle_id,
+            employee_id=workspace_employee_id,
             fueling_date=fueling_date, card_swipe_date=card_swipe_date,
-            payment_type=payment_type, slip_no=slip_no, fuel_type=fuel_type, fuel_pump_id=fuel_pump_id,
+            payment_type=payment_type, slip_no=slip_no, fuel_type=fuel_type, workspace_pump_id=workspace_pump_id,
             previous_reading=previous_reading, current_reading=current_reading,
             km=km, fuel_price=fuel_price, liters=liters, mpg=mpg, amount=amount,
             km_out_task=km_out_task, km_in_task=km_in_task, meter_reading_matched=meter_reading_matched
         )
         db.session.add(rec)
         db.session.flush()
-        
-        # Create journal entry for fuel expense (party ledger)
-        try:
-            from finance_utils import create_expense_journal
-            from models import Account
-            fuel_account = Account.query.filter_by(code='5110').first()
-            if fuel_pump_id and fuel_account:
-                party_account = Account.query.filter_by(party_id=fuel_pump_id, account_type='Liability').first()
-                if party_account:
-                    je = create_expense_journal('FuelExpense', rec, '5110', party_account.id)
-        except Exception as e:
-            print(f"Journal entry creation failed for fuel expense: {e}")
-
-        _deduct_from_wallet('FuelExpense', rec, '5110', form.expense_by.data)
+        _workspace_post_expense_journal(
+            employee_id=workspace_employee_id,
+            reference_type='FuelExpense',
+            reference_id=rec.id,
+            expense_date=fueling_date,
+            amount=amount_f,
+            description=f'Fuel expense vehicle {vehicle.vehicle_no}',
+            category_code='Fuel',
+            workspace_party_id=workspace_pump_id,
+        )
 
         db.session.commit()
         flash('Fuel expense saved.', 'success')
@@ -15563,7 +15588,11 @@ def fuel_expense_edit(pk):
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     rec = FuelExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('fuel_expense_list'))
     form = FuelExpenseForm(obj=rec)
     form.expense_by.choices = _expense_by_choices()
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
@@ -15579,7 +15608,7 @@ def fuel_expense_edit(pk):
         q = q.filter(Vehicle.district_id == rec.district_id)
     vehicles = q.order_by(Vehicle.vehicle_no).all()
     form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicles]
-    pumps = Party.query.filter_by(party_type='Pump').order_by(Party.name).all()
+    pumps = WorkspaceParty.query.filter_by(employee_id=workspace_employee_id, party_type='Pump').order_by(WorkspaceParty.name).all()
     form.fuel_pump_id.choices = [(0, '-- Select Pump --')] + [(p.id, p.name) for p in pumps]
     if request.method == 'GET':
         form.district_id.data = rec.district_id or 0
@@ -15590,7 +15619,7 @@ def fuel_expense_edit(pk):
         form.payment_type.data = rec.payment_type or ''
         form.slip_no.data = rec.slip_no or ''
         form.fuel_type.data = rec.fuel_type or ''
-        form.fuel_pump_id.data = rec.fuel_pump_id or 0
+        form.fuel_pump_id.data = rec.workspace_pump_id or 0
         form.previous_reading.data = rec.previous_reading
         form.current_reading.data = rec.current_reading
         form.amount.data = rec.amount
@@ -15611,9 +15640,9 @@ def fuel_expense_edit(pk):
         payment_type = (form.payment_type.data or '').strip() or None
         slip_no = (form.slip_no.data or '').strip() or None
         fuel_type = (form.fuel_type.data or '').strip() or None
-        fuel_pump_id = form.fuel_pump_id.data or None
-        if fuel_pump_id == 0:
-            fuel_pump_id = None
+        workspace_pump_id = form.fuel_pump_id.data or None
+        if workspace_pump_id == 0:
+            workspace_pump_id = None
         previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
         if previous_reading is None:
@@ -15637,15 +15666,17 @@ def fuel_expense_edit(pk):
             meter_reading_matched = 'Yes' if matched else 'No'
         else:
             meter_reading_matched = 'No'
+        _workspace_reverse_expense_journals('FuelExpense', rec.id, workspace_employee_id)
         rec.district_id = district_id
         rec.project_id = project_id
         rec.vehicle_id = vehicle_id
+        rec.employee_id = workspace_employee_id
         rec.fueling_date = fueling_date
         rec.card_swipe_date = card_swipe_date
         rec.payment_type = payment_type
         rec.slip_no = slip_no
         rec.fuel_type = fuel_type
-        rec.fuel_pump_id = fuel_pump_id
+        rec.workspace_pump_id = workspace_pump_id
         rec.previous_reading = previous_reading
         rec.current_reading = current_reading
         rec.km = km
@@ -15656,6 +15687,16 @@ def fuel_expense_edit(pk):
         rec.km_out_task = km_out_task
         rec.km_in_task = km_in_task
         rec.meter_reading_matched = meter_reading_matched
+        _workspace_post_expense_journal(
+            employee_id=workspace_employee_id,
+            reference_type='FuelExpense',
+            reference_id=rec.id,
+            expense_date=fueling_date,
+            amount=amount_f,
+            description=f'Fuel expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+            category_code='Fuel',
+            workspace_party_id=workspace_pump_id,
+        )
         db.session.commit()
         flash('Fuel expense updated.', 'success')
         return redirect(url_for('fuel_expense_list'))
@@ -15667,7 +15708,12 @@ def fuel_expense_delete(pk):
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     rec = FuelExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('fuel_expense_list'))
+    _workspace_reverse_expense_journals('FuelExpense', rec.id, workspace_employee_id)
     db.session.delete(rec)
     db.session.commit()
     flash('Fuel expense deleted.', 'success')
@@ -15733,6 +15779,7 @@ def oil_expense_list():
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     from auth_utils import get_user_context
     
     user_id = session.get('user_id')
@@ -15775,6 +15822,13 @@ def oil_expense_list():
             OilExpense.expense_date >= from_d,
             OilExpense.expense_date <= to_d
         )
+        if workspace_employee_id:
+            query = query.filter(
+                db.or_(
+                    OilExpense.employee_id == workspace_employee_id,
+                    OilExpense.employee_id.is_(None),
+                )
+            )
         
         # Apply user data scope
         if not is_master_or_admin:
@@ -15823,7 +15877,11 @@ def oil_expense_form(pk=None):
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     rec = OilExpense.query.get_or_404(pk) if pk else None
+    if rec and workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('oil_expense_list'))
     form = OilExpenseForm(obj=rec)
     form.expense_by.choices = _expense_by_choices()
     products_for_oil = Product.query.filter(
@@ -15909,6 +15967,7 @@ def oil_expense_form(pk=None):
             rec = OilExpense(
                 district_id=form.district_id.data or None,
                 project_id=form.project_id.data or None,
+                employee_id=workspace_employee_id,
                 vehicle_id=vehicle_id,
                 expense_date=expense_date,
                 card_swipe_date=card_swipe_date,
@@ -15923,6 +15982,7 @@ def oil_expense_form(pk=None):
         if rec.id:
             rec.district_id = form.district_id.data or None
             rec.project_id = form.project_id.data or None
+            rec.employee_id = workspace_employee_id
             rec.vehicle_id = vehicle_id
             rec.expense_date = expense_date
             rec.card_swipe_date = card_swipe_date
@@ -15946,6 +16006,18 @@ def oil_expense_form(pk=None):
             db.session.add(item)
         db.session.flush()
         _apply_oil_expense_items_balance(rec.items.all(), reverse=False)
+        _workspace_reverse_expense_journals('OilExpense', rec.id, workspace_employee_id)
+        items_total = sum(float(it.amount or 0) for it in rec.items)
+        _workspace_post_expense_journal(
+            employee_id=workspace_employee_id,
+            reference_type='OilExpense',
+            reference_id=rec.id,
+            expense_date=expense_date,
+            amount=items_total,
+            description=f'Oil expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+            category_code='Oil',
+            workspace_party_id=None,
+        )
         db.session.commit()
 
         allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
@@ -15976,11 +16048,6 @@ def oil_expense_form(pk=None):
                 att = OilExpenseAttachment(oil_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
                 db.session.add(att)
 
-            items_total = sum(float(it.amount or 0) for it in rec.items)
-            if items_total > 0 and form.expense_by.data:
-                rec.total_amount = items_total
-                _deduct_from_wallet('OilExpense', rec, '5120', form.expense_by.data)
-
             db.session.commit()
 
         flash('Oil expense saved.', 'success')
@@ -15993,7 +16060,12 @@ def oil_expense_delete(pk):
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     rec = OilExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('oil_expense_list'))
+    _workspace_reverse_expense_journals('OilExpense', rec.id, workspace_employee_id)
     items = list(rec.items.all())
     _apply_oil_expense_items_balance(items, reverse=True)
     for att in rec.attachments:
@@ -16042,6 +16114,7 @@ def maintenance_expense_list():
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     from auth_utils import get_user_context
     
     user_id = session.get('user_id')
@@ -16084,6 +16157,13 @@ def maintenance_expense_list():
             MaintenanceExpense.expense_date >= from_d,
             MaintenanceExpense.expense_date <= to_d
         )
+        if workspace_employee_id:
+            query = query.filter(
+                db.or_(
+                    MaintenanceExpense.employee_id == workspace_employee_id,
+                    MaintenanceExpense.employee_id.is_(None),
+                )
+            )
         
         # Apply user data scope
         if not is_master_or_admin:
@@ -16123,7 +16203,11 @@ def maintenance_expense_form(pk=None):
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     rec = MaintenanceExpense.query.get_or_404(pk) if pk else None
+    if rec and workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_expense_list'))
     form = MaintenanceExpenseForm(obj=rec)
     form.expense_by.choices = _expense_by_choices()
     products_for_maintenance = Product.query.filter(
@@ -16194,6 +16278,7 @@ def maintenance_expense_form(pk=None):
             rec = MaintenanceExpense(
                 district_id=form.district_id.data or None,
                 project_id=form.project_id.data or None,
+                employee_id=workspace_employee_id,
                 vehicle_id=vehicle_id,
                 expense_date=expense_date,
                 previous_reading=prev_reading,
@@ -16206,6 +16291,7 @@ def maintenance_expense_form(pk=None):
         if rec.id:
             rec.district_id = form.district_id.data or None
             rec.project_id = form.project_id.data or None
+            rec.employee_id = workspace_employee_id
             rec.vehicle_id = vehicle_id
             rec.expense_date = expense_date
             rec.previous_reading = prev_reading
@@ -16222,6 +16308,18 @@ def maintenance_expense_form(pk=None):
                 sort_order=idx
             )
             db.session.add(item)
+        _workspace_reverse_expense_journals('MaintenanceExpense', rec.id, workspace_employee_id)
+        items_total = sum(float((it.get('amount') or 0)) for it in items_data)
+        _workspace_post_expense_journal(
+            employee_id=workspace_employee_id,
+            reference_type='MaintenanceExpense',
+            reference_id=rec.id,
+            expense_date=expense_date,
+            amount=items_total,
+            description=f'Maintenance expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+            category_code='Maintenance',
+            workspace_party_id=None,
+        )
         db.session.commit()
 
         allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
@@ -16252,11 +16350,6 @@ def maintenance_expense_form(pk=None):
                 att = MaintenanceExpenseAttachment(maintenance_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
                 db.session.add(att)
 
-            items_total = sum(float(it.amount or 0) for it in rec.items)
-            if items_total > 0 and form.expense_by.data:
-                rec.total_amount = items_total
-                _deduct_from_wallet('MaintenanceExpense', rec, '5130', form.expense_by.data)
-
             db.session.commit()
         flash('Maintenance expense saved.', 'success')
         return redirect(url_for('maintenance_expense_list'))
@@ -16268,7 +16361,12 @@ def maintenance_expense_delete(pk):
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     rec = MaintenanceExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_expense_list'))
+    _workspace_reverse_expense_journals('MaintenanceExpense', rec.id, workspace_employee_id)
     for att in rec.attachments:
         full_path = os.path.join(app.config['UPLOAD_FOLDER'], att.file_path)
         if os.path.isfile(full_path):

@@ -450,8 +450,10 @@ from routes_finance import (
 
 from routes_workspace import (
     workspace_dashboard, workspace_home, workspace_select_employee, workspace_clear_employee,
-    workspace_parties_list, workspace_party_form, workspace_party_delete,
-    workspace_products_list, workspace_product_form, workspace_product_delete,
+    workspace_parties_list, workspace_party_form, workspace_party_delete, workspace_party_export,
+    workspace_party_print, workspace_party_import, workspace_party_import_template,
+    workspace_products_list, workspace_product_form, workspace_product_delete, workspace_product_export,
+    workspace_product_print, workspace_product_import, workspace_product_import_template,
     workspace_accounts_list, workspace_account_form,
     workspace_expenses_list, workspace_expense_form, workspace_expense_delete,
     workspace_fund_transfers_list, workspace_fund_transfer_form, workspace_fund_transfer_delete,
@@ -523,10 +525,18 @@ app.add_url_rule('/workspace/home', 'workspace_home', workspace_home)
 app.add_url_rule('/workspace/select-employee', 'workspace_select_employee', workspace_select_employee, methods=['POST'])
 app.add_url_rule('/workspace/clear-employee', 'workspace_clear_employee', workspace_clear_employee)
 app.add_url_rule('/workspace/parties', 'workspace_parties_list', workspace_parties_list)
+app.add_url_rule('/workspace/parties/export', 'workspace_party_export', workspace_party_export)
+app.add_url_rule('/workspace/parties/print', 'workspace_party_print', workspace_party_print)
+app.add_url_rule('/workspace/parties/import', 'workspace_party_import', workspace_party_import, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/parties/import/template', 'workspace_party_import_template', workspace_party_import_template)
 app.add_url_rule('/workspace/party/new', 'workspace_party_new', workspace_party_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/party/<int:pk>/edit', 'workspace_party_edit', workspace_party_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/party/<int:pk>/delete', 'workspace_party_delete', workspace_party_delete, methods=['POST'])
 app.add_url_rule('/workspace/products', 'workspace_products_list', workspace_products_list)
+app.add_url_rule('/workspace/products/export', 'workspace_product_export', workspace_product_export)
+app.add_url_rule('/workspace/products/print', 'workspace_product_print', workspace_product_print)
+app.add_url_rule('/workspace/products/import', 'workspace_product_import', workspace_product_import, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/products/import/template', 'workspace_product_import_template', workspace_product_import_template)
 app.add_url_rule('/workspace/product/new', 'workspace_product_new', workspace_product_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/product/<int:pk>/edit', 'workspace_product_edit', workspace_product_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/product/<int:pk>/delete', 'workspace_product_delete', workspace_product_delete, methods=['POST'])

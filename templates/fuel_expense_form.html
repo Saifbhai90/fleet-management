@@ -112,7 +112,7 @@
                 <label class="form-label">Fuel Pump Name</label>
                 <div class="d-flex gap-2 align-items-center">
                   {{ form.fuel_pump_id(class="form-select search-select", id="fuelPumpSelect") }}
-                  <a href="{{ url_for('party_form') }}?type=Pump&next={{ request.url | urlencode }}" class="btn btn-outline-primary btn-sm text-nowrap" title="Create new pump">Create Pump</a>
+                  <a href="{{ url_for('workspace_party_new', type='Pump', next=request.url) }}" class="btn btn-outline-primary btn-sm text-nowrap" title="Create new pump">Create Pump</a>
                 </div>
               </div>
               <div class="col-6 col-md-4 field-group">

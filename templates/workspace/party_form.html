@@ -12,6 +12,7 @@
       </div>
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ next_url or '' }}">
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label fw-semibold">Party Name <span class="text-danger">*</span></label>
@@ -21,9 +22,9 @@
             <label class="form-label fw-semibold">Type <span class="text-danger">*</span></label>
             <select name="party_type" class="form-select search-select" required>
               <option value="">-- Select Type --</option>
-              <option value="Pump" {% if row and row.party_type == 'Pump' %}selected{% endif %}>Pump</option>
-              <option value="Workshop" {% if row and row.party_type == 'Workshop' %}selected{% endif %}>Workshop</option>
-              <option value="Spare parts shop" {% if row and row.party_type == 'Spare parts shop' %}selected{% endif %}>Spare parts shop</option>
+              <option value="Pump" {% if (row and row.party_type == 'Pump') or (not row and default_type == 'Pump') %}selected{% endif %}>Pump</option>
+              <option value="Workshop" {% if (row and row.party_type == 'Workshop') or (not row and default_type == 'Workshop') %}selected{% endif %}>Workshop</option>
+              <option value="Spare parts shop" {% if (row and row.party_type == 'Spare parts shop') or (not row and default_type == 'Spare parts shop') %}selected{% endif %}>Spare parts shop</option>
             </select>
           </div>
           <div class="col-md-3">
@@ -60,7 +61,7 @@
           </div>
           <div class="col-12 d-flex gap-2">
             <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i>Save Party</button>
-            <a href="{{ url_for('workspace_parties_list') }}" class="btn btn-outline-secondary">Cancel</a>
+            <a href="{{ next_url if next_url else url_for('workspace_parties_list') }}" class="btn btn-outline-secondary">Cancel</a>
           </div>
         </div>
       </form>

@@ -1,0 +1,45 @@
+{% extends "base_print.html" %}
+{% block title %}Print - Workspace Parties{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-2">
+  <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+    <h3 class="mb-0"><i class="bi bi-building me-2"></i>Workspace Parties - Print Preview</h3>
+    <div>
+      <span class="badge bg-dark me-2">Employee: {{ employee.name }}</span>
+      {% if search %}<span class="badge bg-secondary me-2">Search: "{{ search }}"</span>{% endif %}
+      {% if party_type %}<span class="badge bg-info me-2">Type: {{ party_type }}</span>{% endif %}
+      <button class="btn btn-outline-primary" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print / Save PDF</button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>#</th><th>Name</th><th>Type</th><th>District</th><th>Contact</th><th>Phone</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ r.name }}</td>
+              <td>{{ r.party_type or '-' }}</td>
+              <td>{{ r.district.name if r.district else '-' }}</td>
+              <td>{{ r.contact or '-' }}</td>
+              <td>{{ r.phone or '-' }}</td>
+              <td>{{ 'Active' if r.is_active else 'Inactive' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="text-center py-4 text-muted">No workspace parties found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

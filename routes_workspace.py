@@ -2,6 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from flask import flash, redirect, render_template, request, session, url_for
+from sqlalchemy import and_, or_
 
 from models import (
     db, Employee, Driver, Party, Account, District, Project,
@@ -20,7 +21,18 @@ from finance_utils import (
     workspace_get_account_ledger,
     workspace_close_month,
 )
-from utils import pk_date, parse_date
+from utils import pk_date, parse_date, generate_excel_template
+
+
+def _workspace_multi_word_filter(search_text, *columns):
+    words = [w.strip() for w in (search_text or "").split() if w.strip()]
+    if not words:
+        return None
+    and_parts = []
+    for word in words:
+        pattern = f"%{word}%"
+        and_parts.append(or_(*[col.ilike(pattern) for col in columns]))
+    return and_(*and_parts)
 
 
 def _get_workspace_employee():
@@ -61,7 +73,16 @@ def _workspace_guard(permission_code="workspace_dashboard"):
 
 
 def _list_employees_for_workspace():
-    return Employee.query.filter_by(status="Active").order_by(Employee.name).all()
+    user_id = session.get("user_id")
+    if not user_id:
+        return []
+    ctx = get_user_context(user_id)
+    if ctx.get("is_master_or_admin"):
+        return Employee.query.filter_by(status="Active").order_by(Employee.name).all()
+    emp = ctx.get("employee_record")
+    if emp and emp.status == "Active":
+        return [emp]
+    return []
 
 
 def _get_employee_scope_summary(employee):
@@ -131,6 +152,18 @@ def workspace_dashboard():
         return auth
     employees = _list_employees_for_workspace()
     selected_employee = _get_workspace_employee()
+    # If employee is already selected and still accessible, jump straight to workspace home.
+    if selected_employee and _can_access_employee(selected_employee.id):
+        return redirect(url_for("workspace_home"))
+
+    # If user can access exactly one employee, auto-select and auto-load workspace.
+    if len(employees) == 1:
+        only_emp = employees[0]
+        session["workspace_employee_id"] = only_emp.id
+        ensure_workspace_base_accounts(only_emp.id)
+        db.session.commit()
+        return redirect(url_for("workspace_home"))
+
     return render_template("workspace/select_employee.html", employees=employees, selected_employee=selected_employee)
 
 
@@ -186,8 +219,60 @@ def workspace_parties_list():
     guard, emp = _workspace_guard("workspace_party_list")
     if guard:
         return guard
-    rows = WorkspaceParty.query.filter_by(employee_id=emp.id).order_by(WorkspaceParty.name).all()
-    return render_template("workspace/parties_list.html", rows=rows, employee=emp)
+    search = (request.args.get("search") or "").strip()
+    party_type = (request.args.get("type") or "").strip()
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    per_page = request.args.get("per_page", 20, type=int) or 20
+    if per_page not in (10, 20, 50, 100):
+        per_page = 20
+    sort_by = (request.args.get("sort_by") or "name").strip()
+    sort_order = (request.args.get("sort_order") or "asc").strip().lower()
+    sort_order = "desc" if sort_order == "desc" else "asc"
+
+    query = WorkspaceParty.query.filter_by(employee_id=emp.id)
+    if party_type:
+        query = query.filter(WorkspaceParty.party_type == party_type)
+    if search:
+        flt = _workspace_multi_word_filter(
+            search,
+            WorkspaceParty.name,
+            WorkspaceParty.party_type,
+            WorkspaceParty.contact,
+            WorkspaceParty.phone,
+            WorkspaceParty.address,
+            WorkspaceParty.remarks,
+        )
+        if flt is not None:
+            query = query.filter(flt)
+
+    if sort_by == "district":
+        query = query.outerjoin(District, WorkspaceParty.district_id == District.id)
+        order_col = District.name
+    elif sort_by == "party_type":
+        order_col = WorkspaceParty.party_type
+    elif sort_by == "contact":
+        order_col = WorkspaceParty.contact
+    elif sort_by == "status":
+        order_col = WorkspaceParty.is_active
+    else:
+        order_col = WorkspaceParty.name
+    if sort_order == "desc":
+        order_col = order_col.desc()
+    else:
+        order_col = order_col.asc()
+
+    pagination = query.order_by(order_col, WorkspaceParty.id.asc()).paginate(page=page, per_page=per_page, error_out=False)
+    return render_template(
+        "workspace/parties_list.html",
+        rows=pagination.items,
+        pagination=pagination,
+        per_page=per_page,
+        search=search,
+        party_type=party_type,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        employee=emp,
+    )
 
 
 def workspace_party_form(pk=None):
@@ -201,11 +286,14 @@ def workspace_party_form(pk=None):
 
     districts = District.query.order_by(District.name).all()
 
+    next_url = (request.args.get("next") or request.form.get("next") or "").strip()
+    default_type = (request.args.get("type") or "").strip()
+
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
         if not name:
             flash("Party name is required.", "danger")
-            return render_template("workspace/party_form.html", row=row, employee=emp, districts=districts)
+            return render_template("workspace/party_form.html", row=row, employee=emp, districts=districts, next_url=next_url, default_type=default_type)
         if not row:
             row = WorkspaceParty(employee_id=emp.id)
             db.session.add(row)
@@ -220,8 +308,10 @@ def workspace_party_form(pk=None):
         row.created_by_user_id = session.get("user_id")
         db.session.commit()
         flash("Workspace party saved.", "success")
+        if next_url:
+            return redirect(next_url)
         return redirect(url_for("workspace_parties_list"))
-    return render_template("workspace/party_form.html", row=row, employee=emp, districts=districts)
+    return render_template("workspace/party_form.html", row=row, employee=emp, districts=districts, next_url=next_url, default_type=default_type)
 
 
 def workspace_party_delete(pk):
@@ -239,8 +329,344 @@ def workspace_products_list():
     guard, emp = _workspace_guard("workspace_product_list")
     if guard:
         return guard
-    rows = WorkspaceProduct.query.filter_by(employee_id=emp.id).order_by(WorkspaceProduct.name).all()
-    return render_template("workspace/products_list.html", rows=rows, employee=emp)
+    search = (request.args.get("search") or "").strip()
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    per_page = request.args.get("per_page", 20, type=int) or 20
+    if per_page not in (10, 20, 50, 100):
+        per_page = 20
+    sort_by = (request.args.get("sort_by") or "name").strip()
+    sort_order = (request.args.get("sort_order") or "asc").strip().lower()
+    sort_order = "desc" if sort_order == "desc" else "asc"
+
+    query = WorkspaceProduct.query.filter_by(employee_id=emp.id)
+    if search:
+        flt = _workspace_multi_word_filter(
+            search,
+            WorkspaceProduct.name,
+            WorkspaceProduct.unit,
+            WorkspaceProduct.used_in_forms,
+            WorkspaceProduct.remarks,
+        )
+        if flt is not None:
+            query = query.filter(flt)
+
+    if sort_by == "used_in_forms":
+        order_col = WorkspaceProduct.used_in_forms
+    elif sort_by == "unit":
+        order_col = WorkspaceProduct.unit
+    elif sort_by == "status":
+        order_col = WorkspaceProduct.is_active
+    else:
+        order_col = WorkspaceProduct.name
+    if sort_order == "desc":
+        order_col = order_col.desc()
+    else:
+        order_col = order_col.asc()
+
+    pagination = query.order_by(order_col, WorkspaceProduct.id.asc()).paginate(page=page, per_page=per_page, error_out=False)
+    return render_template(
+        "workspace/products_list.html",
+        rows=pagination.items,
+        pagination=pagination,
+        per_page=per_page,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        employee=emp,
+    )
+
+
+def workspace_party_export():
+    guard, emp = _workspace_guard("workspace_party_list")
+    if guard:
+        return guard
+    search = (request.args.get("search") or "").strip()
+    party_type = (request.args.get("type") or "").strip()
+    query = WorkspaceParty.query.filter_by(employee_id=emp.id)
+    if party_type:
+        query = query.filter(WorkspaceParty.party_type == party_type)
+    if search:
+        flt = _workspace_multi_word_filter(
+            search,
+            WorkspaceParty.name,
+            WorkspaceParty.party_type,
+            WorkspaceParty.contact,
+            WorkspaceParty.phone,
+            WorkspaceParty.address,
+            WorkspaceParty.remarks,
+        )
+        if flt is not None:
+            query = query.filter(flt)
+    rows = query.order_by(WorkspaceParty.name.asc(), WorkspaceParty.id.asc()).all()
+    headers = ["S.No", "Name", "Type", "District", "Contact", "Phone", "Address", "Remarks", "Status"]
+    data_rows = []
+    for i, p in enumerate(rows, 1):
+        data_rows.append([
+            i,
+            p.name or "",
+            p.party_type or "",
+            p.district.name if p.district else "",
+            p.contact or "",
+            p.phone or "",
+            p.address or "",
+            p.remarks or "",
+            "Active" if p.is_active else "Inactive",
+        ])
+    return generate_excel_template(headers, data_rows, required_columns=[], filename=f"workspace_parties_emp_{emp.id}.xlsx")
+
+
+def workspace_party_print():
+    guard, emp = _workspace_guard("workspace_party_list")
+    if guard:
+        return guard
+    search = (request.args.get("search") or "").strip()
+    party_type = (request.args.get("type") or "").strip()
+    query = WorkspaceParty.query.filter_by(employee_id=emp.id)
+    if party_type:
+        query = query.filter(WorkspaceParty.party_type == party_type)
+    if search:
+        flt = _workspace_multi_word_filter(
+            search,
+            WorkspaceParty.name,
+            WorkspaceParty.party_type,
+            WorkspaceParty.contact,
+            WorkspaceParty.phone,
+            WorkspaceParty.address,
+            WorkspaceParty.remarks,
+        )
+        if flt is not None:
+            query = query.filter(flt)
+    rows = query.order_by(WorkspaceParty.name.asc(), WorkspaceParty.id.asc()).all()
+    return render_template("workspace/parties_print.html", rows=rows, employee=emp, search=search, party_type=party_type)
+
+
+def workspace_party_import():
+    guard, emp = _workspace_guard("workspace_party_add")
+    if guard:
+        return guard
+    import_errors = []
+    if request.method == "POST":
+        file_obj = request.files.get("file")
+        if not file_obj or not (file_obj.filename or "").strip():
+            flash("Please select an Excel or CSV file.", "warning")
+            return redirect(url_for("workspace_party_import"))
+        filename = file_obj.filename or ""
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext not in ("xlsx", "xls", "csv"):
+            flash("Unsupported file type. Use .xlsx, .xls or .csv.", "danger")
+            return redirect(url_for("workspace_party_import"))
+        try:
+            import pandas as pd
+
+            if ext in ("xlsx", "xls"):
+                df = pd.read_excel(file_obj)
+            else:
+                df = pd.read_csv(file_obj)
+
+            required_cols = ["name", "party_type"]
+            missing = [c for c in required_cols if c not in df.columns]
+            if missing:
+                flash(f"Missing required columns: {', '.join(missing)}", "danger")
+                return redirect(url_for("workspace_party_import"))
+
+            allowed_types = {"pump": "Pump", "workshop": "Workshop", "spare parts shop": "Spare parts shop"}
+            district_map = {d.name.strip().lower(): d.id for d in District.query.order_by(District.name).all() if d.name}
+            add_rows = []
+            for idx, row in df.iterrows():
+                row_no = idx + 2
+                name = str(row.get("name", "")).strip() if not pd.isna(row.get("name")) else ""
+                ptype_raw = str(row.get("party_type", "")).strip() if not pd.isna(row.get("party_type")) else ""
+                ptype = allowed_types.get(ptype_raw.lower(), "")
+                issues = []
+                if not name:
+                    issues.append('"name" is required.')
+                if not ptype:
+                    issues.append('party_type must be Pump, Workshop or Spare parts shop.')
+
+                district_name = str(row.get("district", "")).strip() if "district" in df.columns and not pd.isna(row.get("district")) else ""
+                district_id = None
+                if district_name:
+                    district_id = district_map.get(district_name.lower())
+                    if not district_id:
+                        issues.append(f'District "{district_name}" not found.')
+
+                if issues:
+                    import_errors.append({"row": row_no, "identifier": name or "-", "message": "; ".join(issues)})
+                    continue
+
+                contact = str(row.get("contact", "")).strip() if "contact" in df.columns and not pd.isna(row.get("contact")) else ""
+                phone = str(row.get("phone", "")).strip() if "phone" in df.columns and not pd.isna(row.get("phone")) else ""
+                address = str(row.get("address", "")).strip() if "address" in df.columns and not pd.isna(row.get("address")) else ""
+                remarks = str(row.get("remarks", "")).strip() if "remarks" in df.columns and not pd.isna(row.get("remarks")) else ""
+
+                add_rows.append(WorkspaceParty(
+                    employee_id=emp.id,
+                    name=name,
+                    party_type=ptype,
+                    district_id=district_id,
+                    contact=contact or None,
+                    phone=phone or None,
+                    address=address or None,
+                    remarks=remarks or None,
+                    is_active=True,
+                    created_by_user_id=session.get("user_id"),
+                ))
+
+            if import_errors:
+                return render_template("workspace/party_import.html", employee=emp, import_errors=import_errors)
+
+            for row in add_rows:
+                db.session.add(row)
+            db.session.commit()
+            flash(f"{len(add_rows)} workspace parties imported successfully.", "success")
+            return redirect(url_for("workspace_parties_list"))
+        except Exception as exc:
+            db.session.rollback()
+            flash(f"Import failed: {exc}", "danger")
+    return render_template("workspace/party_import.html", employee=emp, import_errors=import_errors)
+
+
+def workspace_party_import_template():
+    guard, _emp = _workspace_guard("workspace_party_add")
+    if guard:
+        return guard
+    headers = ["name", "party_type", "district", "contact", "phone", "address", "remarks"]
+    rows = [
+        ["Shell Pump A", "Pump", "Lahore", "Manager", "03001234567", "Main Road", "Sample party"],
+        ["ABC Workshop", "Workshop", "Lahore", "Owner", "03007654321", "Industrial Area", "Sample workshop"],
+    ]
+    return generate_excel_template(headers, rows, required_columns=["name", "party_type"], filename="workspace_party_import_template.xlsx")
+
+
+def workspace_product_export():
+    guard, emp = _workspace_guard("workspace_product_list")
+    if guard:
+        return guard
+    search = (request.args.get("search") or "").strip()
+    query = WorkspaceProduct.query.filter_by(employee_id=emp.id)
+    if search:
+        flt = _workspace_multi_word_filter(
+            search,
+            WorkspaceProduct.name,
+            WorkspaceProduct.unit,
+            WorkspaceProduct.used_in_forms,
+            WorkspaceProduct.remarks,
+        )
+        if flt is not None:
+            query = query.filter(flt)
+    rows = query.order_by(WorkspaceProduct.name.asc(), WorkspaceProduct.id.asc()).all()
+    headers = ["S.No", "Product Name", "Unit", "Used In Forms", "Default Price", "Remarks", "Status"]
+    data_rows = []
+    for i, p in enumerate(rows, 1):
+        data_rows.append([
+            i,
+            p.name or "",
+            p.unit or "",
+            p.used_in_forms or "",
+            float(p.default_price or 0),
+            p.remarks or "",
+            "Active" if p.is_active else "Inactive",
+        ])
+    return generate_excel_template(headers, data_rows, required_columns=[], filename=f"workspace_products_emp_{emp.id}.xlsx")
+
+
+def workspace_product_print():
+    guard, emp = _workspace_guard("workspace_product_list")
+    if guard:
+        return guard
+    search = (request.args.get("search") or "").strip()
+    query = WorkspaceProduct.query.filter_by(employee_id=emp.id)
+    if search:
+        flt = _workspace_multi_word_filter(
+            search,
+            WorkspaceProduct.name,
+            WorkspaceProduct.unit,
+            WorkspaceProduct.used_in_forms,
+            WorkspaceProduct.remarks,
+        )
+        if flt is not None:
+            query = query.filter(flt)
+    rows = query.order_by(WorkspaceProduct.name.asc(), WorkspaceProduct.id.asc()).all()
+    return render_template("workspace/products_print.html", rows=rows, employee=emp, search=search)
+
+
+def workspace_product_import():
+    guard, emp = _workspace_guard("workspace_product_add")
+    if guard:
+        return guard
+    import_errors = []
+    if request.method == "POST":
+        file_obj = request.files.get("file")
+        if not file_obj or not (file_obj.filename or "").strip():
+            flash("Please select an Excel or CSV file.", "warning")
+            return redirect(url_for("workspace_product_import"))
+        filename = file_obj.filename or ""
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext not in ("xlsx", "xls", "csv"):
+            flash("Unsupported file type. Use .xlsx, .xls or .csv.", "danger")
+            return redirect(url_for("workspace_product_import"))
+        try:
+            import pandas as pd
+
+            if ext in ("xlsx", "xls"):
+                df = pd.read_excel(file_obj)
+            else:
+                df = pd.read_csv(file_obj)
+            if "name" not in df.columns:
+                flash("Missing required column: name", "danger")
+                return redirect(url_for("workspace_product_import"))
+
+            add_rows = []
+            for idx, row in df.iterrows():
+                row_no = idx + 2
+                name = str(row.get("name", "")).strip() if not pd.isna(row.get("name")) else ""
+                if not name:
+                    import_errors.append({"row": row_no, "identifier": "-", "message": '"name" is required.'})
+                    continue
+                unit = str(row.get("unit", "")).strip() if "unit" in df.columns and not pd.isna(row.get("unit")) else ""
+                used_in_forms = str(row.get("used_in_forms", "")).strip() if "used_in_forms" in df.columns and not pd.isna(row.get("used_in_forms")) else ""
+                remarks = str(row.get("remarks", "")).strip() if "remarks" in df.columns and not pd.isna(row.get("remarks")) else ""
+                default_price_raw = str(row.get("default_price", "")).strip() if "default_price" in df.columns and not pd.isna(row.get("default_price")) else "0"
+                try:
+                    default_price = Decimal(default_price_raw or "0")
+                except Exception:
+                    import_errors.append({"row": row_no, "identifier": name, "message": "default_price must be numeric."})
+                    continue
+                add_rows.append(WorkspaceProduct(
+                    employee_id=emp.id,
+                    name=name,
+                    unit=unit or None,
+                    used_in_forms=used_in_forms or None,
+                    default_price=default_price,
+                    remarks=remarks or None,
+                    is_active=True,
+                    created_by_user_id=session.get("user_id"),
+                ))
+
+            if import_errors:
+                return render_template("workspace/product_import.html", employee=emp, import_errors=import_errors)
+
+            for row in add_rows:
+                db.session.add(row)
+            db.session.commit()
+            flash(f"{len(add_rows)} workspace products imported successfully.", "success")
+            return redirect(url_for("workspace_products_list"))
+        except Exception as exc:
+            db.session.rollback()
+            flash(f"Import failed: {exc}", "danger")
+    return render_template("workspace/product_import.html", employee=emp, import_errors=import_errors)
+
+
+def workspace_product_import_template():
+    guard, _emp = _workspace_guard("workspace_product_add")
+    if guard:
+        return guard
+    headers = ["name", "unit", "used_in_forms", "default_price", "remarks"]
+    rows = [
+        ["Diesel", "Liter", "Fueling", 278, "Fuel product"],
+        ["Engine Oil", "Liter", "Oil,Maintenance", 1450, "Used in maintenance too"],
+    ]
+    return generate_excel_template(headers, rows, required_columns=["name"], filename="workspace_product_import_template.xlsx")
 
 
 def workspace_product_form(pk=None):

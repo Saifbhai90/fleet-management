@@ -741,6 +741,7 @@ class FuelExpense(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=True, index=True)
     vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False)
 
     fueling_date = db.Column(db.Date, nullable=False)
@@ -749,6 +750,7 @@ class FuelExpense(db.Model):
     slip_no = db.Column(db.String(50), nullable=True)
     fuel_type = db.Column(db.String(20), nullable=True)     # Diesel, Super (Petrol)
     fuel_pump_id = db.Column(db.Integer, db.ForeignKey('party.id'), nullable=True)  # Pump name from Party
+    workspace_pump_id = db.Column(db.Integer, db.ForeignKey('workspace_party.id'), nullable=True)
 
     previous_reading = db.Column(db.Numeric(12, 2), nullable=True)   # last fueling's current_reading
     current_reading = db.Column(db.Numeric(12, 2), nullable=False)
@@ -766,8 +768,10 @@ class FuelExpense(db.Model):
 
     district = db.relationship('District', backref='fuel_expenses', lazy='select')
     project = db.relationship('Project', backref='fuel_expenses', lazy='select')
+    employee = db.relationship('Employee', backref='fuel_expenses', lazy='select')
     vehicle = db.relationship('Vehicle', backref='fuel_expenses', lazy='select')
     fuel_pump = db.relationship('Party', backref='fuel_expenses', lazy='select')
+    workspace_pump = db.relationship('WorkspaceParty', backref='fuel_expenses', lazy='select')
 
     def __repr__(self):
         return f'<FuelExpense {self.vehicle_id} {self.fueling_date}>'
@@ -797,6 +801,7 @@ class OilExpense(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=True, index=True)
     vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False)
     expense_date = db.Column(db.Date, nullable=False)
     card_swipe_date = db.Column(db.Date, nullable=True)
@@ -808,6 +813,7 @@ class OilExpense(db.Model):
 
     district = db.relationship('District', backref='oil_expenses', lazy='select')
     project = db.relationship('Project', backref='oil_expenses', lazy='select')
+    employee = db.relationship('Employee', backref='oil_expenses', lazy='select')
     vehicle = db.relationship('Vehicle', backref='oil_expenses', lazy='select')
     items = db.relationship('OilExpenseItem', backref='oil_expense', lazy='dynamic', order_by='OilExpenseItem.sort_order', cascade='all, delete-orphan')
     attachments = db.relationship('OilExpenseAttachment', backref='oil_expense', lazy='dynamic', cascade='all, delete-orphan')
@@ -862,6 +868,7 @@ class MaintenanceExpense(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=True, index=True)
     vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False)
     expense_date = db.Column(db.Date, nullable=False)
     previous_reading = db.Column(db.Numeric(12, 2), nullable=True)
@@ -872,6 +879,7 @@ class MaintenanceExpense(db.Model):
 
     district = db.relationship('District', backref='maintenance_expenses', lazy='select')
     project = db.relationship('Project', backref='maintenance_expenses', lazy='select')
+    employee = db.relationship('Employee', backref='maintenance_expenses', lazy='select')
     vehicle = db.relationship('Vehicle', backref='maintenance_expenses', lazy='select')
     items = db.relationship('MaintenanceExpenseItem', backref='maintenance_expense', lazy='dynamic', order_by='MaintenanceExpenseItem.sort_order', cascade='all, delete-orphan')
     attachments = db.relationship('MaintenanceExpenseAttachment', backref='maintenance_expense', lazy='dynamic', cascade='all, delete-orphan')

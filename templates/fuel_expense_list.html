@@ -93,7 +93,7 @@
               <td>{{ r.district.name if r.district else '-' }}</td>
               <td class="fw-medium">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
               <td>{{ r.fuel_type or '-' }}</td>
-              <td>{{ r.fuel_pump.name if r.fuel_pump else '-' }}</td>
+              <td>{{ r.workspace_pump.name if r.workspace_pump else (r.fuel_pump.name if r.fuel_pump else '-') }}</td>
               <td>{{ r.km_out_task|round(2) if r.km_out_task is not none else '-' }}</td>
               <td>{{ r.km_in_task|round(2) if r.km_in_task is not none else '-' }}</td>
               <td>{{ r.payment_type or '-' }}</td>
