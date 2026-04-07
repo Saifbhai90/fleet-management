@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from flask import flash, redirect, render_template, request, session, url_for, make_response
 from sqlalchemy import and_, or_
+from sqlalchemy.orm import aliased
 
 from models import (
     db, Employee, Driver, Party, Account, District, Project,
@@ -900,11 +901,64 @@ def workspace_fund_transfers_list():
     guard, emp = _workspace_guard("workspace_transfer_list")
     if guard:
         return guard
-    rows = WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).order_by(
-        WorkspaceFundTransfer.transfer_date.desc(), WorkspaceFundTransfer.id.desc()
-    ).all()
-    total_amount = sum((r.amount or 0) for r in rows)
-    return render_template("workspace/transfers_list.html", rows=rows, employee=emp, total_amount=total_amount)
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    per_page = request.args.get("per_page", 25, type=int) or 25
+    if per_page not in (25, 50, 100, 200):
+        per_page = 25
+    search = (request.args.get("search") or "").strip()
+    from_date = parse_date(request.args.get("from_date"))
+    to_date = parse_date(request.args.get("to_date"))
+
+    from_acct = aliased(WorkspaceAccount)
+    to_acct = aliased(WorkspaceAccount)
+    query = (
+        db.session.query(WorkspaceFundTransfer)
+        .outerjoin(from_acct, WorkspaceFundTransfer.from_account_id == from_acct.id)
+        .outerjoin(to_acct, WorkspaceFundTransfer.to_account_id == to_acct.id)
+        .filter(WorkspaceFundTransfer.employee_id == emp.id)
+    )
+
+    if from_date:
+        query = query.filter(WorkspaceFundTransfer.transfer_date >= from_date)
+    if to_date:
+        query = query.filter(WorkspaceFundTransfer.transfer_date <= to_date)
+    if search:
+        words = [w.strip() for w in search.split() if w.strip()]
+        for w in words:
+            like = f"%{w}%"
+            query = query.filter(
+                or_(
+                    WorkspaceFundTransfer.transfer_number.ilike(like),
+                    WorkspaceFundTransfer.category.ilike(like),
+                    WorkspaceFundTransfer.payment_mode.ilike(like),
+                    WorkspaceFundTransfer.reference_no.ilike(like),
+                    WorkspaceFundTransfer.description.ilike(like),
+                    from_acct.code.ilike(like),
+                    from_acct.name.ilike(like),
+                    to_acct.code.ilike(like),
+                    to_acct.name.ilike(like),
+                )
+            )
+
+    total_amount = (
+        query.with_entities(db.func.coalesce(db.func.sum(WorkspaceFundTransfer.amount), 0)).scalar() or 0
+    )
+    pagination = query.order_by(
+        WorkspaceFundTransfer.transfer_date.desc(),
+        WorkspaceFundTransfer.id.desc(),
+    ).paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template(
+        "workspace/transfers_list.html",
+        rows=pagination.items,
+        pagination=pagination,
+        per_page=per_page,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+        employee=emp,
+        total_amount=total_amount,
+    )
 
 
 def workspace_fund_transfer_form(pk=None):

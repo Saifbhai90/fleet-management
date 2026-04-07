@@ -2,7 +2,10 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 <style>
-  .maint-form-wrap { max-width: 1200px; margin: 0 auto; }
+  .maint-form-wrap { max-width: min(1720px, calc(100vw - 96px)); margin: 0 auto; }
+  @media (max-width: 991.98px) {
+    .maint-form-wrap { max-width: 100%; }
+  }
   .maint-form-wrap .page-header { background: linear-gradient(135deg, #fd7e14 0%, #e8590c 100%); color: #fff; padding: 0.5rem 1rem; border-radius: 10px; margin-bottom: 0.6rem; }
   .maint-form-wrap .form-section { background: #fff; border-radius: 10px; border: 1px solid #e9ecef; margin-bottom: 0.6rem; overflow: hidden; }
   .maint-form-wrap .form-section-header { background: linear-gradient(to right, #f8f9fa 0%, #fff 100%); border-bottom: 1px solid #e9ecef; padding: 0.35rem 0.75rem; font-weight: 600; font-size: 0.8rem; color: #495057; }
@@ -13,11 +16,20 @@
   .maint-form-wrap .field-group { margin-bottom: 0.4rem; }
   .maint-form-wrap #itemsTable input, .maint-form-wrap #itemsTable select { font-size: 0.8rem; padding: 0.3rem 0.4rem; }
   .maint-form-wrap .action-bar { padding: 0.5rem 1rem; background: #f8f9fa; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 0.5rem; }
+  .maint-form-wrap.compact .page-header h4 { font-size: .95rem; }
+  .maint-form-wrap.compact .form-section-header { font-size: .74rem; padding: .28rem .6rem; }
+  .maint-form-wrap.compact .form-section-body { padding: .4rem .6rem; }
+  .maint-form-wrap.compact .form-label { font-size: .66rem; margin-bottom: .12rem; }
+  .maint-form-wrap.compact .form-control, .maint-form-wrap.compact .form-select { font-size: .73rem; min-height: 29px; padding: .26rem .4rem; }
+  .maint-form-wrap.compact #itemsTable input, .maint-form-wrap.compact #itemsTable select { font-size: .72rem; padding: .22rem .34rem; }
 </style>
 <div class="container-fluid maint-form-wrap py-2">
   <div class="page-header d-flex justify-content-between align-items-center">
     <h4><i class="bi bi-wrench me-2"></i>{{ title }}</h4>
-    <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
+    <div class="d-flex gap-2">
+      <button type="button" id="maintCompactToggle" class="btn btn-outline-light btn-sm"><i class="bi bi-arrows-angle-contract me-1"></i>Compact</button>
+      <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
+    </div>
   </div>
 
   <form method="POST" action="" id="maintenanceExpenseForm" enctype="multipart/form-data">
@@ -155,9 +167,9 @@
     <div class="form-section">
       <div class="row g-3 mb-3">
         <div class="col-md-6 field-group">
-          <label class="form-label fw-bold">Expense By (Wallet Deduction)</label>
+          <label class="form-label fw-bold">Expense By (Workspace COA)</label>
           {{ form.expense_by(class="form-select search-select") }}
-          <small class="text-muted">Select person whose wallet should be debited</small>
+          <small class="text-muted">Select workspace account to credit for this expense (optional).</small>
         </div>
       </div>
       <div class="action-bar">
@@ -170,6 +182,27 @@
 
 <script>
 (function() {
+  var maintWrap = document.querySelector('.maint-form-wrap');
+  var maintCompactBtn = document.getElementById('maintCompactToggle');
+  var maintCompactKey = 'ui_compact_maintenance_form';
+
+  function applyMaintCompact(on) {
+    if (!maintWrap) return;
+    maintWrap.classList.toggle('compact', !!on);
+    if (maintCompactBtn) {
+      maintCompactBtn.innerHTML = on
+        ? '<i class="bi bi-arrows-angle-expand me-1"></i>Comfort'
+        : '<i class="bi bi-arrows-angle-contract me-1"></i>Compact';
+    }
+  }
+  applyMaintCompact(localStorage.getItem(maintCompactKey) === '1');
+  if (maintCompactBtn) {
+    maintCompactBtn.addEventListener('click', function() {
+      var next = !(maintWrap && maintWrap.classList.contains('compact'));
+      applyMaintCompact(next);
+      localStorage.setItem(maintCompactKey, next ? '1' : '0');
+    });
+  }
 
   var vehicleSelect = document.getElementById('vehicleSelect');
   var previousReading = document.getElementById('previousReading');

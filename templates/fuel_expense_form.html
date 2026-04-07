@@ -2,7 +2,10 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 <style>
-  .fuel-form-wrap { max-width: 1200px; margin: 0 auto; }
+  .fuel-form-wrap { max-width: min(1720px, calc(100vw - 96px)); margin: 0 auto; }
+  @media (max-width: 991.98px) {
+    .fuel-form-wrap { max-width: 100%; }
+  }
   .fuel-form-wrap .page-header {
     background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
     color: #fff;
@@ -76,11 +79,22 @@
   .fuel-form-wrap #suggestedPriceWrap { font-size: 0.7rem; margin-top: 0.2rem; }
   .fuel-form-wrap .ts-wrapper .ts-control { min-height: 32px; }
   .fuel-form-wrap .ts-wrapper .ts-control input { font-size: 0.8rem; line-height: 1.2; }
+  .fuel-form-wrap.compact .page-header h4 { font-size: .95rem; }
+  .fuel-form-wrap.compact .form-section-header { font-size: .74rem; padding: .28rem .6rem; }
+  .fuel-form-wrap.compact .form-section-body { padding: .4rem .6rem; }
+  .fuel-form-wrap.compact .form-label { font-size: .66rem; margin-bottom: .12rem; }
+  .fuel-form-wrap.compact .form-control,
+  .fuel-form-wrap.compact .form-select { font-size: .73rem; min-height: 29px; padding: .26rem .4rem; }
+  .fuel-form-wrap.compact .btn-save,
+  .fuel-form-wrap.compact .btn-cancel { font-size: .78rem; padding: .28rem .8rem; }
 </style>
 <div class="container-fluid fuel-form-wrap py-2">
   <div class="page-header d-flex justify-content-between align-items-center">
     <h4><i class="bi bi-fuel-pump-fill me-2"></i>{{ title }}</h4>
-    <a href="{{ url_for('fuel_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
+    <div class="d-flex gap-2">
+      <button type="button" id="fuelCompactToggle" class="btn btn-outline-light btn-sm"><i class="bi bi-arrows-angle-contract me-1"></i>Compact</button>
+      <a href="{{ url_for('fuel_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
+    </div>
   </div>
 
   <form method="POST" action="" id="fuelExpenseForm">
@@ -205,9 +219,9 @@
     <div class="form-section">
       <div class="row g-3 mb-3">
         <div class="col-md-6 field-group">
-          <label class="form-label fw-bold">Expense By (Wallet Deduction)</label>
+          <label class="form-label fw-bold">Expense By (Workspace COA)</label>
           {{ form.expense_by(class="form-select search-select") }}
-          <small class="text-muted">Select person whose wallet should be debited for this expense</small>
+          <small class="text-muted">Select workspace account to credit for this expense (optional).</small>
         </div>
       </div>
       <div class="action-bar">
@@ -235,6 +249,27 @@ document.addEventListener('DOMContentLoaded', function() {
   var meterMatched = document.getElementById('meterMatched');
   var kmDisplay = document.getElementById('kmDisplay');
   var mpgDisplay = document.getElementById('mpgDisplay');
+  var fuelWrap = document.querySelector('.fuel-form-wrap');
+  var compactBtn = document.getElementById('fuelCompactToggle');
+  var compactKey = 'ui_compact_fuel_form';
+
+  function applyCompactMode(on) {
+    if (!fuelWrap) return;
+    fuelWrap.classList.toggle('compact', !!on);
+    if (compactBtn) {
+      compactBtn.innerHTML = on
+        ? '<i class="bi bi-arrows-angle-expand me-1"></i>Comfort'
+        : '<i class="bi bi-arrows-angle-contract me-1"></i>Compact';
+    }
+  }
+  applyCompactMode(localStorage.getItem(compactKey) === '1');
+  if (compactBtn) {
+    compactBtn.addEventListener('click', function() {
+      var next = !(fuelWrap && fuelWrap.classList.contains('compact'));
+      applyCompactMode(next);
+      localStorage.setItem(compactKey, next ? '1' : '0');
+    });
+  }
 
   function parseNum(val) {
     if (val === '' || val === null || val === undefined) return null;

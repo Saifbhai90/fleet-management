@@ -2,7 +2,10 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 <style>
-  .oil-form-wrap { max-width: 1200px; margin: 0 auto; }
+  .oil-form-wrap { max-width: min(1720px, calc(100vw - 96px)); margin: 0 auto; }
+  @media (max-width: 991.98px) {
+    .oil-form-wrap { max-width: 100%; }
+  }
   .oil-form-wrap .page-header {
     background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
     color: #fff;
@@ -26,11 +29,20 @@
   .oil-form-wrap .field-group { margin-bottom: 0.4rem; }
   .oil-form-wrap #itemsTable input, .oil-form-wrap #itemsTable select { font-size: 0.8rem; padding: 0.3rem 0.4rem; }
   .oil-form-wrap .action-bar { padding: 0.5rem 1rem; background: #f8f9fa; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 0.5rem; }
+  .oil-form-wrap.compact .page-header h4 { font-size: .95rem; }
+  .oil-form-wrap.compact .form-section-header { font-size: .74rem; padding: .28rem .6rem; }
+  .oil-form-wrap.compact .form-section-body { padding: .4rem .6rem; }
+  .oil-form-wrap.compact .form-label { font-size: .66rem; margin-bottom: .12rem; }
+  .oil-form-wrap.compact .form-control, .oil-form-wrap.compact .form-select { font-size: .73rem; min-height: 29px; padding: .26rem .4rem; }
+  .oil-form-wrap.compact #itemsTable input, .oil-form-wrap.compact #itemsTable select { font-size: .72rem; padding: .22rem .34rem; }
 </style>
 <div class="container-fluid oil-form-wrap py-2">
   <div class="page-header d-flex justify-content-between align-items-center">
     <h4><i class="bi bi-droplet-fill me-2"></i>{{ title }}</h4>
-    <a href="{{ url_for('oil_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
+    <div class="d-flex gap-2">
+      <button type="button" id="oilCompactToggle" class="btn btn-outline-light btn-sm"><i class="bi bi-arrows-angle-contract me-1"></i>Compact</button>
+      <a href="{{ url_for('oil_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
+    </div>
   </div>
 
   <form method="POST" action="" id="oilExpenseForm" enctype="multipart/form-data">
@@ -210,9 +222,9 @@
     <div class="form-section">
       <div class="row g-3 mb-3">
         <div class="col-md-6 field-group">
-          <label class="form-label fw-bold">Expense By (Wallet Deduction)</label>
+          <label class="form-label fw-bold">Expense By (Workspace COA)</label>
           {{ form.expense_by(class="form-select search-select") }}
-          <small class="text-muted">Select person whose wallet should be debited</small>
+          <small class="text-muted">Select workspace account to credit for this expense (optional).</small>
         </div>
       </div>
       <div class="action-bar">
@@ -225,6 +237,27 @@
 
 <script>
 (function() {
+  var oilWrap = document.querySelector('.oil-form-wrap');
+  var oilCompactBtn = document.getElementById('oilCompactToggle');
+  var oilCompactKey = 'ui_compact_oil_form';
+
+  function applyOilCompact(on) {
+    if (!oilWrap) return;
+    oilWrap.classList.toggle('compact', !!on);
+    if (oilCompactBtn) {
+      oilCompactBtn.innerHTML = on
+        ? '<i class="bi bi-arrows-angle-expand me-1"></i>Comfort'
+        : '<i class="bi bi-arrows-angle-contract me-1"></i>Compact';
+    }
+  }
+  applyOilCompact(localStorage.getItem(oilCompactKey) === '1');
+  if (oilCompactBtn) {
+    oilCompactBtn.addEventListener('click', function() {
+      var next = !(oilWrap && oilWrap.classList.contains('compact'));
+      applyOilCompact(next);
+      localStorage.setItem(oilCompactKey, next ? '1' : '0');
+    });
+  }
 
   var vehicleSelect = document.getElementById('vehicleSelect');
   var previousReading = document.getElementById('previousReading');
