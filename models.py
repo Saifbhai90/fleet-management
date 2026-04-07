@@ -1899,14 +1899,18 @@ class WorkspaceParty(db.Model):
     employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
     name = db.Column(db.String(200), nullable=False, index=True)
     party_type = db.Column(db.String(50), nullable=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)
+    contact = db.Column(db.String(100), nullable=True)
     phone = db.Column(db.String(30), nullable=True)
     address = db.Column(db.Text, nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
     updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 
     employee = db.relationship('Employee', backref=db.backref('workspace_parties', lazy='dynamic'))
+    district = db.relationship('District', backref='workspace_parties', lazy='select')
     created_by = db.relationship('User', backref='workspace_parties_created', lazy='select')
 
 
@@ -1922,6 +1926,7 @@ class WorkspaceProduct(db.Model):
     unit = db.Column(db.String(50), nullable=True)
     used_in_forms = db.Column(db.String(120), nullable=True)
     default_price = db.Column(db.Numeric(15, 2), nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)

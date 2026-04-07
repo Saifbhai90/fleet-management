@@ -1569,7 +1569,7 @@
 <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
 
 <!-- SIDEBAR -->
-<div class="sidebar shadow" id="sidebar">
+<div class="sidebar shadow {% if workspace_open and request.endpoint != 'workspace_dashboard' %}collapsed{% endif %}" id="sidebar">
     <div id="sidebarAccordion">
         {% set master_endpoints = ['companies', 'company_form', 'projects_list', 'project_detail', 'project_form', 'districts_list', 'district_form', 'vehicles_list', 'vehicle_form', 'parking_list', 'parking_form', 'drivers_list', 'driver_form', 'employees_list', 'employee_form', 'driver_post_list', 'driver_post_form'] %}
         {% set assignment_endpoints = ['assign_project_to_company', 'assign_project_to_district', 'assign_vehicle_to_district', 'assign_vehicle_to_parking_list', 'assign_vehicle_to_parking_new', 'assign_vehicle_to_parking_edit', 'assign_driver_to_vehicle_list', 'assign_driver_to_vehicle_new', 'assign_driver_to_vehicle_edit'] %}
@@ -2139,7 +2139,7 @@
 </div>
 
 <!-- MAIN CONTENT -->
-<div class="main-content {% if workspace_open and request.endpoint != 'workspace_dashboard' %}ws-mini-open{% endif %}" id="mainContent">
+<div class="main-content {% if workspace_open and request.endpoint != 'workspace_dashboard' %}ws-mini-open expanded{% endif %}" id="mainContent">
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             <div class="flash-message">
@@ -2963,6 +2963,13 @@
         </div>
       </div>
     </aside>
+    {% endif %}
+    {% if workspace_open and request.endpoint != 'workspace_dashboard' %}
+    <div class="d-lg-none mb-2">
+      <a href="{{ url_for('workspace_home') }}" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-arrow-left-circle me-1"></i>Dashboard
+      </a>
+    </div>
     {% endif %}
     {% block content %}{% endblock %}
 </div>

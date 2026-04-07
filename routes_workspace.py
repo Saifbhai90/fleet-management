@@ -4,7 +4,8 @@ from decimal import Decimal
 from flask import flash, redirect, render_template, request, session, url_for
 
 from models import (
-    db, Employee, Driver, Party, Account,
+    db, Employee, Driver, Party, Account, District, Project,
+    EmployeeAssignment, FundTransferCategory,
     WorkspaceParty, WorkspaceProduct, WorkspaceAccount,
     WorkspaceExpense, WorkspaceFundTransfer, WorkspaceMonthClose,
 )
@@ -63,6 +64,67 @@ def _list_employees_for_workspace():
     return Employee.query.filter_by(status="Active").order_by(Employee.name).all()
 
 
+def _get_employee_scope_summary(employee):
+    """Resolve assigned district/project labels for dashboard header."""
+    if not employee:
+        return {"districts": [], "projects": []}
+    districts = [d.name for d in employee.districts.order_by(District.name).all()]
+    projects = [p.name for p in employee.projects.order_by(Project.name).all()]
+
+    # Fallback for legacy setups: read from assignment history if M2M is empty.
+    if not districts:
+        rows = EmployeeAssignment.query.filter(
+            EmployeeAssignment.employee_id == employee.id,
+            EmployeeAssignment.action.in_(["assign_district", "initial"]),
+            EmployeeAssignment.district_id.isnot(None),
+        ).order_by(EmployeeAssignment.effective_date.desc(), EmployeeAssignment.id.desc()).all()
+        seen = set()
+        for r in rows:
+            if r.district and r.district.name not in seen:
+                districts.append(r.district.name)
+                seen.add(r.district.name)
+    if not projects:
+        rows = EmployeeAssignment.query.filter(
+            EmployeeAssignment.employee_id == employee.id,
+            EmployeeAssignment.action.in_(["assign_project", "initial"]),
+            EmployeeAssignment.project_id.isnot(None),
+        ).order_by(EmployeeAssignment.effective_date.desc(), EmployeeAssignment.id.desc()).all()
+        seen = set()
+        for r in rows:
+            if r.project and r.project.name not in seen:
+                projects.append(r.project.name)
+                seen.add(r.project.name)
+    return {"districts": districts, "projects": projects}
+
+
+def _ensure_workspace_driver_accounts(employee):
+    """Auto-load driver accounts for assigned district/project scope into workspace COA."""
+    if not employee:
+        return 0
+    ensure_workspace_base_accounts(employee.id)
+    district_ids = [d.id for d in employee.districts.all()]
+    project_ids = [p.id for p in employee.projects.all()]
+    if not district_ids and not project_ids:
+        return 0
+    q = Driver.query.filter_by(status="Active")
+    if district_ids:
+        q = q.filter(Driver.district_id.in_(district_ids))
+    if project_ids:
+        q = q.filter(Driver.project_id.in_(project_ids))
+    created = 0
+    for drv in q.order_by(Driver.name).all():
+        exists = WorkspaceAccount.query.filter_by(
+            employee_id=employee.id,
+            entity_type="driver",
+            entity_id=drv.id,
+        ).first()
+        if exists:
+            continue
+        ensure_workspace_counterparty_account(employee.id, driver_id=drv.id)
+        created += 1
+    return created
+
+
 def workspace_dashboard():
     auth = check_auth("workspace_dashboard")
     if auth:
@@ -76,6 +138,9 @@ def workspace_home():
     guard, emp = _workspace_guard("workspace_dashboard")
     if guard:
         return guard
+    _ensure_workspace_driver_accounts(emp)
+    db.session.commit()
+    scope = _get_employee_scope_summary(emp)
     stats = {
         "parties": WorkspaceParty.query.filter_by(employee_id=emp.id, is_active=True).count(),
         "products": WorkspaceProduct.query.filter_by(employee_id=emp.id, is_active=True).count(),
@@ -86,7 +151,7 @@ def workspace_home():
             WorkspaceMonthClose.status != "Closed",
         ).count(),
     }
-    return render_template("workspace/dashboard.html", employee=emp, stats=stats)
+    return render_template("workspace/dashboard.html", employee=emp, stats=stats, scope=scope)
 
 
 def workspace_select_employee():
@@ -134,24 +199,29 @@ def workspace_party_form(pk=None):
         flash("Party not found for selected workspace employee.", "danger")
         return redirect(url_for("workspace_parties_list"))
 
+    districts = District.query.order_by(District.name).all()
+
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
         if not name:
             flash("Party name is required.", "danger")
-            return render_template("workspace/party_form.html", row=row, employee=emp)
+            return render_template("workspace/party_form.html", row=row, employee=emp, districts=districts)
         if not row:
             row = WorkspaceParty(employee_id=emp.id)
             db.session.add(row)
         row.name = name
         row.party_type = (request.form.get("party_type") or "").strip() or None
+        row.district_id = request.form.get("district_id", type=int) or None
+        row.contact = (request.form.get("contact") or "").strip() or None
         row.phone = (request.form.get("phone") or "").strip() or None
         row.address = (request.form.get("address") or "").strip() or None
+        row.remarks = (request.form.get("remarks") or "").strip() or None
         row.is_active = request.form.get("is_active") == "1"
         row.created_by_user_id = session.get("user_id")
         db.session.commit()
         flash("Workspace party saved.", "success")
         return redirect(url_for("workspace_parties_list"))
-    return render_template("workspace/party_form.html", row=row, employee=emp)
+    return render_template("workspace/party_form.html", row=row, employee=emp, districts=districts)
 
 
 def workspace_party_delete(pk):
@@ -192,11 +262,13 @@ def workspace_product_form(pk=None):
             db.session.add(row)
         row.name = name
         row.unit = (request.form.get("unit") or "").strip() or None
-        row.used_in_forms = (request.form.get("used_in_forms") or "").strip() or None
+        used_in = request.form.getlist("used_in_forms")
+        row.used_in_forms = ",".join([x.strip() for x in used_in if x.strip()]) if used_in else None
         try:
             row.default_price = Decimal(str((request.form.get("default_price") or "0").strip() or "0"))
         except Exception:
             row.default_price = Decimal("0")
+        row.remarks = (request.form.get("remarks") or "").strip() or None
         row.is_active = request.form.get("is_active") == "1"
         row.created_by_user_id = session.get("user_id")
         db.session.commit()
@@ -221,6 +293,7 @@ def workspace_accounts_list():
     if guard:
         return guard
     ensure_workspace_base_accounts(emp.id)
+    _ensure_workspace_driver_accounts(emp)
     db.session.commit()
     rows = WorkspaceAccount.query.filter_by(employee_id=emp.id).order_by(WorkspaceAccount.code).all()
     return render_template("workspace/accounts_list.html", rows=rows, employee=emp)
@@ -231,6 +304,7 @@ def workspace_account_form(pk=None):
     if guard:
         return guard
     ensure_workspace_base_accounts(emp.id)
+    _ensure_workspace_driver_accounts(emp)
     row = WorkspaceAccount.query.filter_by(employee_id=emp.id, id=pk).first() if pk else None
     if pk and not row:
         flash("Workspace account not found.", "danger")
@@ -296,6 +370,7 @@ def workspace_fund_transfer_form(pk=None):
     if guard:
         return guard
     ensure_workspace_base_accounts(emp.id)
+    _ensure_workspace_driver_accounts(emp)
     row = WorkspaceFundTransfer.query.filter_by(employee_id=emp.id, id=pk).first() if pk else None
     if pk and not row:
         flash("Workspace transfer not found.", "danger")
@@ -304,6 +379,7 @@ def workspace_fund_transfer_form(pk=None):
     accounts = WorkspaceAccount.query.filter_by(employee_id=emp.id, is_active=True).order_by(WorkspaceAccount.code).all()
     parties = WorkspaceParty.query.filter_by(employee_id=emp.id, is_active=True).order_by(WorkspaceParty.name).all()
     drivers = Driver.query.filter_by(status="Active").order_by(Driver.name).all()
+    categories = FundTransferCategory.query.order_by(FundTransferCategory.name).all()
 
     if request.method == "POST":
         try:
@@ -311,12 +387,12 @@ def workspace_fund_transfer_form(pk=None):
             amount = Decimal(str((request.form.get("amount") or "").strip()))
         except Exception:
             flash("Date and amount are required.", "danger")
-            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, parties=parties, drivers=drivers)
+            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, parties=parties, drivers=drivers, categories=categories)
         from_account_id = request.form.get("from_account_id", type=int)
         to_account_id = request.form.get("to_account_id", type=int)
         if not from_account_id:
             flash("From account is required.", "danger")
-            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, parties=parties, drivers=drivers)
+            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, parties=parties, drivers=drivers, categories=categories)
         to_party_id = request.form.get("to_workspace_party_id", type=int) or None
         to_driver_id = request.form.get("to_driver_id", type=int) or None
         if not to_account_id:
@@ -326,7 +402,7 @@ def workspace_fund_transfer_form(pk=None):
                 to_account_id = ensure_workspace_counterparty_account(emp.id, driver_id=to_driver_id).id
         if not to_account_id:
             flash("Select target account or target party/driver.", "danger")
-            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, parties=parties, drivers=drivers)
+            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, parties=parties, drivers=drivers, categories=categories)
 
         if not row:
             row = WorkspaceFundTransfer(
@@ -354,7 +430,7 @@ def workspace_fund_transfer_form(pk=None):
         db.session.commit()
         flash("Workspace transfer saved.", "success")
         return redirect(url_for("workspace_fund_transfers_list"))
-    return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, parties=parties, drivers=drivers)
+    return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, parties=parties, drivers=drivers, categories=categories)
 
 
 def workspace_fund_transfer_delete(pk):

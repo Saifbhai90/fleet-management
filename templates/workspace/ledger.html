@@ -13,8 +13,8 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2"><label class="form-label">From</label><input type="date" class="form-control" name="from_date" value="{{ from_date }}"></div>
-        <div class="col-md-2"><label class="form-label">To</label><input type="date" class="form-control" name="to_date" value="{{ to_date }}"></div>
+        <div class="col-md-2"><label class="form-label">From</label><input type="text" class="form-control datepicker" name="from_date" value="{{ from_date|ddmmyyyy if from_date else '' }}" placeholder="dd-mm-yyyy"></div>
+        <div class="col-md-2"><label class="form-label">To</label><input type="text" class="form-control datepicker" name="to_date" value="{{ to_date|ddmmyyyy if to_date else '' }}" placeholder="dd-mm-yyyy"></div>
         <div class="col-md-2"><label class="form-label">Category</label><input type="text" class="form-control" name="category" value="{{ category or '' }}"></div>
         <div class="col-md-2"><button class="btn btn-primary w-100">View</button></div>
       </form>

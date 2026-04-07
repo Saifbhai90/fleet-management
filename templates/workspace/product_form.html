@@ -2,26 +2,64 @@
 {% block content %}
 <div class="container-fluid py-3">
   {% include "workspace/_nav.html" %}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="bi bi-box-seam me-2 text-primary"></i>{{ 'Edit' if row else 'Add' }} Workspace Product</h5>
+  </div>
   <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white"><strong>{{ 'Edit' if row else 'Add' }} Workspace Product</strong></div>
-    <div class="card-body">
+    <div class="card-body p-4">
+      <div class="alert alert-light border mb-3">
+        <small class="text-muted">Master Product form ki tarah same core fields available hain. Ye product sirf selected employee workspace me use hoga.</small>
+      </div>
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row g-3">
-          <div class="col-md-6"><label class="form-label">Name</label><input type="text" name="name" class="form-control" value="{{ row.name if row else '' }}" required></div>
-          <div class="col-md-2"><label class="form-label">Unit</label><input type="text" name="unit" class="form-control" value="{{ row.unit if row else '' }}"></div>
-          <div class="col-md-2"><label class="form-label">Used In</label><input type="text" name="used_in_forms" class="form-control" value="{{ row.used_in_forms if row else '' }}"></div>
-          <div class="col-md-2"><label class="form-label">Default Price</label><input type="number" step="0.01" name="default_price" class="form-control" value="{{ row.default_price if row else '' }}"></div>
+          <div class="col-md-8">
+            <label class="form-label fw-semibold">Product Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" value="{{ row.name if row else '' }}" required placeholder="e.g. Diesel, Engine Oil, Filter">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold">Unit</label>
+            <input type="text" name="unit" class="form-control" value="{{ row.unit if row else '' }}" placeholder="Ltr / Qty">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold">Default Price</label>
+            <input type="number" step="0.01" name="default_price" class="form-control" value="{{ row.default_price if row else '' }}">
+          </div>
+
+          {% set _used = (row.used_in_forms.split(',') if row and row.used_in_forms else []) %}
+          <div class="col-md-9">
+            <label class="form-label fw-semibold">Used in Form</label>
+            <div class="border rounded p-2 bg-light">
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="used_in_forms" value="Fueling" id="wsUsedFueling" {% if 'Fueling' in _used %}checked{% endif %}>
+                <label class="form-check-label" for="wsUsedFueling">Fueling Form</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="used_in_forms" value="Oil" id="wsUsedOil" {% if 'Oil' in _used %}checked{% endif %}>
+                <label class="form-check-label" for="wsUsedOil">Oil Form</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="used_in_forms" value="Maintenance" id="wsUsedMaintenance" {% if 'Maintenance' in _used %}checked{% endif %}>
+                <label class="form-check-label" for="wsUsedMaintenance">Maintenance Form</label>
+              </div>
+            </div>
+          </div>
           <div class="col-md-3">
-            <label class="form-label">Status</label>
+            <label class="form-label fw-semibold">Status</label>
             <select name="is_active" class="form-select">
               <option value="1" {% if not row or row.is_active %}selected{% endif %}>Active</option>
               <option value="0" {% if row and not row.is_active %}selected{% endif %}>Inactive</option>
             </select>
           </div>
+
+          <div class="col-12">
+            <label class="form-label fw-semibold">Remarks</label>
+            <textarea name="remarks" class="form-control" rows="2" placeholder="Any notes">{{ row.remarks if row else '' }}</textarea>
+          </div>
+
           <div class="col-12 d-flex gap-2">
-            <button type="submit" class="btn btn-primary">Save</button>
-            <a href="{{ url_for('workspace_products_list') }}" class="btn btn-outline-secondary">Back</a>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i>Save Product</button>
+            <a href="{{ url_for('workspace_products_list') }}" class="btn btn-outline-secondary">Cancel</a>
           </div>
         </div>
       </form>

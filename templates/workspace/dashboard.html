@@ -35,7 +35,15 @@
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
             <div>
               <h4 class="mb-1">Employee Workspace Dashboard</h4>
-              <div class="text-muted small">Selected Employee: <strong>{{ employee.name }}</strong></div>
+              <div class="text-muted small">
+                Selected Employee: <strong>{{ employee.name }}</strong>
+                {% if scope and scope.districts %}
+                  | Assigned District: <strong>{{ scope.districts|join(', ') }}</strong>
+                {% endif %}
+                {% if scope and scope.projects %}
+                  | Assigned Project: <strong>{{ scope.projects|join(', ') }}</strong>
+                {% endif %}
+              </div>
             </div>
             <div class="d-flex gap-2">
               <a href="{{ url_for('workspace_dashboard') }}" class="btn btn-outline-primary">

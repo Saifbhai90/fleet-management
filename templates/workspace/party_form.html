@@ -2,26 +2,65 @@
 {% block content %}
 <div class="container-fluid py-3">
   {% include "workspace/_nav.html" %}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="bi bi-building me-2 text-primary"></i>{{ 'Edit' if row else 'Add' }} Workspace Party</h5>
+  </div>
   <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white"><strong>{{ 'Edit' if row else 'Add' }} Workspace Party</strong></div>
-    <div class="card-body">
+    <div class="card-body p-4">
+      <div class="alert alert-light border mb-3">
+        <small class="text-muted">Master Party form ki tarah same important fields available hain. Is party ka data sirf selected employee workspace ke liye hoga.</small>
+      </div>
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row g-3">
-          <div class="col-md-6"><label class="form-label">Name</label><input type="text" name="name" class="form-control" value="{{ row.name if row else '' }}" required></div>
-          <div class="col-md-3"><label class="form-label">Type</label><input type="text" name="party_type" class="form-control" value="{{ row.party_type if row else '' }}"></div>
-          <div class="col-md-3"><label class="form-label">Phone</label><input type="text" name="phone" class="form-control" value="{{ row.phone if row else '' }}"></div>
-          <div class="col-12"><label class="form-label">Address</label><textarea name="address" class="form-control" rows="2">{{ row.address if row else '' }}</textarea></div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Party Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" value="{{ row.name if row else '' }}" required placeholder="Pump / Workshop / Shop name">
+          </div>
           <div class="col-md-3">
-            <label class="form-label">Status</label>
+            <label class="form-label fw-semibold">Type <span class="text-danger">*</span></label>
+            <select name="party_type" class="form-select search-select" required>
+              <option value="">-- Select Type --</option>
+              <option value="Pump" {% if row and row.party_type == 'Pump' %}selected{% endif %}>Pump</option>
+              <option value="Workshop" {% if row and row.party_type == 'Workshop' %}selected{% endif %}>Workshop</option>
+              <option value="Spare parts shop" {% if row and row.party_type == 'Spare parts shop' %}selected{% endif %}>Spare parts shop</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">District</label>
+            <select name="district_id" class="form-select search-select">
+              <option value="">-- Select District --</option>
+              {% for d in districts %}
+              <option value="{{ d.id }}" {% if row and row.district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Contact</label>
+            <input type="text" name="contact" class="form-control" value="{{ row.contact if row else '' }}" placeholder="Primary contact">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Phone</label>
+            <input type="text" name="phone" class="form-control" value="{{ row.phone if row else '' }}" placeholder="03xx-xxxxxxx">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Status</label>
             <select name="is_active" class="form-select">
               <option value="1" {% if not row or row.is_active %}selected{% endif %}>Active</option>
               <option value="0" {% if row and not row.is_active %}selected{% endif %}>Inactive</option>
             </select>
           </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Address</label>
+            <input type="text" name="address" class="form-control" value="{{ row.address if row else '' }}" placeholder="Address">
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Remarks</label>
+            <textarea name="remarks" class="form-control" rows="2" placeholder="Any notes">{{ row.remarks if row else '' }}</textarea>
+          </div>
           <div class="col-12 d-flex gap-2">
-            <button type="submit" class="btn btn-primary">Save</button>
-            <a href="{{ url_for('workspace_parties_list') }}" class="btn btn-outline-secondary">Back</a>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i>Save Party</button>
+            <a href="{{ url_for('workspace_parties_list') }}" class="btn btn-outline-secondary">Cancel</a>
           </div>
         </div>
       </form>

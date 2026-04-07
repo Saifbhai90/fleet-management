@@ -8,10 +8,21 @@
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row g-3">
-          <div class="col-md-3"><label class="form-label">Date</label><input type="date" name="transfer_date" class="form-control" value="{{ row.transfer_date if row else '' }}" required></div>
-          <div class="col-md-3"><label class="form-label">Amount</label><input type="number" step="0.01" name="amount" class="form-control" value="{{ row.amount if row else '' }}" required></div>
-          <div class="col-md-3"><label class="form-label">Payment Mode</label><input type="text" name="payment_mode" class="form-control" value="{{ row.payment_mode if row else 'Cash' }}"></div>
-          <div class="col-md-3"><label class="form-label">Category</label><input type="text" name="category" class="form-control" value="{{ row.category if row else '' }}"></div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Transfer Date</label>
+            <input type="text" name="transfer_date" class="form-control datepicker" value="{{ row.transfer_date|ddmmyyyy if row and row.transfer_date else '' }}" placeholder="dd-mm-yyyy" required>
+          </div>
+          <div class="col-md-3"><label class="form-label fw-semibold">Amount</label><input type="number" step="0.01" name="amount" class="form-control" value="{{ row.amount if row else '' }}" required></div>
+          <div class="col-md-3"><label class="form-label fw-semibold">Payment Mode</label><input type="text" name="payment_mode" class="form-control" value="{{ row.payment_mode if row else 'Cash' }}"></div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Category / Purpose</label>
+            <select name="category" class="form-select search-select">
+              <option value="">-- Select / Optional --</option>
+              {% for c in categories %}
+              <option value="{{ c.name }}" {% if row and row.category == c.name %}selected{% endif %}>{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
           <div class="col-md-6"><label class="form-label">From Account</label>
             <select name="from_account_id" class="form-select search-select" required>
               <option value="">-- Select --</option>

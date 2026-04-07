@@ -7,8 +7,8 @@
     <div class="card-body">
       <form method="post" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="col-md-3"><label class="form-label">Period Start</label><input type="date" class="form-control" name="period_start" required></div>
-        <div class="col-md-3"><label class="form-label">Period End</label><input type="date" class="form-control" name="period_end" required></div>
+        <div class="col-md-3"><label class="form-label">Period Start</label><input type="text" class="form-control datepicker" name="period_start" placeholder="dd-mm-yyyy" required></div>
+        <div class="col-md-3"><label class="form-label">Period End</label><input type="text" class="form-control datepicker" name="period_end" placeholder="dd-mm-yyyy" required></div>
         <div class="col-md-4"><label class="form-label">Company Expense Account</label>
           <select name="company_account_id" class="form-select search-select" required>
             <option value="">-- Select Company Account --</option>
