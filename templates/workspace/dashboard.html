@@ -26,33 +26,10 @@
       border-radius: 10px;
       font-size: 1.1rem;
     }
-    .ws-side-nav a {
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: .5rem;
-      padding: .65rem .8rem;
-      border-radius: .6rem;
-      color: #344054;
-      margin-bottom: .35rem;
-    }
-    .ws-side-nav a:hover {
-      background: #f2f6ff;
-      color: #1d4ed8;
-    }
-    .ws-side-nav a.active {
-      background: #e9f0ff;
-      color: #1d4ed8;
-      font-weight: 600;
-    }
-    .ws-sticky {
-      position: sticky;
-      top: 92px;
-    }
   </style>
 
   <div class="row g-3">
-    <div class="col-xl-9 col-lg-8">
+    <div class="col-12">
       <div class="card border-0 shadow-sm mb-3">
         <div class="card-body p-4">
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
@@ -185,28 +162,6 @@
               </a>
             </div>
             {% endif %}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-xl-3 col-lg-4">
-      <div class="card border-0 shadow-sm ws-sticky">
-        <div class="card-body p-3">
-          <div class="fw-semibold mb-2">Workspace Navigation</div>
-          <div class="ws-side-nav">
-            <a class="active" href="{{ url_for('workspace_home') }}"><i class="bi bi-speedometer2"></i>Dashboard</a>
-            <a href="{{ url_for('workspace_parties_list') }}"><i class="bi bi-building"></i>Parties</a>
-            <a href="{{ url_for('workspace_products_list') }}"><i class="bi bi-box-seam"></i>Products</a>
-            <a href="{{ url_for('workspace_accounts_list') }}"><i class="bi bi-diagram-3"></i>Workspace COA</a>
-            <a href="{{ url_for('fuel_expense_list') }}"><i class="bi bi-fuel-pump"></i>Fuel Expense</a>
-            <a href="{{ url_for('oil_expense_list') }}"><i class="bi bi-droplet"></i>Oil & Lubricants</a>
-            <a href="{{ url_for('maintenance_expense_list') }}"><i class="bi bi-wrench"></i>Maintenance</a>
-            <a href="{{ url_for('employee_expense_list') }}"><i class="bi bi-person-badge"></i>Employee Expense</a>
-            <a href="{{ url_for('workspace_fund_transfers_list') }}"><i class="bi bi-arrow-left-right"></i>Fund Transfers</a>
-            <a href="{{ url_for('workspace_ledger') }}"><i class="bi bi-journal-text"></i>Workspace Ledger</a>
-            <a href="{{ url_for('workspace_month_close') }}"><i class="bi bi-calendar2-check"></i>Month Close</a>
-            <a href="{{ url_for('workspace_reports') }}"><i class="bi bi-bar-chart"></i>Reports</a>
           </div>
         </div>
       </div>

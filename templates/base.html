@@ -507,8 +507,27 @@
         /* Main Content */
         .main-content { margin-left: 300px; margin-top: 60px; padding: 25px; transition: 0.3s; }
         .main-content.expanded { margin-left: 70px; }
+        .main-content.ws-mini-open { padding-right: 235px; }
+        .ws-global-mini {
+            position: fixed;
+            top: 78px;
+            right: 16px;
+            width: 205px;
+            z-index: 1030;
+        }
+        .ws-global-mini .card { border: 0; box-shadow: 0 0.25rem 0.9rem rgba(16,24,40,.12); }
+        .ws-global-mini a {
+            display: flex; align-items: center; gap: .45rem;
+            padding: .48rem .62rem; border-radius: .55rem;
+            text-decoration: none; color: #344054; font-size: .88rem;
+        }
+        .ws-global-mini a:hover { background: #f3f6ff; color: #1d4ed8; }
+        .ws-global-mini a.active { background: #eaf1ff; color: #1d4ed8; font-weight: 600; }
+        .ws-global-mini .ws-mini-title { font-size: .86rem; font-weight: 700; color: #0f172a; margin-bottom: .45rem; }
+        .ws-global-mini .ws-mini-emp { font-size: .76rem; color: #64748b; margin-bottom: .55rem; }
         @media (max-width: 991.98px) {
             .main-content { margin-left: 0; }
+            .main-content.ws-mini-open { padding-right: 25px; }
         }
         /* Flash Messages */
         .flash-message { position: fixed; top: 75px; right: 20px; z-index: 2000; min-width: 300px; }
@@ -2120,7 +2139,7 @@
 </div>
 
 <!-- MAIN CONTENT -->
-<div class="main-content" id="mainContent">
+<div class="main-content {% if workspace_open and request.endpoint != 'workspace_dashboard' %}ws-mini-open{% endif %}" id="mainContent">
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             <div class="flash-message">
@@ -2921,6 +2940,30 @@
         }
     };
     </script>
+    {% if workspace_open and request.endpoint != 'workspace_dashboard' %}
+    <aside class="ws-global-mini d-none d-lg-block">
+      <div class="card">
+        <div class="card-body p-2">
+          <div class="ws-mini-title">Workspace Navigation</div>
+          {% if workspace_selected_employee %}
+          <div class="ws-mini-emp">Employee: {{ workspace_selected_employee.name }}</div>
+          {% endif %}
+          <a href="{{ url_for('workspace_home') }}" class="{% if request.endpoint == 'workspace_home' %}active{% endif %}"><i class="bi bi-speedometer2"></i>Dashboard</a>
+          <a href="{{ url_for('workspace_parties_list') }}" class="{% if request.endpoint in ['workspace_parties_list', 'workspace_party_new', 'workspace_party_edit'] %}active{% endif %}"><i class="bi bi-building"></i>Parties</a>
+          <a href="{{ url_for('workspace_products_list') }}" class="{% if request.endpoint in ['workspace_products_list', 'workspace_product_new', 'workspace_product_edit'] %}active{% endif %}"><i class="bi bi-box-seam"></i>Products</a>
+          <a href="{{ url_for('workspace_accounts_list') }}" class="{% if request.endpoint in ['workspace_accounts_list', 'workspace_account_new', 'workspace_account_edit'] %}active{% endif %}"><i class="bi bi-diagram-3"></i>Workspace COA</a>
+          <a href="{{ url_for('fuel_expense_list') }}" class="{% if request.endpoint in ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit'] %}active{% endif %}"><i class="bi bi-fuel-pump"></i>Fuel Expense</a>
+          <a href="{{ url_for('oil_expense_list') }}" class="{% if request.endpoint in ['oil_expense_list', 'oil_expense_form'] %}active{% endif %}"><i class="bi bi-droplet"></i>Oil & Lubricants</a>
+          <a href="{{ url_for('maintenance_expense_list') }}" class="{% if request.endpoint in ['maintenance_expense_list', 'maintenance_expense_form'] %}active{% endif %}"><i class="bi bi-wrench"></i>Maintenance</a>
+          <a href="{{ url_for('employee_expense_list') }}" class="{% if request.endpoint in ['employee_expense_list', 'employee_expense_form', 'employee_expense_form_edit'] %}active{% endif %}"><i class="bi bi-person-badge"></i>Employee Expense</a>
+          <a href="{{ url_for('workspace_fund_transfers_list') }}" class="{% if request.endpoint in ['workspace_fund_transfers_list', 'workspace_fund_transfer_new', 'workspace_fund_transfer_edit'] %}active{% endif %}"><i class="bi bi-arrow-left-right"></i>Fund Transfers</a>
+          <a href="{{ url_for('workspace_ledger') }}" class="{% if request.endpoint == 'workspace_ledger' %}active{% endif %}"><i class="bi bi-journal-text"></i>Workspace Ledger</a>
+          <a href="{{ url_for('workspace_month_close') }}" class="{% if request.endpoint == 'workspace_month_close' %}active{% endif %}"><i class="bi bi-calendar2-check"></i>Month Close</a>
+          <a href="{{ url_for('workspace_reports') }}" class="{% if request.endpoint == 'workspace_reports' %}active{% endif %}"><i class="bi bi-bar-chart"></i>Reports</a>
+        </div>
+      </div>
+    </aside>
+    {% endif %}
     {% block content %}{% endblock %}
 </div>
 
@@ -3453,6 +3496,29 @@
             if (window.innerWidth >= 992) closeSidebar();
         });
     })();
+
+    {% if workspace_open %}
+    // Keep main sidebar collapsed inside Employee Workspace for cleaner UI.
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.innerWidth < 992) return;
+        var sb = document.getElementById('sidebar');
+        var mc = document.getElementById('mainContent');
+        if (sb && !sb.classList.contains('collapsed')) sb.classList.add('collapsed');
+        if (mc && !mc.classList.contains('expanded')) mc.classList.add('expanded');
+
+        // If user clicks any left-sidebar button, expand sidebar for normal navigation.
+        if (sb) {
+            sb.addEventListener('click', function(ev) {
+                var trigger = ev.target.closest('a, .sb-sub-toggle');
+                if (!trigger) return;
+                if (sb.classList.contains('collapsed')) {
+                    sb.classList.remove('collapsed');
+                    if (mc) mc.classList.remove('expanded');
+                }
+            });
+        }
+    });
+    {% endif %}
 
     // Live Clock — Pakistan Server Time (PKT)
     var _pktOffset = (function(){

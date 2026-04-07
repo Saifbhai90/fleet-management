@@ -1,18 +1,9 @@
 <div class="card border-0 shadow-sm mb-3">
   <div class="card-body py-2">
-    <div class="d-flex flex-wrap gap-2 align-items-center">
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_home') }}">Dashboard</a>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_parties_list') }}">Parties</a>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_products_list') }}">Products</a>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('fuel_expense_list') }}">Fuel</a>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('oil_expense_list') }}">Oil</a>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('maintenance_expense_list') }}">Maintenance</a>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('employee_expense_list') }}">Employee Expense</a>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_fund_transfers_list') }}">Transfers</a>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_accounts_list') }}">Workspace COA</a>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_ledger') }}">Ledger</a>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_month_close') }}">Month Close</a>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_reports') }}">Reports</a>
+    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('workspace_home') }}">
+        <i class="bi bi-arrow-left-circle me-1"></i>Dashboard
+      </a>
       {% if employee %}
       <span class="badge bg-success ms-auto">Employee: {{ employee.name }}</span>
       {% endif %}
