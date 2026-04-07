@@ -2056,6 +2056,7 @@ class WorkspaceFundTransfer(db.Model):
     payment_mode = db.Column(db.String(30), nullable=False, default='Cash')
     reference_no = db.Column(db.String(50), nullable=True)
     description = db.Column(db.Text, nullable=True)
+    attachment = db.Column(db.String(500), nullable=True)
     category = db.Column(db.String(30), nullable=True, index=True)
     journal_entry_id = db.Column(db.Integer, db.ForeignKey('workspace_journal_entry.id'), nullable=True)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)

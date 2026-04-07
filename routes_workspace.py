@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from flask import flash, redirect, render_template, request, session, url_for
+from flask import flash, redirect, render_template, request, session, url_for, make_response
 from sqlalchemy import and_, or_
 
 from models import (
@@ -22,6 +22,29 @@ from finance_utils import (
     workspace_close_month,
 )
 from utils import pk_date, parse_date, generate_excel_template
+
+
+def _upload_workspace_transfer_attachment(file_storage):
+    if not file_storage or not getattr(file_storage, "filename", None):
+        return None
+    try:
+        from r2_storage import upload_image_file as _r2_up, R2_PUBLIC_URL, R2_ACCESS_KEY_ID, R2_ENDPOINT_URL, R2_BUCKET_NAME
+        if not all([R2_PUBLIC_URL, R2_ACCESS_KEY_ID, R2_ENDPOINT_URL, R2_BUCKET_NAME]):
+            return None
+        file_storage.seek(0)
+        return _r2_up(file_storage, folder="workspace_transfers")
+    except Exception:
+        return None
+
+
+def _delete_workspace_transfer_attachment(url):
+    if not url:
+        return
+    try:
+        from r2_storage import delete_file_by_url
+        delete_file_by_url(url)
+    except Exception:
+        pass
 
 
 def _workspace_multi_word_filter(search_text, *columns):
@@ -154,7 +177,9 @@ def workspace_dashboard():
     selected_employee = _get_workspace_employee()
     # If employee is already selected and still accessible, jump straight to workspace home.
     if selected_employee and _can_access_employee(selected_employee.id):
-        return redirect(url_for("workspace_home"))
+        resp = make_response(redirect(url_for("workspace_home")))
+        resp.set_cookie("workspace_sidebar_open", "0", max_age=31536000, path="/", samesite="Lax")
+        return resp
 
     # If user can access exactly one employee, auto-select and auto-load workspace.
     if len(employees) == 1:
@@ -162,9 +187,13 @@ def workspace_dashboard():
         session["workspace_employee_id"] = only_emp.id
         ensure_workspace_base_accounts(only_emp.id)
         db.session.commit()
-        return redirect(url_for("workspace_home"))
+        resp = make_response(redirect(url_for("workspace_home")))
+        resp.set_cookie("workspace_sidebar_open", "0", max_age=31536000, path="/", samesite="Lax")
+        return resp
 
-    return render_template("workspace/select_employee.html", employees=employees, selected_employee=selected_employee)
+    resp = make_response(render_template("workspace/select_employee.html", employees=employees, selected_employee=selected_employee))
+    resp.set_cookie("workspace_sidebar_open", "0", max_age=31536000, path="/", samesite="Lax")
+    return resp
 
 
 def workspace_home():
@@ -802,9 +831,16 @@ def workspace_fund_transfer_form(pk=None):
         flash("Workspace transfer not found.", "danger")
         return redirect(url_for("workspace_fund_transfers_list"))
 
-    accounts = WorkspaceAccount.query.filter_by(employee_id=emp.id, is_active=True).order_by(WorkspaceAccount.code).all()
+    # Ensure counterparty accounts exist so To Account shows drivers + parties directly.
     parties = WorkspaceParty.query.filter_by(employee_id=emp.id, is_active=True).order_by(WorkspaceParty.name).all()
-    drivers = Driver.query.filter_by(status="Active").order_by(Driver.name).all()
+    for p in parties:
+        try:
+            ensure_workspace_counterparty_account(emp.id, party_id=p.id)
+        except Exception:
+            pass
+    db.session.flush()
+
+    accounts = WorkspaceAccount.query.filter_by(employee_id=emp.id, is_active=True).order_by(WorkspaceAccount.code).all()
     categories = FundTransferCategory.query.order_by(FundTransferCategory.name).all()
 
     if request.method == "POST":
@@ -813,22 +849,17 @@ def workspace_fund_transfer_form(pk=None):
             amount = Decimal(str((request.form.get("amount") or "").strip()))
         except Exception:
             flash("Date and amount are required.", "danger")
-            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, parties=parties, drivers=drivers, categories=categories)
+            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, categories=categories, existing_attachment=(row.attachment if row else None))
         from_account_id = request.form.get("from_account_id", type=int)
         to_account_id = request.form.get("to_account_id", type=int)
         if not from_account_id:
             flash("From account is required.", "danger")
-            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, parties=parties, drivers=drivers, categories=categories)
-        to_party_id = request.form.get("to_workspace_party_id", type=int) or None
-        to_driver_id = request.form.get("to_driver_id", type=int) or None
+            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, categories=categories, existing_attachment=(row.attachment if row else None))
         if not to_account_id:
-            if to_party_id:
-                to_account_id = ensure_workspace_counterparty_account(emp.id, party_id=to_party_id).id
-            elif to_driver_id:
-                to_account_id = ensure_workspace_counterparty_account(emp.id, driver_id=to_driver_id).id
-        if not to_account_id:
-            flash("Select target account or target party/driver.", "danger")
-            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, parties=parties, drivers=drivers, categories=categories)
+            flash("To account is required.", "danger")
+            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, categories=categories, existing_attachment=(row.attachment if row else None))
+
+        attachment_url = _upload_workspace_transfer_attachment(request.files.get("attachment"))
 
         if not row:
             row = WorkspaceFundTransfer(
@@ -840,23 +871,30 @@ def workspace_fund_transfer_form(pk=None):
         else:
             workspace_reverse_journal_entry(row.journal_entry_id)
             row.journal_entry_id = None
+            if request.form.get("remove_attachment") == "1":
+                _delete_workspace_transfer_attachment(row.attachment)
+                row.attachment = None
         row.transfer_date = transfer_date or pk_date()
         row.from_account_id = from_account_id
         row.to_account_id = to_account_id
-        row.to_workspace_party_id = to_party_id
-        row.to_driver_id = to_driver_id
+        row.to_workspace_party_id = None
+        row.to_driver_id = None
         row.amount = amount
-        row.payment_mode = (request.form.get("payment_mode") or "Cash").strip()
+        mode = (request.form.get("payment_mode") or "Cash").strip()
+        row.payment_mode = mode if mode in ("Cash", "Bank Transfer", "Cheque", "Online") else "Cash"
         row.reference_no = (request.form.get("reference_no") or "").strip() or None
         row.description = (request.form.get("description") or "").strip() or None
         row.category = (request.form.get("category") or "").strip() or None
+        if attachment_url:
+            _delete_workspace_transfer_attachment(row.attachment)
+            row.attachment = attachment_url
         db.session.flush()
         je = workspace_post_transfer(row)
         row.journal_entry_id = je.id
         db.session.commit()
         flash("Workspace transfer saved.", "success")
         return redirect(url_for("workspace_fund_transfers_list"))
-    return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, parties=parties, drivers=drivers, categories=categories)
+    return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, categories=categories, existing_attachment=(row.attachment if row else None))
 
 
 def workspace_fund_transfer_delete(pk):
@@ -865,6 +903,7 @@ def workspace_fund_transfer_delete(pk):
         return guard
     row = WorkspaceFundTransfer.query.filter_by(employee_id=emp.id, id=pk).first_or_404()
     workspace_reverse_journal_entry(row.journal_entry_id)
+    _delete_workspace_transfer_attachment(row.attachment)
     db.session.delete(row)
     db.session.commit()
     flash("Workspace transfer deleted.", "success")
