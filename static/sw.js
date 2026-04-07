@@ -1,5 +1,5 @@
-// Fleet Manager Service Worker v1
-const CACHE_NAME = 'fleetmgr-v1';
+// Fleet Manager Service Worker v2
+const CACHE_NAME = 'fleetmgr-v2';
 
 // Static assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -40,6 +40,17 @@ self.addEventListener('activate', function(event) {
     self.clients.claim();
 });
 
+function offlineHtmlResponse() {
+    return new Response(
+        '<html><body style="font-family:sans-serif;text-align:center;padding:40px;">' +
+        '<h2>You are offline</h2>' +
+        '<p>Please check your internet connection.</p>' +
+        '<button onclick="location.reload()" style="padding:12px 24px;font-size:1rem;cursor:pointer;">Retry</button>' +
+        '</body></html>',
+        { headers: { 'Content-Type': 'text/html' } }
+    );
+}
+
 // Fetch strategy
 self.addEventListener('fetch', function(event) {
     var request = event.request;
@@ -75,32 +86,40 @@ self.addEventListener('fetch', function(event) {
         return;
     }
 
-    // Network-first for same-origin pages (always latest data)
-    // Falls back to cache if offline
-    event.respondWith(
-        fetch(request).then(function(response) {
-            if (response && response.ok && response.type === 'basic') {
-                var clone = response.clone();
-                caches.open(CACHE_NAME).then(function(cache) {
-                    cache.put(request, clone);
-                });
-            }
-            return response;
-        }).catch(function() {
-            return caches.match(request).then(function(cached) {
+    // Same-origin navigation/documents:
+    // always network-first and never serve stale cached page content.
+    if (request.mode === 'navigate' || request.destination === 'document') {
+        event.respondWith(
+            fetch(request).catch(function() { return offlineHtmlResponse(); })
+        );
+        return;
+    }
+
+    // Cache static assets from our own origin.
+    if (url.pathname.startsWith('/static/')) {
+        event.respondWith(
+            caches.match(request).then(function(cached) {
                 if (cached) return cached;
-                if (request.destination === 'document') {
-                    return new Response(
-                        '<html><body style="font-family:sans-serif;text-align:center;padding:40px;">' +
-                        '<h2>You are offline</h2>' +
-                        '<p>Please check your internet connection.</p>' +
-                        '<button onclick="location.reload()" style="padding:12px 24px;font-size:1rem;cursor:pointer;">Retry</button>' +
-                        '</body></html>',
-                        { headers: { 'Content-Type': 'text/html' } }
-                    );
-                }
-                return new Response('', { status: 503, statusText: 'Offline' });
-            });
+                return fetch(request).then(function(response) {
+                    if (response && response.ok) {
+                        var clone = response.clone();
+                        caches.open(CACHE_NAME).then(function(cache) {
+                            cache.put(request, clone);
+                        });
+                    }
+                    return response;
+                }).catch(function() {
+                    return new Response('', { status: 503, statusText: 'Offline' });
+                });
+            })
+        );
+        return;
+    }
+
+    // Other same-origin requests: network-only to avoid stale dynamic data.
+    event.respondWith(
+        fetch(request).catch(function() {
+            return new Response('', { status: 503, statusText: 'Offline' });
         })
     );
 });

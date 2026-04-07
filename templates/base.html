@@ -5285,12 +5285,8 @@
 
     // ── Service Worker Registration (PWA) ─────────────────────────────────
     if ('serviceWorker' in navigator) {
-        // Unregister ALL existing service workers first to flush stale PWA cache
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            registrations.forEach(function(reg) { reg.unregister(); });
-        });
         window.addEventListener('load', function() {
-            navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function() {});
+            navigator.serviceWorker.register('/sw.js?v=2', { scope: '/', updateViaCache: 'none' }).catch(function() {});
         });
     }
 

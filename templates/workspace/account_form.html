@@ -2,22 +2,33 @@
 {% block content %}
 <div class="container-fluid py-3">
   {% include "workspace/_nav.html" %}
-  <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white"><strong>{{ 'Edit' if row else 'Add' }} Workspace Account</strong></div>
-    <div class="card-body">
+  <div class="section-heading bg-info">
+    <i class="bi bi-diagram-3 me-2"></i>{{ 'Edit' if row else 'Add' }} Workspace Account
+  </div>
+
+  <div class="card shadow-sm border-0 mt-3">
+    <div class="card-body p-4">
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row g-3">
-          <div class="col-md-2"><label class="form-label">Code</label><input type="text" name="code" class="form-control" required value="{{ row.code if row else '' }}"></div>
-          <div class="col-md-4"><label class="form-label">Name</label><input type="text" name="name" class="form-control" required value="{{ row.name if row else '' }}"></div>
-          <div class="col-md-2"><label class="form-label">Type</label>
-            <select name="account_type" class="form-select">
+          <div class="col-md-4">
+            <label class="form-label fw-bold">Code</label>
+            <input type="text" name="code" class="form-control" required value="{{ row.code if row else '' }}">
+          </div>
+          <div class="col-md-8">
+            <label class="form-label fw-bold">Name</label>
+            <input type="text" name="name" class="form-control" required value="{{ row.name if row else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-bold">Type</label>
+            <select name="account_type" class="form-select search-select">
               {% for t in ['Asset','Liability','Equity','Revenue','Expense'] %}
               <option value="{{ t }}" {% if row and row.account_type == t %}selected{% endif %}>{{ t }}</option>
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-4"><label class="form-label">Parent</label>
+          <div class="col-md-4">
+            <label class="form-label fw-bold">Parent</label>
             <select name="parent_id" class="form-select search-select">
               <option value="">-- No Parent --</option>
               {% for p in parents %}
@@ -25,16 +36,26 @@
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-8"><label class="form-label">Description</label><input type="text" name="description" class="form-control" value="{{ row.description if row else '' }}"></div>
-          <div class="col-md-2"><label class="form-label">Status</label>
+          <div class="col-md-4">
+            <label class="form-label fw-bold">Status</label>
             <select name="is_active" class="form-select">
               <option value="1" {% if not row or row.is_active %}selected{% endif %}>Active</option>
               <option value="0" {% if row and not row.is_active %}selected{% endif %}>Inactive</option>
             </select>
           </div>
-          <div class="col-12 d-flex gap-2">
-            <button type="submit" class="btn btn-primary">Save</button>
-            <a href="{{ url_for('workspace_accounts_list') }}" class="btn btn-outline-secondary">Back</a>
+          {% if row %}
+          <div class="col-md-4">
+            <label class="form-label fw-bold">Current Balance</label>
+            <input type="text" class="form-control" value="{{ '{:,.2f}'.format(row.current_balance or 0) }}" readonly>
+          </div>
+          {% endif %}
+          <div class="col-12">
+            <label class="form-label fw-bold">Description</label>
+            <textarea name="description" class="form-control" rows="3">{{ row.description if row else '' }}</textarea>
+          </div>
+          <div class="col-12 d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-info px-4">Save Account</button>
+            <a href="{{ url_for('workspace_accounts_list') }}" class="btn btn-secondary">Cancel</a>
           </div>
         </div>
       </form>

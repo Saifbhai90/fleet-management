@@ -2,28 +2,113 @@
 {% block content %}
 <div class="container-fluid py-3">
   {% include "workspace/_nav.html" %}
-  <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white d-flex justify-content-between">
-      <strong>Workspace Chart of Accounts</strong>
-      <a class="btn btn-sm btn-primary" href="{{ url_for('workspace_account_new') }}">Add Account</a>
-    </div>
-    <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0 js-filter-table">
-        <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Balance</th><th>Status</th><th class="text-end">Action</th></tr></thead>
-        <tbody>
-          {% for r in rows %}
-          <tr>
-            <td>{{ r.code }}</td>
-            <td>{{ r.name }}</td>
-            <td>{{ r.account_type }}</td>
-            <td>{{ '%.2f'|format((r.current_balance or 0)|float) }}</td>
-            <td>{{ 'Active' if r.is_active else 'Inactive' }}</td>
-            <td class="text-end"><a href="{{ url_for('workspace_account_edit', pk=r.id) }}" class="btn btn-sm btn-outline-primary">Edit</a></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><i class="bi bi-diagram-3 me-2 text-info"></i>Workspace Chart of Accounts</h2>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      <a href="{{ url_for('workspace_account_new') }}" class="btn btn-info btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>Add Account
+      </a>
     </div>
   </div>
+
+  <div class="section-heading bg-info">
+    <i class="bi bi-diagram-3 me-2"></i>Workspace Chart of Accounts
+  </div>
+
+  <div class="card shadow-sm border-0 mt-3">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <label class="mb-0 small">Show</label>
+        <select class="form-select form-select-sm" style="width:auto;" onchange="var u=new URLSearchParams(window.location.search);u.set('per_page',this.value);u.set('page','1');window.location.search=u.toString();">
+          {% for val in [25,50,100,200] %}
+          <option value="{{ val }}" {% if per_page|default(50) == val %}selected{% endif %}>{{ val }}</option>
+          {% endfor %}
+        </select>
+        <label class="mb-0 small">entries</label>
+      </div>
+      <div>
+        <input type="text" class="form-control form-control-sm" placeholder="Search all pages..." style="width:220px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="data-table-wrapper">
+        <table class="table table-hover compact-table mb-0" id="wsCoaTable">
+          <thead class="table-light">
+            <tr>
+              <th>Code</th>
+              <th>Account Name</th>
+              <th>Type</th>
+              <th>Parent</th>
+              <th class="text-end">Balance</th>
+              <th class="text-center">Status</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td>{{ r.code }}</td>
+              <td {% if r.parent_id %}style="padding-left:2.5rem;"{% endif %}>
+                {% if r.parent_id %}<i class="bi bi-arrow-return-right text-muted me-1"></i>{% endif %}
+                {{ r.name }}
+              </td>
+              <td>
+                {% set type_colors = {'Asset': 'primary', 'Liability': 'warning', 'Equity': 'success', 'Revenue': 'info', 'Expense': 'danger'} %}
+                <span class="badge bg-{{ type_colors.get(r.account_type, 'secondary') }}">{{ r.account_type }}</span>
+              </td>
+              <td>{{ r.parent.name if r.parent else '-' }}</td>
+              <td class="text-end fw-semibold {% if (r.current_balance or 0) > 0 %}text-success{% elif (r.current_balance or 0) < 0 %}text-danger{% else %}text-muted{% endif %}">
+                {{ "{:,.2f}".format(r.current_balance or 0) }}
+              </td>
+              <td class="text-center">
+                {% if r.is_active %}
+                <span class="badge bg-success">Active</span>
+                {% else %}
+                <span class="badge bg-secondary">Inactive</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                <a href="{{ url_for('workspace_account_edit', pk=r.id) }}" class="btn btn-sm btn-edit-compact" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7" class="text-center py-5 text-muted">
+                <i class="bi bi-diagram-3 display-6 d-block mb-2 opacity-25"></i>
+                No workspace accounts found.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% if pagination %}
+    <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <small class="text-muted"><i class="bi bi-list-ul me-1"></i>Showing {{ (pagination.page - 1) * per_page + 1 if rows|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + rows|length }} of {{ pagination.total }} entries</small>
+        {% if pagination.pages > 1 %}
+        <nav><ul class="pagination pagination-sm mb-0">
+          <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
+          {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
+          <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
+        </ul></nav>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
 </div>
+<script>
+function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
+document.addEventListener('DOMContentLoaded', function(){
+  if(window.fleetTableEnhance) window.fleetTableEnhance('wsCoaTable');
+  if(window.fleetPrintExport) window.fleetPrintExport('wsCoaTable','Workspace Chart of Accounts','Workspace_Chart_of_Accounts.csv');
+});
+</script>
 {% endblock %}

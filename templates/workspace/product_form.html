@@ -19,7 +19,15 @@
           </div>
           <div class="col-md-2">
             <label class="form-label fw-semibold">Unit</label>
-            <input type="text" name="unit" class="form-control" value="{{ row.unit if row else '' }}" placeholder="Ltr / Qty">
+            <select name="unit" class="form-select search-select" data-placeholder="Select unit">
+              <option value="">-- Select Unit --</option>
+              {% if row and row.unit and row.unit not in (unit_choices or []) %}
+              <option value="{{ row.unit }}" selected>{{ row.unit }}</option>
+              {% endif %}
+              {% for u in unit_choices or [] %}
+              <option value="{{ u }}" {% if row and row.unit == u %}selected{% endif %}>{{ u }}</option>
+              {% endfor %}
+            </select>
           </div>
           <div class="col-md-2">
             <label class="form-label fw-semibold">Default Price</label>

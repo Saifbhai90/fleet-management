@@ -226,6 +226,12 @@ def workspace_home():
     )
     adjusted_ledger_end = wallet_balance + closed_expense_total
     net_balance = adjusted_ledger_end - Decimal(str(total_expenses or 0))
+    if net_balance > 0:
+        net_balance_status = "Receivable from Company"
+    elif net_balance < 0:
+        net_balance_status = "Payable to Company"
+    else:
+        net_balance_status = "Settled"
 
     stats = {
         "parties": WorkspaceParty.query.filter_by(employee_id=emp.id, is_active=True).count(),
@@ -234,6 +240,7 @@ def workspace_home():
         "transfers": total_transfers,
         "ledger_end_balance": adjusted_ledger_end,
         "net_balance": net_balance,
+        "net_balance_status": net_balance_status,
         "month_close_adjustment": closed_expense_total,
         "open_closes": WorkspaceMonthClose.query.filter(
             WorkspaceMonthClose.employee_id == emp.id,
@@ -734,11 +741,36 @@ def workspace_product_form(pk=None):
         flash("Product not found for selected workspace employee.", "danger")
         return redirect(url_for("workspace_products_list"))
 
+    default_units = ["Liter", "Piece", "Kg", "Gram", "Ml", "Pack", "Set", "Box", "Pair", "Unit"]
+    db_units = [
+        (u or "").strip()
+        for (u,) in db.session.query(WorkspaceProduct.unit)
+        .filter(
+            WorkspaceProduct.employee_id == emp.id,
+            WorkspaceProduct.unit.isnot(None),
+            WorkspaceProduct.unit != "",
+        )
+        .distinct()
+        .order_by(WorkspaceProduct.unit.asc())
+        .all()
+    ]
+    unit_choices = []
+    seen = set()
+    for u in default_units + db_units:
+        key = (u or "").strip()
+        if not key:
+            continue
+        lk = key.lower()
+        if lk in seen:
+            continue
+        seen.add(lk)
+        unit_choices.append(key)
+
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
         if not name:
             flash("Product name is required.", "danger")
-            return render_template("workspace/product_form.html", row=row, employee=emp)
+            return render_template("workspace/product_form.html", row=row, employee=emp, unit_choices=unit_choices)
         if not row:
             row = WorkspaceProduct(employee_id=emp.id)
             db.session.add(row)
@@ -756,7 +788,7 @@ def workspace_product_form(pk=None):
         db.session.commit()
         flash("Workspace product saved.", "success")
         return redirect(url_for("workspace_products_list"))
-    return render_template("workspace/product_form.html", row=row, employee=emp)
+    return render_template("workspace/product_form.html", row=row, employee=emp, unit_choices=unit_choices)
 
 
 def workspace_product_delete(pk):
@@ -777,8 +809,36 @@ def workspace_accounts_list():
     ensure_workspace_base_accounts(emp.id)
     _ensure_workspace_driver_accounts(emp)
     db.session.commit()
-    rows = WorkspaceAccount.query.filter_by(employee_id=emp.id).order_by(WorkspaceAccount.code).all()
-    return render_template("workspace/accounts_list.html", rows=rows, employee=emp)
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    per_page = request.args.get("per_page", 50, type=int) or 50
+    if per_page not in (25, 50, 100, 200):
+        per_page = 50
+    search = (request.args.get("search") or "").strip()
+
+    query = WorkspaceAccount.query.filter_by(employee_id=emp.id)
+    if search:
+        words = [w.strip() for w in search.split() if w.strip()]
+        for w in words:
+            like = f"%{w}%"
+            query = query.filter(
+                or_(
+                    WorkspaceAccount.code.ilike(like),
+                    WorkspaceAccount.name.ilike(like),
+                    WorkspaceAccount.account_type.ilike(like),
+                    WorkspaceAccount.description.ilike(like),
+                )
+            )
+    pagination = query.order_by(WorkspaceAccount.code.asc(), WorkspaceAccount.id.asc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    return render_template(
+        "workspace/accounts_list.html",
+        rows=pagination.items,
+        pagination=pagination,
+        per_page=per_page,
+        search=search,
+        employee=emp,
+    )
 
 
 def workspace_account_form(pk=None):
