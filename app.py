@@ -433,11 +433,6 @@ from routes_finance import (
     journal_voucher_add, journal_vouchers_list,
     bank_directory_list_api, bank_directory_add_api, bank_directory_delete_api, bank_directory_update_api,
     ft_description_suggestions_api, ft_categories_list_api, ft_categories_add_api,
-    dto_working_dashboard, dto_txn_form, dto_txn_list, dto_txn_verify, dto_txn_delete,
-    dto_counterparty_list, dto_counterparty_toggle,
-    dto_settlement_new, dto_settlement_list, dto_settlement_post, dto_settlement_cancel,
-    dto_report_payables, dto_report_receivables, dto_report_aging, dto_report_claimable,
-    dto_report_settlement, dto_report_snapshot,
 )  # noqa: E402
 
 from routes_payroll import (
@@ -483,26 +478,6 @@ app.add_url_rule('/accounts/fund-transfer/<int:pk>/delete', 'fund_transfer_delet
 
 # Wallet Dashboard
 app.add_url_rule('/accounts/wallet-dashboard', 'wallet_dashboard', wallet_dashboard, methods=['GET', 'POST'])
-app.add_url_rule('/accounts/dto-working', 'dto_working_dashboard', dto_working_dashboard, methods=['GET'])
-app.add_url_rule('/accounts/dto-working/txns', 'dto_txn_list', dto_txn_list, methods=['GET'])
-app.add_url_rule('/accounts/dto-working/txn/new', 'dto_txn_new', dto_txn_form, methods=['GET', 'POST'])
-app.add_url_rule('/accounts/dto-working/txn/<int:pk>/edit', 'dto_txn_edit', dto_txn_form, methods=['GET', 'POST'])
-app.add_url_rule('/accounts/dto-working/txn/<int:pk>/verify', 'dto_txn_verify', dto_txn_verify, methods=['POST'])
-app.add_url_rule('/accounts/dto-working/txn/<int:pk>/cancel', 'dto_txn_delete', dto_txn_delete, methods=['POST'])
-app.add_url_rule('/accounts/dto-working/counterparties', 'dto_counterparty_list', dto_counterparty_list, methods=['GET', 'POST'])
-app.add_url_rule('/accounts/dto-working/counterparties/<int:pk>/toggle', 'dto_counterparty_toggle', dto_counterparty_toggle, methods=['POST'])
-app.add_url_rule('/accounts/dto-working/settlements/new', 'dto_settlement_new', dto_settlement_new, methods=['GET', 'POST'])
-app.add_url_rule('/accounts/dto-working/settlements', 'dto_settlement_list', dto_settlement_list, methods=['GET'])
-app.add_url_rule('/accounts/dto-working/settlements/<int:pk>/post', 'dto_settlement_post', dto_settlement_post, methods=['POST'])
-app.add_url_rule('/accounts/dto-working/settlements/<int:pk>/cancel', 'dto_settlement_cancel', dto_settlement_cancel, methods=['POST'])
-
-# DTO reports
-app.add_url_rule('/accounts/dto-working/reports/payables', 'dto_report_payables', dto_report_payables, methods=['GET'])
-app.add_url_rule('/accounts/dto-working/reports/receivables', 'dto_report_receivables', dto_report_receivables, methods=['GET'])
-app.add_url_rule('/accounts/dto-working/reports/aging', 'dto_report_aging', dto_report_aging, methods=['GET'])
-app.add_url_rule('/accounts/dto-working/reports/claimable', 'dto_report_claimable', dto_report_claimable, methods=['GET'])
-app.add_url_rule('/accounts/dto-working/reports/settlement', 'dto_report_settlement', dto_report_settlement, methods=['GET'])
-app.add_url_rule('/accounts/dto-working/reports/snapshot', 'dto_report_snapshot', dto_report_snapshot, methods=['GET'])
 
 # Fund Transfer description autocomplete
 app.add_url_rule('/api/ft-descriptions', 'ft_description_suggestions', ft_description_suggestions_api, methods=['GET'])

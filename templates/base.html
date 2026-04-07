@@ -1560,8 +1560,8 @@
         {% set workforce_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit', 'employee_lifecycle_assign', 'employee_lifecycle_deassign', 'employee_lifecycle_left', 'employee_lifecycle_rejoin', 'employee_lifecycle_history', 'employee_profile_report', 'employee_lifecycle_assign_list', 'employee_lifecycle_deassign_list', 'employee_lifecycle_left_list', 'employee_lifecycle_rejoin_list'] %}
         {% set task_report_endpoints = ['task_report_upload', 'task_report_list', 'task_report_new', 'task_report_upload_emergency', 'task_report_upload_mileage', 'task_report_upload_both', 'red_task_list', 'red_task_new', 'red_task_edit', 'without_task_list', 'without_task_new', 'without_task_edit', 'task_report_logbook_cover', 'task_report_logbook_view', 'task_report_logbook_view_all'] %}
         {% set expenses_endpoints = ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'maintenance_expense_list', 'maintenance_expense_form', 'employee_expense_list', 'employee_expense_form'] %}
-        {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai', 'active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print', 'driver_seat_available_report', 'driver_seat_available_export', 'driver_seat_available_print', 'missing_documents_report', 'missing_documents_report_print', 'dto_report_payables', 'dto_report_receivables', 'dto_report_aging', 'dto_report_claimable', 'dto_report_settlement', 'dto_report_snapshot'] %}
-        {% set accounts_endpoints = ['accounts_quick_payment', 'payment_vouchers_list', 'payment_voucher_edit', 'payment_voucher_delete', 'accounts_quick_receipt', 'receipt_vouchers_list', 'accounts_bank_entry', 'bank_entries_list', 'accounts_jv', 'journal_vouchers_list', 'accounts_future_entry', 'accounts_balance_sheet', 'accounts_account_ledger', 'chart_of_accounts_list', 'chart_of_accounts_add', 'chart_of_accounts_edit', 'fund_transfer_add', 'fund_transfers_list', 'fund_transfer_edit', 'wallet_dashboard', 'employee_expenses_list', 'employee_expense_add', 'employee_expense_edit', 'dto_working_dashboard', 'dto_txn_list', 'dto_txn_new', 'dto_txn_edit', 'dto_counterparty_list', 'dto_settlement_new', 'dto_settlement_list', 'dto_report_payables', 'dto_report_receivables', 'dto_report_aging', 'dto_report_claimable', 'dto_report_settlement', 'dto_report_snapshot'] %}
+        {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'driver_attendance_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai', 'active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print', 'driver_seat_available_report', 'driver_seat_available_export', 'driver_seat_available_print', 'missing_documents_report', 'missing_documents_report_print'] %}
+        {% set accounts_endpoints = ['accounts_quick_payment', 'payment_vouchers_list', 'payment_voucher_edit', 'payment_voucher_delete', 'accounts_quick_receipt', 'receipt_vouchers_list', 'accounts_bank_entry', 'bank_entries_list', 'accounts_jv', 'journal_vouchers_list', 'accounts_future_entry', 'accounts_balance_sheet', 'accounts_account_ledger', 'chart_of_accounts_list', 'chart_of_accounts_add', 'chart_of_accounts_edit', 'fund_transfer_add', 'fund_transfers_list', 'fund_transfer_edit', 'wallet_dashboard', 'employee_expenses_list', 'employee_expense_add', 'employee_expense_edit'] %}
         {% set _req_from = request.args.get('from', '') %}
         {% set _req_ref = request.args.get('ref', '') %}
         {% set _profile_endpoints = ['report_driver_profile', 'report_vehicle_profile', 'employee_profile_print'] %}
@@ -1909,8 +1909,8 @@
                 <i class="bi bi-bank"></i><span>Finance</span>
             </a>
             {% set _f_dash = request.endpoint in ['wallet_dashboard','chart_of_accounts_list','chart_of_accounts_add','chart_of_accounts_edit'] %}
-            {% set _f_txn = request.endpoint in ['fund_transfers_list','fund_transfer_add','fund_transfer_edit','accounts_quick_payment','payment_vouchers_list','payment_voucher_edit','accounts_quick_receipt','receipt_vouchers_list','accounts_bank_entry','bank_entries_list','accounts_jv','journal_vouchers_list','dto_working_dashboard','dto_txn_list','dto_txn_new','dto_txn_edit','dto_counterparty_list','dto_settlement_new','dto_settlement_list'] %}
-            {% set _f_rpt = request.endpoint in ['accounts_balance_sheet','accounts_account_ledger','dto_report_payables','dto_report_receivables','dto_report_aging','dto_report_claimable','dto_report_settlement','dto_report_snapshot'] %}
+            {% set _f_txn = request.endpoint in ['fund_transfers_list','fund_transfer_add','fund_transfer_edit','accounts_quick_payment','payment_vouchers_list','payment_voucher_edit','accounts_quick_receipt','receipt_vouchers_list','accounts_bank_entry','bank_entries_list','accounts_jv','journal_vouchers_list'] %}
+            {% set _f_rpt = request.endpoint in ['accounts_balance_sheet','accounts_account_ledger'] %}
             <div class="collapse collapse-item-container {% if accounts_open %}show{% endif %}"
                  id="accountsMenu" data-bs-parent="#sidebarAccordion">
                 <div class="sb-sub-toggle {% if not _f_dash %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#finDash" aria-expanded="{{ 'true' if _f_dash else 'false' }}">Dashboard</div>
@@ -1926,9 +1926,6 @@
                 <div class="collapse sb-sub-items {% if _f_txn %}show{% endif %}" id="finTxn" data-bs-parent="#accountsMenu">
                 <a href="{{ url_for('fund_transfers_list') }}" class="collapse-item {% if request.endpoint in ['fund_transfers_list', 'fund_transfer_add', 'fund_transfer_edit'] %}active-link{% endif %}">
                     <i class="bi bi-arrow-left-right text-success"></i><span>Fund Transfer</span>
-                </a>
-                <a href="{{ url_for('dto_working_dashboard') }}" class="collapse-item {% if request.endpoint in ['dto_working_dashboard','dto_txn_list','dto_txn_new','dto_txn_edit','dto_counterparty_list','dto_settlement_new','dto_settlement_list'] %}active-link{% endif %}">
-                    <i class="bi bi-briefcase text-primary"></i><span>DTO Working Ledger</span>
                 </a>
                 {% if can_see_page('accounts_quick_payment') %}
                 <a href="{{ url_for('payment_vouchers_list') }}" class="collapse-item {% if request.endpoint in ['accounts_quick_payment', 'payment_vouchers_list', 'payment_voucher_edit'] %}active-link{% endif %}">
@@ -1961,9 +1958,6 @@
                     <i class="bi bi-journal-bookmark-fill text-warning"></i><span>Account Ledger</span>
                 </a>
                 {% endif %}
-                <a href="{{ url_for('dto_report_payables') }}" class="collapse-item {% if request.endpoint in ['dto_report_payables','dto_report_receivables','dto_report_aging','dto_report_claimable','dto_report_settlement','dto_report_snapshot'] %}active-link{% endif %}">
-                    <i class="bi bi-file-earmark-spreadsheet text-primary"></i><span>DTO Working Reports</span>
-                </a>
                 </div>
             </div>
         </div>
