@@ -204,12 +204,18 @@ document.addEventListener('DOMContentLoaded', function(){
 
   function setSelectValue(selectEl, value){
     if(!selectEl) return;
-    selectEl.value = value ? String(value) : '';
-    if(window.jQuery && window.jQuery(selectEl).data('select2')){
-      window.jQuery(selectEl).trigger('change.select2');
-    } else {
+    var v = value ? String(value) : '';
+    if(selectEl.tomselect){
+      try {
+        selectEl.tomselect.setValue(v, true);
+      } catch(e) {
+        selectEl.value = v;
+      }
       selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
     }
+    selectEl.value = v;
+    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   document.querySelectorAll('.apply-spell-btn').forEach(function(btn){
