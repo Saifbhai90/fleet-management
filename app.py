@@ -249,6 +249,10 @@ if _run_startup_tasks:
                 ('fund_transfer', 'to_account_id', 'INTEGER REFERENCES account(id)'),
                 ('fund_transfer', 'category', 'VARCHAR(30)'),
                 ('journal_entry', 'category', 'VARCHAR(30)'),
+                # Workspace tables fallback (when migration wasn't applied yet)
+                ('workspace_party', 'district_id', 'INTEGER REFERENCES district(id)'),
+                ('workspace_party', 'contact', 'VARCHAR(100)'),
+                ('workspace_party', 'remarks', 'TEXT'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():

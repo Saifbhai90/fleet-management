@@ -5,7 +5,7 @@ Helper functions for voucher number generation, journal entry creation, and bala
 from models import (
     db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence,
     Employee, Driver, Party, Company,
-    WorkspaceAccount, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceExpense, WorkspaceMonthClose,
+    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceExpense, WorkspaceMonthClose,
 )
 from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
@@ -783,18 +783,32 @@ def ensure_workspace_counterparty_account(employee_id, *, party_id=None, driver_
     if party_id:
         code = f"210{party_id}"
         existing = WorkspaceAccount.query.filter_by(employee_id=employee_id, entity_type='party', entity_id=party_id).first()
-        if existing:
-            return existing
-        party = Party.query.get(party_id)
+        party = WorkspaceParty.query.filter_by(employee_id=employee_id, id=party_id).first()
+        if not party:
+            # Backward-compatible fallback for old callers that pass master Party id.
+            party = Party.query.get(party_id)
         if not party:
             raise ValueError("Party not found")
+        parent = WorkspaceAccount.query.filter_by(employee_id=employee_id, code='1000').first()
+        if existing:
+            existing.name = f"Party - {party.name}"
+            existing.is_active = bool(getattr(party, 'is_active', True))
+            if parent and not existing.parent_id:
+                existing.parent_id = parent.id
+            db.session.flush()
+            return existing
+        candidate_code = code
+        seq = 1
+        while WorkspaceAccount.query.filter_by(employee_id=employee_id, code=candidate_code).first():
+            candidate_code = f"{code}{seq}"
+            seq += 1
         row = WorkspaceAccount(
             employee_id=employee_id,
-            code=code,
+            code=candidate_code,
             name=f"Party - {party.name}",
             account_type='Asset',
-            parent_id=WorkspaceAccount.query.filter_by(employee_id=employee_id, code='1000').first().id,
-            is_active=True,
+            parent_id=parent.id if parent else None,
+            is_active=bool(getattr(party, 'is_active', True)),
             opening_balance=0,
             current_balance=0,
             entity_type='party',

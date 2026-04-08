@@ -371,7 +371,15 @@ def workspace_party_form(pk=None):
         row.remarks = (request.form.get("remarks") or "").strip() or None
         row.is_active = request.form.get("is_active") == "1"
         row.created_by_user_id = session.get("user_id")
-        db.session.commit()
+        try:
+            db.session.flush()
+            ensure_workspace_counterparty_account(emp.id, party_id=row.id)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"workspace_party_form save error: {e}")
+            flash("Unable to save workspace party right now. Please try again.", "danger")
+            return render_template("workspace/party_form.html", row=row, employee=emp, districts=districts, next_url=next_url, default_type=default_type)
         flash("Workspace party saved.", "success")
         if next_url:
             return redirect(next_url)
@@ -810,6 +818,12 @@ def workspace_accounts_list():
         return guard
     ensure_workspace_base_accounts(emp.id)
     _ensure_workspace_driver_accounts(emp)
+    parties = WorkspaceParty.query.filter_by(employee_id=emp.id).all()
+    for p in parties:
+        try:
+            ensure_workspace_counterparty_account(emp.id, party_id=p.id)
+        except Exception:
+            pass
     db.session.commit()
     page = max(request.args.get("page", 1, type=int) or 1, 1)
     per_page = request.args.get("per_page", 50, type=int) or 50
