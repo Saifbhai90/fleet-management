@@ -5,7 +5,7 @@ Helper functions for voucher number generation, journal entry creation, and bala
 from models import (
     db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence,
     Employee, Driver, Party, Company,
-    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceExpense, WorkspaceMonthClose,
+    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceMonthClose,
 )
 from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
@@ -1031,9 +1031,17 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
         WorkspaceExpense.expense_date >= period_start,
         WorkspaceExpense.expense_date <= period_end,
     ).all()
-    total = sum(Decimal(str(e.amount or 0)) for e in expenses)
+    opening_expenses = WorkspaceOpeningExpense.query.filter(
+        WorkspaceOpeningExpense.employee_id == employee_id,
+        WorkspaceOpeningExpense.month_close_id.is_(None),
+        WorkspaceOpeningExpense.opening_date >= period_start,
+        WorkspaceOpeningExpense.opening_date <= period_end,
+    ).all()
+    total_regular = sum(Decimal(str(e.amount or 0)) for e in expenses)
+    total_opening = sum(Decimal(str(e.total_expense or 0)) for e in opening_expenses)
+    total = total_regular + total_opening
     if total <= Decimal("0"):
-        raise ValueError("No unclosed workspace expense found in selected period")
+        raise ValueError("No unclosed workspace/opening expense found in selected period")
 
     employee = Employee.query.get(employee_id)
     if not employee:
@@ -1095,5 +1103,7 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
 
     for exp in expenses:
         exp.month_close_id = close_row.id
+    for opn in opening_expenses:
+        opn.month_close_id = close_row.id
 
     return close_row

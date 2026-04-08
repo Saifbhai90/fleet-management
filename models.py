@@ -2056,6 +2056,7 @@ class WorkspaceOpeningExpense(db.Model):
     maintenance_expense = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     employee_expense = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     total_expense = db.Column(db.Numeric(15, 2), nullable=False, default=0, index=True)
+    month_close_id = db.Column(db.Integer, db.ForeignKey('workspace_month_close.id'), nullable=True, index=True)
 
     remarks = db.Column(db.Text, nullable=True)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
@@ -2129,6 +2130,7 @@ class WorkspaceMonthClose(db.Model):
     company_journal_entry = db.relationship('JournalEntry', foreign_keys=[company_journal_entry_id], backref='month_close_company_entry', lazy='select')
     closed_by = db.relationship('User', backref='workspace_month_closes_done', lazy='select')
     expenses = db.relationship('WorkspaceExpense', backref='month_close', lazy='dynamic')
+    opening_expenses = db.relationship('WorkspaceOpeningExpense', backref='month_close', lazy='dynamic')
 
 
 # ────────────────────────────────────────────────
