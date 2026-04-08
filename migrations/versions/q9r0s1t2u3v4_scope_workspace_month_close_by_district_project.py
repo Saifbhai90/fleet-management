@@ -17,42 +17,111 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table("workspace_month_close") as batch_op:
-        batch_op.add_column(sa.Column("district_id", sa.Integer(), nullable=True))
-        batch_op.add_column(sa.Column("project_id", sa.Integer(), nullable=True))
-        batch_op.create_foreign_key("fk_workspace_month_close_district", "district", ["district_id"], ["id"])
-        batch_op.create_foreign_key("fk_workspace_month_close_project", "project", ["project_id"], ["id"])
-        batch_op.create_index("ix_workspace_month_close_district_id", ["district_id"], unique=False)
-        batch_op.create_index("ix_workspace_month_close_project_id", ["project_id"], unique=False)
+    table = "workspace_month_close"
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    cols = {c["name"] for c in insp.get_columns(table)}
+
+    if "district_id" not in cols:
+        op.add_column(table, sa.Column("district_id", sa.Integer(), nullable=True))
+    if "project_id" not in cols:
+        op.add_column(table, sa.Column("project_id", sa.Integer(), nullable=True))
+
+    # Refresh metadata after possible column additions.
+    insp = sa.inspect(bind)
+    idx_names = {i.get("name") for i in insp.get_indexes(table)}
+    fk_names = {f.get("name") for f in insp.get_foreign_keys(table) if f.get("name")}
+    uq_names = {u.get("name") for u in insp.get_unique_constraints(table) if u.get("name")}
+
+    if "ix_workspace_month_close_district_id" not in idx_names:
         try:
-            batch_op.drop_constraint("uq_workspace_month_close_period", type_="unique")
+            op.create_index("ix_workspace_month_close_district_id", table, ["district_id"], unique=False)
         except Exception:
             pass
-        batch_op.create_unique_constraint(
+    if "ix_workspace_month_close_project_id" not in idx_names:
+        try:
+            op.create_index("ix_workspace_month_close_project_id", table, ["project_id"], unique=False)
+        except Exception:
+            pass
+
+    if "fk_workspace_month_close_district" not in fk_names:
+        try:
+            op.create_foreign_key("fk_workspace_month_close_district", table, "district", ["district_id"], ["id"])
+        except Exception:
+            pass
+    if "fk_workspace_month_close_project" not in fk_names:
+        try:
+            op.create_foreign_key("fk_workspace_month_close_project", table, "project", ["project_id"], ["id"])
+        except Exception:
+            pass
+
+    if "uq_workspace_month_close_period" in uq_names:
+        try:
+            op.drop_constraint("uq_workspace_month_close_period", table_name=table, type_="unique")
+        except Exception:
+            pass
+    try:
+        op.create_unique_constraint(
             "uq_workspace_month_close_period",
+            table,
             ["employee_id", "district_id", "project_id", "period_start", "period_end"],
         )
+    except Exception:
+        pass
 
 
 def downgrade():
-    with op.batch_alter_table("workspace_month_close") as batch_op:
+    table = "workspace_month_close"
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    cols = {c["name"] for c in insp.get_columns(table)}
+    idx_names = {i.get("name") for i in insp.get_indexes(table)}
+    fk_names = {f.get("name") for f in insp.get_foreign_keys(table) if f.get("name")}
+    uq_names = {u.get("name") for u in insp.get_unique_constraints(table) if u.get("name")}
+
+    if "uq_workspace_month_close_period" in uq_names:
         try:
-            batch_op.drop_constraint("uq_workspace_month_close_period", type_="unique")
+            op.drop_constraint("uq_workspace_month_close_period", table_name=table, type_="unique")
         except Exception:
             pass
-        batch_op.create_unique_constraint(
+    try:
+        op.create_unique_constraint(
             "uq_workspace_month_close_period",
+            table,
             ["employee_id", "period_start", "period_end"],
         )
+    except Exception:
+        pass
+
+    if "ix_workspace_month_close_project_id" in idx_names:
         try:
-            batch_op.drop_index("ix_workspace_month_close_project_id")
-            batch_op.drop_index("ix_workspace_month_close_district_id")
+            op.drop_index("ix_workspace_month_close_project_id", table_name=table)
         except Exception:
             pass
+    if "ix_workspace_month_close_district_id" in idx_names:
         try:
-            batch_op.drop_constraint("fk_workspace_month_close_project", type_="foreignkey")
-            batch_op.drop_constraint("fk_workspace_month_close_district", type_="foreignkey")
+            op.drop_index("ix_workspace_month_close_district_id", table_name=table)
         except Exception:
             pass
-        batch_op.drop_column("project_id")
-        batch_op.drop_column("district_id")
+
+    if "fk_workspace_month_close_project" in fk_names:
+        try:
+            op.drop_constraint("fk_workspace_month_close_project", table_name=table, type_="foreignkey")
+        except Exception:
+            pass
+    if "fk_workspace_month_close_district" in fk_names:
+        try:
+            op.drop_constraint("fk_workspace_month_close_district", table_name=table, type_="foreignkey")
+        except Exception:
+            pass
+
+    if "project_id" in cols:
+        try:
+            op.drop_column(table, "project_id")
+        except Exception:
+            pass
+    if "district_id" in cols:
+        try:
+            op.drop_column(table, "district_id")
+        except Exception:
+            pass
