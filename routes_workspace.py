@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, date
+from calendar import monthrange
 from decimal import Decimal
 
 from flask import flash, redirect, render_template, request, session, url_for, make_response, jsonify
@@ -119,6 +120,75 @@ def _workspace_has_closed_month_for_date(employee_id, target_date):
         WorkspaceMonthClose.period_start <= target_date,
         WorkspaceMonthClose.period_end >= target_date,
     ).first() is not None
+
+
+def _pending_month_close_spells(employee_id):
+    """
+    Build month-close spell summary (01-15, 16-last-day) for unclosed rows.
+    Only include spells with amount > 0 and with district/project available.
+    """
+    bucket = {}
+
+    def _spell_key(dt):
+        y, m = dt.year, dt.month
+        last = monthrange(y, m)[1]
+        if dt.day <= 15:
+            return y, m, 1, 15
+        return y, m, 16, last
+
+    # Opening expenses (always scoped by district/project).
+    for row in WorkspaceOpeningExpense.query.filter(
+        WorkspaceOpeningExpense.employee_id == employee_id,
+        WorkspaceOpeningExpense.month_close_id.is_(None),
+        WorkspaceOpeningExpense.total_expense > 0,
+    ).all():
+        if not row.opening_date or not row.district_id or not row.project_id:
+            continue
+        y, m, sday, eday = _spell_key(row.opening_date)
+        k = (row.district_id, row.project_id, y, m, sday, eday)
+        bucket[k] = bucket.get(k, Decimal("0")) + Decimal(str(row.total_expense or 0))
+
+    # Regular workspace expenses (if scoped columns exist in model).
+    has_dist = hasattr(WorkspaceExpense, "district_id")
+    has_proj = hasattr(WorkspaceExpense, "project_id")
+    if has_dist and has_proj:
+        for row in WorkspaceExpense.query.filter(
+            WorkspaceExpense.employee_id == employee_id,
+            WorkspaceExpense.month_close_id.is_(None),
+            WorkspaceExpense.amount > 0,
+        ).all():
+            district_id = getattr(row, "district_id", None)
+            project_id = getattr(row, "project_id", None)
+            exp_date = getattr(row, "expense_date", None)
+            if not exp_date or not district_id or not project_id:
+                continue
+            y, m, sday, eday = _spell_key(exp_date)
+            k = (district_id, project_id, y, m, sday, eday)
+            bucket[k] = bucket.get(k, Decimal("0")) + Decimal(str(row.amount or 0))
+
+    if not bucket:
+        return []
+
+    district_map = {d.id: d.name for d in District.query.all()}
+    project_map = {p.id: p.name for p in Project.query.all()}
+    out = []
+    for (district_id, project_id, y, m, sday, eday), amt in bucket.items():
+        if amt <= 0:
+            continue
+        start_dt = date(y, m, sday)
+        end_dt = date(y, m, eday)
+        out.append({
+            "district_id": district_id,
+            "project_id": project_id,
+            "district_name": district_map.get(district_id, "-"),
+            "project_name": project_map.get(project_id, "-"),
+            "period_start": start_dt,
+            "period_end": end_dt,
+            "spell_label": f"{sday:02d}-{eday:02d}({start_dt.strftime('%m-%y')})",
+            "amount": amt,
+        })
+    out.sort(key=lambda r: (r["period_start"], r["district_name"], r["project_name"]), reverse=True)
+    return out
 
 
 def _list_employees_for_workspace():
@@ -1274,6 +1344,8 @@ def workspace_month_close():
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
     rows = WorkspaceMonthClose.query.filter_by(employee_id=emp.id).order_by(WorkspaceMonthClose.id.desc()).all()
+    spell_rows = _pending_month_close_spells(emp.id)
+    default_company_account_id = emp.wallet_account_id or None
 
     if request.method == "POST":
         period_start = parse_date(request.form.get("period_start"))
@@ -1293,6 +1365,8 @@ def workspace_month_close():
                 accounts=accounts,
                 districts=districts,
                 projects=projects,
+                spell_rows=spell_rows,
+                default_company_account_id=default_company_account_id,
                 can_manage_month_close=can_manage_month_close,
             )
         try:
@@ -1321,6 +1395,8 @@ def workspace_month_close():
         accounts=accounts,
         districts=districts,
         projects=projects,
+        spell_rows=spell_rows,
+        default_company_account_id=default_company_account_id,
         can_manage_month_close=can_manage_month_close,
     )
 

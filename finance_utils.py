@@ -1198,11 +1198,17 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
     )
     # WorkspaceExpense legacy model may not carry district/project columns.
     # Guard these filters to avoid runtime attribute errors on older schemas/models.
-    if district_id and hasattr(WorkspaceExpense, "district_id"):
+    has_exp_dist = hasattr(WorkspaceExpense, "district_id")
+    has_exp_proj = hasattr(WorkspaceExpense, "project_id")
+    if district_id and has_exp_dist:
         expenses_q = expenses_q.filter(getattr(WorkspaceExpense, "district_id") == district_id)
-    if project_id and hasattr(WorkspaceExpense, "project_id"):
+    if project_id and has_exp_proj:
         expenses_q = expenses_q.filter(getattr(WorkspaceExpense, "project_id") == project_id)
-    expenses = expenses_q.all()
+    # If scope is selected but legacy rows are not scopeable, exclude them from scoped close.
+    if (district_id or project_id) and not (has_exp_dist and has_exp_proj):
+        expenses = []
+    else:
+        expenses = expenses_q.all()
 
     opening_q = WorkspaceOpeningExpense.query.filter(
         WorkspaceOpeningExpense.employee_id == employee_id,

@@ -7,6 +7,52 @@
   </div>
 
   <div class="section-heading bg-danger">
+    <i class="bi bi-clipboard2-pulse me-2"></i>Pending Spell Summary
+  </div>
+
+  <div class="card shadow-sm border-0 mt-3 mb-4">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+      <strong>Ready To Close (Only Amount &gt; 0)</strong>
+      <small class="text-muted">{{ spell_rows|length }} spells</small>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        {% for s in spell_rows %}
+        <div class="col-xl-3 col-lg-4 col-md-6">
+          <div class="h-100 rounded-3 border border-danger-subtle bg-white p-3 shadow-sm">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <span class="badge text-bg-danger">{{ s.spell_label }}</span>
+              <span class="badge text-bg-light text-danger fw-semibold">Pending</span>
+            </div>
+            <div class="small text-muted mb-1">District</div>
+            <div class="fw-semibold mb-2">{{ s.district_name }}</div>
+            <div class="small text-muted mb-1">Project</div>
+            <div class="fw-semibold mb-2">{{ s.project_name }}</div>
+            <div class="small text-muted mb-1">Total Amount</div>
+            <div class="h5 mb-3 text-danger">{{ '%.2f'|format((s.amount or 0)|float) }}</div>
+            <button type="button"
+                    class="btn btn-outline-danger btn-sm w-100 apply-spell-btn"
+                    data-period-start="{{ s.period_start|ddmmyyyy }}"
+                    data-period-end="{{ s.period_end|ddmmyyyy }}"
+                    data-district-id="{{ s.district_id }}"
+                    data-project-id="{{ s.project_id }}"
+                    data-spell-label="{{ s.spell_label }}">
+              <i class="bi bi-magic me-1"></i>Use This Spell
+            </button>
+          </div>
+        </div>
+        {% else %}
+        <div class="col-12">
+          <div class="alert alert-light border mb-0">
+            <i class="bi bi-check2-circle me-2 text-success"></i>No pending spell found with amount above 0.
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="section-heading bg-danger">
     <i class="bi bi-lock me-2"></i>Close Current Period
   </div>
 
@@ -34,10 +80,10 @@
           </select>
         </div>
         <div class="col-lg-4 col-md-8"><label class="form-label fw-semibold">Fallback Company Expense Account (optional)</label>
-          <select name="company_account_id" class="form-select search-select">
+          <select name="company_account_id" id="monthCloseCompanyAccount" class="form-select search-select" data-default-account-id="{{ default_company_account_id or '' }}">
             <option value="">-- Auto map to company expense heads --</option>
             {% for a in accounts %}
-            <option value="{{ a.id }}">{{ a.code }} - {{ a.name }}</option>
+            <option value="{{ a.id }}" {% if default_company_account_id and a.id == default_company_account_id %}selected{% endif %}>{{ a.code }} - {{ a.name }}</option>
             {% endfor %}
           </select>
         </div>
@@ -113,7 +159,9 @@ document.addEventListener('DOMContentLoaded', function(){
   var periodEndInput = document.getElementById('periodEndInput');
   var districtInput = document.getElementById('monthCloseDistrict');
   var projectInput = document.getElementById('monthCloseProject');
+  var companyAccountInput = document.getElementById('monthCloseCompanyAccount');
   var notesInput = document.getElementById('monthCloseNotes');
+  var selectedSpellLabel = '';
 
   function parseDdMmYyyy(val){
     var m = (val || '').trim().match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
@@ -138,6 +186,9 @@ document.addEventListener('DOMContentLoaded', function(){
     var label = 'Date Range: ' + s.d + '-' + e.d + '(' + monthShort(e.m) + '-' + String(e.y).slice(-2) + ')'
       + ' | District: ' + (dist && dist.indexOf('--') !== 0 ? dist : '-')
       + ' | Project: ' + (proj && proj.indexOf('--') !== 0 ? proj : '-');
+    if(selectedSpellLabel){
+      label += ' | Spell: ' + selectedSpellLabel;
+    }
     var current = (notesInput.value || '').trim();
     // Auto-fill empty notes, or refresh previously auto-generated range.
     if(!current || current.indexOf('Date Range:') === 0){
@@ -150,6 +201,38 @@ document.addEventListener('DOMContentLoaded', function(){
   if(districtInput){ districtInput.addEventListener('change', autoFillNotes); }
   if(projectInput){ projectInput.addEventListener('change', autoFillNotes); }
   autoFillNotes();
+
+  function setSelectValue(selectEl, value){
+    if(!selectEl) return;
+    selectEl.value = value ? String(value) : '';
+    if(window.jQuery && window.jQuery(selectEl).data('select2')){
+      window.jQuery(selectEl).trigger('change.select2');
+    } else {
+      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  document.querySelectorAll('.apply-spell-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var pStart = btn.getAttribute('data-period-start') || '';
+      var pEnd = btn.getAttribute('data-period-end') || '';
+      var districtId = btn.getAttribute('data-district-id') || '';
+      var projectId = btn.getAttribute('data-project-id') || '';
+      var spellLabel = btn.getAttribute('data-spell-label') || '';
+      var defaultAccountId = companyAccountInput ? (companyAccountInput.getAttribute('data-default-account-id') || '') : '';
+
+      if(periodStartInput) periodStartInput.value = pStart;
+      if(periodEndInput) periodEndInput.value = pEnd;
+      setSelectValue(districtInput, districtId);
+      setSelectValue(projectInput, projectId);
+      if(companyAccountInput && defaultAccountId){
+        setSelectValue(companyAccountInput, defaultAccountId);
+      }
+      selectedSpellLabel = spellLabel;
+      autoFillNotes();
+      if(window.toastr){ window.toastr.success('Spell applied to close form. Review and click Close.'); }
+    });
+  });
 
   document.querySelectorAll('.month-close-reopen-form').forEach(function(form){
     form.addEventListener('submit', function(e){
