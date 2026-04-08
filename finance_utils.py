@@ -1196,10 +1196,12 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
         WorkspaceExpense.expense_date >= period_start,
         WorkspaceExpense.expense_date <= period_end,
     )
-    if district_id:
-        expenses_q = expenses_q.filter(WorkspaceExpense.district_id == district_id)
-    if project_id:
-        expenses_q = expenses_q.filter(WorkspaceExpense.project_id == project_id)
+    # WorkspaceExpense legacy model may not carry district/project columns.
+    # Guard these filters to avoid runtime attribute errors on older schemas/models.
+    if district_id and hasattr(WorkspaceExpense, "district_id"):
+        expenses_q = expenses_q.filter(getattr(WorkspaceExpense, "district_id") == district_id)
+    if project_id and hasattr(WorkspaceExpense, "project_id"):
+        expenses_q = expenses_q.filter(getattr(WorkspaceExpense, "project_id") == project_id)
     expenses = expenses_q.all()
 
     opening_q = WorkspaceOpeningExpense.query.filter(
