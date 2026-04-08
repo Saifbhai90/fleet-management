@@ -2643,7 +2643,13 @@
         }
 
         function applyFilters(){
-          if(!_hasAnyFilters()){_restorePageRows();if(typeof window._fleetAfterFilter==='function')window._fleetAfterFilter();return}
+          if(!_hasAnyFilters()){
+            _restorePageRows();
+            // Non-paginated tables keep current tbody; make sure previously hidden rows are visible again.
+            if(!_usingAllRows){getRows().forEach(function(r){r.style.display=''})}
+            if(typeof window._fleetAfterFilter==='function')window._fleetAfterFilter();
+            return
+          }
           if(_allRowsHtml)_switchToAllRows();
           var rows=getRows(),top10Sets={};
           for(var ci in _numFilters){if(_numFilters[ci].type==='top10'){var n=_numFilters[ci].val1||10,pairs=[];rows.forEach(function(r,i){var v=numVal(getCellVal(r,parseInt(ci)));if(!isNaN(v))pairs.push({idx:i,val:v})});pairs.sort(function(a,b){return b.val-a.val});var s=new Set();pairs.slice(0,n).forEach(function(p){s.add(p.idx)});top10Sets[ci]=s}}
