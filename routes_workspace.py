@@ -1077,6 +1077,182 @@ def workspace_opening_expenses_list():
     )
 
 
+def workspace_opening_expense_import():
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+
+    import_errors = []
+    if request.method == "POST":
+        file_obj = request.files.get("file")
+        if not file_obj or not (file_obj.filename or "").strip():
+            flash("Please select an Excel or CSV file.", "warning")
+            return redirect(url_for("workspace_opening_expense_import"))
+
+        filename = file_obj.filename or ""
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext not in ("xlsx", "xls", "csv"):
+            flash("Unsupported file type. Use .xlsx, .xls or .csv.", "danger")
+            return redirect(url_for("workspace_opening_expense_import"))
+
+        try:
+            import pandas as pd
+
+            if ext in ("xlsx", "xls"):
+                df = pd.read_excel(file_obj)
+            else:
+                df = pd.read_csv(file_obj)
+
+            required_cols = ["opening_date", "district", "project"]
+            missing = [c for c in required_cols if c not in df.columns]
+            if missing:
+                flash(f"Missing required columns: {', '.join(missing)}", "danger")
+                return redirect(url_for("workspace_opening_expense_import"))
+
+            district_map = {d.name.strip().lower(): d.id for d in District.query.order_by(District.name).all() if d.name}
+            project_map = {p.name.strip().lower(): p.id for p in Project.query.order_by(Project.name).all() if p.name}
+            ensure_workspace_opening_expense_accounts(emp.id)
+            add_rows = []
+
+            def _dec(raw):
+                if raw is None:
+                    return Decimal("0")
+                s = str(raw).strip()
+                if not s or s.lower() == "nan":
+                    return Decimal("0")
+                return Decimal(s)
+
+            def _date_from_any(v):
+                if v is None:
+                    return None
+                if hasattr(v, "date"):
+                    try:
+                        return v.date()
+                    except Exception:
+                        pass
+                s = str(v).strip()
+                if not s or s.lower() == "nan":
+                    return None
+                d1 = parse_date(s)
+                if d1:
+                    return d1
+                try:
+                    return pd.to_datetime(s, errors="coerce").date()
+                except Exception:
+                    return None
+
+            for idx, row in df.iterrows():
+                row_no = idx + 2
+                issues = []
+
+                opening_date = _date_from_any(row.get("opening_date"))
+                if not opening_date:
+                    issues.append('"opening_date" is required (dd-mm-yyyy or yyyy-mm-dd).')
+
+                district_name = str(row.get("district", "")).strip() if not pd.isna(row.get("district")) else ""
+                district_id = district_map.get(district_name.lower()) if district_name else None
+                if not district_id:
+                    issues.append(f'District "{district_name or "-"}" not found.')
+
+                project_name = str(row.get("project", "")).strip() if not pd.isna(row.get("project")) else ""
+                project_id = project_map.get(project_name.lower()) if project_name else None
+                if not project_id:
+                    issues.append(f'Project "{project_name or "-"}" not found.')
+
+                try:
+                    fueling = _dec(row.get("fueling_expense", 0))
+                    oil = _dec(row.get("oil_change_expense", 0))
+                    maintenance = _dec(row.get("maintenance_expense", 0))
+                    emp_exp = _dec(row.get("employee_expense", 0))
+                except Exception:
+                    issues.append("Expense fields must be numeric.")
+                    fueling = oil = maintenance = emp_exp = Decimal("0")
+
+                if opening_date and _workspace_has_closed_month_for_date(emp.id, opening_date):
+                    issues.append("Date belongs to a closed month. Reopen month-close first.")
+
+                if issues:
+                    import_errors.append({
+                        "row": row_no,
+                        "identifier": f"{district_name or '-'} / {project_name or '-'}",
+                        "message": "; ".join(issues),
+                    })
+                    continue
+
+                total = fueling + oil + maintenance + emp_exp
+                remarks = str(row.get("remarks", "")).strip() if "remarks" in df.columns and not pd.isna(row.get("remarks")) else ""
+                add_rows.append({
+                    "opening_date": opening_date,
+                    "district_id": district_id,
+                    "project_id": project_id,
+                    "fueling_expense": fueling,
+                    "oil_change_expense": oil,
+                    "maintenance_expense": maintenance,
+                    "employee_expense": emp_exp,
+                    "total_expense": total,
+                    "remarks": remarks or None,
+                })
+
+            if import_errors:
+                return render_template("workspace/opening_expense_import.html", employee=emp, import_errors=import_errors)
+
+            for payload in add_rows:
+                rec = WorkspaceOpeningExpense(
+                    employee_id=emp.id,
+                    opening_date=payload["opening_date"],
+                    district_id=payload["district_id"],
+                    project_id=payload["project_id"],
+                    fueling_expense=payload["fueling_expense"],
+                    oil_change_expense=payload["oil_change_expense"],
+                    maintenance_expense=payload["maintenance_expense"],
+                    employee_expense=payload["employee_expense"],
+                    total_expense=payload["total_expense"],
+                    remarks=payload["remarks"],
+                    created_by_user_id=session.get("user_id"),
+                )
+                db.session.add(rec)
+                db.session.flush()
+                if rec.total_expense and Decimal(str(rec.total_expense)) > Decimal("0"):
+                    je = workspace_post_opening_expense(rec)
+                    rec.journal_entry_id = je.id
+
+            db.session.commit()
+            flash(f"{len(add_rows)} opening expense rows imported successfully.", "success")
+            return redirect(url_for("workspace_opening_expenses_list"))
+        except Exception as exc:
+            db.session.rollback()
+            flash(f"Import failed: {exc}", "danger")
+
+    return render_template("workspace/opening_expense_import.html", employee=emp, import_errors=import_errors)
+
+
+def workspace_opening_expense_import_template():
+    guard, _emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+
+    headers = [
+        "opening_date",
+        "district",
+        "project",
+        "fueling_expense",
+        "oil_change_expense",
+        "maintenance_expense",
+        "employee_expense",
+        "remarks",
+    ]
+    rows = [
+        ["01-03-2026", "Muzaffargarh", "RAS-1034", 35000, 6000, 9000, 5000, "Date Range: 1-15(Mar-26)"],
+        ["16-03-2026", "Muzaffargarh", "RAS-1034", 28000, 5000, 7000, 4500, "Date Range: 16-31(Mar-26)"],
+    ]
+    return generate_excel_template(
+        headers,
+        rows,
+        required_columns=["opening_date", "district", "project"],
+        filename="workspace_opening_expense_import_template.xlsx",
+    )
+
+
 def workspace_opening_expense_form(pk=None):
     guard, emp = _workspace_guard("workspace_dashboard")
     if guard:
