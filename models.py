@@ -2041,6 +2041,33 @@ class WorkspaceExpense(db.Model):
     created_by = db.relationship('User', backref='workspace_expenses_created', lazy='select')
 
 
+class WorkspaceOpeningExpense(db.Model):
+    __tablename__ = 'workspace_opening_expense'
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    opening_date = db.Column(db.Date, nullable=False, index=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
+
+    # Opening expense breakdown (monthly opening/brought-forward style)
+    fueling_expense = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    oil_change_expense = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    maintenance_expense = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    employee_expense = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    total_expense = db.Column(db.Numeric(15, 2), nullable=False, default=0, index=True)
+
+    remarks = db.Column(db.Text, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('workspace_opening_expenses', lazy='dynamic'))
+    district = db.relationship('District', backref='workspace_opening_expenses', lazy='select')
+    project = db.relationship('Project', backref='workspace_opening_expenses', lazy='select')
+    created_by = db.relationship('User', backref='workspace_opening_expenses_created', lazy='select')
+
+
 class WorkspaceFundTransfer(db.Model):
     __tablename__ = 'workspace_fund_transfer'
 

@@ -460,6 +460,7 @@ from routes_workspace import (
     workspace_product_print, workspace_product_import, workspace_product_import_template,
     workspace_accounts_list, workspace_account_form,
     workspace_expenses_list, workspace_expense_form, workspace_expense_delete,
+    workspace_opening_expenses_list, workspace_opening_expense_form, workspace_opening_expense_delete,
     workspace_fund_transfers_list, workspace_fund_transfer_form, workspace_fund_transfer_delete,
     workspace_ledger, workspace_month_close, workspace_reports,
     workspace_transfer_description_suggestions_api,
@@ -552,6 +553,10 @@ app.add_url_rule('/workspace/expenses', 'workspace_expenses_list', workspace_exp
 app.add_url_rule('/workspace/expense/new', 'workspace_expense_new', workspace_expense_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/expense/<int:pk>/edit', 'workspace_expense_edit', workspace_expense_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/expense/<int:pk>/delete', 'workspace_expense_delete', workspace_expense_delete, methods=['POST'])
+app.add_url_rule('/workspace/opening-expenses', 'workspace_opening_expenses_list', workspace_opening_expenses_list)
+app.add_url_rule('/workspace/opening-expense/new', 'workspace_opening_expense_new', workspace_opening_expense_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/opening-expense/<int:pk>/edit', 'workspace_opening_expense_edit', workspace_opening_expense_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/opening-expense/<int:pk>/delete', 'workspace_opening_expense_delete', workspace_opening_expense_delete, methods=['POST'])
 app.add_url_rule('/workspace/transfers', 'workspace_fund_transfers_list', workspace_fund_transfers_list)
 app.add_url_rule('/workspace/transfer/new', 'workspace_fund_transfer_new', workspace_fund_transfer_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/transfer/<int:pk>/edit', 'workspace_fund_transfer_edit', workspace_fund_transfer_form, methods=['GET', 'POST'])

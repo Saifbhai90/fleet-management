@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Opening Expenses{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  {% include "workspace/_nav.html" %}
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-cash-coin me-2 text-warning"></i>Opening Expenses</h2>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      <a href="{{ url_for('workspace_opening_expense_new') }}" class="btn btn-warning text-dark btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>Add Opening Expense
+      </a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="GET" class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label small">From Date</label>
+          <input type="text" name="from_date" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">To Date</label>
+          <input type="text" name="to_date" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">District</label>
+          <select name="district_id" class="form-select form-select-sm search-select">
+            <option value="0">-- All Districts --</option>
+            {% for d in districts %}
+            <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Project</label>
+          <select name="project_id" class="form-select form-select-sm search-select">
+            <option value="0">-- All Projects --</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Search</label>
+          <input type="text" name="search" class="form-control form-control-sm" value="{{ search or '' }}" placeholder="Remarks...">
+        </div>
+        <div class="col-md-2 d-flex gap-1">
+          <button type="submit" class="btn btn-warning btn-sm text-dark flex-fill"><i class="bi bi-funnel me-1"></i>Filter</button>
+          <a href="{{ url_for('workspace_opening_expenses_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i></a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-warning text-dark py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="fw-semibold">Opening Expense Entries</span>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-dark">Filtered Total: {{ "{:,.2f}".format(total_amount or 0) }}</span>
+        <input type="text" id="openingSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Quick search..." style="max-width: 220px;" autocomplete="off">
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 small" id="workspaceOpeningExpenseTable">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">#</th>
+              <th>Date</th>
+              <th>District</th>
+              <th>Project</th>
+              <th class="text-end">Fueling</th>
+              <th class="text-end">Oil Change</th>
+              <th class="text-end">Maintenance</th>
+              <th class="text-end">Employee</th>
+              <th class="text-end">Total</th>
+              <th>Remarks</th>
+              <th class="text-center pe-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr class="opening-row">
+              <td class="ps-3">{{ ((pagination.page - 1) * per_page) + loop.index }}</td>
+              <td>{{ r.opening_date|ddmmyyyy }}</td>
+              <td>{{ r.district.name if r.district else '-' }}</td>
+              <td>{{ r.project.name if r.project else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.fueling_expense or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.oil_change_expense or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.maintenance_expense or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.employee_expense or 0) }}</td>
+              <td class="text-end fw-bold text-primary">{{ "{:,.2f}".format(r.total_expense or 0) }}</td>
+              <td>{{ r.remarks or '-' }}</td>
+              <td class="text-center pe-3">
+                <a href="{{ url_for('workspace_opening_expense_edit', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                <form method="POST" action="{{ url_for('workspace_opening_expense_delete', pk=r.id) }}" class="d-inline" onsubmit="return confirm('Delete this opening expense?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr id="openingNoDataRow">
+              <td colspan="11" class="text-center py-5 text-muted">
+                <i class="bi bi-cash-coin display-6 d-block mb-2 opacity-25"></i>
+                No opening expense entries found.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <small class="text-muted"><i class="bi bi-list-ul me-1"></i>Showing {{ ((pagination.page - 1) * per_page) + 1 if rows|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + rows|length }} of {{ pagination.total }} entries</small>
+        {% if pagination and pagination.pages > 1 %}
+        <nav><ul class="pagination pagination-sm mb-0">
+          <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" href="{{ url_for('workspace_opening_expenses_list', page=pagination.prev_num, per_page=per_page, from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, search=search) }}"><i class="bi bi-chevron-left"></i></a></li>
+          {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}
+            {% if p %}
+            <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="{{ url_for('workspace_opening_expenses_list', page=p, per_page=per_page, from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, search=search) }}">{{ p }}</a></li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
+          {% endfor %}
+          <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" href="{{ url_for('workspace_opening_expenses_list', page=pagination.next_num, per_page=per_page, from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, search=search) }}"><i class="bi bi-chevron-right"></i></a></li>
+        </ul></nav>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var searchInput = document.getElementById('openingSearch');
+  var table = document.getElementById('workspaceOpeningExpenseTable');
+  if (searchInput && table) {
+    var tbody = table.querySelector('tbody');
+    var rows = tbody ? tbody.querySelectorAll('tr.opening-row') : [];
+    var noDataRow = tbody ? tbody.querySelector('#openingNoDataRow') : null;
+    searchInput.addEventListener('input', function(){
+      var q = this.value.trim();
+      var visible = 0;
+      rows.forEach(function(row){
+        var show = !q || window.fleetMultiWordMatch(row.innerText || row.textContent, q);
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      if (noDataRow) noDataRow.style.display = (rows.length === 0 || (q && visible === 0)) ? '' : 'none';
+    });
+  }
+  if (window.fleetTableEnhance) window.fleetTableEnhance('workspaceOpeningExpenseTable');
+  if (window.fleetPrintExport) window.fleetPrintExport('workspaceOpeningExpenseTable', 'Opening Expenses', 'Opening_Expenses.csv');
+});
+</script>
+{% endblock %}

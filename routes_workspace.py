@@ -9,7 +9,7 @@ from models import (
     db, Employee, Driver, Party, Account, District, Project,
     EmployeeAssignment, FundTransferCategory,
     WorkspaceParty, WorkspaceProduct, WorkspaceAccount,
-    WorkspaceExpense, WorkspaceFundTransfer, WorkspaceMonthClose,
+    WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFundTransfer, WorkspaceMonthClose,
 )
 from routes_finance import check_auth
 from auth_utils import get_user_context
@@ -204,7 +204,9 @@ def workspace_home():
     _ensure_workspace_driver_accounts(emp)
     db.session.commit()
     scope = _get_employee_scope_summary(emp)
-    total_expenses = sum((x.amount or 0) for x in WorkspaceExpense.query.filter_by(employee_id=emp.id).all())
+    regular_expenses = sum((x.amount or 0) for x in WorkspaceExpense.query.filter_by(employee_id=emp.id).all())
+    opening_expenses = sum((x.total_expense or 0) for x in WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id).all())
+    total_expenses = Decimal(str(regular_expenses or 0)) + Decimal(str(opening_expenses or 0))
     total_transfers = sum((x.amount or 0) for x in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all())
 
     # Live ledger position:
@@ -239,6 +241,7 @@ def workspace_home():
         "parties": WorkspaceParty.query.filter_by(employee_id=emp.id, is_active=True).count(),
         "products": WorkspaceProduct.query.filter_by(employee_id=emp.id, is_active=True).count(),
         "expenses": total_expenses,
+        "opening_expenses": opening_expenses,
         "transfers": total_transfers,
         "ledger_end_balance": adjusted_ledger_end,
         "net_balance": net_balance,
@@ -910,6 +913,129 @@ def workspace_expense_delete(pk):
     if guard:
         return guard
     return redirect(url_for("employee_expense_delete", pk=pk))
+
+
+def workspace_opening_expenses_list():
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+
+    from_date = parse_date(request.args.get("from_date"))
+    to_date = parse_date(request.args.get("to_date"))
+    district_id = request.args.get("district_id", type=int) or 0
+    project_id = request.args.get("project_id", type=int) or 0
+    search = (request.args.get("search") or "").strip()
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    per_page = request.args.get("per_page", 20, type=int) or 20
+    if per_page not in (10, 20, 50, 100):
+        per_page = 20
+
+    query = WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id)
+    if from_date:
+        query = query.filter(WorkspaceOpeningExpense.opening_date >= from_date)
+    if to_date:
+        query = query.filter(WorkspaceOpeningExpense.opening_date <= to_date)
+    if district_id:
+        query = query.filter(WorkspaceOpeningExpense.district_id == district_id)
+    if project_id:
+        query = query.filter(WorkspaceOpeningExpense.project_id == project_id)
+    if search:
+        flt = _workspace_multi_word_filter(search, WorkspaceOpeningExpense.remarks)
+        if flt is not None:
+            query = query.filter(flt)
+
+    total_amount = query.with_entities(
+        db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.total_expense), 0)
+    ).scalar() or 0
+
+    pagination = query.order_by(
+        WorkspaceOpeningExpense.opening_date.desc(),
+        WorkspaceOpeningExpense.id.desc(),
+    ).paginate(page=page, per_page=per_page, error_out=False)
+
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+    return render_template(
+        "workspace/opening_expense_list.html",
+        employee=emp,
+        rows=pagination.items,
+        pagination=pagination,
+        per_page=per_page,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        search=search,
+        total_amount=total_amount,
+        districts=districts,
+        projects=projects,
+    )
+
+
+def workspace_opening_expense_form(pk=None):
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+
+    row = WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id, id=pk).first() if pk else None
+    if pk and not row:
+        flash("Opening expense entry not found.", "danger")
+        return redirect(url_for("workspace_opening_expenses_list"))
+
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+
+    if request.method == "POST":
+        opening_date = parse_date(request.form.get("opening_date"))
+        if not opening_date:
+            flash("Opening date is required.", "danger")
+            return render_template("workspace/opening_expense_form.html", row=row, employee=emp, districts=districts, projects=projects)
+
+        def _to_dec(name):
+            raw = (request.form.get(name) or "").strip()
+            if not raw:
+                return Decimal("0")
+            return Decimal(str(raw))
+
+        try:
+            fueling = _to_dec("fueling_expense")
+            oil = _to_dec("oil_change_expense")
+            maintenance = _to_dec("maintenance_expense")
+            emp_exp = _to_dec("employee_expense")
+        except Exception:
+            flash("Expense fields must be numeric values.", "danger")
+            return render_template("workspace/opening_expense_form.html", row=row, employee=emp, districts=districts, projects=projects)
+
+        if not row:
+            row = WorkspaceOpeningExpense(employee_id=emp.id)
+            db.session.add(row)
+
+        row.opening_date = opening_date
+        row.district_id = request.form.get("district_id", type=int) or None
+        row.project_id = request.form.get("project_id", type=int) or None
+        row.fueling_expense = fueling
+        row.oil_change_expense = oil
+        row.maintenance_expense = maintenance
+        row.employee_expense = emp_exp
+        row.total_expense = fueling + oil + maintenance + emp_exp
+        row.remarks = (request.form.get("remarks") or "").strip() or None
+        row.created_by_user_id = session.get("user_id")
+        db.session.commit()
+        flash("Opening expense saved.", "success")
+        return redirect(url_for("workspace_opening_expenses_list"))
+
+    return render_template("workspace/opening_expense_form.html", row=row, employee=emp, districts=districts, projects=projects)
+
+
+def workspace_opening_expense_delete(pk):
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+    row = WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id, id=pk).first_or_404()
+    db.session.delete(row)
+    db.session.commit()
+    flash("Opening expense deleted.", "success")
+    return redirect(url_for("workspace_opening_expenses_list"))
 
 
 def workspace_fund_transfers_list():
