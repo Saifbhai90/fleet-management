@@ -255,6 +255,8 @@ if _run_startup_tasks:
                 ('workspace_party', 'remarks', 'TEXT'),
                 ('workspace_opening_expense', 'journal_entry_id', 'INTEGER REFERENCES workspace_journal_entry(id)'),
                 ('workspace_opening_expense', 'month_close_id', 'INTEGER REFERENCES workspace_month_close(id)'),
+                ('workspace_month_close', 'district_id', 'INTEGER REFERENCES district(id)'),
+                ('workspace_month_close', 'project_id', 'INTEGER REFERENCES project(id)'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():
@@ -449,7 +451,7 @@ from routes_finance import (
     chart_of_accounts_list, chart_of_accounts_add, chart_of_accounts_edit, chart_of_accounts_toggle,
     fund_transfer_add, fund_transfer_edit, fund_transfer_delete, fund_transfers_list,
     wallet_dashboard,
-    journal_voucher_add, journal_vouchers_list,
+    journal_voucher_add, journal_vouchers_list, journal_voucher_detail,
     bank_directory_list_api, bank_directory_add_api, bank_directory_delete_api, bank_directory_update_api,
     ft_description_suggestions_api, ft_categories_list_api, ft_categories_add_api,
 )  # noqa: E402
@@ -526,6 +528,7 @@ app.add_url_rule('/api/bank-directory/<int:pk>/update', 'bank_directory_update',
 # Journal Voucher (replace placeholder)
 app.add_url_rule('/accounts/jv', 'accounts_jv', journal_voucher_add, methods=['GET', 'POST'])
 app.add_url_rule('/accounts/jv/list', 'journal_vouchers_list', journal_vouchers_list, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/jv/<int:pk>', 'journal_voucher_detail', journal_voucher_detail, methods=['GET'])
 
 # Employee Financial Workspace
 app.add_url_rule('/workspace', 'workspace_dashboard', workspace_dashboard)

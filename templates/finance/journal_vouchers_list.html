@@ -78,19 +78,19 @@
                         {% for jv in items %}
                         <tr>
                             <td class="text-center text-muted small">{{ ((entries.page - 1) * per_page + loop.index) if entries.page is defined else loop.index }}</td>
-                            <td><span class="fw-semibold">{{ jv.entry_number|default(jv.id) }}</span></td>
+                            <td><a class="fw-semibold text-decoration-none" href="{{ url_for('journal_voucher_detail', pk=jv.id) }}">{{ jv.entry_number|default(jv.id) }}</a></td>
                             <td>{{ jv.entry_date|ddmmyyyy }}</td>
                             <td>
                                 {% if jv.entry_type is defined %}
-                                    <span class="badge bg-warning text-dark">{{ jv.entry_type }}</span>
+                                    <a href="{{ url_for('journal_voucher_detail', pk=jv.id) }}" class="badge bg-warning text-dark text-decoration-none">{{ jv.entry_type }}</a>
                                 {% else %}
-                                    <span class="badge bg-warning text-dark">JV</span>
+                                    <a href="{{ url_for('journal_voucher_detail', pk=jv.id) }}" class="badge bg-warning text-dark text-decoration-none">JV</a>
                                 {% endif %}
                             </td>
                             <td title="{{ jv.description }}">{{ jv.description[:60] if jv.description else '-' }}{% if jv.description and jv.description|length > 60 %}…{% endif %}</td>
-                            <td class="text-end fw-semibold">{{ "{:,.2f}".format(jv.total_amount|default(0)) }}</td>
-                            <td>{{ jv.district.name if jv.district else '-' }}</td>
-                            <td>{{ jv.project.name if jv.project else '-' }}</td>
+                            <td class="text-end fw-semibold">{{ "{:,.2f}".format((totals_map.get(jv.id, 0) if totals_map else 0)) }}</td>
+                            <td>{{ scope_map.get(jv.id, {}).get('district', '-') if scope_map else (jv.district.name if jv.district else '-') }}</td>
+                            <td>{{ scope_map.get(jv.id, {}).get('project', '-') if scope_map else (jv.project.name if jv.project else '-') }}</td>
                         </tr>
                         {% else %}
                         <tr>

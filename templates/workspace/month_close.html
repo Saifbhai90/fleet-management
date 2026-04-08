@@ -17,6 +17,22 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">Period Start</label><input type="text" class="form-control datepicker" id="periodStartInput" name="period_start" placeholder="dd-mm-yyyy" required></div>
         <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">Period End</label><input type="text" class="form-control datepicker" id="periodEndInput" name="period_end" placeholder="dd-mm-yyyy" required></div>
+        <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">District</label>
+          <select name="district_id" id="monthCloseDistrict" class="form-select search-select" required>
+            <option value="">-- Select District --</option>
+            {% for d in districts %}
+            <option value="{{ d.id }}">{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">Project</label>
+          <select name="project_id" id="monthCloseProject" class="form-select search-select" required>
+            <option value="">-- Select Project --</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}">{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
         <div class="col-lg-4 col-md-8"><label class="form-label fw-semibold">Fallback Company Expense Account (optional)</label>
           <select name="company_account_id" class="form-select search-select">
             <option value="">-- Auto map to company expense heads --</option>
@@ -25,7 +41,7 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-lg-2 col-md-4"><label class="form-label fw-semibold">Action</label><button class="btn btn-danger w-100"><i class="bi bi-check2-circle me-1"></i>Close Month</button></div>
+        <div class="col-lg-2 col-md-4"><label class="form-label fw-semibold">Action</label><button class="btn btn-danger w-100"><i class="bi bi-check2-circle me-1"></i>Close</button></div>
         <div class="col-12"><label class="form-label fw-semibold">Notes</label><textarea name="notes" id="monthCloseNotes" class="form-control" rows="2" placeholder="Optional remarks for this close batch"></textarea></div>
       </form>
     </div>
@@ -38,12 +54,14 @@
     </div>
     <div class="table-responsive">
       <table class="table table-sm table-hover align-middle mb-0" id="workspaceMonthCloseTable">
-        <thead class="table-light"><tr><th>#</th><th>Period</th><th>Status</th><th class="text-end">Total Expense</th><th>Company JE</th><th>Closed At</th><th>Action</th></tr></thead>
+        <thead class="table-light"><tr><th>#</th><th>Period</th><th>District</th><th>Project</th><th>Status</th><th class="text-end">Total Expense</th><th>Company JE</th><th>Closed At</th><th>Action</th></tr></thead>
         <tbody>
           {% for r in rows %}
           <tr>
             <td>{{ r.id }}</td>
             <td>{{ r.period_start|ddmmyyyy }} - {{ r.period_end|ddmmyyyy }}</td>
+            <td>{{ r.district.name if r.district else '-' }}</td>
+            <td>{{ r.project.name if r.project else '-' }}</td>
             <td>
               {% if r.status == 'Closed' %}
               <span class="badge bg-success">Closed</span>
@@ -82,7 +100,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="7" class="text-center text-muted py-4">No month close records yet.</td></tr>
+          <tr><td colspan="9" class="text-center text-muted py-4">No month close records yet.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -93,6 +111,8 @@
 document.addEventListener('DOMContentLoaded', function(){
   var periodStartInput = document.getElementById('periodStartInput');
   var periodEndInput = document.getElementById('periodEndInput');
+  var districtInput = document.getElementById('monthCloseDistrict');
+  var projectInput = document.getElementById('monthCloseProject');
   var notesInput = document.getElementById('monthCloseNotes');
 
   function parseDdMmYyyy(val){
@@ -113,7 +133,11 @@ document.addEventListener('DOMContentLoaded', function(){
     var s = parseDdMmYyyy(periodStartInput.value);
     var e = parseDdMmYyyy(periodEndInput.value);
     if(!s || !e) return;
-    var label = 'Date Range: ' + s.d + '-' + e.d + '(' + monthShort(e.m) + '-' + String(e.y).slice(-2) + ')';
+    var dist = districtInput && districtInput.options[districtInput.selectedIndex] ? districtInput.options[districtInput.selectedIndex].text : '';
+    var proj = projectInput && projectInput.options[projectInput.selectedIndex] ? projectInput.options[projectInput.selectedIndex].text : '';
+    var label = 'Date Range: ' + s.d + '-' + e.d + '(' + monthShort(e.m) + '-' + String(e.y).slice(-2) + ')'
+      + ' | District: ' + (dist && dist.indexOf('--') !== 0 ? dist : '-')
+      + ' | Project: ' + (proj && proj.indexOf('--') !== 0 ? proj : '-');
     var current = (notesInput.value || '').trim();
     // Auto-fill empty notes, or refresh previously auto-generated range.
     if(!current || current.indexOf('Date Range:') === 0){
@@ -123,6 +147,8 @@ document.addEventListener('DOMContentLoaded', function(){
 
   if(periodStartInput){ periodStartInput.addEventListener('input', autoFillNotes); periodStartInput.addEventListener('change', autoFillNotes); }
   if(periodEndInput){ periodEndInput.addEventListener('input', autoFillNotes); periodEndInput.addEventListener('change', autoFillNotes); }
+  if(districtInput){ districtInput.addEventListener('change', autoFillNotes); }
+  if(projectInput){ projectInput.addEventListener('change', autoFillNotes); }
   autoFillNotes();
 
   document.querySelectorAll('.month-close-reopen-form').forEach(function(form){

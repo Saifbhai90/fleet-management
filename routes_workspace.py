@@ -1271,20 +1271,28 @@ def workspace_month_close():
         return guard
     can_manage_month_close = _is_master_or_admin_user()
     accounts = Account.query.filter_by(is_active=True).order_by(Account.code).all()
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
     rows = WorkspaceMonthClose.query.filter_by(employee_id=emp.id).order_by(WorkspaceMonthClose.id.desc()).all()
 
     if request.method == "POST":
         period_start = parse_date(request.form.get("period_start"))
         period_end = parse_date(request.form.get("period_end"))
+        district_id = request.form.get("district_id", type=int)
+        project_id = request.form.get("project_id", type=int)
         company_account_id = request.form.get("company_account_id", type=int)
         notes = (request.form.get("notes") or "").strip()
-        if not (period_start and period_end):
-            flash("Period start/end are required.", "danger")
+        district = District.query.get(district_id) if district_id else None
+        project = Project.query.get(project_id) if project_id else None
+        if not (period_start and period_end and district and project):
+            flash("Period, district and project are required.", "danger")
             return render_template(
                 "workspace/month_close.html",
                 employee=emp,
                 rows=rows,
                 accounts=accounts,
+                districts=districts,
+                projects=projects,
                 can_manage_month_close=can_manage_month_close,
             )
         try:
@@ -1292,6 +1300,10 @@ def workspace_month_close():
                 employee_id=emp.id,
                 period_start=period_start,
                 period_end=period_end,
+                district_id=district.id,
+                project_id=project.id,
+                district_name=district.name,
+                project_name=project.name,
                 company_account_id=company_account_id,
                 user_id=session.get("user_id"),
                 notes=notes,
@@ -1307,6 +1319,8 @@ def workspace_month_close():
         employee=emp,
         rows=rows,
         accounts=accounts,
+        districts=districts,
+        projects=projects,
         can_manage_month_close=can_manage_month_close,
     )
 

@@ -1943,9 +1943,99 @@ def journal_vouchers_list():
             ))
 
     entries = query.paginate(page=page, per_page=per_page, error_out=False)
+    items = entries.items
+    entry_ids = [e.id for e in items]
+    totals_map = {}
+    if entry_ids:
+        amount_rows = db.session.query(
+            JournalEntryLine.journal_entry_id,
+            db.func.coalesce(db.func.sum(JournalEntryLine.debit), 0)
+        ).filter(
+            JournalEntryLine.journal_entry_id.in_(entry_ids)
+        ).group_by(JournalEntryLine.journal_entry_id).all()
+        totals_map = {r[0]: Decimal(str(r[1] or 0)) for r in amount_rows}
+
+    scope_map = {}
+    for e in items:
+        district_name = e.district.name if e.district else '-'
+        project_name = e.project.name if e.project else '-'
+        if (district_name == '-' or project_name == '-') and e.reference_type == 'WorkspaceMonthClose' and e.reference_id:
+            row = WorkspaceMonthClose.query.get(e.reference_id)
+            if row:
+                district_name = district_name if district_name != '-' else (row.district.name if row.district else '-')
+                project_name = project_name if project_name != '-' else (row.project.name if row.project else '-')
+        scope_map[e.id] = {'district': district_name, 'project': project_name}
 
     return render_template('finance/journal_vouchers_list.html',
-                           entries=entries, from_date=from_date, to_date=to_date, per_page=per_page, search=search)
+                           entries=entries, from_date=from_date, to_date=to_date, per_page=per_page, search=search,
+                           totals_map=totals_map, scope_map=scope_map)
+
+
+def journal_voucher_detail(pk):
+    auth_check = check_auth('accounts_jv')
+    if auth_check:
+        return auth_check
+
+    je = JournalEntry.query.get_or_404(pk)
+    line_rows = db.session.query(JournalEntryLine, Account).join(
+        Account, Account.id == JournalEntryLine.account_id
+    ).filter(
+        JournalEntryLine.journal_entry_id == je.id
+    ).order_by(JournalEntryLine.sort_order.asc(), JournalEntryLine.id.asc()).all()
+
+    lines = []
+    total_debit = Decimal('0')
+    total_credit = Decimal('0')
+    for ln, acc in line_rows:
+        debit = Decimal(str(ln.debit or 0))
+        credit = Decimal(str(ln.credit or 0))
+        total_debit += debit
+        total_credit += credit
+        lines.append({
+            'account_code': acc.code,
+            'account_name': acc.name,
+            'debit': debit,
+            'credit': credit,
+            'description': ln.description or '',
+        })
+
+    source = {'title': je.reference_type or 'Manual', 'items': []}
+    if je.reference_type == 'FundTransfer' and je.reference_id:
+        ft = FundTransfer.query.get(je.reference_id)
+        if ft:
+            source['title'] = 'Fund Transfer'
+            source['items'] = [
+                ('Transfer No', ft.transfer_number or '-'),
+                ('Amount', f"{Decimal(str(ft.amount or 0)):,.2f}"),
+                ('From', ft.from_name or '-'),
+                ('To', ft.to_name or '-'),
+                ('Payment Mode', ft.payment_mode or '-'),
+                ('Category', ft.category or '-'),
+                ('Description', ft.description or '-'),
+            ]
+    elif je.reference_type == 'WorkspaceMonthClose' and je.reference_id:
+        mc = WorkspaceMonthClose.query.get(je.reference_id)
+        if mc:
+            source['title'] = 'Workspace Month Close'
+            source['items'] = [
+                ('Batch ID', str(mc.id)),
+                ('Period', f"{mc.period_start.strftime('%d-%m-%Y')} - {mc.period_end.strftime('%d-%m-%Y')}"),
+                ('District', mc.district.name if mc.district else '-'),
+                ('Project', mc.project.name if mc.project else '-'),
+                ('Closing Amount', f"{Decimal(str(mc.total_expense or 0)):,.2f}"),
+                ('Notes', mc.notes or '-'),
+            ]
+    elif je.reference_type == 'Manual':
+        source['items'] = [('Source', 'Manual journal voucher')]
+
+    return render_template(
+        'finance/journal_voucher_detail.html',
+        je=je,
+        lines=lines,
+        total_debit=total_debit,
+        total_credit=total_credit,
+        source=source,
+    )
 
 
 # ──────────────────────────────────────────────────────

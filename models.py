@@ -2105,11 +2105,13 @@ class WorkspaceFundTransfer(db.Model):
 class WorkspaceMonthClose(db.Model):
     __tablename__ = 'workspace_month_close'
     __table_args__ = (
-        db.UniqueConstraint('employee_id', 'period_start', 'period_end', name='uq_workspace_month_close_period'),
+        db.UniqueConstraint('employee_id', 'district_id', 'project_id', 'period_start', 'period_end', name='uq_workspace_month_close_period'),
     )
 
     id = db.Column(db.Integer, primary_key=True)
     employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
     period_start = db.Column(db.Date, nullable=False, index=True)
     period_end = db.Column(db.Date, nullable=False, index=True)
     status = db.Column(db.String(20), nullable=False, default='Draft')  # Draft, Closed, Reopened
@@ -2126,6 +2128,8 @@ class WorkspaceMonthClose(db.Model):
     updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 
     employee = db.relationship('Employee', backref=db.backref('workspace_month_closes', lazy='dynamic'))
+    district = db.relationship('District', backref='workspace_month_closes', lazy='select')
+    project = db.relationship('Project', backref='workspace_month_closes', lazy='select')
     workspace_expense_account = db.relationship('WorkspaceAccount', foreign_keys=[workspace_expense_account_id], backref='month_close_expense_links', lazy='select')
     company_account = db.relationship('Account', foreign_keys=[company_account_id], backref='workspace_month_close_targets', lazy='select')
     workspace_journal_entry = db.relationship('WorkspaceJournalEntry', foreign_keys=[workspace_journal_entry_id], backref='month_close_workspace_entry', lazy='select')

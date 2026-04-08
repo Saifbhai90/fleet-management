@@ -1187,20 +1187,32 @@ def reconcile_workspace_opening_expense_postings(employee_id):
     return created
 
 
-def workspace_close_month(employee_id, period_start, period_end, company_account_id, user_id, notes=''):
+def workspace_close_month(employee_id, period_start, period_end, company_account_id, user_id, notes='',
+                         district_id=None, project_id=None, district_name=None, project_name=None):
     ensure_workspace_base_accounts(employee_id)
-    expenses = WorkspaceExpense.query.filter(
+    expenses_q = WorkspaceExpense.query.filter(
         WorkspaceExpense.employee_id == employee_id,
         WorkspaceExpense.month_close_id.is_(None),
         WorkspaceExpense.expense_date >= period_start,
         WorkspaceExpense.expense_date <= period_end,
-    ).all()
-    opening_expenses = WorkspaceOpeningExpense.query.filter(
+    )
+    if district_id:
+        expenses_q = expenses_q.filter(WorkspaceExpense.district_id == district_id)
+    if project_id:
+        expenses_q = expenses_q.filter(WorkspaceExpense.project_id == project_id)
+    expenses = expenses_q.all()
+
+    opening_q = WorkspaceOpeningExpense.query.filter(
         WorkspaceOpeningExpense.employee_id == employee_id,
         WorkspaceOpeningExpense.month_close_id.is_(None),
         WorkspaceOpeningExpense.opening_date >= period_start,
         WorkspaceOpeningExpense.opening_date <= period_end,
-    ).all()
+    )
+    if district_id:
+        opening_q = opening_q.filter(WorkspaceOpeningExpense.district_id == district_id)
+    if project_id:
+        opening_q = opening_q.filter(WorkspaceOpeningExpense.project_id == project_id)
+    opening_expenses = opening_q.all()
     total_regular = sum(Decimal(str(e.amount or 0)) for e in expenses)
     total_opening = sum(Decimal(str(e.total_expense or 0)) for e in opening_expenses)
     total = total_regular + total_opening
@@ -1219,6 +1231,8 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
 
     close_row = WorkspaceMonthClose(
         employee_id=employee_id,
+        district_id=district_id,
+        project_id=project_id,
         period_start=period_start,
         period_end=period_end,
         status='Closed',
@@ -1257,25 +1271,28 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
                 debit_bucket[acct.id] = debit_bucket.get(acct.id, Decimal('0')) + amt
 
     period_label = f"{period_start.day}-{period_end.day}({period_end.strftime('%b-%y')})"
+    scope_label = f"District: {district_name or '-'} | Project: {project_name or '-'}"
     company_lines = []
     for acct_id, amt in debit_bucket.items():
         company_lines.append({
             'account_id': acct_id,
             'debit': amt,
             'credit': 0,
-            'description': f'Workspace month close expense - {employee.name} | Period: {period_label}',
+            'description': f'Workspace month close expense - {employee.name} | Period: {period_label} | {scope_label}',
         })
     company_lines.append({
         'account_id': company_wallet.id,
         'debit': 0,
         'credit': total,
-        'description': f'Workspace settlement against employee wallet - {employee.name} | Period: {period_label}',
+        'description': f'Workspace settlement against employee wallet - {employee.name} | Period: {period_label} | {scope_label}',
     })
     company_je = create_journal_entry(
         entry_type='Journal',
         entry_date=period_end,
-        description=f"Workspace month close {employee.name} ({period_start:%m/%Y})",
+        description=f"Workspace month close {employee.name} ({period_start:%m/%Y}) [{scope_label}]",
         lines=company_lines,
+        district_id=district_id,
+        project_id=project_id,
         reference_type='WorkspaceMonthClose',
         reference_id=close_row.id,
         created_by_user_id=user_id,
