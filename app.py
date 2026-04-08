@@ -253,6 +253,7 @@ if _run_startup_tasks:
                 ('workspace_party', 'district_id', 'INTEGER REFERENCES district(id)'),
                 ('workspace_party', 'contact', 'VARCHAR(100)'),
                 ('workspace_party', 'remarks', 'TEXT'),
+                ('workspace_opening_expense', 'journal_entry_id', 'INTEGER REFERENCES workspace_journal_entry(id)'),
                 ('workspace_opening_expense', 'month_close_id', 'INTEGER REFERENCES workspace_month_close(id)'),
             ]
             for _tbl, _col, _coltype in _col_additions:

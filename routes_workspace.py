@@ -15,8 +15,10 @@ from routes_finance import check_auth
 from auth_utils import get_user_context
 from finance_utils import (
     ensure_workspace_base_accounts,
+    ensure_workspace_opening_expense_accounts,
     ensure_workspace_counterparty_account,
     workspace_post_expense,
+    workspace_post_opening_expense,
     workspace_post_transfer,
     workspace_reverse_journal_entry,
     workspace_get_account_ledger,
@@ -820,6 +822,7 @@ def workspace_accounts_list():
     if guard:
         return guard
     ensure_workspace_base_accounts(emp.id)
+    ensure_workspace_opening_expense_accounts(emp.id)
     _ensure_workspace_driver_accounts(emp)
     parties = WorkspaceParty.query.filter_by(employee_id=emp.id).all()
     for p in parties:
@@ -984,6 +987,7 @@ def workspace_opening_expense_form(pk=None):
 
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
+    ensure_workspace_opening_expense_accounts(emp.id)
 
     if request.method == "POST":
         opening_date = parse_date(request.form.get("opening_date"))
@@ -1009,6 +1013,9 @@ def workspace_opening_expense_form(pk=None):
         if not row:
             row = WorkspaceOpeningExpense(employee_id=emp.id)
             db.session.add(row)
+        elif row.journal_entry_id:
+            workspace_reverse_journal_entry(row.journal_entry_id)
+            row.journal_entry_id = None
 
         row.opening_date = opening_date
         row.district_id = request.form.get("district_id", type=int) or None
@@ -1020,6 +1027,10 @@ def workspace_opening_expense_form(pk=None):
         row.total_expense = fueling + oil + maintenance + emp_exp
         row.remarks = (request.form.get("remarks") or "").strip() or None
         row.created_by_user_id = session.get("user_id")
+        db.session.flush()
+        if row.total_expense and Decimal(str(row.total_expense)) > Decimal("0"):
+            je = workspace_post_opening_expense(row)
+            row.journal_entry_id = je.id
         db.session.commit()
         flash("Opening expense saved.", "success")
         return redirect(url_for("workspace_opening_expenses_list"))
@@ -1032,6 +1043,8 @@ def workspace_opening_expense_delete(pk):
     if guard:
         return guard
     row = WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id, id=pk).first_or_404()
+    if row.journal_entry_id:
+        workspace_reverse_journal_entry(row.journal_entry_id)
     db.session.delete(row)
     db.session.commit()
     flash("Opening expense deleted.", "success")

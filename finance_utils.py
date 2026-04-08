@@ -778,6 +778,43 @@ def ensure_workspace_base_accounts(employee_id):
     return existing
 
 
+def ensure_workspace_opening_expense_accounts(employee_id):
+    """Create dedicated opening-expense heads under 5100 if missing."""
+    existing = ensure_workspace_base_accounts(employee_id)
+    mapping = {
+        'opening_fueling': ('5111', 'Opening Fueling Expense'),
+        'opening_oil': ('5112', 'Opening Oil Change Expense'),
+        'opening_maintenance': ('5113', 'Opening Maintenance Expense'),
+        'opening_employee': ('5114', 'Opening Employee Expense'),
+    }
+    parent = existing.get('5100')
+    for _key, (code, name) in mapping.items():
+        if code in existing:
+            continue
+        row = WorkspaceAccount(
+            employee_id=employee_id,
+            code=code,
+            name=name,
+            account_type='Expense',
+            parent_id=parent.id if parent else None,
+            is_active=True,
+            opening_balance=0,
+            current_balance=0,
+            entity_type='opening_expense_head',
+            description='Dedicated opening expense head',
+        )
+        db.session.add(row)
+        db.session.flush()
+        existing[code] = row
+    return {
+        'fueling': existing.get('5111'),
+        'oil': existing.get('5112'),
+        'maintenance': existing.get('5113'),
+        'employee': existing.get('5114'),
+        'cash': existing.get('1100'),
+    }
+
+
 def ensure_workspace_counterparty_account(employee_id, *, party_id=None, driver_id=None):
     ensure_workspace_base_accounts(employee_id)
     if party_id:
@@ -1023,6 +1060,44 @@ def workspace_post_transfer(transfer_obj):
     )
 
 
+def workspace_post_opening_expense(opening_obj):
+    """Post opening breakup to dedicated workspace expense heads."""
+    heads = ensure_workspace_opening_expense_accounts(opening_obj.employee_id)
+    if not heads.get('cash'):
+        raise ValueError("Workspace cash account not found")
+
+    fueling = Decimal(str(opening_obj.fueling_expense or 0))
+    oil = Decimal(str(opening_obj.oil_change_expense or 0))
+    maintenance = Decimal(str(opening_obj.maintenance_expense or 0))
+    emp_exp = Decimal(str(opening_obj.employee_expense or 0))
+    total = fueling + oil + maintenance + emp_exp
+    if total <= Decimal("0"):
+        raise ValueError("Opening total must be greater than zero")
+
+    lines = []
+    if fueling > 0 and heads.get('fueling'):
+        lines.append({'account_id': heads['fueling'].id, 'debit': fueling, 'credit': 0, 'description': 'Opening Fueling Expense'})
+    if oil > 0 and heads.get('oil'):
+        lines.append({'account_id': heads['oil'].id, 'debit': oil, 'credit': 0, 'description': 'Opening Oil Change Expense'})
+    if maintenance > 0 and heads.get('maintenance'):
+        lines.append({'account_id': heads['maintenance'].id, 'debit': maintenance, 'credit': 0, 'description': 'Opening Maintenance Expense'})
+    if emp_exp > 0 and heads.get('employee'):
+        lines.append({'account_id': heads['employee'].id, 'debit': emp_exp, 'credit': 0, 'description': 'Opening Employee Expense'})
+    lines.append({'account_id': heads['cash'].id, 'debit': 0, 'credit': total, 'description': 'Opening Expense settled from workspace cash'})
+
+    return workspace_create_journal_entry(
+        employee_id=opening_obj.employee_id,
+        entry_type='Expense',
+        entry_date=opening_obj.opening_date,
+        description=opening_obj.remarks or f"Opening Expense {opening_obj.opening_date:%d-%m-%Y}",
+        lines=lines,
+        reference_type='WorkspaceOpeningExpense',
+        reference_id=opening_obj.id,
+        created_by_user_id=opening_obj.created_by_user_id,
+        category='Opening',
+    )
+
+
 def workspace_close_month(employee_id, period_start, period_end, company_account_id, user_id, notes=''):
     ensure_workspace_base_accounts(employee_id)
     expenses = WorkspaceExpense.query.filter(
@@ -1050,8 +1125,7 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
         raise ValueError("Employee company wallet account is not configured")
     company_wallet = Account.query.get(employee.wallet_account_id)
     expense_head = WorkspaceAccount.query.filter_by(employee_id=employee_id, code='5100').first()
-    cash_head = WorkspaceAccount.query.filter_by(employee_id=employee_id, code='1100').first()
-    if not (expense_head and cash_head):
+    if not expense_head:
         raise ValueError("Workspace base accounts are missing")
 
     close_row = WorkspaceMonthClose(
@@ -1068,22 +1142,6 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
     )
     db.session.add(close_row)
     db.session.flush()
-
-    wje = workspace_create_journal_entry(
-        employee_id=employee_id,
-        entry_type='MonthClose',
-        entry_date=period_end,
-        description=f"Month close {period_start:%d-%m-%Y} to {period_end:%d-%m-%Y}",
-        lines=[
-            {'account_id': expense_head.id, 'debit': 0, 'credit': total, 'description': 'Close expense batch'},
-            {'account_id': cash_head.id, 'debit': total, 'credit': 0, 'description': 'Reverse to workspace cash'},
-        ],
-        reference_type='WorkspaceMonthClose',
-        reference_id=close_row.id,
-        created_by_user_id=user_id,
-        category='MonthClose',
-    )
-    close_row.workspace_journal_entry_id = wje.id
 
     company_lines = [
         {'account_id': company_account_id, 'debit': total, 'credit': 0, 'description': f'Workspace month close expense - {employee.name}'},
