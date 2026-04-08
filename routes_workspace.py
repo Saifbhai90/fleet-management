@@ -108,6 +108,17 @@ def _is_master_or_admin_user():
     return bool(ctx.get("is_master_or_admin"))
 
 
+def _workspace_has_closed_month_for_date(employee_id, target_date):
+    if not employee_id or not target_date:
+        return False
+    return db.session.query(WorkspaceMonthClose.id).filter(
+        WorkspaceMonthClose.employee_id == employee_id,
+        WorkspaceMonthClose.status == "Closed",
+        WorkspaceMonthClose.period_start <= target_date,
+        WorkspaceMonthClose.period_end >= target_date,
+    ).first() is not None
+
+
 def _list_employees_for_workspace():
     user_id = session.get("user_id")
     if not user_id:
@@ -1008,6 +1019,9 @@ def workspace_opening_expense_form(pk=None):
         if not opening_date:
             flash("Opening date is required.", "danger")
             return render_template("workspace/opening_expense_form.html", row=row, employee=emp, districts=districts, projects=projects)
+        if _workspace_has_closed_month_for_date(emp.id, opening_date):
+            flash("This date belongs to a closed month. Reopen month-close batch first to make changes.", "danger")
+            return render_template("workspace/opening_expense_form.html", row=row, employee=emp, districts=districts, projects=projects)
 
         def _to_dec(name):
             raw = (request.form.get(name) or "").strip()
@@ -1057,6 +1071,9 @@ def workspace_opening_expense_delete(pk):
     if guard:
         return guard
     row = WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id, id=pk).first_or_404()
+    if _workspace_has_closed_month_for_date(emp.id, row.opening_date):
+        flash("Cannot delete opening expense from a closed month. Reopen month-close batch first.", "danger")
+        return redirect(url_for("workspace_opening_expenses_list"))
     if row.journal_entry_id:
         workspace_reverse_journal_entry(row.journal_entry_id)
     db.session.delete(row)

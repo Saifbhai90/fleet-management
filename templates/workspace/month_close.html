@@ -52,7 +52,19 @@
               {% endif %}
             </td>
             <td class="text-end fw-semibold">{{ '%.2f'|format((r.total_expense or 0)|float) }}</td>
-            <td>{{ r.company_journal_entry_id or '-' }}</td>
+            <td>
+              {% if r.company_journal_entry %}
+                <div class="d-flex flex-column gap-1">
+                  <span>{{ r.company_journal_entry.entry_number or r.company_journal_entry_id }}</span>
+                  <a class="small text-decoration-none" target="_blank"
+                     href="{{ url_for('journal_vouchers_list', search=(r.company_journal_entry.entry_number or (r.company_journal_entry_id|string))) }}">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>View JE
+                  </a>
+                </div>
+              {% else %}
+                {{ r.company_journal_entry_id or '-' }}
+              {% endif %}
+            </td>
             <td>{{ r.closed_at|ddmmyyyy if r.closed_at else '-' }}</td>
             <td>
               {% if can_manage_month_close %}

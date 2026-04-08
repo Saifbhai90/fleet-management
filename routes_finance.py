@@ -6,7 +6,8 @@ from flask import render_template, request, redirect, url_for, flash, jsonify, s
 from sqlalchemy import or_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
-                    FundTransfer, BankAccountDirectory, FundTransferCategory, WorkspaceAccount, WorkspaceJournalEntry)
+                    FundTransfer, BankAccountDirectory, FundTransferCategory, WorkspaceAccount, WorkspaceJournalEntry,
+                    WorkspaceMonthClose)
 from forms import (PaymentVoucherForm, ReceiptVoucherForm, BankEntryForm, JournalVoucherForm,
                    EmployeeExpenseForm, AccountLedgerFilterForm, BalanceSheetFilterForm,
                    AccountForm, FundTransferForm, FundTransferFilterForm, WalletDashboardFilterForm)
@@ -46,6 +47,17 @@ def _require_workspace_employee_for_expenses():
 
 def _workspace_employee_id():
     return session.get('workspace_employee_id')
+
+
+def _workspace_date_is_closed(employee_id, target_date):
+    if not employee_id or not target_date:
+        return False
+    return db.session.query(WorkspaceMonthClose.id).filter(
+        WorkspaceMonthClose.employee_id == employee_id,
+        WorkspaceMonthClose.status == 'Closed',
+        WorkspaceMonthClose.period_start <= target_date,
+        WorkspaceMonthClose.period_end >= target_date,
+    ).first() is not None
 
 
 def _reverse_workspace_employee_expense_journals(expense_id, workspace_employee_id):
@@ -532,7 +544,16 @@ def accounts_account_ledger():
     
     ledger_data = None
     dto_summary = None
-    category_choices = [name for name, _ in _get_fund_transfer_category_choices(include_all_label=True)[1:]]
+    category_set = {name for name, _ in _get_fund_transfer_category_choices(include_all_label=True)[1:] if name}
+    journal_categories = db.session.query(JournalEntry.category).filter(
+        JournalEntry.category.isnot(None),
+        JournalEntry.category != ''
+    ).distinct().all()
+    for cat_row in journal_categories:
+        if cat_row and cat_row[0]:
+            category_set.add(cat_row[0])
+    category_set.add('Workspace Close')
+    category_choices = sorted(category_set, key=lambda s: s.lower())
     selected_categories = []
     
     account_id_param = request.args.get('account_id', 0, type=int)
@@ -662,6 +683,9 @@ def employee_expense_form(pk=None):
         if workspace_employee_id and expense.employee_id and expense.employee_id != workspace_employee_id:
             flash('This employee expense does not belong to selected workspace employee.', 'danger')
             return redirect(url_for('employee_expense_list'))
+        if _workspace_date_is_closed(workspace_employee_id, expense.expense_date):
+            flash('This expense belongs to a closed month. Reopen month-close batch first to edit.', 'danger')
+            return redirect(url_for('employee_expense_list'))
         form = EmployeeExpenseForm(obj=expense)
     else:
         form = EmployeeExpenseForm()
@@ -677,6 +701,10 @@ def employee_expense_form(pk=None):
     
     if form.validate_on_submit():
         try:
+            if _workspace_date_is_closed(workspace_employee_id, form.expense_date.data):
+                flash('Selected date belongs to a closed month. Reopen month-close batch first.', 'danger')
+                return render_template('finance/employee_expense_form.html', form=form, expense=expense,
+                                     title='Add Employee Expense' if not pk else 'Edit Employee Expense')
             if not expense:
                 expense = EmployeeExpense()
             
@@ -819,6 +847,9 @@ def employee_expense_delete(pk):
     expense = EmployeeExpense.query.get_or_404(pk)
     if workspace_employee_id and expense.employee_id and expense.employee_id != workspace_employee_id:
         flash('This employee expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('employee_expense_list'))
+    if _workspace_date_is_closed(workspace_employee_id, expense.expense_date):
+        flash('Cannot delete expense from a closed month. Reopen month-close batch first.', 'danger')
         return redirect(url_for('employee_expense_list'))
     
     try:
