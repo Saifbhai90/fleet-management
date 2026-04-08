@@ -551,9 +551,9 @@ def accounts_account_ledger():
     ).distinct().all()
     for cat_row in journal_categories:
         if cat_row and cat_row[0]:
-            category_set.add(cat_row[0])
+            category_set.add((cat_row[0] or '').strip())
     category_set.add('Workspace Close')
-    category_choices = sorted(category_set, key=lambda s: s.lower())
+    category_choices = ['Workspace Close'] + [c for c in sorted(category_set, key=lambda s: s.lower()) if c != 'Workspace Close']
     selected_categories = []
     
     account_id_param = request.args.get('account_id', 0, type=int)

@@ -1149,7 +1149,8 @@ def _company_expense_account_for_category(category_key, fallback_account_id=None
     if key == 'maintenance':
         return _ensure_company_expense_head('5300', 'Maintenance Expenses')
     if key == 'employee':
-        return _ensure_company_expense_head('5400', 'Salary & Wages')
+        # Keep employee month-close postings under operational group (5500).
+        return _ensure_company_expense_head('5510', 'Employee Expenses', parent_code='5500')
     if fallback_account_id:
         return Account.query.get(fallback_account_id)
     return _ensure_company_expense_head('5500', 'Operational Expenses')

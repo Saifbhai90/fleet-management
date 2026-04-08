@@ -167,11 +167,19 @@ document.addEventListener('DOMContentLoaded', function(){
 {% endif %}
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-    var CATS = [
+    var CATS_RAW = [
+        ['Workspace Close','Workspace Close'],
         {% for c in (category_choices or []) %}
         ['{{ c|e }}','{{ c|e }}']{% if not loop.last %},{% endif %}
         {% endfor %}
     ];
+    var _seenCats = {};
+    var CATS = CATS_RAW.filter(function(x){
+        var k = (x && x[0] ? String(x[0]).trim().toLowerCase() : '');
+        if(!k || _seenCats[k]) return false;
+        _seenCats[k] = true;
+        return true;
+    });
     var PRE = [
         {% for c in (selected_categories or []) %}
         '{{ c|e }}'{% if not loop.last %},{% endif %}

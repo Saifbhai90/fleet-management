@@ -7,6 +7,7 @@ from sqlalchemy.orm import aliased
 
 from models import (
     db, Employee, Driver, Party, Account, District, Project,
+    JournalEntry, JournalEntryLine,
     EmployeeAssignment, FundTransferCategory,
     WorkspaceParty, WorkspaceProduct, WorkspaceAccount,
     WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFundTransfer, WorkspaceMonthClose,
@@ -233,24 +234,27 @@ def workspace_home():
     total_transfers = sum((x.amount or 0) for x in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all())
 
     # Live ledger position:
-    # Employee wallet gets credited at month-close settlement (company-side entry).
-    # Add closed batch totals back so dashboard does not double-reduce against Total Expenses.
+    # "Account Ledger End Balance" should reflect wallet closing balance excluding
+    # category "Workspace Close" impact (user-facing convention).
     wallet_balance = Decimal("0")
+    workspace_close_effect = Decimal("0")
     wallet_acct = Account.query.get(emp.wallet_account_id) if emp.wallet_account_id else None
     if wallet_acct:
         wallet_balance = Decimal(str(wallet_acct.current_balance or 0))
-    closed_expense_total = Decimal(
-        str(
-            db.session.query(db.func.coalesce(db.func.sum(WorkspaceMonthClose.total_expense), 0))
-            .filter(
-                WorkspaceMonthClose.employee_id == emp.id,
-                WorkspaceMonthClose.status == "Closed",
-            )
-            .scalar()
-            or 0
-        )
-    )
-    adjusted_ledger_end = wallet_balance + closed_expense_total
+        rows = db.session.query(JournalEntryLine).join(JournalEntry).filter(
+            JournalEntryLine.account_id == wallet_acct.id,
+            JournalEntry.is_posted == True,
+            JournalEntry.category == "Workspace Close",
+        ).all()
+        for ln in rows:
+            debit = Decimal(str(ln.debit or 0))
+            credit = Decimal(str(ln.credit or 0))
+            if wallet_acct.account_type in ["Asset", "Expense"]:
+                workspace_close_effect += (debit - credit)
+            else:
+                workspace_close_effect += (credit - debit)
+
+    adjusted_ledger_end = wallet_balance - workspace_close_effect
     # User convention: Net = Account Ledger End Balance - Total Expenses
     net_balance = adjusted_ledger_end - Decimal(str(total_expenses or 0))
     if net_balance > 0:
@@ -269,7 +273,7 @@ def workspace_home():
         "ledger_end_balance": adjusted_ledger_end,
         "net_balance": net_balance,
         "net_balance_status": net_balance_status,
-        "month_close_adjustment": closed_expense_total,
+        "month_close_adjustment": (-workspace_close_effect) if workspace_close_effect < 0 else workspace_close_effect,
         "open_closes": WorkspaceMonthClose.query.filter(
             WorkspaceMonthClose.employee_id == emp.id,
             WorkspaceMonthClose.status != "Closed",
