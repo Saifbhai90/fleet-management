@@ -899,9 +899,29 @@ def chart_of_accounts_list():
                 Account.account_type.ilike(like),
             ))
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    page_accounts = pagination.items
+    movement_map = {}
+    page_ids = [a.id for a in page_accounts]
+    if page_ids:
+        rows = db.session.query(
+            JournalEntryLine.account_id,
+            db.func.coalesce(db.func.sum(JournalEntryLine.debit), 0),
+            db.func.coalesce(db.func.sum(JournalEntryLine.credit), 0),
+        ).join(JournalEntry).filter(
+            JournalEntryLine.account_id.in_(page_ids),
+            JournalEntry.is_posted == True,
+        ).group_by(JournalEntryLine.account_id).all()
+        movement_map = {
+            r[0]: {
+                'debit': Decimal(str(r[1] or 0)),
+                'credit': Decimal(str(r[2] or 0)),
+            }
+            for r in rows
+        }
     return render_template('finance/chart_of_accounts.html',
-                           title='Chart of Accounts', accounts=pagination.items,
-                           pagination=pagination, per_page=per_page, search=search)
+                           title='Chart of Accounts', accounts=page_accounts,
+                           pagination=pagination, per_page=per_page, search=search,
+                           movement_map=movement_map)
 
 
 def chart_of_accounts_add():
@@ -1618,22 +1638,6 @@ def wallet_dashboard():
     total_funds = Decimal('0')
     total_expenses = Decimal('0')
 
-    emp_recv = dict(db.session.query(
-        FundTransfer.to_employee_id,
-        db.func.coalesce(db.func.sum(FundTransfer.amount), 0)
-    ).filter(FundTransfer.to_employee_id.isnot(None)).group_by(FundTransfer.to_employee_id).all())
-    drv_recv = dict(db.session.query(
-        FundTransfer.to_driver_id,
-        db.func.coalesce(db.func.sum(FundTransfer.amount), 0)
-    ).filter(FundTransfer.to_driver_id.isnot(None)).group_by(FundTransfer.to_driver_id).all())
-    wallet_spent = dict(db.session.query(
-        JournalEntryLine.account_id,
-        db.func.coalesce(db.func.sum(JournalEntryLine.credit), 0)
-    ).join(JournalEntry).filter(
-        JournalEntry.entry_type == 'Expense',
-        JournalEntry.is_posted == True,
-    ).group_by(JournalEntryLine.account_id).all())
-
     all_acct_ids = set()
     employees = Employee.query.filter(Employee.wallet_account_id.isnot(None)).all()
     drv_query = Driver.query.filter(Driver.wallet_account_id.isnot(None))
@@ -1647,6 +1651,23 @@ def wallet_dashboard():
     for drv in drivers:
         all_acct_ids.add(drv.wallet_account_id)
     acct_map = {a.id: a for a in Account.query.filter(Account.id.in_(all_acct_ids)).all()} if all_acct_ids else {}
+    wallet_movement = {}
+    if all_acct_ids:
+        movement_rows = db.session.query(
+            JournalEntryLine.account_id,
+            db.func.coalesce(db.func.sum(JournalEntryLine.debit), 0),
+            db.func.coalesce(db.func.sum(JournalEntryLine.credit), 0),
+        ).join(JournalEntry).filter(
+            JournalEntryLine.account_id.in_(all_acct_ids),
+            JournalEntry.is_posted == True,
+        ).group_by(JournalEntryLine.account_id).all()
+        wallet_movement = {
+            row[0]: {
+                'debit': Decimal(str(row[1] or 0)),
+                'credit': Decimal(str(row[2] or 0)),
+            }
+            for row in movement_rows
+        }
 
     proj_ids = {drv.project_id for drv in drivers if drv.project_id}
     proj_map = {p.id: p.name for p in Project.query.filter(Project.id.in_(proj_ids)).all()} if proj_ids else {}
@@ -1664,8 +1685,7 @@ def wallet_dashboard():
         if filter_project and filter_project not in emp_project_ids:
             continue
         bal = Decimal(str(acct.current_balance or 0))
-        received = Decimal(str(emp_recv.get(emp.id, 0)))
-        spent = Decimal(str(wallet_spent.get(acct.id, 0)))
+        m = wallet_movement.get(acct.id, {'debit': Decimal('0'), 'credit': Decimal('0')})
         wallets.append({
             'person_name': emp.name,
             'person_type': 'Employee',
@@ -1673,8 +1693,8 @@ def wallet_dashboard():
             'district_name': ', '.join(emp_districts) or '—',
             'project_name': ', '.join(emp_projects) or '—',
             'balance': bal,
-            'total_received': received,
-            'total_spent': spent,
+            'total_debit': m['debit'],
+            'total_credit': m['credit'],
             'account_id': acct.id,
         })
         if bal > 0:
@@ -1696,8 +1716,7 @@ def wallet_dashboard():
         if not acct:
             continue
         bal = Decimal(str(acct.current_balance or 0))
-        received = Decimal(str(drv_recv.get(drv.id, 0)))
-        spent = Decimal(str(wallet_spent.get(acct.id, 0)))
+        m = wallet_movement.get(acct.id, {'debit': Decimal('0'), 'credit': Decimal('0')})
         veh_no = drv_veh_map.get(drv.vehicle_id, '')
         wallets.append({
             'person_name': f"{drv.name} ({veh_no})" if veh_no else drv.name,
@@ -1706,8 +1725,8 @@ def wallet_dashboard():
             'district_name': drv.district.name if drv.district else '—',
             'project_name': proj_map.get(drv.project_id, '—'),
             'balance': bal,
-            'total_received': received,
-            'total_spent': spent,
+            'total_debit': m['debit'],
+            'total_credit': m['credit'],
             'account_id': acct.id,
         })
         if bal > 0:
@@ -1721,7 +1740,7 @@ def wallet_dashboard():
             party_accts = Account.query.filter_by(parent_id=party_head.id, is_active=True).all()
             for acct in party_accts:
                 bal = Decimal(str(acct.current_balance or 0))
-                spent = Decimal(str(wallet_spent.get(acct.id, 0)))
+                m = wallet_movement.get(acct.id, {'debit': Decimal('0'), 'credit': Decimal('0')})
                 wallets.append({
                     'person_name': acct.name,
                     'person_type': 'Party',
@@ -1729,8 +1748,8 @@ def wallet_dashboard():
                     'district_name': '—',
                     'project_name': '—',
                     'balance': bal,
-                    'total_received': Decimal('0'),
-                    'total_spent': spent,
+                    'total_debit': m['debit'],
+                    'total_credit': m['credit'],
                     'account_id': acct.id,
                 })
                 if bal > 0:
@@ -1746,7 +1765,7 @@ def wallet_dashboard():
             company_accts = Account.query.filter_by(parent_id=company_head.id, is_active=True).all()
             for acct in company_accts:
                 bal = Decimal(str(acct.current_balance or 0))
-                spent = Decimal(str(wallet_spent.get(acct.id, 0)))
+                m = wallet_movement.get(acct.id, {'debit': Decimal('0'), 'credit': Decimal('0')})
                 wallets.append({
                     'person_name': acct.name,
                     'person_type': 'Company',
@@ -1754,8 +1773,8 @@ def wallet_dashboard():
                     'district_name': '—',
                     'project_name': '—',
                     'balance': bal,
-                    'total_received': Decimal('0'),
-                    'total_spent': spent,
+                    'total_debit': m['debit'],
+                    'total_credit': m['credit'],
                     'account_id': acct.id,
                 })
                 if bal > 0:
@@ -1777,11 +1796,15 @@ def wallet_dashboard():
             return all(t in blob for t in tokens)
         wallets = [w for w in wallets if _match_wallet(w)]
 
+    # Card summary follows the same language as table columns.
+    total_debit = sum((Decimal(str(w.get('total_debit') or 0)) for w in wallets), Decimal('0'))
+    total_credit = sum((Decimal(str(w.get('total_credit') or 0)) for w in wallets), Decimal('0'))
+    total_balance = sum((Decimal(str(w.get('balance') or 0)) for w in wallets), Decimal('0'))
     summary = {
         'total_wallets': len(wallets),
-        'total_funds': total_funds,
-        'total_expenses': total_expenses,
-        'net_outstanding': total_funds - total_expenses,
+        'total_debit': total_debit,
+        'total_credit': total_credit,
+        'total_balance': total_balance,
     }
 
     return render_template('finance/wallet_dashboard.html',

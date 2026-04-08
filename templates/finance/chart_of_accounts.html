@@ -42,6 +42,8 @@
                             <th>Account Name</th>
                             <th>Type</th>
                             <th>Parent</th>
+                            <th class="text-end">Debit</th>
+                            <th class="text-end">Credit</th>
                             <th class="text-end">Balance</th>
                             <th class="text-center">Status</th>
                             <th class="text-center">Actions</th>
@@ -72,6 +74,9 @@
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
+                            {% set mv = movement_map.get(account.id, {'debit': 0, 'credit': 0}) %}
+                            <td class="text-end">{{ "{:,.2f}".format(mv['debit']) }}</td>
+                            <td class="text-end">{{ "{:,.2f}".format(mv['credit']) }}</td>
                             <td class="text-end fw-semibold {% if account.current_balance > 0 %}text-success{% elif account.current_balance < 0 %}text-danger{% else %}text-muted{% endif %}" title="Opening: {{ '{:,.2f}'.format(account.opening_balance or 0) }} | Current: {{ '{:,.2f}'.format(account.current_balance or 0) }}">{{ "{:,.2f}".format(account.current_balance or 0) }}</td>
                             <td class="text-center">
                                 {% if account.is_active %}
@@ -88,7 +93,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" class="text-center py-5 text-muted">
+                            <td colspan="9" class="text-center py-5 text-muted">
                                 <i class="bi bi-diagram-3 display-6 d-block mb-2 opacity-25"></i>
                                 No accounts found.
                             </td>

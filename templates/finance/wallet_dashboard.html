@@ -66,8 +66,8 @@
                             </div>
                         </div>
                         <div>
-                            <div class="text-muted small">Total Funds</div>
-                            <div class="fs-4 fw-bold text-success">{{ "{:,.2f}".format(summary.total_funds|default(0)) }}</div>
+                            <div class="text-muted small">Total Debit</div>
+                            <div class="fs-4 fw-bold text-success">{{ "{:,.2f}".format(summary.total_debit|default(0)) }}</div>
                         </div>
                     </div>
                 </div>
@@ -83,8 +83,8 @@
                             </div>
                         </div>
                         <div>
-                            <div class="text-muted small">Total Expenses</div>
-                            <div class="fs-4 fw-bold text-danger">{{ "{:,.2f}".format(summary.total_expenses|default(0)) }}</div>
+                            <div class="text-muted small">Total Credit</div>
+                            <div class="fs-4 fw-bold text-danger">{{ "{:,.2f}".format(summary.total_credit|default(0)) }}</div>
                         </div>
                     </div>
                 </div>
@@ -100,8 +100,8 @@
                             </div>
                         </div>
                         <div>
-                            <div class="text-muted small">Net Outstanding</div>
-                            <div class="fs-4 fw-bold text-warning">{{ "{:,.2f}".format(summary.net_outstanding|default(0)) }}</div>
+                            <div class="text-muted small">Net Balance</div>
+                            <div class="fs-4 fw-bold text-warning">{{ "{:,.2f}".format(summary.total_balance|default(0)) }}</div>
                         </div>
                     </div>
                 </div>
@@ -127,9 +127,9 @@
                             <th>Type</th>
                             <th>District</th>
                             <th>Project</th>
+                            <th class="text-end">Debit</th>
+                            <th class="text-end">Credit</th>
                             <th class="text-end">Balance</th>
-                            <th class="text-end">Received</th>
-                            <th class="text-end">Spent</th>
                         </tr>
                     </thead>
                     <tbody style="font-size:.82rem;">
@@ -155,11 +155,11 @@
                             </td>
                             <td>{{ w.district_name|default('-') }}</td>
                             <td>{{ w.project_name|default('-') }}</td>
+                            <td class="text-end">{{ "{:,.2f}".format(w.total_debit|default(0)) }}</td>
+                            <td class="text-end">{{ "{:,.2f}".format(w.total_credit|default(0)) }}</td>
                             <td class="text-end fw-bold {% if w.balance >= 0 %}text-success{% else %}text-danger{% endif %}">
                                 {{ "{:,.2f}".format(w.balance) }}
                             </td>
-                            <td class="text-end">{{ "{:,.2f}".format(w.total_received|default(0)) }}</td>
-                            <td class="text-end">{{ "{:,.2f}".format(w.total_spent|default(0)) }}</td>
                         </tr>
                         {% else %}
                         <tr>

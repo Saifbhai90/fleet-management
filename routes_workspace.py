@@ -15,6 +15,7 @@ from models import (
 from routes_finance import check_auth
 from auth_utils import get_user_context
 from finance_utils import (
+    get_account_ledger,
     ensure_workspace_base_accounts,
     ensure_workspace_opening_expense_accounts,
     ensure_workspace_counterparty_account,
@@ -240,7 +241,12 @@ def workspace_home():
     workspace_close_credit_total = Decimal("0")
     wallet_acct = Account.query.get(emp.wallet_account_id) if emp.wallet_account_id else None
     if wallet_acct:
-        wallet_balance = Decimal(str(wallet_acct.current_balance or 0))
+        # Use ledger closing balance (last running balance) as source of truth.
+        ledger_data = get_account_ledger(wallet_acct.id)
+        if ledger_data and isinstance(ledger_data, dict):
+            wallet_balance = Decimal(str(ledger_data.get("closing_balance") or 0))
+        else:
+            wallet_balance = Decimal(str(wallet_acct.current_balance or 0))
         rows = db.session.query(JournalEntryLine).join(JournalEntry).filter(
             JournalEntryLine.account_id == wallet_acct.id,
             JournalEntry.is_posted == True,
