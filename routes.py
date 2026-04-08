@@ -13115,7 +13115,14 @@ def task_report_list():
         VehicleDailyTask.task_date <= to_date
     )
     if district_id:
-        query = query.filter(VehicleDailyTask.district_id == district_id)
+        # Some legacy rows may have null/old district_id; in that case
+        # fall back to the linked vehicle's current district for filtering.
+        query = query.join(Vehicle, Vehicle.id == VehicleDailyTask.vehicle_id).filter(
+            or_(
+                VehicleDailyTask.district_id == district_id,
+                and_(VehicleDailyTask.district_id.is_(None), Vehicle.district_id == district_id),
+            )
+        )
     if project_id:
         query = query.filter(VehicleDailyTask.project_id == project_id)
     tasks = query.order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id).all()
