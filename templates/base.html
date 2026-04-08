@@ -2852,14 +2852,27 @@
             return window.location.pathname + '?' + u.toString();
         }
 
+        function _hasClientSideTableFiltering(tbl) {
+            if (!tbl) return false;
+            if (tbl.querySelector('.ft-filter-btn.active')) return true;
+            return !!tbl.querySelector('tbody tr[style*="display: none"]');
+        }
+
         function _fetchAllTable(cb) {
+            var localTbl = document.getElementById(tableId);
+            // If user has applied client-side filters (Excel header filter/search hide rows),
+            // honor current visible rows for print/export instead of reloading full server dataset.
+            if (_hasClientSideTableFiltering(localTbl)) {
+                cb(localTbl);
+                return;
+            }
             var url = _allPagesUrl();
             fetch(url, {credentials:'same-origin'}).then(function(r){ return r.text(); }).then(function(html) {
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(html, 'text/html');
                 var remoteTbl = doc.getElementById(tableId);
-                if (remoteTbl) { cb(remoteTbl); } else { cb(document.getElementById(tableId)); }
-            }).catch(function(){ cb(document.getElementById(tableId)); });
+                if (remoteTbl) { cb(remoteTbl); } else { cb(localTbl); }
+            }).catch(function(){ cb(localTbl); });
         }
 
         function _cleanTable(tbl) {
