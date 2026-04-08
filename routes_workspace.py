@@ -234,10 +234,10 @@ def workspace_home():
     total_transfers = sum((x.amount or 0) for x in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all())
 
     # Live ledger position:
-    # "Account Ledger End Balance" should reflect wallet closing balance excluding
-    # category "Workspace Close" impact (user-facing convention).
+    # User convention for dashboard card:
+    # last ledger balance - total credit posted under category "Workspace Close".
     wallet_balance = Decimal("0")
-    workspace_close_effect = Decimal("0")
+    workspace_close_credit_total = Decimal("0")
     wallet_acct = Account.query.get(emp.wallet_account_id) if emp.wallet_account_id else None
     if wallet_acct:
         wallet_balance = Decimal(str(wallet_acct.current_balance or 0))
@@ -247,14 +247,11 @@ def workspace_home():
             JournalEntry.category == "Workspace Close",
         ).all()
         for ln in rows:
-            debit = Decimal(str(ln.debit or 0))
             credit = Decimal(str(ln.credit or 0))
-            if wallet_acct.account_type in ["Asset", "Expense"]:
-                workspace_close_effect += (debit - credit)
-            else:
-                workspace_close_effect += (credit - debit)
+            if credit > 0:
+                workspace_close_credit_total += credit
 
-    adjusted_ledger_end = wallet_balance - workspace_close_effect
+    adjusted_ledger_end = wallet_balance - workspace_close_credit_total
     # User convention: Net = Account Ledger End Balance - Total Expenses
     net_balance = adjusted_ledger_end - Decimal(str(total_expenses or 0))
     if net_balance > 0:
@@ -273,7 +270,7 @@ def workspace_home():
         "ledger_end_balance": adjusted_ledger_end,
         "net_balance": net_balance,
         "net_balance_status": net_balance_status,
-        "month_close_adjustment": (-workspace_close_effect) if workspace_close_effect < 0 else workspace_close_effect,
+        "month_close_adjustment": workspace_close_credit_total,
         "open_closes": WorkspaceMonthClose.query.filter(
             WorkspaceMonthClose.employee_id == emp.id,
             WorkspaceMonthClose.status != "Closed",
