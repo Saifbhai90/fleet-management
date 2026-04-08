@@ -257,7 +257,7 @@ def workspace_home():
             if credit > 0:
                 workspace_close_credit_total += credit
 
-    adjusted_ledger_end = wallet_balance - workspace_close_credit_total
+    adjusted_ledger_end = wallet_balance + workspace_close_credit_total
     # User convention: Net = Account Ledger End Balance - Total Expenses
     net_balance = adjusted_ledger_end - Decimal(str(total_expenses or 0))
     if net_balance > 0:

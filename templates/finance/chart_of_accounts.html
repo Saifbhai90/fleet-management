@@ -75,9 +75,12 @@
                                 {% endif %}
                             </td>
                             {% set mv = movement_map.get(account.id, {'debit': 0, 'credit': 0}) %}
+                            {% set bal = (mv['debit'] or 0) - (mv['credit'] or 0) %}
                             <td class="text-end">{{ "{:,.2f}".format(mv['debit']) }}</td>
                             <td class="text-end">{{ "{:,.2f}".format(mv['credit']) }}</td>
-                            <td class="text-end fw-semibold {% if account.current_balance > 0 %}text-success{% elif account.current_balance < 0 %}text-danger{% else %}text-muted{% endif %}" title="Opening: {{ '{:,.2f}'.format(account.opening_balance or 0) }} | Current: {{ '{:,.2f}'.format(account.current_balance or 0) }}">{{ "{:,.2f}".format(account.current_balance or 0) }}</td>
+                            <td class="text-end fw-semibold {% if bal > 0 %}text-success{% elif bal < 0 %}text-danger{% else %}text-muted{% endif %}">
+                                {{ "{:,.2f}".format(bal) }}
+                            </td>
                             <td class="text-center">
                                 {% if account.is_active %}
                                     <span class="badge bg-success">Active</span>

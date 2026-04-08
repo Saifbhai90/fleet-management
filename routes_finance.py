@@ -1684,8 +1684,8 @@ def wallet_dashboard():
             continue
         if filter_project and filter_project not in emp_project_ids:
             continue
-        bal = Decimal(str(acct.current_balance or 0))
         m = wallet_movement.get(acct.id, {'debit': Decimal('0'), 'credit': Decimal('0')})
+        bal = Decimal(str(m['debit'] or 0)) - Decimal(str(m['credit'] or 0))
         wallets.append({
             'person_name': emp.name,
             'person_type': 'Employee',
@@ -1715,8 +1715,8 @@ def wallet_dashboard():
         acct = acct_map.get(drv.wallet_account_id)
         if not acct:
             continue
-        bal = Decimal(str(acct.current_balance or 0))
         m = wallet_movement.get(acct.id, {'debit': Decimal('0'), 'credit': Decimal('0')})
+        bal = Decimal(str(m['debit'] or 0)) - Decimal(str(m['credit'] or 0))
         veh_no = drv_veh_map.get(drv.vehicle_id, '')
         wallets.append({
             'person_name': f"{drv.name} ({veh_no})" if veh_no else drv.name,
@@ -1739,8 +1739,8 @@ def wallet_dashboard():
         if party_head:
             party_accts = Account.query.filter_by(parent_id=party_head.id, is_active=True).all()
             for acct in party_accts:
-                bal = Decimal(str(acct.current_balance or 0))
                 m = wallet_movement.get(acct.id, {'debit': Decimal('0'), 'credit': Decimal('0')})
+                bal = Decimal(str(m['debit'] or 0)) - Decimal(str(m['credit'] or 0))
                 wallets.append({
                     'person_name': acct.name,
                     'person_type': 'Party',
@@ -1764,8 +1764,8 @@ def wallet_dashboard():
         if company_head:
             company_accts = Account.query.filter_by(parent_id=company_head.id, is_active=True).all()
             for acct in company_accts:
-                bal = Decimal(str(acct.current_balance or 0))
                 m = wallet_movement.get(acct.id, {'debit': Decimal('0'), 'credit': Decimal('0')})
+                bal = Decimal(str(m['debit'] or 0)) - Decimal(str(m['credit'] or 0))
                 wallets.append({
                     'person_name': acct.name,
                     'person_type': 'Company',
