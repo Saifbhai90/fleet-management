@@ -17,6 +17,7 @@ from finance_utils import (
     ensure_workspace_base_accounts,
     ensure_workspace_opening_expense_accounts,
     ensure_workspace_counterparty_account,
+    reconcile_workspace_opening_expense_postings,
     workspace_post_expense,
     workspace_post_opening_expense,
     workspace_post_transfer,
@@ -830,6 +831,10 @@ def workspace_accounts_list():
             ensure_workspace_counterparty_account(emp.id, party_id=p.id)
         except Exception:
             pass
+    try:
+        reconcile_workspace_opening_expense_postings(emp.id)
+    except Exception as e:
+        print(f"Opening expense posting backfill skipped: {e}")
     db.session.commit()
     page = max(request.args.get("page", 1, type=int) or 1, 1)
     per_page = request.args.get("per_page", 50, type=int) or 50
@@ -1239,8 +1244,8 @@ def workspace_month_close():
         period_end = parse_date(request.form.get("period_end"))
         company_account_id = request.form.get("company_account_id", type=int)
         notes = (request.form.get("notes") or "").strip()
-        if not (period_start and period_end and company_account_id):
-            flash("Period and company account are required.", "danger")
+        if not (period_start and period_end):
+            flash("Period start/end are required.", "danger")
             return render_template("workspace/month_close.html", employee=emp, rows=rows, accounts=accounts)
         try:
             close_row = workspace_close_month(

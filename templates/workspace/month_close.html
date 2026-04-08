@@ -15,18 +15,18 @@
     <div class="card-body">
       <form method="post" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">Period Start</label><input type="text" class="form-control datepicker" name="period_start" placeholder="dd-mm-yyyy" required></div>
-        <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">Period End</label><input type="text" class="form-control datepicker" name="period_end" placeholder="dd-mm-yyyy" required></div>
-        <div class="col-lg-4 col-md-8"><label class="form-label fw-semibold">Company Expense Account</label>
-          <select name="company_account_id" class="form-select search-select" required>
-            <option value="">-- Select Company Account --</option>
+        <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">Period Start</label><input type="text" class="form-control datepicker" id="periodStartInput" name="period_start" placeholder="dd-mm-yyyy" required></div>
+        <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">Period End</label><input type="text" class="form-control datepicker" id="periodEndInput" name="period_end" placeholder="dd-mm-yyyy" required></div>
+        <div class="col-lg-4 col-md-8"><label class="form-label fw-semibold">Fallback Company Expense Account (optional)</label>
+          <select name="company_account_id" class="form-select search-select">
+            <option value="">-- Auto map to company expense heads --</option>
             {% for a in accounts %}
             <option value="{{ a.id }}">{{ a.code }} - {{ a.name }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-lg-2 col-md-4"><label class="form-label fw-semibold">Action</label><button class="btn btn-danger w-100"><i class="bi bi-check2-circle me-1"></i>Close Month</button></div>
-        <div class="col-12"><label class="form-label fw-semibold">Notes</label><textarea name="notes" class="form-control" rows="2" placeholder="Optional remarks for this close batch"></textarea></div>
+        <div class="col-12"><label class="form-label fw-semibold">Notes</label><textarea name="notes" id="monthCloseNotes" class="form-control" rows="2" placeholder="Optional remarks for this close batch"></textarea></div>
       </form>
     </div>
   </div>
@@ -65,6 +65,40 @@
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function(){
+  var periodStartInput = document.getElementById('periodStartInput');
+  var periodEndInput = document.getElementById('periodEndInput');
+  var notesInput = document.getElementById('monthCloseNotes');
+
+  function parseDdMmYyyy(val){
+    var m = (val || '').trim().match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if(!m) return null;
+    var d = parseInt(m[1], 10), mo = parseInt(m[2], 10), y = parseInt(m[3], 10);
+    if(!(d >= 1 && d <= 31 && mo >= 1 && mo <= 12 && y >= 1900)) return null;
+    return {d:d, m:mo, y:y};
+  }
+
+  function monthShort(m){
+    var arr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return arr[m - 1] || '';
+  }
+
+  function autoFillNotes(){
+    if(!periodStartInput || !periodEndInput || !notesInput) return;
+    var s = parseDdMmYyyy(periodStartInput.value);
+    var e = parseDdMmYyyy(periodEndInput.value);
+    if(!s || !e) return;
+    var label = 'Date Range: ' + s.d + '-' + e.d + '(' + monthShort(e.m) + '-' + String(e.y).slice(-2) + ')';
+    var current = (notesInput.value || '').trim();
+    // Auto-fill empty notes, or refresh previously auto-generated range.
+    if(!current || current.indexOf('Date Range:') === 0){
+      notesInput.value = label;
+    }
+  }
+
+  if(periodStartInput){ periodStartInput.addEventListener('input', autoFillNotes); periodStartInput.addEventListener('change', autoFillNotes); }
+  if(periodEndInput){ periodEndInput.addEventListener('input', autoFillNotes); periodEndInput.addEventListener('change', autoFillNotes); }
+  autoFillNotes();
+
   if(window.fleetTableEnhance) window.fleetTableEnhance('workspaceMonthCloseTable');
   if(window.fleetPrintExport) window.fleetPrintExport('workspaceMonthCloseTable','Workspace Month Close History','Workspace_Month_Close_History.csv');
 });

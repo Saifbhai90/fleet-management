@@ -1098,6 +1098,72 @@ def workspace_post_opening_expense(opening_obj):
     )
 
 
+def _ensure_company_expense_head(code, name, parent_code='5000'):
+    row = Account.query.filter_by(code=code).first()
+    if row:
+        return row
+    parent = Account.query.filter_by(code=parent_code).first()
+    row = Account(
+        code=code,
+        name=name,
+        account_type='Expense',
+        parent_id=parent.id if parent else None,
+        is_active=True,
+        opening_balance=0,
+        current_balance=0,
+        description=f'Auto-created expense head ({name})',
+    )
+    db.session.add(row)
+    db.session.flush()
+    return row
+
+
+def _company_expense_account_for_category(category_key, fallback_account_id=None):
+    key = (category_key or '').strip().lower()
+    if key == 'fuel':
+        return _ensure_company_expense_head('5100', 'Fuel Expenses')
+    if key == 'oil':
+        return _ensure_company_expense_head('5200', 'Oil Expenses')
+    if key == 'maintenance':
+        return _ensure_company_expense_head('5300', 'Maintenance Expenses')
+    if key == 'employee':
+        return _ensure_company_expense_head('5400', 'Salary & Wages')
+    if fallback_account_id:
+        return Account.query.get(fallback_account_id)
+    return _ensure_company_expense_head('5500', 'Operational Expenses')
+
+
+def _map_workspace_expense_category(exp_obj):
+    txt = ((exp_obj.category or '') + ' ' + (exp_obj.expense_type or '')).lower()
+    if 'fuel' in txt:
+        return 'fuel'
+    if 'oil' in txt:
+        return 'oil'
+    if 'maint' in txt:
+        return 'maintenance'
+    if 'employee' in txt or 'salary' in txt:
+        return 'employee'
+    return 'other'
+
+
+def reconcile_workspace_opening_expense_postings(employee_id):
+    """
+    Backfill old opening-expense rows created before posting logic existed.
+    Creates missing workspace journals only where journal_entry_id is null.
+    """
+    rows = WorkspaceOpeningExpense.query.filter(
+        WorkspaceOpeningExpense.employee_id == employee_id,
+        WorkspaceOpeningExpense.journal_entry_id.is_(None),
+        WorkspaceOpeningExpense.total_expense > 0,
+    ).all()
+    created = 0
+    for row in rows:
+        je = workspace_post_opening_expense(row)
+        row.journal_entry_id = je.id
+        created += 1
+    return created
+
+
 def workspace_close_month(employee_id, period_start, period_end, company_account_id, user_id, notes=''):
     ensure_workspace_base_accounts(employee_id)
     expenses = WorkspaceExpense.query.filter(
@@ -1143,10 +1209,45 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
     db.session.add(close_row)
     db.session.flush()
 
-    company_lines = [
-        {'account_id': company_account_id, 'debit': total, 'credit': 0, 'description': f'Workspace month close expense - {employee.name}'},
-        {'account_id': company_wallet.id, 'debit': 0, 'credit': total, 'description': f'Workspace settlement against employee wallet - {employee.name}'},
-    ]
+    debit_bucket = {}
+    for exp in expenses:
+        amt = Decimal(str(exp.amount or 0))
+        if amt <= 0:
+            continue
+        cat = _map_workspace_expense_category(exp)
+        acct = _company_expense_account_for_category(cat, fallback_account_id=company_account_id)
+        if acct:
+            debit_bucket[acct.id] = debit_bucket.get(acct.id, Decimal('0')) + amt
+
+    for opn in opening_expenses:
+        mapping = [
+            ('fuel', Decimal(str(opn.fueling_expense or 0))),
+            ('oil', Decimal(str(opn.oil_change_expense or 0))),
+            ('maintenance', Decimal(str(opn.maintenance_expense or 0))),
+            ('employee', Decimal(str(opn.employee_expense or 0))),
+        ]
+        for cat, amt in mapping:
+            if amt <= 0:
+                continue
+            acct = _company_expense_account_for_category(cat, fallback_account_id=company_account_id)
+            if acct:
+                debit_bucket[acct.id] = debit_bucket.get(acct.id, Decimal('0')) + amt
+
+    period_label = f"{period_start.day}-{period_end.day}({period_end.strftime('%b-%y')})"
+    company_lines = []
+    for acct_id, amt in debit_bucket.items():
+        company_lines.append({
+            'account_id': acct_id,
+            'debit': amt,
+            'credit': 0,
+            'description': f'Workspace month close expense - {employee.name} | Period: {period_label}',
+        })
+    company_lines.append({
+        'account_id': company_wallet.id,
+        'debit': 0,
+        'credit': total,
+        'description': f'Workspace settlement against employee wallet - {employee.name} | Period: {period_label}',
+    })
     company_je = create_journal_entry(
         entry_type='Journal',
         entry_date=period_end,
