@@ -22,6 +22,7 @@ from finance_utils import (
     workspace_post_opening_expense,
     workspace_post_transfer,
     workspace_reverse_journal_entry,
+    reverse_company_journal_entry,
     workspace_get_account_ledger,
     workspace_close_month,
 )
@@ -97,6 +98,14 @@ def _workspace_guard(permission_code="workspace_dashboard"):
         flash("You cannot access another employee workspace.", "danger")
         return redirect(url_for("workspace_dashboard")), None
     return None, emp
+
+
+def _is_master_or_admin_user():
+    user_id = session.get("user_id")
+    if not user_id:
+        return False
+    ctx = get_user_context(user_id)
+    return bool(ctx.get("is_master_or_admin"))
 
 
 def _list_employees_for_workspace():
@@ -1236,6 +1245,7 @@ def workspace_month_close():
     guard, emp = _workspace_guard("workspace_month_close")
     if guard:
         return guard
+    can_manage_month_close = _is_master_or_admin_user()
     accounts = Account.query.filter_by(is_active=True).order_by(Account.code).all()
     rows = WorkspaceMonthClose.query.filter_by(employee_id=emp.id).order_by(WorkspaceMonthClose.id.desc()).all()
 
@@ -1246,7 +1256,13 @@ def workspace_month_close():
         notes = (request.form.get("notes") or "").strip()
         if not (period_start and period_end):
             flash("Period start/end are required.", "danger")
-            return render_template("workspace/month_close.html", employee=emp, rows=rows, accounts=accounts)
+            return render_template(
+                "workspace/month_close.html",
+                employee=emp,
+                rows=rows,
+                accounts=accounts,
+                can_manage_month_close=can_manage_month_close,
+            )
         try:
             close_row = workspace_close_month(
                 employee_id=emp.id,
@@ -1262,7 +1278,38 @@ def workspace_month_close():
         except Exception as exc:
             db.session.rollback()
             flash(f"Month close failed: {exc}", "danger")
-    return render_template("workspace/month_close.html", employee=emp, rows=rows, accounts=accounts)
+    return render_template(
+        "workspace/month_close.html",
+        employee=emp,
+        rows=rows,
+        accounts=accounts,
+        can_manage_month_close=can_manage_month_close,
+    )
+
+
+def workspace_month_close_reverse(pk):
+    guard, emp = _workspace_guard("workspace_month_close")
+    if guard:
+        return guard
+    if not _is_master_or_admin_user():
+        flash("Only admin/master can reopen a month close batch.", "danger")
+        return redirect(url_for("workspace_month_close"))
+
+    row = WorkspaceMonthClose.query.filter_by(id=pk, employee_id=emp.id).first_or_404()
+    try:
+        # Revert linked company posting first, then reopen all linked expenses.
+        if row.company_journal_entry_id:
+            reverse_company_journal_entry(row.company_journal_entry_id)
+            row.company_journal_entry_id = None
+        WorkspaceExpense.query.filter_by(month_close_id=row.id).update({"month_close_id": None}, synchronize_session=False)
+        WorkspaceOpeningExpense.query.filter_by(month_close_id=row.id).update({"month_close_id": None}, synchronize_session=False)
+        db.session.delete(row)
+        db.session.commit()
+        flash("Month close batch reopened successfully. You can close this period again.", "success")
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"Month close reopen failed: {exc}", "danger")
+    return redirect(url_for("workspace_month_close"))
 
 
 def workspace_reports():

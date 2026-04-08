@@ -962,6 +962,28 @@ def workspace_reverse_journal_entry(journal_entry_id):
         db.session.delete(je)
 
 
+def reverse_company_journal_entry(journal_entry_id):
+    """Reverse account balances and delete a posted company journal entry."""
+    if not journal_entry_id:
+        return
+    lines = JournalEntryLine.query.filter_by(journal_entry_id=journal_entry_id).all()
+    for line in lines:
+        account = db.session.query(Account).with_for_update().filter_by(id=line.account_id).first()
+        if not account:
+            continue
+        debit = Decimal(str(line.debit or 0))
+        credit = Decimal(str(line.credit or 0))
+        if account.account_type in ['Asset', 'Expense']:
+            delta = debit - credit
+        else:
+            delta = credit - debit
+        account.current_balance = Decimal(str(account.current_balance or 0)) - delta
+        db.session.add(account)
+    je = JournalEntry.query.get(journal_entry_id)
+    if je:
+        db.session.delete(je)
+
+
 def workspace_get_account_ledger(account_id, from_date=None, to_date=None, category=None):
     account = WorkspaceAccount.query.get(account_id)
     if not account:

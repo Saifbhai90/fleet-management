@@ -464,7 +464,7 @@ from routes_workspace import (
     workspace_expenses_list, workspace_expense_form, workspace_expense_delete,
     workspace_opening_expenses_list, workspace_opening_expense_form, workspace_opening_expense_delete,
     workspace_fund_transfers_list, workspace_fund_transfer_form, workspace_fund_transfer_delete,
-    workspace_ledger, workspace_month_close, workspace_reports,
+    workspace_ledger, workspace_month_close, workspace_month_close_reverse, workspace_reports,
     workspace_transfer_description_suggestions_api,
 )  # noqa: E402
 
@@ -566,6 +566,7 @@ app.add_url_rule('/workspace/transfer/<int:pk>/delete', 'workspace_fund_transfer
 app.add_url_rule('/api/workspace-transfer-descriptions', 'workspace_transfer_description_suggestions', workspace_transfer_description_suggestions_api, methods=['GET'])
 app.add_url_rule('/workspace/ledger', 'workspace_ledger', workspace_ledger)
 app.add_url_rule('/workspace/month-close', 'workspace_month_close', workspace_month_close, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/month-close/<int:pk>/reverse', 'workspace_month_close_reverse', workspace_month_close_reverse, methods=['POST'])
 app.add_url_rule('/workspace/reports', 'workspace_reports', workspace_reports)
 
 # ── Payroll Module ──────────────────────────────────────────────────────────
