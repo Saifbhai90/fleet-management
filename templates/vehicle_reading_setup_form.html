@@ -11,6 +11,7 @@
   <div class="page-header d-flex justify-content-between align-items-center">
     <h4 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Vehicle Fuel/Oil Previous Reading Setup</h4>
     <div class="d-flex gap-2">
+      <a href="{{ url_for('vehicle_reading_setup_import') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-upload me-1"></i>Import</a>
       <a href="{{ url_for('vehicle_reading_setup_list') }}" class="btn btn-outline-light btn-sm">View List</a>
       <a href="{{ url_for('workspace_home') }}" class="btn btn-outline-light btn-sm">Back to Dashboard</a>
     </div>

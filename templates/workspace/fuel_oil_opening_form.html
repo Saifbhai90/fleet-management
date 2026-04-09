@@ -24,6 +24,7 @@
   <div class="page-header d-flex justify-content-between align-items-center">
     <h4><i class="bi bi-fuel-pump-diesel me-2"></i>{{ 'Edit' if row else 'Add' }} Fuel/Oil Opening (Pump Card & Credit)</h4>
     <div class="d-flex gap-2">
+      <a href="{{ url_for('workspace_fuel_oil_opening_import') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-upload me-1"></i>Import</a>
       <button type="button" id="foCompactToggle" class="btn btn-outline-light btn-sm"><i class="bi bi-arrows-angle-contract me-1"></i>Compact</button>
       <a href="{{ url_for('workspace_fuel_oil_openings_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
     </div>

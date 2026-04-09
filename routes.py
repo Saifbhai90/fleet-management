@@ -15343,6 +15343,163 @@ def vehicle_reading_setup_list():
     )
 
 
+@app.route('/expenses/vehicle-reading-setup/import', methods=['GET', 'POST'])
+def vehicle_reading_setup_import():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    import_errors = []
+
+    if request.method == 'POST':
+        file_obj = request.files.get('file')
+        if not file_obj or not (file_obj.filename or '').strip():
+            flash('Please select an Excel or CSV file.', 'warning')
+            return redirect(url_for('vehicle_reading_setup_import'))
+        filename = file_obj.filename or ''
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+        if ext not in ('xlsx', 'xls', 'csv'):
+            flash('Unsupported file type. Use .xlsx, .xls or .csv.', 'danger')
+            return redirect(url_for('vehicle_reading_setup_import'))
+
+        try:
+            import pandas as pd
+            if ext in ('xlsx', 'xls'):
+                df = pd.read_excel(file_obj)
+            else:
+                df = pd.read_csv(file_obj)
+
+            required_cols = ['setup_date', 'district', 'project', 'vehicle']
+            missing = [c for c in required_cols if c not in df.columns]
+            if missing:
+                flash(f"Missing required columns: {', '.join(missing)}", 'danger')
+                return redirect(url_for('vehicle_reading_setup_import'))
+
+            district_map = {d.name.strip().lower(): d.id for d in District.query.order_by(District.name).all() if d.name}
+            project_map = {p.name.strip().lower(): p.id for p in Project.query.order_by(Project.name).all() if p.name}
+            vehicle_map = {v.vehicle_no.strip().lower(): v.id for v in Vehicle.query.order_by(Vehicle.vehicle_no).all() if v.vehicle_no}
+            rows_to_save = []
+
+            def _to_dec(raw):
+                if raw is None:
+                    return None
+                s = str(raw).strip()
+                if not s or s.lower() == 'nan':
+                    return None
+                return Decimal(s)
+
+            def _to_date(raw):
+                if raw is None:
+                    return None
+                if hasattr(raw, 'date'):
+                    try:
+                        return raw.date()
+                    except Exception:
+                        pass
+                s = str(raw).strip()
+                if not s or s.lower() == 'nan':
+                    return None
+                d = parse_date(s)
+                if d:
+                    return d
+                try:
+                    return pd.to_datetime(s, errors='coerce').date()
+                except Exception:
+                    return None
+
+            for idx, row in df.iterrows():
+                row_no = idx + 2
+                issues = []
+                setup_date = _to_date(row.get('setup_date'))
+                if not setup_date:
+                    issues.append('"setup_date" is required.')
+
+                district_name = str(row.get('district', '')).strip() if not pd.isna(row.get('district')) else ''
+                district_id = district_map.get(district_name.lower()) if district_name else None
+                if not district_id:
+                    issues.append(f'District "{district_name or "-"}" not found.')
+
+                project_name = str(row.get('project', '')).strip() if not pd.isna(row.get('project')) else ''
+                project_id = project_map.get(project_name.lower()) if project_name else None
+                if not project_id:
+                    issues.append(f'Project "{project_name or "-"}" not found.')
+
+                vehicle_no = str(row.get('vehicle', '')).strip() if not pd.isna(row.get('vehicle')) else ''
+                vehicle_id = vehicle_map.get(vehicle_no.lower()) if vehicle_no else None
+                if not vehicle_id:
+                    issues.append(f'Vehicle "{vehicle_no or "-"}" not found.')
+
+                try:
+                    fuel_prev = _to_dec(row.get('fuel_previous_reading'))
+                    oil_prev = _to_dec(row.get('oil_previous_reading'))
+                except Exception:
+                    issues.append('Fuel/Oil previous reading must be numeric.')
+                    fuel_prev = oil_prev = None
+
+                if issues:
+                    import_errors.append({
+                        'row': row_no,
+                        'identifier': vehicle_no or '-',
+                        'message': '; '.join(issues),
+                    })
+                    continue
+
+                remarks = str(row.get('remarks', '')).strip() if 'remarks' in df.columns and not pd.isna(row.get('remarks')) else ''
+                rows_to_save.append({
+                    'setup_date': setup_date,
+                    'district_id': district_id,
+                    'project_id': project_id,
+                    'vehicle_id': vehicle_id,
+                    'fuel_previous_reading': fuel_prev,
+                    'oil_previous_reading': oil_prev,
+                    'remarks': remarks or None,
+                })
+
+            if import_errors:
+                return render_template('vehicle_reading_setup_import.html', import_errors=import_errors)
+
+            for payload in rows_to_save:
+                rec = WorkspaceVehicleReadingSetup.query.filter_by(
+                    employee_id=workspace_employee_id,
+                    vehicle_id=payload['vehicle_id'],
+                ).first()
+                if not rec:
+                    rec = WorkspaceVehicleReadingSetup(
+                        employee_id=workspace_employee_id,
+                        vehicle_id=payload['vehicle_id'],
+                    )
+                    db.session.add(rec)
+                rec.setup_date = payload['setup_date']
+                rec.district_id = payload['district_id']
+                rec.project_id = payload['project_id']
+                rec.fuel_previous_reading = payload['fuel_previous_reading']
+                rec.oil_previous_reading = payload['oil_previous_reading']
+                rec.remarks = payload['remarks']
+                rec.created_by_user_id = session.get('user_id')
+
+            db.session.commit()
+            flash(f"{len(rows_to_save)} vehicle reading setup rows imported successfully.", 'success')
+            return redirect(url_for('vehicle_reading_setup_list'))
+        except Exception as exc:
+            db.session.rollback()
+            flash(f"Import failed: {exc}", 'danger')
+
+    return render_template('vehicle_reading_setup_import.html', import_errors=import_errors)
+
+
+@app.route('/expenses/vehicle-reading-setup/import/template')
+def vehicle_reading_setup_import_template():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    headers = ['setup_date', 'district', 'project', 'vehicle', 'fuel_previous_reading', 'oil_previous_reading', 'remarks']
+    rows = [
+        ['01-03-2026', 'Muzaffargarh', 'RAS-1034', 'LEA-1064', 125000, 125000, 'Initial readings'],
+        ['01-03-2026', 'Muzaffargarh', 'RAS-1034', 'LEA-1065', 98000, 98000, 'Initial readings'],
+    ]
+    return generate_excel_template(headers, rows, required_columns=['setup_date', 'district', 'project', 'vehicle'], filename='vehicle_reading_setup_import_template.xlsx')
+
+
 @app.route('/api/vehicle-reading-setup')
 def api_vehicle_reading_setup():
     _guard = _require_workspace_employee_for_expense_management()
