@@ -11,7 +11,7 @@ from models import (
     JournalEntry, JournalEntryLine,
     EmployeeAssignment, FundTransferCategory,
     WorkspaceParty, WorkspaceProduct, WorkspaceAccount,
-    WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFundTransfer, WorkspaceMonthClose,
+    WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFuelOilOpeningExpense, WorkspaceFundTransfer, WorkspaceMonthClose, WorkspaceFuelOilMonthClose,
 )
 from routes_finance import check_auth
 from auth_utils import get_user_context
@@ -19,15 +19,18 @@ from finance_utils import (
     get_account_ledger,
     ensure_workspace_base_accounts,
     ensure_workspace_opening_expense_accounts,
+    ensure_workspace_fuel_oil_opening_accounts,
     ensure_workspace_counterparty_account,
     reconcile_workspace_opening_expense_postings,
     workspace_post_expense,
     workspace_post_opening_expense,
+    workspace_post_fuel_oil_opening_expense,
     workspace_post_transfer,
     workspace_reverse_journal_entry,
     reverse_company_journal_entry,
     workspace_get_account_ledger,
     workspace_close_month,
+    workspace_close_fuel_oil_month,
 )
 from utils import pk_date, parse_date, generate_excel_template
 
@@ -119,6 +122,17 @@ def _workspace_has_closed_month_for_date(employee_id, target_date):
         WorkspaceMonthClose.status == "Closed",
         WorkspaceMonthClose.period_start <= target_date,
         WorkspaceMonthClose.period_end >= target_date,
+    ).first() is not None
+
+
+def _workspace_has_closed_fuel_oil_month_for_date(employee_id, target_date):
+    if not employee_id or not target_date:
+        return False
+    return db.session.query(WorkspaceFuelOilMonthClose.id).filter(
+        WorkspaceFuelOilMonthClose.employee_id == employee_id,
+        WorkspaceFuelOilMonthClose.status == "Closed",
+        WorkspaceFuelOilMonthClose.period_start <= target_date,
+        WorkspaceFuelOilMonthClose.period_end >= target_date,
     ).first() is not None
 
 
@@ -301,7 +315,8 @@ def workspace_home():
     scope = _get_employee_scope_summary(emp)
     regular_expenses = sum((x.amount or 0) for x in WorkspaceExpense.query.filter_by(employee_id=emp.id).all())
     opening_expenses = sum((x.total_expense or 0) for x in WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id).all())
-    total_expenses = Decimal(str(regular_expenses or 0)) + Decimal(str(opening_expenses or 0))
+    fuel_oil_openings = sum((x.total_amount or 0) for x in WorkspaceFuelOilOpeningExpense.query.filter_by(employee_id=emp.id).all())
+    total_expenses = Decimal(str(regular_expenses or 0)) + Decimal(str(opening_expenses or 0)) + Decimal(str(fuel_oil_openings or 0))
     total_transfers = sum((x.amount or 0) for x in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all())
 
     # Live ledger position:
@@ -342,6 +357,7 @@ def workspace_home():
         "products": WorkspaceProduct.query.filter_by(employee_id=emp.id, is_active=True).count(),
         "expenses": total_expenses,
         "opening_expenses": opening_expenses,
+        "fuel_oil_openings": fuel_oil_openings,
         "transfers": total_transfers,
         "ledger_end_balance": adjusted_ledger_end,
         "net_balance": net_balance,
@@ -921,6 +937,7 @@ def workspace_accounts_list():
         return guard
     ensure_workspace_base_accounts(emp.id)
     ensure_workspace_opening_expense_accounts(emp.id)
+    ensure_workspace_fuel_oil_opening_accounts(emp.id)
     _ensure_workspace_driver_accounts(emp)
     parties = WorkspaceParty.query.filter_by(employee_id=emp.id).all()
     for p in parties:
@@ -1333,6 +1350,277 @@ def workspace_opening_expense_delete(pk):
     db.session.commit()
     flash("Opening expense deleted.", "success")
     return redirect(url_for("workspace_opening_expenses_list"))
+
+
+def workspace_fuel_oil_openings_list():
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+
+    from_date = parse_date(request.args.get("from_date"))
+    to_date = parse_date(request.args.get("to_date"))
+    district_id = request.args.get("district_id", type=int) or 0
+    project_id = request.args.get("project_id", type=int) or 0
+    search = (request.args.get("search") or "").strip()
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    per_page = request.args.get("per_page", 20, type=int) or 20
+    if per_page not in (10, 20, 50, 100):
+        per_page = 20
+
+    query = WorkspaceFuelOilOpeningExpense.query.filter_by(employee_id=emp.id)
+    if from_date:
+        query = query.filter(WorkspaceFuelOilOpeningExpense.opening_date >= from_date)
+    if to_date:
+        query = query.filter(WorkspaceFuelOilOpeningExpense.opening_date <= to_date)
+    if district_id:
+        query = query.filter(WorkspaceFuelOilOpeningExpense.district_id == district_id)
+    if project_id:
+        query = query.filter(WorkspaceFuelOilOpeningExpense.project_id == project_id)
+    if search:
+        flt = _workspace_multi_word_filter(search, WorkspaceFuelOilOpeningExpense.remarks)
+        if flt is not None:
+            query = query.filter(flt)
+
+    total_amount = query.with_entities(
+        db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.total_amount), 0)
+    ).scalar() or 0
+
+    pagination = query.order_by(
+        WorkspaceFuelOilOpeningExpense.opening_date.desc(),
+        WorkspaceFuelOilOpeningExpense.id.desc(),
+    ).paginate(page=page, per_page=per_page, error_out=False)
+
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+    return render_template(
+        "workspace/fuel_oil_opening_list.html",
+        employee=emp,
+        rows=pagination.items,
+        pagination=pagination,
+        per_page=per_page,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        search=search,
+        total_amount=total_amount,
+        districts=districts,
+        projects=projects,
+    )
+
+
+def workspace_fuel_oil_opening_form(pk=None):
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+
+    row = WorkspaceFuelOilOpeningExpense.query.filter_by(employee_id=emp.id, id=pk).first() if pk else None
+    if pk and not row:
+        flash("Fuel/Oil opening entry not found.", "danger")
+        return redirect(url_for("workspace_fuel_oil_openings_list"))
+
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+    ensure_workspace_fuel_oil_opening_accounts(emp.id)
+
+    if request.method == "POST":
+        opening_date = parse_date(request.form.get("opening_date"))
+        if not opening_date:
+            flash("Date is required.", "danger")
+            return render_template("workspace/fuel_oil_opening_form.html", row=row, employee=emp, districts=districts, projects=projects)
+        if _workspace_has_closed_fuel_oil_month_for_date(emp.id, opening_date):
+            flash("This date belongs to a closed Fuel/Oil close batch. Reopen fuel/oil close first to make changes.", "danger")
+            return render_template("workspace/fuel_oil_opening_form.html", row=row, employee=emp, districts=districts, projects=projects)
+
+        def _to_dec(name):
+            raw = (request.form.get(name) or "").strip()
+            if not raw:
+                return Decimal("0")
+            return Decimal(str(raw))
+
+        try:
+            pump_card_fueling = _to_dec("pump_card_fueling")
+            credit_fueling = _to_dec("credit_fueling")
+            card_oil_change = _to_dec("card_oil_change")
+            credit_oil_change = _to_dec("credit_oil_change")
+        except Exception:
+            flash("Amount fields must be numeric values.", "danger")
+            return render_template("workspace/fuel_oil_opening_form.html", row=row, employee=emp, districts=districts, projects=projects)
+
+        if not row:
+            row = WorkspaceFuelOilOpeningExpense(employee_id=emp.id)
+            db.session.add(row)
+        elif row.journal_entry_id:
+            workspace_reverse_journal_entry(row.journal_entry_id)
+            row.journal_entry_id = None
+
+        row.opening_date = opening_date
+        row.district_id = request.form.get("district_id", type=int) or None
+        row.project_id = request.form.get("project_id", type=int) or None
+        row.pump_card_fueling = pump_card_fueling
+        row.credit_fueling = credit_fueling
+        row.total_fueling = pump_card_fueling + credit_fueling
+        row.card_oil_change = card_oil_change
+        row.credit_oil_change = credit_oil_change
+        row.total_oil_change = card_oil_change + credit_oil_change
+        row.total_amount = row.total_fueling + row.total_oil_change
+        row.remarks = (request.form.get("remarks") or "").strip() or None
+        row.created_by_user_id = session.get("user_id")
+
+        db.session.flush()
+        if row.total_amount and Decimal(str(row.total_amount)) > Decimal("0"):
+            je = workspace_post_fuel_oil_opening_expense(row)
+            row.journal_entry_id = je.id
+        db.session.commit()
+        flash("Fuel/Oil opening expense saved.", "success")
+        return redirect(url_for("workspace_fuel_oil_openings_list"))
+
+    return render_template("workspace/fuel_oil_opening_form.html", row=row, employee=emp, districts=districts, projects=projects)
+
+
+def workspace_fuel_oil_opening_delete(pk):
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+    row = WorkspaceFuelOilOpeningExpense.query.filter_by(employee_id=emp.id, id=pk).first_or_404()
+    if _workspace_has_closed_fuel_oil_month_for_date(emp.id, row.opening_date):
+        flash("Cannot delete fuel/oil opening from a closed fuel/oil batch. Reopen fuel/oil close first.", "danger")
+        return redirect(url_for("workspace_fuel_oil_openings_list"))
+    if row.journal_entry_id:
+        workspace_reverse_journal_entry(row.journal_entry_id)
+    db.session.delete(row)
+    db.session.commit()
+    flash("Fuel/Oil opening expense deleted.", "success")
+    return redirect(url_for("workspace_fuel_oil_openings_list"))
+
+
+def _pending_fuel_oil_close_spells(employee_id):
+    bucket = {}
+
+    def _spell_key(dt):
+        y, m = dt.year, dt.month
+        last = monthrange(y, m)[1]
+        if dt.day <= 15:
+            return y, m, 1, 15
+        return y, m, 16, last
+
+    for row in WorkspaceFuelOilOpeningExpense.query.filter(
+        WorkspaceFuelOilOpeningExpense.employee_id == employee_id,
+        WorkspaceFuelOilOpeningExpense.fuel_oil_month_close_id.is_(None),
+        WorkspaceFuelOilOpeningExpense.total_amount > 0,
+    ).all():
+        if not row.opening_date or not row.district_id or not row.project_id:
+            continue
+        y, m, sday, eday = _spell_key(row.opening_date)
+        k = (row.district_id, row.project_id, y, m, sday, eday)
+        bucket[k] = bucket.get(k, Decimal("0")) + Decimal(str(row.total_amount or 0))
+
+    if not bucket:
+        return []
+
+    district_map = {d.id: d.name for d in District.query.all()}
+    project_map = {p.id: p.name for p in Project.query.all()}
+    out = []
+    for (district_id, project_id, y, m, sday, eday), amt in bucket.items():
+        if amt <= 0:
+            continue
+        start_dt = date(y, m, sday)
+        end_dt = date(y, m, eday)
+        out.append({
+            "district_id": district_id,
+            "project_id": project_id,
+            "district_name": district_map.get(district_id, "-"),
+            "project_name": project_map.get(project_id, "-"),
+            "period_start": start_dt,
+            "period_end": end_dt,
+            "spell_label": f"{sday:02d}-{eday:02d}({start_dt.strftime('%m-%y')})",
+            "amount": amt,
+        })
+    out.sort(key=lambda r: (r["period_start"], r["district_name"], r["project_name"]), reverse=True)
+    return out
+
+
+def workspace_fuel_oil_month_close():
+    guard, emp = _workspace_guard("workspace_month_close")
+    if guard:
+        return guard
+
+    can_manage_month_close = _is_master_or_admin_user()
+    accounts = Account.query.filter_by(is_active=True).order_by(Account.code).all()
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+    rows = WorkspaceFuelOilMonthClose.query.filter_by(employee_id=emp.id).order_by(WorkspaceFuelOilMonthClose.id.desc()).all()
+    spell_rows = _pending_fuel_oil_close_spells(emp.id)
+    default_company_account_id = emp.wallet_account_id or None
+
+    if request.method == "POST":
+        period_start = parse_date(request.form.get("period_start"))
+        period_end = parse_date(request.form.get("period_end"))
+        company_account_id = request.form.get("company_account_id", type=int) or None
+        district = District.query.get(request.form.get("district_id", type=int) or 0)
+        project = Project.query.get(request.form.get("project_id", type=int) or 0)
+        notes = (request.form.get("notes") or "").strip()
+        if not period_start or not period_end:
+            flash("Period start and end are required.", "danger")
+        elif period_end < period_start:
+            flash("Period end must be on/after period start.", "danger")
+        elif not district or not project:
+            flash("District and Project are required for fuel/oil close.", "danger")
+        else:
+            try:
+                close_row = workspace_close_fuel_oil_month(
+                    employee_id=emp.id,
+                    period_start=period_start,
+                    period_end=period_end,
+                    district_id=district.id,
+                    project_id=project.id,
+                    district_name=district.name,
+                    project_name=project.name,
+                    company_account_id=company_account_id,
+                    user_id=session.get("user_id"),
+                    notes=notes,
+                )
+                db.session.commit()
+                flash(f"Fuel/Oil month close completed. Batch #{close_row.id}", "success")
+                return redirect(url_for("workspace_fuel_oil_month_close"))
+            except Exception as exc:
+                db.session.rollback()
+                flash(f"Fuel/Oil month close failed: {exc}", "danger")
+
+    return render_template(
+        "workspace/fuel_oil_month_close.html",
+        employee=emp,
+        rows=rows,
+        accounts=accounts,
+        districts=districts,
+        projects=projects,
+        spell_rows=spell_rows,
+        default_company_account_id=default_company_account_id,
+        can_manage_month_close=can_manage_month_close,
+    )
+
+
+def workspace_fuel_oil_month_close_reverse(pk):
+    guard, emp = _workspace_guard("workspace_month_close")
+    if guard:
+        return guard
+    if not _is_master_or_admin_user():
+        flash("Only admin/master can reopen a fuel/oil close batch.", "danger")
+        return redirect(url_for("workspace_fuel_oil_month_close"))
+
+    row = WorkspaceFuelOilMonthClose.query.filter_by(id=pk, employee_id=emp.id).first_or_404()
+    try:
+        if row.company_journal_entry_id:
+            reverse_company_journal_entry(row.company_journal_entry_id)
+            row.company_journal_entry_id = None
+        WorkspaceFuelOilOpeningExpense.query.filter_by(fuel_oil_month_close_id=row.id).update({"fuel_oil_month_close_id": None}, synchronize_session=False)
+        db.session.delete(row)
+        db.session.commit()
+        flash("Fuel/Oil close batch reopened successfully.", "success")
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"Fuel/Oil close reopen failed: {exc}", "danger")
+    return redirect(url_for("workspace_fuel_oil_month_close"))
 
 
 def workspace_fund_transfers_list():

@@ -175,6 +175,15 @@
               </a>
             </div>
             {% endif %}
+            {% if can_see_page('workspace_dashboard') %}
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+              <a href="{{ url_for('workspace_fuel_oil_openings_list') }}" class="ws-module-card p-3">
+                <div class="ws-module-icon bg-info-subtle text-info mb-2"><i class="bi bi-fuel-pump-diesel"></i></div>
+                <div class="fw-semibold">Fuel/Oil Opening</div>
+                <small class="text-muted">Pump card + credit opening breakup with auto totals.</small>
+              </a>
+            </div>
+            {% endif %}
           </div>
 
           <div class="ws-section-title">Finance, Ledger & Closing</div>
@@ -212,6 +221,15 @@
                 <div class="ws-module-icon bg-danger-subtle text-danger mb-2"><i class="bi bi-calendar2-check"></i></div>
                 <div class="fw-semibold">Month Close</div>
                 <small class="text-muted">Period close aur bridge posting.</small>
+              </a>
+            </div>
+            {% endif %}
+            {% if can_see_page('workspace_month_close') %}
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+              <a href="{{ url_for('workspace_fuel_oil_month_close') }}" class="ws-module-card p-3">
+                <div class="ws-module-icon bg-info-subtle text-info mb-2"><i class="bi bi-calendar2-week"></i></div>
+                <div class="fw-semibold">Fuel/Oil Close</div>
+                <small class="text-muted">Fuel/Oil opening ka separate close batch.</small>
               </a>
             </div>
             {% endif %}

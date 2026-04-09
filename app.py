@@ -255,6 +255,7 @@ if _run_startup_tasks:
                 ('workspace_party', 'remarks', 'TEXT'),
                 ('workspace_opening_expense', 'journal_entry_id', 'INTEGER REFERENCES workspace_journal_entry(id)'),
                 ('workspace_opening_expense', 'month_close_id', 'INTEGER REFERENCES workspace_month_close(id)'),
+                ('workspace_fuel_oil_opening_expense', 'fuel_oil_month_close_id', 'INTEGER REFERENCES workspace_fuel_oil_month_close(id)'),
                 ('workspace_month_close', 'district_id', 'INTEGER REFERENCES district(id)'),
                 ('workspace_month_close', 'project_id', 'INTEGER REFERENCES project(id)'),
             ]
@@ -466,6 +467,8 @@ from routes_workspace import (
     workspace_expenses_list, workspace_expense_form, workspace_expense_delete,
     workspace_opening_expenses_list, workspace_opening_expense_form, workspace_opening_expense_delete,
     workspace_opening_expense_import, workspace_opening_expense_import_template,
+    workspace_fuel_oil_openings_list, workspace_fuel_oil_opening_form, workspace_fuel_oil_opening_delete,
+    workspace_fuel_oil_month_close, workspace_fuel_oil_month_close_reverse,
     workspace_fund_transfers_list, workspace_fund_transfer_form, workspace_fund_transfer_delete,
     workspace_ledger, workspace_month_close, workspace_month_close_reverse, workspace_reports,
     workspace_transfer_description_suggestions_api,
@@ -565,6 +568,12 @@ app.add_url_rule('/workspace/opening-expenses/import/template', 'workspace_openi
 app.add_url_rule('/workspace/opening-expense/new', 'workspace_opening_expense_new', workspace_opening_expense_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/opening-expense/<int:pk>/edit', 'workspace_opening_expense_edit', workspace_opening_expense_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/opening-expense/<int:pk>/delete', 'workspace_opening_expense_delete', workspace_opening_expense_delete, methods=['POST'])
+app.add_url_rule('/workspace/fuel-oil-openings', 'workspace_fuel_oil_openings_list', workspace_fuel_oil_openings_list)
+app.add_url_rule('/workspace/fuel-oil-opening/new', 'workspace_fuel_oil_opening_new', workspace_fuel_oil_opening_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/fuel-oil-opening/<int:pk>/edit', 'workspace_fuel_oil_opening_edit', workspace_fuel_oil_opening_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/fuel-oil-opening/<int:pk>/delete', 'workspace_fuel_oil_opening_delete', workspace_fuel_oil_opening_delete, methods=['POST'])
+app.add_url_rule('/workspace/fuel-oil-close', 'workspace_fuel_oil_month_close', workspace_fuel_oil_month_close, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/fuel-oil-close/<int:pk>/reverse', 'workspace_fuel_oil_month_close_reverse', workspace_fuel_oil_month_close_reverse, methods=['POST'])
 app.add_url_rule('/workspace/transfers', 'workspace_fund_transfers_list', workspace_fund_transfers_list)
 app.add_url_rule('/workspace/transfer/new', 'workspace_fund_transfer_new', workspace_fund_transfer_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/transfer/<int:pk>/edit', 'workspace_fund_transfer_edit', workspace_fund_transfer_form, methods=['GET', 'POST'])

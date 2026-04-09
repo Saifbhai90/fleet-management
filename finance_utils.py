@@ -5,7 +5,7 @@ Helper functions for voucher number generation, journal entry creation, and bala
 from models import (
     db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence,
     Employee, Driver, Party, Company,
-    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceMonthClose,
+    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFuelOilOpeningExpense, WorkspaceMonthClose, WorkspaceFuelOilMonthClose,
 )
 from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
@@ -815,6 +815,43 @@ def ensure_workspace_opening_expense_accounts(employee_id):
     }
 
 
+def ensure_workspace_fuel_oil_opening_accounts(employee_id):
+    """Create dedicated fuel/oil opening heads under 5100 if missing."""
+    existing = ensure_workspace_base_accounts(employee_id)
+    mapping = {
+        'pump_fuel': ('5115', 'Opening Pump Card Fueling'),
+        'credit_fuel': ('5116', 'Opening Credit Fueling'),
+        'card_oil': ('5117', 'Opening Card Oil Change'),
+        'credit_oil': ('5118', 'Opening Credit Oil Change'),
+    }
+    parent = existing.get('5100')
+    for _key, (code, name) in mapping.items():
+        if code in existing:
+            continue
+        row = WorkspaceAccount(
+            employee_id=employee_id,
+            code=code,
+            name=name,
+            account_type='Expense',
+            parent_id=parent.id if parent else None,
+            is_active=True,
+            opening_balance=0,
+            current_balance=0,
+            entity_type='fuel_oil_opening_head',
+            description='Dedicated opening fuel/oil expense head',
+        )
+        db.session.add(row)
+        db.session.flush()
+        existing[code] = row
+    return {
+        'pump_fuel': existing.get('5115'),
+        'credit_fuel': existing.get('5116'),
+        'card_oil': existing.get('5117'),
+        'credit_oil': existing.get('5118'),
+        'cash': existing.get('1100'),
+    }
+
+
 def ensure_workspace_counterparty_account(employee_id, *, party_id=None, driver_id=None):
     ensure_workspace_base_accounts(employee_id)
     if party_id:
@@ -1120,6 +1157,44 @@ def workspace_post_opening_expense(opening_obj):
     )
 
 
+def workspace_post_fuel_oil_opening_expense(opening_obj):
+    """Post fuel/oil opening breakup to dedicated workspace expense heads."""
+    heads = ensure_workspace_fuel_oil_opening_accounts(opening_obj.employee_id)
+    if not heads.get('cash'):
+        raise ValueError("Workspace cash account not found")
+
+    pump_fuel = Decimal(str(opening_obj.pump_card_fueling or 0))
+    credit_fuel = Decimal(str(opening_obj.credit_fueling or 0))
+    card_oil = Decimal(str(opening_obj.card_oil_change or 0))
+    credit_oil = Decimal(str(opening_obj.credit_oil_change or 0))
+    total = pump_fuel + credit_fuel + card_oil + credit_oil
+    if total <= Decimal("0"):
+        raise ValueError("Opening total must be greater than zero")
+
+    lines = []
+    if pump_fuel > 0 and heads.get('pump_fuel'):
+        lines.append({'account_id': heads['pump_fuel'].id, 'debit': pump_fuel, 'credit': 0, 'description': 'Opening Pump Card Fueling'})
+    if credit_fuel > 0 and heads.get('credit_fuel'):
+        lines.append({'account_id': heads['credit_fuel'].id, 'debit': credit_fuel, 'credit': 0, 'description': 'Opening Credit Fueling'})
+    if card_oil > 0 and heads.get('card_oil'):
+        lines.append({'account_id': heads['card_oil'].id, 'debit': card_oil, 'credit': 0, 'description': 'Opening Card Oil Change'})
+    if credit_oil > 0 and heads.get('credit_oil'):
+        lines.append({'account_id': heads['credit_oil'].id, 'debit': credit_oil, 'credit': 0, 'description': 'Opening Credit Oil Change'})
+    lines.append({'account_id': heads['cash'].id, 'debit': 0, 'credit': total, 'description': 'Opening Fuel/Oil settled from workspace cash'})
+
+    return workspace_create_journal_entry(
+        employee_id=opening_obj.employee_id,
+        entry_type='Expense',
+        entry_date=opening_obj.opening_date,
+        description=opening_obj.remarks or f"Fuel/Oil Opening {opening_obj.opening_date:%d-%m-%Y}",
+        lines=lines,
+        reference_type='WorkspaceFuelOilOpeningExpense',
+        reference_id=opening_obj.id,
+        created_by_user_id=opening_obj.created_by_user_id,
+        category='Opening',
+    )
+
+
 def _ensure_company_expense_head(code, name, parent_code='5000'):
     row = Account.query.filter_by(code=code).first()
     if row:
@@ -1277,7 +1352,6 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
             acct = _company_expense_account_for_category(cat, fallback_account_id=company_account_id)
             if acct:
                 debit_bucket[acct.id] = debit_bucket.get(acct.id, Decimal('0')) + amt
-
     period_label = f"{period_start.day}-{period_end.day}({period_end.strftime('%b-%y')})"
     scope_label = f"District: {district_name or '-'} | Project: {project_name or '-'}"
     company_lines = []
@@ -1312,5 +1386,95 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
         exp.month_close_id = close_row.id
     for opn in opening_expenses:
         opn.month_close_id = close_row.id
+
+    return close_row
+
+
+def workspace_close_fuel_oil_month(employee_id, period_start, period_end, company_account_id, user_id, notes='',
+                                   district_id=None, project_id=None, district_name=None, project_name=None):
+    rows_q = WorkspaceFuelOilOpeningExpense.query.filter(
+        WorkspaceFuelOilOpeningExpense.employee_id == employee_id,
+        WorkspaceFuelOilOpeningExpense.fuel_oil_month_close_id.is_(None),
+        WorkspaceFuelOilOpeningExpense.opening_date >= period_start,
+        WorkspaceFuelOilOpeningExpense.opening_date <= period_end,
+    )
+    if district_id:
+        rows_q = rows_q.filter(WorkspaceFuelOilOpeningExpense.district_id == district_id)
+    if project_id:
+        rows_q = rows_q.filter(WorkspaceFuelOilOpeningExpense.project_id == project_id)
+    rows = rows_q.all()
+
+    total = sum(Decimal(str(r.total_amount or 0)) for r in rows)
+    if total <= Decimal("0"):
+        raise ValueError("No unclosed fuel/oil opening found in selected period")
+
+    employee = Employee.query.get(employee_id)
+    if not employee:
+        raise ValueError("Employee not found")
+    if not employee.wallet_account_id:
+        raise ValueError("Employee company wallet account is not configured")
+    company_wallet = Account.query.get(employee.wallet_account_id)
+
+    close_row = WorkspaceFuelOilMonthClose(
+        employee_id=employee_id,
+        district_id=district_id,
+        project_id=project_id,
+        period_start=period_start,
+        period_end=period_end,
+        status='Closed',
+        total_amount=total,
+        company_account_id=company_account_id,
+        closed_by_user_id=user_id,
+        closed_at=pk_now(),
+        notes=notes or None,
+    )
+    db.session.add(close_row)
+    db.session.flush()
+
+    debit_bucket = {}
+    for row in rows:
+        mapping = [
+            ('fuel', Decimal(str(row.total_fueling or 0))),
+            ('oil', Decimal(str(row.total_oil_change or 0))),
+        ]
+        for cat, amt in mapping:
+            if amt <= 0:
+                continue
+            acct = _company_expense_account_for_category(cat, fallback_account_id=company_account_id)
+            if acct:
+                debit_bucket[acct.id] = debit_bucket.get(acct.id, Decimal('0')) + amt
+
+    period_label = f"{period_start.day}-{period_end.day}({period_end.strftime('%b-%y')})"
+    scope_label = f"District: {district_name or '-'} | Project: {project_name or '-'}"
+    company_lines = []
+    for acct_id, amt in debit_bucket.items():
+        company_lines.append({
+            'account_id': acct_id,
+            'debit': amt,
+            'credit': 0,
+            'description': f'Workspace fuel/oil close expense - {employee.name} | Period: {period_label} | {scope_label}',
+        })
+    company_lines.append({
+        'account_id': company_wallet.id,
+        'debit': 0,
+        'credit': total,
+        'description': f'Workspace fuel/oil settlement against employee wallet - {employee.name} | Period: {period_label} | {scope_label}',
+    })
+    company_je = create_journal_entry(
+        entry_type='Journal',
+        entry_date=period_end,
+        description=f"Workspace fuel/oil close {employee.name} ({period_start:%m/%Y}) [{scope_label}]",
+        lines=company_lines,
+        district_id=district_id,
+        project_id=project_id,
+        reference_type='WorkspaceFuelOilMonthClose',
+        reference_id=close_row.id,
+        created_by_user_id=user_id,
+        category='Workspace Fuel/Oil Close',
+    )
+    close_row.company_journal_entry_id = company_je.id
+
+    for row in rows:
+        row.fuel_oil_month_close_id = close_row.id
 
     return close_row

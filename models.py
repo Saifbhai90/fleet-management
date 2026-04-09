@@ -2071,6 +2071,42 @@ class WorkspaceOpeningExpense(db.Model):
     created_by = db.relationship('User', backref='workspace_opening_expenses_created', lazy='select')
 
 
+class WorkspaceFuelOilOpeningExpense(db.Model):
+    __tablename__ = 'workspace_fuel_oil_opening_expense'
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    opening_date = db.Column(db.Date, nullable=False, index=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
+
+    # Fueling split
+    pump_card_fueling = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    credit_fueling = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    total_fueling = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+
+    # Oil change split
+    card_oil_change = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    credit_oil_change = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    total_oil_change = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+
+    total_amount = db.Column(db.Numeric(15, 2), nullable=False, default=0, index=True)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey('workspace_journal_entry.id'), nullable=True)
+    month_close_id = db.Column(db.Integer, db.ForeignKey('workspace_month_close.id'), nullable=True, index=True)
+    fuel_oil_month_close_id = db.Column(db.Integer, db.ForeignKey('workspace_fuel_oil_month_close.id'), nullable=True, index=True)
+
+    remarks = db.Column(db.Text, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('workspace_fuel_oil_opening_expenses', lazy='dynamic'))
+    district = db.relationship('District', backref='workspace_fuel_oil_opening_expenses', lazy='select')
+    project = db.relationship('Project', backref='workspace_fuel_oil_opening_expenses', lazy='select')
+    journal_entry = db.relationship('WorkspaceJournalEntry', backref='workspace_fuel_oil_opening_expense', lazy='select')
+    created_by = db.relationship('User', backref='workspace_fuel_oil_opening_expenses_created', lazy='select')
+
+
 class WorkspaceFundTransfer(db.Model):
     __tablename__ = 'workspace_fund_transfer'
 
@@ -2137,6 +2173,37 @@ class WorkspaceMonthClose(db.Model):
     closed_by = db.relationship('User', backref='workspace_month_closes_done', lazy='select')
     expenses = db.relationship('WorkspaceExpense', backref='month_close', lazy='dynamic')
     opening_expenses = db.relationship('WorkspaceOpeningExpense', backref='month_close', lazy='dynamic')
+
+
+class WorkspaceFuelOilMonthClose(db.Model):
+    __tablename__ = 'workspace_fuel_oil_month_close'
+    __table_args__ = (
+        db.UniqueConstraint('employee_id', 'district_id', 'project_id', 'period_start', 'period_end', name='uq_workspace_fuel_oil_month_close_period'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
+    period_start = db.Column(db.Date, nullable=False, index=True)
+    period_end = db.Column(db.Date, nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False, default='Closed')
+    total_amount = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    company_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=True)
+    company_journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
+    closed_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    closed_at = db.Column(db.DateTime, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('workspace_fuel_oil_month_closes', lazy='dynamic'))
+    district = db.relationship('District', backref='workspace_fuel_oil_month_closes', lazy='select')
+    project = db.relationship('Project', backref='workspace_fuel_oil_month_closes', lazy='select')
+    company_account = db.relationship('Account', foreign_keys=[company_account_id], backref='workspace_fuel_oil_close_targets', lazy='select')
+    company_journal_entry = db.relationship('JournalEntry', foreign_keys=[company_journal_entry_id], backref='workspace_fuel_oil_close_entry', lazy='select')
+    closed_by = db.relationship('User', backref='workspace_fuel_oil_month_closes_done', lazy='select')
+    fuel_oil_openings = db.relationship('WorkspaceFuelOilOpeningExpense', backref='fuel_oil_month_close', lazy='dynamic')
 
 
 # ────────────────────────────────────────────────
