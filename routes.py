@@ -15345,6 +15345,105 @@ def vehicle_reading_setup_list():
     )
 
 
+def _vehicle_reading_setup_rows(employee_id, from_date=None, to_date=None, district_id=0, project_id=0, vehicle_id=0, search=''):
+    q = WorkspaceVehicleReadingSetup.query.filter_by(employee_id=employee_id)
+    if from_date:
+        q = q.filter(WorkspaceVehicleReadingSetup.setup_date >= from_date)
+    if to_date:
+        q = q.filter(WorkspaceVehicleReadingSetup.setup_date <= to_date)
+    if district_id:
+        q = q.filter(WorkspaceVehicleReadingSetup.district_id == district_id)
+    if project_id:
+        q = q.filter(WorkspaceVehicleReadingSetup.project_id == project_id)
+    if vehicle_id:
+        q = q.filter(WorkspaceVehicleReadingSetup.vehicle_id == vehicle_id)
+    if search:
+        like = f"%{search}%"
+        q = q.join(Vehicle, WorkspaceVehicleReadingSetup.vehicle_id == Vehicle.id).filter(
+            or_(
+                Vehicle.vehicle_no.ilike(like),
+                WorkspaceVehicleReadingSetup.remarks.ilike(like),
+            )
+        )
+    return q.order_by(
+        WorkspaceVehicleReadingSetup.setup_date.desc(),
+        WorkspaceVehicleReadingSetup.id.desc(),
+    ).all()
+
+
+@app.route('/expenses/vehicle-reading-setups/export')
+def vehicle_reading_setup_export():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    from_date = parse_date(request.args.get('from_date'))
+    to_date = parse_date(request.args.get('to_date'))
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    search = (request.args.get('search') or '').strip()
+
+    rows = _vehicle_reading_setup_rows(
+        workspace_employee_id,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        vehicle_id=vehicle_id,
+        search=search,
+    )
+
+    headers = ['S.No', 'Date', 'District', 'Project', 'Vehicle', 'Fuel Previous', 'Oil Previous', 'Remarks']
+    data_rows = []
+    for i, r in enumerate(rows, 1):
+        data_rows.append([
+            i,
+            r.setup_date.strftime('%d-%m-%Y') if r.setup_date else '',
+            r.district.name if r.district else '',
+            r.project.name if r.project else '',
+            r.vehicle.vehicle_no if r.vehicle else '',
+            float(r.fuel_previous_reading) if r.fuel_previous_reading is not None else '',
+            float(r.oil_previous_reading) if r.oil_previous_reading is not None else '',
+            r.remarks or '',
+        ])
+    return generate_excel_template(headers, data_rows, required_columns=[], filename='vehicle_reading_setup.xlsx')
+
+
+@app.route('/expenses/vehicle-reading-setups/print')
+def vehicle_reading_setup_print():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    from_date = parse_date(request.args.get('from_date'))
+    to_date = parse_date(request.args.get('to_date'))
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    search = (request.args.get('search') or '').strip()
+
+    rows = _vehicle_reading_setup_rows(
+        workspace_employee_id,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        vehicle_id=vehicle_id,
+        search=search,
+    )
+    return render_template(
+        'vehicle_reading_setup_print.html',
+        rows=rows,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        vehicle_id=vehicle_id,
+        search=search,
+    )
+
+
 @app.route('/expenses/vehicle-reading-setup/import', methods=['GET', 'POST'])
 def vehicle_reading_setup_import():
     _guard = _require_workspace_employee_for_expense_management()

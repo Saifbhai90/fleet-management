@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vehicle Reading Setup Print</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; color: #111; }
+    h2 { margin: 0 0 8px 0; font-size: 20px; }
+    .meta { font-size: 12px; margin-bottom: 12px; color: #444; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border: 1px solid #ccc; padding: 6px; vertical-align: top; }
+    th { background: #f1f3f5; text-align: left; }
+    .text-end { text-align: right; }
+    .text-center { text-align: center; }
+    @media print {
+      @page { size: A4 landscape; margin: 10mm; }
+      body { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <h2>Vehicle Fuel/Oil Previous Reading Setup</h2>
+  <div class="meta">
+    {% if from_date %}From: {{ from_date|ddmmyyyy }}{% else %}From: -{% endif %} |
+    {% if to_date %}To: {{ to_date|ddmmyyyy }}{% else %}To: -{% endif %} |
+    Search: {{ search or '-' }} |
+    Total: {{ rows|length }}
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th class="text-center">#</th>
+        <th>Date</th>
+        <th>District</th>
+        <th>Project</th>
+        <th>Vehicle</th>
+        <th class="text-end">Fuel Prev</th>
+        <th class="text-end">Oil Prev</th>
+        <th>Remarks</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td class="text-center">{{ loop.index }}</td>
+        <td>{{ r.setup_date|ddmmyyyy if r.setup_date else '-' }}</td>
+        <td>{{ r.district.name if r.district else '-' }}</td>
+        <td>{{ r.project.name if r.project else '-' }}</td>
+        <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
+        <td class="text-end">{{ "%.2f"|format(r.fuel_previous_reading|float) if r.fuel_previous_reading is not none else '-' }}</td>
+        <td class="text-end">{{ "%.2f"|format(r.oil_previous_reading|float) if r.oil_previous_reading is not none else '-' }}</td>
+        <td>{{ r.remarks or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="text-center">No records found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <script>
+    window.addEventListener('load', function () { window.print(); });
+  </script>
+</body>
+</html>
