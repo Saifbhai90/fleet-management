@@ -67,6 +67,7 @@
             <a href="{{ url_for('vehicle_reading_setup_list') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
             <button class="btn btn-success btn-sm"><i class="bi bi-funnel me-1"></i>Apply</button>
           </div>
+          <input type="hidden" name="per_page" value="{{ per_page }}">
         </form>
       </div>
     </div>
@@ -74,7 +75,15 @@
     <div class="card vrs-list-card">
       <div class="card-header d-flex justify-content-between align-items-center">
         <span><i class="bi bi-table me-1 text-success"></i>Setup Entries</span>
-        <input id="vrsSearch" type="text" class="form-control form-control-sm" placeholder="Quick search..." style="max-width:220px;">
+        <div class="d-flex align-items-center gap-2">
+          <input id="vrsSearch" type="text" class="form-control form-control-sm" placeholder="Quick search..." style="max-width:220px;">
+          <select id="vrsPerPage" class="form-select form-select-sm" style="width:auto;">
+            <option value="10" {% if per_page == 10 %}selected{% endif %}>10 / page</option>
+            <option value="20" {% if per_page == 20 %}selected{% endif %}>20 / page</option>
+            <option value="50" {% if per_page == 50 %}selected{% endif %}>50 / page</option>
+            <option value="100" {% if per_page == 100 %}selected{% endif %}>100 / page</option>
+          </select>
+        </div>
       </div>
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0 small" id="vehicleReadingSetupTable">
@@ -111,6 +120,41 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <small class="text-muted">
+            <i class="bi bi-list-ul me-1"></i>
+            Showing
+            {% if pagination.total > 0 %}
+              {{ ((pagination.page - 1) * per_page) + 1 }} to {{ (pagination.page - 1) * per_page + rows|length }}
+            {% else %}
+              0 to 0
+            {% endif %}
+            of {{ pagination.total }} records
+          </small>
+          {% if pagination and pagination.pages > 1 %}
+          <nav>
+            <ul class="pagination pagination-sm mb-0">
+              <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('vehicle_reading_setup_list', page=pagination.prev_num, per_page=per_page, from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, search=search) }}"><i class="bi bi-chevron-left"></i></a>
+              </li>
+              {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}
+                {% if p %}
+                <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                  <a class="page-link" href="{{ url_for('vehicle_reading_setup_list', page=p, per_page=per_page, from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, search=search) }}">{{ p }}</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+                {% endif %}
+              {% endfor %}
+              <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('vehicle_reading_setup_list', page=pagination.next_num, per_page=per_page, from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, search=search) }}"><i class="bi bi-chevron-right"></i></a>
+              </li>
+            </ul>
+          </nav>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
@@ -171,6 +215,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   var searchInput = document.getElementById('vrsSearch');
+  var perPageSelect = document.getElementById('vrsPerPage');
   var table = document.getElementById('vehicleReadingSetupTable');
   if (searchInput && table) {
     var tbody = table.querySelector('tbody');
@@ -185,6 +230,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (show) visible++;
       });
       if (noDataRow) noDataRow.style.display = (dataRows.length === 0 || (q && visible === 0)) ? '' : 'none';
+    });
+  }
+
+  if (perPageSelect) {
+    perPageSelect.addEventListener('change', function() {
+      var u = new URL(window.location.href);
+      u.searchParams.set('per_page', this.value);
+      u.searchParams.set('page', '1');
+      window.location.href = u.toString();
     });
   }
 

@@ -15318,8 +15318,10 @@ def vehicle_reading_setup_list():
         WorkspaceVehicleReadingSetup.id.desc(),
     ).all()
 
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    page = max(request.args.get('page', 1, type=int) or 1, 1)
+    per_page = request.args.get('per_page', 20, type=int) or 20
+    if per_page not in (10, 20, 50, 100):
+        per_page = 20
     pagination = SimplePagination(rows, page, per_page)
 
     districts = District.query.order_by(District.name).all()
