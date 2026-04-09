@@ -55,25 +55,9 @@
             <label class="form-label">Date <span class="text-danger">*</span></label>
             {{ form.expense_date(class="form-control datepicker", id="expenseDate") }}
           </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="form-section">
-      <div class="form-section-header">Meter Reading</div>
-      <div class="form-section-body">
-        <div class="row g-2">
-          <div class="col-md-4 field-group">
-            <label class="form-label">Previous Reading</label>
-            {{ form.previous_reading(class="form-control bg-light", id="previousReading", step="0.01", readonly=True, placeholder="From last entry") }}
-          </div>
           <div class="col-md-4 field-group">
             <label class="form-label">Current Reading</label>
             {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
-          </div>
-          <div class="col-md-4 field-group">
-            <label class="form-label">KM (Current − Previous)</label>
-            <input type="text" id="kmDisplay" class="form-control bg-light" readonly placeholder="—">
           </div>
         </div>
       </div>
@@ -205,9 +189,7 @@
   }
 
   var vehicleSelect = document.getElementById('vehicleSelect');
-  var previousReading = document.getElementById('previousReading');
   var currentReading = document.getElementById('currentReading');
-  var kmDisplay = document.getElementById('kmDisplay');
   var itemsBody = document.getElementById('itemsBody');
   var entryProductSelect = document.getElementById('entryProductSelect');
   var entryQty = document.getElementById('entryQty');
@@ -304,25 +286,6 @@
     document.getElementById('totalBillAmount').textContent = totalAmount.toFixed(2);
   }
 
-  function updateKm() {
-    var prev = parseFloat(previousReading.value) || null;
-    var curr = parseFloat(currentReading.value) || null;
-    kmDisplay.value = (prev != null && curr != null && curr >= prev) ? (curr - prev).toFixed(2) : '';
-  }
-  if (currentReading) currentReading.addEventListener('input', updateKm);
-  if (previousReading) previousReading.addEventListener('input', updateKm);
-  if (vehicleSelect) {
-    vehicleSelect.addEventListener('change', function() {
-      var vid = this.value;
-      previousReading.value = '';
-      if (!vid || vid === '0') return;
-      fetch('/api/maintenance-expense/last-reading?vehicle_id=' + vid).then(function(r) { return r.json(); }).then(function(d) {
-        if (d.previous_reading != null) previousReading.value = d.previous_reading;
-        updateKm();
-      });
-    });
-  }
-  updateKm();
   updateEntryAmount();
 })();
 </script>

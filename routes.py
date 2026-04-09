@@ -9,7 +9,7 @@ from models import (
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
     Party, Product, FuelExpense, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
-    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry,
+    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceVehicleReadingSetup,
     Notification, NotificationRead,
     User, Role, Permission,
     LoginLog, ActivityLog, ClientActivityLog,
@@ -15188,6 +15188,193 @@ def api_parties():
 # ────────────────────────────────────────────────
 # Fuel Expense
 # ────────────────────────────────────────────────
+@app.route('/expenses/vehicle-reading-setup', methods=['GET', 'POST'])
+def vehicle_reading_setup_form():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+    vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
+
+    selected_vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    row = None
+    if selected_vehicle_id:
+        row = WorkspaceVehicleReadingSetup.query.filter_by(
+            employee_id=workspace_employee_id,
+            vehicle_id=selected_vehicle_id,
+        ).first()
+
+    if request.method == 'POST':
+        district_id = request.form.get('district_id', type=int) or None
+        project_id = request.form.get('project_id', type=int) or None
+        vehicle_id = request.form.get('vehicle_id', type=int) or None
+        setup_date = parse_date(request.form.get('setup_date'))
+        fuel_prev_raw = (request.form.get('fuel_previous_reading') or '').strip()
+        oil_prev_raw = (request.form.get('oil_previous_reading') or '').strip()
+        remarks = (request.form.get('remarks') or '').strip() or None
+
+        if not vehicle_id:
+            flash('Please select vehicle.', 'danger')
+            return render_template(
+                'vehicle_reading_setup_form.html',
+                districts=districts, projects=projects, vehicles=vehicles,
+                row=row, selected_vehicle_id=selected_vehicle_id,
+            )
+        if not setup_date:
+            flash('Please select setup date.', 'danger')
+            return render_template(
+                'vehicle_reading_setup_form.html',
+                districts=districts, projects=projects, vehicles=vehicles,
+                row=row, selected_vehicle_id=selected_vehicle_id,
+            )
+
+        def _to_dec(raw):
+            if not raw:
+                return None
+            return Decimal(str(raw))
+
+        try:
+            fuel_prev = _to_dec(fuel_prev_raw)
+            oil_prev = _to_dec(oil_prev_raw)
+        except Exception:
+            flash('Fuel/Oil previous reading must be numeric.', 'danger')
+            return render_template(
+                'vehicle_reading_setup_form.html',
+                districts=districts, projects=projects, vehicles=vehicles,
+                row=row, selected_vehicle_id=selected_vehicle_id,
+            )
+
+        rec = WorkspaceVehicleReadingSetup.query.filter_by(
+            employee_id=workspace_employee_id,
+            vehicle_id=vehicle_id,
+        ).first()
+        if not rec:
+            rec = WorkspaceVehicleReadingSetup(
+                employee_id=workspace_employee_id,
+                vehicle_id=vehicle_id,
+            )
+            db.session.add(rec)
+
+        rec.district_id = district_id
+        rec.project_id = project_id
+        rec.setup_date = setup_date
+        rec.fuel_previous_reading = fuel_prev
+        rec.oil_previous_reading = oil_prev
+        rec.remarks = remarks
+        rec.created_by_user_id = session.get('user_id')
+        db.session.commit()
+        flash('Vehicle previous reading setup saved.', 'success')
+        return redirect(url_for('vehicle_reading_setup_form', vehicle_id=vehicle_id))
+
+    return render_template(
+        'vehicle_reading_setup_form.html',
+        districts=districts,
+        projects=projects,
+        vehicles=vehicles,
+        row=row,
+        selected_vehicle_id=selected_vehicle_id,
+    )
+
+
+@app.route('/expenses/vehicle-reading-setups')
+def vehicle_reading_setup_list():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+
+    from_date = parse_date(request.args.get('from_date'))
+    to_date = parse_date(request.args.get('to_date'))
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    search = (request.args.get('search') or '').strip()
+
+    q = WorkspaceVehicleReadingSetup.query.filter_by(employee_id=workspace_employee_id)
+    if from_date:
+        q = q.filter(WorkspaceVehicleReadingSetup.setup_date >= from_date)
+    if to_date:
+        q = q.filter(WorkspaceVehicleReadingSetup.setup_date <= to_date)
+    if district_id:
+        q = q.filter(WorkspaceVehicleReadingSetup.district_id == district_id)
+    if project_id:
+        q = q.filter(WorkspaceVehicleReadingSetup.project_id == project_id)
+    if vehicle_id:
+        q = q.filter(WorkspaceVehicleReadingSetup.vehicle_id == vehicle_id)
+    if search:
+        like = f"%{search}%"
+        q = q.join(Vehicle, WorkspaceVehicleReadingSetup.vehicle_id == Vehicle.id).filter(
+            or_(
+                Vehicle.vehicle_no.ilike(like),
+                WorkspaceVehicleReadingSetup.remarks.ilike(like),
+            )
+        )
+
+    rows = q.order_by(
+        WorkspaceVehicleReadingSetup.setup_date.desc(),
+        WorkspaceVehicleReadingSetup.id.desc(),
+    ).all()
+
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    pagination = SimplePagination(rows, page, per_page)
+
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+    vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
+
+    return render_template(
+        'vehicle_reading_setup_list.html',
+        rows=pagination.items,
+        pagination=pagination,
+        per_page=per_page,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        vehicle_id=vehicle_id,
+        search=search,
+        districts=districts,
+        projects=projects,
+        vehicles=vehicles,
+    )
+
+
+@app.route('/api/vehicle-reading-setup')
+def api_vehicle_reading_setup():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({})
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    vehicle_id = request.args.get('vehicle_id', type=int)
+    if not vehicle_id:
+        return jsonify({})
+
+    row = WorkspaceVehicleReadingSetup.query.filter_by(
+        employee_id=workspace_employee_id,
+        vehicle_id=vehicle_id,
+    ).first()
+    payload = {
+        'fuel_previous_reading': float(row.fuel_previous_reading) if row and row.fuel_previous_reading is not None else None,
+        'oil_previous_reading': float(row.oil_previous_reading) if row and row.oil_previous_reading is not None else None,
+        'district_id': row.district_id if row else None,
+        'project_id': row.project_id if row else None,
+        'setup_date': row.setup_date.strftime('%d-%m-%Y') if row and row.setup_date else None,
+        'remarks': row.remarks if row else '',
+    }
+    if row:
+        return jsonify(payload)
+
+    last_fuel = FuelExpense.query.filter_by(vehicle_id=vehicle_id).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
+    last_oil = OilExpense.query.filter_by(vehicle_id=vehicle_id).order_by(OilExpense.expense_date.desc(), OilExpense.id.desc()).first()
+    payload['fuel_previous_reading'] = float(last_fuel.current_reading) if last_fuel and last_fuel.current_reading is not None else None
+    payload['oil_previous_reading'] = float(last_oil.current_reading) if last_oil and last_oil.current_reading is not None else None
+    return jsonify(payload)
+
+
 def _fuel_expense_task_readings(vehicle_id, task_date):
     """Return (km_out_day_start, km_in_day_close) from VehicleDailyTask for given vehicle and date. None if no task."""
     task = VehicleDailyTask.query.filter_by(vehicle_id=vehicle_id, task_date=task_date).first()
@@ -15208,8 +15395,12 @@ def api_fuel_expense_last_reading():
     vehicle_id = request.args.get('vehicle_id', type=int)
     if not vehicle_id:
         return jsonify({'previous_reading': None})
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     last_entry = FuelExpense.query.filter_by(vehicle_id=vehicle_id).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
-    return jsonify({'previous_reading': float(last_entry.current_reading) if last_entry and last_entry.current_reading else None})
+    if last_entry and last_entry.current_reading is not None:
+        return jsonify({'previous_reading': float(last_entry.current_reading)})
+    fallback = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'fuel')
+    return jsonify({'previous_reading': fallback})
 
 
 @app.route('/api/fuel-expense/task-readings')
@@ -15442,6 +15633,24 @@ def _workspace_employee_id_for_expenses():
     return session.get('workspace_employee_id')
 
 
+def _fallback_vehicle_previous_reading(employee_id, vehicle_id, mode):
+    if not employee_id or not vehicle_id:
+        return None
+    setup = WorkspaceVehicleReadingSetup.query.filter_by(
+        employee_id=employee_id,
+        vehicle_id=vehicle_id,
+    ).first()
+    if not setup:
+        return None
+    if mode == 'fuel':
+        raw = setup.fuel_previous_reading
+    elif mode == 'oil':
+        raw = setup.oil_previous_reading
+    else:
+        raw = None
+    return float(raw) if raw is not None else None
+
+
 def _workspace_reverse_expense_journals(reference_type, reference_id, employee_id):
     if not employee_id:
         return
@@ -15550,7 +15759,10 @@ def fuel_expense_add():
         current_reading = form.current_reading.data
         if previous_reading is None:
             last_entry = FuelExpense.query.filter_by(vehicle_id=vehicle_id).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
-            previous_reading = float(last_entry.current_reading) if last_entry and last_entry.current_reading else 0
+            if last_entry and last_entry.current_reading is not None:
+                previous_reading = float(last_entry.current_reading)
+            else:
+                previous_reading = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'fuel') or 0
         prev_f = float(previous_reading)
         curr_f = float(current_reading)
         km = curr_f - prev_f if curr_f >= prev_f else 0
@@ -15662,7 +15874,10 @@ def fuel_expense_edit(pk):
                 FuelExpense.vehicle_id == vehicle_id,
                 FuelExpense.id != pk
             ).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
-            previous_reading = float(last_entry.current_reading) if last_entry and last_entry.current_reading else 0
+            if last_entry and last_entry.current_reading is not None:
+                previous_reading = float(last_entry.current_reading)
+            else:
+                previous_reading = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'fuel') or 0
         prev_f = float(previous_reading)
         curr_f = float(current_reading)
         km = curr_f - prev_f if curr_f >= prev_f else 0
@@ -15741,12 +15956,16 @@ def api_oil_expense_last_reading():
     vehicle_id = request.args.get('vehicle_id', type=int)
     if not vehicle_id:
         return jsonify({})
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     last_entry = OilExpense.query.filter_by(vehicle_id=vehicle_id).order_by(
         OilExpense.expense_date.desc(), OilExpense.id.desc()
     ).first()
-    if not last_entry or last_entry.current_reading is None:
+    if last_entry and last_entry.current_reading is not None:
+        return jsonify({'previous_reading': float(last_entry.current_reading)})
+    fallback = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'oil')
+    if fallback is None:
         return jsonify({})
-    return jsonify({'previous_reading': float(last_entry.current_reading)})
+    return jsonify({'previous_reading': fallback})
 
 
 @app.route('/api/oil-expense/products-for-oil')
@@ -15929,6 +16148,14 @@ def oil_expense_form(pk=None):
         card_swipe_date = form.card_swipe_date.data
         prev_reading = form.previous_reading.data
         curr_reading = form.current_reading.data
+        if prev_reading is None:
+            last_entry = OilExpense.query.filter_by(vehicle_id=vehicle_id).order_by(
+                OilExpense.expense_date.desc(), OilExpense.id.desc()
+            ).first()
+            if last_entry and last_entry.current_reading is not None:
+                prev_reading = float(last_entry.current_reading)
+            else:
+                prev_reading = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'oil')
         km = None
         if prev_reading is not None and curr_reading is not None:
             try:
@@ -16252,14 +16479,7 @@ def maintenance_expense_form(pk=None):
             flash('Select vehicle.', 'danger')
             return render_template('maintenance_expense_form.html', form=form, rec=rec, title='Edit Maintenance' if rec else 'Add Maintenance', products_for_maintenance=products_for_maintenance)
         expense_date = form.expense_date.data
-        prev_reading = form.previous_reading.data
         curr_reading = form.current_reading.data
-        km = None
-        if prev_reading is not None and curr_reading is not None:
-            try:
-                km = float(curr_reading) - float(prev_reading)
-            except (TypeError, ValueError):
-                pass
         remarks = form.remarks.data
 
         product_ids = request.form.getlist('product_id')
@@ -16295,9 +16515,9 @@ def maintenance_expense_form(pk=None):
                 employee_id=workspace_employee_id,
                 vehicle_id=vehicle_id,
                 expense_date=expense_date,
-                previous_reading=prev_reading,
                 current_reading=curr_reading,
-                km=km,
+                previous_reading=None,
+                km=None,
                 remarks=remarks
             )
             db.session.add(rec)
@@ -16308,9 +16528,9 @@ def maintenance_expense_form(pk=None):
             rec.employee_id = workspace_employee_id
             rec.vehicle_id = vehicle_id
             rec.expense_date = expense_date
-            rec.previous_reading = prev_reading
             rec.current_reading = curr_reading
-            rec.km = km
+            rec.previous_reading = None
+            rec.km = None
             rec.remarks = remarks
         for idx, it in enumerate(items_data):
             item = MaintenanceExpenseItem(

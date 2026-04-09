@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Vehicle Fuel/Oil Previous Reading Setup{% endblock %}
+{% block content %}
+<style>
+  .vrs-wrap { max-width: min(1500px, calc(100vw - 96px)); margin: 0 auto; }
+  .vrs-wrap .page-header { background: linear-gradient(135deg, #198754 0%, #157347 100%); color: #fff; padding: .6rem 1rem; border-radius: 10px; margin-bottom: .7rem; }
+  .vrs-wrap .card { border: 1px solid #e9ecef; border-radius: 10px; }
+</style>
+
+<div class="container-fluid vrs-wrap py-2">
+  <div class="page-header d-flex justify-content-between align-items-center">
+    <h4 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Vehicle Fuel/Oil Previous Reading Setup</h4>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('vehicle_reading_setup_list') }}" class="btn btn-outline-light btn-sm">View List</a>
+      <a href="{{ url_for('workspace_home') }}" class="btn btn-outline-light btn-sm">Back to Dashboard</a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <form method="post" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">District</label>
+          <select name="district_id" id="vrsDistrict" class="form-select search-select">
+            <option value="">-- Select District --</option>
+            {% for d in districts %}
+            <option value="{{ d.id }}" {% if row and row.district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Project</label>
+          <select name="project_id" id="vrsProject" class="form-select search-select">
+            <option value="">-- Select Project --</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}" {% if row and row.project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Vehicle</label>
+          <select name="vehicle_id" id="vrsVehicle" class="form-select search-select" required>
+            <option value="">-- Select Vehicle --</option>
+            {% for v in vehicles %}
+            <option value="{{ v.id }}" {% if (row and row.vehicle_id == v.id) or selected_vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Setup Date</label>
+          <input type="text" name="setup_date" id="vrsSetupDate" class="form-control datepicker" placeholder="dd-mm-yyyy" required value="{{ row.setup_date.strftime('%d-%m-%Y') if row and row.setup_date else '' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Fuel Previous Reading</label>
+          <input type="number" step="0.01" min="0" name="fuel_previous_reading" id="vrsFuelPrev" class="form-control" value="{{ row.fuel_previous_reading if row else '' }}" placeholder="0.00">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Oil Previous Reading</label>
+          <input type="number" step="0.01" min="0" name="oil_previous_reading" id="vrsOilPrev" class="form-control" value="{{ row.oil_previous_reading if row else '' }}" placeholder="0.00">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Remarks</label>
+          <input type="text" name="remarks" id="vrsRemarks" class="form-control" value="{{ row.remarks if row else '' }}" placeholder="Optional">
+        </div>
+        <div class="col-12 d-flex justify-content-end gap-2">
+          <a href="{{ url_for('vehicle_reading_setup_form') }}" class="btn btn-outline-secondary">Reset</a>
+          <button class="btn btn-success"><i class="bi bi-save me-1"></i>Save Setup</button>
+        </div>
+      </form>
+      <div class="small text-muted mt-2">
+        Note: Fuel/Oil expense forms me Previous Reading pehle last current reading se aati hai; agar last entry na ho to yahan set value use hoti hai.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var district = document.getElementById('vrsDistrict');
+  var project = document.getElementById('vrsProject');
+  var vehicle = document.getElementById('vrsVehicle');
+  var setupDate = document.getElementById('vrsSetupDate');
+  var fuelPrev = document.getElementById('vrsFuelPrev');
+  var oilPrev = document.getElementById('vrsOilPrev');
+  var remarks = document.getElementById('vrsRemarks');
+
+  function setSelectValue(selectEl, value){
+    if(!selectEl) return;
+    var v = value ? String(value) : '';
+    if(selectEl.tomselect){
+      try { selectEl.tomselect.setValue(v, true); } catch(e) { selectEl.value = v; }
+      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+    selectEl.value = v;
+    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function loadSetupForVehicle(){
+    var vid = vehicle && vehicle.value;
+    if(!vid || vid === '0') return;
+    fetch('/api/vehicle-reading-setup?vehicle_id=' + encodeURIComponent(vid))
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(!data) return;
+        if(data.district_id){ setSelectValue(district, data.district_id); }
+        if(data.project_id){ setSelectValue(project, data.project_id); }
+        if(data.setup_date && setupDate && !setupDate.value){ setupDate.value = data.setup_date; }
+        if(data.fuel_previous_reading != null){ fuelPrev.value = data.fuel_previous_reading; }
+        if(data.oil_previous_reading != null){ oilPrev.value = data.oil_previous_reading; }
+        if(data.remarks && !remarks.value){ remarks.value = data.remarks; }
+      });
+  }
+
+  if(district && project){
+    district.addEventListener('change', function(){
+      var did = district.value;
+      if (project.tomselect) { project.tomselect.destroy(); }
+      if (vehicle.tomselect) { vehicle.tomselect.destroy(); }
+      project.innerHTML = '<option value="">-- Select Project --</option>';
+      vehicle.innerHTML = '<option value="">-- Select Vehicle --</option>';
+      initSearchableDropdowns(vehicle.parentNode);
+      if(did){
+        fetch('/get_projects_by_district/' + did)
+          .then(function(r){ return r.json(); })
+          .then(function(arr){
+            arr.forEach(function(p){
+              var o = document.createElement('option');
+              o.value = p.id;
+              o.textContent = p.name;
+              project.appendChild(o);
+            });
+            initSearchableDropdowns(project.parentNode);
+          });
+      } else {
+        initSearchableDropdowns(project.parentNode);
+      }
+    });
+  }
+
+  if(project && vehicle){
+    project.addEventListener('change', function(){
+      var pid = project.value;
+      var did = district ? district.value : '';
+      if (vehicle.tomselect) { vehicle.tomselect.destroy(); }
+      vehicle.innerHTML = '<option value="">-- Select Vehicle --</option>';
+      if(pid){
+        var url = '/get_vehicles_by_project_district?project_id=' + pid;
+        if (did) url += '&district_id=' + did;
+        fetch(url).then(function(r){ return r.json(); }).then(function(arr){
+          arr.forEach(function(v){
+            var o = document.createElement('option');
+            o.value = v.id;
+            o.textContent = v.vehicle_no;
+            vehicle.appendChild(o);
+          });
+          initSearchableDropdowns(vehicle.parentNode);
+        });
+      } else {
+        initSearchableDropdowns(vehicle.parentNode);
+      }
+    });
+  }
+
+  if(vehicle){ vehicle.addEventListener('change', loadSetupForVehicle); }
+  loadSetupForVehicle();
+});
+</script>
+{% endblock %}

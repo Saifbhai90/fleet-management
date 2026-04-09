@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Vehicle Reading Setup List{% endblock %}
+{% block content %}
+<style>
+  .vrs-list-wrap { max-width: min(1700px, calc(100vw - 96px)); margin: 0 auto; }
+  .vrs-list-header { background: linear-gradient(135deg, #198754 0%, #157347 100%); color: #fff; border-radius: 12px; padding: .65rem 1rem; }
+  .vrs-list-card { border: 1px solid #e9ecef; border-radius: 12px; box-shadow: 0 2px 10px rgba(16,24,40,.06); }
+  .vrs-list-card .card-header { background: linear-gradient(to right, #f8f9fa 0%, #fff 100%); font-weight: 600; font-size: .87rem; }
+</style>
+
+<div class="container-fluid py-3">
+  <div class="vrs-list-wrap">
+    <div class="d-flex justify-content-between align-items-center vrs-list-header mb-3">
+      <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Vehicle Fuel/Oil Previous Reading Setup</h5>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-light btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+        <button class="btn btn-outline-light btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+        <a href="{{ url_for('vehicle_reading_setup_form') }}" class="btn btn-light btn-sm text-success"><i class="bi bi-plus-circle me-1"></i>Add Setup</a>
+      </div>
+    </div>
+
+    <div class="card vrs-list-card mb-3">
+      <div class="card-header"><i class="bi bi-funnel me-1 text-success"></i>Filters</div>
+      <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+          <div class="col-md-2">
+            <label class="form-label small">From Date</label>
+            <input type="text" class="form-control form-control-sm datepicker" name="from_date" value="{{ from_date|ddmmyyyy if from_date else '' }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">To Date</label>
+            <input type="text" class="form-control form-control-sm datepicker" name="to_date" value="{{ to_date|ddmmyyyy if to_date else '' }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">District</label>
+            <select class="form-select form-select-sm search-select" id="districtSelect" name="district_id">
+              <option value="0">-- All Districts --</option>
+              {% for d in districts %}
+              <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Project</label>
+            <select class="form-select form-select-sm search-select" id="projectSelect" name="project_id">
+              <option value="0">-- All Projects --</option>
+              {% for p in projects %}
+              <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Vehicle</label>
+            <select class="form-select form-select-sm search-select" id="vehicleSelect" name="vehicle_id">
+              <option value="0">-- All Vehicles --</option>
+              {% for v in vehicles %}
+              <option value="{{ v.id }}" {% if vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Search</label>
+            <input type="text" class="form-control form-control-sm" name="search" value="{{ search or '' }}" placeholder="Vehicle / remarks">
+          </div>
+          <div class="col-12 d-flex justify-content-end gap-2">
+            <a href="{{ url_for('vehicle_reading_setup_list') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
+            <button class="btn btn-success btn-sm"><i class="bi bi-funnel me-1"></i>Apply</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card vrs-list-card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-table me-1 text-success"></i>Setup Entries</span>
+        <input id="vrsSearch" type="text" class="form-control form-control-sm" placeholder="Quick search..." style="max-width:220px;">
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 small" id="vehicleReadingSetupTable">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Date</th>
+              <th>District</th>
+              <th>Project</th>
+              <th>Vehicle</th>
+              <th class="text-end">Fuel Prev</th>
+              <th class="text-end">Oil Prev</th>
+              <th>Remarks</th>
+              <th class="text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr class="vrs-row">
+              <td>{{ loop.index + ((pagination.page - 1) * per_page) }}</td>
+              <td>{{ r.setup_date|ddmmyyyy }}</td>
+              <td>{{ r.district.name if r.district else '-' }}</td>
+              <td>{{ r.project.name if r.project else '-' }}</td>
+              <td class="fw-semibold">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
+              <td class="text-end">{{ "%.2f"|format(r.fuel_previous_reading|float) if r.fuel_previous_reading is not none else '-' }}</td>
+              <td class="text-end">{{ "%.2f"|format(r.oil_previous_reading|float) if r.oil_previous_reading is not none else '-' }}</td>
+              <td>{{ r.remarks or '-' }}</td>
+              <td class="text-center">
+                <a href="{{ url_for('vehicle_reading_setup_form', vehicle_id=r.vehicle_id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i></a>
+              </td>
+            </tr>
+            {% else %}
+            <tr id="vrsNoDataRow"><td colspan="9" class="text-center py-4 text-muted">No setup entries found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
+  var vehicleSelect = document.getElementById('vehicleSelect');
+
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = this.value;
+      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
+      if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
+      projectSelect.innerHTML = '<option value="0">-- All Projects --</option>';
+      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+      initSearchableDropdowns(vehicleSelect.parentNode);
+      if (did && did !== '0') {
+        fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
+          arr.forEach(function(p) {
+            var o = document.createElement('option');
+            o.value = p.id;
+            o.textContent = p.name;
+            projectSelect.appendChild(o);
+          });
+          initSearchableDropdowns(projectSelect.parentNode);
+        });
+      } else {
+        initSearchableDropdowns(projectSelect.parentNode);
+      }
+    });
+  }
+
+  if (projectSelect && vehicleSelect) {
+    projectSelect.addEventListener('change', function() {
+      var pid = projectSelect.value;
+      var did = districtSelect ? districtSelect.value : '';
+      if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
+      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+      if (pid && pid !== '0') {
+        var url = '/get_vehicles_by_project_district?project_id=' + pid;
+        if (did && did !== '0') url += '&district_id=' + did;
+        fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
+          arr.forEach(function(v) {
+            var o = document.createElement('option');
+            o.value = v.id;
+            o.textContent = v.vehicle_no;
+            vehicleSelect.appendChild(o);
+          });
+          initSearchableDropdowns(vehicleSelect.parentNode);
+        });
+      } else {
+        initSearchableDropdowns(vehicleSelect.parentNode);
+      }
+    });
+  }
+
+  var searchInput = document.getElementById('vrsSearch');
+  var table = document.getElementById('vehicleReadingSetupTable');
+  if (searchInput && table) {
+    var tbody = table.querySelector('tbody');
+    var dataRows = Array.from(tbody.querySelectorAll('tr.vrs-row'));
+    var noDataRow = tbody.querySelector('#vrsNoDataRow');
+    searchInput.addEventListener('input', function() {
+      var q = this.value.trim();
+      var visible = 0;
+      dataRows.forEach(function(row) {
+        var show = !q || window.fleetMultiWordMatch(row.innerText || row.textContent, q);
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      if (noDataRow) noDataRow.style.display = (dataRows.length === 0 || (q && visible === 0)) ? '' : 'none';
+    });
+  }
+
+  if (window.fleetTableEnhance) window.fleetTableEnhance('vehicleReadingSetupTable');
+  if (window.fleetPrintExport) window.fleetPrintExport('vehicleReadingSetupTable', 'Vehicle Reading Setup', 'Vehicle_Reading_Setup.csv');
+});
+</script>
+{% endblock %}

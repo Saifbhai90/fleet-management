@@ -777,6 +777,32 @@ class FuelExpense(db.Model):
         return f'<FuelExpense {self.vehicle_id} {self.fueling_date}>'
 
 
+class WorkspaceVehicleReadingSetup(db.Model):
+    __tablename__ = 'workspace_vehicle_reading_setup'
+    __table_args__ = (
+        db.UniqueConstraint('employee_id', 'vehicle_id', name='uq_ws_vehicle_reading_employee_vehicle'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False, index=True)
+    setup_date = db.Column(db.Date, nullable=False, index=True)
+    fuel_previous_reading = db.Column(db.Numeric(12, 2), nullable=True)
+    oil_previous_reading = db.Column(db.Numeric(12, 2), nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('vehicle_reading_setups', lazy='dynamic'))
+    district = db.relationship('District', backref='vehicle_reading_setups', lazy='select')
+    project = db.relationship('Project', backref='vehicle_reading_setups', lazy='select')
+    vehicle = db.relationship('Vehicle', backref='workspace_reading_setups', lazy='select')
+    created_by = db.relationship('User', backref='workspace_vehicle_reading_setups_created', lazy='select')
+
+
 # ────────────────────────────────────────────────
 # Product Balance (in-hand stock for Oil/Maintenance)
 # ────────────────────────────────────────────────

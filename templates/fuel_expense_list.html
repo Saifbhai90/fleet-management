@@ -1,15 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Fuel Expense{% endblock %}
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-fuel-pump me-2 text-primary"></i>Fuel Expense</h2>
-    <a href="{{ url_for('fuel_expense_add', district_id=form.district_id.data or 0, project_id=form.project_id.data or 0) }}" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus-circle me-1"></i>Add Fuel Expense
-    </a>
+<style>
+  .fuel-list-wrap { max-width: min(1700px, calc(100vw - 96px)); margin: 0 auto; }
+  .fuel-list-head { background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%); color:#fff; border-radius: 12px; padding: .65rem 1rem; }
+  .fuel-list-card { border: 1px solid #e9ecef; border-radius: 12px; box-shadow: 0 2px 10px rgba(16,24,40,.06); }
+  .fuel-list-card .card-header { background: linear-gradient(to right, #f8f9fa 0%, #fff 100%); font-weight: 600; font-size: .87rem; }
+</style>
+<div class="container-fluid py-3">
+  <div class="fuel-list-wrap">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 fuel-list-head">
+    <h5 class="mb-0"><i class="bi bi-fuel-pump me-2"></i>Fuel Expense</h5>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-light btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button class="btn btn-outline-light btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      <a href="{{ url_for('fuel_expense_add', district_id=form.district_id.data or 0, project_id=form.project_id.data or 0) }}" class="btn btn-light btn-sm text-primary">
+        <i class="bi bi-plus-circle me-1"></i>Add Fuel Expense
+      </a>
+    </div>
   </div>
 
-  <div class="card shadow-sm border-0 rounded-3 mb-4">
+  <div class="card fuel-list-card mb-3">
+    <div class="card-header"><i class="bi bi-funnel me-1 text-primary"></i>Filters</div>
     <div class="card-body">
       <form method="POST" action="{{ url_for('fuel_expense_list') }}" class="row g-3 align-items-end">
         {{ form.hidden_tag() }}
@@ -54,8 +66,8 @@
     </div>
   </div>
 
-  <div class="card shadow border-0 rounded-3 overflow-hidden">
-    <div class="card-header bg-primary text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+  <div class="card fuel-list-card overflow-hidden">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="fw-semibold">Fuel Expense from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
       <input type="text" id="fuelExpenseSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Search..." style="max-width: 220px;" autocomplete="off">
     </div>
@@ -156,6 +168,7 @@
       </div>
     </div>
   </div>
+  </div>
 </div>
 <script>
 (function() {
@@ -234,6 +247,10 @@
     }
   }
 })();
+</script>
+<script>
+if (window.fleetTableEnhance) window.fleetTableEnhance('fuelExpenseTable');
+if (window.fleetPrintExport) window.fleetPrintExport('fuelExpenseTable', 'Fuel Expense', 'Fuel_Expense.csv');
 </script>
 
 {% if pagination and pagination.pages > 1 %}

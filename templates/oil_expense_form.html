@@ -7,7 +7,7 @@
     .oil-form-wrap { max-width: 100%; }
   }
   .oil-form-wrap .page-header {
-    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    background: linear-gradient(135deg, #5b21b6 0%, #4338ca 100%);
     color: #fff;
     padding: 0.5rem 1rem;
     border-radius: 10px;
@@ -62,7 +62,10 @@
           </div>
           <div class="col-md-4 field-group">
             <label class="form-label">Vehicle <span class="text-danger">*</span></label>
-            {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
+            <div class="d-flex gap-2 align-items-center">
+              {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
+              <a href="{{ url_for('vehicle_reading_setup_form') }}" class="btn btn-outline-success btn-sm text-nowrap" title="Set Fuel/Oil previous readings">Set Reading</a>
+            </div>
           </div>
           <div class="col-md-4 field-group">
             <label class="form-label">Oil Change Date <span class="text-danger">*</span></label>
