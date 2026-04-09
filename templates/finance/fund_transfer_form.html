@@ -11,6 +11,8 @@
 .ft-preview-wrap{position:relative;display:inline-block;max-width:220px}
 .ft-preview-wrap img{max-width:220px;max-height:150px;border-radius:6px;object-fit:contain;box-shadow:0 1px 4px rgba(0,0,0,.12)}
 .ft-preview-wrap .ft-remove{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:#dc3545;color:#fff;border:none;font-size:.7rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.ft-file-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #dbe4ea;border-radius:8px;background:#fff;color:#374151;font-size:.8rem;max-width:280px}
+.ft-file-chip .name{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ft-paste-hint{font-size:.72rem;color:#999;margin-top:4px}
 
 /* Description autocomplete */
@@ -136,25 +138,37 @@
 
                             {# ── Attachment upload ── #}
                             <div class="col-12">
-                                <label class="form-label fw-bold">Attachment (Image)</label>
+                                <label class="form-label fw-bold">Attachment (Image/PDF)</label>
                                 <div class="ft-upload-zone" id="ftUploadZone" tabindex="0">
-                                    <input type="file" name="attachment" id="ftFileInput" accept="image/*" style="display:none">
+                                    <input type="file" name="attachment" id="ftFileInput" accept="image/*,.pdf" style="display:none">
                                     <div id="ftPlaceholder" class="ft-placeholder">
                                         <i class="bi bi-cloud-arrow-up"></i>
-                                        Click to browse, drag &amp; drop, or paste an image
+                                        Click to browse, drag &amp; drop image/PDF, or paste an image
                                     </div>
                                     <div id="ftPreview" style="display:none" class="ft-preview-wrap">
                                         <img id="ftPreviewImg" src="" alt="preview">
                                         <button type="button" class="ft-remove" id="ftRemoveBtn" title="Remove"><i class="bi bi-x"></i></button>
                                     </div>
+                                    <div id="ftFileChip" style="display:none" class="ft-file-chip">
+                                        <i class="bi bi-file-earmark-pdf text-danger"></i>
+                                        <span id="ftFileName" class="name"></span>
+                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1" id="ftFileChipRemove" title="Remove"><i class="bi bi-x-circle"></i></button>
+                                    </div>
                                     <div class="ft-paste-hint">Ctrl+V to paste from clipboard</div>
                                 </div>
                                 {% if existing_attachment %}
+                                {% set is_pdf_attachment = existing_attachment.lower().endswith('.pdf') %}
                                 <div class="mt-2" id="ftExisting">
                                     <small class="text-muted">Current:</small>
-                                    <a href="{{ existing_attachment }}" target="_blank" class="ms-1">
-                                        <img src="{{ existing_attachment }}" style="max-height:50px;border-radius:4px" alt="current">
-                                    </a>
+                                    {% if is_pdf_attachment %}
+                                        <a href="{{ existing_attachment }}" target="_blank" class="ms-1 text-decoration-none">
+                                            <i class="bi bi-file-earmark-pdf text-danger"></i> View current PDF
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ existing_attachment }}" target="_blank" class="ms-1">
+                                            <img src="{{ existing_attachment }}" style="max-height:50px;border-radius:4px" alt="current">
+                                        </a>
+                                    {% endif %}
                                     <label class="ms-2 text-danger" style="font-size:.78rem;cursor:pointer">
                                         <input type="checkbox" name="remove_attachment" value="1" class="form-check-input form-check-input-sm me-1">Remove
                                     </label>
@@ -233,16 +247,41 @@
         ph   = document.getElementById('ftPlaceholder'),
         prev = document.getElementById('ftPreview'),
         img  = document.getElementById('ftPreviewImg'),
+        fileChip = document.getElementById('ftFileChip'),
+        fileName = document.getElementById('ftFileName'),
+        fileChipRemove = document.getElementById('ftFileChipRemove'),
         rmBtn= document.getElementById('ftRemoveBtn');
 
     function showPreview(file){
-        if(!file || !file.type.startsWith('image/')) return;
-        var reader = new FileReader();
-        reader.onload = function(e){ img.src = e.target.result; ph.style.display='none'; prev.style.display='inline-block'; };
-        reader.readAsDataURL(file);
+        if(!file) return;
+        ph.style.display='none';
+        if(file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')){
+            if(prev) prev.style.display='none';
+            if(fileChip){
+                fileChip.style.display='inline-flex';
+                if(fileName) fileName.textContent = file.name || 'attachment.pdf';
+            }
+            return;
+        }
+        if(file.type.startsWith('image/')){
+            var reader = new FileReader();
+            reader.onload = function(e){
+                img.src = e.target.result;
+                if(prev) prev.style.display='inline-block';
+                if(fileChip) fileChip.style.display='none';
+            };
+            reader.readAsDataURL(file);
+            return;
+        }
+        clearPreview();
     }
     function clearPreview(){
-        inp.value=''; img.src=''; prev.style.display='none'; ph.style.display='';
+        inp.value='';
+        img.src='';
+        if(prev) prev.style.display='none';
+        if(fileChip) fileChip.style.display='none';
+        if(fileName) fileName.textContent='';
+        ph.style.display='';
         var dt = new DataTransfer(); inp.files = dt.files;
     }
     zone.addEventListener('click', function(e){ if(e.target.closest('.ft-remove')) return; inp.click(); });
@@ -252,7 +291,12 @@
     zone.addEventListener('drop', function(e){
         e.preventDefault(); zone.classList.remove('drag-over');
         var f = e.dataTransfer.files;
-        if(f && f[0] && f[0].type.startsWith('image/')){ var dt=new DataTransfer(); dt.items.add(f[0]); inp.files=dt.files; showPreview(f[0]); }
+        if(f && f[0]){
+            var ok = f[0].type.startsWith('image/') || f[0].type === 'application/pdf' || /\.pdf$/i.test(f[0].name || '');
+            if(ok){
+                var dt=new DataTransfer(); dt.items.add(f[0]); inp.files=dt.files; showPreview(f[0]);
+            }
+        }
     });
     document.addEventListener('paste', function(e){
         var items = (e.clipboardData||e.originalEvent.clipboardData).items;
@@ -264,6 +308,7 @@
         }
     });
     rmBtn.addEventListener('click', function(e){ e.stopPropagation(); clearPreview(); });
+    if(fileChipRemove){ fileChipRemove.addEventListener('click', function(e){ e.stopPropagation(); clearPreview(); }); }
 
     /* ── Bank Directory Panel ── */
     var bdList     = document.getElementById('bdList'),

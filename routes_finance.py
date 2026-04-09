@@ -1293,15 +1293,25 @@ def _parse_person(val):
 
 
 def _upload_ft_attachment(file_storage):
-    """Upload fund-transfer attachment image to R2, return public URL or None."""
+    """Upload fund-transfer attachment (image/pdf) to R2, return public URL or None."""
     if not file_storage or not getattr(file_storage, 'filename', None):
         return None
     try:
-        from r2_storage import upload_image_file as _r2_up, R2_PUBLIC_URL, R2_ACCESS_KEY_ID, R2_ENDPOINT_URL, R2_BUCKET_NAME
+        from r2_storage import (
+            upload_image_file as _r2_img_up,
+            upload_pdf_file as _r2_pdf_up,
+            R2_PUBLIC_URL,
+            R2_ACCESS_KEY_ID,
+            R2_ENDPOINT_URL,
+            R2_BUCKET_NAME,
+        )
         if not all([R2_PUBLIC_URL, R2_ACCESS_KEY_ID, R2_ENDPOINT_URL, R2_BUCKET_NAME]):
             return None
+        ext = os.path.splitext(secure_filename(file_storage.filename or ''))[1].lower()
         file_storage.seek(0)
-        return _r2_up(file_storage, folder='fund_transfers')
+        if ext == '.pdf':
+            return _r2_pdf_up(file_storage, folder='fund_transfers')
+        return _r2_img_up(file_storage, folder='fund_transfers')
     except Exception:
         return None
 

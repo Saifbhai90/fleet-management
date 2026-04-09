@@ -1323,8 +1323,8 @@ class FundTransferForm(FlaskForm):
     category = SelectField('Category / Purpose', validators=[Optional()],
                            choices=[],
                            render_kw={'class': 'form-select'})
-    attachment = FileField('Attachment (Image)', validators=[Optional(),
-                           FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], 'Images only!')])
+    attachment = FileField('Attachment (Image/PDF)', validators=[Optional(),
+                           FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'pdf'], 'Only image or PDF allowed!')])
     is_salary = BooleanField('Salary Payment (balance will not accumulate in receiver wallet)',
                              default=False, validators=[Optional()])
     submit = SubmitField('Save Transfer')
