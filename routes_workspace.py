@@ -1367,19 +1367,14 @@ def workspace_fuel_oil_openings_list():
     if per_page not in (10, 20, 50, 100):
         per_page = 20
 
-    query = WorkspaceFuelOilOpeningExpense.query.filter_by(employee_id=emp.id)
-    if from_date:
-        query = query.filter(WorkspaceFuelOilOpeningExpense.opening_date >= from_date)
-    if to_date:
-        query = query.filter(WorkspaceFuelOilOpeningExpense.opening_date <= to_date)
-    if district_id:
-        query = query.filter(WorkspaceFuelOilOpeningExpense.district_id == district_id)
-    if project_id:
-        query = query.filter(WorkspaceFuelOilOpeningExpense.project_id == project_id)
-    if search:
-        flt = _workspace_multi_word_filter(search, WorkspaceFuelOilOpeningExpense.remarks)
-        if flt is not None:
-            query = query.filter(flt)
+    query = _workspace_fuel_oil_opening_query(
+        employee_id=emp.id,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        search=search,
+    )
 
     total_amount = query.with_entities(
         db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.total_amount), 0)
@@ -1406,6 +1401,122 @@ def workspace_fuel_oil_openings_list():
         total_amount=total_amount,
         districts=districts,
         projects=projects,
+    )
+
+
+def _workspace_fuel_oil_opening_query(employee_id, from_date=None, to_date=None, district_id=0, project_id=0, search=""):
+    query = WorkspaceFuelOilOpeningExpense.query.filter_by(employee_id=employee_id)
+    if from_date:
+        query = query.filter(WorkspaceFuelOilOpeningExpense.opening_date >= from_date)
+    if to_date:
+        query = query.filter(WorkspaceFuelOilOpeningExpense.opening_date <= to_date)
+    if district_id:
+        query = query.filter(WorkspaceFuelOilOpeningExpense.district_id == district_id)
+    if project_id:
+        query = query.filter(WorkspaceFuelOilOpeningExpense.project_id == project_id)
+    if search:
+        flt = _workspace_multi_word_filter(search, WorkspaceFuelOilOpeningExpense.remarks)
+        if flt is not None:
+            query = query.filter(flt)
+    return query
+
+
+def _workspace_fuel_oil_opening_rows(employee_id, from_date=None, to_date=None, district_id=0, project_id=0, search=""):
+    return _workspace_fuel_oil_opening_query(
+        employee_id=employee_id,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        search=search,
+    ).order_by(
+        WorkspaceFuelOilOpeningExpense.opening_date.desc(),
+        WorkspaceFuelOilOpeningExpense.id.desc(),
+    ).all()
+
+
+def workspace_fuel_oil_opening_export():
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+
+    from_date = parse_date(request.args.get("from_date"))
+    to_date = parse_date(request.args.get("to_date"))
+    district_id = request.args.get("district_id", type=int) or 0
+    project_id = request.args.get("project_id", type=int) or 0
+    search = (request.args.get("search") or "").strip()
+
+    rows = _workspace_fuel_oil_opening_rows(
+        employee_id=emp.id,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        search=search,
+    )
+
+    headers = [
+        "S.No",
+        "Date",
+        "District",
+        "Project",
+        "Pump Card Fueling",
+        "Credit Fueling",
+        "Fueling Total",
+        "Card Oil Change",
+        "Credit Oil Change",
+        "Oil Total",
+        "Grand Total",
+        "Remarks",
+    ]
+    data_rows = []
+    for i, r in enumerate(rows, 1):
+        data_rows.append([
+            i,
+            r.opening_date.strftime("%d-%m-%Y") if r.opening_date else "",
+            r.district.name if r.district else "",
+            r.project.name if r.project else "",
+            float(r.pump_card_fueling or 0),
+            float(r.credit_fueling or 0),
+            float(r.total_fueling or 0),
+            float(r.card_oil_change or 0),
+            float(r.credit_oil_change or 0),
+            float(r.total_oil_change or 0),
+            float(r.total_amount or 0),
+            r.remarks or "",
+        ])
+    return generate_excel_template(headers, data_rows, required_columns=[], filename="workspace_fuel_oil_opening.xlsx")
+
+
+def workspace_fuel_oil_opening_print():
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+
+    from_date = parse_date(request.args.get("from_date"))
+    to_date = parse_date(request.args.get("to_date"))
+    district_id = request.args.get("district_id", type=int) or 0
+    project_id = request.args.get("project_id", type=int) or 0
+    search = (request.args.get("search") or "").strip()
+
+    rows = _workspace_fuel_oil_opening_rows(
+        employee_id=emp.id,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        search=search,
+    )
+    total_amount = sum(Decimal(str(r.total_amount or 0)) for r in rows)
+    return render_template(
+        "workspace/fuel_oil_opening_print.html",
+        rows=rows,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        search=search,
+        total_amount=total_amount,
     )
 
 

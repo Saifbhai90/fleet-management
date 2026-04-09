@@ -7,8 +7,8 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-fuel-pump-diesel me-2 text-info"></i>Fuel/Oil Opening (Pump Card & Credit)</h2>
     <div class="d-flex align-items-center gap-2">
-      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
-      <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      <a href="{{ url_for('workspace_fuel_oil_opening_print', from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, search=search) }}" class="btn btn-outline-secondary btn-sm" title="Print / Preview" target="_blank"><i class="bi bi-eye me-1"></i>Print / Preview</a>
+      <a href="{{ url_for('workspace_fuel_oil_opening_export', from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, search=search) }}" class="btn btn-outline-success btn-sm" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</a>
       <a href="{{ url_for('workspace_fuel_oil_opening_import') }}" class="btn btn-outline-primary btn-sm" title="Import from Excel/CSV">
         <i class="bi bi-upload me-1"></i>Import
       </a>
@@ -58,6 +58,7 @@
           <button type="submit" class="btn btn-info btn-sm text-white flex-fill"><i class="bi bi-funnel me-1"></i>Filter</button>
           <a href="{{ url_for('workspace_fuel_oil_openings_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i></a>
         </div>
+        <input type="hidden" name="per_page" value="{{ per_page }}">
       </form>
     </div>
   </div>
@@ -67,7 +68,13 @@
       <span class="fw-semibold">Fuel/Oil Opening Entries</span>
       <div class="d-flex align-items-center gap-2">
         <span class="badge bg-dark">Filtered Total: {{ "{:,.2f}".format(total_amount or 0) }}</span>
-        <input type="text" id="foOpeningSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Quick search..." style="max-width: 220px;" autocomplete="off">
+        <input type="text" id="foOpeningSearch" class="form-control form-control-sm bg-white text-dark" value="{{ search or '' }}" placeholder="Quick search..." style="max-width: 220px;" autocomplete="off">
+        <select id="foPerPage" class="form-select form-select-sm bg-white text-dark" style="width:auto;">
+          <option value="10" {% if per_page == 10 %}selected{% endif %}>10 / page</option>
+          <option value="20" {% if per_page == 20 %}selected{% endif %}>20 / page</option>
+          <option value="50" {% if per_page == 50 %}selected{% endif %}>50 / page</option>
+          <option value="100" {% if per_page == 100 %}selected{% endif %}>100 / page</option>
+        </select>
       </div>
     </div>
     <div class="card-body p-0">
@@ -149,24 +156,27 @@
 <script>
 document.addEventListener('DOMContentLoaded', function(){
   var searchInput = document.getElementById('foOpeningSearch');
-  var table = document.getElementById('workspaceFuelOilOpeningTable');
-  if (searchInput && table) {
-    var tbody = table.querySelector('tbody');
-    var rows = tbody ? tbody.querySelectorAll('tr.fo-opening-row') : [];
-    var noDataRow = tbody ? tbody.querySelector('#foNoDataRow') : null;
-    searchInput.addEventListener('input', function(){
-      var q = this.value.trim();
-      var visible = 0;
-      rows.forEach(function(row){
-        var show = !q || window.fleetMultiWordMatch(row.innerText || row.textContent, q);
-        row.style.display = show ? '' : 'none';
-        if (show) visible++;
-      });
-      if (noDataRow) noDataRow.style.display = (rows.length === 0 || (q && visible === 0)) ? '' : 'none';
+  var perPageSelect = document.getElementById('foPerPage');
+
+  if (searchInput) {
+    searchInput.addEventListener('keydown', function(e){
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      var u = new URL(window.location.href);
+      u.searchParams.set('search', searchInput.value.trim());
+      u.searchParams.set('page', '1');
+      window.location.href = u.toString();
     });
   }
-  if (window.fleetTableEnhance) window.fleetTableEnhance('workspaceFuelOilOpeningTable');
-  if (window.fleetPrintExport) window.fleetPrintExport('workspaceFuelOilOpeningTable', 'Fuel_Oil_Opening_Expenses', 'Fuel_Oil_Opening_Expenses.csv');
+
+  if (perPageSelect) {
+    perPageSelect.addEventListener('change', function() {
+      var u = new URL(window.location.href);
+      u.searchParams.set('per_page', this.value);
+      u.searchParams.set('page', '1');
+      window.location.href = u.toString();
+    });
+  }
 });
 </script>
 {% endblock %}
