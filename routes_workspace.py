@@ -321,9 +321,9 @@ def workspace_home():
 
     # Live ledger position:
     # User convention for dashboard card:
-    # last ledger balance - total credit posted under category "Workspace Close".
+    # last ledger balance + total credit posted under close categories.
     wallet_balance = Decimal("0")
-    workspace_close_credit_total = Decimal("0")
+    close_credit_total = Decimal("0")
     wallet_acct = Account.query.get(emp.wallet_account_id) if emp.wallet_account_id else None
     if wallet_acct:
         # Use ledger closing balance (last running balance) as source of truth.
@@ -335,14 +335,14 @@ def workspace_home():
         rows = db.session.query(JournalEntryLine).join(JournalEntry).filter(
             JournalEntryLine.account_id == wallet_acct.id,
             JournalEntry.is_posted == True,
-            JournalEntry.category == "Workspace Close",
+            JournalEntry.category.in_(["Workspace Close", "Workspace Fuel/Oil Close"]),
         ).all()
         for ln in rows:
             credit = Decimal(str(ln.credit or 0))
             if credit > 0:
-                workspace_close_credit_total += credit
+                close_credit_total += credit
 
-    adjusted_ledger_end = wallet_balance + workspace_close_credit_total
+    adjusted_ledger_end = wallet_balance + close_credit_total
     # User convention: Net = Account Ledger End Balance - Total Expenses
     net_balance = adjusted_ledger_end - Decimal(str(total_expenses or 0))
     if net_balance > 0:
@@ -362,7 +362,7 @@ def workspace_home():
         "ledger_end_balance": adjusted_ledger_end,
         "net_balance": net_balance,
         "net_balance_status": net_balance_status,
-        "month_close_adjustment": workspace_close_credit_total,
+        "month_close_adjustment": close_credit_total,
         "open_closes": WorkspaceMonthClose.query.filter(
             WorkspaceMonthClose.employee_id == emp.id,
             WorkspaceMonthClose.status != "Closed",

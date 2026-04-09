@@ -94,7 +94,7 @@
       </div>
       {% if (stats.month_close_adjustment or 0)|float > 0 %}
       <div class="small text-muted mb-3">
-        Month-close adjustment: {{ '%.2f'|format((stats.month_close_adjustment or 0)|float) }} (Workspace Close total credit) added to ledger closing balance.
+        Month-close adjustment: {{ '%.2f'|format((stats.month_close_adjustment or 0)|float) }} (Workspace Close + Workspace Fuel/Oil Close total credit) added to ledger closing balance.
       </div>
       {% endif %}
 
