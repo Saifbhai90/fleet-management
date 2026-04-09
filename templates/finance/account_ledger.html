@@ -35,7 +35,7 @@
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label form-label-sm mb-1">Category</label>
-                    <input type="hidden" name="category" id="catHidden" value="">
+                    <input type="hidden" name="category_filter" id="catHidden" value="{{ (selected_categories or [])|join(',') }}">
                     <div id="catMultiWrap">
                         <button type="button" class="form-select form-select-sm text-start" id="catMultiBtn" style="font-size:.78rem;min-height:31px;overflow:hidden;text-overflow:ellipsis;padding-right:20px;line-height:1.5;">-- All Categories --</button>
                     </div>

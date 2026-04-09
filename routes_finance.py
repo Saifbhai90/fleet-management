@@ -555,6 +555,9 @@ def accounts_account_ledger():
     category_set.add('Workspace Close')
     category_choices = ['Workspace Close'] + [c for c in sorted(category_set, key=lambda s: s.lower()) if c != 'Workspace Close']
     selected_categories = []
+    if request.method == 'POST':
+        _raw_cat_pre = request.form.get('category_filter', request.form.get('category', ''))
+        selected_categories = [c.strip() for c in _raw_cat_pre.split(',') if c.strip()]
     
     account_id_param = request.args.get('account_id', 0, type=int)
     if account_id_param > 0 and request.method == 'GET':
@@ -564,7 +567,7 @@ def accounts_account_ledger():
         account_id = form.account_id.data
         from_date_val = form.from_date.data
         to_date_val = form.to_date.data
-        _raw_cat = request.form.get('category', '')
+        _raw_cat = request.form.get('category_filter', request.form.get('category', ''))
         category_val = [c.strip() for c in _raw_cat.split(',') if c.strip()] or None
         selected_categories = category_val or []
         district_id = form.district_id.data if form.district_id.data and form.district_id.data != 0 else None
