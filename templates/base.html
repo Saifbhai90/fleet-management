@@ -2464,6 +2464,7 @@
         }
 
         function _isPaginatedView(){return !!tbl.closest('.card')&&!!tbl.closest('.card').querySelector('.pagination')}
+        function _useClientPaging(){return _isPaginatedView() && String(tbl.getAttribute('data-ft-no-client-paging')||'0')!=='1'}
         function _getPerPage(){
           try{
             var q=new URLSearchParams(window.location.search),v=parseInt(q.get('per_page')||'0',10);
@@ -2718,7 +2719,7 @@
             // Non-paginated tables keep current tbody; make sure previously hidden rows are visible again.
             if(!_usingAllRows){getRows().forEach(function(r){r.style.display='';r.setAttribute('data-ft-match','1');})}
             _clientPage=1;
-            _renderClientPager(getRows().length);
+            if(_useClientPaging())_renderClientPager(getRows().length);
             if(typeof window._fleetAfterFilter==='function')window._fleetAfterFilter();
             try{ window.dispatchEvent(new CustomEvent('fleet:after-filter')); }catch(_e){}
             return
@@ -2736,14 +2737,18 @@
             if(show) matchedRows.push(r);
             r.style.display='none';
           });
-          var perPage=Math.max(1,_getPerPage());
           var totalMatched=matchedRows.length;
-          var totalPages=Math.max(1,Math.ceil(totalMatched/perPage));
-          if(_clientPage>totalPages)_clientPage=totalPages;
-          if(_clientPage<1)_clientPage=1;
-          var start=(_clientPage-1)*perPage,end=start+perPage;
-          matchedRows.slice(start,end).forEach(function(r){r.style.display='';});
-          _renderClientPager(totalMatched);
+          if(_useClientPaging()){
+            var perPage=Math.max(1,_getPerPage());
+            var totalPages=Math.max(1,Math.ceil(totalMatched/perPage));
+            if(_clientPage>totalPages)_clientPage=totalPages;
+            if(_clientPage<1)_clientPage=1;
+            var start=(_clientPage-1)*perPage,end=start+perPage;
+            matchedRows.slice(start,end).forEach(function(r){r.style.display='';});
+            _renderClientPager(totalMatched);
+          }else{
+            matchedRows.forEach(function(r){r.style.display='';});
+          }
           if(typeof window._fleetAfterFilter==='function')window._fleetAfterFilter();
           try{ window.dispatchEvent(new CustomEvent('fleet:after-filter')); }catch(_e){}
         }
