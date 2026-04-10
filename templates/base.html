@@ -2418,6 +2418,7 @@
         var _sortCol=-1,_sortAsc=true,_filters={},_numFilters={},_txtFilters={},_customFilters={};
         var _allRowsLoaded=false,_allRowsLoading=false,_allRowsCallbacks=[];
         var _initialPageHtml=tbody.innerHTML,_allRowsHtml='',_usingAllRows=false;
+        var _clientPage=1;
 
         if(!_styleInjected){_styleInjected=true;var s=document.createElement('style');s.textContent=
           '.ft-sort{cursor:pointer;user-select:none;position:relative;padding-right:18px!important}'+
@@ -2462,7 +2463,66 @@
           document.head.appendChild(s);
         }
 
-        function _isPaginatedView(){return !!document.querySelector('.pagination')}
+        function _isPaginatedView(){return !!tbl.closest('.card')&&!!tbl.closest('.card').querySelector('.pagination')}
+        function _getPerPage(){
+          try{
+            var q=new URLSearchParams(window.location.search),v=parseInt(q.get('per_page')||'0',10);
+            if(v>0)return v;
+          }catch(_e){}
+          return 10;
+        }
+        function _getPagerUl(){
+          var card=tbl.closest('.card'); if(!card) return null;
+          return card.querySelector('.card-footer .pagination');
+        }
+        function _bindPagerClicks(ul){
+          if(!ul)return;
+          ul.querySelectorAll('a.page-link[data-ft-page]').forEach(function(a){
+            a.addEventListener('click',function(e){
+              e.preventDefault();
+              var p=parseInt(a.getAttribute('data-ft-page')||'1',10)||1;
+              _clientPage=p;
+              applyFilters();
+            });
+          });
+        }
+        function _renderClientPager(filteredCount){
+          var ul=_getPagerUl(); if(!ul) return;
+          if(!ul.dataset.ftOriginalHtml) ul.dataset.ftOriginalHtml=ul.innerHTML;
+          if(!_hasAnyFilters()){
+            ul.innerHTML=ul.dataset.ftOriginalHtml||ul.innerHTML;
+            return;
+          }
+          var perPage=Math.max(1,_getPerPage());
+          var pages=Math.max(1,Math.ceil(filteredCount/perPage));
+          if(_clientPage>pages)_clientPage=pages;
+          if(_clientPage<1)_clientPage=1;
+          var h='';
+          var prevDis=_clientPage<=1?' disabled':'';
+          h+='<li class="page-item'+prevDis+'"><a class="page-link" href="#" data-ft-page="'+(_clientPage-1)+'"><i class="bi bi-chevron-left"></i></a></li>';
+          var start=Math.max(1,_clientPage-2),end=Math.min(pages,_clientPage+2);
+          if(start>1){h+='<li class="page-item"><a class="page-link" href="#" data-ft-page="1">1</a></li>';if(start>2)h+='<li class="page-item disabled"><span class="page-link">…</span></li>';}
+          for(var p=start;p<=end;p++){
+            h+='<li class="page-item'+(p===_clientPage?' active':'')+'"><a class="page-link" href="#" data-ft-page="'+p+'">'+p+'</a></li>';
+          }
+          if(end<pages){if(end<pages-1)h+='<li class="page-item disabled"><span class="page-link">…</span></li>';h+='<li class="page-item"><a class="page-link" href="#" data-ft-page="'+pages+'">'+pages+'</a></li>';}
+          var nextDis=_clientPage>=pages?' disabled':'';
+          h+='<li class="page-item'+nextDis+'"><a class="page-link" href="#" data-ft-page="'+(_clientPage+1)+'"><i class="bi bi-chevron-right"></i></a></li>';
+          ul.innerHTML=h;
+          _bindPagerClicks(ul);
+        }
+        function _extractPageCount(doc){
+          var rt=doc.getElementById(tableId);
+          if(!rt)return 1;
+          var card=rt.closest('.card'); if(!card)return 1;
+          var links=Array.from(card.querySelectorAll('.pagination .page-link'));
+          var max=1;
+          links.forEach(function(a){
+            var n=parseInt((a.textContent||'').trim(),10);
+            if(!isNaN(n)&&n>max)max=n;
+          });
+          return max;
+        }
         function _runAllRowsCallbacks(){while(_allRowsCallbacks.length){try{(_allRowsCallbacks.shift())()}catch(_e){}}}
         function _objHas(o){for(var k in o){if(Object.prototype.hasOwnProperty.call(o,k))return true;}return false}
         function _hasAnyFilters(){return _objHas(_filters)||_objHas(_numFilters)||_objHas(_txtFilters)||_objHas(_customFilters)}
@@ -2475,18 +2535,26 @@
           if(_allRowsLoading)return;
           _allRowsLoading=true;
           try{
-            var u=new URL(window.location.href);
+            var u=new URL(window.location.href),parts=[];
             u.searchParams.set('page','1');
-            // High page size so header filter can work across full dataset.
-            u.searchParams.set('per_page','100000');
             fetch(u.toString(),{credentials:'same-origin'}).then(function(r){return r.text()}).then(function(html){
               var doc=new DOMParser().parseFromString(html,'text/html');
-              var rt=doc.getElementById(tableId);
-              var rb=rt?rt.querySelector('tbody'):null;
-              if(rb){
-                _allRowsHtml=rb.innerHTML||'';
+              var rt=doc.getElementById(tableId),rb=rt?rt.querySelector('tbody'):null;
+              if(rb) parts.push(rb.innerHTML||'');
+              var pages=_extractPageCount(doc);
+              if(pages<=1) return;
+              var jobs=[];
+              for(var p=2;p<=pages;p++){
+                var up=new URL(u.toString());up.searchParams.set('page',String(p));
+                jobs.push(fetch(up.toString(),{credentials:'same-origin'}).then(function(r){return r.text();}).then(function(h){
+                  var d=new DOMParser().parseFromString(h,'text/html');
+                  var t=d.getElementById(tableId),b=t?t.querySelector('tbody'):null;
+                  if(b) parts.push(b.innerHTML||'');
+                }).catch(function(){}));
               }
+              return Promise.all(jobs);
             }).catch(function(){}).finally(function(){
+              _allRowsHtml=parts.join('');
               _allRowsLoading=false;_allRowsLoaded=true;_runAllRowsCallbacks();
               if(typeof window._fleetAfterFilter==='function')window._fleetAfterFilter();
               try{ window.dispatchEvent(new CustomEvent('fleet:after-filter')); }catch(_e){}
@@ -2513,6 +2581,7 @@
             ths.forEach(function(h){h.classList.remove('asc','desc')});th.classList.add(_sortAsc?'asc':'desc');
             var rows=getRows();rows.sort(function(a,b){var va=getCellVal(a,ci),vb=getCellVal(b,ci),na=numVal(va),nb=numVal(vb);if(!isNaN(na)&&!isNaN(nb))return _sortAsc?na-nb:nb-na;return _sortAsc?va.localeCompare(vb):vb.localeCompare(va)});
             rows.forEach(function(r){tbody.appendChild(r)});
+            if(_hasAnyFilters())applyFilters();
           });
 
           fbtn.addEventListener('click',function(e){
@@ -2647,21 +2716,34 @@
           if(!_hasAnyFilters()){
             _restorePageRows();
             // Non-paginated tables keep current tbody; make sure previously hidden rows are visible again.
-            if(!_usingAllRows){getRows().forEach(function(r){r.style.display=''})}
+            if(!_usingAllRows){getRows().forEach(function(r){r.style.display='';r.setAttribute('data-ft-match','1');})}
+            _clientPage=1;
+            _renderClientPager(getRows().length);
             if(typeof window._fleetAfterFilter==='function')window._fleetAfterFilter();
             try{ window.dispatchEvent(new CustomEvent('fleet:after-filter')); }catch(_e){}
             return
           }
           if(_allRowsHtml)_switchToAllRows();
           var rows=getRows(),top10Sets={};
+          var matchedRows=[];
           for(var ci in _numFilters){if(_numFilters[ci].type==='top10'){var n=_numFilters[ci].val1||10,pairs=[];rows.forEach(function(r,i){var v=numVal(getCellVal(r,parseInt(ci)));if(!isNaN(v))pairs.push({idx:i,val:v})});pairs.sort(function(a,b){return b.val-a.val});var s=new Set();pairs.slice(0,n).forEach(function(p){s.add(p.idx)});top10Sets[ci]=s}}
           rows.forEach(function(r,ri){
             var show=true;
             for(var ci in _filters){if(!_filters[ci].has(getCellVal(r,parseInt(ci)))){show=false;break}}
             if(show){for(var ci in _numFilters){var nf=_numFilters[ci];if(nf.type==='top10'){if(!top10Sets[ci]||!top10Sets[ci].has(ri)){show=false;break}}else{if(!_numFilterPass(parseInt(ci),getCellVal(r,parseInt(ci)))){show=false;break}}}}
             if(show){for(var ci in _customFilters){if(!_customFilterPass(parseInt(ci),getCellVal(r,parseInt(ci)))){show=false;break}}}
-            r.style.display=show?'':'none';
+            r.setAttribute('data-ft-match',show?'1':'0');
+            if(show) matchedRows.push(r);
+            r.style.display='none';
           });
+          var perPage=Math.max(1,_getPerPage());
+          var totalMatched=matchedRows.length;
+          var totalPages=Math.max(1,Math.ceil(totalMatched/perPage));
+          if(_clientPage>totalPages)_clientPage=totalPages;
+          if(_clientPage<1)_clientPage=1;
+          var start=(_clientPage-1)*perPage,end=start+perPage;
+          matchedRows.slice(start,end).forEach(function(r){r.style.display='';});
+          _renderClientPager(totalMatched);
           if(typeof window._fleetAfterFilter==='function')window._fleetAfterFilter();
           try{ window.dispatchEvent(new CustomEvent('fleet:after-filter')); }catch(_e){}
         }
@@ -2715,6 +2797,8 @@
           var tbody=tbl.querySelector('tbody'); if(!tbody) return;
           var allRows=Array.from(tbody.querySelectorAll('tr')).filter(function(r){return r.cells&&r.cells.length>1;});
           var visibleRows=allRows.filter(function(r){return r.style.display!=='none';});
+          var matchedRows=allRows.filter(function(r){return r.getAttribute('data-ft-match')==='1';});
+          var hasActiveFilter=!!tbl.querySelector('.ft-filter-btn.active');
           var totalRecords=parseInt(tbl.getAttribute('data-ft-total-records')||'0',10)||0;
           var allRowsLoaded=totalRecords>0?allRows.length>=totalRecords:false;
 
@@ -2726,8 +2810,8 @@
           tbl.querySelectorAll('[data-ft-total-col]').forEach(function(cell){
             var ci=parseInt(cell.getAttribute('data-ft-total-col')||'-1',10);
             if(ci<0)return;
-            if(allRowsLoaded){
-              cell.textContent=_fmtNum(_sumVisibleCol(visibleRows,ci));
+            if(allRowsLoaded&&hasActiveFilter){
+              cell.textContent=_fmtNum(_sumVisibleCol((matchedRows.length?matchedRows:visibleRows),ci));
             }else{
               var base=_parseNum(cell.getAttribute('data-ft-base')||'0');
               cell.textContent=_fmtNum(base);
@@ -2742,32 +2826,23 @@
           var tbody=tbl.querySelector('tbody'); if(!tbody) return;
           var allRows=Array.from(tbody.querySelectorAll('tr')).filter(function(r){return r.cells&&r.cells.length>1;});
           var visibleRows=allRows.filter(function(r){return r.style.display!=='none';});
+          var matchedRows=allRows.filter(function(r){return r.getAttribute('data-ft-match')==='1';});
           var hasActiveFilter=!!tbl.querySelector('.ft-filter-btn.active');
-          var isFiltered=hasActiveFilter || (allRows.length>0 && visibleRows.length!==allRows.length);
+          var isFiltered=hasActiveFilter || (matchedRows.length>0 && matchedRows.length!==allRows.length);
           var card=tbl.closest('.card'); if(!card) return;
           var counter=card.querySelector('.card-footer small.text-muted');
-          var pager=card.querySelector('.card-footer .pagination');
           var totalRecords=parseInt(tbl.getAttribute('data-ft-total-records')||'0',10)||allRows.length;
 
           if(counter){
             if(!counter.dataset.ftOriginalHtml) counter.dataset.ftOriginalHtml=counter.innerHTML;
             if(isFiltered){
-              var shown=visibleRows.length;
-              var start=(shown>0)?1:0;
-              var end=shown;
-              counter.innerHTML='<i class="bi bi-list-ul me-1"></i>Showing '+start+' to '+end+' of '+shown+' entries (filtered from '+totalRecords+')';
+              var shownPage=visibleRows.length;
+              var shownAll=matchedRows.length;
+              var start=(shownPage>0)?(matchedRows.indexOf(visibleRows[0])+1):0;
+              var end=(shownPage>0)?(start+shownPage-1):0;
+              counter.innerHTML='<i class="bi bi-list-ul me-1"></i>Showing '+start+' to '+end+' of '+shownAll+' entries (filtered from '+totalRecords+')';
             }else if(counter.dataset.ftOriginalHtml){
               counter.innerHTML=counter.dataset.ftOriginalHtml;
-            }
-          }
-          if(pager){
-            var nav=pager.closest('nav');
-            if(nav){
-              if(isFiltered){
-                nav.style.display='none';
-              }else{
-                nav.style.display='';
-              }
             }
           }
         });
@@ -2785,7 +2860,12 @@
           return _csvEscape(h.textContent||'');
         });
         if(headers.length) lines.push(headers.join(','));
-        var rows=Array.from(tbl.querySelectorAll('tbody tr')).filter(function(r){return r.style.display!=='none' && r.cells && r.cells.length>0;});
+        var rows=Array.from(tbl.querySelectorAll('tbody tr')).filter(function(r){
+          if(!(r.cells&&r.cells.length>0))return false;
+          var m=r.getAttribute('data-ft-match');
+          if(m==='1')return true;
+          return r.style.display!=='none';
+        });
         rows.forEach(function(r){
           var row=Array.from(r.cells).map(function(c){return _csvEscape(c.textContent||'');});
           lines.push(row.join(','));
@@ -2805,7 +2885,11 @@
         var t=tbl.cloneNode(true);
         var tb=t.querySelector('tbody');
         if(tb){
-          var vis=Array.from(tbl.querySelectorAll('tbody tr')).filter(function(r){return r.style.display!=='none';});
+          var vis=Array.from(tbl.querySelectorAll('tbody tr')).filter(function(r){
+            var m=r.getAttribute('data-ft-match');
+            if(m==='1')return true;
+            return r.style.display!=='none';
+          });
           tb.innerHTML='';
           vis.forEach(function(r){tb.appendChild(r.cloneNode(true));});
         }
