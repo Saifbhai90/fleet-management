@@ -76,7 +76,7 @@
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 small" id="workspaceOpeningExpenseTable">
+        <table class="table table-hover align-middle mb-0 small" id="workspaceOpeningExpenseTable" data-ft-auto-totals="1" data-ft-total-records="{{ pagination.total }}">
           <thead class="table-light">
             <tr>
               <th class="ps-3">#</th>
@@ -125,20 +125,20 @@
           <tfoot>
             <tr class="table-warning fw-semibold">
               <td colspan="4" class="ps-3">Subtotal (Current Page)</td>
-              <td class="text-end">{{ "{:,.2f}".format(page_fueling_subtotal or 0) }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(page_oil_subtotal or 0) }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(page_maintenance_subtotal or 0) }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(page_employee_subtotal or 0) }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(page_total_subtotal or 0) }}</td>
+              <td class="text-end" data-ft-visible-col="4">{{ "{:,.2f}".format(page_fueling_subtotal or 0) }}</td>
+              <td class="text-end" data-ft-visible-col="5">{{ "{:,.2f}".format(page_oil_subtotal or 0) }}</td>
+              <td class="text-end" data-ft-visible-col="6">{{ "{:,.2f}".format(page_maintenance_subtotal or 0) }}</td>
+              <td class="text-end" data-ft-visible-col="7">{{ "{:,.2f}".format(page_employee_subtotal or 0) }}</td>
+              <td class="text-end" data-ft-visible-col="8">{{ "{:,.2f}".format(page_total_subtotal or 0) }}</td>
               <td colspan="2"></td>
             </tr>
             <tr class="table-info fw-bold">
               <td colspan="4" class="ps-3">Total (All Filtered Records)</td>
-              <td class="text-end">{{ "{:,.2f}".format(overall_fueling_total or 0) }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(overall_oil_total or 0) }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(overall_maintenance_total or 0) }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(overall_employee_total or 0) }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(overall_total or 0) }}</td>
+              <td class="text-end" data-ft-total-col="4" data-ft-base="{{ overall_fueling_total or 0 }}">{{ "{:,.2f}".format(overall_fueling_total or 0) }}</td>
+              <td class="text-end" data-ft-total-col="5" data-ft-base="{{ overall_oil_total or 0 }}">{{ "{:,.2f}".format(overall_oil_total or 0) }}</td>
+              <td class="text-end" data-ft-total-col="6" data-ft-base="{{ overall_maintenance_total or 0 }}">{{ "{:,.2f}".format(overall_maintenance_total or 0) }}</td>
+              <td class="text-end" data-ft-total-col="7" data-ft-base="{{ overall_employee_total or 0 }}">{{ "{:,.2f}".format(overall_employee_total or 0) }}</td>
+              <td class="text-end" data-ft-total-col="8" data-ft-base="{{ overall_total or 0 }}">{{ "{:,.2f}".format(overall_total or 0) }}</td>
               <td colspan="2"></td>
             </tr>
           </tfoot>

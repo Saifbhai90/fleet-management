@@ -2489,6 +2489,7 @@
             }).catch(function(){}).finally(function(){
               _allRowsLoading=false;_allRowsLoaded=true;_runAllRowsCallbacks();
               if(typeof window._fleetAfterFilter==='function')window._fleetAfterFilter();
+              try{ window.dispatchEvent(new CustomEvent('fleet:after-filter')); }catch(_e){}
             });
           }catch(_e){
             _allRowsLoading=false;_allRowsLoaded=true;_runAllRowsCallbacks();
@@ -2648,6 +2649,7 @@
             // Non-paginated tables keep current tbody; make sure previously hidden rows are visible again.
             if(!_usingAllRows){getRows().forEach(function(r){r.style.display=''})}
             if(typeof window._fleetAfterFilter==='function')window._fleetAfterFilter();
+            try{ window.dispatchEvent(new CustomEvent('fleet:after-filter')); }catch(_e){}
             return
           }
           if(_allRowsHtml)_switchToAllRows();
@@ -2661,6 +2663,7 @@
             r.style.display=show?'':'none';
           });
           if(typeof window._fleetAfterFilter==='function')window._fleetAfterFilter();
+          try{ window.dispatchEvent(new CustomEvent('fleet:after-filter')); }catch(_e){}
         }
         document.addEventListener('click',function(e){if(!e.target.closest('.ft-filter-dd')&&!e.target.closest('.ft-filter-btn')&&!e.target.closest('.ft-af-overlay'))_closeAllDd()});
       };
@@ -2685,6 +2688,177 @@
         document.addEventListener('DOMContentLoaded',function(){window.fleetEnhanceAllListTables(document)});
       }else{
         window.fleetEnhanceAllListTables(document);
+      }
+
+      function _parseNum(v){
+        var s=String(v==null?'':v).replace(/[,%\s]/g,'').replace(/[^\d.\-]/g,'');
+        var n=parseFloat(s);
+        return isNaN(n)?0:n;
+      }
+      function _fmtNum(n){
+        var x=(isNaN(n)||!isFinite(n))?0:n;
+        try{return x.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
+        catch(_e){return (Math.round(x*100)/100).toFixed(2);}
+      }
+      function _sumVisibleCol(rows,colIdx){
+        var t=0;
+        rows.forEach(function(r){
+          var c=r.cells[colIdx];
+          if(!c)return;
+          t+=_parseNum(c.textContent||c.innerText||'');
+        });
+        return t;
+      }
+      window.fleetRefreshAutoTotals=function(root){
+        var scope=(root&&root.querySelectorAll)?root:document;
+        scope.querySelectorAll('table[data-ft-auto-totals="1"]').forEach(function(tbl){
+          var tbody=tbl.querySelector('tbody'); if(!tbody) return;
+          var allRows=Array.from(tbody.querySelectorAll('tr')).filter(function(r){return r.cells&&r.cells.length>1;});
+          var visibleRows=allRows.filter(function(r){return r.style.display!=='none';});
+          var totalRecords=parseInt(tbl.getAttribute('data-ft-total-records')||'0',10)||0;
+          var allRowsLoaded=totalRecords>0?allRows.length>=totalRecords:false;
+
+          tbl.querySelectorAll('[data-ft-visible-col]').forEach(function(cell){
+            var ci=parseInt(cell.getAttribute('data-ft-visible-col')||'-1',10);
+            if(ci<0)return;
+            cell.textContent=_fmtNum(_sumVisibleCol(visibleRows,ci));
+          });
+          tbl.querySelectorAll('[data-ft-total-col]').forEach(function(cell){
+            var ci=parseInt(cell.getAttribute('data-ft-total-col')||'-1',10);
+            if(ci<0)return;
+            if(allRowsLoaded){
+              cell.textContent=_fmtNum(_sumVisibleCol(visibleRows,ci));
+            }else{
+              var base=_parseNum(cell.getAttribute('data-ft-base')||'0');
+              cell.textContent=_fmtNum(base);
+            }
+          });
+        });
+      };
+      window.fleetRefreshRecordMeta=function(root){
+        var scope=(root&&root.querySelectorAll)?root:document;
+        scope.querySelectorAll('table').forEach(function(tbl){
+          if(!(tbl.dataset&&tbl.dataset.ftEnhanced==='1')) return;
+          var tbody=tbl.querySelector('tbody'); if(!tbody) return;
+          var allRows=Array.from(tbody.querySelectorAll('tr')).filter(function(r){return r.cells&&r.cells.length>1;});
+          var visibleRows=allRows.filter(function(r){return r.style.display!=='none';});
+          var hasActiveFilter=!!tbl.querySelector('.ft-filter-btn.active');
+          var isFiltered=hasActiveFilter || (allRows.length>0 && visibleRows.length!==allRows.length);
+          var card=tbl.closest('.card'); if(!card) return;
+          var counter=card.querySelector('.card-footer small.text-muted');
+          var pager=card.querySelector('.card-footer .pagination');
+          var totalRecords=parseInt(tbl.getAttribute('data-ft-total-records')||'0',10)||allRows.length;
+
+          if(counter){
+            if(!counter.dataset.ftOriginalHtml) counter.dataset.ftOriginalHtml=counter.innerHTML;
+            if(isFiltered){
+              var shown=visibleRows.length;
+              var start=(shown>0)?1:0;
+              var end=shown;
+              counter.innerHTML='<i class="bi bi-list-ul me-1"></i>Showing '+start+' to '+end+' of '+shown+' entries (filtered from '+totalRecords+')';
+            }else if(counter.dataset.ftOriginalHtml){
+              counter.innerHTML=counter.dataset.ftOriginalHtml;
+            }
+          }
+          if(pager){
+            var nav=pager.closest('nav');
+            if(nav){
+              if(isFiltered){
+                nav.style.display='none';
+              }else{
+                nav.style.display='';
+              }
+            }
+          }
+        });
+      };
+      function _csvEscape(v){
+        var s=String(v==null?'':v).replace(/\r?\n/g,' ').trim();
+        if(/[",]/.test(s)) return '"'+s.replace(/"/g,'""')+'"';
+        return s;
+      }
+      function _tableToCsv(tbl){
+        var lines=[];
+        var headers=Array.from(tbl.querySelectorAll('thead th')).map(function(th){
+          var h=th.cloneNode(true);
+          h.querySelectorAll('.ft-filter-wrap').forEach(function(n){n.remove();});
+          return _csvEscape(h.textContent||'');
+        });
+        if(headers.length) lines.push(headers.join(','));
+        var rows=Array.from(tbl.querySelectorAll('tbody tr')).filter(function(r){return r.style.display!=='none' && r.cells && r.cells.length>0;});
+        rows.forEach(function(r){
+          var row=Array.from(r.cells).map(function(c){return _csvEscape(c.textContent||'');});
+          lines.push(row.join(','));
+        });
+        var footRows=Array.from(tbl.querySelectorAll('tfoot tr')).filter(function(r){return r.cells&&r.cells.length>0;});
+        if(footRows.length){
+          lines.push('');
+          footRows.forEach(function(r){
+            var row=Array.from(r.cells).map(function(c){return _csvEscape(c.textContent||'');});
+            lines.push(row.join(','));
+          });
+        }
+        return lines.join('\n');
+      }
+      function _openFilteredPrint(tbl){
+        var headerHtml='<h3 style="margin:0 0 10px 0;font-family:Arial,sans-serif;">'+(document.title||'Filtered Preview')+'</h3>';
+        var t=tbl.cloneNode(true);
+        var tb=t.querySelector('tbody');
+        if(tb){
+          var vis=Array.from(tbl.querySelectorAll('tbody tr')).filter(function(r){return r.style.display!=='none';});
+          tb.innerHTML='';
+          vis.forEach(function(r){tb.appendChild(r.cloneNode(true));});
+        }
+        var w=window.open('','_blank');
+        if(!w) return;
+        w.document.open();
+        w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Print Preview</title>'+
+          '<style>body{font-family:Arial,sans-serif;padding:14px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #999;padding:6px}thead th{background:#f3f3f3}tfoot td{font-weight:700;background:#fafafa}</style>'+
+          '</head><body>'+headerHtml+t.outerHTML+'</body></html>');
+        w.document.close();
+        w.focus();
+        w.print();
+      }
+      function _getFirstFilteredEnhancedTable(){
+        var tables=Array.from(document.querySelectorAll('table')).filter(function(tbl){
+          return tbl.dataset&&tbl.dataset.ftEnhanced==='1'&&!!tbl.querySelector('.ft-filter-btn.active');
+        });
+        return tables.length?tables[0]:null;
+      }
+      document.addEventListener('click',function(e){
+        var a=e.target.closest('a[href]');
+        if(!a) return;
+        var href=(a.getAttribute('href')||'').toLowerCase();
+        var title=((a.getAttribute('title')||'')+' '+(a.textContent||'')).toLowerCase();
+        var isPrint=href.indexOf('_print')!==-1 || title.indexOf('print')!==-1 || title.indexOf('preview')!==-1;
+        var isExport=href.indexOf('_export')!==-1 || title.indexOf('export')!==-1;
+        if(!isPrint && !isExport) return;
+        var tbl=_getFirstFilteredEnhancedTable();
+        if(!tbl) return;
+        if(isPrint){
+          e.preventDefault();
+          _openFilteredPrint(tbl);
+          return;
+        }
+        if(isExport){
+          e.preventDefault();
+          var csv=_tableToCsv(tbl);
+          var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+          var url=URL.createObjectURL(blob);
+          var dl=document.createElement('a');
+          var d=new Date();
+          var fname='filtered_export_'+d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'.csv';
+          dl.href=url; dl.download=fname; document.body.appendChild(dl); dl.click(); dl.remove();
+          setTimeout(function(){URL.revokeObjectURL(url);},1000);
+        }
+      },true);
+      window.addEventListener('fleet:after-filter',function(){window.fleetRefreshAutoTotals(document);});
+      window.addEventListener('fleet:after-filter',function(){window.fleetRefreshRecordMeta(document);});
+      if(document.readyState==='loading'){
+        document.addEventListener('DOMContentLoaded',function(){window.fleetRefreshAutoTotals(document);window.fleetRefreshRecordMeta(document);});
+      }else{
+        window.fleetRefreshAutoTotals(document);
+        window.fleetRefreshRecordMeta(document);
       }
     })();
 
