@@ -2674,7 +2674,8 @@
           var thead=tbl.querySelector('thead'),tbody=tbl.querySelector('tbody');
           if(!thead||!tbody)return;
           if(thead.querySelectorAll('th').length<2)return;
-          if(tbody.querySelector('input,select,textarea'))return; // Skip editable entry grids.
+          // Skip only truly editable grids, not list tables that contain hidden inputs (e.g. CSRF in row forms).
+          if(tbody.querySelector('input:not([type="hidden"]),select,textarea,[contenteditable="true"]'))return;
           if(!tbl.id){seq+=1;tbl.id='ft_auto_tbl_'+seq;}
           window.fleetTableEnhance(tbl.id);
         });

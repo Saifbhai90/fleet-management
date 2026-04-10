@@ -1688,11 +1688,34 @@ def workspace_fuel_oil_openings_list():
     total_amount = query.with_entities(
         db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.total_amount), 0)
     ).scalar() or 0
+    totals_row = query.with_entities(
+        db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.pump_card_fueling), 0),
+        db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.credit_fueling), 0),
+        db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.total_fueling), 0),
+        db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.card_oil_change), 0),
+        db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.credit_oil_change), 0),
+        db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.total_oil_change), 0),
+        db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.total_amount), 0),
+    ).first()
 
     pagination = query.order_by(
         WorkspaceFuelOilOpeningExpense.opening_date.desc(),
         WorkspaceFuelOilOpeningExpense.id.desc(),
     ).paginate(page=page, per_page=per_page, error_out=False)
+    page_pump_card_fueling_subtotal = sum(Decimal(str(r.pump_card_fueling or 0)) for r in pagination.items)
+    page_credit_fueling_subtotal = sum(Decimal(str(r.credit_fueling or 0)) for r in pagination.items)
+    page_total_fueling_subtotal = sum(Decimal(str(r.total_fueling or 0)) for r in pagination.items)
+    page_card_oil_change_subtotal = sum(Decimal(str(r.card_oil_change or 0)) for r in pagination.items)
+    page_credit_oil_change_subtotal = sum(Decimal(str(r.credit_oil_change or 0)) for r in pagination.items)
+    page_total_oil_change_subtotal = sum(Decimal(str(r.total_oil_change or 0)) for r in pagination.items)
+    page_grand_total_subtotal = sum(Decimal(str(r.total_amount or 0)) for r in pagination.items)
+    overall_pump_card_fueling_total = Decimal(str((totals_row[0] if totals_row else 0) or 0))
+    overall_credit_fueling_total = Decimal(str((totals_row[1] if totals_row else 0) or 0))
+    overall_total_fueling_total = Decimal(str((totals_row[2] if totals_row else 0) or 0))
+    overall_card_oil_change_total = Decimal(str((totals_row[3] if totals_row else 0) or 0))
+    overall_credit_oil_change_total = Decimal(str((totals_row[4] if totals_row else 0) or 0))
+    overall_total_oil_change_total = Decimal(str((totals_row[5] if totals_row else 0) or 0))
+    overall_grand_total = Decimal(str((totals_row[6] if totals_row else 0) or 0))
 
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
@@ -1708,6 +1731,20 @@ def workspace_fuel_oil_openings_list():
         project_id=project_id,
         search=search,
         total_amount=total_amount,
+        page_pump_card_fueling_subtotal=page_pump_card_fueling_subtotal,
+        page_credit_fueling_subtotal=page_credit_fueling_subtotal,
+        page_total_fueling_subtotal=page_total_fueling_subtotal,
+        page_card_oil_change_subtotal=page_card_oil_change_subtotal,
+        page_credit_oil_change_subtotal=page_credit_oil_change_subtotal,
+        page_total_oil_change_subtotal=page_total_oil_change_subtotal,
+        page_grand_total_subtotal=page_grand_total_subtotal,
+        overall_pump_card_fueling_total=overall_pump_card_fueling_total,
+        overall_credit_fueling_total=overall_credit_fueling_total,
+        overall_total_fueling_total=overall_total_fueling_total,
+        overall_card_oil_change_total=overall_card_oil_change_total,
+        overall_credit_oil_change_total=overall_credit_oil_change_total,
+        overall_total_oil_change_total=overall_total_oil_change_total,
+        overall_grand_total=overall_grand_total,
         districts=districts,
         projects=projects,
     )
@@ -1724,7 +1761,22 @@ def _workspace_fuel_oil_opening_query(employee_id, from_date=None, to_date=None,
     if project_id:
         query = query.filter(WorkspaceFuelOilOpeningExpense.project_id == project_id)
     if search:
-        flt = _workspace_multi_word_filter(search, WorkspaceFuelOilOpeningExpense.remarks)
+        query = query.outerjoin(District, WorkspaceFuelOilOpeningExpense.district_id == District.id)
+        query = query.outerjoin(Project, WorkspaceFuelOilOpeningExpense.project_id == Project.id)
+        flt = _workspace_multi_word_filter(
+            search,
+            WorkspaceFuelOilOpeningExpense.remarks,
+            District.name,
+            Project.name,
+            cast(WorkspaceFuelOilOpeningExpense.opening_date, String),
+            cast(WorkspaceFuelOilOpeningExpense.pump_card_fueling, String),
+            cast(WorkspaceFuelOilOpeningExpense.credit_fueling, String),
+            cast(WorkspaceFuelOilOpeningExpense.total_fueling, String),
+            cast(WorkspaceFuelOilOpeningExpense.card_oil_change, String),
+            cast(WorkspaceFuelOilOpeningExpense.credit_oil_change, String),
+            cast(WorkspaceFuelOilOpeningExpense.total_oil_change, String),
+            cast(WorkspaceFuelOilOpeningExpense.total_amount, String),
+        )
         if flt is not None:
             query = query.filter(flt)
     return query

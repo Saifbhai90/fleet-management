@@ -129,6 +129,30 @@
             </tr>
             {% endfor %}
           </tbody>
+          <tfoot>
+            <tr class="table-warning fw-semibold">
+              <td colspan="4" class="ps-3">Subtotal (Current Page)</td>
+              <td class="text-end">{{ "{:,.2f}".format(page_pump_card_fueling_subtotal or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(page_credit_fueling_subtotal or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(page_total_fueling_subtotal or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(page_card_oil_change_subtotal or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(page_credit_oil_change_subtotal or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(page_total_oil_change_subtotal or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(page_grand_total_subtotal or 0) }}</td>
+              <td colspan="2"></td>
+            </tr>
+            <tr class="table-info fw-bold">
+              <td colspan="4" class="ps-3">Total (All Filtered Records)</td>
+              <td class="text-end">{{ "{:,.2f}".format(overall_pump_card_fueling_total or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(overall_credit_fueling_total or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(overall_total_fueling_total or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(overall_card_oil_change_total or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(overall_credit_oil_change_total or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(overall_total_oil_change_total or 0) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(overall_grand_total or 0) }}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
