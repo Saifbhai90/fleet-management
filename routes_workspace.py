@@ -1047,6 +1047,39 @@ def workspace_expense_delete(pk):
     return redirect(url_for("employee_expense_delete", pk=pk))
 
 
+def _workspace_opening_expense_query(employee_id, from_date=None, to_date=None, district_id=0, project_id=0, search=""):
+    query = WorkspaceOpeningExpense.query.filter(WorkspaceOpeningExpense.employee_id == employee_id)
+    if from_date:
+        query = query.filter(WorkspaceOpeningExpense.opening_date >= from_date)
+    if to_date:
+        query = query.filter(WorkspaceOpeningExpense.opening_date <= to_date)
+    if district_id:
+        query = query.filter(WorkspaceOpeningExpense.district_id == district_id)
+    if project_id:
+        query = query.filter(WorkspaceOpeningExpense.project_id == project_id)
+    if search:
+        query = query.outerjoin(District, WorkspaceOpeningExpense.district_id == District.id)
+        query = query.outerjoin(Project, WorkspaceOpeningExpense.project_id == Project.id)
+        flt = _workspace_multi_word_filter(search, WorkspaceOpeningExpense.remarks, District.name, Project.name)
+        if flt is not None:
+            query = query.filter(flt)
+    return query
+
+
+def _workspace_opening_expense_rows(employee_id, from_date=None, to_date=None, district_id=0, project_id=0, search=""):
+    return _workspace_opening_expense_query(
+        employee_id=employee_id,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        search=search,
+    ).order_by(
+        WorkspaceOpeningExpense.opening_date.desc(),
+        WorkspaceOpeningExpense.id.desc(),
+    ).all()
+
+
 def workspace_opening_expenses_list():
     guard, emp = _workspace_guard("workspace_dashboard")
     if guard:
@@ -1062,28 +1095,35 @@ def workspace_opening_expenses_list():
     if per_page not in (10, 20, 50, 100):
         per_page = 20
 
-    query = WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id)
-    if from_date:
-        query = query.filter(WorkspaceOpeningExpense.opening_date >= from_date)
-    if to_date:
-        query = query.filter(WorkspaceOpeningExpense.opening_date <= to_date)
-    if district_id:
-        query = query.filter(WorkspaceOpeningExpense.district_id == district_id)
-    if project_id:
-        query = query.filter(WorkspaceOpeningExpense.project_id == project_id)
-    if search:
-        flt = _workspace_multi_word_filter(search, WorkspaceOpeningExpense.remarks)
-        if flt is not None:
-            query = query.filter(flt)
-
+    query = _workspace_opening_expense_query(
+        employee_id=emp.id,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        search=search,
+    )
     total_amount = query.with_entities(
         db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.total_expense), 0)
     ).scalar() or 0
-
+    totals_row = query.with_entities(
+        db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.fueling_expense), 0),
+        db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.oil_change_expense), 0),
+        db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.maintenance_expense), 0),
+        db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.total_expense), 0),
+    ).first()
     pagination = query.order_by(
         WorkspaceOpeningExpense.opening_date.desc(),
         WorkspaceOpeningExpense.id.desc(),
     ).paginate(page=page, per_page=per_page, error_out=False)
+    page_fueling_subtotal = sum(Decimal(str(r.fueling_expense or 0)) for r in pagination.items)
+    page_oil_subtotal = sum(Decimal(str(r.oil_change_expense or 0)) for r in pagination.items)
+    page_maintenance_subtotal = sum(Decimal(str(r.maintenance_expense or 0)) for r in pagination.items)
+    page_total_subtotal = sum(Decimal(str(r.total_expense or 0)) for r in pagination.items)
+    overall_fueling_total = Decimal(str((totals_row[0] if totals_row else 0) or 0))
+    overall_oil_total = Decimal(str((totals_row[1] if totals_row else 0) or 0))
+    overall_maintenance_total = Decimal(str((totals_row[2] if totals_row else 0) or 0))
+    overall_total = Decimal(str((totals_row[3] if totals_row else 0) or 0))
 
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
@@ -1099,8 +1139,82 @@ def workspace_opening_expenses_list():
         project_id=project_id,
         search=search,
         total_amount=total_amount,
+        page_fueling_subtotal=page_fueling_subtotal,
+        page_oil_subtotal=page_oil_subtotal,
+        page_maintenance_subtotal=page_maintenance_subtotal,
+        page_total_subtotal=page_total_subtotal,
+        overall_fueling_total=overall_fueling_total,
+        overall_oil_total=overall_oil_total,
+        overall_maintenance_total=overall_maintenance_total,
+        overall_total=overall_total,
         districts=districts,
         projects=projects,
+    )
+
+
+def workspace_opening_expense_export():
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+    from_date = parse_date(request.args.get("from_date"))
+    to_date = parse_date(request.args.get("to_date"))
+    district_id = request.args.get("district_id", type=int) or 0
+    project_id = request.args.get("project_id", type=int) or 0
+    search = (request.args.get("search") or "").strip()
+    rows = _workspace_opening_expense_rows(
+        employee_id=emp.id,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        search=search,
+    )
+    headers = [
+        "S.No", "Date", "District", "Project", "Fueling", "Oil Change",
+        "Maintenance", "Employee", "Total", "Remarks",
+    ]
+    data_rows = []
+    for i, r in enumerate(rows, 1):
+        data_rows.append([
+            i,
+            r.opening_date.strftime("%d-%m-%Y") if r.opening_date else "",
+            r.district.name if r.district else "",
+            r.project.name if r.project else "",
+            float(r.fueling_expense or 0),
+            float(r.oil_change_expense or 0),
+            float(r.maintenance_expense or 0),
+            float(r.employee_expense or 0),
+            float(r.total_expense or 0),
+            r.remarks or "",
+        ])
+    return generate_excel_template(headers, data_rows, required_columns=[], filename="workspace_opening_expenses.xlsx")
+
+
+def workspace_opening_expense_print():
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+    from_date = parse_date(request.args.get("from_date"))
+    to_date = parse_date(request.args.get("to_date"))
+    district_id = request.args.get("district_id", type=int) or 0
+    project_id = request.args.get("project_id", type=int) or 0
+    search = (request.args.get("search") or "").strip()
+    rows = _workspace_opening_expense_rows(
+        employee_id=emp.id,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        search=search,
+    )
+    total_amount = sum(Decimal(str(r.total_expense or 0)) for r in rows)
+    return render_template(
+        "workspace/opening_expense_print.html",
+        rows=rows,
+        from_date=from_date,
+        to_date=to_date,
+        search=search,
+        total_amount=total_amount,
     )
 
 
