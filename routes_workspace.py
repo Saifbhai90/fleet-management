@@ -114,26 +114,36 @@ def _is_master_or_admin_user():
     return bool(ctx.get("is_master_or_admin"))
 
 
-def _workspace_has_closed_month_for_date(employee_id, target_date):
+def _workspace_has_closed_month_for_date(employee_id, target_date, district_id=None, project_id=None):
     if not employee_id or not target_date:
         return False
-    return db.session.query(WorkspaceMonthClose.id).filter(
+    q = db.session.query(WorkspaceMonthClose.id).filter(
         WorkspaceMonthClose.employee_id == employee_id,
         WorkspaceMonthClose.status == "Closed",
         WorkspaceMonthClose.period_start <= target_date,
         WorkspaceMonthClose.period_end >= target_date,
-    ).first() is not None
+    )
+    if district_id:
+        q = q.filter(WorkspaceMonthClose.district_id == district_id)
+    if project_id:
+        q = q.filter(WorkspaceMonthClose.project_id == project_id)
+    return q.first() is not None
 
 
-def _workspace_has_closed_fuel_oil_month_for_date(employee_id, target_date):
+def _workspace_has_closed_fuel_oil_month_for_date(employee_id, target_date, district_id=None, project_id=None):
     if not employee_id or not target_date:
         return False
-    return db.session.query(WorkspaceFuelOilMonthClose.id).filter(
+    q = db.session.query(WorkspaceFuelOilMonthClose.id).filter(
         WorkspaceFuelOilMonthClose.employee_id == employee_id,
         WorkspaceFuelOilMonthClose.status == "Closed",
         WorkspaceFuelOilMonthClose.period_start <= target_date,
         WorkspaceFuelOilMonthClose.period_end >= target_date,
-    ).first() is not None
+    )
+    if district_id:
+        q = q.filter(WorkspaceFuelOilMonthClose.district_id == district_id)
+    if project_id:
+        q = q.filter(WorkspaceFuelOilMonthClose.project_id == project_id)
+    return q.first() is not None
 
 
 def _pending_month_close_spells(employee_id):
@@ -1185,7 +1195,12 @@ def workspace_opening_expense_import():
                     issues.append("Expense fields must be numeric.")
                     fueling = oil = maintenance = emp_exp = Decimal("0")
 
-                if opening_date and _workspace_has_closed_month_for_date(emp.id, opening_date):
+                if opening_date and _workspace_has_closed_month_for_date(
+                    emp.id,
+                    opening_date,
+                    district_id=district_id,
+                    project_id=project_id,
+                ):
                     issues.append("Date belongs to a closed month. Reopen month-close first.")
 
                 if issues:
@@ -1289,7 +1304,14 @@ def workspace_opening_expense_form(pk=None):
         if not opening_date:
             flash("Opening date is required.", "danger")
             return render_template("workspace/opening_expense_form.html", row=row, employee=emp, districts=districts, projects=projects)
-        if _workspace_has_closed_month_for_date(emp.id, opening_date):
+        district_id = request.form.get("district_id", type=int) or None
+        project_id = request.form.get("project_id", type=int) or None
+        if _workspace_has_closed_month_for_date(
+            emp.id,
+            opening_date,
+            district_id=district_id,
+            project_id=project_id,
+        ):
             flash("This date belongs to a closed month. Reopen month-close batch first to make changes.", "danger")
             return render_template("workspace/opening_expense_form.html", row=row, employee=emp, districts=districts, projects=projects)
 
@@ -1316,8 +1338,8 @@ def workspace_opening_expense_form(pk=None):
             row.journal_entry_id = None
 
         row.opening_date = opening_date
-        row.district_id = request.form.get("district_id", type=int) or None
-        row.project_id = request.form.get("project_id", type=int) or None
+        row.district_id = district_id
+        row.project_id = project_id
         row.fueling_expense = fueling
         row.oil_change_expense = oil
         row.maintenance_expense = maintenance
@@ -1341,7 +1363,12 @@ def workspace_opening_expense_delete(pk):
     if guard:
         return guard
     row = WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id, id=pk).first_or_404()
-    if _workspace_has_closed_month_for_date(emp.id, row.opening_date):
+    if _workspace_has_closed_month_for_date(
+        emp.id,
+        row.opening_date,
+        district_id=row.district_id,
+        project_id=row.project_id,
+    ):
         flash("Cannot delete opening expense from a closed month. Reopen month-close batch first.", "danger")
         return redirect(url_for("workspace_opening_expenses_list"))
     if row.journal_entry_id:
@@ -1539,7 +1566,14 @@ def workspace_fuel_oil_opening_form(pk=None):
         if not opening_date:
             flash("Date is required.", "danger")
             return render_template("workspace/fuel_oil_opening_form.html", row=row, employee=emp, districts=districts, projects=projects)
-        if _workspace_has_closed_fuel_oil_month_for_date(emp.id, opening_date):
+        district_id = request.form.get("district_id", type=int) or None
+        project_id = request.form.get("project_id", type=int) or None
+        if _workspace_has_closed_fuel_oil_month_for_date(
+            emp.id,
+            opening_date,
+            district_id=district_id,
+            project_id=project_id,
+        ):
             flash("This date belongs to a closed Fuel/Oil close batch. Reopen fuel/oil close first to make changes.", "danger")
             return render_template("workspace/fuel_oil_opening_form.html", row=row, employee=emp, districts=districts, projects=projects)
 
@@ -1566,8 +1600,8 @@ def workspace_fuel_oil_opening_form(pk=None):
             row.journal_entry_id = None
 
         row.opening_date = opening_date
-        row.district_id = request.form.get("district_id", type=int) or None
-        row.project_id = request.form.get("project_id", type=int) or None
+        row.district_id = district_id
+        row.project_id = project_id
         row.pump_card_fueling = pump_card_fueling
         row.credit_fueling = credit_fueling
         row.total_fueling = pump_card_fueling + credit_fueling
@@ -1594,7 +1628,12 @@ def workspace_fuel_oil_opening_delete(pk):
     if guard:
         return guard
     row = WorkspaceFuelOilOpeningExpense.query.filter_by(employee_id=emp.id, id=pk).first_or_404()
-    if _workspace_has_closed_fuel_oil_month_for_date(emp.id, row.opening_date):
+    if _workspace_has_closed_fuel_oil_month_for_date(
+        emp.id,
+        row.opening_date,
+        district_id=row.district_id,
+        project_id=row.project_id,
+    ):
         flash("Cannot delete fuel/oil opening from a closed fuel/oil batch. Reopen fuel/oil close first.", "danger")
         return redirect(url_for("workspace_fuel_oil_openings_list"))
     if row.journal_entry_id:
@@ -1696,7 +1735,12 @@ def workspace_fuel_oil_opening_import():
                     issues.append("Amount fields must be numeric.")
                     pump_card_fueling = credit_fueling = card_oil_change = credit_oil_change = Decimal("0")
 
-                if opening_date and _workspace_has_closed_fuel_oil_month_for_date(emp.id, opening_date):
+                if opening_date and _workspace_has_closed_fuel_oil_month_for_date(
+                    emp.id,
+                    opening_date,
+                    district_id=district_id,
+                    project_id=project_id,
+                ):
                     issues.append("Date belongs to a closed fuel/oil close batch. Reopen fuel/oil close first.")
 
                 if issues:
