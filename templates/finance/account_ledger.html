@@ -62,16 +62,30 @@
             <h5 class="mb-0">{{ ledger_data.account.code }} - {{ ledger_data.account.name }}</h5>
         </div>
         <div class="card-body p-0">
+            {% set debit_total = ledger_data.transactions|sum(attribute='debit') %}
+            {% set credit_total = ledger_data.transactions|sum(attribute='credit') %}
+            {% set net_balance = ledger_data.opening_balance + debit_total - credit_total %}
             <div class="alert alert-info m-3 mb-0">
                 <div class="row">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <strong>Opening Balance:</strong> {{ "{:,.2f}".format(ledger_data.opening_balance) }}
                     </div>
-                    <div class="col-md-4">
-                        <strong>Total Debit:</strong> {{ "{:,.2f}".format(ledger_data.transactions|sum(attribute='debit')) }}
+                    <div class="col-md-3">
+                        <strong>Total Debit:</strong> {{ "{:,.2f}".format(debit_total) }}
                     </div>
-                    <div class="col-md-4">
-                        <strong>Total Credit:</strong> {{ "{:,.2f}".format(ledger_data.transactions|sum(attribute='credit')) }}
+                    <div class="col-md-3">
+                        <strong>Total Credit:</strong> {{ "{:,.2f}".format(credit_total) }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Balance:</strong>
+                        {{ "{:,.2f}".format(net_balance) }}
+                        {% if net_balance < 0 %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-1">Receivable</span>
+                        {% elif net_balance > 0 %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">Payable</span>
+                        {% else %}
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1">Settled</span>
+                        {% endif %}
                     </div>
                 </div>
             </div>
