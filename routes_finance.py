@@ -1608,13 +1608,17 @@ def fund_transfers_list():
                 FundTransfer.reference_no.ilike(like),
             ))
 
+    overall_amount_total = query.with_entities(db.func.coalesce(db.func.sum(FundTransfer.amount), 0)).scalar() or 0
     query = query.order_by(FundTransfer.transfer_date.desc(), FundTransfer.id.desc())
     transfers = query.paginate(page=page, per_page=per_page, error_out=False)
+    page_amount_subtotal = sum((ft.amount or 0) for ft in (transfers.items or []))
     category_choices = [name for name, _label in _get_fund_transfer_category_choices(include_all_label=True)[1:]]
     return render_template('finance/fund_transfers_list.html',
                            form=form, transfers=transfers,
                            from_date=from_date, to_date=to_date, per_page=per_page, search=search,
-                           category_choices=category_choices)
+                           category_choices=category_choices,
+                           page_amount_subtotal=page_amount_subtotal,
+                           overall_amount_total=overall_amount_total)
 
 
 def _populate_transfer_filters(form):

@@ -104,7 +104,7 @@
         </div>
         <div class="card-body p-0">
             <div class="data-table-wrapper" style="overflow-x:auto">
-                <table class="table table-hover table-bordered mb-0" id="fundTransferTable">
+                <table class="table table-hover table-bordered mb-0" id="fundTransferTable" data-ft-auto-totals="1" data-ft-total-records="{{ transfers.total }}">
                     <thead class="table-light">
                         <tr>
                             <th class="text-center" style="width:28px">#</th>
@@ -162,6 +162,18 @@
                         </tr>
                         {% endfor %}
                     </tbody>
+                    <tfoot>
+                        <tr class="table-warning fw-semibold">
+                            <td colspan="5" class="text-end">Subtotal (Current Page)</td>
+                            <td class="text-end" data-ft-visible-col="5">{{ "{:,.2f}".format(page_amount_subtotal or 0) }}</td>
+                            <td colspan="8"></td>
+                        </tr>
+                        <tr class="table-info fw-bold">
+                            <td colspan="5" class="text-end">Total (All Filtered Records)</td>
+                            <td class="text-end" data-ft-total-col="5" data-ft-base="{{ overall_amount_total or 0 }}">{{ "{:,.2f}".format(overall_amount_total or 0) }}</td>
+                            <td colspan="8"></td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
