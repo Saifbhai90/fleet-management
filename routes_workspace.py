@@ -3,7 +3,7 @@ from calendar import monthrange
 from decimal import Decimal
 
 from flask import flash, redirect, render_template, request, session, url_for, make_response, jsonify
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, cast, String
 from sqlalchemy.orm import aliased
 
 from models import (
@@ -1047,8 +1047,29 @@ def workspace_expense_delete(pk):
     return redirect(url_for("employee_expense_delete", pk=pk))
 
 
-def _workspace_opening_expense_query(employee_id, from_date=None, to_date=None, district_id=0, project_id=0, search=""):
-    query = WorkspaceOpeningExpense.query.filter(WorkspaceOpeningExpense.employee_id == employee_id)
+def _workspace_opening_expense_query(
+    employee_id,
+    from_date=None,
+    to_date=None,
+    district_id=0,
+    project_id=0,
+    search="",
+    col_date="",
+    col_district="",
+    col_project="",
+    col_fueling="",
+    col_oil="",
+    col_maintenance="",
+    col_employee="",
+    col_total="",
+    col_remarks="",
+):
+    query = (
+        WorkspaceOpeningExpense.query
+        .filter(WorkspaceOpeningExpense.employee_id == employee_id)
+        .outerjoin(District, WorkspaceOpeningExpense.district_id == District.id)
+        .outerjoin(Project, WorkspaceOpeningExpense.project_id == Project.id)
+    )
     if from_date:
         query = query.filter(WorkspaceOpeningExpense.opening_date >= from_date)
     if to_date:
@@ -1058,15 +1079,65 @@ def _workspace_opening_expense_query(employee_id, from_date=None, to_date=None, 
     if project_id:
         query = query.filter(WorkspaceOpeningExpense.project_id == project_id)
     if search:
-        query = query.outerjoin(District, WorkspaceOpeningExpense.district_id == District.id)
-        query = query.outerjoin(Project, WorkspaceOpeningExpense.project_id == Project.id)
         flt = _workspace_multi_word_filter(search, WorkspaceOpeningExpense.remarks, District.name, Project.name)
         if flt is not None:
             query = query.filter(flt)
+    if col_date:
+        parsed = parse_date(col_date)
+        if parsed:
+            query = query.filter(WorkspaceOpeningExpense.opening_date == parsed)
+    if col_district:
+        query = query.filter(District.name.ilike(f"%{col_district}%"))
+    if col_project:
+        query = query.filter(Project.name.ilike(f"%{col_project}%"))
+    if col_fueling:
+        query = query.filter(cast(WorkspaceOpeningExpense.fueling_expense, String).ilike(f"%{col_fueling}%"))
+    if col_oil:
+        query = query.filter(cast(WorkspaceOpeningExpense.oil_change_expense, String).ilike(f"%{col_oil}%"))
+    if col_maintenance:
+        query = query.filter(cast(WorkspaceOpeningExpense.maintenance_expense, String).ilike(f"%{col_maintenance}%"))
+    if col_employee:
+        query = query.filter(cast(WorkspaceOpeningExpense.employee_expense, String).ilike(f"%{col_employee}%"))
+    if col_total:
+        query = query.filter(cast(WorkspaceOpeningExpense.total_expense, String).ilike(f"%{col_total}%"))
+    if col_remarks:
+        query = query.filter(WorkspaceOpeningExpense.remarks.ilike(f"%{col_remarks}%"))
     return query
 
 
-def _workspace_opening_expense_rows(employee_id, from_date=None, to_date=None, district_id=0, project_id=0, search=""):
+def _workspace_opening_expense_rows(
+    employee_id,
+    from_date=None,
+    to_date=None,
+    district_id=0,
+    project_id=0,
+    search="",
+    col_date="",
+    col_district="",
+    col_project="",
+    col_fueling="",
+    col_oil="",
+    col_maintenance="",
+    col_employee="",
+    col_total="",
+    col_remarks="",
+    sort_by="date",
+    sort_order="desc",
+):
+    sort_map = {
+        "date": WorkspaceOpeningExpense.opening_date,
+        "district": District.name,
+        "project": Project.name,
+        "fueling": WorkspaceOpeningExpense.fueling_expense,
+        "oil": WorkspaceOpeningExpense.oil_change_expense,
+        "maintenance": WorkspaceOpeningExpense.maintenance_expense,
+        "employee": WorkspaceOpeningExpense.employee_expense,
+        "total": WorkspaceOpeningExpense.total_expense,
+        "remarks": WorkspaceOpeningExpense.remarks,
+    }
+    sort_col = sort_map.get(sort_by, WorkspaceOpeningExpense.opening_date)
+    desc_order = (sort_order or "").lower() != "asc"
+    ordered = sort_col.desc() if desc_order else sort_col.asc()
     return _workspace_opening_expense_query(
         employee_id=employee_id,
         from_date=from_date,
@@ -1074,10 +1145,16 @@ def _workspace_opening_expense_rows(employee_id, from_date=None, to_date=None, d
         district_id=district_id,
         project_id=project_id,
         search=search,
-    ).order_by(
-        WorkspaceOpeningExpense.opening_date.desc(),
-        WorkspaceOpeningExpense.id.desc(),
-    ).all()
+        col_date=col_date,
+        col_district=col_district,
+        col_project=col_project,
+        col_fueling=col_fueling,
+        col_oil=col_oil,
+        col_maintenance=col_maintenance,
+        col_employee=col_employee,
+        col_total=col_total,
+        col_remarks=col_remarks,
+    ).order_by(ordered, WorkspaceOpeningExpense.id.desc()).all()
 
 
 def workspace_opening_expenses_list():
@@ -1090,6 +1167,17 @@ def workspace_opening_expenses_list():
     district_id = request.args.get("district_id", type=int) or 0
     project_id = request.args.get("project_id", type=int) or 0
     search = (request.args.get("search") or "").strip()
+    col_date = (request.args.get("col_date") or "").strip()
+    col_district = (request.args.get("col_district") or "").strip()
+    col_project = (request.args.get("col_project") or "").strip()
+    col_fueling = (request.args.get("col_fueling") or "").strip()
+    col_oil = (request.args.get("col_oil") or "").strip()
+    col_maintenance = (request.args.get("col_maintenance") or "").strip()
+    col_employee = (request.args.get("col_employee") or "").strip()
+    col_total = (request.args.get("col_total") or "").strip()
+    col_remarks = (request.args.get("col_remarks") or "").strip()
+    sort_by = (request.args.get("sort_by") or "date").strip().lower()
+    sort_order = (request.args.get("sort_order") or "desc").strip().lower()
     page = max(request.args.get("page", 1, type=int) or 1, 1)
     per_page = request.args.get("per_page", 20, type=int) or 20
     if per_page not in (10, 20, 50, 100):
@@ -1102,6 +1190,15 @@ def workspace_opening_expenses_list():
         district_id=district_id,
         project_id=project_id,
         search=search,
+        col_date=col_date,
+        col_district=col_district,
+        col_project=col_project,
+        col_fueling=col_fueling,
+        col_oil=col_oil,
+        col_maintenance=col_maintenance,
+        col_employee=col_employee,
+        col_total=col_total,
+        col_remarks=col_remarks,
     )
     total_amount = query.with_entities(
         db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.total_expense), 0)
@@ -1110,20 +1207,34 @@ def workspace_opening_expenses_list():
         db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.fueling_expense), 0),
         db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.oil_change_expense), 0),
         db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.maintenance_expense), 0),
+        db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.employee_expense), 0),
         db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.total_expense), 0),
     ).first()
-    pagination = query.order_by(
-        WorkspaceOpeningExpense.opening_date.desc(),
-        WorkspaceOpeningExpense.id.desc(),
-    ).paginate(page=page, per_page=per_page, error_out=False)
+    sort_map = {
+        "date": WorkspaceOpeningExpense.opening_date,
+        "district": District.name,
+        "project": Project.name,
+        "fueling": WorkspaceOpeningExpense.fueling_expense,
+        "oil": WorkspaceOpeningExpense.oil_change_expense,
+        "maintenance": WorkspaceOpeningExpense.maintenance_expense,
+        "employee": WorkspaceOpeningExpense.employee_expense,
+        "total": WorkspaceOpeningExpense.total_expense,
+        "remarks": WorkspaceOpeningExpense.remarks,
+    }
+    sort_col = sort_map.get(sort_by, WorkspaceOpeningExpense.opening_date)
+    desc_order = sort_order != "asc"
+    ordered = sort_col.desc() if desc_order else sort_col.asc()
+    pagination = query.order_by(ordered, WorkspaceOpeningExpense.id.desc()).paginate(page=page, per_page=per_page, error_out=False)
     page_fueling_subtotal = sum(Decimal(str(r.fueling_expense or 0)) for r in pagination.items)
     page_oil_subtotal = sum(Decimal(str(r.oil_change_expense or 0)) for r in pagination.items)
     page_maintenance_subtotal = sum(Decimal(str(r.maintenance_expense or 0)) for r in pagination.items)
+    page_employee_subtotal = sum(Decimal(str(r.employee_expense or 0)) for r in pagination.items)
     page_total_subtotal = sum(Decimal(str(r.total_expense or 0)) for r in pagination.items)
     overall_fueling_total = Decimal(str((totals_row[0] if totals_row else 0) or 0))
     overall_oil_total = Decimal(str((totals_row[1] if totals_row else 0) or 0))
     overall_maintenance_total = Decimal(str((totals_row[2] if totals_row else 0) or 0))
-    overall_total = Decimal(str((totals_row[3] if totals_row else 0) or 0))
+    overall_employee_total = Decimal(str((totals_row[3] if totals_row else 0) or 0))
+    overall_total = Decimal(str((totals_row[4] if totals_row else 0) or 0))
 
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
@@ -1142,11 +1253,24 @@ def workspace_opening_expenses_list():
         page_fueling_subtotal=page_fueling_subtotal,
         page_oil_subtotal=page_oil_subtotal,
         page_maintenance_subtotal=page_maintenance_subtotal,
+        page_employee_subtotal=page_employee_subtotal,
         page_total_subtotal=page_total_subtotal,
         overall_fueling_total=overall_fueling_total,
         overall_oil_total=overall_oil_total,
         overall_maintenance_total=overall_maintenance_total,
+        overall_employee_total=overall_employee_total,
         overall_total=overall_total,
+        col_date=col_date,
+        col_district=col_district,
+        col_project=col_project,
+        col_fueling=col_fueling,
+        col_oil=col_oil,
+        col_maintenance=col_maintenance,
+        col_employee=col_employee,
+        col_total=col_total,
+        col_remarks=col_remarks,
+        sort_by=sort_by,
+        sort_order=sort_order,
         districts=districts,
         projects=projects,
     )
@@ -1161,6 +1285,17 @@ def workspace_opening_expense_export():
     district_id = request.args.get("district_id", type=int) or 0
     project_id = request.args.get("project_id", type=int) or 0
     search = (request.args.get("search") or "").strip()
+    col_date = (request.args.get("col_date") or "").strip()
+    col_district = (request.args.get("col_district") or "").strip()
+    col_project = (request.args.get("col_project") or "").strip()
+    col_fueling = (request.args.get("col_fueling") or "").strip()
+    col_oil = (request.args.get("col_oil") or "").strip()
+    col_maintenance = (request.args.get("col_maintenance") or "").strip()
+    col_employee = (request.args.get("col_employee") or "").strip()
+    col_total = (request.args.get("col_total") or "").strip()
+    col_remarks = (request.args.get("col_remarks") or "").strip()
+    sort_by = (request.args.get("sort_by") or "date").strip().lower()
+    sort_order = (request.args.get("sort_order") or "desc").strip().lower()
     rows = _workspace_opening_expense_rows(
         employee_id=emp.id,
         from_date=from_date,
@@ -1168,6 +1303,17 @@ def workspace_opening_expense_export():
         district_id=district_id,
         project_id=project_id,
         search=search,
+        col_date=col_date,
+        col_district=col_district,
+        col_project=col_project,
+        col_fueling=col_fueling,
+        col_oil=col_oil,
+        col_maintenance=col_maintenance,
+        col_employee=col_employee,
+        col_total=col_total,
+        col_remarks=col_remarks,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
     headers = [
         "S.No", "Date", "District", "Project", "Fueling", "Oil Change",
@@ -1199,6 +1345,17 @@ def workspace_opening_expense_print():
     district_id = request.args.get("district_id", type=int) or 0
     project_id = request.args.get("project_id", type=int) or 0
     search = (request.args.get("search") or "").strip()
+    col_date = (request.args.get("col_date") or "").strip()
+    col_district = (request.args.get("col_district") or "").strip()
+    col_project = (request.args.get("col_project") or "").strip()
+    col_fueling = (request.args.get("col_fueling") or "").strip()
+    col_oil = (request.args.get("col_oil") or "").strip()
+    col_maintenance = (request.args.get("col_maintenance") or "").strip()
+    col_employee = (request.args.get("col_employee") or "").strip()
+    col_total = (request.args.get("col_total") or "").strip()
+    col_remarks = (request.args.get("col_remarks") or "").strip()
+    sort_by = (request.args.get("sort_by") or "date").strip().lower()
+    sort_order = (request.args.get("sort_order") or "desc").strip().lower()
     rows = _workspace_opening_expense_rows(
         employee_id=emp.id,
         from_date=from_date,
@@ -1206,6 +1363,17 @@ def workspace_opening_expense_print():
         district_id=district_id,
         project_id=project_id,
         search=search,
+        col_date=col_date,
+        col_district=col_district,
+        col_project=col_project,
+        col_fueling=col_fueling,
+        col_oil=col_oil,
+        col_maintenance=col_maintenance,
+        col_employee=col_employee,
+        col_total=col_total,
+        col_remarks=col_remarks,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
     total_amount = sum(Decimal(str(r.total_expense or 0)) for r in rows)
     return render_template(

@@ -7,8 +7,8 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-cash-coin me-2 text-warning"></i>Opening Expenses</h2>
     <div class="d-flex align-items-center gap-2">
-      <a href="{{ url_for('workspace_opening_expense_print', from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, search=search) }}" class="btn btn-outline-secondary btn-sm" title="Print / Preview" target="_blank"><i class="bi bi-eye me-1"></i>Print / Preview</a>
-      <a href="{{ url_for('workspace_opening_expense_export', from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, search=search) }}" class="btn btn-outline-success btn-sm" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</a>
+      <a href="{{ url_for('workspace_opening_expense_print', from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, search=search, col_date=col_date, col_district=col_district, col_project=col_project, col_fueling=col_fueling, col_oil=col_oil, col_maintenance=col_maintenance, col_employee=col_employee, col_total=col_total, col_remarks=col_remarks, sort_by=sort_by, sort_order=sort_order) }}" class="btn btn-outline-secondary btn-sm" title="Print / Preview" target="_blank"><i class="bi bi-eye me-1"></i>Print / Preview</a>
+      <a href="{{ url_for('workspace_opening_expense_export', from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, search=search, col_date=col_date, col_district=col_district, col_project=col_project, col_fueling=col_fueling, col_oil=col_oil, col_maintenance=col_maintenance, col_employee=col_employee, col_total=col_total, col_remarks=col_remarks, sort_by=sort_by, sort_order=sort_order) }}" class="btn btn-outline-success btn-sm" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</a>
       <a href="{{ url_for('workspace_opening_expense_import') }}" class="btn btn-outline-primary btn-sm" title="Import from Excel/CSV">
         <i class="bi bi-upload me-1"></i>Import
       </a>
@@ -80,16 +80,31 @@
           <thead class="table-light">
             <tr>
               <th class="ps-3">#</th>
-              <th>Date</th>
-              <th>District</th>
-              <th>Project</th>
-              <th class="text-end">Fueling</th>
-              <th class="text-end">Oil Change</th>
-              <th class="text-end">Maintenance</th>
-              <th class="text-end">Employee</th>
-              <th class="text-end">Total</th>
-              <th>Remarks</th>
+              <th><a href="#" class="text-decoration-none text-dark" onclick="return sortOpening('date')">Date{% if sort_by == 'date' %} {{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}</a></th>
+              <th><a href="#" class="text-decoration-none text-dark" onclick="return sortOpening('district')">District{% if sort_by == 'district' %} {{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}</a></th>
+              <th><a href="#" class="text-decoration-none text-dark" onclick="return sortOpening('project')">Project{% if sort_by == 'project' %} {{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}</a></th>
+              <th class="text-end"><a href="#" class="text-decoration-none text-dark" onclick="return sortOpening('fueling')">Fueling{% if sort_by == 'fueling' %} {{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}</a></th>
+              <th class="text-end"><a href="#" class="text-decoration-none text-dark" onclick="return sortOpening('oil')">Oil Change{% if sort_by == 'oil' %} {{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}</a></th>
+              <th class="text-end"><a href="#" class="text-decoration-none text-dark" onclick="return sortOpening('maintenance')">Maintenance{% if sort_by == 'maintenance' %} {{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}</a></th>
+              <th class="text-end"><a href="#" class="text-decoration-none text-dark" onclick="return sortOpening('employee')">Employee{% if sort_by == 'employee' %} {{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}</a></th>
+              <th class="text-end"><a href="#" class="text-decoration-none text-dark" onclick="return sortOpening('total')">Total{% if sort_by == 'total' %} {{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}</a></th>
+              <th><a href="#" class="text-decoration-none text-dark" onclick="return sortOpening('remarks')">Remarks{% if sort_by == 'remarks' %} {{ '▲' if sort_order == 'asc' else '▼' }}{% endif %}</a></th>
               <th class="text-center pe-3">Actions</th>
+            </tr>
+            <tr>
+              <th class="ps-3"></th>
+              <th><input type="text" id="colDate" class="form-control form-control-sm" value="{{ col_date or '' }}" placeholder="dd-mm-yyyy"></th>
+              <th><input type="text" id="colDistrict" class="form-control form-control-sm" value="{{ col_district or '' }}" placeholder="Filter"></th>
+              <th><input type="text" id="colProject" class="form-control form-control-sm" value="{{ col_project or '' }}" placeholder="Filter"></th>
+              <th><input type="text" id="colFueling" class="form-control form-control-sm text-end" value="{{ col_fueling or '' }}" placeholder="0"></th>
+              <th><input type="text" id="colOil" class="form-control form-control-sm text-end" value="{{ col_oil or '' }}" placeholder="0"></th>
+              <th><input type="text" id="colMaintenance" class="form-control form-control-sm text-end" value="{{ col_maintenance or '' }}" placeholder="0"></th>
+              <th><input type="text" id="colEmployee" class="form-control form-control-sm text-end" value="{{ col_employee or '' }}" placeholder="0"></th>
+              <th><input type="text" id="colTotal" class="form-control form-control-sm text-end" value="{{ col_total or '' }}" placeholder="0"></th>
+              <th><input type="text" id="colRemarks" class="form-control form-control-sm" value="{{ col_remarks or '' }}" placeholder="Filter"></th>
+              <th class="text-center pe-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyOpeningColumnFilters()"><i class="bi bi-funnel"></i></button>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -128,7 +143,7 @@
               <td class="text-end">{{ "{:,.2f}".format(page_fueling_subtotal or 0) }}</td>
               <td class="text-end">{{ "{:,.2f}".format(page_oil_subtotal or 0) }}</td>
               <td class="text-end">{{ "{:,.2f}".format(page_maintenance_subtotal or 0) }}</td>
-              <td class="text-end">-</td>
+              <td class="text-end">{{ "{:,.2f}".format(page_employee_subtotal or 0) }}</td>
               <td class="text-end">{{ "{:,.2f}".format(page_total_subtotal or 0) }}</td>
               <td colspan="2"></td>
             </tr>
@@ -137,7 +152,7 @@
               <td class="text-end">{{ "{:,.2f}".format(overall_fueling_total or 0) }}</td>
               <td class="text-end">{{ "{:,.2f}".format(overall_oil_total or 0) }}</td>
               <td class="text-end">{{ "{:,.2f}".format(overall_maintenance_total or 0) }}</td>
-              <td class="text-end">-</td>
+              <td class="text-end">{{ "{:,.2f}".format(overall_employee_total or 0) }}</td>
               <td class="text-end">{{ "{:,.2f}".format(overall_total or 0) }}</td>
               <td colspan="2"></td>
             </tr>
@@ -150,15 +165,15 @@
         <small class="text-muted"><i class="bi bi-list-ul me-1"></i>Showing {{ ((pagination.page - 1) * per_page) + 1 if rows|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + rows|length }} of {{ pagination.total }} entries</small>
         {% if pagination and pagination.pages > 1 %}
         <nav><ul class="pagination pagination-sm mb-0">
-          <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" href="{{ url_for('workspace_opening_expenses_list', page=pagination.prev_num, per_page=per_page, from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, search=search) }}"><i class="bi bi-chevron-left"></i></a></li>
+          <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" href="#" onclick="return goOpeningPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
           {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}
             {% if p %}
-            <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="{{ url_for('workspace_opening_expenses_list', page=p, per_page=per_page, from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, search=search) }}">{{ p }}</a></li>
+            <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="#" onclick="return goOpeningPage({{ p }})">{{ p }}</a></li>
             {% else %}
             <li class="page-item disabled"><span class="page-link">…</span></li>
             {% endif %}
           {% endfor %}
-          <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" href="{{ url_for('workspace_opening_expenses_list', page=pagination.next_num, per_page=per_page, from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, search=search) }}"><i class="bi bi-chevron-right"></i></a></li>
+          <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" href="#" onclick="return goOpeningPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
         </ul></nav>
         {% endif %}
       </div>
@@ -180,6 +195,11 @@ document.addEventListener('DOMContentLoaded', function(){
       window.location.href = u.toString();
     });
   }
+  ['colDate','colDistrict','colProject','colFueling','colOil','colMaintenance','colEmployee','colTotal','colRemarks'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); applyOpeningColumnFilters(); } });
+  });
   if (perPageSelect) {
     perPageSelect.addEventListener('change', function() {
       var u = new URL(window.location.href);
@@ -189,5 +209,43 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 });
+
+function applyOpeningColumnFilters(){
+  var u = new URL(window.location.href);
+  u.searchParams.set('col_date', (document.getElementById('colDate') || {}).value || '');
+  u.searchParams.set('col_district', (document.getElementById('colDistrict') || {}).value || '');
+  u.searchParams.set('col_project', (document.getElementById('colProject') || {}).value || '');
+  u.searchParams.set('col_fueling', (document.getElementById('colFueling') || {}).value || '');
+  u.searchParams.set('col_oil', (document.getElementById('colOil') || {}).value || '');
+  u.searchParams.set('col_maintenance', (document.getElementById('colMaintenance') || {}).value || '');
+  u.searchParams.set('col_employee', (document.getElementById('colEmployee') || {}).value || '');
+  u.searchParams.set('col_total', (document.getElementById('colTotal') || {}).value || '');
+  u.searchParams.set('col_remarks', (document.getElementById('colRemarks') || {}).value || '');
+  u.searchParams.set('page', '1');
+  window.location.href = u.toString();
+}
+
+function sortOpening(col){
+  var u = new URL(window.location.href);
+  var current = (u.searchParams.get('sort_by') || 'date');
+  var order = (u.searchParams.get('sort_order') || 'desc');
+  if (current === col) {
+    order = order === 'asc' ? 'desc' : 'asc';
+  } else {
+    order = 'asc';
+  }
+  u.searchParams.set('sort_by', col);
+  u.searchParams.set('sort_order', order);
+  u.searchParams.set('page', '1');
+  window.location.href = u.toString();
+  return false;
+}
+
+function goOpeningPage(page){
+  var u = new URL(window.location.href);
+  u.searchParams.set('page', String(page));
+  window.location.href = u.toString();
+  return false;
+}
 </script>
 {% endblock %}
