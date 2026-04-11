@@ -258,10 +258,12 @@
   var oilTaskStartReading = null;
   var oilTaskCloseReading = null;
 
-  var productsForOil = [];
-  fetch('/api/oil-expense/products-for-oil').then(function(r) { return r.json(); }).then(function(arr) {
+  var productsForOil = [{% for p in products_for_oil %}{id:{{ p.id }},name:{{ p.name | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}];
+
+  function _populateOilProducts(arr) {
     productsForOil = arr;
     var sel = entryProductSelect;
+    if (sel.tomselect) sel.tomselect.destroy();
     sel.innerHTML = '<option value="">-- Search / Select --</option>';
     arr.forEach(function(p) {
       var o = document.createElement('option');
@@ -270,11 +272,19 @@
       o.setAttribute('data-name', p.name || '');
       sel.appendChild(o);
     });
-    if (entryProductSelect.tomselect) entryProductSelect.tomselect.destroy();
-    initSearchableDropdowns(entryProductSelect.parentNode);
+    initSearchableDropdowns(sel.parentNode);
     itemsBody.querySelectorAll('.item-row').forEach(function(tr) { bindListRow(tr); });
     updateTotals();
-  });
+  }
+
+  if (productsForOil.length) {
+    _populateOilProducts(productsForOil);
+  }
+
+  fetch('/api/oil-expense/products-for-oil')
+    .then(function(r) { return r.json(); })
+    .then(function(arr) { if (arr && arr.length) _populateOilProducts(arr); })
+    .catch(function() {});
 
   function updateEntryAmountAndBalance() {
     var purchase = parseFloat(entryPurchaseQty.value) || 0;

@@ -250,9 +250,11 @@
   var taskStartReading = null;
   var taskCloseReading = null;
 
-  var productsForMaintenance = [];
-  fetch('/api/maintenance-expense/products-for-maintenance').then(function(r) { return r.json(); }).then(function(arr) {
+  var productsForMaintenance = [{% for p in products_for_maintenance %}{id:{{ p.id }},name:{{ p.name | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}];
+
+  function _populateMaintenanceProducts(arr) {
     productsForMaintenance = arr;
+    if (entryProductSelect.tomselect) entryProductSelect.tomselect.destroy();
     entryProductSelect.innerHTML = '<option value="">-- Search / Select --</option>';
     arr.forEach(function(p) {
       var o = document.createElement('option');
@@ -260,11 +262,19 @@
       o.textContent = p.name;
       entryProductSelect.appendChild(o);
     });
-    if (entryProductSelect.tomselect) entryProductSelect.tomselect.destroy();
     initSearchableDropdowns(entryProductSelect.parentNode);
     itemsBody.querySelectorAll('.item-row').forEach(function(tr) { bindListRow(tr); });
     updateTotals();
-  });
+  }
+
+  if (productsForMaintenance.length) {
+    _populateMaintenanceProducts(productsForMaintenance);
+  }
+
+  fetch('/api/maintenance-expense/products-for-maintenance')
+    .then(function(r) { return r.json(); })
+    .then(function(arr) { if (arr && arr.length) _populateMaintenanceProducts(arr); })
+    .catch(function() {});
 
   function updateEntryAmount() {
     var qty = parseFloat(entryQty.value) || 0;
