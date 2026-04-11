@@ -25,10 +25,10 @@
         <div class="oca-subtitle">Family-wise oil limits with safe/near/crossed tracking</div>
       </div>
       {% if can_see_page('oil_change_alert_report') %}
-      <a href="{{ url_for('oil_change_alert_report_export', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status, custom_km=custom_km) }}" class="btn btn-success btn-sm">
+      <a href="{{ url_for('oil_change_alert_report_export', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status, custom_km_mode=custom_km_mode, custom_km=custom_km) }}" class="btn btn-success btn-sm">
         <i class="bi bi-file-earmark-excel me-1"></i>Export
       </a>
-      <a href="{{ url_for('oil_change_alert_report_print', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status, custom_km=custom_km) }}" class="btn btn-warning btn-sm" target="_blank">
+      <a href="{{ url_for('oil_change_alert_report_print', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status, custom_km_mode=custom_km_mode, custom_km=custom_km) }}" class="btn btn-warning btn-sm" target="_blank">
         <i class="bi bi-printer me-1"></i>Print
       </a>
       {% endif %}
@@ -69,6 +69,14 @@
             <option value="safe" {% if status == 'safe' %}selected{% endif %}>Safe</option>
             <option value="near" {% if status == 'near' %}selected{% endif %}>Near</option>
             <option value="crossed" {% if status == 'crossed' %}selected{% endif %}>Crossed</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Check Type</label>
+          <select name="custom_km_mode" class="form-select form-select-sm">
+            <option value="" {% if not custom_km_mode %}selected{% endif %}>-- Select --</option>
+            <option value="above" {% if custom_km_mode == 'above' %}selected{% endif %}>Above Check KM</option>
+            <option value="below" {% if custom_km_mode == 'below' %}selected{% endif %}>Below Check KM</option>
           </select>
         </div>
         <div class="col-6 col-md-2">
@@ -162,6 +170,8 @@
               <span class="status-crossed">Ahead (+{{ '%.2f'|format(r.custom_diff|abs) }})</span>
               {% elif custom_km and r.custom_state == 'behind' %}
               <span class="status-safe">Behind (-{{ '%.2f'|format(r.custom_diff|abs) }})</span>
+              {% elif custom_km and r.custom_state == 'equal' %}
+              <span class="status-near">Equal (0.00)</span>
               {% else %}
               <span class="text-muted">-</span>
               {% endif %}

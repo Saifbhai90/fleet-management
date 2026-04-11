@@ -31,6 +31,11 @@
     <span class="total-badge"><i class="bi bi-exclamation-triangle-fill me-1"></i>Total Vehicles: {{ total }}</span>
     {% if custom_km %}
     <span class="total-badge ms-2">Check KM: {{ custom_km }}</span>
+    {% if custom_km_mode == 'above' %}
+    <span class="total-badge ms-2">Mode: Above Check KM</span>
+    {% elif custom_km_mode == 'below' %}
+    <span class="total-badge ms-2">Mode: Below Check KM</span>
+    {% endif %}
     {% endif %}
   </div>
 
@@ -70,6 +75,8 @@
           Ahead (+{{ '%.2f'|format(r.custom_diff|abs) }})
           {% elif custom_km and r.custom_state == 'behind' %}
           Behind (-{{ '%.2f'|format(r.custom_diff|abs) }})
+          {% elif custom_km and r.custom_state == 'equal' %}
+          Equal (0.00)
           {% else %}
           -
           {% endif %}

@@ -9485,6 +9485,7 @@ def _vehicle_last_oil_change_base(vehicle_id, workspace_employee_id=None):
 
 def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', status='',
                            custom_km=None,
+                           custom_km_mode='',
                            workspace_employee_id=None,
                            allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
                            is_master_or_admin=True):
@@ -9550,7 +9551,16 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', statu
         custom_diff = None
         if custom_km is not None:
             custom_diff = round(kms_after_oil - float(custom_km), 2)
-            custom_state = 'ahead' if custom_diff >= 0 else 'behind'
+            if custom_diff > 0:
+                custom_state = 'ahead'
+            elif custom_diff < 0:
+                custom_state = 'behind'
+            else:
+                custom_state = 'equal'
+            if custom_km_mode == 'above' and custom_state != 'ahead':
+                continue
+            if custom_km_mode == 'below' and custom_state != 'behind':
+                continue
 
         rows.append({
             'vehicle': vehicle,
@@ -9594,6 +9604,9 @@ def oil_change_alert_report():
     if status not in ('', 'safe', 'near', 'crossed'):
         status = ''
     custom_km_raw = (request.args.get('custom_km') or '').strip()
+    custom_km_mode = (request.args.get('custom_km_mode') or '').strip().lower()
+    if custom_km_mode not in ('', 'above', 'below'):
+        custom_km_mode = ''
     custom_km = None
     if custom_km_raw:
         try:
@@ -9611,6 +9624,7 @@ def oil_change_alert_report():
         vehicle_family=vehicle_family,
         status=status,
         custom_km=custom_km,
+        custom_km_mode=custom_km_mode,
         workspace_employee_id=workspace_employee_id,
         allowed_projects=allowed_projects,
         allowed_districts=allowed_districts,
@@ -9654,6 +9668,7 @@ def oil_change_alert_report():
         district_choices=district_choices,
         family_choices=family_choices,
         custom_km=custom_km_raw,
+        custom_km_mode=custom_km_mode,
         ahead_count=ahead_count,
         behind_count=behind_count,
     )
@@ -9677,6 +9692,9 @@ def oil_change_alert_report_export():
     if status not in ('', 'safe', 'near', 'crossed'):
         status = ''
     custom_km_raw = (request.args.get('custom_km') or '').strip()
+    custom_km_mode = (request.args.get('custom_km_mode') or '').strip().lower()
+    if custom_km_mode not in ('', 'above', 'below'):
+        custom_km_mode = ''
     custom_km = None
     if custom_km_raw:
         try:
@@ -9694,6 +9712,7 @@ def oil_change_alert_report_export():
         vehicle_family=vehicle_family,
         status=status,
         custom_km=custom_km,
+        custom_km_mode=custom_km_mode,
         workspace_employee_id=workspace_employee_id,
         allowed_projects=allowed_projects,
         allowed_districts=allowed_districts,
@@ -9727,6 +9746,7 @@ def oil_change_alert_report_export():
             (
                 f"Ahead ({abs(r['custom_diff']):.2f})" if r.get('custom_state') == 'ahead'
                 else f"Behind ({abs(r['custom_diff']):.2f})" if r.get('custom_state') == 'behind'
+                else "Equal (0.00)" if r.get('custom_state') == 'equal'
                 else '-'
             ),
             r['base_source'] or '-',
@@ -9756,6 +9776,9 @@ def oil_change_alert_report_print():
     if status not in ('', 'safe', 'near', 'crossed'):
         status = ''
     custom_km_raw = (request.args.get('custom_km') or '').strip()
+    custom_km_mode = (request.args.get('custom_km_mode') or '').strip().lower()
+    if custom_km_mode not in ('', 'above', 'below'):
+        custom_km_mode = ''
     custom_km = None
     if custom_km_raw:
         try:
@@ -9773,6 +9796,7 @@ def oil_change_alert_report_print():
         vehicle_family=vehicle_family,
         status=status,
         custom_km=custom_km,
+        custom_km_mode=custom_km_mode,
         workspace_employee_id=workspace_employee_id,
         allowed_projects=allowed_projects,
         allowed_districts=allowed_districts,
@@ -9785,6 +9809,7 @@ def oil_change_alert_report_print():
         rows=rows,
         total=len(rows),
         custom_km=custom_km_raw,
+        custom_km_mode=custom_km_mode,
         now=datetime.now,
     )
 
