@@ -123,9 +123,15 @@ def _workspace_has_closed_month_for_date(employee_id, target_date, district_id=N
         WorkspaceMonthClose.period_start <= target_date,
         WorkspaceMonthClose.period_end >= target_date,
     )
-    if district_id:
+    # Match the exact scope (district/project). A close in one scope
+    # must not block postings for another district/project.
+    if district_id is None:
+        q = q.filter(WorkspaceMonthClose.district_id.is_(None))
+    else:
         q = q.filter(WorkspaceMonthClose.district_id == district_id)
-    if project_id:
+    if project_id is None:
+        q = q.filter(WorkspaceMonthClose.project_id.is_(None))
+    else:
         q = q.filter(WorkspaceMonthClose.project_id == project_id)
     return q.first() is not None
 
@@ -139,9 +145,15 @@ def _workspace_has_closed_fuel_oil_month_for_date(employee_id, target_date, dist
         WorkspaceFuelOilMonthClose.period_start <= target_date,
         WorkspaceFuelOilMonthClose.period_end >= target_date,
     )
-    if district_id:
+    # Match the exact scope (district/project). A close in one scope
+    # must not block postings for another district/project.
+    if district_id is None:
+        q = q.filter(WorkspaceFuelOilMonthClose.district_id.is_(None))
+    else:
         q = q.filter(WorkspaceFuelOilMonthClose.district_id == district_id)
-    if project_id:
+    if project_id is None:
+        q = q.filter(WorkspaceFuelOilMonthClose.project_id.is_(None))
+    else:
         q = q.filter(WorkspaceFuelOilMonthClose.project_id == project_id)
     return q.first() is not None
 
