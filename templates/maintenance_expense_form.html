@@ -50,15 +50,15 @@
             <label class="form-label">Vehicle <span class="text-danger">*</span></label>
             {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
           </div>
-          <div class="col-md-4 field-group">
+          <div class="col-md-3 field-group">
             <label class="form-label">Date <span class="text-danger">*</span></label>
             {{ form.expense_date(class="form-control datepicker", id="expenseDate") }}
           </div>
-          <div class="col-md-4 field-group">
+          <div class="col-md-3 field-group">
             <label class="form-label">Current Reading</label>
             {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
           </div>
-          <div class="col-md-8 field-group job-category-group">
+          <div class="col-md-6 field-group job-category-group">
             <label class="form-label">Job Category</label>
             <div class="input-group">
               <select name="job_category" id="jobCategorySelect" class="form-select search-select">
