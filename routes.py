@@ -475,9 +475,12 @@ def api_fuel_market_rates():
 
 @app.route('/api/fuel-market-rate-for-date')
 def api_fuel_market_rate_for_date():
-    """Return PSO rate for a specific date. If today: trigger scan if needed.
-    If date is in the past and not in DB: live-scan PSO (returns current rate,
-    saves it under that date only if it's today)."""
+    """Return PSO rate for a specific date.
+
+    Scan policy:
+    - Today: live scan allowed (if DB record missing).
+    - Non-today dates: DB-only (no live scan).
+    """
     date_str = (request.args.get('date') or '').strip()
     scan_data = _read_fuel_market_scan()
     rates = scan_data.get('rates') or {}
@@ -496,30 +499,6 @@ def api_fuel_market_rate_for_date():
             'scan_date': date_str,
             'scanned_at': entry.get('scanned_at', ''),
         })
-
-    if date_str and date_str != today_s:
-        try:
-            pso = _scan_pso_rates()
-            if pso.get('ok'):
-                scanned_at = pk_now().strftime('%d-%m-%Y %I:%M:%S %p')
-                rates[date_str] = {
-                    'ok': True,
-                    'petrol': pso.get('petrol'),
-                    'diesel': pso.get('diesel'),
-                    'scanned_at': scanned_at,
-                    'error': '',
-                }
-                scan_data['rates'] = rates
-                _save_fuel_market_scan(scan_data)
-                return jsonify({
-                    'ok': True,
-                    'petrol': pso.get('petrol'),
-                    'diesel': pso.get('diesel'),
-                    'scan_date': date_str,
-                    'scanned_at': scanned_at,
-                })
-        except Exception:
-            pass
 
     return jsonify({
         'ok': False,
