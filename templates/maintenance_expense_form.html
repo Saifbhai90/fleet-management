@@ -165,6 +165,27 @@
             </tr>
           </tfoot>
         </table>
+        <div class="row g-2 mt-2 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label mb-0">Total Bill Amount (User Entry)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              class="form-control"
+              id="totalBillInput"
+              name="total_bill_amount"
+              value="{{ entered_total_bill if entered_total_bill is not none else '' }}"
+              placeholder="Enter final bill total"
+            >
+            {% if total_bill_error %}
+              <div class="text-danger small mt-1">{{ total_bill_error }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-8">
+            <small class="text-muted">Save se pehle check hoga: list total aur Total Bill Amount equal hone chahiye.</small>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -263,10 +284,11 @@ document.addEventListener('DOMContentLoaded', function() {
   var newJobCategoryKm = document.getElementById('newJobCategoryKm');
   var newJobCategoryDay = document.getElementById('newJobCategoryDay');
   var modalEl = document.getElementById('jobCategoryModal');
-  var jobModal = (window.bootstrap && modalEl) ? new window.bootstrap.Modal(modalEl) : null;
+  var jobModal = (window.bootstrap && modalEl) ? new window.bootstrap.Modal(modalEl, { backdrop: false, focus: false, keyboard: true }) : null;
   var fallbackShown = false;
   var taskStartReading = null;
   var taskCloseReading = null;
+  var totalBillInput = document.getElementById('totalBillInput');
 
   var productsForMaintenance = [{% for p in products_for_maintenance %}{id:{{ p.id }},name:{{ p.name | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}];
 
@@ -332,6 +354,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var productName = escapeHtml(p ? (p.name || '') : '');
     var qty = parseFloat(entryQty.value) || 0;
     var price = parseFloat(entryPrice.value) || 0;
+    if (qty <= 0) { alert('Qty enter karein (0 se bari).'); entryQty.focus(); return; }
+    if (price <= 0) { alert('Price enter karein (0 se bari).'); entryPrice.focus(); return; }
     var amount = (qty * price).toFixed(2);
 
     var tr = document.createElement('tr');
@@ -383,6 +407,23 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('totalBillAmount').textContent = totalAmount.toFixed(2);
   }
 
+  function validateBeforeSubmit() {
+    if (!totalBillInput) return true;
+    var listTotal = parseFloat(document.getElementById('totalBillAmount').textContent || '0') || 0;
+    var entered = parseFloat(totalBillInput.value || '0');
+    if (!isFinite(entered) || entered <= 0) {
+      alert('Total Bill Amount enter karein (0 se bari).');
+      totalBillInput.focus();
+      return false;
+    }
+    if (Math.abs(listTotal - entered) > 0.01) {
+      alert('Total Bill Amount aur product list ka total equal nahi hai.');
+      totalBillInput.focus();
+      return false;
+    }
+    return true;
+  }
+
   function syncJobIntervalMode() {
     if (!jobCategorySelect || !jobIntervalMode) return;
     var opt = jobCategorySelect.options[jobCategorySelect.selectedIndex];
@@ -406,7 +447,6 @@ document.addEventListener('DOMContentLoaded', function() {
         modalEl.style.display = 'block';
         modalEl.classList.add('show');
         modalEl.removeAttribute('aria-hidden');
-        document.body.classList.add('modal-open');
       }
     });
   }
@@ -420,8 +460,17 @@ document.addEventListener('DOMContentLoaded', function() {
         modalEl.classList.remove('show');
         modalEl.style.display = 'none';
         modalEl.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('modal-open');
       }
+    });
+  }
+
+  if (modalEl && window.bootstrap) {
+    modalEl.addEventListener('shown.bs.modal', function() {
+      var backdrops = document.querySelectorAll('.modal-backdrop');
+      backdrops.forEach(function(el) { el.remove(); });
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
     });
   }
 
@@ -544,6 +593,12 @@ document.addEventListener('DOMContentLoaded', function() {
   if (vehicleSelect) vehicleSelect.addEventListener('change', fetchTaskReadingsForMaintenance);
   if (expenseDate) expenseDate.addEventListener('change', fetchTaskReadingsForMaintenance);
   if (currentReading) currentReading.addEventListener('input', updateCurrentReadingMatch);
+  var maintenanceExpenseForm = document.getElementById('maintenanceExpenseForm');
+  if (maintenanceExpenseForm) {
+    maintenanceExpenseForm.addEventListener('submit', function(e) {
+      if (!validateBeforeSubmit()) e.preventDefault();
+    });
+  }
 
   // Put cursor in first field when form opens.
   window.setTimeout(function() {

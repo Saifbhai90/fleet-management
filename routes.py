@@ -17804,6 +17804,8 @@ def maintenance_expense_form(pk=None):
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('maintenance_expense_list'))
     form = MaintenanceExpenseForm(obj=rec)
+    total_bill_error = ''
+    entered_total_bill = (request.form.get('total_bill_amount') or '').strip() if request.method == 'POST' else ''
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
     products_for_maintenance = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
     job_categories = _get_maintenance_job_categories()
@@ -17838,6 +17840,8 @@ def maintenance_expense_form(pk=None):
                 title='Edit Maintenance' if rec else 'Add Maintenance',
                 products_for_maintenance=products_for_maintenance,
                 job_categories=job_categories,
+                total_bill_error=total_bill_error,
+                entered_total_bill=entered_total_bill,
             )
         expense_date = form.expense_date.data
         curr_reading = form.current_reading.data
@@ -17870,6 +17874,40 @@ def maintenance_expense_form(pk=None):
                 price = 0
             amount = (qty * price) if price else None
             items_data.append({'product_id': pid, 'qty': qty, 'price': price, 'amount': amount})
+
+        items_total = sum(float((it.get('amount') or 0)) for it in items_data)
+        try:
+            entered_total_bill_num = float(entered_total_bill) if entered_total_bill else 0.0
+        except (TypeError, ValueError):
+            entered_total_bill_num = 0.0
+
+        if entered_total_bill_num <= 0:
+            total_bill_error = 'Total Bill Amount enter karein (0 se bara).'
+            flash('Form save nahi hua. Total Bill Amount required hai.', 'danger')
+            return render_template(
+                'maintenance_expense_form.html',
+                form=form,
+                rec=rec,
+                title='Edit Maintenance' if rec else 'Add Maintenance',
+                products_for_maintenance=products_for_maintenance,
+                job_categories=job_categories,
+                total_bill_error=total_bill_error,
+                entered_total_bill=entered_total_bill,
+            )
+
+        if abs(items_total - entered_total_bill_num) > 0.01:
+            total_bill_error = f'Total mismatch: list total {items_total:.2f} aur entered total {entered_total_bill_num:.2f} equal nahi.'
+            flash('Form save nahi hua. Product list total aur Total Bill Amount equal karein.', 'danger')
+            return render_template(
+                'maintenance_expense_form.html',
+                form=form,
+                rec=rec,
+                title='Edit Maintenance' if rec else 'Add Maintenance',
+                products_for_maintenance=products_for_maintenance,
+                job_categories=job_categories,
+                total_bill_error=total_bill_error,
+                entered_total_bill=entered_total_bill,
+            )
 
         if rec:
             rec.items.delete()
@@ -17912,7 +17950,6 @@ def maintenance_expense_form(pk=None):
             )
             db.session.add(item)
         _workspace_reverse_expense_journals('MaintenanceExpense', rec.id, workspace_employee_id)
-        items_total = sum(float((it.get('amount') or 0)) for it in items_data)
         _workspace_post_expense_journal(
             employee_id=workspace_employee_id,
             reference_type='MaintenanceExpense',
@@ -17969,6 +18006,8 @@ def maintenance_expense_form(pk=None):
         title='Edit Maintenance' if rec else 'Add Maintenance',
         products_for_maintenance=products_for_maintenance,
         job_categories=job_categories,
+        total_bill_error=total_bill_error,
+        entered_total_bill=entered_total_bill,
     )
 
 
