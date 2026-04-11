@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  {% include "workspace/_nav.html" %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><i class="bi bi-calendar2-check me-2 text-danger"></i>Month Close & Bridge Posting History</h2>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-danger btn-sm" id="wsMonthCloseCompactToggle" title="Compact mode"><i class="bi bi-arrows-angle-contract me-1"></i>Compact</button>
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      <a href="{{ url_for('workspace_month_close') }}" class="btn btn-danger btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>New Month Close
+      </a>
+    </div>
+  </div>
+
+  <div class="section-heading bg-danger">
+    <i class="bi bi-list-check me-2"></i>Month Close Batches
+  </div>
+
+  <div class="card shadow-sm border-0 mt-3 mb-3">
+    <div class="card-body py-2">
+      <form method="GET" action="" class="row g-2 align-items-end">
+        <div class="col-6 col-md-3">
+          <label class="form-label form-label-sm mb-1">From Date</label>
+          <input type="text" name="from_date" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label form-label-sm mb-1">To Date</label>
+          <input type="text" name="to_date" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
+        </div>
+        <div class="col-8 col-md-4">
+          <label class="form-label form-label-sm mb-1">Search</label>
+          <input type="text" name="search" class="form-control form-control-sm" value="{{ search or '' }}" placeholder="batch, district, project, notes, JE...">
+        </div>
+        <div class="col-4 col-md-2 d-flex gap-1">
+          <button type="submit" class="btn btn-danger btn-sm flex-fill"><i class="bi bi-funnel me-1"></i>Filter</button>
+          <a href="{{ url_for('workspace_month_close_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i></a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center flex-wrap gap-2 py-1">
+      <div class="d-flex align-items-center gap-2">
+        <label class="mb-0" style="font-size:.75rem">Show</label>
+        <select class="form-select form-select-sm" style="width:auto;font-size:.75rem;padding:2px 6px;" onchange="var u=new URLSearchParams(window.location.search);u.set('per_page',this.value);u.set('page','1');window.location.search=u.toString();">
+          {% for val in [25,50,100,200] %}
+          <option value="{{ val }}" {% if per_page|default(25) == val %}selected{% endif %}>{{ val }}</option>
+          {% endfor %}
+        </select>
+        <label class="mb-0" style="font-size:.75rem">entries</label>
+      </div>
+      <div>
+        <input type="text" class="form-control form-control-sm" placeholder="Search all pages..." style="width:180px;font-size:.75rem;padding:3px 8px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="data-table-wrapper" style="overflow-x:auto">
+        <table class="table table-hover table-bordered mb-0" id="wsMonthCloseTable" style="font-size:.78rem;">
+          <thead class="table-light">
+            <tr>
+              <th class="text-center" style="width:28px">#</th>
+              <th>Batch ID</th>
+              <th>Period</th>
+              <th>District</th>
+              <th>Project</th>
+              <th>Status</th>
+              <th class="text-end">Total Expense</th>
+              <th>Company JE</th>
+              <th>Closed At</th>
+              <th class="text-center no-print no-export">Act.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td class="text-center text-muted">{{ ((pagination.page - 1) * per_page + loop.index) if pagination else loop.index }}</td>
+              <td><span class="text-danger fw-semibold">MC-{{ r.id }}</span></td>
+              <td>{{ r.period_start|ddmmyyyy }} - {{ r.period_end|ddmmyyyy }}</td>
+              <td>{{ r.district.name if r.district else '-' }}</td>
+              <td>{{ r.project.name if r.project else '-' }}</td>
+              <td>
+                {% if r.status == 'Closed' %}
+                <span class="badge bg-success">Closed</span>
+                {% else %}
+                <span class="badge bg-secondary">{{ r.status or '-' }}</span>
+                {% endif %}
+              </td>
+              <td class="text-end fw-semibold">{{ '{:,.2f}'.format((r.total_expense or 0)|float) }}</td>
+              <td>
+                {% if r.company_journal_entry %}
+                <div class="d-flex flex-column gap-1">
+                  <span>{{ r.company_journal_entry.entry_number or r.company_journal_entry_id }}</span>
+                  <a class="small text-decoration-none" target="_blank" href="{{ url_for('journal_vouchers_list', search=(r.company_journal_entry.entry_number or (r.company_journal_entry_id|string))) }}">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>View JE
+                  </a>
+                </div>
+                {% else %}
+                {{ r.company_journal_entry_id or '-' }}
+                {% endif %}
+              </td>
+              <td>{{ r.closed_at|ddmmyyyy if r.closed_at else '-' }}</td>
+              <td class="text-center no-print no-export">
+                {% if can_manage_month_close %}
+                <form method="post" action="{{ url_for('workspace_month_close_reverse', pk=r.id) }}" class="d-inline month-close-reopen-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-sm btn-delete-compact" title="Reopen / Reverse" data-range="{{ r.period_start|ddmmyyyy }} - {{ r.period_end|ddmmyyyy }}" {% if r.status != 'Closed' %}disabled{% endif %}>
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                  </button>
+                </form>
+                {% else %}
+                <span class="text-muted small">-</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="10" class="text-center py-5 text-muted">
+                <i class="bi bi-calendar2-check display-6 d-block mb-2 opacity-25"></i>
+                No month close records found{% if search or from_date or to_date %} for selected filters{% endif %}.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colspan="6" class="text-end">Total</th>
+              <th class="text-end">{{ '{:,.2f}'.format((total_expense or 0)|float) }}</th>
+              <th colspan="3"></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+    {% if pagination %}
+    <div class="card-footer bg-white border-top py-2 px-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <small class="text-muted" style="font-size:.74rem"><i class="bi bi-list-ul me-1"></i>Showing {{ (pagination.page - 1) * per_page + 1 if rows|length > 0 else 0 }}-{{ (pagination.page - 1) * per_page + rows|length }} of {{ pagination.total }}</small>
+        {% if pagination.pages > 1 %}
+        <nav><ul class="pagination pagination-sm mb-0" style="--bs-pagination-font-size:.72rem">
+          <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
+          {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">...</span></li>{% endif %}{% endfor %}
+          <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
+        </ul></nav>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+<style>
+#wsMonthCloseTable.compact { font-size: .71rem !important; }
+#wsMonthCloseTable.compact thead th { font-size: .68rem; padding: 4px 5px; white-space: nowrap; }
+#wsMonthCloseTable.compact tbody td { padding: 3px 5px; white-space: nowrap; }
+#wsMonthCloseTable.compact .badge { font-size: .62rem; padding: 2px 4px; }
+#wsMonthCloseTable.compact .btn-sm { padding: 1px 4px; font-size: .66rem; }
+</style>
+<script>
+function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
+document.addEventListener('DOMContentLoaded', function(){
+  var table = document.getElementById('wsMonthCloseTable');
+  var btn = document.getElementById('wsMonthCloseCompactToggle');
+  var key = 'ui_compact_ws_month_close_list';
+  function apply(on){
+    if (!table) return;
+    table.classList.toggle('compact', !!on);
+    if (btn) {
+      btn.innerHTML = on
+        ? '<i class="bi bi-arrows-angle-expand me-1"></i>Comfort'
+        : '<i class="bi bi-arrows-angle-contract me-1"></i>Compact';
+    }
+  }
+  apply(localStorage.getItem(key) === '1');
+  if (btn) {
+    btn.addEventListener('click', function() {
+      var next = !(table && table.classList.contains('compact'));
+      apply(next);
+      localStorage.setItem(key, next ? '1' : '0');
+    });
+  }
+  document.querySelectorAll('.month-close-reopen-form').forEach(function(form){
+    form.addEventListener('submit', function(e){
+      var btnEl = form.querySelector('button[data-range]');
+      var range = btnEl ? btnEl.getAttribute('data-range') : '';
+      var message = 'Reopen/Reverse this month close batch?\n\n'
+        + 'Period: ' + range + '\n'
+        + 'This will remove linked company JV and reopen included expenses/opening expenses.';
+      if(!window.confirm(message)){ e.preventDefault(); }
+    });
+  });
+  if(window.fleetTableEnhance) window.fleetTableEnhance('wsMonthCloseTable');
+  if(window.fleetPrintExport) window.fleetPrintExport('wsMonthCloseTable','Workspace Month Close History','Workspace_Month_Close_History.csv');
+});
+</script>
+{% endblock %}

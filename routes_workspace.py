@@ -2276,7 +2276,7 @@ def workspace_fuel_oil_month_close_reverse(pk):
         return guard
     if not _is_master_or_admin_user():
         flash("Only admin/master can reopen a fuel/oil close batch.", "danger")
-        return redirect(url_for("workspace_fuel_oil_month_close"))
+        return redirect(url_for("workspace_fuel_oil_month_close_list"))
 
     row = WorkspaceFuelOilMonthClose.query.filter_by(id=pk, employee_id=emp.id).first_or_404()
     try:
@@ -2290,7 +2290,67 @@ def workspace_fuel_oil_month_close_reverse(pk):
     except Exception as exc:
         db.session.rollback()
         flash(f"Fuel/Oil close reopen failed: {exc}", "danger")
-    return redirect(url_for("workspace_fuel_oil_month_close"))
+    return redirect(url_for("workspace_fuel_oil_month_close_list"))
+
+
+def workspace_fuel_oil_month_close_list():
+    guard, emp = _workspace_guard("workspace_month_close")
+    if guard:
+        return guard
+    can_manage_month_close = _is_master_or_admin_user()
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    per_page = request.args.get("per_page", 25, type=int) or 25
+    if per_page not in (25, 50, 100, 200):
+        per_page = 25
+    search = (request.args.get("search") or "").strip()
+    from_date = parse_date(request.args.get("from_date"))
+    to_date = parse_date(request.args.get("to_date"))
+
+    query = (
+        db.session.query(WorkspaceFuelOilMonthClose)
+        .outerjoin(District, WorkspaceFuelOilMonthClose.district_id == District.id)
+        .outerjoin(Project, WorkspaceFuelOilMonthClose.project_id == Project.id)
+        .outerjoin(JournalEntry, WorkspaceFuelOilMonthClose.company_journal_entry_id == JournalEntry.id)
+        .filter(WorkspaceFuelOilMonthClose.employee_id == emp.id)
+    )
+    if from_date:
+        query = query.filter(WorkspaceFuelOilMonthClose.period_start >= from_date)
+    if to_date:
+        query = query.filter(WorkspaceFuelOilMonthClose.period_end <= to_date)
+    if search:
+        query = query.filter(
+            _workspace_multi_word_filter(
+                search,
+                cast(WorkspaceFuelOilMonthClose.id, String),
+                District.name,
+                Project.name,
+                WorkspaceFuelOilMonthClose.status,
+                WorkspaceFuelOilMonthClose.notes,
+                JournalEntry.entry_number,
+                cast(WorkspaceFuelOilMonthClose.company_journal_entry_id, String),
+            )
+        )
+
+    total_amount = (
+        query.with_entities(db.func.coalesce(db.func.sum(WorkspaceFuelOilMonthClose.total_amount), 0)).scalar() or 0
+    )
+    pagination = query.order_by(
+        WorkspaceFuelOilMonthClose.period_end.desc(),
+        WorkspaceFuelOilMonthClose.id.desc(),
+    ).paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template(
+        "workspace/fuel_oil_month_close_list.html",
+        employee=emp,
+        rows=pagination.items,
+        pagination=pagination,
+        per_page=per_page,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+        total_amount=total_amount,
+        can_manage_month_close=can_manage_month_close,
+    )
 
 
 def workspace_fund_transfers_list():
@@ -2541,7 +2601,7 @@ def workspace_month_close_reverse(pk):
         return guard
     if not _is_master_or_admin_user():
         flash("Only admin/master can reopen a month close batch.", "danger")
-        return redirect(url_for("workspace_month_close"))
+        return redirect(url_for("workspace_month_close_list"))
 
     row = WorkspaceMonthClose.query.filter_by(id=pk, employee_id=emp.id).first_or_404()
     try:
@@ -2557,7 +2617,67 @@ def workspace_month_close_reverse(pk):
     except Exception as exc:
         db.session.rollback()
         flash(f"Month close reopen failed: {exc}", "danger")
-    return redirect(url_for("workspace_month_close"))
+    return redirect(url_for("workspace_month_close_list"))
+
+
+def workspace_month_close_list():
+    guard, emp = _workspace_guard("workspace_month_close")
+    if guard:
+        return guard
+    can_manage_month_close = _is_master_or_admin_user()
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    per_page = request.args.get("per_page", 25, type=int) or 25
+    if per_page not in (25, 50, 100, 200):
+        per_page = 25
+    search = (request.args.get("search") or "").strip()
+    from_date = parse_date(request.args.get("from_date"))
+    to_date = parse_date(request.args.get("to_date"))
+
+    query = (
+        db.session.query(WorkspaceMonthClose)
+        .outerjoin(District, WorkspaceMonthClose.district_id == District.id)
+        .outerjoin(Project, WorkspaceMonthClose.project_id == Project.id)
+        .outerjoin(JournalEntry, WorkspaceMonthClose.company_journal_entry_id == JournalEntry.id)
+        .filter(WorkspaceMonthClose.employee_id == emp.id)
+    )
+    if from_date:
+        query = query.filter(WorkspaceMonthClose.period_start >= from_date)
+    if to_date:
+        query = query.filter(WorkspaceMonthClose.period_end <= to_date)
+    if search:
+        query = query.filter(
+            _workspace_multi_word_filter(
+                search,
+                cast(WorkspaceMonthClose.id, String),
+                District.name,
+                Project.name,
+                WorkspaceMonthClose.status,
+                WorkspaceMonthClose.notes,
+                JournalEntry.entry_number,
+                cast(WorkspaceMonthClose.company_journal_entry_id, String),
+            )
+        )
+
+    total_expense = (
+        query.with_entities(db.func.coalesce(db.func.sum(WorkspaceMonthClose.total_expense), 0)).scalar() or 0
+    )
+    pagination = query.order_by(
+        WorkspaceMonthClose.period_end.desc(),
+        WorkspaceMonthClose.id.desc(),
+    ).paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template(
+        "workspace/month_close_list.html",
+        employee=emp,
+        rows=pagination.items,
+        pagination=pagination,
+        per_page=per_page,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+        total_expense=total_expense,
+        can_manage_month_close=can_manage_month_close,
+    )
 
 
 def workspace_reports():

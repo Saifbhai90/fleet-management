@@ -471,9 +471,9 @@ from routes_workspace import (
     workspace_fuel_oil_openings_list, workspace_fuel_oil_opening_form, workspace_fuel_oil_opening_delete,
     workspace_fuel_oil_opening_export, workspace_fuel_oil_opening_print,
     workspace_fuel_oil_opening_import, workspace_fuel_oil_opening_import_template,
-    workspace_fuel_oil_month_close, workspace_fuel_oil_month_close_reverse,
+    workspace_fuel_oil_month_close, workspace_fuel_oil_month_close_list, workspace_fuel_oil_month_close_reverse,
     workspace_fund_transfers_list, workspace_fund_transfer_form, workspace_fund_transfer_delete,
-    workspace_ledger, workspace_month_close, workspace_month_close_reverse, workspace_reports,
+    workspace_ledger, workspace_month_close, workspace_month_close_list, workspace_month_close_reverse, workspace_reports,
     workspace_transfer_description_suggestions_api,
 )  # noqa: E402
 
@@ -582,6 +582,7 @@ app.add_url_rule('/workspace/fuel-oil-opening/new', 'workspace_fuel_oil_opening_
 app.add_url_rule('/workspace/fuel-oil-opening/<int:pk>/edit', 'workspace_fuel_oil_opening_edit', workspace_fuel_oil_opening_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/fuel-oil-opening/<int:pk>/delete', 'workspace_fuel_oil_opening_delete', workspace_fuel_oil_opening_delete, methods=['POST'])
 app.add_url_rule('/workspace/fuel-oil-close', 'workspace_fuel_oil_month_close', workspace_fuel_oil_month_close, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/fuel-oil-close/list', 'workspace_fuel_oil_month_close_list', workspace_fuel_oil_month_close_list)
 app.add_url_rule('/workspace/fuel-oil-close/<int:pk>/reverse', 'workspace_fuel_oil_month_close_reverse', workspace_fuel_oil_month_close_reverse, methods=['POST'])
 app.add_url_rule('/workspace/transfers', 'workspace_fund_transfers_list', workspace_fund_transfers_list)
 app.add_url_rule('/workspace/transfer/new', 'workspace_fund_transfer_new', workspace_fund_transfer_form, methods=['GET', 'POST'])
@@ -590,6 +591,7 @@ app.add_url_rule('/workspace/transfer/<int:pk>/delete', 'workspace_fund_transfer
 app.add_url_rule('/api/workspace-transfer-descriptions', 'workspace_transfer_description_suggestions', workspace_transfer_description_suggestions_api, methods=['GET'])
 app.add_url_rule('/workspace/ledger', 'workspace_ledger', workspace_ledger)
 app.add_url_rule('/workspace/month-close', 'workspace_month_close', workspace_month_close, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/month-close/list', 'workspace_month_close_list', workspace_month_close_list)
 app.add_url_rule('/workspace/month-close/<int:pk>/reverse', 'workspace_month_close_reverse', workspace_month_close_reverse, methods=['POST'])
 app.add_url_rule('/workspace/reports', 'workspace_reports', workspace_reports)
 
