@@ -92,7 +92,6 @@
   <div class="page-header d-flex justify-content-between align-items-center">
     <h4><i class="bi bi-fuel-pump-fill me-2"></i>{{ title }}</h4>
     <div class="d-flex gap-2">
-      <button type="button" id="fuelCompactToggle" class="btn btn-outline-light btn-sm"><i class="bi bi-arrows-angle-contract me-1"></i>Compact</button>
       <a href="{{ url_for('fuel_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
     </div>
   </div>
@@ -252,28 +251,6 @@ document.addEventListener('DOMContentLoaded', function() {
   var meterMatched = document.getElementById('meterMatched');
   var kmDisplay = document.getElementById('kmDisplay');
   var mpgDisplay = document.getElementById('mpgDisplay');
-  var fuelWrap = document.querySelector('.fuel-form-wrap');
-  var compactBtn = document.getElementById('fuelCompactToggle');
-  var compactKey = 'ui_compact_fuel_form';
-
-  function applyCompactMode(on) {
-    if (!fuelWrap) return;
-    fuelWrap.classList.toggle('compact', !!on);
-    if (compactBtn) {
-      compactBtn.innerHTML = on
-        ? '<i class="bi bi-arrows-angle-expand me-1"></i>Comfort'
-        : '<i class="bi bi-arrows-angle-contract me-1"></i>Compact';
-    }
-  }
-  applyCompactMode(localStorage.getItem(compactKey) === '1');
-  if (compactBtn) {
-    compactBtn.addEventListener('click', function() {
-      var next = !(fuelWrap && fuelWrap.classList.contains('compact'));
-      applyCompactMode(next);
-      localStorage.setItem(compactKey, next ? '1' : '0');
-    });
-  }
-
   function parseNum(val) {
     if (val === '' || val === null || val === undefined) return null;
     var n = parseFloat(String(val).replace(/,/g, ''));

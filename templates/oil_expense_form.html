@@ -40,7 +40,6 @@
   <div class="page-header d-flex justify-content-between align-items-center">
     <h4><i class="bi bi-droplet-fill me-2"></i>{{ title }}</h4>
     <div class="d-flex gap-2">
-      <button type="button" id="oilCompactToggle" class="btn btn-outline-light btn-sm"><i class="bi bi-arrows-angle-contract me-1"></i>Compact</button>
       <a href="{{ url_for('oil_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
     </div>
   </div>
@@ -240,28 +239,6 @@
 
 <script>
 (function() {
-  var oilWrap = document.querySelector('.oil-form-wrap');
-  var oilCompactBtn = document.getElementById('oilCompactToggle');
-  var oilCompactKey = 'ui_compact_oil_form';
-
-  function applyOilCompact(on) {
-    if (!oilWrap) return;
-    oilWrap.classList.toggle('compact', !!on);
-    if (oilCompactBtn) {
-      oilCompactBtn.innerHTML = on
-        ? '<i class="bi bi-arrows-angle-expand me-1"></i>Comfort'
-        : '<i class="bi bi-arrows-angle-contract me-1"></i>Compact';
-    }
-  }
-  applyOilCompact(localStorage.getItem(oilCompactKey) === '1');
-  if (oilCompactBtn) {
-    oilCompactBtn.addEventListener('click', function() {
-      var next = !(oilWrap && oilWrap.classList.contains('compact'));
-      applyOilCompact(next);
-      localStorage.setItem(oilCompactKey, next ? '1' : '0');
-    });
-  }
-
   var vehicleSelect = document.getElementById('vehicleSelect');
   var previousReading = document.getElementById('previousReading');
   var currentReading = document.getElementById('currentReading');

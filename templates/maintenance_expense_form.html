@@ -27,7 +27,6 @@
   <div class="page-header d-flex justify-content-between align-items-center">
     <h4><i class="bi bi-wrench me-2"></i>{{ title }}</h4>
     <div class="d-flex gap-2">
-      <button type="button" id="maintCompactToggle" class="btn btn-outline-light btn-sm"><i class="bi bi-arrows-angle-contract me-1"></i>Compact</button>
       <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
     </div>
   </div>
@@ -166,28 +165,6 @@
 
 <script>
 (function() {
-  var maintWrap = document.querySelector('.maint-form-wrap');
-  var maintCompactBtn = document.getElementById('maintCompactToggle');
-  var maintCompactKey = 'ui_compact_maintenance_form';
-
-  function applyMaintCompact(on) {
-    if (!maintWrap) return;
-    maintWrap.classList.toggle('compact', !!on);
-    if (maintCompactBtn) {
-      maintCompactBtn.innerHTML = on
-        ? '<i class="bi bi-arrows-angle-expand me-1"></i>Comfort'
-        : '<i class="bi bi-arrows-angle-contract me-1"></i>Compact';
-    }
-  }
-  applyMaintCompact(localStorage.getItem(maintCompactKey) === '1');
-  if (maintCompactBtn) {
-    maintCompactBtn.addEventListener('click', function() {
-      var next = !(maintWrap && maintWrap.classList.contains('compact'));
-      applyMaintCompact(next);
-      localStorage.setItem(maintCompactKey, next ? '1' : '0');
-    });
-  }
-
   var vehicleSelect = document.getElementById('vehicleSelect');
   var currentReading = document.getElementById('currentReading');
   var itemsBody = document.getElementById('itemsBody');

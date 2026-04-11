@@ -25,7 +25,6 @@
     <h4><i class="bi bi-fuel-pump-diesel me-2"></i>{{ 'Edit' if row else 'Add' }} Fuel/Oil Opening (Pump Card & Credit)</h4>
     <div class="d-flex gap-2">
       <a href="{{ url_for('workspace_fuel_oil_opening_import') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-upload me-1"></i>Import</a>
-      <button type="button" id="foCompactToggle" class="btn btn-outline-light btn-sm"><i class="bi bi-arrows-angle-contract me-1"></i>Compact</button>
       <a href="{{ url_for('workspace_fuel_oil_openings_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
     </div>
   </div>
@@ -124,27 +123,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  var wrap = document.querySelector('.fo-wrap');
-  var compactBtn = document.getElementById('foCompactToggle');
-  var compactKey = 'ui_compact_fuel_oil_opening_form';
-  function applyCompact(on){
-    if(!wrap) return;
-    wrap.classList.toggle('compact', !!on);
-    if (compactBtn) {
-      compactBtn.innerHTML = on
-        ? '<i class="bi bi-arrows-angle-expand me-1"></i>Comfort'
-        : '<i class="bi bi-arrows-angle-contract me-1"></i>Compact';
-    }
-  }
-  applyCompact(localStorage.getItem(compactKey) === '1');
-  if (compactBtn) {
-    compactBtn.addEventListener('click', function(){
-      var next = !(wrap && wrap.classList.contains('compact'));
-      applyCompact(next);
-      localStorage.setItem(compactKey, next ? '1' : '0');
-    });
-  }
-
   var fuelInputs = Array.from(document.querySelectorAll('.fo-fuel'));
   var oilInputs = Array.from(document.querySelectorAll('.fo-oil'));
   var fuelTotalEl = document.getElementById('foFuelTotal');

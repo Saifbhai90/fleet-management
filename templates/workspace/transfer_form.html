@@ -28,7 +28,6 @@
     <div class="d-flex justify-content-between align-items-center ws-tf-header mb-3">
       <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>{{ 'Edit' if row else 'Add' }} Workspace Transfer</h5>
       <div class="d-flex gap-2">
-        <button type="button" id="wsTransferCompactToggle" class="btn btn-outline-light btn-sm"><i class="bi bi-arrows-angle-contract me-1"></i>Compact</button>
         <a href="{{ url_for('workspace_fund_transfers_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
       </div>
     </div>
@@ -140,9 +139,6 @@
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  var wrap = document.querySelector('.ws-transfer-form-wrap');
-  var btn = document.getElementById('wsTransferCompactToggle');
-  var key = 'ui_compact_ws_transfer_form';
   var descBox = document.getElementById('wsTransferDesc');
   var sugBox = document.getElementById('wsDescSuggest');
   var _dTimer, _active = -1;
@@ -151,24 +147,6 @@ document.addEventListener('DOMContentLoaded', function() {
   var attachPlaceholder = document.getElementById('wsAttachPlaceholder');
   var attachPreview = document.getElementById('wsAttachPreview');
   var attachPreviewImg = document.getElementById('wsAttachPreviewImg');
-
-  function apply(on) {
-    if (!wrap) return;
-    wrap.classList.toggle('compact', !!on);
-    if (btn) {
-      btn.innerHTML = on
-        ? '<i class="bi bi-arrows-angle-expand me-1"></i>Comfort'
-        : '<i class="bi bi-arrows-angle-contract me-1"></i>Compact';
-    }
-  }
-  apply(localStorage.getItem(key) === '1');
-  if (btn) {
-    btn.addEventListener('click', function() {
-      var next = !(wrap && wrap.classList.contains('compact'));
-      apply(next);
-      localStorage.setItem(key, next ? '1' : '0');
-    });
-  }
 
   function showAttachPreview(file) {
     if (!file || !file.type || file.type.indexOf('image/') !== 0) return;

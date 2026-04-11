@@ -5,7 +5,6 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
     <h2 class="mb-0"><i class="bi bi-calendar2-week me-2 text-info"></i>Fuel/Oil Close & Bridge Posting History</h2>
     <div class="d-flex align-items-center gap-2">
-      <button class="btn btn-outline-info btn-sm" id="wsFuelOilCloseCompactToggle" title="Compact mode"><i class="bi bi-arrows-angle-contract me-1"></i>Compact</button>
       <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
       <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
       <a href="{{ url_for('workspace_fuel_oil_month_close') }}" class="btn btn-info btn-sm text-white">
@@ -160,26 +159,6 @@
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 document.addEventListener('DOMContentLoaded', function(){
-  var table = document.getElementById('wsFuelOilCloseTable');
-  var btn = document.getElementById('wsFuelOilCloseCompactToggle');
-  var key = 'ui_compact_ws_fuel_oil_close_list';
-  function apply(on){
-    if (!table) return;
-    table.classList.toggle('compact', !!on);
-    if (btn) {
-      btn.innerHTML = on
-        ? '<i class="bi bi-arrows-angle-expand me-1"></i>Comfort'
-        : '<i class="bi bi-arrows-angle-contract me-1"></i>Compact';
-    }
-  }
-  apply(localStorage.getItem(key) === '1');
-  if (btn) {
-    btn.addEventListener('click', function() {
-      var next = !(table && table.classList.contains('compact'));
-      apply(next);
-      localStorage.setItem(key, next ? '1' : '0');
-    });
-  }
   document.querySelectorAll('.month-close-reopen-form').forEach(function(form){
     form.addEventListener('submit', function(e){
       var btnEl = form.querySelector('button[data-range]');
