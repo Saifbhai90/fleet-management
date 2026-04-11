@@ -44,22 +44,37 @@
           <div class="col-md-4 field-group">
             <label class="form-label">District</label>
             {{ form.district_id(class="form-select search-select", id="districtSelect") }}
+            {% if form.district_id.errors %}
+              <div class="text-danger small mt-1">{{ form.district_id.errors[0] }}</div>
+            {% endif %}
           </div>
           <div class="col-md-4 field-group">
             <label class="form-label">Project</label>
             {{ form.project_id(class="form-select search-select", id="projectSelect") }}
+            {% if form.project_id.errors %}
+              <div class="text-danger small mt-1">{{ form.project_id.errors[0] }}</div>
+            {% endif %}
           </div>
           <div class="col-md-4 field-group">
             <label class="form-label">Vehicle <span class="text-danger">*</span></label>
             {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
+            {% if form.vehicle_id.errors %}
+              <div class="text-danger small mt-1">{{ form.vehicle_id.errors[0] }}</div>
+            {% endif %}
           </div>
           <div class="col-md-3 field-group">
             <label class="form-label">Date <span class="text-danger">*</span></label>
             {{ form.expense_date(class="form-control datepicker", id="expenseDate") }}
+            {% if form.expense_date.errors %}
+              <div class="text-danger small mt-1">{{ form.expense_date.errors[0] }}</div>
+            {% endif %}
           </div>
           <div class="col-md-4 field-group">
             <label class="form-label">Current Reading <small class="text-muted" id="taskReadingsMeta">(Start: - | Close: -)</small></label>
             {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
+            {% if form.current_reading.errors %}
+              <div class="text-danger small mt-1">{{ form.current_reading.errors[0] }}</div>
+            {% endif %}
             <small class="reading-match-note text-muted" id="currentReadingMatchNote">Enter reading to check match with task start/close.</small>
           </div>
           <div class="col-md-5 field-group job-category-group">
@@ -180,6 +195,9 @@
         <div class="col-md-6 field-group">
           <label class="form-label fw-bold">Expense By (Workspace COA)</label>
           {{ form.expense_by(class="form-select search-select") }}
+          {% if form.expense_by.errors %}
+            <div class="text-danger small mt-1">{{ form.expense_by.errors[0] }}</div>
+          {% endif %}
           <small class="text-muted">Select workspace account to credit for this expense (optional).</small>
         </div>
       </div>
@@ -224,7 +242,7 @@
 </div>
 
 <script>
-(function() {
+document.addEventListener('DOMContentLoaded', function() {
   var districtSelect = document.getElementById('districtSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
   var currentReading = document.getElementById('currentReading');
@@ -252,6 +270,12 @@
 
   var productsForMaintenance = [{% for p in products_for_maintenance %}{id:{{ p.id }},name:{{ p.name | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}];
 
+  function _reinitSearchableDropdown(scopeEl) {
+    if (typeof initSearchableDropdowns === 'function') {
+      initSearchableDropdowns(scopeEl);
+    }
+  }
+
   function _populateMaintenanceProducts(arr) {
     productsForMaintenance = arr;
     if (entryProductSelect.tomselect) entryProductSelect.tomselect.destroy();
@@ -262,7 +286,7 @@
       o.textContent = p.name;
       entryProductSelect.appendChild(o);
     });
-    initSearchableDropdowns(entryProductSelect.parentNode);
+    _reinitSearchableDropdown(entryProductSelect.parentNode);
     itemsBody.querySelectorAll('.item-row').forEach(function(tr) { bindListRow(tr); });
     updateTotals();
   }
@@ -281,6 +305,14 @@
     var price = parseFloat(entryPrice.value) || 0;
     entryAmount.value = (qty * price).toFixed(2);
   }
+  function escapeHtml(text) {
+    return String(text || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
   entryQty.addEventListener('input', updateEntryAmount);
   entryPrice.addEventListener('input', updateEntryAmount);
 
@@ -297,7 +329,7 @@
     var pid = entryProductSelect.value;
     if (!pid) { alert('Please select a product.'); entryProductSelect.focus(); return; }
     var p = productsForMaintenance.find(function(x) { return String(x.id) === String(pid); });
-    var productName = p ? (p.name || '') : '';
+    var productName = escapeHtml(p ? (p.name || '') : '');
     var qty = parseFloat(entryQty.value) || 0;
     var price = parseFloat(entryPrice.value) || 0;
     var amount = (qty * price).toFixed(2);
@@ -317,7 +349,9 @@
     updateTotals();
   }
 
-  addToListBtn.addEventListener('click', addEntryToList);
+  if (addToListBtn) {
+    addToListBtn.addEventListener('click', addEntryToList);
+  }
   function onEntryKeydown(e) { if (e.key === 'Enter') { e.preventDefault(); addEntryToList(); } }
   entryProductSelect.addEventListener('keydown', onEntryKeydown);
   entryQty.addEventListener('keydown', onEntryKeydown);
@@ -522,6 +556,6 @@
 
   updateEntryAmount();
   fetchTaskReadingsForMaintenance();
-})();
+});
 </script>
 {% endblock %}

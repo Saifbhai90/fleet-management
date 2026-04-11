@@ -17957,6 +17957,11 @@ def maintenance_expense_form(pk=None):
             db.session.commit()
         flash('Maintenance expense saved.', 'success')
         return redirect(url_for('maintenance_expense_list'))
+    elif request.method == 'POST':
+        if form.errors:
+            flash('Form save nahi hua. Required fields check karein.', 'danger')
+        else:
+            flash('Form save nahi hua. Data dobara check karein.', 'danger')
     return render_template(
         'maintenance_expense_form.html',
         form=form,
