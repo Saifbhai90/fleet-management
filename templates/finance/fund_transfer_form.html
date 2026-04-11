@@ -251,6 +251,8 @@
         fileName = document.getElementById('ftFileName'),
         fileChipRemove = document.getElementById('ftFileChipRemove'),
         rmBtn= document.getElementById('ftRemoveBtn');
+    var toSel = document.getElementById('to_person');
+    var amountInput = document.getElementById('amount');
 
     function showPreview(file){
         if(!file) return;
@@ -284,7 +286,11 @@
         ph.style.display='';
         var dt = new DataTransfer(); inp.files = dt.files;
     }
-    zone.addEventListener('click', function(e){ if(e.target.closest('.ft-remove')) return; inp.click(); });
+    zone.addEventListener('click', function(e){
+        if(e.target.closest('.ft-remove')) return;
+        zone.focus();
+        inp.click();
+    });
     inp.addEventListener('change', function(){ if(this.files && this.files[0]) showPreview(this.files[0]); });
     zone.addEventListener('dragover', function(e){ e.preventDefault(); zone.classList.add('drag-over'); });
     zone.addEventListener('dragleave', function(){ zone.classList.remove('drag-over'); });
@@ -299,6 +305,9 @@
         }
     });
     document.addEventListener('paste', function(e){
+        var ae = document.activeElement;
+        var isAttachmentFocused = !!(zone && (ae === zone || zone.contains(ae) || ae === inp));
+        if(!isAttachmentFocused) return;
         var items = (e.clipboardData||e.originalEvent.clipboardData).items;
         for(var i=0;i<items.length;i++){
             if(items[i].type.indexOf('image')!==-1){
@@ -309,6 +318,16 @@
     });
     rmBtn.addEventListener('click', function(e){ e.stopPropagation(); clearPreview(); });
     if(fileChipRemove){ fileChipRemove.addEventListener('click', function(e){ e.stopPropagation(); clearPreview(); }); }
+
+    /* ── Move focus: To (Receiver) -> Amount ── */
+    if(toSel && amountInput){
+        toSel.addEventListener('change', function(){
+            setTimeout(function(){
+                amountInput.focus();
+                if (amountInput.select) amountInput.select();
+            }, 80);
+        });
+    }
 
     /* ── Bank Directory Panel ── */
     var bdList     = document.getElementById('bdList'),
@@ -594,7 +613,6 @@
             }).catch(function(){});
     }
     var fromSel = document.getElementById('from_person');
-    var toSel = document.getElementById('to_person');
     if(fromSel){ fromSel.addEventListener('change', function(){ autoFillFromPerson(this.value); }); }
     if(toSel){ toSel.addEventListener('change', function(){ autoFillFromPerson(this.value); }); }
 })();
