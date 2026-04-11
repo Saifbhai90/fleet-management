@@ -1253,6 +1253,10 @@ def _person_choices():
             _seen_acct_ids.add(acct.id)
 
     for e in Employee.query.filter_by(status='Active').order_by(Employee.name).all():
+        try:
+            ensure_workspace_base_accounts(e.id)
+        except Exception:
+            pass
         post_label = e.post.full_name if e.post else 'Staff'
         choices.append((f'emp-{e.id}', f"{e.name} ({post_label})"))
         acct = Account.query.filter_by(entity_type='employee', entity_id=e.id).first()
@@ -1351,6 +1355,90 @@ def _delete_ft_attachment(url):
         pass
 
 
+def _transfer_is_company_to_employee(transfer):
+    return bool(
+        transfer
+        and transfer.from_company_id
+        and transfer.to_employee_id
+        and Decimal(str(transfer.amount or 0)) > Decimal("0")
+    )
+
+
+def _reverse_workspace_company_funding_mirror(transfer_id):
+    if not transfer_id:
+        return
+    mirrors = WorkspaceJournalEntry.query.filter_by(
+        reference_type='FundTransfer',
+        reference_id=transfer_id,
+        category='Company Funding Mirror',
+    ).all()
+    for mirror in mirrors:
+        workspace_reverse_journal_entry(mirror.id)
+
+
+def _post_workspace_company_funding_mirror(transfer):
+    if not _transfer_is_company_to_employee(transfer):
+        return None
+    base = ensure_workspace_base_accounts(transfer.to_employee_id)
+    bank_account = base.get('1110') or base.get('1100')
+    funding_account = base.get('2300')
+    if not bank_account or not funding_account:
+        raise ValueError("Workspace mirror accounts are not configured (HBL/Company Funding).")
+    amount_val = Decimal(str(transfer.amount or 0))
+    return workspace_create_journal_entry(
+        employee_id=transfer.to_employee_id,
+        entry_type='Journal',
+        entry_date=transfer.transfer_date,
+        description=f"Company funding received via transfer {transfer.transfer_number}",
+        lines=[
+            {
+                'account_id': bank_account.id,
+                'debit': amount_val,
+                'credit': 0,
+                'description': f"Company transfer in ({transfer.transfer_number})",
+            },
+            {
+                'account_id': funding_account.id,
+                'debit': 0,
+                'credit': amount_val,
+                'description': f"Company funding liability ({transfer.transfer_number})",
+            },
+        ],
+        reference_type='FundTransfer',
+        reference_id=transfer.id,
+        created_by_user_id=transfer.created_by_user_id or session.get('user_id'),
+        category='Company Funding Mirror',
+    )
+
+
+def _sync_workspace_company_funding_mirror(transfer):
+    if not transfer or not transfer.id:
+        return None
+    _reverse_workspace_company_funding_mirror(transfer.id)
+    if _transfer_is_company_to_employee(transfer):
+        return _post_workspace_company_funding_mirror(transfer)
+    return None
+
+
+def _backfill_workspace_company_funding_mirrors():
+    created = 0
+    candidates = FundTransfer.query.filter(
+        FundTransfer.from_company_id.isnot(None),
+        FundTransfer.to_employee_id.isnot(None),
+    ).all()
+    for transfer in candidates:
+        exists = WorkspaceJournalEntry.query.filter_by(
+            employee_id=transfer.to_employee_id,
+            reference_type='FundTransfer',
+            reference_id=transfer.id,
+            category='Company Funding Mirror',
+        ).first()
+        if not exists:
+            _post_workspace_company_funding_mirror(transfer)
+            created += 1
+    return created
+
+
 def fund_transfer_add():
     auth_check = check_auth('fund_transfer')
     if auth_check:
@@ -1421,6 +1509,7 @@ def fund_transfer_add():
 
             je = create_fund_transfer_journal(transfer, from_wallet, to_wallet)
             transfer.journal_entry_id = je.id
+            _sync_workspace_company_funding_mirror(transfer)
             db.session.commit()
             flash('Fund Transfer created successfully!', 'success')
             return redirect(url_for('fund_transfers_list'))
@@ -1482,6 +1571,7 @@ def fund_transfer_edit(pk):
 
     if form.validate_on_submit():
         try:
+            _reverse_workspace_company_funding_mirror(transfer.id)
             if transfer.journal_entry_id:
                 old_je = JournalEntry.query.get(transfer.journal_entry_id)
                 if old_je:
@@ -1537,6 +1627,7 @@ def fund_transfer_edit(pk):
 
             je = create_fund_transfer_journal(transfer, from_wallet, to_wallet)
             transfer.journal_entry_id = je.id
+            _sync_workspace_company_funding_mirror(transfer)
             db.session.commit()
             flash('Fund Transfer updated!', 'success')
             return redirect(url_for('fund_transfers_list'))
@@ -1554,6 +1645,7 @@ def fund_transfer_delete(pk):
         return auth_check
     transfer = FundTransfer.query.get_or_404(pk)
     try:
+        _reverse_workspace_company_funding_mirror(transfer.id)
         if transfer.journal_entry_id:
             je = JournalEntry.query.get(transfer.journal_entry_id)
             if je:
@@ -1573,6 +1665,12 @@ def fund_transfers_list():
     auth_check = check_auth('fund_transfer')
     if auth_check:
         return auth_check
+    try:
+        created = _backfill_workspace_company_funding_mirrors()
+        if created:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     form = FundTransferFilterForm()
     choices = [('0', '-- All Persons --')] + _person_choices()[1:]

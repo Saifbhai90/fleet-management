@@ -749,6 +749,11 @@ def ensure_workspace_base_accounts(employee_id):
     required = [
         ("1000", "Workspace Assets", "Asset", None, "asset_root"),
         ("1100", "Workspace Cash", "Asset", "1000", "cash"),
+        ("1110", "HBL Bank", "Asset", "1000", "bank_hbl"),
+        ("1120", "Easypaisa", "Asset", "1000", "bank_easypaisa"),
+        ("1130", "JazzCash", "Asset", "1000", "bank_jazzcash"),
+        ("2000", "Workspace Liabilities", "Liability", None, "liability_root"),
+        ("2300", "Company Funding", "Liability", "2000", "company_funding"),
         ("5000", "Workspace Expenses", "Expense", None, "expense_root"),
         ("5100", "General Expense", "Expense", "5000", "general_expense"),
     ]
@@ -811,7 +816,7 @@ def ensure_workspace_opening_expense_accounts(employee_id):
         'oil': existing.get('5112'),
         'maintenance': existing.get('5113'),
         'employee': existing.get('5114'),
-        'cash': existing.get('1100'),
+        'company_funding': existing.get('2300'),
     }
 
 
@@ -848,7 +853,7 @@ def ensure_workspace_fuel_oil_opening_accounts(employee_id):
         'credit_fuel': existing.get('5116'),
         'card_oil': existing.get('5117'),
         'credit_oil': existing.get('5118'),
-        'cash': existing.get('1100'),
+        'company_funding': existing.get('2300'),
     }
 
 
@@ -1122,8 +1127,8 @@ def workspace_post_transfer(transfer_obj):
 def workspace_post_opening_expense(opening_obj):
     """Post opening breakup to dedicated workspace expense heads."""
     heads = ensure_workspace_opening_expense_accounts(opening_obj.employee_id)
-    if not heads.get('cash'):
-        raise ValueError("Workspace cash account not found")
+    if not heads.get('company_funding'):
+        raise ValueError("Workspace Company Funding account not found")
 
     fueling = Decimal(str(opening_obj.fueling_expense or 0))
     oil = Decimal(str(opening_obj.oil_change_expense or 0))
@@ -1142,7 +1147,7 @@ def workspace_post_opening_expense(opening_obj):
         lines.append({'account_id': heads['maintenance'].id, 'debit': maintenance, 'credit': 0, 'description': 'Opening Maintenance Expense'})
     if emp_exp > 0 and heads.get('employee'):
         lines.append({'account_id': heads['employee'].id, 'debit': emp_exp, 'credit': 0, 'description': 'Opening Employee Expense'})
-    lines.append({'account_id': heads['cash'].id, 'debit': 0, 'credit': total, 'description': 'Opening Expense settled from workspace cash'})
+    lines.append({'account_id': heads['company_funding'].id, 'debit': 0, 'credit': total, 'description': 'Opening Expense funded by company'})
 
     return workspace_create_journal_entry(
         employee_id=opening_obj.employee_id,
@@ -1160,8 +1165,8 @@ def workspace_post_opening_expense(opening_obj):
 def workspace_post_fuel_oil_opening_expense(opening_obj):
     """Post fuel/oil opening breakup to dedicated workspace expense heads."""
     heads = ensure_workspace_fuel_oil_opening_accounts(opening_obj.employee_id)
-    if not heads.get('cash'):
-        raise ValueError("Workspace cash account not found")
+    if not heads.get('company_funding'):
+        raise ValueError("Workspace Company Funding account not found")
 
     pump_fuel = Decimal(str(opening_obj.pump_card_fueling or 0))
     credit_fuel = Decimal(str(opening_obj.credit_fueling or 0))
@@ -1180,7 +1185,7 @@ def workspace_post_fuel_oil_opening_expense(opening_obj):
         lines.append({'account_id': heads['card_oil'].id, 'debit': card_oil, 'credit': 0, 'description': 'Opening Card Oil Change'})
     if credit_oil > 0 and heads.get('credit_oil'):
         lines.append({'account_id': heads['credit_oil'].id, 'debit': credit_oil, 'credit': 0, 'description': 'Opening Credit Oil Change'})
-    lines.append({'account_id': heads['cash'].id, 'debit': 0, 'credit': total, 'description': 'Opening Fuel/Oil settled from workspace cash'})
+    lines.append({'account_id': heads['company_funding'].id, 'debit': 0, 'credit': total, 'description': 'Opening Fuel/Oil funded by company'})
 
     return workspace_create_journal_entry(
         employee_id=opening_obj.employee_id,
@@ -1246,9 +1251,16 @@ def _map_workspace_expense_category(exp_obj):
 
 def reconcile_workspace_opening_expense_postings(employee_id):
     """
-    Backfill old opening-expense rows created before posting logic existed.
-    Creates missing workspace journals only where journal_entry_id is null.
+    Keep opening postings consistent with latest policy:
+    - backfill missing journals
+    - migrate legacy cash-credit journals to Company Funding credit
     """
+    ensure_workspace_base_accounts(employee_id)
+    accounts = WorkspaceAccount.query.filter_by(employee_id=employee_id).all()
+    by_code = {a.code: a for a in accounts}
+    cash_id = by_code.get('1100').id if by_code.get('1100') else None
+    company_funding = by_code.get('2300')
+
     rows = WorkspaceOpeningExpense.query.filter(
         WorkspaceOpeningExpense.employee_id == employee_id,
         WorkspaceOpeningExpense.journal_entry_id.is_(None),
@@ -1259,7 +1271,51 @@ def reconcile_workspace_opening_expense_postings(employee_id):
         je = workspace_post_opening_expense(row)
         row.journal_entry_id = je.id
         created += 1
-    return created
+
+    migrated = 0
+    if company_funding and cash_id:
+        posted_rows = WorkspaceOpeningExpense.query.filter(
+            WorkspaceOpeningExpense.employee_id == employee_id,
+            WorkspaceOpeningExpense.journal_entry_id.isnot(None),
+            WorkspaceOpeningExpense.total_expense > 0,
+        ).all()
+        for row in posted_rows:
+            je = WorkspaceJournalEntry.query.get(row.journal_entry_id)
+            if not je:
+                continue
+            has_cash_credit = WorkspaceJournalEntryLine.query.filter_by(
+                journal_entry_id=je.id,
+                account_id=cash_id,
+            ).filter(WorkspaceJournalEntryLine.credit > 0).first() is not None
+            if not has_cash_credit:
+                continue
+            workspace_reverse_journal_entry(je.id)
+            row.journal_entry_id = None
+            rebuilt = workspace_post_opening_expense(row)
+            row.journal_entry_id = rebuilt.id
+            migrated += 1
+
+        fuel_oil_rows = WorkspaceFuelOilOpeningExpense.query.filter(
+            WorkspaceFuelOilOpeningExpense.employee_id == employee_id,
+            WorkspaceFuelOilOpeningExpense.journal_entry_id.isnot(None),
+            WorkspaceFuelOilOpeningExpense.total_amount > 0,
+        ).all()
+        for row in fuel_oil_rows:
+            je = WorkspaceJournalEntry.query.get(row.journal_entry_id)
+            if not je:
+                continue
+            has_cash_credit = WorkspaceJournalEntryLine.query.filter_by(
+                journal_entry_id=je.id,
+                account_id=cash_id,
+            ).filter(WorkspaceJournalEntryLine.credit > 0).first() is not None
+            if not has_cash_credit:
+                continue
+            workspace_reverse_journal_entry(je.id)
+            row.journal_entry_id = None
+            rebuilt = workspace_post_fuel_oil_opening_expense(row)
+            row.journal_entry_id = rebuilt.id
+            migrated += 1
+    return created + migrated
 
 
 def workspace_close_month(employee_id, period_start, period_end, company_account_id, user_id, notes='',
