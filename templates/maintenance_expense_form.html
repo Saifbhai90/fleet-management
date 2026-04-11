@@ -67,6 +67,7 @@
             <div class="input-group">
               <select name="job_category" id="jobCategorySelect" class="form-select search-select">
                 <option value="" {% if not rec or not rec.job_category %}selected{% endif %}>Non-Trackable</option>
+                <option value="General Maintenance" data-interval-mode="" data-interval-value="" {% if rec and rec.job_category == 'General Maintenance' %}selected{% endif %}>General Maintenance</option>
                 {% for jc in job_categories or [] %}
                 <option
                   value="{{ jc.name }}"
