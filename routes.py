@@ -9,6 +9,7 @@ from models import (
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
     Party, Product, FuelExpense, FuelExpenseAttachment, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
+    WorkspaceProduct,
     WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceVehicleReadingSetup,
     Notification, NotificationRead,
     User, Role, Permission,
@@ -17067,13 +17068,8 @@ def api_oil_expense_last_reading():
 
 @app.route('/api/oil-expense/products-for-oil')
 def api_oil_expense_products_for_oil():
-    products = Product.query.filter(
-        db.or_(
-            Product.used_in_forms.is_(None),
-            Product.used_in_forms == '',
-            Product.used_in_forms.like('%Oil%')
-        )
-    ).order_by(Product.name).all()
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    products = _workspace_products_for_expense_form(workspace_employee_id, 'Oil')
     return jsonify([{'id': p.id, 'name': p.name} for p in products])
 
 
@@ -17101,6 +17097,71 @@ def _apply_oil_expense_items_balance(items, reverse=False):
         if delta:
             bal.balance_qty = (bal.balance_qty or 0) + delta
     db.session.flush()
+
+
+def _workspace_products_for_expense_form(employee_id, form_token):
+    """Return Product rows for workspace products, creating master Product mirrors when needed.
+
+    Oil/Maintenance item tables reference master Product FK, so workspace products are mapped by
+    name and auto-synced on demand.
+    """
+    token = (form_token or '').strip()
+    if not employee_id:
+        return Product.query.filter(
+            db.or_(
+                Product.used_in_forms.is_(None),
+                Product.used_in_forms == '',
+                Product.used_in_forms.like(f'%{token}%'),
+            )
+        ).order_by(Product.name).all()
+
+    ws_query = WorkspaceProduct.query.filter(
+        WorkspaceProduct.employee_id == employee_id,
+        WorkspaceProduct.is_active.is_(True),
+    )
+    if token:
+        ws_query = ws_query.filter(
+            db.or_(
+                WorkspaceProduct.used_in_forms.is_(None),
+                WorkspaceProduct.used_in_forms == '',
+                WorkspaceProduct.used_in_forms.ilike(f'%{token}%'),
+            )
+        )
+    ws_rows = ws_query.order_by(WorkspaceProduct.name.asc()).all()
+
+    mapped = []
+    changed = False
+    for ws in ws_rows:
+        name = (ws.name or '').strip()
+        if not name:
+            continue
+        prod = Product.query.filter(func.lower(Product.name) == name.lower()).first()
+        if not prod:
+            prod = Product(name=name, used_in_forms=token or None, remarks=ws.remarks)
+            db.session.add(prod)
+            try:
+                db.session.flush()
+                changed = True
+            except IntegrityError:
+                db.session.rollback()
+                prod = Product.query.filter(func.lower(Product.name) == name.lower()).first()
+                if not prod:
+                    continue
+        elif token:
+            existing_tokens = [x.strip() for x in (prod.used_in_forms or '').split(',') if x.strip()]
+            if token not in existing_tokens:
+                existing_tokens.append(token)
+                prod.used_in_forms = ','.join(existing_tokens)
+                changed = True
+        mapped.append(prod)
+
+    if changed:
+        db.session.commit()
+    # Keep deterministic ordering and avoid duplicates if names collide by case.
+    uniq = {}
+    for p in mapped:
+        uniq[p.id] = p
+    return sorted(uniq.values(), key=lambda x: (x.name or '').lower())
 
 
 @app.route('/oil-expenses')
@@ -17214,13 +17275,7 @@ def oil_expense_form(pk=None):
         return redirect(url_for('oil_expense_list'))
     form = OilExpenseForm(obj=rec)
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
-    products_for_oil = Product.query.filter(
-        db.or_(
-            Product.used_in_forms.is_(None),
-            Product.used_in_forms == '',
-            Product.used_in_forms.like('%Oil%')
-        )
-    ).order_by(Product.name).all()
+    products_for_oil = _workspace_products_for_expense_form(workspace_employee_id, 'Oil')
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
     form.vehicle_id.choices = [(v.id, v.vehicle_no) for v in Vehicle.query.order_by(Vehicle.vehicle_no).all()]
@@ -17443,13 +17498,8 @@ def api_maintenance_expense_last_reading():
 
 @app.route('/api/maintenance-expense/products-for-maintenance')
 def api_maintenance_expense_products():
-    products = Product.query.filter(
-        db.or_(
-            Product.used_in_forms.is_(None),
-            Product.used_in_forms == '',
-            Product.used_in_forms.like('%Maintenance%')
-        )
-    ).order_by(Product.name).all()
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    products = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
     return jsonify([{'id': p.id, 'name': p.name} for p in products])
 
 
@@ -17555,13 +17605,7 @@ def maintenance_expense_form(pk=None):
         return redirect(url_for('maintenance_expense_list'))
     form = MaintenanceExpenseForm(obj=rec)
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
-    products_for_maintenance = Product.query.filter(
-        db.or_(
-            Product.used_in_forms.is_(None),
-            Product.used_in_forms == '',
-            Product.used_in_forms.like('%Maintenance%')
-        )
-    ).order_by(Product.name).all()
+    products_for_maintenance = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
     job_categories = _get_maintenance_job_categories()
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
