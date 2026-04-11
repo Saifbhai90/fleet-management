@@ -67,9 +67,10 @@
                 <option
                   value="{{ jc.name }}"
                   data-interval-mode="{{ jc.interval_mode }}"
+                  data-interval-value="{{ jc.interval_value or '' }}"
                   {% if rec and rec.job_category == jc.name %}selected{% endif %}
                 >
-                  {{ jc.name }} ({{ 'Interval KM' if jc.interval_mode == 'interval_km' else 'Interval Day' }})
+                  {{ jc.name }} ({{ (jc.interval_value|string) ~ ' KM' if jc.interval_mode == 'interval_km' else (jc.interval_value|string) ~ ' Days' }})
                 </option>
                 {% endfor %}
               </select>
@@ -197,13 +198,17 @@
           <label class="form-label">Category Name</label>
           <input type="text" class="form-control" id="newJobCategoryName" placeholder="e.g. Engine Oil Service">
         </div>
-        <div>
-          <label class="form-label">Interval Type</label>
-          <select class="form-select" id="newJobCategoryMode">
-            <option value="interval_km">Interval KM</option>
-            <option value="interval_day">Interval Day</option>
-          </select>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label">Interval KM</label>
+            <input type="number" class="form-control" id="newJobCategoryKm" min="1" step="1" placeholder="e.g. 4000">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Interval Day</label>
+            <input type="number" class="form-control" id="newJobCategoryDay" min="1" step="1" placeholder="e.g. 180">
+          </div>
         </div>
+        <small class="text-muted d-block mt-2">Only one field should be entered: KM or Day.</small>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button>
@@ -228,9 +233,11 @@
   var addJobCategoryBtn = document.getElementById('addJobCategoryBtn');
   var saveJobCategoryBtn = document.getElementById('saveJobCategoryBtn');
   var newJobCategoryName = document.getElementById('newJobCategoryName');
-  var newJobCategoryMode = document.getElementById('newJobCategoryMode');
+  var newJobCategoryKm = document.getElementById('newJobCategoryKm');
+  var newJobCategoryDay = document.getElementById('newJobCategoryDay');
   var modalEl = document.getElementById('jobCategoryModal');
   var jobModal = (window.bootstrap && modalEl) ? new window.bootstrap.Modal(modalEl) : null;
+  var fallbackShown = false;
 
   var productsForMaintenance = [];
   fetch('/api/maintenance-expense/products-for-maintenance').then(function(r) { return r.json(); }).then(function(arr) {
@@ -334,30 +341,59 @@
 
   if (addJobCategoryBtn) {
     addJobCategoryBtn.addEventListener('click', function() {
-      if (!jobModal) return;
       if (newJobCategoryName) newJobCategoryName.value = '';
-      if (newJobCategoryMode) newJobCategoryMode.value = 'interval_km';
-      jobModal.show();
+      if (newJobCategoryKm) newJobCategoryKm.value = '';
+      if (newJobCategoryDay) newJobCategoryDay.value = '';
+      if (jobModal) {
+        jobModal.show();
+      } else if (modalEl) {
+        fallbackShown = true;
+        modalEl.style.display = 'block';
+        modalEl.classList.add('show');
+        modalEl.removeAttribute('aria-hidden');
+        document.body.classList.add('modal-open');
+      }
+    });
+  }
+
+  if (!jobModal && modalEl) {
+    modalEl.addEventListener('click', function(e) {
+      if (!fallbackShown) return;
+      var closeBtn = e.target.closest('[data-bs-dismiss="modal"], .btn-close');
+      if (e.target === modalEl || closeBtn) {
+        fallbackShown = false;
+        modalEl.classList.remove('show');
+        modalEl.style.display = 'none';
+        modalEl.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('modal-open');
+      }
     });
   }
 
   if (saveJobCategoryBtn) {
     saveJobCategoryBtn.addEventListener('click', function() {
       var name = (newJobCategoryName && newJobCategoryName.value ? newJobCategoryName.value : '').trim();
-      var mode = (newJobCategoryMode && newJobCategoryMode.value ? newJobCategoryMode.value : '').trim();
+      var kmVal = (newJobCategoryKm && newJobCategoryKm.value ? newJobCategoryKm.value : '').trim();
+      var dayVal = (newJobCategoryDay && newJobCategoryDay.value ? newJobCategoryDay.value : '').trim();
       if (!name) {
         alert('Category name is required.');
         if (newJobCategoryName) newJobCategoryName.focus();
         return;
       }
-      if (mode !== 'interval_km' && mode !== 'interval_day') {
-        alert('Select interval type.');
+      var hasKm = !!(kmVal && Number(kmVal) > 0);
+      var hasDay = !!(dayVal && Number(dayVal) > 0);
+      if (hasKm && hasDay) {
+        alert('Only one interval is allowed: KM or Day.');
+        return;
+      }
+      if (!hasKm && !hasDay) {
+        alert('Enter interval in KM or Day.');
         return;
       }
       fetch('/api/maintenance-job-categories/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name, interval_mode: mode })
+        body: JSON.stringify({ name: name, interval_km_value: kmVal, interval_day_value: dayVal })
       }).then(function(r) { return r.json(); }).then(function(res) {
         if (!res || !res.ok) {
           alert((res && res.message) || 'Unable to add category.');
@@ -370,7 +406,8 @@
           var o = document.createElement('option');
           o.value = res.item.name;
           o.setAttribute('data-interval-mode', res.item.interval_mode);
-          o.textContent = res.item.name + ' (' + (res.item.interval_mode === 'interval_km' ? 'Interval KM' : 'Interval Day') + ')';
+          o.setAttribute('data-interval-value', res.item.interval_value || '');
+          o.textContent = res.item.name + ' (' + (res.item.interval_mode === 'interval_km' ? (res.item.interval_value + ' KM') : (res.item.interval_value + ' Days')) + ')';
           jobCategorySelect.appendChild(o);
         }
         jobCategorySelect.value = res.item.name;
@@ -379,7 +416,15 @@
           jobCategorySelect.tomselect.setValue(res.item.name, true);
         }
         syncJobIntervalMode();
-        if (jobModal) jobModal.hide();
+        if (jobModal) {
+          jobModal.hide();
+        } else if (modalEl) {
+          fallbackShown = false;
+          modalEl.classList.remove('show');
+          modalEl.style.display = 'none';
+          modalEl.setAttribute('aria-hidden', 'true');
+          document.body.classList.remove('modal-open');
+        }
       });
     });
   }

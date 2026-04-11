@@ -185,7 +185,7 @@ def _get_maintenance_job_categories():
     """Load maintenance job categories from system settings.
 
     Format:
-      [{ "name": "Engine Oil Service", "interval_mode": "interval_km" }]
+      [{ "name": "Engine Oil Service", "interval_mode": "interval_km", "interval_value": 5000 }]
     """
     raw = (SystemSetting.get(_MAINTENANCE_JOB_CATEGORY_KEY, '') or '').strip()
     options = []
@@ -198,15 +198,19 @@ def _get_maintenance_job_categories():
                         continue
                     name = (entry.get('name') or '').strip()
                     mode = (entry.get('interval_mode') or '').strip().lower()
-                    if not name or mode not in ('interval_km', 'interval_day'):
+                    try:
+                        interval_value = int(float(entry.get('interval_value')))
+                    except Exception:
+                        interval_value = 0
+                    if not name or mode not in ('interval_km', 'interval_day') or interval_value <= 0:
                         continue
-                    options.append({'name': name, 'interval_mode': mode})
+                    options.append({'name': name, 'interval_mode': mode, 'interval_value': interval_value})
         except Exception:
             options = []
     if not options:
         options = [
-            {'name': 'Engine Oil Service', 'interval_mode': 'interval_km'},
-            {'name': 'General Inspection', 'interval_mode': 'interval_day'},
+            {'name': 'Engine Oil Service', 'interval_mode': 'interval_km', 'interval_value': 5000},
+            {'name': 'General Inspection', 'interval_mode': 'interval_day', 'interval_value': 180},
         ]
     return options
 
@@ -219,13 +223,17 @@ def _save_maintenance_job_categories(options):
             continue
         name = (entry.get('name') or '').strip()
         mode = (entry.get('interval_mode') or '').strip().lower()
-        if not name or mode not in ('interval_km', 'interval_day'):
+        try:
+            interval_value = int(float(entry.get('interval_value')))
+        except Exception:
+            interval_value = 0
+        if not name or mode not in ('interval_km', 'interval_day') or interval_value <= 0:
             continue
         key = f"{name.lower()}::{mode}"
         if key in seen:
             continue
         seen.add(key)
-        clean.append({'name': name, 'interval_mode': mode})
+        clean.append({'name': name, 'interval_mode': mode, 'interval_value': interval_value})
     SystemSetting.set(_MAINTENANCE_JOB_CATEGORY_KEY, json.dumps(clean, ensure_ascii=True))
     return clean
 
@@ -2851,15 +2859,38 @@ def maintenance_job_categories_api():
 def maintenance_job_category_add_api():
     payload = request.get_json(silent=True) or {}
     name = (payload.get('name') or '').strip()
-    interval_mode = (payload.get('interval_mode') or '').strip().lower()
+    interval_km_value = payload.get('interval_km_value')
+    interval_day_value = payload.get('interval_day_value')
     if not name:
         return jsonify({'ok': False, 'message': 'Category name is required'}), 400
-    if interval_mode not in ('interval_km', 'interval_day'):
-        return jsonify({'ok': False, 'message': 'Interval mode is required'}), 400
+    km_val = None
+    day_val = None
+    try:
+        if interval_km_value not in (None, ''):
+            km_val = int(float(interval_km_value))
+    except Exception:
+        km_val = None
+    try:
+        if interval_day_value not in (None, ''):
+            day_val = int(float(interval_day_value))
+    except Exception:
+        day_val = None
+    km_ok = km_val is not None and km_val > 0
+    day_ok = day_val is not None and day_val > 0
+    if km_ok and day_ok:
+        return jsonify({'ok': False, 'message': 'Only one interval is allowed (KM or Day).'}), 400
+    if not km_ok and not day_ok:
+        return jsonify({'ok': False, 'message': 'Enter interval in KM or Day.'}), 400
+    interval_mode = 'interval_km' if km_ok else 'interval_day'
+    interval_value = km_val if km_ok else day_val
     options = _get_maintenance_job_categories()
-    options.append({'name': name, 'interval_mode': interval_mode})
+    options.append({'name': name, 'interval_mode': interval_mode, 'interval_value': interval_value})
     clean = _save_maintenance_job_categories(options)
-    return jsonify({'ok': True, 'item': {'name': name, 'interval_mode': interval_mode}, 'options': clean})
+    return jsonify({
+        'ok': True,
+        'item': {'name': name, 'interval_mode': interval_mode, 'interval_value': interval_value},
+        'options': clean
+    })
 
 
 @app.route('/vehicle/add', methods=['GET', 'POST'])
