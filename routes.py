@@ -142,6 +142,7 @@ _DEFAULT_VEHICLE_FAMILIES = [
 ]
 _VEHICLE_FAMILY_OIL_LIMITS_KEY = 'vehicle_family_oil_change_limits'
 _VEHICLE_FAMILY_OIL_NEAR_PERCENT_KEY = 'vehicle_family_oil_change_near_percent'
+_MAINTENANCE_JOB_CATEGORY_KEY = 'maintenance_job_categories'
 
 
 def _get_vehicle_family_options():
@@ -177,6 +178,55 @@ def _save_vehicle_family_options(options):
         seen.add(key)
         clean.append(val)
     SystemSetting.set(_VEHICLE_FAMILY_SETTING_KEY, json.dumps(clean, ensure_ascii=True))
+    return clean
+
+
+def _get_maintenance_job_categories():
+    """Load maintenance job categories from system settings.
+
+    Format:
+      [{ "name": "Engine Oil Service", "interval_mode": "interval_km" }]
+    """
+    raw = (SystemSetting.get(_MAINTENANCE_JOB_CATEGORY_KEY, '') or '').strip()
+    options = []
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                for entry in parsed:
+                    if not isinstance(entry, dict):
+                        continue
+                    name = (entry.get('name') or '').strip()
+                    mode = (entry.get('interval_mode') or '').strip().lower()
+                    if not name or mode not in ('interval_km', 'interval_day'):
+                        continue
+                    options.append({'name': name, 'interval_mode': mode})
+        except Exception:
+            options = []
+    if not options:
+        options = [
+            {'name': 'Engine Oil Service', 'interval_mode': 'interval_km'},
+            {'name': 'General Inspection', 'interval_mode': 'interval_day'},
+        ]
+    return options
+
+
+def _save_maintenance_job_categories(options):
+    clean = []
+    seen = set()
+    for entry in (options or []):
+        if not isinstance(entry, dict):
+            continue
+        name = (entry.get('name') or '').strip()
+        mode = (entry.get('interval_mode') or '').strip().lower()
+        if not name or mode not in ('interval_km', 'interval_day'):
+            continue
+        key = f"{name.lower()}::{mode}"
+        if key in seen:
+            continue
+        seen.add(key)
+        clean.append({'name': name, 'interval_mode': mode})
+    SystemSetting.set(_MAINTENANCE_JOB_CATEGORY_KEY, json.dumps(clean, ensure_ascii=True))
     return clean
 
 
@@ -2790,6 +2840,26 @@ def vehicle_family_option_add_api():
     options.append(name)
     clean = _save_vehicle_family_options(options)
     return jsonify({'ok': True, 'name': name, 'options': clean})
+
+
+@app.route('/api/maintenance-job-categories', methods=['GET'])
+def maintenance_job_categories_api():
+    return jsonify(_get_maintenance_job_categories())
+
+
+@app.route('/api/maintenance-job-categories/add', methods=['POST'])
+def maintenance_job_category_add_api():
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get('name') or '').strip()
+    interval_mode = (payload.get('interval_mode') or '').strip().lower()
+    if not name:
+        return jsonify({'ok': False, 'message': 'Category name is required'}), 400
+    if interval_mode not in ('interval_km', 'interval_day'):
+        return jsonify({'ok': False, 'message': 'Interval mode is required'}), 400
+    options = _get_maintenance_job_categories()
+    options.append({'name': name, 'interval_mode': interval_mode})
+    clean = _save_maintenance_job_categories(options)
+    return jsonify({'ok': True, 'item': {'name': name, 'interval_mode': interval_mode}, 'options': clean})
 
 
 @app.route('/vehicle/add', methods=['GET', 'POST'])
@@ -17333,6 +17403,7 @@ def maintenance_expense_form(pk=None):
             Product.used_in_forms.like('%Maintenance%')
         )
     ).order_by(Product.name).all()
+    job_categories = _get_maintenance_job_categories()
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
     form.vehicle_id.choices = [(v.id, v.vehicle_no) for v in Vehicle.query.order_by(Vehicle.vehicle_no).all()]
@@ -17352,10 +17423,21 @@ def maintenance_expense_form(pk=None):
         vehicle_id = form.vehicle_id.data
         if not vehicle_id:
             flash('Select vehicle.', 'danger')
-            return render_template('maintenance_expense_form.html', form=form, rec=rec, title='Edit Maintenance' if rec else 'Add Maintenance', products_for_maintenance=products_for_maintenance)
+            return render_template(
+                'maintenance_expense_form.html',
+                form=form,
+                rec=rec,
+                title='Edit Maintenance' if rec else 'Add Maintenance',
+                products_for_maintenance=products_for_maintenance,
+                job_categories=job_categories,
+            )
         expense_date = form.expense_date.data
         curr_reading = form.current_reading.data
         remarks = form.remarks.data
+        job_category = (request.form.get('job_category') or '').strip() or None
+        job_interval_mode = (request.form.get('job_interval_mode') or '').strip().lower()
+        if job_interval_mode not in ('interval_km', 'interval_day'):
+            job_interval_mode = None
 
         product_ids = request.form.getlist('product_id')
         qtys = request.form.getlist('qty')
@@ -17393,6 +17475,8 @@ def maintenance_expense_form(pk=None):
                 current_reading=curr_reading,
                 previous_reading=None,
                 km=None,
+                job_category=job_category,
+                job_interval_mode=job_interval_mode,
                 remarks=remarks
             )
             db.session.add(rec)
@@ -17406,6 +17490,8 @@ def maintenance_expense_form(pk=None):
             rec.current_reading = curr_reading
             rec.previous_reading = None
             rec.km = None
+            rec.job_category = job_category
+            rec.job_interval_mode = job_interval_mode
             rec.remarks = remarks
         for idx, it in enumerate(items_data):
             item = MaintenanceExpenseItem(
@@ -17463,7 +17549,14 @@ def maintenance_expense_form(pk=None):
             db.session.commit()
         flash('Maintenance expense saved.', 'success')
         return redirect(url_for('maintenance_expense_list'))
-    return render_template('maintenance_expense_form.html', form=form, rec=rec, title='Edit Maintenance' if rec else 'Add Maintenance', products_for_maintenance=products_for_maintenance)
+    return render_template(
+        'maintenance_expense_form.html',
+        form=form,
+        rec=rec,
+        title='Edit Maintenance' if rec else 'Add Maintenance',
+        products_for_maintenance=products_for_maintenance,
+        job_categories=job_categories,
+    )
 
 
 @app.route('/maintenance-expense/delete/<int:pk>', methods=['POST'])

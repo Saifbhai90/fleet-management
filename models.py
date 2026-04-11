@@ -901,6 +901,8 @@ class MaintenanceExpense(db.Model):
     previous_reading = db.Column(db.Numeric(12, 2), nullable=True)
     current_reading = db.Column(db.Numeric(12, 2), nullable=True)
     km = db.Column(db.Numeric(12, 2), nullable=True)
+    job_category = db.Column(db.String(120), nullable=True, index=True)
+    job_interval_mode = db.Column(db.String(20), nullable=True)  # interval_km | interval_day
     remarks = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
 

@@ -80,6 +80,7 @@
               <th>Project</th>
               <th>Vehicle</th>
               <th>Date</th>
+              <th>Job Category</th>
               <th>Prev / Curr / KM</th>
               <th>Items</th>
               <th>Total Qty</th>
@@ -96,6 +97,14 @@
               <td>{{ r.project.name if r.project else '-' }}</td>
               <td class="fw-medium">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
               <td>{{ r.expense_date|ddmmyyyy }}</td>
+              <td>
+                {% if r.job_category %}
+                  <div class="fw-semibold">{{ r.job_category }}</div>
+                  <small class="text-muted">{{ 'Interval KM' if r.job_interval_mode == 'interval_km' else 'Interval Day' if r.job_interval_mode == 'interval_day' else '-' }}</small>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
               <td>{{ r.previous_reading|round(2) if r.previous_reading is not none else '-' }} / {{ r.current_reading|round(2) if r.current_reading is not none else '-' }} / {{ r.km|round(2) if r.km is not none else '-' }}</td>
               <td>
                 {% for it in r.items %}
@@ -115,7 +124,7 @@
             </tr>
             {% else %}
             <tr id="maintenanceNoDataRow">
-              <td colspan="10" class="text-center py-5 text-muted">
+              <td colspan="11" class="text-center py-5 text-muted">
                 <i class="bi bi-wrench display-6 d-block mb-2"></i>
                 No maintenance entries. <a href="{{ url_for('maintenance_expense_form') }}">Add Maintenance</a>
               </td>
