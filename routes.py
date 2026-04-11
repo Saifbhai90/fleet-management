@@ -2318,7 +2318,7 @@ def vehicles_list():
         query = query.outerjoin(Project,  Vehicle.project_id  == Project.id) \
                      .outerjoin(District, Vehicle.district_id == District.id)
         flt = _multi_word_filter(search,
-            Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type, Vehicle.vehicle_family,
+            Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type, Vehicle.vehicle_family, Vehicle.fuel_type,
             Vehicle.phone_no, Vehicle.engine_no, Vehicle.chassis_no,
             Project.name, District.name)
         if flt is not None:
@@ -2337,6 +2337,8 @@ def vehicles_list():
         order_col = Vehicle.vehicle_type.asc() if sort_order == 'asc' else Vehicle.vehicle_type.desc()
     elif sort_by == 'vehicle_family':
         order_col = Vehicle.vehicle_family.asc() if sort_order == 'asc' else Vehicle.vehicle_family.desc()
+    elif sort_by == 'fuel_type':
+        order_col = Vehicle.fuel_type.asc() if sort_order == 'asc' else Vehicle.fuel_type.desc()
     elif sort_by == 'active_date':
         order_col = Vehicle.active_date.asc() if sort_order == 'asc' else Vehicle.active_date.desc()
     elif sort_by == 'project':
@@ -2624,11 +2626,11 @@ def vehicles_export():
     search = request.args.get('search', '').strip()
     query = Vehicle.query
     if search:
-        flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type, Vehicle.vehicle_family)
+        flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type, Vehicle.vehicle_family, Vehicle.fuel_type)
         if flt is not None:
             query = query.filter(flt)
     vehicles = query.order_by(Vehicle.id).all()
-    headers = ['ID', 'Vehicle No', 'Model', 'Type', 'Family', 'Driver Capacity', 'Phone', 'Active Date']
+    headers = ['ID', 'Vehicle No', 'Model', 'Type', 'Family', 'Fuel Type', 'Driver Capacity', 'Phone', 'Active Date']
     rows = []
     for v in vehicles:
         rows.append([
@@ -2637,6 +2639,7 @@ def vehicles_export():
             v.model,
             v.vehicle_type,
             v.vehicle_family or '',
+            v.fuel_type or 'Petrol',
             getattr(v, 'driver_capacity', None),
             v.phone_no,
             v.active_date.strftime('%Y-%m-%d') if getattr(v, 'active_date', None) else ''
@@ -2778,6 +2781,7 @@ def vehicles_import():
                     engine_no=clean_text(row.get('engine_no')),
                     chassis_no=clean_text(row.get('chassis_no')),
                     vehicle_type=clean_text(row.get('vehicle_type')),
+                    fuel_type=clean_text(row.get('fuel_type')) if 'fuel_type' in df.columns and clean_text(row.get('fuel_type')) != 'N/A' else 'Petrol',
                     driver_capacity=driver_capacity,
                     phone_no=clean_text(row.get('phone_no')),
                     active_date=active_date,
@@ -2811,10 +2815,10 @@ def vehicles_import_template():
     Downloadable template for vehicle import (open in Excel and fill).
     Required fields ka detail description import page par diya gaya hai.
     """
-    headers = ['vehicle_no', 'model', 'vehicle_type', 'engine_no', 'chassis_no', 'driver_capacity', 'phone_no', 'active_date', 'remarks']
+    headers = ['vehicle_no', 'model', 'vehicle_type', 'fuel_type', 'engine_no', 'chassis_no', 'driver_capacity', 'phone_no', 'active_date', 'remarks']
     rows = [
-        ['LEA-1234', 'Suzuki Cultus', 'Ambulance', 'ENG123', 'CHS123', 1, '0300-1112233', '01-01-2024', 'Example row 1'],
-        ['LEA-5678', 'Toyota Hiace', 'Passanger', 'ENG456', 'CHS456', 2, '0300-2223344', '05-02-2024', 'Example row 2'],
+        ['LEA-1234', 'Suzuki Cultus', 'Ambulance', 'Petrol', 'ENG123', 'CHS123', 1, '0300-1112233', '01-01-2024', 'Example row 1'],
+        ['LEA-5678', 'Toyota Hiace', 'Passanger', 'Diesel', 'ENG456', 'CHS456', 2, '0300-2223344', '05-02-2024', 'Example row 2'],
     ]
     required_cols = ['vehicle_no', 'model', 'vehicle_type', 'engine_no', 'chassis_no', 'driver_capacity', 'active_date']
     return generate_excel_template(headers, rows, required_columns=required_cols, filename='vehicles_import_template.xlsx')
@@ -2826,7 +2830,7 @@ def vehicles_print():
     search = request.args.get('search', '').strip()
     query = Vehicle.query
     if search:
-        flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type, Vehicle.vehicle_family)
+        flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type, Vehicle.vehicle_family, Vehicle.fuel_type)
         if flt is not None:
             query = query.filter(flt)
     vehicles = query.order_by(Vehicle.id).all()
@@ -13762,7 +13766,7 @@ def get_vehicles_by_project_district():
     if scope_vehicles:
         q = q.filter(Vehicle.id.in_(scope_vehicles))
     vehicles = q.order_by(Vehicle.vehicle_no).all()
-    return jsonify([{'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or ''} for v in vehicles])
+    return jsonify([{'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or '', 'fuel_type': v.fuel_type or 'Petrol'} for v in vehicles])
 
 
 @app.route('/task-report', methods=['GET', 'POST'])
@@ -16370,13 +16374,15 @@ def api_fuel_expense_last_reading():
     """Return last fueling entry's current_reading for vehicle_id (for Previous Reading)."""
     vehicle_id = request.args.get('vehicle_id', type=int)
     if not vehicle_id:
-        return jsonify({'previous_reading': None})
+        return jsonify({'previous_reading': None, 'fuel_type': None})
+    vehicle = Vehicle.query.get(vehicle_id)
+    vehicle_fuel_type = (vehicle.fuel_type if vehicle and vehicle.fuel_type else 'Petrol')
     workspace_employee_id = _workspace_employee_id_for_expenses()
     last_entry = FuelExpense.query.filter_by(vehicle_id=vehicle_id).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
     if last_entry and last_entry.current_reading is not None:
-        return jsonify({'previous_reading': float(last_entry.current_reading)})
+        return jsonify({'previous_reading': float(last_entry.current_reading), 'fuel_type': vehicle_fuel_type})
     fallback = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'fuel')
-    return jsonify({'previous_reading': fallback})
+    return jsonify({'previous_reading': fallback, 'fuel_type': vehicle_fuel_type})
 
 
 @app.route('/api/fuel-expense/task-readings')
@@ -16397,12 +16403,16 @@ def api_fuel_expense_task_readings():
 def api_fuel_expense_suggested_price():
     """Return latest fuel_price for the given fuel_type (Diesel or Super) from last expense entry."""
     fuel_type = request.args.get('fuel_type', '').strip()
-    if fuel_type not in ('Diesel', 'Super'):
+    normalized = 'Super' if fuel_type == 'Petrol' else fuel_type
+    if normalized not in ('Diesel', 'Super'):
         return jsonify({'fuel_price': None})
-    last_entry = FuelExpense.query.filter(
-        FuelExpense.fuel_type == fuel_type,
-        FuelExpense.fuel_price.isnot(None)
-    ).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
+    if normalized == 'Super':
+        fuel_filter = FuelExpense.fuel_type.in_(('Super', 'Petrol'))
+    else:
+        fuel_filter = FuelExpense.fuel_type == normalized
+    last_entry = FuelExpense.query.filter(fuel_filter, FuelExpense.fuel_price.isnot(None)).order_by(
+        FuelExpense.fueling_date.desc(), FuelExpense.id.desc()
+    ).first()
     return jsonify({'fuel_price': float(last_entry.fuel_price) if last_entry and last_entry.fuel_price else None})
 
 
@@ -16410,15 +16420,20 @@ def api_fuel_expense_suggested_price():
 def api_fuel_expense_price_hint():
     """Return last 2 entries for current pump + fuel_type, and 2 other pumps' latest entry (same fuel_type) for price reference."""
     fuel_type = request.args.get('fuel_type', '').strip()
+    normalized = 'Super' if fuel_type == 'Petrol' else fuel_type
     fuel_pump_id = request.args.get('fuel_pump_id', type=int)
     employee_id = _workspace_employee_id_for_expenses()
-    if fuel_type not in ('Diesel', 'Super'):
+    if normalized not in ('Diesel', 'Super'):
         return jsonify({'current_pump': [], 'other_pumps': []})
+    if normalized == 'Super':
+        fuel_filter = FuelExpense.fuel_type.in_(('Super', 'Petrol'))
+    else:
+        fuel_filter = FuelExpense.fuel_type == normalized
     current_pump = []
     if fuel_pump_id:
         q = FuelExpense.query.filter(
             FuelExpense.workspace_pump_id == fuel_pump_id,
-            FuelExpense.fuel_type == fuel_type,
+            fuel_filter,
             FuelExpense.fuel_price.isnot(None)
         )
         if employee_id:
@@ -16434,7 +16449,7 @@ def api_fuel_expense_price_hint():
             })
     other_pumps = []
     q_other = db.session.query(FuelExpense.workspace_pump_id).filter(
-        FuelExpense.fuel_type == fuel_type,
+        fuel_filter,
         FuelExpense.fuel_price.isnot(None),
         FuelExpense.workspace_pump_id.isnot(None),
     )
@@ -16446,7 +16461,7 @@ def api_fuel_expense_price_hint():
     for pid in other_pump_ids:
         q = FuelExpense.query.filter(
             FuelExpense.workspace_pump_id == pid,
-            FuelExpense.fuel_type == fuel_type,
+            fuel_filter,
             FuelExpense.fuel_price.isnot(None)
         )
         if employee_id:
@@ -16586,6 +16601,18 @@ def _workspace_expense_by_choices(employee_id):
     return choices
 
 
+def _workspace_default_cash_expense_by(employee_id):
+    if not employee_id:
+        return ''
+    ensure_workspace_base_accounts(employee_id)
+    cash_account = WorkspaceAccount.query.filter_by(
+        employee_id=employee_id,
+        code='1100',
+        is_active=True,
+    ).first()
+    return f'acct-{cash_account.id}' if cash_account else ''
+
+
 def _workspace_account_id_from_expense_by(expense_by_val, employee_id):
     if not expense_by_val:
         return None
@@ -16710,9 +16737,12 @@ def fuel_expense_add():
     pumps = WorkspaceParty.query.filter_by(employee_id=workspace_employee_id, party_type='Pump').order_by(WorkspaceParty.name).all()
     form.fuel_pump_id.choices = [(0, '-- Select Pump --')] + [(p.id, p.name) for p in pumps]
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
+    default_district_id = _workspace_employee_default_district_id(workspace_employee_id)
     if request.method == 'GET':
         district_id = request.args.get('district_id', type=int)
         project_id = request.args.get('project_id', type=int)
+        if not district_id and default_district_id:
+            district_id = default_district_id
         if district_id:
             projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
             form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in projects]
@@ -16724,6 +16754,8 @@ def fuel_expense_add():
             form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicles]
         form.district_id.data = district_id or 0
         form.project_id.data = project_id or 0
+        if not form.fueling_date.data:
+            form.fueling_date.data = pk_date()
     if request.method == 'POST' and form.validate_on_submit():
         vehicle_id = form.vehicle_id.data
         if vehicle_id == 0:
@@ -16739,8 +16771,10 @@ def fuel_expense_add():
         fueling_date = form.fueling_date.data
         card_swipe_date = form.card_swipe_date.data
         payment_type = (form.payment_type.data or '').strip() or None
+        if payment_type in ('Cash', 'Credit'):
+            card_swipe_date = None
         slip_no = (form.slip_no.data or '').strip() or None
-        fuel_type = (form.fuel_type.data or '').strip() or None
+        fuel_type = (vehicle.fuel_type or 'Petrol').strip() or 'Petrol'
         workspace_pump_id = form.fuel_pump_id.data or None
         if workspace_pump_id == 0:
             workspace_pump_id = None
@@ -16763,10 +16797,14 @@ def fuel_expense_add():
         mpg = round(km / float(liters), 2) if liters and km else None
         km_out_task, km_in_task = _fuel_expense_task_readings(vehicle_id, fueling_date)
         if km_out_task is not None and km_in_task is not None:
-            matched = (abs(prev_f - km_out_task) < 0.01 and abs(curr_f - km_in_task) < 0.01)
-            meter_reading_matched = 'Yes' if matched else 'No'
+            lo = min(float(km_out_task), float(km_in_task))
+            hi = max(float(km_out_task), float(km_in_task))
+            meter_reading_matched = 'Yes' if lo <= curr_f <= hi else 'No'
         else:
             meter_reading_matched = 'No'
+        expense_by_val = form.expense_by.data or ''
+        if payment_type == 'Cash':
+            expense_by_val = expense_by_val or _workspace_default_cash_expense_by(workspace_employee_id)
         rec = FuelExpense(
             district_id=district_id, project_id=project_id, vehicle_id=vehicle_id,
             employee_id=workspace_employee_id,
@@ -16787,7 +16825,7 @@ def fuel_expense_add():
             description=f'Fuel expense vehicle {vehicle.vehicle_no}',
             category_code='Fuel',
             workspace_party_id=workspace_pump_id,
-            credit_account_id=_workspace_account_id_from_expense_by(form.expense_by.data, workspace_employee_id),
+            credit_account_id=_workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id),
         )
 
         db.session.commit()
@@ -16859,7 +16897,7 @@ def fuel_expense_edit(pk):
         form.card_swipe_date.data = rec.card_swipe_date
         form.payment_type.data = rec.payment_type or ''
         form.slip_no.data = rec.slip_no or ''
-        form.fuel_type.data = rec.fuel_type or ''
+        form.fuel_type.data = (rec.vehicle.fuel_type if rec.vehicle and rec.vehicle.fuel_type else (rec.fuel_type or 'Petrol'))
         form.fuel_pump_id.data = rec.workspace_pump_id or 0
         form.previous_reading.data = rec.previous_reading
         form.current_reading.data = rec.current_reading
@@ -16879,8 +16917,11 @@ def fuel_expense_edit(pk):
         fueling_date = form.fueling_date.data
         card_swipe_date = form.card_swipe_date.data
         payment_type = (form.payment_type.data or '').strip() or None
+        if payment_type in ('Cash', 'Credit'):
+            card_swipe_date = None
         slip_no = (form.slip_no.data or '').strip() or None
-        fuel_type = (form.fuel_type.data or '').strip() or None
+        vehicle_obj = Vehicle.query.get_or_404(vehicle_id)
+        fuel_type = (vehicle_obj.fuel_type or 'Petrol').strip() or 'Petrol'
         workspace_pump_id = form.fuel_pump_id.data or None
         if workspace_pump_id == 0:
             workspace_pump_id = None
@@ -16906,10 +16947,14 @@ def fuel_expense_edit(pk):
         mpg = round(km / float(liters), 2) if liters and km else None
         km_out_task, km_in_task = _fuel_expense_task_readings(vehicle_id, fueling_date)
         if km_out_task is not None and km_in_task is not None:
-            matched = (abs(prev_f - km_out_task) < 0.01 and abs(curr_f - km_in_task) < 0.01)
-            meter_reading_matched = 'Yes' if matched else 'No'
+            lo = min(float(km_out_task), float(km_in_task))
+            hi = max(float(km_out_task), float(km_in_task))
+            meter_reading_matched = 'Yes' if lo <= curr_f <= hi else 'No'
         else:
             meter_reading_matched = 'No'
+        expense_by_val = form.expense_by.data or ''
+        if payment_type == 'Cash':
+            expense_by_val = expense_by_val or _workspace_default_cash_expense_by(workspace_employee_id)
         _workspace_reverse_expense_journals('FuelExpense', rec.id, workspace_employee_id)
         rec.district_id = district_id
         rec.project_id = project_id
@@ -16940,7 +16985,7 @@ def fuel_expense_edit(pk):
             description=f'Fuel expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
             category_code='Fuel',
             workspace_party_id=workspace_pump_id,
-            credit_account_id=_workspace_account_id_from_expense_by(form.expense_by.data, workspace_employee_id),
+            credit_account_id=_workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id),
         )
         db.session.commit()
         allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}

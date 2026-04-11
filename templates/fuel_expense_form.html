@@ -124,20 +124,21 @@
                 </div>
               </div>
               <div class="col-6 col-md-4 field-group">
-                <label class="form-label">Fuel Type</label>
-                {{ form.fuel_type(class="form-select search-select", id="fuelTypeSelect") }}
+                <label class="form-label">Fuel Type (Auto)</label>
+                {{ form.fuel_type(class="d-none", id="fuelTypeSelect") }}
+                <input type="text" id="fuelTypeDisplay" class="form-control bg-light" readonly placeholder="Auto from selected vehicle">
               </div>
               <div class="col-6 col-md-4 field-group">
                 <label class="form-label">Fueling Date <span class="text-danger">*</span></label>
                 {{ form.fueling_date(class="form-control datepicker", id="fuelingDate") }}
               </div>
               <div class="col-6 col-md-4 field-group">
-                <label class="form-label">Card Swipe Date</label>
-                {{ form.card_swipe_date(class="form-control datepicker") }}
+                <label class="form-label">Payment Type</label>
+                {{ form.payment_type(class="form-select search-select", id="paymentTypeSelect") }}
               </div>
               <div class="col-6 col-md-4 field-group">
-                <label class="form-label">Payment Type</label>
-                {{ form.payment_type(class="form-select search-select") }}
+                <label class="form-label">Card Swipe Date</label>
+                {{ form.card_swipe_date(class="form-control datepicker", id="cardSwipeDate") }}
               </div>
               <div class="col-6 col-md-4 field-group">
                 <label class="form-label">Slip No</label>
@@ -233,7 +234,7 @@
       <div class="row g-3 mb-3">
         <div class="col-md-6 field-group">
           <label class="form-label fw-bold">Expense By (Workspace COA)</label>
-          {{ form.expense_by(class="form-select search-select") }}
+          {{ form.expense_by(class="form-select search-select", id="expenseBySelect") }}
           <small class="text-muted">Select workspace account to credit for this expense (optional).</small>
         </div>
       </div>
@@ -256,12 +257,29 @@ document.addEventListener('DOMContentLoaded', function() {
   var currentReadingInput = document.getElementById('currentReading');
   var fuelPriceInput = document.getElementById('fuelPrice');
   var amountInput = document.getElementById('amountInput');
+  var fuelTypeSelect = document.getElementById('fuelTypeSelect');
+  var fuelTypeDisplay = document.getElementById('fuelTypeDisplay');
+  var paymentTypeSelect = document.getElementById('paymentTypeSelect');
+  var cardSwipeDateInput = document.getElementById('cardSwipeDate');
+  var expenseBySelect = document.getElementById('expenseBySelect');
   var litersDisplay = document.getElementById('litersDisplay');
   var kmOutTask = document.getElementById('kmOutTask');
   var kmInTask = document.getElementById('kmInTask');
   var meterMatched = document.getElementById('meterMatched');
   var kmDisplay = document.getElementById('kmDisplay');
   var mpgDisplay = document.getElementById('mpgDisplay');
+  var taskStartReading = null;
+  var taskCloseReading = null;
+  var cashExpenseByValue = '';
+  if (expenseBySelect && expenseBySelect.options) {
+    for (var e = 0; e < expenseBySelect.options.length; e += 1) {
+      var opt = expenseBySelect.options[e];
+      if ((opt.textContent || '').toLowerCase().indexOf('1100 - workspace cash') === 0) {
+        cashExpenseByValue = opt.value;
+        break;
+      }
+    }
+  }
   function parseNum(val) {
     if (val === '' || val === null || val === undefined) return null;
     var n = parseFloat(String(val).replace(/,/g, ''));
@@ -270,12 +288,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function fetchLastReading() {
     var vid = vehicleSelect && vehicleSelect.value;
-    if (!vid || vid === '0') return;
+    if (!vid || vid === '0') {
+      if (previousReadingInput) previousReadingInput.value = '';
+      if (fuelTypeSelect) fuelTypeSelect.value = '';
+      if (fuelTypeDisplay) fuelTypeDisplay.value = '';
+      computeKm();
+      return;
+    }
     fetch('/api/fuel-expense/last-reading?vehicle_id=' + vid)
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (data.previous_reading != null && previousReadingInput) {
           previousReadingInput.value = data.previous_reading;
+        }
+        if (data.fuel_type && fuelTypeSelect) {
+          fuelTypeSelect.value = data.fuel_type;
+          if (fuelTypeDisplay) fuelTypeDisplay.value = data.fuel_type;
+        } else if (fuelTypeDisplay) {
+          fuelTypeDisplay.value = '';
         }
         computeKm();
       });
@@ -288,6 +318,8 @@ document.addEventListener('DOMContentLoaded', function() {
       kmOutTask.value = '';
       kmInTask.value = '';
       meterMatched.value = '';
+      taskStartReading = null;
+      taskCloseReading = null;
       return;
     }
     fetch('/api/fuel-expense/task-readings?vehicle_id=' + vid + '&fueling_date=' + encodeURIComponent(d))
@@ -295,15 +327,25 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(function(data) {
         kmOutTask.value = data.km_out_task != null ? data.km_out_task : '';
         kmInTask.value = data.km_in_task != null ? data.km_in_task : '';
-        var prev = parseNum(previousReadingInput.value);
-        var curr = parseNum(currentReadingInput.value);
-        if (data.km_out_task != null && data.km_in_task != null && prev != null && curr != null) {
-          var match = Math.abs(prev - data.km_out_task) < 0.02 && Math.abs(curr - data.km_in_task) < 0.02;
-          meterMatched.value = match ? 'Yes' : 'No';
-        } else {
-          meterMatched.value = '';
-        }
+        taskStartReading = parseNum(data.km_out_task);
+        taskCloseReading = parseNum(data.km_in_task);
+        updateMatchedState();
       });
+  }
+
+  function updateMatchedState() {
+        var curr = parseNum(currentReadingInput.value);
+        if (curr == null || taskStartReading == null || taskCloseReading == null) {
+          meterMatched.value = '';
+          meterMatched.classList.remove('text-success', 'text-danger');
+          return;
+        }
+        var low = Math.min(taskStartReading, taskCloseReading);
+        var high = Math.max(taskStartReading, taskCloseReading);
+        var matched = curr >= low && curr <= high;
+        meterMatched.value = matched ? 'Yes' : 'No';
+        meterMatched.classList.toggle('text-success', matched);
+        meterMatched.classList.toggle('text-danger', !matched);
   }
 
   function computeKm() {
@@ -314,7 +356,34 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
       kmDisplay.value = '';
     }
+    updateMatchedState();
     computeMpgAndLiters();
+  }
+
+  function handlePaymentTypeBehavior() {
+    if (!paymentTypeSelect) return;
+    var paymentType = paymentTypeSelect.value || '';
+    var cardDisabled = paymentType === 'Cash' || paymentType === 'Credit';
+    if (cardSwipeDateInput) {
+      cardSwipeDateInput.disabled = cardDisabled;
+      if (cardDisabled) {
+        cardSwipeDateInput.value = '';
+      }
+    }
+    if (!expenseBySelect) return;
+    if (paymentType === 'Cash') {
+      if (cashExpenseByValue) {
+        expenseBySelect.value = cashExpenseByValue;
+        if (expenseBySelect.tomselect) {
+          expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
+        }
+      }
+    } else {
+      expenseBySelect.value = '';
+      if (expenseBySelect.tomselect) {
+        expenseBySelect.tomselect.setValue('', true);
+      }
+    }
   }
 
   function computeMpgAndLiters() {
@@ -341,6 +410,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
       projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
       vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+      if (fuelTypeSelect) fuelTypeSelect.value = '';
+      if (fuelTypeDisplay) fuelTypeDisplay.value = '';
       initSearchableDropdowns(vehicleSelect.parentNode);
       if (did && did !== '0') {
         fetch('/get_projects_by_district/' + did)
@@ -366,6 +437,8 @@ document.addEventListener('DOMContentLoaded', function() {
       var did = districtSelect ? districtSelect.value : '';
       if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
       vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+      if (fuelTypeSelect) fuelTypeSelect.value = '';
+      if (fuelTypeDisplay) fuelTypeDisplay.value = '';
       if (pid && pid !== '0') {
         var url = '/get_vehicles_by_project_district?project_id=' + pid;
         if (did && did !== '0') url += '&district_id=' + did;
@@ -374,6 +447,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var o = document.createElement('option');
             o.value = v.id;
             o.textContent = v.vehicle_no;
+            o.setAttribute('data-fuel-type', v.fuel_type || 'Petrol');
             vehicleSelect.appendChild(o);
           });
           initSearchableDropdowns(vehicleSelect.parentNode);
@@ -386,6 +460,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (vehicleSelect) {
     vehicleSelect.addEventListener('change', function() {
+      var selected = vehicleSelect.options[vehicleSelect.selectedIndex];
+      var selectedFuel = selected ? (selected.getAttribute('data-fuel-type') || '') : '';
+      if (fuelTypeSelect) fuelTypeSelect.value = selectedFuel;
+      if (fuelTypeDisplay) fuelTypeDisplay.value = selectedFuel;
       fetchLastReading();
       fetchTaskReadings();
     });
@@ -394,10 +472,10 @@ document.addEventListener('DOMContentLoaded', function() {
   if (fuelingDateInput) fuelingDateInput.addEventListener('change', fetchTaskReadings);
   if (previousReadingInput) previousReadingInput.addEventListener('input', function() { computeKm(); fetchTaskReadings(); });
   if (currentReadingInput) currentReadingInput.addEventListener('input', computeKm);
+  if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', handlePaymentTypeBehavior);
   if (amountInput) amountInput.addEventListener('input', computeMpgAndLiters);
   if (fuelPriceInput) fuelPriceInput.addEventListener('input', computeMpgAndLiters);
 
-  var fuelTypeSelect = document.getElementById('fuelTypeSelect');
   var suggestedPriceWrap = document.getElementById('suggestedPriceWrap');
   var suggestedPriceText = document.getElementById('suggestedPriceText');
   var useSuggestedPriceBtn = document.getElementById('useSuggestedPriceBtn');
@@ -406,7 +484,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var ft = fuelTypeSelect && fuelTypeSelect.value;
     if (!suggestedPriceWrap || !suggestedPriceText) return;
     suggestedPriceWrap.style.display = 'none';
-    if (!ft || ft === '' || (ft !== 'Diesel' && ft !== 'Super')) return;
+    if (!ft || ft === '' || (ft !== 'Diesel' && ft !== 'Super' && ft !== 'Petrol')) return;
     fetch('/api/fuel-expense/suggested-price?fuel_type=' + encodeURIComponent(ft))
       .then(function(r) { return r.json(); })
       .then(function(data) {
@@ -432,7 +510,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!priceHintPanel || !priceHintLine) return;
     priceHintLine.textContent = '';
     priceHintPanel.style.display = 'none';
-    if (!ft || (ft !== 'Diesel' && ft !== 'Super')) return;
+    if (!ft || (ft !== 'Diesel' && ft !== 'Super' && ft !== 'Petrol')) return;
     var url = '/api/fuel-expense/price-hint?fuel_type=' + encodeURIComponent(ft);
     if (pumpId && pumpId !== '0') url += '&fuel_pump_id=' + pumpId;
     fetch(url)
@@ -472,7 +550,16 @@ document.addEventListener('DOMContentLoaded', function() {
   fetchTaskReadings();
   computeKm();
   computeMpgAndLiters();
+  handlePaymentTypeBehavior();
   fetchSuggestedPrice();
+
+  window.setTimeout(function() {
+    if (districtSelect && districtSelect.tomselect) {
+      districtSelect.tomselect.focus();
+    } else if (districtSelect) {
+      districtSelect.focus();
+    }
+  }, 100);
 });
 </script>
 {% endblock %}

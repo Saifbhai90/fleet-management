@@ -27,9 +27,10 @@
               <th style="width: 18%">Model</th>
               <th style="width: 16%">Vehicle Type</th>
               <th style="width: 14%">Vehicle Family</th>
-              <th style="width: 10%">Capacity</th>
-              <th style="width: 12%">Phone No</th>
-              <th style="width: 14%">Active Date</th>
+              <th style="width: 10%">Fuel Type</th>
+              <th style="width: 8%">Capacity</th>
+              <th style="width: 10%">Phone No</th>
+              <th style="width: 12%">Active Date</th>
             </tr>
           </thead>
           <tbody>
@@ -40,13 +41,14 @@
               <td>{{ v.model }}</td>
               <td>{{ v.vehicle_type or '-' }}</td>
               <td>{{ v.vehicle_family or '-' }}</td>
+              <td>{{ v.fuel_type or 'Petrol' }}</td>
               <td>{{ v.driver_capacity or '1' }}</td>
               <td>{{ v.phone_no or '-' }}</td>
               <td>{{ v.active_date.strftime('%d-%m-%Y') if v.active_date else '-' }}</td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="8" class="text-center py-4 text-muted">
+              <td colspan="9" class="text-center py-4 text-muted">
                 No vehicles found.
               </td>
             </tr>

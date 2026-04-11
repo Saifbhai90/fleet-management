@@ -255,6 +255,7 @@ class Vehicle(db.Model):
     chassis_no = db.Column(db.String(50), unique=True)
     vehicle_type = db.Column(db.String(50), index=True)
     vehicle_family = db.Column(db.String(100), index=True)
+    fuel_type = db.Column(db.String(20), nullable=False, default='Petrol', index=True)
     phone_no = db.Column(db.String(20))
     active_date = db.Column(db.Date, index=True)
     driver_capacity = db.Column(db.Integer, default=1)

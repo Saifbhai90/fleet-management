@@ -71,6 +71,20 @@ class VehicleForm(FlaskForm):
         validators=[DataRequired()],
         render_kw={'class': 'form-select search-select'}
     )
+    fuel_type = SelectField(
+        'Fuel Type',
+        choices=[
+            ('Petrol', 'Petrol'),
+            ('Diesel', 'Diesel'),
+            ('CNG', 'CNG'),
+            ('LPG', 'LPG'),
+            ('Electric', 'Electric'),
+            ('Hybrid', 'Hybrid'),
+        ],
+        validators=[DataRequired()],
+        default='Petrol',
+        render_kw={'class': 'form-select search-select'}
+    )
     driver_capacity = IntegerField('Driver Capacity', validators=[DataRequired(), NumberRange(min=1)])
 
     phone_no = StringField('Vehicle Phone No', validators=[Optional(), Length(max=20)])
@@ -797,9 +811,13 @@ PAYMENT_TYPE_CHOICES = [
 ]
 
 FUEL_TYPE_CHOICES = [
-    ('', '-- Select --'),
+    ('', '-- Auto from selected vehicle --'),
+    ('Petrol', 'Petrol'),
     ('Diesel', 'Diesel'),
-    ('Super', 'Super (Petrol)'),
+    ('CNG', 'CNG'),
+    ('LPG', 'LPG'),
+    ('Electric', 'Electric'),
+    ('Hybrid', 'Hybrid'),
 ]
 
 OIL_PAYMENT_TYPE_CHOICES = [
