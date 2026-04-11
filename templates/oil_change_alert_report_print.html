@@ -24,7 +24,7 @@
 
   <div class="rpt-meta d-flex flex-wrap gap-3">
     <span><i class="bi bi-calendar3 me-1"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
-    <span><i class="bi bi-sliders me-1"></i>Near threshold: {{ near_percent }}%</span>
+    <span><i class="bi bi-sliders me-1"></i>Near threshold: family-wise configuration</span>
   </div>
   <div class="mb-2">
     <span class="total-badge"><i class="bi bi-exclamation-triangle-fill me-1"></i>Total Alerts: {{ total }}</span>
@@ -52,7 +52,7 @@
         <td>{{ r.project.name if r.project else '-' }}</td>
         <td>{{ r.district.name if r.district else '-' }}</td>
         <td>{{ r.vehicle.vehicle_no }}{% if r.vehicle.model %} ({{ r.vehicle.model }}){% endif %}</td>
-        <td>{{ r.vehicle_family }} / {{ r.limit_km }}</td>
+        <td>{{ r.vehicle_family }} / {{ r.limit_km }} KM ({{ r.near_percent }}%)</td>
         <td>{{ '%.2f'|format(r.base_reading) }}</td>
         <td>{{ '%.2f'|format(r.current_reading) }}</td>
         <td>{{ '%.2f'|format(r.kms_after_oil) }}</td>

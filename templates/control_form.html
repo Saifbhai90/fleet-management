@@ -1,20 +1,33 @@
 {% extends "base.html" %}
-{% block title %}Attendance Time Control{% endblock %}
+{% block title %}
+{% set _tab = request.args.get('settings_tab', 'attendance') %}
+{% if _tab == 'freeze' %}Freeze Data Control{% elif _tab == 'oil_limits' %}Oil Change Limits{% else %}Attendance Time Control{% endif %}
+{% endblock %}
 
 {% block content %}
+{% set active_tab = request.args.get('settings_tab', 'attendance') %}
+{% set page_title = 'Attendance Time Control' %}
+{% set page_subtitle = 'Yahan attendance time windows set karein. Global Default sab par apply hota hai. Kisi Project / District / Vehicle ka alag time chahiye to override add karein.' %}
+{% if active_tab == 'freeze' %}
+  {% set page_title = 'Freeze Data Control' %}
+  {% set page_subtitle = 'Yahan date-wise freeze policy set karein taake add/edit entries controlled rahen.' %}
+{% elif active_tab == 'oil_limits' %}
+  {% set page_title = 'Vehicle Family Wise Oil Change Limits' %}
+  {% set page_subtitle = 'Har vehicle family ke liye oil change KM limit aur near alert threshold set karein.' %}
+{% endif %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-sliders me-2 text-primary"></i>Attendance Time Control</h2>
+    <h2 class="mb-0"><i class="bi bi-sliders me-2 text-primary"></i>{{ page_title }}</h2>
     <a href="{{ url_for('user_list') }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left me-1"></i>User & Access</a>
   </div>
 
   <p class="text-muted mb-4">
-    Yahan attendance time windows set karein. <strong>Global Default</strong> sab par apply hota hai.
-    Kisi <strong>Project / District / Vehicle</strong> ka alag time chahiye to override add karein.
+    {{ page_subtitle }}
+    {% if active_tab == 'attendance' %}
     <br><span class="text-info"><i class="bi bi-info-circle me-1"></i>Priority: Vehicle > District > Project > Global</span>
+    {% endif %}
   </p>
 
-{% set active_tab = request.args.get('settings_tab', 'attendance') %}
   <ul class="nav nav-pills mb-3" id="settingsMainTabs">
     <li class="nav-item">
       <button type="button" class="nav-link {% if active_tab not in ['freeze', 'oil_limits'] %}active{% endif %}" data-settings-tab="attendance">
@@ -525,21 +538,14 @@
               Agar last oil change reading na mile to <strong>Vehicle Fuel/Oil Previous Reading Setup</strong> ki oil reading use hogi.
             </div>
 
-            <div class="row g-3 mb-3">
-              <div class="col-md-4">
-                <label class="form-label fw-semibold">Near Alert Threshold (%)</label>
-                <input type="number" min="50" max="99" step="1" class="form-control" name="oil_near_percent" value="{{ oil_near_percent or 90 }}">
-                <div class="form-text">Example: 90 = limit ka 90% complete hone par "Near" alert.</div>
-              </div>
-            </div>
-
             <div class="table-responsive">
               <table class="table table-sm table-bordered align-middle">
                 <thead class="table-light">
                   <tr>
                     <th style="width:6%">#</th>
                     <th>Vehicle Family</th>
-                    <th style="width:26%">Oil Change Limit (KM)</th>
+                    <th style="width:22%">Oil Change Limit (KM)</th>
+                    <th style="width:22%">Near Alert Threshold (%)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -549,12 +555,15 @@
                     <td class="fw-semibold">{{ fam }}</td>
                     <td>
                       <input type="hidden" name="oil_family" value="{{ fam }}">
-                      <input type="number" min="0" step="1" class="form-control form-control-sm" name="oil_limit_value" value="{{ oil_change_limits.get(fam, '') }}" placeholder="e.g. 5000">
+                      <input type="number" min="0" step="1" class="form-control form-control-sm" name="oil_limit_value" value="{{ oil_change_limits.get(fam, {}).get('limit_km', '') }}" placeholder="e.g. 5000">
+                    </td>
+                    <td>
+                      <input type="number" min="50" max="99" step="1" class="form-control form-control-sm" name="oil_near_percent_value" value="{{ oil_change_limits.get(fam, {}).get('near_percent', 90) }}" placeholder="e.g. 90">
                     </td>
                   </tr>
                   {% else %}
                   <tr>
-                    <td colspan="3" class="text-center text-muted py-3">No vehicle families found.</td>
+                    <td colspan="4" class="text-center text-muted py-3">No vehicle families found.</td>
                   </tr>
                   {% endfor %}
                 </tbody>

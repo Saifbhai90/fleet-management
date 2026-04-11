@@ -21,9 +21,7 @@
     <div class="d-flex flex-wrap align-items-center gap-2">
       <div class="me-auto">
         <h2><i class="bi bi-bell-fill me-2"></i>Oil Change Alert Report</h2>
-        <div class="oca-subtitle">
-          Near alert threshold: {{ near_percent }}% of family limit
-        </div>
+        <div class="oca-subtitle">Family-wise oil limits with near/crossed alert tracking</div>
       </div>
       {% if can_see_page('oil_change_alert_report') %}
       <a href="{{ url_for('oil_change_alert_report_export', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status) }}" class="btn btn-success btn-sm">
@@ -117,7 +115,7 @@
             </td>
             <td>
               <div class="fw-semibold">{{ r.vehicle_family }}</div>
-              <small class="text-muted">Limit: {{ r.limit_km }} KM</small>
+              <small class="text-muted">Limit: {{ r.limit_km }} KM · Near: {{ r.near_percent }}%</small>
             </td>
             <td>
               <div>{{ '%.2f'|format(r.base_reading) }}</div>
@@ -141,7 +139,16 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="10" class="text-center text-muted py-4">No oil change alerts found.</td>
+            <td class="text-center text-muted py-4">-</td>
+            <td class="text-center text-muted py-4">-</td>
+            <td class="text-center text-muted py-4">-</td>
+            <td class="text-center text-muted py-4">-</td>
+            <td class="text-center text-muted py-4">-</td>
+            <td class="text-center text-muted py-4">-</td>
+            <td class="text-center text-muted py-4">-</td>
+            <td class="text-center text-muted py-4">-</td>
+            <td class="text-center text-muted py-4">-</td>
+            <td class="text-center text-muted py-4">No oil change alerts found.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -155,6 +162,8 @@
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <script>
 $(function () {
+  var hasData = {{ 1 if rows else 0 }};
+  if (!hasData) return;
   if (window.innerWidth < 768) return;
   var table = $('#oilAlertTable').DataTable({
     dom: "<'row'<'col-12'tr>><'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>",

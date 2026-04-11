@@ -181,8 +181,27 @@ def _save_vehicle_family_options(options):
 
 
 def _get_vehicle_family_oil_change_limits():
-    """Load per-family oil change limit (KM) from settings."""
+    """Load per-family oil change config from settings.
+
+    Format:
+      { "Family": { "limit_km": 5000, "near_percent": 90 } }
+    Backward compatibility:
+      { "Family": 5000 }  # old format
+    """
     raw = (SystemSetting.get(_VEHICLE_FAMILY_OIL_LIMITS_KEY, '') or '').strip()
+    default_near = _get_vehicle_family_oil_near_percent()
+
+    def _norm_near(v):
+        try:
+            n = int(float(v))
+        except Exception:
+            n = default_near
+        if n < 50:
+            return 50
+        if n > 99:
+            return 99
+        return n
+
     out = {}
     if raw:
         try:
@@ -192,12 +211,24 @@ def _get_vehicle_family_oil_change_limits():
                     fam = (str(k) or '').strip()
                     if not fam:
                         continue
-                    try:
-                        km = int(float(v))
-                    except Exception:
-                        continue
-                    if km > 0:
-                        out[fam] = km
+                    km = None
+                    near = default_near
+                    if isinstance(v, dict):
+                        try:
+                            km = int(float(v.get('limit_km')))
+                        except Exception:
+                            km = None
+                        near = _norm_near(v.get('near_percent'))
+                    else:
+                        try:
+                            km = int(float(v))
+                        except Exception:
+                            km = None
+                    if km and km > 0:
+                        out[fam] = {
+                            'limit_km': km,
+                            'near_percent': near,
+                        }
         except Exception:
             out = {}
     return out
@@ -205,16 +236,41 @@ def _get_vehicle_family_oil_change_limits():
 
 def _save_vehicle_family_oil_change_limits(limits):
     clean = {}
-    for fam, km in (limits or {}).items():
+    default_near = _get_vehicle_family_oil_near_percent()
+
+    def _norm_near(v):
+        try:
+            n = int(float(v))
+        except Exception:
+            n = default_near
+        if n < 50:
+            return 50
+        if n > 99:
+            return 99
+        return n
+
+    for fam, payload in (limits or {}).items():
         fam_name = (fam or '').strip()
         if not fam_name:
             continue
-        try:
-            km_val = int(float(km))
-        except Exception:
-            continue
-        if km_val > 0:
-            clean[fam_name] = km_val
+        km_val = None
+        near_val = default_near
+        if isinstance(payload, dict):
+            try:
+                km_val = int(float(payload.get('limit_km')))
+            except Exception:
+                km_val = None
+            near_val = _norm_near(payload.get('near_percent'))
+        else:
+            try:
+                km_val = int(float(payload))
+            except Exception:
+                km_val = None
+        if km_val and km_val > 0:
+            clean[fam_name] = {
+                'limit_km': km_val,
+                'near_percent': near_val,
+            }
     SystemSetting.set(_VEHICLE_FAMILY_OIL_LIMITS_KEY, json.dumps(clean, ensure_ascii=True))
     return clean
 
@@ -5408,7 +5464,6 @@ def form_control():
     freeze_allowed_set = set(freeze_cfg.get('allowed_set') or set())
     oil_family_options = _get_vehicle_family_options()
     oil_change_limits = _get_vehicle_family_oil_change_limits()
-    oil_near_percent = _get_vehicle_family_oil_near_percent()
 
     if request.method == 'GET':
         if glob:
@@ -5428,7 +5483,6 @@ def form_control():
             freeze_allowed_set=freeze_allowed_set,
             oil_family_options=oil_family_options,
             oil_change_limits=oil_change_limits,
-            oil_near_percent=oil_near_percent,
         )
 
     action = request.form.get('action', '')
@@ -5483,11 +5537,13 @@ def form_control():
     if action == 'save_oil_change_limits':
         posted_families = request.form.getlist('oil_family')
         posted_limits = request.form.getlist('oil_limit_value')
+        posted_near = request.form.getlist('oil_near_percent_value')
         limits_payload = {}
-        for fam, raw in zip(posted_families, posted_limits):
+        for idx, fam in enumerate(posted_families):
             fam_name = (fam or '').strip()
             if not fam_name:
                 continue
+            raw = posted_limits[idx] if idx < len(posted_limits) else ''
             raw_val = (raw or '').strip()
             if not raw_val:
                 continue
@@ -5496,10 +5552,13 @@ def form_control():
             except Exception:
                 continue
             if km_limit > 0:
-                limits_payload[fam_name] = km_limit
+                near_raw = posted_near[idx] if idx < len(posted_near) else ''
+                limits_payload[fam_name] = {
+                    'limit_km': km_limit,
+                    'near_percent': near_raw,
+                }
         _save_vehicle_family_oil_change_limits(limits_payload)
-        near_percent = _save_vehicle_family_oil_near_percent(request.form.get('oil_near_percent'))
-        flash(f'Vehicle family oil change limits saved. Near alert threshold set at {near_percent}%.', 'success')
+        flash('Vehicle family oil change limits saved successfully.', 'success')
         return redirect(url_for('form_control', settings_tab='oil_limits'))
 
     if action == 'add_override':
@@ -5596,7 +5655,6 @@ def form_control():
         freeze_allowed_set=freeze_allowed_set,
         oil_family_options=oil_family_options,
         oil_change_limits=oil_change_limits,
-        oil_near_percent=oil_near_percent,
     )
 
 
@@ -9449,8 +9507,6 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', statu
                            allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
                            is_master_or_admin=True):
     limits = _get_vehicle_family_oil_change_limits()
-    near_percent = _get_vehicle_family_oil_near_percent()
-    near_ratio = float(near_percent) / 100.0
 
     query = db.session.query(Vehicle, Project, District).outerjoin(
         Project, Vehicle.project_id == Project.id
@@ -9474,8 +9530,10 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', statu
     rows = []
     for vehicle, project, district in query.order_by(Project.name, District.name, Vehicle.vehicle_no).all():
         family_name = (vehicle.vehicle_family or '').strip()
-        km_limit = limits.get(family_name)
-        if not family_name or not km_limit:
+        family_cfg = limits.get(family_name) or {}
+        km_limit = family_cfg.get('limit_km')
+        near_percent = family_cfg.get('near_percent')
+        if not family_name or not km_limit or not near_percent:
             continue
 
         base_reading, base_date, base_source = _vehicle_last_oil_change_base(vehicle.id, workspace_employee_id)
@@ -9490,6 +9548,7 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', statu
 
         kms_after_oil = round(max(0.0, float(current_reading) - float(base_reading)), 2)
         limit_f = float(km_limit)
+        near_ratio = float(near_percent) / 100.0
         near_at = round(limit_f * near_ratio, 2)
         remaining = round(limit_f - kms_after_oil, 2)
 
@@ -9511,8 +9570,8 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', statu
             'project': project,
             'district': district,
             'vehicle_family': family_name,
-            'limit_km': int(km_limit),
-            'near_percent': near_percent,
+            'limit_km': int(limit_f),
+            'near_percent': int(near_percent),
             'base_reading': round(float(base_reading), 2),
             'base_date': base_date,
             'base_source': base_source,
@@ -9571,7 +9630,10 @@ def oil_change_alert_report():
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
 
     limits = _get_vehicle_family_oil_change_limits()
-    family_choices = [('', '-- All Families --')] + [(k, f'{k} ({v} KM)') for k, v in sorted(limits.items())]
+    family_choices = [('', '-- All Families --')] + [
+        (k, f"{k} ({v.get('limit_km')} KM / Near {v.get('near_percent')}%)")
+        for k, v in sorted(limits.items())
+    ]
 
     return render_template(
         'oil_change_alert_report.html',
@@ -9584,7 +9646,6 @@ def oil_change_alert_report():
         project_choices=project_choices,
         district_choices=district_choices,
         family_choices=family_choices,
-        near_percent=_get_vehicle_family_oil_near_percent(),
     )
 
 
@@ -9620,7 +9681,7 @@ def oil_change_alert_report_export():
 
     headers = [
         'Sr No', 'Project', 'District', 'Vehicle No', 'Model', 'Type', 'Family',
-        'Limit KM', 'Base Reading', 'Current Reading', 'KM After Oil', 'Remaining KM', 'Status',
+        'Limit KM', 'Near %', 'Base Reading', 'Current Reading', 'KM After Oil', 'Remaining KM', 'Status',
         'Base Source', 'Current Source'
     ]
     data_rows = []
@@ -9635,6 +9696,7 @@ def oil_change_alert_report_export():
             v.vehicle_type if v and v.vehicle_type else '-',
             r['vehicle_family'],
             r['limit_km'],
+            r['near_percent'],
             r['base_reading'],
             r['current_reading'],
             r['kms_after_oil'],
@@ -9683,7 +9745,6 @@ def oil_change_alert_report_print():
         'oil_change_alert_report_print.html',
         rows=rows,
         total=len(rows),
-        near_percent=_get_vehicle_family_oil_near_percent(),
         now=datetime.now,
     )
 
