@@ -2463,18 +2463,42 @@
           document.head.appendChild(s);
         }
 
-        function _isPaginatedView(){return !!tbl.closest('.card')&&!!tbl.closest('.card').querySelector('.pagination')}
+        function _findPaginationHostForTable(tableEl){
+          var n=tableEl;
+          while(n&&n!==document.body){
+            if(n.querySelector&&n.querySelector('.pagination')) return n;
+            n=n.parentElement;
+          }
+          return null;
+        }
+        function _isPaginatedView(){return !!_findPaginationHostForTable(tbl)}
         function _useClientPaging(){return _isPaginatedView() && String(tbl.getAttribute('data-ft-no-client-paging')||'0')!=='1'}
         function _getPerPage(){
           try{
             var q=new URLSearchParams(window.location.search),v=parseInt(q.get('per_page')||'0',10);
             if(v>0)return v;
           }catch(_e){}
-          return 10;
+          try{
+            var host=_findPaginationHostForTable(tbl)||document;
+            var selectors=[
+              'select[name="per_page"]',
+              'select[id*="PerPage"]',
+              'select[id*="perPage"]',
+              'select[onchange*="per_page"]'
+            ];
+            for(var i=0;i<selectors.length;i++){
+              var sel=host.querySelector(selectors[i]);
+              if(!sel) continue;
+              var sv=parseInt(sel.value||'0',10);
+              if(sv>0) return sv;
+            }
+          }catch(_e2){}
+          // Last safe fallback: current page row count (at least 10)
+          return Math.max(10,getRows().length||0);
         }
         function _getPagerUl(){
-          var card=tbl.closest('.card'); if(!card) return null;
-          return card.querySelector('.card-footer .pagination');
+          var host=_findPaginationHostForTable(tbl); if(!host) return null;
+          return host.querySelector('.pagination');
         }
         function _bindPagerClicks(ul){
           if(!ul)return;
@@ -2515,8 +2539,16 @@
         function _extractPageCount(doc){
           var rt=doc.getElementById(tableId);
           if(!rt)return 1;
-          var card=rt.closest('.card'); if(!card)return 1;
-          var links=Array.from(card.querySelectorAll('.pagination .page-link'));
+          var host=(function(tableEl){
+            var n=tableEl;
+            while(n&&n!==doc.body){
+              if(n.querySelector&&n.querySelector('.pagination')) return n;
+              n=n.parentElement;
+            }
+            return null;
+          })(rt);
+          if(!host)return 1;
+          var links=Array.from(host.querySelectorAll('.pagination .page-link'));
           var max=1;
           links.forEach(function(a){
             var n=parseInt((a.textContent||'').trim(),10);
@@ -2826,6 +2858,27 @@
       };
       window.fleetRefreshRecordMeta=function(root){
         var scope=(root&&root.querySelectorAll)?root:document;
+        function _findMetaHost(tableEl){
+          var n=tableEl;
+          while(n&&n!==document.body){
+            if(
+              (n.querySelector&&n.querySelector('.pagination')) ||
+              (n.querySelector&&n.querySelector('.table-footer')) ||
+              (n.classList&&n.classList.contains('card'))
+            ){
+              return n;
+            }
+            n=n.parentElement;
+          }
+          return tableEl.parentElement;
+        }
+        function _findCounterEl(host){
+          if(!host||!host.querySelectorAll) return null;
+          var candidates=Array.from(host.querySelectorAll('.table-footer small.text-muted, .card-footer small.text-muted, .table-footer .text-muted, .card-footer .text-muted'));
+          if(!candidates.length) return null;
+          var withShowing=candidates.find(function(el){return /showing/i.test((el.textContent||''));});
+          return withShowing||candidates[0];
+        }
         scope.querySelectorAll('table').forEach(function(tbl){
           if(!(tbl.dataset&&tbl.dataset.ftEnhanced==='1')) return;
           var tbody=tbl.querySelector('tbody'); if(!tbody) return;
@@ -2834,8 +2887,8 @@
           var matchedRows=allRows.filter(function(r){return r.getAttribute('data-ft-match')==='1';});
           var hasActiveFilter=!!tbl.querySelector('.ft-filter-btn.active');
           var isFiltered=hasActiveFilter || (matchedRows.length>0 && matchedRows.length!==allRows.length);
-          var card=tbl.closest('.card'); if(!card) return;
-          var counter=card.querySelector('.card-footer small.text-muted');
+          var host=_findMetaHost(tbl); if(!host) return;
+          var counter=_findCounterEl(host);
           var totalRecords=parseInt(tbl.getAttribute('data-ft-total-records')||'0',10)||allRows.length;
 
           if(counter){
