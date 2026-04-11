@@ -773,9 +773,23 @@ class FuelExpense(db.Model):
     vehicle = db.relationship('Vehicle', backref='fuel_expenses', lazy='select')
     fuel_pump = db.relationship('Party', backref='fuel_expenses', lazy='select')
     workspace_pump = db.relationship('WorkspaceParty', backref='fuel_expenses', lazy='select')
+    attachments = db.relationship('FuelExpenseAttachment', backref='fuel_expense', lazy='dynamic', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<FuelExpense {self.vehicle_id} {self.fueling_date}>'
+
+
+class FuelExpenseAttachment(db.Model):
+    __tablename__ = 'fuel_expense_attachment'
+    id = db.Column(db.Integer, primary_key=True)
+    fuel_expense_id = db.Column(db.Integer, db.ForeignKey('fuel_expense.id'), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_type = db.Column(db.String(20), nullable=True)
+    original_name = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    def __repr__(self):
+        return f'<FuelExpenseAttachment {self.file_path}>'
 
 
 class WorkspaceVehicleReadingSetup(db.Model):

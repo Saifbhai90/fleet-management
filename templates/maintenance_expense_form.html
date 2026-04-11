@@ -24,6 +24,7 @@
   .job-category-group .btn { min-height: 40px; }
   #taskReadingsMeta { white-space: nowrap; display: inline-block; }
   #currentReading { min-height: 44px; font-size: 1.02rem; font-weight: 600; }
+  .reading-match-note { font-weight: 600; }
 </style>
 <div class="container-fluid maint-form-wrap py-2">
   <div class="page-header d-flex justify-content-between align-items-center">
@@ -59,7 +60,7 @@
           <div class="col-md-4 field-group">
             <label class="form-label">Current Reading <small class="text-muted" id="taskReadingsMeta">(Start: - | Close: -)</small></label>
             {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
-            <small class="text-muted" id="currentReadingMatchNote">Enter reading to check match with task start/close.</small>
+            <small class="reading-match-note text-muted" id="currentReadingMatchNote">Enter reading to check match with task start/close.</small>
           </div>
           <div class="col-md-5 field-group job-category-group">
             <label class="form-label">Job Category</label>
@@ -440,23 +441,30 @@
 
   function updateCurrentReadingMatch() {
     if (!currentReadingMatchNote) return;
+    currentReadingMatchNote.classList.remove('text-success', 'text-danger', 'text-muted');
     var curr = parseFloat(currentReading && currentReading.value ? currentReading.value : '');
     if (!isFinite(curr)) {
+      currentReadingMatchNote.classList.add('text-muted');
       currentReadingMatchNote.textContent = 'Enter reading to check match with task start/close.';
       return;
     }
     if (taskStartReading == null || taskCloseReading == null) {
+      currentReadingMatchNote.classList.add('text-muted');
       currentReadingMatchNote.textContent = 'Task readings not available for selected date.';
       return;
     }
     var tol = 0.02;
     if (Math.abs(curr - taskStartReading) <= tol) {
+      currentReadingMatchNote.classList.add('text-success');
       currentReadingMatchNote.textContent = 'Matched with Start Reading.';
     } else if (Math.abs(curr - taskCloseReading) <= tol) {
+      currentReadingMatchNote.classList.add('text-success');
       currentReadingMatchNote.textContent = 'Matched with Close Reading.';
     } else if (curr >= Math.min(taskStartReading, taskCloseReading) && curr <= Math.max(taskStartReading, taskCloseReading)) {
+      currentReadingMatchNote.classList.add('text-success');
       currentReadingMatchNote.textContent = 'Matched (within Start/Close range).';
     } else {
+      currentReadingMatchNote.classList.add('text-danger');
       currentReadingMatchNote.textContent = 'Outside Start/Close readings.';
     }
   }
