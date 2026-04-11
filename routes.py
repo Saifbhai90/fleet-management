@@ -17512,6 +17512,14 @@ def oil_expense_form(pk=None):
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('oil_expense_list'))
     form = OilExpenseForm(obj=rec)
+    total_bill_error = ''
+    party_error = ''
+    entered_total_bill = (request.form.get('total_bill_amount') or '').strip() if request.method == 'POST' else ''
+    selected_party_id = (request.form.get('workspace_party_id') or '').strip() if request.method == 'POST' else ''
+    workspace_parties = WorkspaceParty.query.filter_by(
+        employee_id=workspace_employee_id,
+        is_active=True
+    ).order_by(WorkspaceParty.name).all()
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
     products_for_oil = _workspace_products_for_expense_form(workspace_employee_id, 'Oil')
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
@@ -17529,6 +17537,10 @@ def oil_expense_form(pk=None):
             form.project_id.data = rec.project_id
         if rec.vehicle_id:
             form.vehicle_id.data = rec.vehicle_id
+        if getattr(rec, 'workspace_party_id', None):
+            selected_party_id = str(rec.workspace_party_id)
+        if getattr(rec, 'total_bill_amount', None) is not None:
+            entered_total_bill = f"{float(rec.total_bill_amount):.2f}"
     elif request.method == 'GET':
         if default_district_id:
             form.district_id.data = default_district_id
@@ -17539,7 +17551,18 @@ def oil_expense_form(pk=None):
         vehicle_id = form.vehicle_id.data
         if not vehicle_id:
             flash('Select vehicle.', 'danger')
-            return render_template('oil_expense_form.html', form=form, rec=rec, title='Edit Oil Expense' if rec else 'Add Oil Expense', products_for_oil=products_for_oil)
+            return render_template(
+                'oil_expense_form.html',
+                form=form,
+                rec=rec,
+                title='Edit Oil Expense' if rec else 'Add Oil Expense',
+                products_for_oil=products_for_oil,
+                workspace_parties=workspace_parties,
+                selected_party_id=selected_party_id,
+                entered_total_bill=entered_total_bill,
+                total_bill_error=total_bill_error,
+                party_error=party_error,
+            )
         expense_date = form.expense_date.data
         card_swipe_date = form.card_swipe_date.data
         prev_reading = form.previous_reading.data
@@ -17559,6 +17582,26 @@ def oil_expense_form(pk=None):
             except (TypeError, ValueError):
                 pass
         remarks = form.remarks.data
+        selected_party_id = (request.form.get('workspace_party_id') or '').strip()
+        selected_party_id_int = int(selected_party_id) if selected_party_id.isdigit() else None
+        if selected_party_id_int:
+            valid_party = WorkspaceParty.query.filter_by(
+                employee_id=workspace_employee_id,
+                id=selected_party_id_int,
+                is_active=True
+            ).first()
+            if not valid_party:
+                party_error = 'Selected party is invalid for this workspace.'
+                selected_party_id_int = None
+        entered_total_bill = (request.form.get('total_bill_amount') or '').strip()
+        total_bill_amount = None
+        if entered_total_bill:
+            try:
+                total_bill_amount = Decimal(entered_total_bill)
+            except Exception:
+                total_bill_amount = None
+        if total_bill_amount is not None and total_bill_amount <= Decimal('0'):
+            total_bill_error = 'Total Bill Amount must be greater than zero.'
 
         product_ids = request.form.getlist('product_id')
         payment_types = request.form.getlist('payment_type')
@@ -17644,6 +17687,32 @@ def oil_expense_form(pk=None):
         _apply_oil_expense_items_balance(rec.items.all(), reverse=False)
         _workspace_reverse_expense_journals('OilExpense', rec.id, workspace_employee_id)
         items_total = sum(float(it.amount or 0) for it in rec.items)
+        if total_bill_amount is None:
+            total_bill_error = 'Total Bill Amount is required.'
+        elif abs(float(total_bill_amount) - float(items_total)) > 0.01:
+            total_bill_error = 'Total Bill Amount must match product lines total.'
+
+        if total_bill_error or party_error:
+            db.session.rollback()
+            if total_bill_error:
+                flash(total_bill_error, 'danger')
+            if party_error:
+                flash(party_error, 'danger')
+            return render_template(
+                'oil_expense_form.html',
+                form=form,
+                rec=rec if rec and rec.id else None,
+                title='Edit Oil Expense' if rec else 'Add Oil Expense',
+                products_for_oil=products_for_oil,
+                workspace_parties=workspace_parties,
+                selected_party_id=selected_party_id,
+                entered_total_bill=entered_total_bill,
+                total_bill_error=total_bill_error,
+                party_error=party_error,
+            )
+
+        rec.workspace_party_id = selected_party_id_int
+        rec.total_bill_amount = total_bill_amount
         _workspace_post_expense_journal(
             employee_id=workspace_employee_id,
             reference_type='OilExpense',
@@ -17652,7 +17721,7 @@ def oil_expense_form(pk=None):
             amount=items_total,
             description=f'Oil expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
             category_code='Oil',
-            workspace_party_id=None,
+            workspace_party_id=selected_party_id_int,
             credit_account_id=_workspace_account_id_from_expense_by(form.expense_by.data, workspace_employee_id),
         )
         db.session.commit()
@@ -17689,7 +17758,18 @@ def oil_expense_form(pk=None):
 
         flash('Oil expense saved.', 'success')
         return redirect(url_for('oil_expense_list'))
-    return render_template('oil_expense_form.html', form=form, rec=rec, title='Edit Oil Expense' if rec else 'Add Oil Expense', products_for_oil=products_for_oil)
+    return render_template(
+        'oil_expense_form.html',
+        form=form,
+        rec=rec,
+        title='Edit Oil Expense' if rec else 'Add Oil Expense',
+        products_for_oil=products_for_oil,
+        workspace_parties=workspace_parties,
+        selected_party_id=selected_party_id,
+        entered_total_bill=entered_total_bill,
+        total_bill_error=total_bill_error,
+        party_error=party_error,
+    )
 
 
 @app.route('/oil-expense/delete/<int:pk>', methods=['POST'])

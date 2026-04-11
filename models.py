@@ -850,6 +850,8 @@ class OilExpense(db.Model):
     previous_reading = db.Column(db.Numeric(12, 2), nullable=True)
     current_reading = db.Column(db.Numeric(12, 2), nullable=True)
     km = db.Column(db.Numeric(12, 2), nullable=True)  # current - previous
+    workspace_party_id = db.Column(db.Integer, db.ForeignKey('workspace_party.id'), nullable=True, index=True)
+    total_bill_amount = db.Column(db.Numeric(15, 2), nullable=True)
     remarks = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
 
@@ -857,6 +859,7 @@ class OilExpense(db.Model):
     project = db.relationship('Project', backref='oil_expenses', lazy='select')
     employee = db.relationship('Employee', backref='oil_expenses', lazy='select')
     vehicle = db.relationship('Vehicle', backref='oil_expenses', lazy='select')
+    workspace_party = db.relationship('WorkspaceParty', backref='oil_expenses', lazy='select')
     items = db.relationship('OilExpenseItem', backref='oil_expense', lazy='dynamic', order_by='OilExpenseItem.sort_order', cascade='all, delete-orphan')
     attachments = db.relationship('OilExpenseAttachment', backref='oil_expense', lazy='dynamic', cascade='all, delete-orphan')
 

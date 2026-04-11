@@ -223,9 +223,37 @@
 
     <div class="form-section">
       <div class="row g-3 mb-3">
-        <div class="col-md-6 field-group">
+        <div class="col-md-4 field-group">
+          <label class="form-label fw-bold">Party Name (Workspace)</label>
+          <select name="workspace_party_id" id="partySelect" class="form-select search-select">
+            <option value="">-- Select Party --</option>
+            {% for p in workspace_parties or [] %}
+              <option value="{{ p.id }}" {% if selected_party_id and selected_party_id|string == p.id|string %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+          {% if party_error %}
+            <div class="text-danger small mt-1">{{ party_error }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-4 field-group">
+          <label class="form-label fw-bold">Total Bill Amount (User Entry)</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            class="form-control"
+            id="totalBillInput"
+            name="total_bill_amount"
+            value="{{ entered_total_bill if entered_total_bill is not none else '' }}"
+            placeholder="Enter final bill total"
+          >
+          {% if total_bill_error %}
+            <div class="text-danger small mt-1">{{ total_bill_error }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-4 field-group">
           <label class="form-label fw-bold">Expense By (Workspace COA)</label>
-          {{ form.expense_by(class="form-select search-select") }}
+          {{ form.expense_by(class="form-select search-select", id="expenseBySelect") }}
           <small class="text-muted">Select workspace account to credit for this expense (optional).</small>
         </div>
       </div>
@@ -255,6 +283,7 @@
   var entryAmount = document.getElementById('entryAmount');
   var entryBalanceQty = document.getElementById('entryBalanceQty');
   var addToListBtn = document.getElementById('addToListBtn');
+  var totalBillInput = document.getElementById('totalBillInput');
   var oilTaskStartReading = null;
   var oilTaskCloseReading = null;
 
@@ -297,6 +326,15 @@
   entryUsedQty.addEventListener('input', updateEntryAmountAndBalance);
   entryPrice.addEventListener('input', updateEntryAmountAndBalance);
 
+  function escapeHtml(text) {
+    return String(text || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   function clearEntryRow() {
     entryProductSelect.value = '';
     entryPaymentType.value = '';
@@ -317,13 +355,24 @@
       return;
     }
     var p = productsForOil.find(function(x) { return String(x.id) === String(pid); });
-    var productName = p ? (p.name || '') : '';
+    var productName = escapeHtml(p ? (p.name || '') : '');
     var paymentType = entryPaymentType.value || '';
     var purchaseQty = parseFloat(entryPurchaseQty.value) || 0;
     var usedQty = parseFloat(entryUsedQty.value) || 0;
     var price = parseFloat(entryPrice.value) || 0;
     var amount = (purchaseQty * price).toFixed(2);
     var balanceQty = (purchaseQty - usedQty).toFixed(2);
+
+    if (purchaseQty <= 0 && usedQty <= 0) {
+      alert('Purchase Qty ya Used Qty me se koi aik value add karein.');
+      entryPurchaseQty.focus();
+      return;
+    }
+    if (purchaseQty > 0 && price <= 0) {
+      alert('Purchase Qty ke sath Price 0 se bari honi chahiye.');
+      entryPrice.focus();
+      return;
+    }
 
     var tr = document.createElement('tr');
     tr.className = 'item-row';
@@ -397,6 +446,23 @@
     document.getElementById('totalUsedQty').textContent = totalUsed.toFixed(2);
     document.getElementById('totalBalanceQty').textContent = totalBalance.toFixed(2);
     document.getElementById('totalBillAmount').textContent = totalAmount.toFixed(2);
+  }
+
+  function validateBeforeSubmit() {
+    if (!totalBillInput) return true;
+    var listTotal = parseFloat(document.getElementById('totalBillAmount').textContent || '0') || 0;
+    var entered = parseFloat(totalBillInput.value || '0');
+    if (!isFinite(entered) || entered <= 0) {
+      alert('Total Bill Amount enter karein (0 se bari).');
+      totalBillInput.focus();
+      return false;
+    }
+    if (Math.abs(listTotal - entered) > 0.01) {
+      alert('Total Bill Amount aur product list ka total equal nahi hai.');
+      totalBillInput.focus();
+      return false;
+    }
+    return true;
   }
 
   function updateKm() {
@@ -482,6 +548,15 @@
   updateOilReadingMatch();
   fetchOilTaskReadings();
   updateEntryAmountAndBalance();
+
+  var formEl = document.getElementById('oilExpenseForm');
+  if (formEl) {
+    formEl.addEventListener('submit', function(e) {
+      if (!validateBeforeSubmit()) {
+        e.preventDefault();
+      }
+    });
+  }
 })();
 </script>
 {% endblock %}
