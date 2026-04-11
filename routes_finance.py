@@ -1295,6 +1295,27 @@ def _parse_person(val):
     return None, None
 
 
+def _flash_fund_transfer_form_errors(form):
+    """Show user-friendly validation messages on failed submit."""
+    if not form:
+        return
+    ordered_fields = ['transfer_date', 'from_person', 'to_person', 'amount', 'category', 'payment_mode']
+    shown = False
+    for fname in ordered_fields:
+        field = getattr(form, fname, None)
+        if field and getattr(field, 'errors', None):
+            flash(field.errors[0], 'danger')
+            shown = True
+    if not shown:
+        for errs in form.errors.values():
+            if errs:
+                flash(errs[0], 'danger')
+                shown = True
+                break
+    if not shown:
+        flash('Please correct the form errors and try again.', 'danger')
+
+
 def _upload_ft_attachment(file_storage):
     """Upload fund-transfer attachment (image/pdf) to R2, return public URL or None."""
     if not file_storage or not getattr(file_storage, 'filename', None):
@@ -1341,6 +1362,11 @@ def fund_transfer_add():
     form.to_person.choices = choices
     _populate_transfer_filters(form)
 
+    if request.method == 'POST' and not form.validate_on_submit():
+        _flash_fund_transfer_form_errors(form)
+        return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer',
+                               existing_attachment=None)
+
     if form.validate_on_submit():
         try:
             from_type, from_id = _parse_person(form.from_person.data)
@@ -1349,6 +1375,17 @@ def fund_transfer_add():
                 flash('Please select both sender and receiver.', 'danger')
                 return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer',
                            existing_attachment=None)
+
+            amount_val = Decimal(str(form.amount.data or 0))
+            if amount_val <= Decimal('0'):
+                flash('Amount must be greater than 0.', 'danger')
+                return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer',
+                                       existing_attachment=None)
+            category_val = (form.category.data or '').strip()
+            if not category_val:
+                flash('Category / Purpose is required.', 'danger')
+                return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer',
+                                       existing_attachment=None)
 
             from_wallet = ensure_wallet_account(from_type, from_id)
             to_wallet = ensure_wallet_account(to_type, to_id)
@@ -1368,13 +1405,13 @@ def fund_transfer_add():
                 to_party_id=to_id if to_type == 'pty' else None,
                 to_company_id=to_id if to_type == 'com' else None,
                 to_account_id=to_id if to_type == 'acct' else None,
-                amount=form.amount.data,
+                amount=amount_val,
                 payment_mode=form.payment_mode.data,
                 reference_no=form.reference_no.data,
                 description=form.description.data,
                 attachment=attachment_url,
                 is_salary=form.is_salary.data or False,
-                category=form.category.data or None,
+                category=category_val,
                 district_id=form.district_id.data or None,
                 project_id=form.project_id.data or None,
                 created_by_user_id=session.get('user_id'),
@@ -1438,6 +1475,11 @@ def fund_transfer_edit(pk):
         elif transfer.to_account_id:
             form.to_person.data = f'acct-{transfer.to_account_id}'
 
+    if request.method == 'POST' and not form.validate_on_submit():
+        _flash_fund_transfer_form_errors(form)
+        return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
+                               existing_attachment=transfer.attachment)
+
     if form.validate_on_submit():
         try:
             if transfer.journal_entry_id:
@@ -1450,6 +1492,16 @@ def fund_transfer_edit(pk):
 
             from_type, from_id = _parse_person(form.from_person.data)
             to_type, to_id = _parse_person(form.to_person.data)
+            amount_val = Decimal(str(form.amount.data or 0))
+            if amount_val <= Decimal('0'):
+                flash('Amount must be greater than 0.', 'danger')
+                return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
+                                       existing_attachment=transfer.attachment)
+            category_val = (form.category.data or '').strip()
+            if not category_val:
+                flash('Category / Purpose is required.', 'danger')
+                return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
+                                       existing_attachment=transfer.attachment)
             from_wallet = ensure_wallet_account(from_type, from_id)
             to_wallet = ensure_wallet_account(to_type, to_id)
 
@@ -1464,14 +1516,14 @@ def fund_transfer_edit(pk):
             transfer.to_party_id = to_id if to_type == 'pty' else None
             transfer.to_company_id = to_id if to_type == 'com' else None
             transfer.to_account_id = to_id if to_type == 'acct' else None
-            transfer.amount = form.amount.data
+            transfer.amount = amount_val
             transfer.payment_mode = form.payment_mode.data
             transfer.reference_no = form.reference_no.data
             transfer.description = form.description.data
             transfer.district_id = form.district_id.data or None
             transfer.project_id = form.project_id.data or None
             transfer.is_salary = form.is_salary.data or False
-            transfer.category = form.category.data or None
+            transfer.category = category_val
 
             if request.form.get('remove_attachment') == '1':
                 _delete_ft_attachment(transfer.attachment)

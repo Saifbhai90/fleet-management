@@ -1320,7 +1320,7 @@ class FundTransferForm(FlaskForm):
                               choices=[], render_kw={'class': 'form-select search-select'})
     project_id = SelectField('Project', coerce=int, validators=[Optional()],
                              choices=[], render_kw={'class': 'form-select search-select'})
-    category = SelectField('Category / Purpose', validators=[Optional()],
+    category = SelectField('Category / Purpose', validators=[DataRequired(message='Category / Purpose is required.')],
                            choices=[],
                            render_kw={'class': 'form-select'})
     attachment = FileField('Attachment (Image/PDF)', validators=[Optional(),
