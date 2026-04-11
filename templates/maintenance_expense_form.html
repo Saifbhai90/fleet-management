@@ -22,6 +22,8 @@
   .maint-form-wrap .action-bar { padding: 0.78rem 1rem; background: #f8fafc; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 0.5rem; }
   .maint-form-wrap .btn { font-size: 0.92rem; }
   .job-category-group .btn { min-height: 40px; }
+  #taskReadingsMeta { white-space: nowrap; display: inline-block; }
+  #currentReading { min-height: 44px; font-size: 1.02rem; font-weight: 600; }
 </style>
 <div class="container-fluid maint-form-wrap py-2">
   <div class="page-header d-flex justify-content-between align-items-center">
@@ -54,12 +56,12 @@
             <label class="form-label">Date <span class="text-danger">*</span></label>
             {{ form.expense_date(class="form-control datepicker", id="expenseDate") }}
           </div>
-          <div class="col-md-3 field-group">
+          <div class="col-md-4 field-group">
             <label class="form-label">Current Reading <small class="text-muted" id="taskReadingsMeta">(Start: - | Close: -)</small></label>
             {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
             <small class="text-muted" id="currentReadingMatchNote">Enter reading to check match with task start/close.</small>
           </div>
-          <div class="col-md-6 field-group job-category-group">
+          <div class="col-md-5 field-group job-category-group">
             <label class="form-label">Job Category</label>
             <div class="input-group">
               <select name="job_category" id="jobCategorySelect" class="form-select search-select">
@@ -221,6 +223,7 @@
 
 <script>
 (function() {
+  var districtSelect = document.getElementById('districtSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
   var currentReading = document.getElementById('currentReading');
   var expenseDate = document.getElementById('expenseDate');
@@ -451,6 +454,8 @@
       currentReadingMatchNote.textContent = 'Matched with Start Reading.';
     } else if (Math.abs(curr - taskCloseReading) <= tol) {
       currentReadingMatchNote.textContent = 'Matched with Close Reading.';
+    } else if (curr >= Math.min(taskStartReading, taskCloseReading) && curr <= Math.max(taskStartReading, taskCloseReading)) {
+      currentReadingMatchNote.textContent = 'Matched (within Start/Close range).';
     } else {
       currentReadingMatchNote.textContent = 'Outside Start/Close readings.';
     }
@@ -486,6 +491,15 @@
   if (vehicleSelect) vehicleSelect.addEventListener('change', fetchTaskReadingsForMaintenance);
   if (expenseDate) expenseDate.addEventListener('change', fetchTaskReadingsForMaintenance);
   if (currentReading) currentReading.addEventListener('input', updateCurrentReadingMatch);
+
+  // Put cursor in first field when form opens.
+  window.setTimeout(function() {
+    if (districtSelect && districtSelect.tomselect) {
+      districtSelect.tomselect.focus();
+    } else if (districtSelect) {
+      districtSelect.focus();
+    }
+  }, 120);
 
   updateEntryAmount();
   fetchTaskReadingsForMaintenance();
