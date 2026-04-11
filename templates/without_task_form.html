@@ -15,7 +15,7 @@
           <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
         </div>
         <div class="col-md-3">
-          <label class="form-label">District <span class="text-danger">*</span></label>
+          <label class="form-label">District</label>
           <select name="district_id" id="districtSelect" class="form-select search-select">
             <option value="0">-- All Districts --</option>
             {% for d in districts %}
@@ -24,7 +24,7 @@
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Project <span class="text-danger">*</span></label>
+          <label class="form-label">Project</label>
           <select name="project_id" id="projectSelect" class="form-select search-select">
             <option value="0">-- All Projects --</option>
             {% for p in projects %}
@@ -144,13 +144,13 @@
       </div>
     </div>
   </form>
-  {% elif district_id and project_id %}
+  {% elif load_attempted %}
   <div class="alert alert-info">
     <i class="bi bi-info-circle me-2"></i>No vehicles found with KMs Driven > 0 and EMG = 0 for this date. Make sure Task Entry data exists for <strong>{{ view_date.strftime('%d-%m-%Y') }}</strong>.
   </div>
   {% else %}
   <div class="alert alert-info">
-    <i class="bi bi-info-circle me-2"></i>Date, District aur Project select karke <strong>Load Vehicles</strong> par click karein. New Task Entry se vehicles jinka KMs > 0 aur EMG = 0 ho, wo yahan show honge.
+    <i class="bi bi-info-circle me-2"></i>Date select karke <strong>Load Vehicles</strong> par click karein. District/Project optional filters hain. New Task Entry se vehicles jinka KMs > 0 aur EMG = 0 ho, wo yahan show honge.
   </div>
   {% endif %}
 </div>

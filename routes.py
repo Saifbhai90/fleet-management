@@ -14368,6 +14368,7 @@ def without_task_new():
                 driver_id = int(request.form.get(f'row_{idx}_driver_id') or 0) or None
             except (ValueError, TypeError):
                 driver_id = None
+            edit_mode = str(request.form.get(f'row_{idx}_edit_mode') or '1') == '1'
             existing = VehicleMoveWithoutTask.query.filter_by(vehicle_id=veh_id, move_date=move_date).first()
             if existing:
                 # Locked row: keep old record exactly as-is unless user explicitly clicks Edit.
@@ -14427,10 +14428,23 @@ def without_task_new():
         saved_map = {r.vehicle_id: r for r in saved_recs.all()}
 
         tq = VehicleDailyTask.query.filter(VehicleDailyTask.task_date == view_date)
+        needs_vehicle_join = bool(district_id or project_id)
+        if needs_vehicle_join:
+            tq = tq.join(Vehicle, Vehicle.id == VehicleDailyTask.vehicle_id)
         if district_id:
-            tq = tq.filter(VehicleDailyTask.district_id == district_id)
+            tq = tq.filter(
+                or_(
+                    VehicleDailyTask.district_id == district_id,
+                    and_(VehicleDailyTask.district_id.is_(None), Vehicle.district_id == district_id),
+                )
+            )
         if project_id:
-            tq = tq.filter(VehicleDailyTask.project_id == project_id)
+            tq = tq.filter(
+                or_(
+                    VehicleDailyTask.project_id == project_id,
+                    and_(VehicleDailyTask.project_id.is_(None), Vehicle.project_id == project_id),
+                )
+            )
         tasks = tq.all()
         seen_vids = set()
         for t in tasks:
@@ -14502,7 +14516,8 @@ def without_task_new():
                 })
     return render_template('without_task_form.html', rows=rows, view_date=view_date,
                            district_id=district_id, project_id=project_id,
-                           districts=districts, projects=projects, title='Add Vehicle Move without Task')
+                           districts=districts, projects=projects, load_attempted=load_attempted,
+                           title='Add Vehicle Move without Task')
 
 
 @app.route('/vehicle-move-without-task/<int:pk>/edit', methods=['GET', 'POST'])
