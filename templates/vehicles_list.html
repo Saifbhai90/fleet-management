@@ -124,7 +124,7 @@
           </div>
         </div>
         <div class="col-10 col-md-4">
-          <input type="text" name="search" class="form-control filter-input" placeholder="Search by vehicle no, model, type, phone, engine or chassis no..." value="{{ search }}">
+          <input type="text" name="search" class="form-control filter-input" placeholder="Search by vehicle no, model, type, family, phone, engine or chassis no..." value="{{ search }}">
         </div>
         <div class="col-2 col-md-2">
           <button class="btn btn-success-compact w-100" type="submit"><i class="bi bi-search"></i></button>
@@ -169,6 +169,10 @@
               Vehicle Type
               <i data-lucide="{% if sort_by == 'vehicle_type' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'vehicle_type' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
             </th>
+            <th width="12%" class="sortable-header {% if sort_by == 'vehicle_family' %}active{% endif %}" onclick="sortTable('vehicle_family')">
+              Vehicle Family
+              <i data-lucide="{% if sort_by == 'vehicle_family' and sort_order == 'asc' %}chevron-up{% elif sort_by == 'vehicle_family' and sort_order == 'desc' %}chevron-down{% else %}chevrons-up-down{% endif %}" class="sort-icon"></i>
+            </th>
             <th width="8%">Capacity</th>
             <th width="12%">Phone No</th>
             <th width="12%" class="sortable-header {% if sort_by == 'active_date' %}active{% endif %}" onclick="sortTable('active_date')">
@@ -194,6 +198,7 @@
             <td class="fw-bold">{{ vehicle.vehicle_no }}{% if vehicle.document_path %} <a href="{{ url_for('uploaded_file', filename=vehicle.document_path) }}" target="_blank" class="text-primary ms-1" title="View document"><i class="bi bi-file-earmark-pdf"></i></a>{% endif %}</td>
             <td>{{ vehicle.model }}</td>
             <td><span class="badge badge-sm badge-info">{{ vehicle.vehicle_type }}</span></td>
+            <td>{{ vehicle.vehicle_family or '-' }}</td>
             <td>
               <span class="badge badge-sm badge-info">
                 <i class="bi bi-person-fill me-1"></i>{{ vehicle.driver_capacity or '1' }}
@@ -223,7 +228,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="9" class="text-center py-4">
+            <td colspan="10" class="text-center py-4">
               <div class="text-muted">
                 <i class="bi bi-truck-flatbed fs-3 d-block mb-2"></i>
                 <p class="mb-0">No vehicles found.{% if can_see_page('vehicles_add') %} <a href="{{ url_for('vehicle_form') }}">Add a new vehicle now</a>.{% endif %}</p>

@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Oil Change Alert Report{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<style>
+  .oca-header { background: linear-gradient(135deg, #8e24aa 0%, #5e35b1 100%); color: #fff; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
+  .oca-header h2 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+  .oca-subtitle { font-size: 0.84rem; opacity: .9; margin-top: .2rem; }
+  .oca-filter { background: #fff; border-radius: 8px; box-shadow: 0 1px 5px rgba(0,0,0,.08); padding: .9rem 1rem; margin-bottom: 1rem; }
+  .oca-table-wrap { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); padding: .9rem; }
+  #oilAlertTable thead th { background: #f3e5f5; color: #4a148c; border-bottom: 2px solid #8e24aa; font-size: .78rem; text-transform: uppercase; white-space: nowrap; }
+  #oilAlertTable td { vertical-align: middle; font-size: .83rem; }
+  .status-near { background: #fff8e1; color: #ef6c00; border: 1px solid #ffe0b2; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
+  .status-crossed { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
+  .total-badge { background: #ede7f6; color: #512da8; padding: .25rem .8rem; border-radius: 20px; font-size: .82rem; font-weight: 700; }
+</style>
+
+<div class="container-fluid py-3 px-3 px-md-4">
+  <div class="oca-header">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <div class="me-auto">
+        <h2><i class="bi bi-bell-fill me-2"></i>Oil Change Alert Report</h2>
+        <div class="oca-subtitle">
+          Near alert threshold: {{ near_percent }}% of family limit
+        </div>
+      </div>
+      {% if can_see_page('oil_change_alert_report') %}
+      <a href="{{ url_for('oil_change_alert_report_export', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status) }}" class="btn btn-success btn-sm">
+        <i class="bi bi-file-earmark-excel me-1"></i>Export
+      </a>
+      <a href="{{ url_for('oil_change_alert_report_print', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status) }}" class="btn btn-warning btn-sm" target="_blank">
+        <i class="bi bi-printer me-1"></i>Print
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="oca-filter">
+    <form method="get" action="{{ url_for('oil_change_alert_report') }}">
+      <div class="row g-2 align-items-end">
+        <div class="col-6 col-md-3">
+          <label class="form-label mb-1 small fw-semibold">Project</label>
+          <select name="project_id" class="form-select form-select-sm search-select" id="projectSelect">
+            {% for val, label in project_choices %}
+            <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label mb-1 small fw-semibold">District</label>
+          <select name="district_id" class="form-select form-select-sm search-select" id="districtSelect">
+            {% for val, label in district_choices %}
+            <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label mb-1 small fw-semibold">Vehicle Family</label>
+          <select name="vehicle_family" class="form-select form-select-sm search-select">
+            {% for val, label in family_choices %}
+            <option value="{{ val }}" {% if vehicle_family == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Status</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="all" {% if status == 'all' %}selected{% endif %}>Near + Crossed</option>
+            <option value="near" {% if status == 'near' %}selected{% endif %}>Near</option>
+            <option value="crossed" {% if status == 'crossed' %}selected{% endif %}>Crossed</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-1">
+          <button class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel-fill"></i></button>
+        </div>
+      </div>
+      <div class="mt-2">
+        <a href="{{ url_for('oil_change_alert_report') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x-circle me-1"></i>Clear
+        </a>
+        <span class="total-badge ms-2">{{ total }} alert{{ 's' if total != 1 else '' }}</span>
+      </div>
+    </form>
+  </div>
+
+  <div class="oca-table-wrap">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="total-badge"><i class="bi bi-exclamation-triangle-fill me-1"></i>Total Alerts: {{ total }}</span>
+      <input type="text" id="dtSearchInput" class="form-control form-control-sm" placeholder="Search..." style="max-width:220px;">
+    </div>
+    <div class="table-responsive">
+      <table id="oilAlertTable" class="table table-sm table-bordered table-hover align-middle w-100">
+        <thead>
+          <tr>
+            <th>Sr No</th>
+            <th>Project</th>
+            <th>District</th>
+            <th>Vehicle</th>
+            <th>Family / Limit</th>
+            <th>Base Reading</th>
+            <th>Current Reading</th>
+            <th>KM After Oil</th>
+            <th>Remaining KM</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ r.project.name if r.project else '-' }}</td>
+            <td>{{ r.district.name if r.district else '-' }}</td>
+            <td>
+              <div class="fw-semibold">{{ r.vehicle.vehicle_no }}</div>
+              <small class="text-muted">{{ r.vehicle.model or '-' }}{% if r.vehicle.vehicle_type %} · {{ r.vehicle.vehicle_type }}{% endif %}</small>
+            </td>
+            <td>
+              <div class="fw-semibold">{{ r.vehicle_family }}</div>
+              <small class="text-muted">Limit: {{ r.limit_km }} KM</small>
+            </td>
+            <td>
+              <div>{{ '%.2f'|format(r.base_reading) }}</div>
+              <small class="text-muted">{{ r.base_source }}</small>
+            </td>
+            <td>
+              <div>{{ '%.2f'|format(r.current_reading) }}</div>
+              <small class="text-muted">{{ r.current_source }}</small>
+            </td>
+            <td class="fw-semibold">{{ '%.2f'|format(r.kms_after_oil) }}</td>
+            <td class="{% if r.remaining_km <= 0 %}text-danger fw-semibold{% else %}text-warning fw-semibold{% endif %}">
+              {{ '%.2f'|format(r.remaining_km) }}
+            </td>
+            <td>
+              {% if r.status == 'crossed' %}
+              <span class="status-crossed">Crossed</span>
+              {% else %}
+              <span class="status-near">Near</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="10" class="text-center text-muted py-4">No oil change alerts found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script>
+$(function () {
+  if (window.innerWidth < 768) return;
+  var table = $('#oilAlertTable').DataTable({
+    dom: "<'row'<'col-12'tr>><'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>",
+    pageLength: 25,
+    lengthChange: false,
+    order: [],
+    language: {
+      info: 'Showing _START_ to _END_ of _TOTAL_ alerts',
+      emptyTable: 'No alerts found.',
+      paginate: { first: '«', last: '»', next: '›', previous: '‹' }
+    }
+  });
+  $('#dtSearchInput').on('keyup input', function () {
+    table.search(this.value).draw();
+  });
+});
+</script>
+{% endblock %}

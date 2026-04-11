@@ -1,0 +1,70 @@
+{% extends "base_print.html" %}
+{% block title %}Print – Oil Change Alert Report{% endblock %}
+
+{% block extra_head %}
+<style>
+  .rpt-header { background: linear-gradient(135deg, #8e24aa 0%, #5e35b1 100%); color: #fff; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
+  .rpt-header h2 { margin: 0; font-size: 1.22rem; font-weight: 700; }
+  .rpt-meta { font-size: 0.78rem; color: #546e7a; margin-bottom: 0.75rem; }
+  .total-badge { display: inline-block; background: #ede7f6; color: #512da8; font-size: 0.82rem; font-weight: 700; padding: 0.2rem 0.75rem; border-radius: 20px; }
+  .rpt-table { font-size: 0.81rem; }
+  .rpt-table thead th { background: #f3e5f5; color: #4a148c; font-weight: 700; font-size: 0.74rem; text-transform: uppercase; border-bottom: 2px solid #8e24aa; white-space: nowrap; padding: 0.4rem 0.6rem; }
+  .rpt-table tbody td { vertical-align: middle; padding: 0.38rem 0.58rem; }
+  .rpt-table tbody tr:nth-child(even) { background: #faf5ff; }
+  .status-near { color: #ef6c00; font-weight: 700; }
+  .status-crossed { color: #c62828; font-weight: 700; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="print-container">
+  <div class="rpt-header">
+    <h2><i class="bi bi-bell-fill me-2"></i>Oil Change Alert Report</h2>
+  </div>
+
+  <div class="rpt-meta d-flex flex-wrap gap-3">
+    <span><i class="bi bi-calendar3 me-1"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
+    <span><i class="bi bi-sliders me-1"></i>Near threshold: {{ near_percent }}%</span>
+  </div>
+  <div class="mb-2">
+    <span class="total-badge"><i class="bi bi-exclamation-triangle-fill me-1"></i>Total Alerts: {{ total }}</span>
+  </div>
+
+  <table class="table table-sm table-bordered rpt-table w-100">
+    <thead>
+      <tr>
+        <th>Sr No</th>
+        <th>Project</th>
+        <th>District</th>
+        <th>Vehicle</th>
+        <th>Family / Limit</th>
+        <th>Base Reading</th>
+        <th>Current Reading</th>
+        <th>KM After Oil</th>
+        <th>Remaining KM</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ r.project.name if r.project else '-' }}</td>
+        <td>{{ r.district.name if r.district else '-' }}</td>
+        <td>{{ r.vehicle.vehicle_no }}{% if r.vehicle.model %} ({{ r.vehicle.model }}){% endif %}</td>
+        <td>{{ r.vehicle_family }} / {{ r.limit_km }}</td>
+        <td>{{ '%.2f'|format(r.base_reading) }}</td>
+        <td>{{ '%.2f'|format(r.current_reading) }}</td>
+        <td>{{ '%.2f'|format(r.kms_after_oil) }}</td>
+        <td>{{ '%.2f'|format(r.remaining_km) }}</td>
+        <td class="{% if r.status == 'crossed' %}status-crossed{% else %}status-near{% endif %}">
+          {{ 'Crossed' if r.status == 'crossed' else 'Near' }}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="text-center text-muted py-4">No oil change alerts found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

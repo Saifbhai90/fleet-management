@@ -14,10 +14,10 @@
     <br><span class="text-info"><i class="bi bi-info-circle me-1"></i>Priority: Vehicle > District > Project > Global</span>
   </p>
 
-  {% set active_tab = request.args.get('settings_tab', 'attendance') %}
+{% set active_tab = request.args.get('settings_tab', 'attendance') %}
   <ul class="nav nav-pills mb-3" id="settingsMainTabs">
     <li class="nav-item">
-      <button type="button" class="nav-link {% if active_tab != 'freeze' %}active{% endif %}" data-settings-tab="attendance">
+      <button type="button" class="nav-link {% if active_tab not in ['freeze', 'oil_limits'] %}active{% endif %}" data-settings-tab="attendance">
         <i class="bi bi-clock-history me-1"></i>Attendance Control
       </button>
     </li>
@@ -26,9 +26,14 @@
         <i class="bi bi-snow2 me-1"></i>Freeze Data Control
       </button>
     </li>
+    <li class="nav-item">
+      <button type="button" class="nav-link {% if active_tab == 'oil_limits' %}active{% endif %}" data-settings-tab="oil_limits">
+        <i class="bi bi-droplet-half me-1"></i>Oil Change Limits
+      </button>
+    </li>
   </ul>
 
-  <div id="attendanceControlPane" {% if active_tab == 'freeze' %}style="display:none"{% endif %}>
+  <div id="attendanceControlPane" {% if active_tab in ['freeze', 'oil_limits'] %}style="display:none"{% endif %}>
 
   <!-- ═══════════════ GLOBAL DEFAULT ═══════════════ -->
   <div class="row mb-4">
@@ -501,6 +506,70 @@
     </div>
   </div>
 </div>
+
+<div id="oilLimitsPane" {% if active_tab != 'oil_limits' %}style="display:none"{% endif %}>
+  <div class="row mb-4">
+    <div class="col-lg-10">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header text-white py-3" style="background: linear-gradient(135deg, #7b1fa2 0%, #512da8 100%);">
+          <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Vehicle Family Wise Oil Change Limits</h5>
+        </div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('form_control', settings_tab='oil_limits') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="save_oil_change_limits">
+
+            <div class="alert alert-light border small mb-3">
+              <i class="bi bi-info-circle me-1"></i>
+              Last oil change ke baad jitne KM chal jayein, us limit ke near/cross hone par report me alert show hoga.
+              Agar last oil change reading na mile to <strong>Vehicle Fuel/Oil Previous Reading Setup</strong> ki oil reading use hogi.
+            </div>
+
+            <div class="row g-3 mb-3">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Near Alert Threshold (%)</label>
+                <input type="number" min="50" max="99" step="1" class="form-control" name="oil_near_percent" value="{{ oil_near_percent or 90 }}">
+                <div class="form-text">Example: 90 = limit ka 90% complete hone par "Near" alert.</div>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width:6%">#</th>
+                    <th>Vehicle Family</th>
+                    <th style="width:26%">Oil Change Limit (KM)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for fam in oil_family_options %}
+                  <tr>
+                    <td>{{ loop.index }}</td>
+                    <td class="fw-semibold">{{ fam }}</td>
+                    <td>
+                      <input type="hidden" name="oil_family" value="{{ fam }}">
+                      <input type="number" min="0" step="1" class="form-control form-control-sm" name="oil_limit_value" value="{{ oil_change_limits.get(fam, '') }}" placeholder="e.g. 5000">
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr>
+                    <td colspan="3" class="text-center text-muted py-3">No vehicle families found.</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="d-flex justify-content-end">
+              <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Oil Limits</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 </div>
 
 <script>
@@ -508,6 +577,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const tabBtns = document.querySelectorAll('[data-settings-tab]');
   const attendancePane = document.getElementById('attendanceControlPane');
   const freezePane = document.getElementById('freezeControlPane');
+  const oilPane = document.getElementById('oilLimitsPane');
   tabBtns.forEach(function(btn){
     btn.addEventListener('click', function(){
       const t = btn.getAttribute('data-settings-tab');
@@ -515,10 +585,17 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.classList.add('active');
       if(t === 'freeze'){
         attendancePane.style.display = 'none';
+        oilPane.style.display = 'none';
         freezePane.style.display = '';
         history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=freeze');
+      } else if (t === 'oil_limits') {
+        attendancePane.style.display = 'none';
+        freezePane.style.display = 'none';
+        oilPane.style.display = '';
+        history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=oil_limits');
       } else {
         freezePane.style.display = 'none';
+        oilPane.style.display = 'none';
         attendancePane.style.display = '';
         history.replaceState({}, '', '{{ url_for("form_control") }}');
       }

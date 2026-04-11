@@ -140,6 +140,8 @@ _DEFAULT_VEHICLE_FAMILIES = [
     'Toyota Hilux Vigo',
     'Changan Karvaan',
 ]
+_VEHICLE_FAMILY_OIL_LIMITS_KEY = 'vehicle_family_oil_change_limits'
+_VEHICLE_FAMILY_OIL_NEAR_PERCENT_KEY = 'vehicle_family_oil_change_near_percent'
 
 
 def _get_vehicle_family_options():
@@ -176,6 +178,71 @@ def _save_vehicle_family_options(options):
         clean.append(val)
     SystemSetting.set(_VEHICLE_FAMILY_SETTING_KEY, json.dumps(clean, ensure_ascii=True))
     return clean
+
+
+def _get_vehicle_family_oil_change_limits():
+    """Load per-family oil change limit (KM) from settings."""
+    raw = (SystemSetting.get(_VEHICLE_FAMILY_OIL_LIMITS_KEY, '') or '').strip()
+    out = {}
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                for k, v in parsed.items():
+                    fam = (str(k) or '').strip()
+                    if not fam:
+                        continue
+                    try:
+                        km = int(float(v))
+                    except Exception:
+                        continue
+                    if km > 0:
+                        out[fam] = km
+        except Exception:
+            out = {}
+    return out
+
+
+def _save_vehicle_family_oil_change_limits(limits):
+    clean = {}
+    for fam, km in (limits or {}).items():
+        fam_name = (fam or '').strip()
+        if not fam_name:
+            continue
+        try:
+            km_val = int(float(km))
+        except Exception:
+            continue
+        if km_val > 0:
+            clean[fam_name] = km_val
+    SystemSetting.set(_VEHICLE_FAMILY_OIL_LIMITS_KEY, json.dumps(clean, ensure_ascii=True))
+    return clean
+
+
+def _get_vehicle_family_oil_near_percent():
+    raw = (SystemSetting.get(_VEHICLE_FAMILY_OIL_NEAR_PERCENT_KEY, '90') or '90').strip()
+    try:
+        val = int(raw)
+    except Exception:
+        val = 90
+    if val < 50:
+        return 50
+    if val > 99:
+        return 99
+    return val
+
+
+def _save_vehicle_family_oil_near_percent(percent):
+    try:
+        val = int(percent)
+    except Exception:
+        val = 90
+    if val < 50:
+        val = 50
+    if val > 99:
+        val = 99
+    SystemSetting.set(_VEHICLE_FAMILY_OIL_NEAR_PERCENT_KEY, str(val))
+    return val
 
 
 
@@ -2137,7 +2204,7 @@ def vehicles_list():
         query = query.outerjoin(Project,  Vehicle.project_id  == Project.id) \
                      .outerjoin(District, Vehicle.district_id == District.id)
         flt = _multi_word_filter(search,
-            Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type,
+            Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type, Vehicle.vehicle_family,
             Vehicle.phone_no, Vehicle.engine_no, Vehicle.chassis_no,
             Project.name, District.name)
         if flt is not None:
@@ -2154,6 +2221,8 @@ def vehicles_list():
         order_col = Vehicle.model.asc() if sort_order == 'asc' else Vehicle.model.desc()
     elif sort_by == 'vehicle_type':
         order_col = Vehicle.vehicle_type.asc() if sort_order == 'asc' else Vehicle.vehicle_type.desc()
+    elif sort_by == 'vehicle_family':
+        order_col = Vehicle.vehicle_family.asc() if sort_order == 'asc' else Vehicle.vehicle_family.desc()
     elif sort_by == 'active_date':
         order_col = Vehicle.active_date.asc() if sort_order == 'asc' else Vehicle.active_date.desc()
     elif sort_by == 'project':
@@ -2441,11 +2510,11 @@ def vehicles_export():
     search = request.args.get('search', '').strip()
     query = Vehicle.query
     if search:
-        flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type)
+        flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type, Vehicle.vehicle_family)
         if flt is not None:
             query = query.filter(flt)
     vehicles = query.order_by(Vehicle.id).all()
-    headers = ['ID', 'Vehicle No', 'Model', 'Type', 'Driver Capacity', 'Phone', 'Active Date']
+    headers = ['ID', 'Vehicle No', 'Model', 'Type', 'Family', 'Driver Capacity', 'Phone', 'Active Date']
     rows = []
     for v in vehicles:
         rows.append([
@@ -2453,6 +2522,7 @@ def vehicles_export():
             v.vehicle_no,
             v.model,
             v.vehicle_type,
+            v.vehicle_family or '',
             getattr(v, 'driver_capacity', None),
             v.phone_no,
             v.active_date.strftime('%Y-%m-%d') if getattr(v, 'active_date', None) else ''
@@ -2642,7 +2712,7 @@ def vehicles_print():
     search = request.args.get('search', '').strip()
     query = Vehicle.query
     if search:
-        flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type)
+        flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.model, Vehicle.vehicle_type, Vehicle.vehicle_family)
         if flt is not None:
             query = query.filter(flt)
     vehicles = query.order_by(Vehicle.id).all()
@@ -5336,6 +5406,9 @@ def form_control():
     freeze_cfg = get_freeze_config()
     freeze_forms = get_freeze_form_catalog()
     freeze_allowed_set = set(freeze_cfg.get('allowed_set') or set())
+    oil_family_options = _get_vehicle_family_options()
+    oil_change_limits = _get_vehicle_family_oil_change_limits()
+    oil_near_percent = _get_vehicle_family_oil_near_percent()
 
     if request.method == 'GET':
         if glob:
@@ -5353,6 +5426,9 @@ def form_control():
             freeze_cfg=freeze_cfg,
             freeze_forms=freeze_forms,
             freeze_allowed_set=freeze_allowed_set,
+            oil_family_options=oil_family_options,
+            oil_change_limits=oil_change_limits,
+            oil_near_percent=oil_near_percent,
         )
 
     action = request.form.get('action', '')
@@ -5403,6 +5479,28 @@ def form_control():
         db.session.commit()
         flash('Geofence & Notification settings saved.', 'success')
         return redirect(url_for('form_control'))
+
+    if action == 'save_oil_change_limits':
+        posted_families = request.form.getlist('oil_family')
+        posted_limits = request.form.getlist('oil_limit_value')
+        limits_payload = {}
+        for fam, raw in zip(posted_families, posted_limits):
+            fam_name = (fam or '').strip()
+            if not fam_name:
+                continue
+            raw_val = (raw or '').strip()
+            if not raw_val:
+                continue
+            try:
+                km_limit = int(float(raw_val))
+            except Exception:
+                continue
+            if km_limit > 0:
+                limits_payload[fam_name] = km_limit
+        _save_vehicle_family_oil_change_limits(limits_payload)
+        near_percent = _save_vehicle_family_oil_near_percent(request.form.get('oil_near_percent'))
+        flash(f'Vehicle family oil change limits saved. Near alert threshold set at {near_percent}%.', 'success')
+        return redirect(url_for('form_control', settings_tab='oil_limits'))
 
     if action == 'add_override':
         scope = override_form.scope.data
@@ -5496,6 +5594,9 @@ def form_control():
         freeze_cfg=freeze_cfg,
         freeze_forms=freeze_forms,
         freeze_allowed_set=freeze_allowed_set,
+        oil_family_options=oil_family_options,
+        oil_change_limits=oil_change_limits,
+        oil_near_percent=oil_near_percent,
     )
 
 
@@ -9276,6 +9377,313 @@ def active_drivers_report_print():
         'active_driver_summary_print.html',
         results=results, total=len(results),
         from_date=from_date_str, to_date=to_date_str,
+        now=datetime.now,
+    )
+
+
+# ── Oil Change Alert Report ──────────────────────────────────────────────
+def _apply_workspace_employee_scope_for_expense(query, model_cls, workspace_employee_id):
+    if workspace_employee_id:
+        query = query.filter(
+            db.or_(
+                model_cls.employee_id == workspace_employee_id,
+                model_cls.employee_id.is_(None),
+            )
+        )
+    return query
+
+
+def _vehicle_latest_meter_reading(vehicle_id, workspace_employee_id=None):
+    candidates = []
+
+    fuel_q = FuelExpense.query.filter(
+        FuelExpense.vehicle_id == vehicle_id,
+        FuelExpense.current_reading.isnot(None),
+    )
+    fuel_q = _apply_workspace_employee_scope_for_expense(fuel_q, FuelExpense, workspace_employee_id)
+    fuel_row = fuel_q.order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
+    if fuel_row and fuel_row.current_reading is not None:
+        candidates.append((fuel_row.fueling_date, fuel_row.id, float(fuel_row.current_reading), 'Fuel Entry'))
+
+    oil_q = OilExpense.query.filter(
+        OilExpense.vehicle_id == vehicle_id,
+        OilExpense.current_reading.isnot(None),
+    )
+    oil_q = _apply_workspace_employee_scope_for_expense(oil_q, OilExpense, workspace_employee_id)
+    oil_row = oil_q.order_by(OilExpense.expense_date.desc(), OilExpense.id.desc()).first()
+    if oil_row and oil_row.current_reading is not None:
+        candidates.append((oil_row.expense_date, oil_row.id, float(oil_row.current_reading), 'Oil Entry'))
+
+    maint_q = MaintenanceExpense.query.filter(
+        MaintenanceExpense.vehicle_id == vehicle_id,
+        MaintenanceExpense.current_reading.isnot(None),
+    )
+    maint_q = _apply_workspace_employee_scope_for_expense(maint_q, MaintenanceExpense, workspace_employee_id)
+    maint_row = maint_q.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).first()
+    if maint_row and maint_row.current_reading is not None:
+        candidates.append((maint_row.expense_date, maint_row.id, float(maint_row.current_reading), 'Maintenance Entry'))
+
+    if not candidates:
+        return None, None, None
+    latest = max(candidates, key=lambda x: ((x[0] or date.min), x[1]))
+    return latest[2], latest[0], latest[3]
+
+
+def _vehicle_last_oil_change_base(vehicle_id, workspace_employee_id=None):
+    oil_q = OilExpense.query.filter(
+        OilExpense.vehicle_id == vehicle_id,
+        OilExpense.current_reading.isnot(None),
+    )
+    oil_q = _apply_workspace_employee_scope_for_expense(oil_q, OilExpense, workspace_employee_id)
+    oil_row = oil_q.order_by(OilExpense.expense_date.desc(), OilExpense.id.desc()).first()
+    if oil_row and oil_row.current_reading is not None:
+        return float(oil_row.current_reading), oil_row.expense_date, 'Last Oil Change'
+    fallback = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'oil')
+    if fallback is not None:
+        return float(fallback), None, 'Reading Setup'
+    return None, None, None
+
+
+def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', status='all',
+                           workspace_employee_id=None,
+                           allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
+                           is_master_or_admin=True):
+    limits = _get_vehicle_family_oil_change_limits()
+    near_percent = _get_vehicle_family_oil_near_percent()
+    near_ratio = float(near_percent) / 100.0
+
+    query = db.session.query(Vehicle, Project, District).outerjoin(
+        Project, Vehicle.project_id == Project.id
+    ).outerjoin(
+        District, Vehicle.district_id == District.id
+    )
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(Vehicle.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    if project_id:
+        query = query.filter(Vehicle.project_id == project_id)
+    if district_id:
+        query = query.filter(Vehicle.district_id == district_id)
+    if vehicle_family:
+        query = query.filter(Vehicle.vehicle_family == vehicle_family)
+
+    rows = []
+    for vehicle, project, district in query.order_by(Project.name, District.name, Vehicle.vehicle_no).all():
+        family_name = (vehicle.vehicle_family or '').strip()
+        km_limit = limits.get(family_name)
+        if not family_name or not km_limit:
+            continue
+
+        base_reading, base_date, base_source = _vehicle_last_oil_change_base(vehicle.id, workspace_employee_id)
+        if base_reading is None:
+            continue
+
+        current_reading, current_date, current_source = _vehicle_latest_meter_reading(vehicle.id, workspace_employee_id)
+        if current_reading is None:
+            current_reading = base_reading
+            current_date = base_date
+            current_source = base_source
+
+        kms_after_oil = round(max(0.0, float(current_reading) - float(base_reading)), 2)
+        limit_f = float(km_limit)
+        near_at = round(limit_f * near_ratio, 2)
+        remaining = round(limit_f - kms_after_oil, 2)
+
+        if kms_after_oil >= limit_f:
+            status_code = 'crossed'
+        elif kms_after_oil >= near_at:
+            status_code = 'near'
+        else:
+            status_code = 'safe'
+
+        # This report is only for "near" and "crossed" alerts.
+        if status_code == 'safe':
+            continue
+        if status in ('near', 'crossed') and status_code != status:
+            continue
+
+        rows.append({
+            'vehicle': vehicle,
+            'project': project,
+            'district': district,
+            'vehicle_family': family_name,
+            'limit_km': int(km_limit),
+            'near_percent': near_percent,
+            'base_reading': round(float(base_reading), 2),
+            'base_date': base_date,
+            'base_source': base_source,
+            'current_reading': round(float(current_reading), 2),
+            'current_date': current_date,
+            'current_source': current_source,
+            'kms_after_oil': kms_after_oil,
+            'remaining_km': remaining,
+            'status': status_code,
+        })
+
+    rows.sort(key=lambda x: (0 if x['status'] == 'crossed' else 1, x['remaining_km']))
+    return rows
+
+
+@app.route('/oil-change-alert-report')
+def oil_change_alert_report():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_family = (request.args.get('vehicle_family') or '').strip()
+    status = (request.args.get('status') or 'all').strip().lower()
+    if status not in ('all', 'near', 'crossed'):
+        status = 'all'
+
+    rows = _oil_change_alert_rows(
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_family=vehicle_family,
+        status=status,
+        workspace_employee_id=workspace_employee_id,
+        allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts,
+        allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+
+    project_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.all()]
+
+    district_q = District.query.order_by(District.name)
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    if project_id:
+        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
+
+    limits = _get_vehicle_family_oil_change_limits()
+    family_choices = [('', '-- All Families --')] + [(k, f'{k} ({v} KM)') for k, v in sorted(limits.items())]
+
+    return render_template(
+        'oil_change_alert_report.html',
+        rows=rows,
+        total=len(rows),
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_family=vehicle_family,
+        status=status,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        family_choices=family_choices,
+        near_percent=_get_vehicle_family_oil_near_percent(),
+    )
+
+
+@app.route('/oil-change-alert-report/export')
+def oil_change_alert_report_export():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_family = (request.args.get('vehicle_family') or '').strip()
+    status = (request.args.get('status') or 'all').strip().lower()
+    if status not in ('all', 'near', 'crossed'):
+        status = 'all'
+
+    rows = _oil_change_alert_rows(
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_family=vehicle_family,
+        status=status,
+        workspace_employee_id=workspace_employee_id,
+        allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts,
+        allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+
+    headers = [
+        'Sr No', 'Project', 'District', 'Vehicle No', 'Model', 'Type', 'Family',
+        'Limit KM', 'Base Reading', 'Current Reading', 'KM After Oil', 'Remaining KM', 'Status',
+        'Base Source', 'Current Source'
+    ]
+    data_rows = []
+    for idx, r in enumerate(rows, 1):
+        v = r['vehicle']
+        data_rows.append([
+            idx,
+            r['project'].name if r['project'] else '-',
+            r['district'].name if r['district'] else '-',
+            v.vehicle_no if v else '-',
+            v.model if v and v.model else '-',
+            v.vehicle_type if v and v.vehicle_type else '-',
+            r['vehicle_family'],
+            r['limit_km'],
+            r['base_reading'],
+            r['current_reading'],
+            r['kms_after_oil'],
+            r['remaining_km'],
+            'Crossed' if r['status'] == 'crossed' else 'Near',
+            r['base_source'] or '-',
+            r['current_source'] or '-',
+        ])
+    return generate_excel_template(
+        headers, data_rows, required_columns=[],
+        filename=f'oil_change_alert_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+
+@app.route('/oil-change-alert-report/print')
+def oil_change_alert_report_print():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_family = (request.args.get('vehicle_family') or '').strip()
+    status = (request.args.get('status') or 'all').strip().lower()
+    if status not in ('all', 'near', 'crossed'):
+        status = 'all'
+
+    rows = _oil_change_alert_rows(
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_family=vehicle_family,
+        status=status,
+        workspace_employee_id=workspace_employee_id,
+        allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts,
+        allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+
+    return render_template(
+        'oil_change_alert_report_print.html',
+        rows=rows,
+        total=len(rows),
+        near_percent=_get_vehicle_family_oil_near_percent(),
         now=datetime.now,
     )
 

@@ -106,6 +106,12 @@
               <i class="bi bi-star text-warning me-2"></i>Maintenance Expense Report
             </a>
             {% endif %}
+            {% if can_see_page('oil_change_alert_report') %}
+            <a href="{{ url_for('oil_change_alert_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Oil Change Alert Report
+              <small class="text-muted d-block ms-4">Vehicle family limit ke near / crossed alerts</small>
+            </a>
+            {% endif %}
           </div>
         </div>
       </div>
