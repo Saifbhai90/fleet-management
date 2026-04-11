@@ -9470,9 +9470,16 @@ def _vehicle_last_oil_change_base(vehicle_id, workspace_employee_id=None):
     oil_row = oil_q.order_by(OilExpense.expense_date.desc(), OilExpense.id.desc()).first()
     if oil_row and oil_row.current_reading is not None:
         return float(oil_row.current_reading), oil_row.expense_date, 'Last Oil Change'
-    fallback = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'oil')
-    if fallback is not None:
-        return float(fallback), None, 'Reading Setup'
+    if workspace_employee_id:
+        fallback = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'oil')
+        if fallback is not None:
+            return float(fallback), None, 'Reading Setup'
+    setup = WorkspaceVehicleReadingSetup.query.filter(
+        WorkspaceVehicleReadingSetup.vehicle_id == vehicle_id,
+        WorkspaceVehicleReadingSetup.oil_previous_reading.isnot(None),
+    ).order_by(WorkspaceVehicleReadingSetup.updated_at.desc()).first()
+    if setup and setup.oil_previous_reading is not None:
+        return float(setup.oil_previous_reading), setup.setup_date, 'Reading Setup'
     return None, None, None
 
 
