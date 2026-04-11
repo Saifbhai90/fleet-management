@@ -754,8 +754,10 @@ def ensure_workspace_base_accounts(employee_id):
         ("1130", "JazzCash", "Asset", "1000", "bank_jazzcash"),
         ("2000", "Workspace Liabilities", "Liability", None, "liability_root"),
         ("2300", "Company Funding", "Liability", "2000", "company_funding"),
+        ("2310", "Transfer Clearing", "Liability", "2000", "transfer_clearing"),
         ("5000", "Workspace Expenses", "Expense", None, "expense_root"),
         ("5100", "General Expense", "Expense", "5000", "general_expense"),
+        ("5400", "Salary Expense", "Expense", "5000", "salary_expense"),
     ]
 
     existing = {
