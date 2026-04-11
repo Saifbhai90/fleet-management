@@ -16478,6 +16478,56 @@ def api_fuel_expense_price_hint():
     return jsonify({'current_pump': current_pump, 'other_pumps': other_pumps})
 
 
+@app.route('/api/fuel-expense/price-history')
+def api_fuel_expense_price_history():
+    """Return last 3 prices for selected pump + last 3 prices for fuel type across any pump."""
+    fuel_type = request.args.get('fuel_type', '').strip()
+    normalized = 'Super' if fuel_type == 'Petrol' else fuel_type
+    fuel_pump_id = request.args.get('fuel_pump_id', type=int)
+    employee_id = _workspace_employee_id_for_expenses()
+    if normalized not in ('Diesel', 'Super'):
+        return jsonify({'selected_pump': [], 'all_pumps': []})
+
+    if normalized == 'Super':
+        fuel_filter = FuelExpense.fuel_type.in_(('Super', 'Petrol'))
+    else:
+        fuel_filter = FuelExpense.fuel_type == normalized
+
+    base_q = FuelExpense.query.filter(
+        fuel_filter,
+        FuelExpense.fuel_price.isnot(None),
+    )
+    if employee_id:
+        base_q = base_q.filter(FuelExpense.employee_id == employee_id)
+
+    def _fmt_row(r):
+        pump_name = ''
+        if r.workspace_pump:
+            pump_name = r.workspace_pump.name or ''
+        elif r.fuel_pump:
+            pump_name = r.fuel_pump.name or ''
+        return {
+            'date': r.fueling_date.strftime('%d-%m-%Y') if r.fueling_date else '',
+            'pump_name': pump_name,
+            'vehicle_no': r.vehicle.vehicle_no if r.vehicle else '',
+            'fuel_price': float(r.fuel_price),
+        }
+
+    selected_pump_rows = []
+    if fuel_pump_id:
+        selected_q = base_q.filter(FuelExpense.workspace_pump_id == fuel_pump_id).order_by(
+            FuelExpense.fueling_date.desc(),
+            FuelExpense.id.desc(),
+        ).limit(3).all()
+        selected_pump_rows = [_fmt_row(r) for r in selected_q]
+
+    all_rows = base_q.order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).limit(3).all()
+    return jsonify({
+        'selected_pump': selected_pump_rows,
+        'all_pumps': [_fmt_row(r) for r in all_rows],
+    })
+
+
 @app.route('/expenses/fuel')
 def fuel_expense_list():
     _guard = _require_workspace_employee_for_expense_management()
@@ -16789,7 +16839,7 @@ def fuel_expense_add():
                 previous_reading = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'fuel') or 0
         prev_f = float(previous_reading)
         curr_f = float(current_reading)
-        km = curr_f - prev_f if curr_f >= prev_f else 0
+        km = curr_f - prev_f
         amount = form.amount.data
         fuel_price = form.fuel_price.data
         amount_f = float(amount) if amount else 0
@@ -16939,7 +16989,7 @@ def fuel_expense_edit(pk):
                 previous_reading = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'fuel') or 0
         prev_f = float(previous_reading)
         curr_f = float(current_reading)
-        km = curr_f - prev_f if curr_f >= prev_f else 0
+        km = curr_f - prev_f
         amount = form.amount.data
         fuel_price = form.fuel_price.data
         amount_f = float(amount) if amount else 0
