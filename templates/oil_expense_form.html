@@ -289,6 +289,12 @@
 
   var productsForOil = [{% for p in products_for_oil %}{id:{{ p.id }},name:{{ p.name | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}];
 
+  function _reinitSearchableDropdown(scopeEl) {
+    if (typeof initSearchableDropdowns === 'function') {
+      initSearchableDropdowns(scopeEl);
+    }
+  }
+
   function _populateOilProducts(arr) {
     productsForOil = arr;
     var sel = entryProductSelect;
@@ -301,7 +307,7 @@
       o.setAttribute('data-name', p.name || '');
       sel.appendChild(o);
     });
-    initSearchableDropdowns(sel.parentNode);
+    _reinitSearchableDropdown(sel.parentNode);
     itemsBody.querySelectorAll('.item-row').forEach(function(tr) { bindListRow(tr); });
     updateTotals();
   }
@@ -392,7 +398,9 @@
     updateTotals();
   }
 
-  addToListBtn.addEventListener('click', addEntryToList);
+  if (addToListBtn) {
+    addToListBtn.addEventListener('click', addEntryToList);
+  }
 
   function onEntryKeydown(e) {
     if (e.key === 'Enter') {
