@@ -13,6 +13,7 @@
   #oilAlertTable td { vertical-align: middle; font-size: .83rem; }
   .status-near { background: #fff8e1; color: #ef6c00; border: 1px solid #ffe0b2; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
   .status-crossed { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
+  .status-safe { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
   .total-badge { background: #ede7f6; color: #512da8; padding: .25rem .8rem; border-radius: 20px; font-size: .82rem; font-weight: 700; }
 </style>
 
@@ -21,13 +22,13 @@
     <div class="d-flex flex-wrap align-items-center gap-2">
       <div class="me-auto">
         <h2><i class="bi bi-bell-fill me-2"></i>Oil Change Alert Report</h2>
-        <div class="oca-subtitle">Family-wise oil limits with near/crossed alert tracking</div>
+        <div class="oca-subtitle">Family-wise oil limits with safe/near/crossed tracking</div>
       </div>
       {% if can_see_page('oil_change_alert_report') %}
-      <a href="{{ url_for('oil_change_alert_report_export', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status) }}" class="btn btn-success btn-sm">
+      <a href="{{ url_for('oil_change_alert_report_export', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status, custom_km=custom_km) }}" class="btn btn-success btn-sm">
         <i class="bi bi-file-earmark-excel me-1"></i>Export
       </a>
-      <a href="{{ url_for('oil_change_alert_report_print', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status) }}" class="btn btn-warning btn-sm" target="_blank">
+      <a href="{{ url_for('oil_change_alert_report_print', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status, custom_km=custom_km) }}" class="btn btn-warning btn-sm" target="_blank">
         <i class="bi bi-printer me-1"></i>Print
       </a>
       {% endif %}
@@ -64,10 +65,23 @@
         <div class="col-6 col-md-2">
           <label class="form-label mb-1 small fw-semibold">Status</label>
           <select name="status" class="form-select form-select-sm">
-            <option value="all" {% if status == 'all' %}selected{% endif %}>Near + Crossed</option>
+            <option value="" {% if not status %}selected{% endif %}>-- Select Status --</option>
+            <option value="safe" {% if status == 'safe' %}selected{% endif %}>Safe</option>
             <option value="near" {% if status == 'near' %}selected{% endif %}>Near</option>
             <option value="crossed" {% if status == 'crossed' %}selected{% endif %}>Crossed</option>
           </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Check KM</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            name="custom_km"
+            class="form-control form-control-sm"
+            placeholder="e.g. 4000"
+            value="{{ custom_km or '' }}"
+          >
         </div>
         <div class="col-12 col-md-1">
           <button class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel-fill"></i></button>
@@ -77,14 +91,18 @@
         <a href="{{ url_for('oil_change_alert_report') }}" class="btn btn-outline-secondary btn-sm">
           <i class="bi bi-x-circle me-1"></i>Clear
         </a>
-        <span class="total-badge ms-2">{{ total }} alert{{ 's' if total != 1 else '' }}</span>
+        <span class="total-badge ms-2">{{ total }} vehicle{{ 's' if total != 1 else '' }}</span>
+        {% if custom_km %}
+        <span class="total-badge ms-2">Ahead of {{ custom_km }} KM: {{ ahead_count or 0 }}</span>
+        <span class="total-badge ms-2">Behind {{ custom_km }} KM: {{ behind_count or 0 }}</span>
+        {% endif %}
       </div>
     </form>
   </div>
 
   <div class="oca-table-wrap">
     <div class="d-flex justify-content-between align-items-center mb-2">
-      <span class="total-badge"><i class="bi bi-exclamation-triangle-fill me-1"></i>Total Alerts: {{ total }}</span>
+      <span class="total-badge"><i class="bi bi-exclamation-triangle-fill me-1"></i>Total Vehicles: {{ total }}</span>
       <input type="text" id="dtSearchInput" class="form-control form-control-sm" placeholder="Search..." style="max-width:220px;">
     </div>
     <div class="table-responsive">
@@ -101,6 +119,7 @@
             <th>KM After Oil</th>
             <th>Remaining KM</th>
             <th>Status</th>
+            <th>Check KM Result</th>
           </tr>
         </thead>
         <tbody>
@@ -132,8 +151,19 @@
             <td>
               {% if r.status == 'crossed' %}
               <span class="status-crossed">Crossed</span>
-              {% else %}
+              {% elif r.status == 'near' %}
               <span class="status-near">Near</span>
+              {% else %}
+              <span class="status-safe">Safe</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if custom_km and r.custom_state == 'ahead' %}
+              <span class="status-crossed">Ahead (+{{ '%.2f'|format(r.custom_diff|abs) }})</span>
+              {% elif custom_km and r.custom_state == 'behind' %}
+              <span class="status-safe">Behind (-{{ '%.2f'|format(r.custom_diff|abs) }})</span>
+              {% else %}
+              <span class="text-muted">-</span>
               {% endif %}
             </td>
           </tr>
@@ -148,7 +178,8 @@
             <td class="text-center text-muted py-4">-</td>
             <td class="text-center text-muted py-4">-</td>
             <td class="text-center text-muted py-4">-</td>
-            <td class="text-center text-muted py-4">No oil change alerts found.</td>
+            <td class="text-center text-muted py-4">-</td>
+            <td class="text-center text-muted py-4">No vehicles found.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -171,8 +202,8 @@ $(function () {
     lengthChange: false,
     order: [],
     language: {
-      info: 'Showing _START_ to _END_ of _TOTAL_ alerts',
-      emptyTable: 'No alerts found.',
+      info: 'Showing _START_ to _END_ of _TOTAL_ vehicles',
+      emptyTable: 'No vehicles found.',
       paginate: { first: '«', last: '»', next: '›', previous: '‹' }
     }
   });

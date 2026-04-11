@@ -9452,39 +9452,13 @@ def _apply_workspace_employee_scope_for_expense(query, model_cls, workspace_empl
 
 
 def _vehicle_latest_meter_reading(vehicle_id, workspace_employee_id=None):
-    candidates = []
-
-    fuel_q = FuelExpense.query.filter(
-        FuelExpense.vehicle_id == vehicle_id,
-        FuelExpense.current_reading.isnot(None),
-    )
-    fuel_q = _apply_workspace_employee_scope_for_expense(fuel_q, FuelExpense, workspace_employee_id)
-    fuel_row = fuel_q.order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
-    if fuel_row and fuel_row.current_reading is not None:
-        candidates.append((fuel_row.fueling_date, fuel_row.id, float(fuel_row.current_reading), 'Fuel Entry'))
-
-    oil_q = OilExpense.query.filter(
-        OilExpense.vehicle_id == vehicle_id,
-        OilExpense.current_reading.isnot(None),
-    )
-    oil_q = _apply_workspace_employee_scope_for_expense(oil_q, OilExpense, workspace_employee_id)
-    oil_row = oil_q.order_by(OilExpense.expense_date.desc(), OilExpense.id.desc()).first()
-    if oil_row and oil_row.current_reading is not None:
-        candidates.append((oil_row.expense_date, oil_row.id, float(oil_row.current_reading), 'Oil Entry'))
-
-    maint_q = MaintenanceExpense.query.filter(
-        MaintenanceExpense.vehicle_id == vehicle_id,
-        MaintenanceExpense.current_reading.isnot(None),
-    )
-    maint_q = _apply_workspace_employee_scope_for_expense(maint_q, MaintenanceExpense, workspace_employee_id)
-    maint_row = maint_q.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).first()
-    if maint_row and maint_row.current_reading is not None:
-        candidates.append((maint_row.expense_date, maint_row.id, float(maint_row.current_reading), 'Maintenance Entry'))
-
-    if not candidates:
-        return None, None, None
-    latest = max(candidates, key=lambda x: ((x[0] or date.min), x[1]))
-    return latest[2], latest[0], latest[3]
+    task_row = VehicleDailyTask.query.filter(
+        VehicleDailyTask.vehicle_id == vehicle_id,
+        VehicleDailyTask.close_reading.isnot(None),
+    ).order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id.desc()).first()
+    if task_row and task_row.close_reading is not None:
+        return float(task_row.close_reading), task_row.task_date, 'Task Close Reading'
+    return None, None, None
 
 
 def _vehicle_last_oil_change_base(vehicle_id, workspace_employee_id=None):
@@ -9502,7 +9476,8 @@ def _vehicle_last_oil_change_base(vehicle_id, workspace_employee_id=None):
     return None, None, None
 
 
-def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', status='all',
+def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', status='',
+                           custom_km=None,
                            workspace_employee_id=None,
                            allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
                            is_master_or_admin=True):
@@ -9559,11 +9534,16 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', statu
         else:
             status_code = 'safe'
 
-        # This report is only for "near" and "crossed" alerts.
-        if status_code == 'safe':
+        # If user selected a status, apply that specific status filter.
+        # If user did not select status, show all vehicles (safe/near/crossed).
+        if status in ('safe', 'near', 'crossed') and status_code != status:
             continue
-        if status in ('near', 'crossed') and status_code != status:
-            continue
+
+        custom_state = None
+        custom_diff = None
+        if custom_km is not None:
+            custom_diff = round(kms_after_oil - float(custom_km), 2)
+            custom_state = 'ahead' if custom_diff >= 0 else 'behind'
 
         rows.append({
             'vehicle': vehicle,
@@ -9581,9 +9561,11 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', statu
             'kms_after_oil': kms_after_oil,
             'remaining_km': remaining,
             'status': status_code,
+            'custom_state': custom_state,
+            'custom_diff': custom_diff,
         })
 
-    rows.sort(key=lambda x: (0 if x['status'] == 'crossed' else 1, x['remaining_km']))
+    rows.sort(key=lambda x: (0 if x['status'] == 'crossed' else 1 if x['status'] == 'near' else 2, x['remaining_km']))
     return rows
 
 
@@ -9601,15 +9583,27 @@ def oil_change_alert_report():
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
     vehicle_family = (request.args.get('vehicle_family') or '').strip()
-    status = (request.args.get('status') or 'all').strip().lower()
-    if status not in ('all', 'near', 'crossed'):
-        status = 'all'
+    status = (request.args.get('status') or '').strip().lower()
+    if status not in ('', 'safe', 'near', 'crossed'):
+        status = ''
+    custom_km_raw = (request.args.get('custom_km') or '').strip()
+    custom_km = None
+    if custom_km_raw:
+        try:
+            custom_km = float(custom_km_raw)
+            if custom_km < 0:
+                custom_km = None
+                custom_km_raw = ''
+        except Exception:
+            custom_km = None
+            custom_km_raw = ''
 
     rows = _oil_change_alert_rows(
         project_id=project_id,
         district_id=district_id,
         vehicle_family=vehicle_family,
         status=status,
+        custom_km=custom_km,
         workspace_employee_id=workspace_employee_id,
         allowed_projects=allowed_projects,
         allowed_districts=allowed_districts,
@@ -9635,6 +9629,12 @@ def oil_change_alert_report():
         for k, v in sorted(limits.items())
     ]
 
+    ahead_count = None
+    behind_count = None
+    if custom_km is not None:
+        ahead_count = sum(1 for r in rows if r.get('custom_state') == 'ahead')
+        behind_count = sum(1 for r in rows if r.get('custom_state') == 'behind')
+
     return render_template(
         'oil_change_alert_report.html',
         rows=rows,
@@ -9646,6 +9646,9 @@ def oil_change_alert_report():
         project_choices=project_choices,
         district_choices=district_choices,
         family_choices=family_choices,
+        custom_km=custom_km_raw,
+        ahead_count=ahead_count,
+        behind_count=behind_count,
     )
 
 
@@ -9663,15 +9666,27 @@ def oil_change_alert_report_export():
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
     vehicle_family = (request.args.get('vehicle_family') or '').strip()
-    status = (request.args.get('status') or 'all').strip().lower()
-    if status not in ('all', 'near', 'crossed'):
-        status = 'all'
+    status = (request.args.get('status') or '').strip().lower()
+    if status not in ('', 'safe', 'near', 'crossed'):
+        status = ''
+    custom_km_raw = (request.args.get('custom_km') or '').strip()
+    custom_km = None
+    if custom_km_raw:
+        try:
+            custom_km = float(custom_km_raw)
+            if custom_km < 0:
+                custom_km = None
+                custom_km_raw = ''
+        except Exception:
+            custom_km = None
+            custom_km_raw = ''
 
     rows = _oil_change_alert_rows(
         project_id=project_id,
         district_id=district_id,
         vehicle_family=vehicle_family,
         status=status,
+        custom_km=custom_km,
         workspace_employee_id=workspace_employee_id,
         allowed_projects=allowed_projects,
         allowed_districts=allowed_districts,
@@ -9681,7 +9696,7 @@ def oil_change_alert_report_export():
 
     headers = [
         'Sr No', 'Project', 'District', 'Vehicle No', 'Model', 'Type', 'Family',
-        'Limit KM', 'Near %', 'Base Reading', 'Current Reading', 'KM After Oil', 'Remaining KM', 'Status',
+        'Limit KM', 'Near %', 'Base Reading', 'Current Reading', 'KM After Oil', 'Remaining KM', 'Status', 'Custom KM Check',
         'Base Source', 'Current Source'
     ]
     data_rows = []
@@ -9701,7 +9716,12 @@ def oil_change_alert_report_export():
             r['current_reading'],
             r['kms_after_oil'],
             r['remaining_km'],
-            'Crossed' if r['status'] == 'crossed' else 'Near',
+            'Crossed' if r['status'] == 'crossed' else 'Near' if r['status'] == 'near' else 'Safe',
+            (
+                f"Ahead ({abs(r['custom_diff']):.2f})" if r.get('custom_state') == 'ahead'
+                else f"Behind ({abs(r['custom_diff']):.2f})" if r.get('custom_state') == 'behind'
+                else '-'
+            ),
             r['base_source'] or '-',
             r['current_source'] or '-',
         ])
@@ -9725,15 +9745,27 @@ def oil_change_alert_report_print():
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
     vehicle_family = (request.args.get('vehicle_family') or '').strip()
-    status = (request.args.get('status') or 'all').strip().lower()
-    if status not in ('all', 'near', 'crossed'):
-        status = 'all'
+    status = (request.args.get('status') or '').strip().lower()
+    if status not in ('', 'safe', 'near', 'crossed'):
+        status = ''
+    custom_km_raw = (request.args.get('custom_km') or '').strip()
+    custom_km = None
+    if custom_km_raw:
+        try:
+            custom_km = float(custom_km_raw)
+            if custom_km < 0:
+                custom_km = None
+                custom_km_raw = ''
+        except Exception:
+            custom_km = None
+            custom_km_raw = ''
 
     rows = _oil_change_alert_rows(
         project_id=project_id,
         district_id=district_id,
         vehicle_family=vehicle_family,
         status=status,
+        custom_km=custom_km,
         workspace_employee_id=workspace_employee_id,
         allowed_projects=allowed_projects,
         allowed_districts=allowed_districts,
@@ -9745,6 +9777,7 @@ def oil_change_alert_report_print():
         'oil_change_alert_report_print.html',
         rows=rows,
         total=len(rows),
+        custom_km=custom_km_raw,
         now=datetime.now,
     )
 
