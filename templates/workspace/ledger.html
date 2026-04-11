@@ -46,10 +46,17 @@
   </div>
 
   {% if ledger %}
+  {% set ns = namespace(total_debit=0.0, total_credit=0.0) %}
+  {% for t in ledger.transactions %}
+    {% set ns.total_debit = ns.total_debit + (t.debit or 0)|float %}
+    {% set ns.total_credit = ns.total_credit + (t.credit or 0)|float %}
+  {% endfor %}
   <div class="row g-3 mb-3">
-    <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Selected Account</small><h6 class="mb-0">{{ ledger.account.code }} - {{ ledger.account.name }}</h6></div></div></div>
-    <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Opening Balance</small><h5 class="mb-0">{{ '%.2f'|format((ledger.opening_balance or 0)|float) }}</h5></div></div></div>
-    <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Closing Balance</small><h5 class="mb-0 {{ 'text-danger' if (ledger.closing_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((ledger.closing_balance or 0)|float) }}</h5></div></div></div>
+    <div class="col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Selected Account</small><h6 class="mb-0">{{ ledger.account.code }} - {{ ledger.account.name }}</h6></div></div></div>
+    <div class="col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Opening Balance</small><h5 class="mb-0">{{ '%.2f'|format((ledger.opening_balance or 0)|float) }}</h5></div></div></div>
+    <div class="col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Debit</small><h5 class="mb-0 text-success">{{ '%.2f'|format(ns.total_debit) }}</h5></div></div></div>
+    <div class="col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Credit</small><h5 class="mb-0 text-danger">{{ '%.2f'|format(ns.total_credit) }}</h5></div></div></div>
+    <div class="col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Closing Balance</small><h5 class="mb-0 {{ 'text-danger' if (ledger.closing_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((ledger.closing_balance or 0)|float) }}</h5></div></div></div>
   </div>
 
   <div class="card border-0 shadow-sm">
