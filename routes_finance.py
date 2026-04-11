@@ -3,7 +3,7 @@ Finance & Accounting Routes
 All routes for vouchers, journal entries, ledgers, and financial reports
 """
 from flask import render_template, request, redirect, url_for, flash, jsonify, session
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
                     FundTransfer, BankAccountDirectory, FundTransferCategory, WorkspaceAccount, WorkspaceJournalEntry,
@@ -1364,6 +1364,15 @@ def _transfer_is_company_to_employee(transfer):
     )
 
 
+def _transfer_is_employee_to_company(transfer):
+    return bool(
+        transfer
+        and transfer.from_employee_id
+        and transfer.to_company_id
+        and Decimal(str(transfer.amount or 0)) > Decimal("0")
+    )
+
+
 def _reverse_workspace_company_funding_mirror(transfer_id):
     if not transfer_id:
         return
@@ -1377,20 +1386,19 @@ def _reverse_workspace_company_funding_mirror(transfer_id):
 
 
 def _post_workspace_company_funding_mirror(transfer):
-    if not _transfer_is_company_to_employee(transfer):
+    if not transfer or Decimal(str(transfer.amount or 0)) <= Decimal("0"):
         return None
-    base = ensure_workspace_base_accounts(transfer.to_employee_id)
+    mirror_employee_id = transfer.to_employee_id if _transfer_is_company_to_employee(transfer) else transfer.from_employee_id
+    if not mirror_employee_id:
+        return None
+    base = ensure_workspace_base_accounts(mirror_employee_id)
     bank_account = base.get('1110') or base.get('1100')
     funding_account = base.get('2300')
     if not bank_account or not funding_account:
         raise ValueError("Workspace mirror accounts are not configured (HBL/Company Funding).")
     amount_val = Decimal(str(transfer.amount or 0))
-    return workspace_create_journal_entry(
-        employee_id=transfer.to_employee_id,
-        entry_type='Journal',
-        entry_date=transfer.transfer_date,
-        description=f"Company funding received via transfer {transfer.transfer_number}",
-        lines=[
+    if _transfer_is_company_to_employee(transfer):
+        lines = [
             {
                 'account_id': bank_account.id,
                 'debit': amount_val,
@@ -1403,7 +1411,32 @@ def _post_workspace_company_funding_mirror(transfer):
                 'credit': amount_val,
                 'description': f"Company funding liability ({transfer.transfer_number})",
             },
-        ],
+        ]
+        desc = f"Company funding received via transfer {transfer.transfer_number}"
+    elif _transfer_is_employee_to_company(transfer):
+        lines = [
+            {
+                'account_id': funding_account.id,
+                'debit': amount_val,
+                'credit': 0,
+                'description': f"Company funding settled ({transfer.transfer_number})",
+            },
+            {
+                'account_id': bank_account.id,
+                'debit': 0,
+                'credit': amount_val,
+                'description': f"Company transfer out ({transfer.transfer_number})",
+            },
+        ]
+        desc = f"Company funding paid back via transfer {transfer.transfer_number}"
+    else:
+        return None
+    return workspace_create_journal_entry(
+        employee_id=mirror_employee_id,
+        entry_type='Journal',
+        entry_date=transfer.transfer_date,
+        description=desc,
+        lines=lines,
         reference_type='FundTransfer',
         reference_id=transfer.id,
         created_by_user_id=transfer.created_by_user_id or session.get('user_id'),
@@ -1415,7 +1448,7 @@ def _sync_workspace_company_funding_mirror(transfer):
     if not transfer or not transfer.id:
         return None
     _reverse_workspace_company_funding_mirror(transfer.id)
-    if _transfer_is_company_to_employee(transfer):
+    if _transfer_is_company_to_employee(transfer) or _transfer_is_employee_to_company(transfer):
         return _post_workspace_company_funding_mirror(transfer)
     return None
 
@@ -1423,12 +1456,17 @@ def _sync_workspace_company_funding_mirror(transfer):
 def _backfill_workspace_company_funding_mirrors():
     created = 0
     candidates = FundTransfer.query.filter(
-        FundTransfer.from_company_id.isnot(None),
-        FundTransfer.to_employee_id.isnot(None),
+        or_(
+            and_(FundTransfer.from_company_id.isnot(None), FundTransfer.to_employee_id.isnot(None)),
+            and_(FundTransfer.from_employee_id.isnot(None), FundTransfer.to_company_id.isnot(None)),
+        ),
     ).all()
     for transfer in candidates:
+        employee_id = transfer.to_employee_id if transfer.to_employee_id else transfer.from_employee_id
+        if not employee_id:
+            continue
         exists = WorkspaceJournalEntry.query.filter_by(
-            employee_id=transfer.to_employee_id,
+            employee_id=employee_id,
             reference_type='FundTransfer',
             reference_id=transfer.id,
             category='Company Funding Mirror',
