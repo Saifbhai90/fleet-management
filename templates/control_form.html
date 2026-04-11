@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}
 {% set _tab = request.args.get('settings_tab', 'attendance') %}
-{% if _tab == 'freeze' %}Freeze Data Control{% elif _tab == 'oil_limits' %}Oil Change Limits{% else %}Attendance Time Control{% endif %}
+{% if _tab == 'freeze' %}Freeze Data Control{% elif _tab == 'oil_limits' %}Oil Change Limits{% elif _tab == 'accounting_maintenance' %}Accounting Maintenance{% else %}Attendance Time Control{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -14,6 +14,9 @@
 {% elif active_tab == 'oil_limits' %}
   {% set page_title = 'Vehicle Family Wise Oil Change Limits' %}
   {% set page_subtitle = 'Har vehicle family ke liye oil change KM limit aur near alert threshold set karein.' %}
+{% elif active_tab == 'accounting_maintenance' %}
+  {% set page_title = 'Accounting Maintenance' %}
+  {% set page_subtitle = 'One-time repair/backfill tools. Daily flow mein auto backfill disabled hai; yahan se manual run karein.' %}
 {% endif %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
@@ -30,7 +33,7 @@
 
   <ul class="nav nav-pills mb-3" id="settingsMainTabs">
     <li class="nav-item">
-      <button type="button" class="nav-link {% if active_tab not in ['freeze', 'oil_limits'] %}active{% endif %}" data-settings-tab="attendance">
+      <button type="button" class="nav-link {% if active_tab not in ['freeze', 'oil_limits', 'accounting_maintenance'] %}active{% endif %}" data-settings-tab="attendance">
         <i class="bi bi-clock-history me-1"></i>Attendance Control
       </button>
     </li>
@@ -44,9 +47,14 @@
         <i class="bi bi-droplet-half me-1"></i>Oil Change Limits
       </button>
     </li>
+    <li class="nav-item">
+      <button type="button" class="nav-link {% if active_tab == 'accounting_maintenance' %}active{% endif %}" data-settings-tab="accounting_maintenance">
+        <i class="bi bi-journal-check me-1"></i>Accounting Maintenance
+      </button>
+    </li>
   </ul>
 
-  <div id="attendanceControlPane" {% if active_tab in ['freeze', 'oil_limits'] %}style="display:none"{% endif %}>
+  <div id="attendanceControlPane" {% if active_tab in ['freeze', 'oil_limits', 'accounting_maintenance'] %}style="display:none"{% endif %}>
 
   <!-- ═══════════════ GLOBAL DEFAULT ═══════════════ -->
   <div class="row mb-4">
@@ -579,6 +587,47 @@
     </div>
   </div>
 </div>
+
+<div id="accountingMaintenancePane" {% if active_tab != 'accounting_maintenance' %}style="display:none"{% endif %}>
+  <div class="row mb-4">
+    <div class="col-lg-10">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-dark text-white py-3">
+          <h5 class="mb-0"><i class="bi bi-tools me-2"></i>Accounting Maintenance Tools</h5>
+        </div>
+        <div class="card-body">
+          <div class="alert alert-info small mb-3">
+            In tools ko sirf tab run karein jab historical repair/backfill chahiye. Normal entries add/edit/delete par real-time posting already enabled hai.
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <form method="post" action="{{ url_for('form_control', settings_tab='accounting_maintenance') }}" onsubmit="return confirm('Run Fund Transfer mirror backfill now?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="run_transfer_mirror_backfill">
+                <div class="border rounded p-3 h-100">
+                  <h6 class="mb-2"><i class="bi bi-arrow-left-right me-1"></i>Fund Transfer Mirror Backfill</h6>
+                  <p class="text-muted small mb-3">Employee-involved fund transfers ke missing workspace mirror journals create karega.</p>
+                  <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-play-circle me-1"></i>Run Backfill</button>
+                </div>
+              </form>
+            </div>
+            <div class="col-md-6">
+              <form method="post" action="{{ url_for('form_control', settings_tab='accounting_maintenance') }}" onsubmit="return confirm('Run Opening Entries maintenance now?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="run_opening_entries_backfill">
+                <div class="border rounded p-3 h-100">
+                  <h6 class="mb-2"><i class="bi bi-journal-plus me-1"></i>Opening Entries Maintenance</h6>
+                  <p class="text-muted small mb-3">Legacy opening postings ko reconcile/migrate karke Company Funding model par align karega.</p>
+                  <button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-play-circle me-1"></i>Run Maintenance</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 </div>
 
 <script>
@@ -587,6 +636,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const attendancePane = document.getElementById('attendanceControlPane');
   const freezePane = document.getElementById('freezeControlPane');
   const oilPane = document.getElementById('oilLimitsPane');
+  const accountingPane = document.getElementById('accountingMaintenancePane');
   tabBtns.forEach(function(btn){
     btn.addEventListener('click', function(){
       const t = btn.getAttribute('data-settings-tab');
@@ -595,16 +645,25 @@ document.addEventListener('DOMContentLoaded', function() {
       if(t === 'freeze'){
         attendancePane.style.display = 'none';
         oilPane.style.display = 'none';
+        accountingPane.style.display = 'none';
         freezePane.style.display = '';
         history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=freeze');
       } else if (t === 'oil_limits') {
         attendancePane.style.display = 'none';
         freezePane.style.display = 'none';
+        accountingPane.style.display = 'none';
         oilPane.style.display = '';
         history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=oil_limits');
+      } else if (t === 'accounting_maintenance') {
+        attendancePane.style.display = 'none';
+        freezePane.style.display = 'none';
+        oilPane.style.display = 'none';
+        accountingPane.style.display = '';
+        history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=accounting_maintenance');
       } else {
         freezePane.style.display = 'none';
         oilPane.style.display = 'none';
+        accountingPane.style.display = 'none';
         attendancePane.style.display = '';
         history.replaceState({}, '', '{{ url_for("form_control") }}');
       }

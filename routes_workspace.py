@@ -967,10 +967,6 @@ def workspace_accounts_list():
             ensure_workspace_counterparty_account(emp.id, party_id=p.id)
         except Exception:
             pass
-    try:
-        reconcile_workspace_opening_expense_postings(emp.id)
-    except Exception as e:
-        print(f"Opening expense posting backfill skipped: {e}")
     db.session.commit()
     page = max(request.args.get("page", 1, type=int) or 1, 1)
     per_page = request.args.get("per_page", 50, type=int) or 50

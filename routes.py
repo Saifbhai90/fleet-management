@@ -5750,6 +5750,44 @@ def form_control():
         except ValueError:
             return None
 
+    if action == 'run_transfer_mirror_backfill':
+        if not _can_manage_freeze_data():
+            flash('You do not have permission to run accounting maintenance.', 'danger')
+            return redirect(url_for('form_control', settings_tab='accounting_maintenance'))
+        try:
+            from routes_finance import _backfill_workspace_company_funding_mirrors
+            created = int(_backfill_workspace_company_funding_mirrors() or 0)
+            db.session.commit()
+            flash(f'Fund transfer mirror backfill completed. Workspace journal(s) created: {created}.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Fund transfer mirror backfill failed: {e}', 'danger')
+        return redirect(url_for('form_control', settings_tab='accounting_maintenance'))
+
+    if action == 'run_opening_entries_backfill':
+        if not _can_manage_freeze_data():
+            flash('You do not have permission to run accounting maintenance.', 'danger')
+            return redirect(url_for('form_control', settings_tab='accounting_maintenance'))
+        try:
+            from finance_utils import reconcile_workspace_opening_expense_postings
+            updated_total = 0
+            failed = 0
+            employees = Employee.query.order_by(Employee.id.asc()).all()
+            for emp in employees:
+                try:
+                    updated_total += int(reconcile_workspace_opening_expense_postings(emp.id) or 0)
+                except Exception:
+                    failed += 1
+            db.session.commit()
+            msg = f'Opening entries maintenance completed. Updated posting(s): {updated_total}.'
+            if failed:
+                msg += f' Failed employee workspace(s): {failed}.'
+            flash(msg, 'success' if not failed else 'warning')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Opening entries maintenance failed: {e}', 'danger')
+        return redirect(url_for('form_control', settings_tab='accounting_maintenance'))
+
     if action == 'save_global':
         if not glob:
             glob = AttendanceTimeOverride(scope='global')

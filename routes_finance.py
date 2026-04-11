@@ -1696,12 +1696,6 @@ def fund_transfers_list():
     auth_check = check_auth('fund_transfer')
     if auth_check:
         return auth_check
-    try:
-        created = _backfill_workspace_company_funding_mirrors()
-        if created:
-            db.session.commit()
-    except Exception:
-        db.session.rollback()
 
     form = FundTransferFilterForm()
     choices = [('0', '-- All Persons --')] + _person_choices()[1:]
