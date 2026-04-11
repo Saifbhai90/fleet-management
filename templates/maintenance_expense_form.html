@@ -101,6 +101,41 @@
             <input type="hidden" name="job_interval_mode" id="jobIntervalMode" value="{{ rec.job_interval_mode if rec and rec.job_interval_mode else '' }}">
             <small class="text-muted">Select category with interval mode to support next maintenance tracking.</small>
           </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">Payment Type</label>
+            <select name="payment_type" id="paymentTypeSelect" class="form-select search-select">
+              <option value="Cash" {% if selected_payment_type == 'Cash' %}selected{% endif %}>Cash</option>
+              <option value="Credit" {% if selected_payment_type == 'Credit' %}selected{% endif %}>Credit</option>
+            </select>
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">Party Name</label>
+            <select name="workspace_party_id" id="partySelect" class="form-select search-select">
+              <option value="">-- Select Party --</option>
+              {% for p in workspace_parties or [] %}
+                <option value="{{ p.id }}" {% if selected_party_id and selected_party_id|string == p.id|string %}selected{% endif %}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+            {% if party_error %}
+              <div class="text-danger small mt-1">{{ party_error }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-4 field-group">
+            <label class="form-label">Total Bill Amount (User Entry)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              class="form-control"
+              id="totalBillInput"
+              name="total_bill_amount"
+              value="{{ entered_total_bill if entered_total_bill is not none else '' }}"
+              placeholder="Enter final bill total"
+            >
+            {% if total_bill_error %}
+              <div class="text-danger small mt-1">{{ total_bill_error }}</div>
+            {% endif %}
+          </div>
         </div>
       </div>
     </div>
@@ -165,27 +200,6 @@
             </tr>
           </tfoot>
         </table>
-        <div class="row g-2 mt-2 align-items-end">
-          <div class="col-md-4">
-            <label class="form-label mb-0">Total Bill Amount (User Entry)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              class="form-control"
-              id="totalBillInput"
-              name="total_bill_amount"
-              value="{{ entered_total_bill if entered_total_bill is not none else '' }}"
-              placeholder="Enter final bill total"
-            >
-            {% if total_bill_error %}
-              <div class="text-danger small mt-1">{{ total_bill_error }}</div>
-            {% endif %}
-          </div>
-          <div class="col-md-8">
-            <small class="text-muted">Save se pehle check hoga: list total aur Total Bill Amount equal hone chahiye.</small>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -215,7 +229,7 @@
       <div class="row g-3 mb-3">
         <div class="col-md-6 field-group">
           <label class="form-label fw-bold">Expense By (Workspace COA)</label>
-          {{ form.expense_by(class="form-select search-select") }}
+          {{ form.expense_by(class="form-select search-select", id="expenseBySelect") }}
           {% if form.expense_by.errors %}
             <div class="text-danger small mt-1">{{ form.expense_by.errors[0] }}</div>
           {% endif %}
@@ -278,6 +292,9 @@ document.addEventListener('DOMContentLoaded', function() {
   var addToListBtn = document.getElementById('addToListBtn');
   var jobCategorySelect = document.getElementById('jobCategorySelect');
   var jobIntervalMode = document.getElementById('jobIntervalMode');
+  var paymentTypeSelect = document.getElementById('paymentTypeSelect');
+  var partySelect = document.getElementById('partySelect');
+  var expenseBySelect = document.getElementById('expenseBySelect');
   var addJobCategoryBtn = document.getElementById('addJobCategoryBtn');
   var saveJobCategoryBtn = document.getElementById('saveJobCategoryBtn');
   var newJobCategoryName = document.getElementById('newJobCategoryName');
@@ -289,6 +306,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var taskStartReading = null;
   var taskCloseReading = null;
   var totalBillInput = document.getElementById('totalBillInput');
+  var cashExpenseByValue = '';
 
   var productsForMaintenance = [{% for p in products_for_maintenance %}{id:{{ p.id }},name:{{ p.name | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}];
 
@@ -321,6 +339,36 @@ document.addEventListener('DOMContentLoaded', function() {
     .then(function(r) { return r.json(); })
     .then(function(arr) { if (arr && arr.length) _populateMaintenanceProducts(arr); })
     .catch(function() {});
+
+  if (expenseBySelect && expenseBySelect.options) {
+    for (var e = 0; e < expenseBySelect.options.length; e += 1) {
+      var opt = expenseBySelect.options[e];
+      if ((opt.textContent || '').toLowerCase().indexOf('1100 - workspace cash') === 0) {
+        cashExpenseByValue = opt.value;
+        break;
+      }
+    }
+  }
+
+  function handlePaymentTypeBehavior() {
+    if (!paymentTypeSelect) return;
+    var pType = paymentTypeSelect.value || 'Cash';
+    var isCash = pType === 'Cash';
+    if (partySelect) {
+      partySelect.disabled = isCash;
+      if (isCash) {
+        partySelect.value = '';
+        if (partySelect.tomselect) partySelect.tomselect.setValue('', true);
+      }
+    }
+    if (!expenseBySelect) return;
+    if (isCash) {
+      if (cashExpenseByValue) {
+        expenseBySelect.value = cashExpenseByValue;
+        if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
+      }
+    }
+  }
 
   function updateEntryAmount() {
     var qty = parseFloat(entryQty.value) || 0;
@@ -593,6 +641,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (vehicleSelect) vehicleSelect.addEventListener('change', fetchTaskReadingsForMaintenance);
   if (expenseDate) expenseDate.addEventListener('change', fetchTaskReadingsForMaintenance);
   if (currentReading) currentReading.addEventListener('input', updateCurrentReadingMatch);
+  if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', handlePaymentTypeBehavior);
   var maintenanceExpenseForm = document.getElementById('maintenanceExpenseForm');
   if (maintenanceExpenseForm) {
     maintenanceExpenseForm.addEventListener('submit', function(e) {
@@ -611,6 +660,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   updateEntryAmount();
   fetchTaskReadingsForMaintenance();
+  handlePaymentTypeBehavior();
 });
 </script>
 {% endblock %}

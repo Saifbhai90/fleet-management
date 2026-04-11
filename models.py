@@ -918,6 +918,9 @@ class MaintenanceExpense(db.Model):
     km = db.Column(db.Numeric(12, 2), nullable=True)
     job_category = db.Column(db.String(120), nullable=True, index=True)
     job_interval_mode = db.Column(db.String(20), nullable=True)  # interval_km | interval_day
+    payment_type = db.Column(db.String(20), nullable=True)  # Cash | Credit
+    workspace_party_id = db.Column(db.Integer, db.ForeignKey('workspace_party.id'), nullable=True, index=True)
+    total_bill_amount = db.Column(db.Numeric(15, 2), nullable=True)
     remarks = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
 
@@ -925,6 +928,7 @@ class MaintenanceExpense(db.Model):
     project = db.relationship('Project', backref='maintenance_expenses', lazy='select')
     employee = db.relationship('Employee', backref='maintenance_expenses', lazy='select')
     vehicle = db.relationship('Vehicle', backref='maintenance_expenses', lazy='select')
+    workspace_party = db.relationship('WorkspaceParty', backref='maintenance_expenses', lazy='select')
     items = db.relationship('MaintenanceExpenseItem', backref='maintenance_expense', lazy='dynamic', order_by='MaintenanceExpenseItem.sort_order', cascade='all, delete-orphan')
     attachments = db.relationship('MaintenanceExpenseAttachment', backref='maintenance_expense', lazy='dynamic', cascade='all, delete-orphan')
 

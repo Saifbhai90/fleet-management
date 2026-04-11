@@ -17806,9 +17806,16 @@ def maintenance_expense_form(pk=None):
     form = MaintenanceExpenseForm(obj=rec)
     total_bill_error = ''
     entered_total_bill = (request.form.get('total_bill_amount') or '').strip() if request.method == 'POST' else ''
+    party_error = ''
+    selected_payment_type = (request.form.get('payment_type') or (getattr(rec, 'payment_type', None) if rec else '') or 'Cash').strip()
+    selected_party_id = (request.form.get('workspace_party_id') or (str(getattr(rec, 'workspace_party_id', '') or '') if rec else '')).strip()
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
     products_for_maintenance = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
     job_categories = _get_maintenance_job_categories()
+    workspace_parties = WorkspaceParty.query.filter_by(
+        employee_id=workspace_employee_id,
+        is_active=True,
+    ).order_by(WorkspaceParty.name.asc()).all()
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
     form.vehicle_id.choices = [(v.id, v.vehicle_no) for v in Vehicle.query.order_by(Vehicle.vehicle_no).all()]
@@ -17842,6 +17849,10 @@ def maintenance_expense_form(pk=None):
                 job_categories=job_categories,
                 total_bill_error=total_bill_error,
                 entered_total_bill=entered_total_bill,
+                party_error=party_error,
+                selected_payment_type=selected_payment_type,
+                selected_party_id=selected_party_id,
+                workspace_parties=workspace_parties,
             )
         expense_date = form.expense_date.data
         curr_reading = form.current_reading.data
@@ -17850,6 +17861,30 @@ def maintenance_expense_form(pk=None):
         job_interval_mode = (request.form.get('job_interval_mode') or '').strip().lower()
         if job_interval_mode not in ('interval_km', 'interval_day'):
             job_interval_mode = None
+        payment_type = (request.form.get('payment_type') or 'Cash').strip()
+        if payment_type not in ('Cash', 'Credit'):
+            payment_type = 'Cash'
+        selected_payment_type = payment_type
+        workspace_party_id_raw = (request.form.get('workspace_party_id') or '').strip()
+        workspace_party_id = int(workspace_party_id_raw) if workspace_party_id_raw.isdigit() else None
+        selected_party_id = str(workspace_party_id or '')
+        if payment_type == 'Credit' and not workspace_party_id:
+            party_error = 'Credit payment ke liye Party Name select karna zaroori hai.'
+            flash('Form save nahi hua. Credit payment me Party Name required hai.', 'danger')
+            return render_template(
+                'maintenance_expense_form.html',
+                form=form,
+                rec=rec,
+                title='Edit Maintenance' if rec else 'Add Maintenance',
+                products_for_maintenance=products_for_maintenance,
+                job_categories=job_categories,
+                total_bill_error=total_bill_error,
+                entered_total_bill=entered_total_bill,
+                party_error=party_error,
+                selected_payment_type=selected_payment_type,
+                selected_party_id=selected_party_id,
+                workspace_parties=workspace_parties,
+            )
 
         product_ids = request.form.getlist('product_id')
         qtys = request.form.getlist('qty')
@@ -17893,6 +17928,10 @@ def maintenance_expense_form(pk=None):
                 job_categories=job_categories,
                 total_bill_error=total_bill_error,
                 entered_total_bill=entered_total_bill,
+                party_error=party_error,
+                selected_payment_type=selected_payment_type,
+                selected_party_id=selected_party_id,
+                workspace_parties=workspace_parties,
             )
 
         if abs(items_total - entered_total_bill_num) > 0.01:
@@ -17907,6 +17946,10 @@ def maintenance_expense_form(pk=None):
                 job_categories=job_categories,
                 total_bill_error=total_bill_error,
                 entered_total_bill=entered_total_bill,
+                party_error=party_error,
+                selected_payment_type=selected_payment_type,
+                selected_party_id=selected_party_id,
+                workspace_parties=workspace_parties,
             )
 
         if rec:
@@ -17923,6 +17966,9 @@ def maintenance_expense_form(pk=None):
                 km=None,
                 job_category=job_category,
                 job_interval_mode=job_interval_mode,
+                payment_type=payment_type,
+                workspace_party_id=(workspace_party_id if payment_type == 'Credit' else None),
+                total_bill_amount=entered_total_bill_num,
                 remarks=remarks
             )
             db.session.add(rec)
@@ -17938,6 +17984,9 @@ def maintenance_expense_form(pk=None):
             rec.km = None
             rec.job_category = job_category
             rec.job_interval_mode = job_interval_mode
+            rec.payment_type = payment_type
+            rec.workspace_party_id = workspace_party_id if payment_type == 'Credit' else None
+            rec.total_bill_amount = entered_total_bill_num
             rec.remarks = remarks
         for idx, it in enumerate(items_data):
             item = MaintenanceExpenseItem(
@@ -17950,6 +17999,11 @@ def maintenance_expense_form(pk=None):
             )
             db.session.add(item)
         _workspace_reverse_expense_journals('MaintenanceExpense', rec.id, workspace_employee_id)
+        expense_by_val = form.expense_by.data or ''
+        if payment_type == 'Cash':
+            expense_by_val = expense_by_val or _workspace_default_cash_expense_by(workspace_employee_id)
+        selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
+
         _workspace_post_expense_journal(
             employee_id=workspace_employee_id,
             reference_type='MaintenanceExpense',
@@ -17958,9 +18012,42 @@ def maintenance_expense_form(pk=None):
             amount=items_total,
             description=f'Maintenance expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
             category_code='Maintenance',
-            workspace_party_id=None,
-            credit_account_id=_workspace_account_id_from_expense_by(form.expense_by.data, workspace_employee_id),
+            workspace_party_id=workspace_party_id if payment_type == 'Credit' else None,
+            credit_account_id=(selected_credit_account_id if payment_type == 'Cash' else None),
         )
+
+        # Credit flow:
+        # 1) Expense booked against party (payable)
+        # 2) If Expense By account is selected, immediately settle party against that account.
+        if payment_type == 'Credit' and workspace_party_id and selected_credit_account_id:
+            party_acct = ensure_workspace_counterparty_account(workspace_employee_id, party_id=workspace_party_id)
+            if party_acct and selected_credit_account_id != party_acct.id:
+                settle_amount = Decimal(str(items_total or 0))
+                if settle_amount > 0:
+                    workspace_create_journal_entry(
+                        employee_id=workspace_employee_id,
+                        entry_type='Transfer',
+                        entry_date=expense_date or pk_date(),
+                        description=f'Maintenance credit settlement vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                        lines=[
+                            {
+                                'account_id': party_acct.id,
+                                'debit': settle_amount,
+                                'credit': 0,
+                                'description': 'Party payable settled',
+                            },
+                            {
+                                'account_id': selected_credit_account_id,
+                                'debit': 0,
+                                'credit': settle_amount,
+                                'description': 'Paid via selected Expense By account',
+                            },
+                        ],
+                        reference_type='MaintenanceExpense',
+                        reference_id=rec.id,
+                        created_by_user_id=session.get('user_id'),
+                        category='Maintenance',
+                    )
         db.session.commit()
 
         allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
@@ -18008,6 +18095,10 @@ def maintenance_expense_form(pk=None):
         job_categories=job_categories,
         total_bill_error=total_bill_error,
         entered_total_bill=entered_total_bill,
+        party_error=party_error,
+        selected_payment_type=selected_payment_type,
+        selected_party_id=selected_party_id,
+        workspace_parties=workspace_parties,
     )
 
 
