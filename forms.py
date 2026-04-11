@@ -65,6 +65,12 @@ class VehicleForm(FlaskForm):
         validators=[DataRequired()],
         render_kw={'class': 'form-select search-select'}
     )
+    vehicle_family = SelectField(
+        'Vehicle Family',
+        choices=[('', '-- Select Vehicle Family --')],
+        validators=[DataRequired()],
+        render_kw={'class': 'form-select search-select'}
+    )
     driver_capacity = IntegerField('Driver Capacity', validators=[DataRequired(), NumberRange(min=1)])
 
     phone_no = StringField('Vehicle Phone No', validators=[Optional(), Length(max=20)])

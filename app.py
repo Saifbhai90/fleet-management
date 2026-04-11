@@ -258,6 +258,7 @@ if _run_startup_tasks:
                 ('workspace_fuel_oil_opening_expense', 'fuel_oil_month_close_id', 'INTEGER REFERENCES workspace_fuel_oil_month_close(id)'),
                 ('workspace_month_close', 'district_id', 'INTEGER REFERENCES district(id)'),
                 ('workspace_month_close', 'project_id', 'INTEGER REFERENCES project(id)'),
+                ('vehicle', 'vehicle_family', 'VARCHAR(100)'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():
@@ -345,6 +346,7 @@ if _run_startup_tasks:
                     "CREATE INDEX IF NOT EXISTS ix_driver_district ON driver (driver_district)",
                     "CREATE INDEX IF NOT EXISTS ix_vehicle_model ON vehicle (model)",
                     "CREATE INDEX IF NOT EXISTS ix_vehicle_type ON vehicle (vehicle_type)",
+                    "CREATE INDEX IF NOT EXISTS ix_vehicle_family ON vehicle (vehicle_family)",
                     "CREATE INDEX IF NOT EXISTS ix_vehicle_active_date ON vehicle (active_date)",
                     "CREATE INDEX IF NOT EXISTS ix_parking_district ON parking_station (district)",
                     "CREATE INDEX IF NOT EXISTS ix_parking_tehsil ON parking_station (tehsil)",

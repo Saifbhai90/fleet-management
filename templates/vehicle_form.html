@@ -33,26 +33,47 @@
                                         </div>
 
                                         <!-- Row 2 -->
-                                        <div class="col-md-4">
+                                        <div class="col-md-3">
                                             <label class="form-label fw-semibold small">Model</label>
                                             {{ form.model(class="form-control form-control-sm " + ("is-invalid" if form.model.errors else ""), placeholder="2023") }}
                                             {% for error in form.model.errors %}
                                             <div class="invalid-feedback d-block">{{ error }}</div>
                                             {% endfor %}
                                         </div>
-                                        <div class="col-md-4">
+                                        <div class="col-md-3">
                                             <label class="form-label fw-semibold small">Vehicle Type</label>
                                             {{ form.vehicle_type(class="form-select form-select-sm search-select " + ("is-invalid" if form.vehicle_type.errors else "")) }}
                                             {% for error in form.vehicle_type.errors %}
                                             <div class="invalid-feedback d-block">{{ error }}</div>
                                             {% endfor %}
                                         </div>
-                                        <div class="col-md-4">
+                                        <div class="col-md-3">
+                                            <label class="form-label fw-semibold small">Vehicle Family</label>
+                                            <div class="input-group input-group-sm">
+                                                {{ form.vehicle_family(id="vehicleFamilySelect", class="form-select search-select " + ("is-invalid" if form.vehicle_family.errors else "")) }}
+                                                <button type="button" class="btn btn-outline-primary" id="addVehicleFamilyBtn" title="Add vehicle family">
+                                                    <i class="bi bi-plus-lg"></i>
+                                                </button>
+                                            </div>
+                                            {% for error in form.vehicle_family.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="col-md-3">
                                             <label class="form-label fw-semibold small">Driver Capacity</label>
                                             {{ form.driver_capacity(class="form-control form-control-sm " + ("is-invalid" if form.driver_capacity.errors else ""), placeholder="e.g. 1") }}
                                             {% for error in form.driver_capacity.errors %}
                                             <div class="invalid-feedback d-block">{{ error }}</div>
                                             {% endfor %}
+                                        </div>
+                                        <div class="col-12" id="vehicleFamilyCreateWrap" style="display:none;">
+                                            <div class="d-flex gap-2 align-items-center p-2 rounded border bg-light">
+                                                <input type="text" id="newVehicleFamilyInput" class="form-control form-control-sm" placeholder="New vehicle family (e.g. Toyota Prado)">
+                                                <button type="button" class="btn btn-sm btn-primary" id="saveVehicleFamilyBtn">
+                                                    <i class="bi bi-check2 me-1"></i>Create
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" id="cancelVehicleFamilyBtn">Cancel</button>
+                                            </div>
                                         </div>
 
                                         <!-- Row 3 -->
@@ -131,6 +152,85 @@
         </div>
     </div>
 </div>
+
+<script>
+(function(){
+    var familySel = document.getElementById('vehicleFamilySelect');
+    var addBtn = document.getElementById('addVehicleFamilyBtn');
+    var wrap = document.getElementById('vehicleFamilyCreateWrap');
+    var input = document.getElementById('newVehicleFamilyInput');
+    var saveBtn = document.getElementById('saveVehicleFamilyBtn');
+    var cancelBtn = document.getElementById('cancelVehicleFamilyBtn');
+    var csrfEl = document.querySelector('input[name="csrf_token"]');
+
+    if (!familySel || !addBtn || !wrap || !input || !saveBtn || !cancelBtn) return;
+
+    function closeCreate() {
+        wrap.style.display = 'none';
+        input.value = '';
+    }
+
+    addBtn.addEventListener('click', function(){
+        wrap.style.display = 'block';
+        input.focus();
+    });
+
+    cancelBtn.addEventListener('click', function(){
+        closeCreate();
+    });
+
+    saveBtn.addEventListener('click', function(){
+        var name = (input.value || '').trim();
+        if (!name) {
+            if (window.toastr) window.toastr.warning('Vehicle family name required.');
+            return;
+        }
+        saveBtn.disabled = true;
+        fetch('/api/vehicle-family-options/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfEl ? csrfEl.value : ''
+            },
+            body: JSON.stringify({name: name})
+        }).then(function(r){ return r.json(); })
+        .then(function(resp){
+            saveBtn.disabled = false;
+            if (!resp || !resp.ok) {
+                if (window.toastr) window.toastr.error((resp && resp.message) || 'Unable to create vehicle family.');
+                return;
+            }
+            var exists = false;
+            Array.from(familySel.options).forEach(function(o){
+                if ((o.value || '').toLowerCase() === name.toLowerCase()) exists = true;
+            });
+            if (!exists) {
+                var opt = document.createElement('option');
+                opt.value = resp.name;
+                opt.textContent = resp.name;
+                familySel.appendChild(opt);
+            }
+            familySel.value = resp.name;
+            if (familySel.tomselect) {
+                familySel.tomselect.addOption({value: resp.name, text: resp.name});
+                familySel.tomselect.setValue(resp.name, true);
+            }
+            if (window.toastr) window.toastr.success('Vehicle family added.');
+            closeCreate();
+        }).catch(function(){
+            saveBtn.disabled = false;
+            if (window.toastr) window.toastr.error('Unable to create vehicle family.');
+        });
+    });
+
+    input.addEventListener('keydown', function(e){
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveBtn.click();
+        }
+    });
+})();
+</script>
 
 <style>
     /* Compact Styling */

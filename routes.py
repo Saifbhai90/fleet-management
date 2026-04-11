@@ -74,6 +74,7 @@ from flask_wtf.csrf import CSRFError
 from werkzeug.security import generate_password_hash
 import re
 import os
+import json
 import tempfile
 import time as _time_mod
 from werkzeug.utils import secure_filename
@@ -131,6 +132,50 @@ class SimplePagination:
                     yield None
                 yield num
                 last = num
+
+
+_VEHICLE_FAMILY_SETTING_KEY = 'vehicle_family_options'
+_DEFAULT_VEHICLE_FAMILIES = [
+    'Suzuki Bolan',
+    'Toyota Hilux Vigo',
+    'Changan Karvaan',
+]
+
+
+def _get_vehicle_family_options():
+    """Load vehicle family dropdown options from system settings."""
+    raw = (SystemSetting.get(_VEHICLE_FAMILY_SETTING_KEY, '') or '').strip()
+    options = []
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                options = [str(x).strip() for x in parsed if str(x).strip()]
+        except Exception:
+            # Backward compatibility if old value was stored as delimited text.
+            options = [p.strip() for p in raw.split('|') if p.strip()]
+    if not options:
+        options = list(_DEFAULT_VEHICLE_FAMILIES)
+    for name in _DEFAULT_VEHICLE_FAMILIES:
+        if name not in options:
+            options.append(name)
+    return options
+
+
+def _save_vehicle_family_options(options):
+    clean = []
+    seen = set()
+    for name in options:
+        val = (name or '').strip()
+        if not val:
+            continue
+        key = val.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        clean.append(val)
+    SystemSetting.set(_VEHICLE_FAMILY_SETTING_KEY, json.dumps(clean, ensure_ascii=True))
+    return clean
 
 
 
@@ -2604,11 +2649,34 @@ def vehicles_print():
     return render_template('vehicles_print.html', vehicles=vehicles, search=search)
 
 
+@app.route('/api/vehicle-family-options', methods=['GET'])
+def vehicle_family_options_api():
+    return jsonify(_get_vehicle_family_options())
+
+
+@app.route('/api/vehicle-family-options/add', methods=['POST'])
+def vehicle_family_option_add_api():
+    name = (request.get_json(silent=True) or {}).get('name', '')
+    name = (name or '').strip()
+    if not name:
+        return jsonify({'ok': False, 'message': 'Name is required'}), 400
+    options = _get_vehicle_family_options()
+    options.append(name)
+    clean = _save_vehicle_family_options(options)
+    return jsonify({'ok': True, 'name': name, 'options': clean})
+
+
 @app.route('/vehicle/add', methods=['GET', 'POST'])
 @app.route('/vehicle/edit/<int:id>', methods=['GET', 'POST'])
 def vehicle_form(id=None):
     vehicle = Vehicle.query.get_or_404(id) if id else None
     form = VehicleForm(obj=vehicle)
+    family_choices = [('', '-- Select Vehicle Family --')] + [(v, v) for v in _get_vehicle_family_options()]
+    if vehicle and vehicle.vehicle_family:
+        existing = vehicle.vehicle_family.strip()
+        if existing and all(existing != val for val, _lbl in family_choices):
+            family_choices.append((existing, existing))
+    form.vehicle_family.choices = family_choices
     if form.validate_on_submit():
         try:
             if not vehicle:
