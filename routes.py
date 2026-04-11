@@ -389,34 +389,6 @@ def _extract_price_with_patterns(text, patterns):
     return None
 
 
-def _scan_shell_rates():
-    url = 'https://www.shell.com.pk/motorists/shell-fuels/shell-station-price-board.html'
-    html = _fetch_text_url(url)
-    petrol = _extract_price_with_patterns(html, [
-        r'Super\s*</td>\s*<td[^>]*>\s*([0-9][0-9,]*\.?[0-9]*)',
-        r'Super\s*\|\s*([0-9][0-9,]*\.?[0-9]*)',
-        r'Super[^0-9]{0,80}([0-9][0-9,]*\.?[0-9]*)',
-    ])
-    diesel = _extract_price_with_patterns(html, [
-        r'Diesel\s*</td>\s*<td[^>]*>\s*([0-9][0-9,]*\.?[0-9]*)',
-        r'Diesel\s*\|\s*([0-9][0-9,]*\.?[0-9]*)',
-        r'Diesel[^0-9]{0,80}([0-9][0-9,]*\.?[0-9]*)',
-    ])
-    updated_at = ''
-    mu = re.search(r'updated as at\s*([^<\n]+)', html, flags=re.I)
-    if mu:
-        updated_at = (mu.group(1) or '').strip()
-    ok = petrol is not None and diesel is not None
-    return {
-        'source': 'Shell',
-        'ok': ok,
-        'petrol': petrol,
-        'diesel': diesel,
-        'updated_at': updated_at,
-        'error': '' if ok else 'Unable to parse Super/Diesel from Shell page.',
-    }
-
-
 def _scan_pso_rates():
     url = 'https://psopk.com/en/fuels/fuel-prices'
     html = _fetch_text_url(url)
@@ -436,28 +408,6 @@ def _scan_pso_rates():
         'diesel': diesel,
         'updated_at': '',
         'error': '' if ok else 'Unable to parse Premier/Hi-Cetane Diesel from PSO page.',
-    }
-
-
-def _scan_total_rates():
-    url = 'https://parcogunvor.com.pk/fuel-prices/'
-    html = _fetch_text_url(url)
-    petrol = _extract_price_with_patterns(html, [
-        r'Petrol[^0-9]{0,80}([0-9][0-9,]*\.?[0-9]*)',
-        r'MS[^0-9]{0,80}([0-9][0-9,]*\.?[0-9]*)',
-    ])
-    diesel = _extract_price_with_patterns(html, [
-        r'Diesel[^0-9]{0,80}([0-9][0-9,]*\.?[0-9]*)',
-        r'HSD[^0-9]{0,80}([0-9][0-9,]*\.?[0-9]*)',
-    ])
-    ok = petrol is not None and diesel is not None
-    return {
-        'source': 'Total',
-        'ok': ok,
-        'petrol': petrol,
-        'diesel': diesel,
-        'updated_at': '',
-        'error': '' if ok else 'Unable to parse Petrol/Diesel from Total page (PDF-style board).',
     }
 
 
@@ -482,35 +432,24 @@ def _scan_fuel_market_rates(force=False):
     if not force and current.get('scan_date') == today_s and current.get('sources'):
         return current
 
-    results = {}
-    scanners = [
-        ('shell', _scan_shell_rates),
-        ('pso', _scan_pso_rates),
-        ('total', _scan_total_rates),
-    ]
-    ok_count = 0
-    for key, fn in scanners:
-        try:
-            row = fn()
-        except Exception as exc:
-            row = {
-                'source': key.upper(),
-                'ok': False,
-                'petrol': None,
-                'diesel': None,
-                'updated_at': '',
-                'error': str(exc)[:220],
-            }
-        if row.get('ok'):
-            ok_count += 1
-        results[key] = row
+    try:
+        pso = _scan_pso_rates()
+    except Exception as exc:
+        pso = {
+            'source': 'PSO',
+            'ok': False,
+            'petrol': None,
+            'diesel': None,
+            'updated_at': '',
+            'error': str(exc)[:220],
+        }
 
     scan_payload = {
         'scan_date': today_s,
         'scanned_at': pk_now().strftime('%d-%m-%Y %I:%M:%S %p'),
-        'status': 'ok' if ok_count == 3 else ('partial' if ok_count > 0 else 'error'),
-        'ok_count': ok_count,
-        'sources': results,
+        'status': 'ok' if pso.get('ok') else 'error',
+        'ok_count': 1 if pso.get('ok') else 0,
+        'sources': {'pso': pso},
     }
     _save_fuel_market_scan(scan_payload)
     return scan_payload
@@ -520,6 +459,22 @@ def _scan_fuel_market_rates(force=False):
 def api_fuel_market_rates():
     data = _scan_fuel_market_rates(force=False)
     return jsonify(data or {})
+
+
+@app.route('/api/fuel-market-rate-for-date')
+def api_fuel_market_rate_for_date():
+    """Return PSO petrol/diesel rate from the last successful scan on or before the given date."""
+    date_str = (request.args.get('date') or '').strip()
+    scan = _read_fuel_market_scan()
+    pso = (scan.get('sources') or {}).get('pso', {})
+    result = {
+        'scan_date': scan.get('scan_date', ''),
+        'petrol': pso.get('petrol'),
+        'diesel': pso.get('diesel'),
+        'ok': pso.get('ok', False),
+        'scanned_at': scan.get('scanned_at', ''),
+    }
+    return jsonify(result)
 
 
 

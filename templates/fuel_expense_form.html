@@ -92,10 +92,6 @@
       <a href="{{ url_for('fuel_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
     </div>
   </div>
-  <div id="fuelMarketScanStatusBar" class="alert alert-secondary py-2 px-3 mb-2 small">
-    Fuel market scan status loading...
-  </div>
-
   <form method="POST" action="" id="fuelExpenseForm" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
 
@@ -204,9 +200,6 @@
                 <div id="priceHintPanel" class="mt-1 small border rounded p-2 bg-light" style="display:none;">
                   <span class="fw-semibold text-dark">Recent: </span><span id="priceHintLine"></span>
                 </div>
-                <div id="threePumpRatesWrap" class="mt-2 small border rounded p-2 bg-light">
-                  Loading Shell/PSO/Total rates...
-                </div>
               </div>
               <div class="col-6 col-md-3 field-group">
                 <label class="form-label">Ltr <small class="text-muted">(Auto)</small></label>
@@ -215,6 +208,11 @@
               <div class="col-6 col-md-3 field-group">
                 <label class="form-label">MPG</label>
                 <input type="text" id="mpgDisplay" class="form-control bg-light" readonly placeholder="—">
+              </div>
+              <div class="col-12">
+                <div id="psoRateDatePanel" class="small border rounded px-3 py-2 bg-light text-muted" style="display:none;">
+                  <i class="bi bi-fuel-pump me-1"></i><span id="psoRateDateText"></span>
+                </div>
               </div>
               <div class="col-12 field-group">
                 <div class="row g-2">
@@ -297,12 +295,11 @@ document.addEventListener('DOMContentLoaded', function() {
   var mpgDisplay = document.getElementById('mpgDisplay');
   var samePumpHistoryWrap = document.getElementById('samePumpHistoryWrap');
   var allPumpHistoryWrap = document.getElementById('allPumpHistoryWrap');
+  var psoRateDatePanel = document.getElementById('psoRateDatePanel');
+  var psoRateDateText = document.getElementById('psoRateDateText');
   var taskStartReading = null;
   var taskCloseReading = null;
-  var fuelMarketScanData = null;
   var cashExpenseByValue = '';
-  var fuelMarketScanStatusBar = document.getElementById('fuelMarketScanStatusBar');
-  var threePumpRatesWrap = document.getElementById('threePumpRatesWrap');
   if (expenseBySelect && expenseBySelect.options) {
     for (var e = 0; e < expenseBySelect.options.length; e += 1) {
       var opt = expenseBySelect.options[e];
@@ -324,7 +321,6 @@ document.addEventListener('DOMContentLoaded', function() {
       if (previousReadingInput) previousReadingInput.value = '';
       if (fuelTypeSelect) fuelTypeSelect.value = '';
       if (fuelTypeDisplay) fuelTypeDisplay.value = '';
-      renderThreePumpRates();
       computeKm();
       return;
     }
@@ -342,7 +338,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         fetchSuggestedPrice();
         fetchPriceHistory();
-        renderThreePumpRates();
+        fetchPsoRateForDate();
         computeKm();
       });
   }
@@ -396,82 +392,35 @@ document.addEventListener('DOMContentLoaded', function() {
     computeMpgAndLiters();
   }
 
-  function renderFuelMarketStatus() {
-    if (!fuelMarketScanStatusBar) return;
-    if (!fuelMarketScanData || !fuelMarketScanData.sources) {
-      fuelMarketScanStatusBar.className = 'alert alert-secondary py-2 px-3 mb-2 small';
-      fuelMarketScanStatusBar.textContent = 'Fuel market scan status not available.';
+  function fetchPsoRateForDate() {
+    if (!psoRateDatePanel || !psoRateDateText) return;
+    var ft = (fuelTypeSelect && fuelTypeSelect.value) || '';
+    var dateVal = (fuelingDateInput && fuelingDateInput.value) || '';
+    if (!ft || (ft !== 'Diesel' && ft !== 'Super' && ft !== 'Petrol') || !dateVal) {
+      psoRateDatePanel.style.display = 'none';
       return;
     }
-    var okCount = parseInt(fuelMarketScanData.ok_count || 0, 10);
-    var cls = 'alert-secondary';
-    if (okCount === 3) cls = 'alert-success';
-    else if (okCount > 0) cls = 'alert-warning';
-    else cls = 'alert-danger';
-    fuelMarketScanStatusBar.className = 'alert ' + cls + ' py-2 px-3 mb-2 small';
-    var parts = [
-      'Last Scan: ' + (fuelMarketScanData.scanned_at || '-'),
-      'Success: ' + okCount + '/3'
-    ];
-    ['shell', 'pso', 'total'].forEach(function(k) {
-      var src = fuelMarketScanData.sources[k] || {};
-      if (src.ok) {
-        parts.push((src.source || k.toUpperCase()) + ': OK');
-      } else {
-        parts.push((src.source || k.toUpperCase()) + ': ' + (src.error || 'Scan failed'));
-      }
-    });
-    fuelMarketScanStatusBar.textContent = parts.join(' | ');
-  }
-
-  function renderThreePumpRates() {
-    if (!threePumpRatesWrap) return;
-    if (!fuelMarketScanData || !fuelMarketScanData.sources) {
-      threePumpRatesWrap.textContent = 'Rates not available.';
-      return;
-    }
-    var ft = (fuelTypeSelect && fuelTypeSelect.value) ? fuelTypeSelect.value : '';
-    var key = '';
-    if (ft === 'Diesel') key = 'diesel';
-    else if (ft === 'Petrol' || ft === 'Super') key = 'petrol';
-    if (!key) {
-      threePumpRatesWrap.textContent = 'Select Petrol/Diesel vehicle to view Shell/PSO/Total rates.';
-      return;
-    }
-    var labels = (key === 'petrol') ? 'Petrol' : 'Diesel';
-    var rows = [];
-    ['shell', 'pso', 'total'].forEach(function(k) {
-      var src = fuelMarketScanData.sources[k] || {};
-      var srcName = src.source || k.toUpperCase();
-      if (!src.ok) {
-        rows.push('<div><strong>' + srcName + '</strong>: Error - ' + (src.error || 'Scan failed') + '</div>');
-        return;
-      }
-      var priceVal = src[key];
-      if (priceVal == null || priceVal === '') {
-        rows.push('<div><strong>' + srcName + '</strong>: Error - ' + (src.error || (labels + ' rate missing')) + '</div>');
-        return;
-      }
-      rows.push(
-        '<div><strong>' + srcName + '</strong> | Date: ' + (src.updated_at || fuelMarketScanData.scan_date || '-') +
-        ' | Fuel: ' + labels + ' | Rs/Ltr: ' + parseFloat(priceVal).toFixed(2) + '</div>'
-      );
-    });
-    threePumpRatesWrap.innerHTML = rows.join('');
-  }
-
-  function fetchFuelMarketScan() {
-    fetch('/api/fuel-market-rates')
+    fetch('/api/fuel-market-rate-for-date?date=' + encodeURIComponent(dateVal))
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        fuelMarketScanData = data || null;
-        renderFuelMarketStatus();
-        renderThreePumpRates();
+        if (!data || !data.ok) {
+          psoRateDateText.innerHTML = '<span class="text-danger">PSO rate not available (scan pending or failed).</span>';
+          psoRateDatePanel.style.display = 'block';
+          return;
+        }
+        var key = (ft === 'Diesel') ? 'diesel' : 'petrol';
+        var label = (ft === 'Diesel') ? 'Diesel' : 'Petrol';
+        var rate = data[key];
+        if (rate == null) {
+          psoRateDateText.innerHTML = '<span class="text-danger">PSO ' + label + ' rate not found.</span>';
+        } else {
+          psoRateDateText.innerHTML = '<strong class="text-dark">PSO ' + label + ' Rate:</strong> <span class="text-success fw-bold">Rs ' + parseFloat(rate).toFixed(2) + '/Ltr</span>' +
+            ' <span class="text-muted">(Scan: ' + (data.scanned_at || data.scan_date || '-') + ')</span>';
+        }
+        psoRateDatePanel.style.display = 'block';
       })
       .catch(function() {
-        fuelMarketScanData = null;
-        renderFuelMarketStatus();
-        renderThreePumpRates();
+        psoRateDatePanel.style.display = 'none';
       });
   }
 
@@ -581,13 +530,13 @@ document.addEventListener('DOMContentLoaded', function() {
       if (fuelTypeDisplay) fuelTypeDisplay.value = selectedFuel;
       fetchSuggestedPrice();
       fetchPriceHistory();
-      renderThreePumpRates();
+      fetchPsoRateForDate();
       fetchLastReading();
       fetchTaskReadings();
     });
   }
 
-  if (fuelingDateInput) fuelingDateInput.addEventListener('change', fetchTaskReadings);
+  if (fuelingDateInput) fuelingDateInput.addEventListener('change', function() { fetchTaskReadings(); fetchPsoRateForDate(); });
   if (previousReadingInput) previousReadingInput.addEventListener('input', function() { computeKm(); fetchTaskReadings(); });
   if (currentReadingInput) currentReadingInput.addEventListener('input', computeKm);
   if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', handlePaymentTypeBehavior);
@@ -655,7 +604,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (fuelTypeSelect) fuelTypeSelect.addEventListener('change', function() {
     fetchSuggestedPrice();
     fetchPriceHistory();
-    renderThreePumpRates();
+    fetchPsoRateForDate();
   });
 
   var priceHintPanel = document.getElementById('priceHintPanel');
@@ -714,7 +663,7 @@ document.addEventListener('DOMContentLoaded', function() {
   handlePaymentTypeBehavior();
   fetchSuggestedPrice();
   fetchPriceHistory();
-  fetchFuelMarketScan();
+  fetchPsoRateForDate();
 
   window.setTimeout(function() {
     if (districtSelect && districtSelect.tomselect) {
