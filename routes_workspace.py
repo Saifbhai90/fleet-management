@@ -9,9 +9,9 @@ from sqlalchemy.orm import aliased
 from models import (
     db, Employee, Driver, Party, Account, District, Project,
     JournalEntry, JournalEntryLine,
-    EmployeeAssignment, FundTransferCategory,
+    EmployeeAssignment, FundTransfer, FundTransferCategory,
     WorkspaceParty, WorkspaceProduct, WorkspaceAccount,
-    WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFuelOilOpeningExpense, WorkspaceFundTransfer, WorkspaceMonthClose, WorkspaceFuelOilMonthClose,
+    WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFuelOilOpeningExpense, WorkspaceFundTransfer, WorkspaceJournalEntry, WorkspaceMonthClose, WorkspaceFuelOilMonthClose,
 )
 from routes_finance import check_auth
 from auth_utils import get_user_context
@@ -2525,15 +2525,77 @@ def workspace_ledger():
     to_date = parse_date(request.args.get("to_date"))
     category = (request.args.get("category") or "").strip() or None
     ledger = workspace_get_account_ledger(account_id, from_date=from_date, to_date=to_date, category=category) if account_id else None
+    transfer_map = {}
+    if ledger and ledger.get("transactions"):
+        transfer_ids = [
+            int(t.get("reference_id"))
+            for t in ledger["transactions"]
+            if (t.get("reference_type") or "") == "FundTransfer" and t.get("reference_id")
+        ]
+        if transfer_ids:
+            rows = FundTransfer.query.filter(FundTransfer.id.in_(sorted(set(transfer_ids)))).all()
+            transfer_map = {r.id: r.transfer_number for r in rows if r and r.transfer_number}
     return render_template(
         "workspace/ledger.html",
         employee=emp,
         accounts=accounts,
         account_id=account_id,
         ledger=ledger,
+        transfer_map=transfer_map,
         from_date=from_date,
         to_date=to_date,
         category=category,
+    )
+
+
+def _resolve_transfer_account_name(prefix, transfer):
+    if not transfer:
+        return "-"
+    person_id = getattr(transfer, f"{prefix}_employee_id", None)
+    if person_id:
+        acct = Account.query.filter_by(entity_type="employee", entity_id=person_id).first()
+        return f"{acct.code} - {acct.name}" if acct else "Employee Wallet"
+    person_id = getattr(transfer, f"{prefix}_driver_id", None)
+    if person_id:
+        acct = Account.query.filter_by(entity_type="driver", entity_id=person_id).first()
+        return f"{acct.code} - {acct.name}" if acct else "Driver Wallet"
+    person_id = getattr(transfer, f"{prefix}_party_id", None)
+    if person_id:
+        acct = Account.query.filter_by(entity_type="party", entity_id=person_id).first()
+        return f"{acct.code} - {acct.name}" if acct else "Party Ledger"
+    person_id = getattr(transfer, f"{prefix}_company_id", None)
+    if person_id:
+        acct = Account.query.filter_by(entity_type="company", entity_id=person_id).first()
+        return f"{acct.code} - {acct.name}" if acct else "Company Account"
+    account_id = getattr(transfer, f"{prefix}_account_id", None)
+    if account_id:
+        acct = Account.query.get(account_id)
+        if acct:
+            return f"{acct.code} - {acct.name}"
+    return "-"
+
+
+def workspace_ledger_transfer_detail(transfer_id):
+    guard, emp = _workspace_guard("workspace_ledger")
+    if guard:
+        return guard
+    transfer = FundTransfer.query.get_or_404(transfer_id)
+    if not any([transfer.from_employee_id == emp.id, transfer.to_employee_id == emp.id]):
+        flash("This transfer is not linked with selected workspace employee.", "danger")
+        return redirect(url_for("workspace_ledger"))
+
+    workspace_rows = WorkspaceJournalEntry.query.filter_by(
+        employee_id=emp.id,
+        reference_type="FundTransfer",
+        reference_id=transfer.id,
+    ).order_by(WorkspaceJournalEntry.entry_date.asc(), WorkspaceJournalEntry.id.asc()).all()
+    return render_template(
+        "workspace/ledger_transfer_detail.html",
+        employee=emp,
+        transfer=transfer,
+        from_account_name=_resolve_transfer_account_name("from", transfer),
+        to_account_name=_resolve_transfer_account_name("to", transfer),
+        workspace_rows=workspace_rows,
     )
 
 

@@ -1052,11 +1052,14 @@ def workspace_get_account_ledger(account_id, from_date=None, to_date=None, categ
         credit = Decimal(str(line.credit or 0))
         running += (debit - credit) if account.account_type in ['Asset', 'Expense'] else (credit - debit)
         tx.append({
+            'journal_entry_id': je.id,
             'date': je.entry_date,
             'entry_number': je.entry_number,
             'entry_type': je.entry_type,
             'description': line.description or je.description,
             'category': je.category or '',
+            'reference_type': je.reference_type or '',
+            'reference_id': je.reference_id,
             'debit': debit,
             'credit': credit,
             'balance': running,

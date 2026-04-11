@@ -59,12 +59,21 @@
     </div>
     <div class="table-responsive">
       <table class="table table-sm table-hover align-middle mb-0" id="workspaceLedgerTable">
-        <thead class="table-light"><tr><th>Date</th><th>Entry</th><th>Type</th><th>Description</th><th>Category</th><th class="text-end">Debit</th><th class="text-end">Credit</th><th class="text-end">Balance</th></tr></thead>
+        <thead class="table-light"><tr><th>Date</th><th>Entry</th><th>FT Ref</th><th>Type</th><th>Description</th><th>Category</th><th class="text-end">Debit</th><th class="text-end">Credit</th><th class="text-end">Balance</th></tr></thead>
         <tbody>
           {% for t in ledger.transactions %}
           <tr>
             <td>{{ t.date|ddmmyyyy }}</td>
             <td>{{ t.entry_number }}</td>
+            <td>
+              {% if (t.reference_type or '') == 'FundTransfer' and transfer_map and transfer_map.get(t.reference_id) %}
+                <a href="{{ url_for('workspace_ledger_transfer_detail', transfer_id=t.reference_id) }}" class="fw-semibold text-decoration-none">
+                  {{ transfer_map.get(t.reference_id) }}
+                </a>
+              {% else %}
+                -
+              {% endif %}
+            </td>
             <td>{{ t.entry_type }}</td>
             <td>{{ t.description }}</td>
             <td>{{ t.category }}</td>
@@ -73,7 +82,7 @@
             <td class="text-end fw-semibold">{{ '%.2f'|format((t.balance or 0)|float) }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="8" class="text-center text-muted py-4">No transactions found.</td></tr>
+          <tr><td colspan="9" class="text-center text-muted py-4">No transactions found.</td></tr>
           {% endfor %}
         </tbody>
       </table>
