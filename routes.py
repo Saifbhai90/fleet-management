@@ -144,6 +144,7 @@ _DEFAULT_VEHICLE_FAMILIES = [
 _VEHICLE_FAMILY_OIL_LIMITS_KEY = 'vehicle_family_oil_change_limits'
 _VEHICLE_FAMILY_OIL_NEAR_PERCENT_KEY = 'vehicle_family_oil_change_near_percent'
 _MAINTENANCE_JOB_CATEGORY_KEY = 'maintenance_job_categories'
+_FUEL_MARKET_SCAN_KEY = 'fuel_market_scan_status'
 
 
 def _get_vehicle_family_options():
@@ -358,6 +359,167 @@ def _save_vehicle_family_oil_near_percent(percent):
         val = 99
     SystemSetting.set(_VEHICLE_FAMILY_OIL_NEAR_PERCENT_KEY, str(val))
     return val
+
+
+def _fetch_text_url(url, timeout=12):
+    import urllib.request
+    req = urllib.request.Request(url, headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    })
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read()
+    return raw.decode('utf-8', errors='ignore')
+
+
+def _to_float_price(s):
+    try:
+        return float(str(s).replace(',', '').strip())
+    except Exception:
+        return None
+
+
+def _extract_price_with_patterns(text, patterns):
+    for pat in patterns:
+        m = re.search(pat, text, flags=re.I | re.S)
+        if m:
+            val = _to_float_price(m.group(1))
+            if val is not None:
+                return val
+    return None
+
+
+def _scan_shell_rates():
+    url = 'https://www.shell.com.pk/motorists/shell-fuels/shell-station-price-board.html'
+    html = _fetch_text_url(url)
+    petrol = _extract_price_with_patterns(html, [
+        r'Super\s*</td>\s*<td[^>]*>\s*([0-9][0-9,]*\.?[0-9]*)',
+        r'Super\s*\|\s*([0-9][0-9,]*\.?[0-9]*)',
+        r'Super[^0-9]{0,80}([0-9][0-9,]*\.?[0-9]*)',
+    ])
+    diesel = _extract_price_with_patterns(html, [
+        r'Diesel\s*</td>\s*<td[^>]*>\s*([0-9][0-9,]*\.?[0-9]*)',
+        r'Diesel\s*\|\s*([0-9][0-9,]*\.?[0-9]*)',
+        r'Diesel[^0-9]{0,80}([0-9][0-9,]*\.?[0-9]*)',
+    ])
+    updated_at = ''
+    mu = re.search(r'updated as at\s*([^<\n]+)', html, flags=re.I)
+    if mu:
+        updated_at = (mu.group(1) or '').strip()
+    ok = petrol is not None and diesel is not None
+    return {
+        'source': 'Shell',
+        'ok': ok,
+        'petrol': petrol,
+        'diesel': diesel,
+        'updated_at': updated_at,
+        'error': '' if ok else 'Unable to parse Super/Diesel from Shell page.',
+    }
+
+
+def _scan_pso_rates():
+    url = 'https://psopk.com/en/fuels/fuel-prices'
+    html = _fetch_text_url(url)
+    petrol = _extract_price_with_patterns(html, [
+        r'PREMIER\s*EURO\s*5[^0-9]{0,100}([0-9][0-9,]*\.?[0-9]*)\s*/?\s*Ltr',
+        r'Premier[^0-9]{0,120}([0-9][0-9,]*\.?[0-9]*)\s*/?\s*Ltr',
+    ])
+    diesel = _extract_price_with_patterns(html, [
+        r'HI-?CETANE\s*DIESEL\s*EURO\s*5[^0-9]{0,100}([0-9][0-9,]*\.?[0-9]*)\s*/?\s*Ltr',
+        r'Hi-?Cetane\s*Diesel[^0-9]{0,120}([0-9][0-9,]*\.?[0-9]*)\s*/?\s*Ltr',
+    ])
+    ok = petrol is not None and diesel is not None
+    return {
+        'source': 'PSO',
+        'ok': ok,
+        'petrol': petrol,
+        'diesel': diesel,
+        'updated_at': '',
+        'error': '' if ok else 'Unable to parse Premier/Hi-Cetane Diesel from PSO page.',
+    }
+
+
+def _scan_total_rates():
+    url = 'https://parcogunvor.com.pk/fuel-prices/'
+    html = _fetch_text_url(url)
+    petrol = _extract_price_with_patterns(html, [
+        r'Petrol[^0-9]{0,80}([0-9][0-9,]*\.?[0-9]*)',
+        r'MS[^0-9]{0,80}([0-9][0-9,]*\.?[0-9]*)',
+    ])
+    diesel = _extract_price_with_patterns(html, [
+        r'Diesel[^0-9]{0,80}([0-9][0-9,]*\.?[0-9]*)',
+        r'HSD[^0-9]{0,80}([0-9][0-9,]*\.?[0-9]*)',
+    ])
+    ok = petrol is not None and diesel is not None
+    return {
+        'source': 'Total',
+        'ok': ok,
+        'petrol': petrol,
+        'diesel': diesel,
+        'updated_at': '',
+        'error': '' if ok else 'Unable to parse Petrol/Diesel from Total page (PDF-style board).',
+    }
+
+
+def _read_fuel_market_scan():
+    raw = (SystemSetting.get(_FUEL_MARKET_SCAN_KEY, '') or '').strip()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_fuel_market_scan(data):
+    SystemSetting.set(_FUEL_MARKET_SCAN_KEY, json.dumps(data or {}, ensure_ascii=True))
+
+
+def _scan_fuel_market_rates(force=False):
+    today_s = pk_date().strftime('%Y-%m-%d')
+    current = _read_fuel_market_scan()
+    if not force and current.get('scan_date') == today_s and current.get('sources'):
+        return current
+
+    results = {}
+    scanners = [
+        ('shell', _scan_shell_rates),
+        ('pso', _scan_pso_rates),
+        ('total', _scan_total_rates),
+    ]
+    ok_count = 0
+    for key, fn in scanners:
+        try:
+            row = fn()
+        except Exception as exc:
+            row = {
+                'source': key.upper(),
+                'ok': False,
+                'petrol': None,
+                'diesel': None,
+                'updated_at': '',
+                'error': str(exc)[:220],
+            }
+        if row.get('ok'):
+            ok_count += 1
+        results[key] = row
+
+    scan_payload = {
+        'scan_date': today_s,
+        'scanned_at': pk_now().strftime('%d-%m-%Y %I:%M:%S %p'),
+        'status': 'ok' if ok_count == 3 else ('partial' if ok_count > 0 else 'error'),
+        'ok_count': ok_count,
+        'sources': results,
+    }
+    _save_fuel_market_scan(scan_payload)
+    return scan_payload
+
+
+@app.route('/api/fuel-market-rates')
+def api_fuel_market_rates():
+    data = _scan_fuel_market_rates(force=False)
+    return jsonify(data or {})
 
 
 

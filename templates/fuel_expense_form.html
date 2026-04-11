@@ -92,6 +92,9 @@
       <a href="{{ url_for('fuel_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
     </div>
   </div>
+  <div id="fuelMarketScanStatusBar" class="alert alert-secondary py-2 px-3 mb-2 small">
+    Fuel market scan status loading...
+  </div>
 
   <form method="POST" action="" id="fuelExpenseForm" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
@@ -201,6 +204,9 @@
                 <div id="priceHintPanel" class="mt-1 small border rounded p-2 bg-light" style="display:none;">
                   <span class="fw-semibold text-dark">Recent: </span><span id="priceHintLine"></span>
                 </div>
+                <div id="threePumpRatesWrap" class="mt-2 small border rounded p-2 bg-light">
+                  Loading Shell/PSO/Total rates...
+                </div>
               </div>
               <div class="col-6 col-md-3 field-group">
                 <label class="form-label">Ltr <small class="text-muted">(Auto)</small></label>
@@ -293,7 +299,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var allPumpHistoryWrap = document.getElementById('allPumpHistoryWrap');
   var taskStartReading = null;
   var taskCloseReading = null;
+  var fuelMarketScanData = null;
   var cashExpenseByValue = '';
+  var fuelMarketScanStatusBar = document.getElementById('fuelMarketScanStatusBar');
+  var threePumpRatesWrap = document.getElementById('threePumpRatesWrap');
   if (expenseBySelect && expenseBySelect.options) {
     for (var e = 0; e < expenseBySelect.options.length; e += 1) {
       var opt = expenseBySelect.options[e];
@@ -315,6 +324,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (previousReadingInput) previousReadingInput.value = '';
       if (fuelTypeSelect) fuelTypeSelect.value = '';
       if (fuelTypeDisplay) fuelTypeDisplay.value = '';
+      renderThreePumpRates();
       computeKm();
       return;
     }
@@ -332,6 +342,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         fetchSuggestedPrice();
         fetchPriceHistory();
+        renderThreePumpRates();
         computeKm();
       });
   }
@@ -383,6 +394,85 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     updateMatchedState();
     computeMpgAndLiters();
+  }
+
+  function renderFuelMarketStatus() {
+    if (!fuelMarketScanStatusBar) return;
+    if (!fuelMarketScanData || !fuelMarketScanData.sources) {
+      fuelMarketScanStatusBar.className = 'alert alert-secondary py-2 px-3 mb-2 small';
+      fuelMarketScanStatusBar.textContent = 'Fuel market scan status not available.';
+      return;
+    }
+    var okCount = parseInt(fuelMarketScanData.ok_count || 0, 10);
+    var cls = 'alert-secondary';
+    if (okCount === 3) cls = 'alert-success';
+    else if (okCount > 0) cls = 'alert-warning';
+    else cls = 'alert-danger';
+    fuelMarketScanStatusBar.className = 'alert ' + cls + ' py-2 px-3 mb-2 small';
+    var parts = [
+      'Last Scan: ' + (fuelMarketScanData.scanned_at || '-'),
+      'Success: ' + okCount + '/3'
+    ];
+    ['shell', 'pso', 'total'].forEach(function(k) {
+      var src = fuelMarketScanData.sources[k] || {};
+      if (src.ok) {
+        parts.push((src.source || k.toUpperCase()) + ': OK');
+      } else {
+        parts.push((src.source || k.toUpperCase()) + ': ' + (src.error || 'Scan failed'));
+      }
+    });
+    fuelMarketScanStatusBar.textContent = parts.join(' | ');
+  }
+
+  function renderThreePumpRates() {
+    if (!threePumpRatesWrap) return;
+    if (!fuelMarketScanData || !fuelMarketScanData.sources) {
+      threePumpRatesWrap.textContent = 'Rates not available.';
+      return;
+    }
+    var ft = (fuelTypeSelect && fuelTypeSelect.value) ? fuelTypeSelect.value : '';
+    var key = '';
+    if (ft === 'Diesel') key = 'diesel';
+    else if (ft === 'Petrol' || ft === 'Super') key = 'petrol';
+    if (!key) {
+      threePumpRatesWrap.textContent = 'Select Petrol/Diesel vehicle to view Shell/PSO/Total rates.';
+      return;
+    }
+    var labels = (key === 'petrol') ? 'Petrol' : 'Diesel';
+    var rows = [];
+    ['shell', 'pso', 'total'].forEach(function(k) {
+      var src = fuelMarketScanData.sources[k] || {};
+      var srcName = src.source || k.toUpperCase();
+      if (!src.ok) {
+        rows.push('<div><strong>' + srcName + '</strong>: Error - ' + (src.error || 'Scan failed') + '</div>');
+        return;
+      }
+      var priceVal = src[key];
+      if (priceVal == null || priceVal === '') {
+        rows.push('<div><strong>' + srcName + '</strong>: Error - ' + (src.error || (labels + ' rate missing')) + '</div>');
+        return;
+      }
+      rows.push(
+        '<div><strong>' + srcName + '</strong> | Date: ' + (src.updated_at || fuelMarketScanData.scan_date || '-') +
+        ' | Fuel: ' + labels + ' | Rs/Ltr: ' + parseFloat(priceVal).toFixed(2) + '</div>'
+      );
+    });
+    threePumpRatesWrap.innerHTML = rows.join('');
+  }
+
+  function fetchFuelMarketScan() {
+    fetch('/api/fuel-market-rates')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        fuelMarketScanData = data || null;
+        renderFuelMarketStatus();
+        renderThreePumpRates();
+      })
+      .catch(function() {
+        fuelMarketScanData = null;
+        renderFuelMarketStatus();
+        renderThreePumpRates();
+      });
   }
 
   function handlePaymentTypeBehavior() {
@@ -491,6 +581,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (fuelTypeDisplay) fuelTypeDisplay.value = selectedFuel;
       fetchSuggestedPrice();
       fetchPriceHistory();
+      renderThreePumpRates();
       fetchLastReading();
       fetchTaskReadings();
     });
@@ -564,6 +655,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (fuelTypeSelect) fuelTypeSelect.addEventListener('change', function() {
     fetchSuggestedPrice();
     fetchPriceHistory();
+    renderThreePumpRates();
   });
 
   var priceHintPanel = document.getElementById('priceHintPanel');
@@ -622,6 +714,7 @@ document.addEventListener('DOMContentLoaded', function() {
   handlePaymentTypeBehavior();
   fetchSuggestedPrice();
   fetchPriceHistory();
+  fetchFuelMarketScan();
 
   window.setTimeout(function() {
     if (districtSelect && districtSelect.tomselect) {
