@@ -14416,8 +14416,8 @@ def without_task_new():
         return redirect(url_for('without_task_list'))
 
     rows = []
-    _has_filter = date_str != ''
-    if _has_filter or district_id or project_id:
+    load_attempted = bool(date_str or district_id or project_id)
+    if load_attempted:
         saved_recs = VehicleMoveWithoutTask.query.filter(
             VehicleMoveWithoutTask.move_date == view_date
         )
