@@ -16609,6 +16609,19 @@ def _workspace_employee_id_for_expenses():
     return session.get('workspace_employee_id')
 
 
+def _workspace_employee_default_district_id(employee_id):
+    if not employee_id:
+        return None
+    emp = Employee.query.get(employee_id)
+    if not emp:
+        return None
+    try:
+        first_district = emp.districts.order_by(District.name.asc()).first()
+    except Exception:
+        first_district = None
+    return first_district.id if first_district else None
+
+
 def _fallback_vehicle_previous_reading(employee_id, vehicle_id, mode):
     if not employee_id or not vehicle_id:
         return None
@@ -17086,6 +17099,7 @@ def oil_expense_form(pk=None):
     if _guard:
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
+    default_district_id = _workspace_employee_default_district_id(workspace_employee_id)
     rec = OilExpense.query.get_or_404(pk) if pk else None
     if rec and workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
@@ -17114,6 +17128,11 @@ def oil_expense_form(pk=None):
             form.project_id.data = rec.project_id
         if rec.vehicle_id:
             form.vehicle_id.data = rec.vehicle_id
+    elif request.method == 'GET':
+        if default_district_id:
+            form.district_id.data = default_district_id
+        if not form.expense_date.data:
+            form.expense_date.data = pk_date()
 
     if form.validate_on_submit():
         vehicle_id = form.vehicle_id.data
@@ -17421,6 +17440,7 @@ def maintenance_expense_form(pk=None):
     if _guard:
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
+    default_district_id = _workspace_employee_default_district_id(workspace_employee_id)
     rec = MaintenanceExpense.query.get_or_404(pk) if pk else None
     if rec and workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
@@ -17449,6 +17469,11 @@ def maintenance_expense_form(pk=None):
             form.project_id.data = rec.project_id
         if rec.vehicle_id:
             form.vehicle_id.data = rec.vehicle_id
+    elif request.method == 'GET':
+        if default_district_id:
+            form.district_id.data = default_district_id
+        if not form.expense_date.data:
+            form.expense_date.data = pk_date()
 
     if form.validate_on_submit():
         vehicle_id = form.vehicle_id.data

@@ -55,14 +55,15 @@
             {{ form.expense_date(class="form-control datepicker", id="expenseDate") }}
           </div>
           <div class="col-md-3 field-group">
-            <label class="form-label">Current Reading</label>
+            <label class="form-label">Current Reading <small class="text-muted" id="taskReadingsMeta">(Start: - | Close: -)</small></label>
             {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
+            <small class="text-muted" id="currentReadingMatchNote">Enter reading to check match with task start/close.</small>
           </div>
           <div class="col-md-6 field-group job-category-group">
             <label class="form-label">Job Category</label>
             <div class="input-group">
               <select name="job_category" id="jobCategorySelect" class="form-select search-select">
-                <option value="">-- Select Job Category --</option>
+                <option value="" {% if not rec or not rec.job_category %}selected{% endif %}>Non-Trackable</option>
                 {% for jc in job_categories or [] %}
                 <option
                   value="{{ jc.name }}"
@@ -222,6 +223,9 @@
 (function() {
   var vehicleSelect = document.getElementById('vehicleSelect');
   var currentReading = document.getElementById('currentReading');
+  var expenseDate = document.getElementById('expenseDate');
+  var taskReadingsMeta = document.getElementById('taskReadingsMeta');
+  var currentReadingMatchNote = document.getElementById('currentReadingMatchNote');
   var itemsBody = document.getElementById('itemsBody');
   var entryProductSelect = document.getElementById('entryProductSelect');
   var entryQty = document.getElementById('entryQty');
@@ -238,6 +242,8 @@
   var modalEl = document.getElementById('jobCategoryModal');
   var jobModal = (window.bootstrap && modalEl) ? new window.bootstrap.Modal(modalEl) : null;
   var fallbackShown = false;
+  var taskStartReading = null;
+  var taskCloseReading = null;
 
   var productsForMaintenance = [];
   fetch('/api/maintenance-expense/products-for-maintenance').then(function(r) { return r.json(); }).then(function(arr) {
@@ -429,7 +435,60 @@
     });
   }
 
+  function updateCurrentReadingMatch() {
+    if (!currentReadingMatchNote) return;
+    var curr = parseFloat(currentReading && currentReading.value ? currentReading.value : '');
+    if (!isFinite(curr)) {
+      currentReadingMatchNote.textContent = 'Enter reading to check match with task start/close.';
+      return;
+    }
+    if (taskStartReading == null || taskCloseReading == null) {
+      currentReadingMatchNote.textContent = 'Task readings not available for selected date.';
+      return;
+    }
+    var tol = 0.02;
+    if (Math.abs(curr - taskStartReading) <= tol) {
+      currentReadingMatchNote.textContent = 'Matched with Start Reading.';
+    } else if (Math.abs(curr - taskCloseReading) <= tol) {
+      currentReadingMatchNote.textContent = 'Matched with Close Reading.';
+    } else {
+      currentReadingMatchNote.textContent = 'Outside Start/Close readings.';
+    }
+  }
+
+  function fetchTaskReadingsForMaintenance() {
+    var vid = vehicleSelect && vehicleSelect.value;
+    var dt = expenseDate && expenseDate.value;
+    taskStartReading = null;
+    taskCloseReading = null;
+    if (taskReadingsMeta) taskReadingsMeta.textContent = '(Start: - | Close: -)';
+    if (!vid || vid === '0' || !dt) {
+      updateCurrentReadingMatch();
+      return;
+    }
+    fetch('/api/fuel-expense/task-readings?vehicle_id=' + vid + '&fueling_date=' + encodeURIComponent(dt))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var s = (d && d.km_out_task != null) ? parseFloat(d.km_out_task) : null;
+        var c = (d && d.km_in_task != null) ? parseFloat(d.km_in_task) : null;
+        taskStartReading = isFinite(s) ? s : null;
+        taskCloseReading = isFinite(c) ? c : null;
+        if (taskReadingsMeta) {
+          taskReadingsMeta.textContent = '(Start: ' + (taskStartReading != null ? taskStartReading.toFixed(2) : '-') + ' | Close: ' + (taskCloseReading != null ? taskCloseReading.toFixed(2) : '-') + ')';
+        }
+        updateCurrentReadingMatch();
+      })
+      .catch(function() {
+        updateCurrentReadingMatch();
+      });
+  }
+
+  if (vehicleSelect) vehicleSelect.addEventListener('change', fetchTaskReadingsForMaintenance);
+  if (expenseDate) expenseDate.addEventListener('change', fetchTaskReadingsForMaintenance);
+  if (currentReading) currentReading.addEventListener('input', updateCurrentReadingMatch);
+
   updateEntryAmount();
+  fetchTaskReadingsForMaintenance();
 })();
 </script>
 {% endblock %}

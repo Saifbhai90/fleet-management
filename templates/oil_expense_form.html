@@ -9,32 +9,31 @@
   .oil-form-wrap .page-header {
     background: linear-gradient(135deg, #5b21b6 0%, #4338ca 100%);
     color: #fff;
-    padding: 0.5rem 1rem;
-    border-radius: 10px;
-    margin-bottom: 0.6rem;
+    padding: 0.85rem 1.1rem;
+    border-radius: 14px;
+    margin-bottom: 1rem;
+    box-shadow: 0 8px 20px rgba(91, 33, 182, 0.25);
   }
-  .oil-form-wrap .form-section { background: #fff; border-radius: 10px; border: 1px solid #e9ecef; margin-bottom: 0.6rem; overflow: hidden; }
+  .oil-form-wrap .page-header h4 { margin: 0; font-size: 1.35rem; font-weight: 700; letter-spacing: 0.2px; }
+  .oil-form-wrap .form-section { background: #fff; border-radius: 12px; border: 1px solid #e9ecef; margin-bottom: 0.95rem; overflow: hidden; box-shadow: 0 2px 10px rgba(16, 24, 40, 0.06); }
   .oil-form-wrap .form-section-header {
-    background: linear-gradient(to right, #f8f9fa 0%, #fff 100%);
-    border-bottom: 1px solid #e9ecef;
-    padding: 0.35rem 0.75rem;
-    font-weight: 600;
-    font-size: 0.8rem;
-    color: #495057;
+    background: linear-gradient(to right, #f5f3ff 0%, #fff 100%);
+    border-bottom: 1px solid #eceff1;
+    padding: 0.62rem 0.95rem;
+    font-weight: 700;
+    font-size: 1rem;
+    color: #374151;
   }
-  .oil-form-wrap .form-section-body { padding: 0.5rem 0.75rem; }
-  .oil-form-wrap .form-label { font-size: 0.72rem; font-weight: 500; color: #495057; margin-bottom: 0.2rem; }
-  .oil-form-wrap .form-control, .oil-form-wrap .form-select { border-radius: 6px; font-size: 0.8rem; padding: 0.35rem 0.5rem; min-height: 32px; }
+  .oil-form-wrap .form-section-body { padding: 0.95rem 1rem; }
+  .oil-form-wrap .form-label { font-size: 0.92rem; font-weight: 600; color: #334155; margin-bottom: 0.35rem; }
+  .oil-form-wrap .form-control, .oil-form-wrap .form-select { border-radius: 8px; font-size: 0.95rem; padding: 0.52rem 0.7rem; min-height: 40px; }
   .oil-form-wrap .form-control.bg-light { background-color: #f1f3f5 !important; cursor: default; }
-  .oil-form-wrap .field-group { margin-bottom: 0.4rem; }
-  .oil-form-wrap #itemsTable input, .oil-form-wrap #itemsTable select { font-size: 0.8rem; padding: 0.3rem 0.4rem; }
-  .oil-form-wrap .action-bar { padding: 0.5rem 1rem; background: #f8f9fa; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 0.5rem; }
-  .oil-form-wrap.compact .page-header h4 { font-size: .95rem; }
-  .oil-form-wrap.compact .form-section-header { font-size: .74rem; padding: .28rem .6rem; }
-  .oil-form-wrap.compact .form-section-body { padding: .4rem .6rem; }
-  .oil-form-wrap.compact .form-label { font-size: .66rem; margin-bottom: .12rem; }
-  .oil-form-wrap.compact .form-control, .oil-form-wrap.compact .form-select { font-size: .73rem; min-height: 29px; padding: .26rem .4rem; }
-  .oil-form-wrap.compact #itemsTable input, .oil-form-wrap.compact #itemsTable select { font-size: .72rem; padding: .22rem .34rem; }
+  .oil-form-wrap .field-group { margin-bottom: 0.55rem; }
+  .oil-form-wrap #itemsTable thead th { font-size: 0.86rem; }
+  .oil-form-wrap #itemsTable td { font-size: 0.9rem; }
+  .oil-form-wrap #itemsTable input, .oil-form-wrap #itemsTable select { font-size: 0.9rem; padding: 0.42rem 0.5rem; min-height: 36px; }
+  .oil-form-wrap .action-bar { padding: 0.78rem 1rem; background: #f8fafc; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 0.5rem; }
+  .oil-form-wrap .btn { font-size: 0.92rem; }
 </style>
 <div class="container-fluid oil-form-wrap py-2">
   <div class="page-header d-flex justify-content-between align-items-center">
@@ -87,8 +86,9 @@
             {{ form.previous_reading(class="form-control bg-light", id="previousReading", step="0.01", readonly=True, placeholder="From last entry") }}
           </div>
           <div class="col-md-4 field-group">
-            <label class="form-label">Current Reading</label>
+            <label class="form-label">Current Reading <small class="text-muted" id="oilTaskReadingsMeta">(Start: - | Close: -)</small></label>
             {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
+            <small class="text-muted" id="oilCurrentReadingMatchNote">Enter reading to check match with task start/close.</small>
           </div>
           <div class="col-md-4 field-group">
             <label class="form-label">KM (Current − Previous)</label>
@@ -243,6 +243,9 @@
   var previousReading = document.getElementById('previousReading');
   var currentReading = document.getElementById('currentReading');
   var kmDisplay = document.getElementById('kmDisplay');
+  var expenseDate = document.getElementById('expenseDate');
+  var oilTaskReadingsMeta = document.getElementById('oilTaskReadingsMeta');
+  var oilCurrentReadingMatchNote = document.getElementById('oilCurrentReadingMatchNote');
   var itemsBody = document.getElementById('itemsBody');
   var entryProductSelect = document.getElementById('entryProductSelect');
   var entryPaymentType = document.getElementById('entryPaymentType');
@@ -252,6 +255,8 @@
   var entryAmount = document.getElementById('entryAmount');
   var entryBalanceQty = document.getElementById('entryBalanceQty');
   var addToListBtn = document.getElementById('addToListBtn');
+  var oilTaskStartReading = null;
+  var oilTaskCloseReading = null;
 
   var productsForOil = [];
   fetch('/api/oil-expense/products-for-oil').then(function(r) { return r.json(); }).then(function(arr) {
@@ -393,22 +398,79 @@
       kmDisplay.value = '';
     }
   }
+
+  function updateOilReadingMatch() {
+    if (!oilCurrentReadingMatchNote) return;
+    var curr = parseFloat(currentReading && currentReading.value ? currentReading.value : '');
+    if (!isFinite(curr)) {
+      oilCurrentReadingMatchNote.textContent = 'Enter reading to check match with task start/close.';
+      return;
+    }
+    if (oilTaskStartReading == null || oilTaskCloseReading == null) {
+      oilCurrentReadingMatchNote.textContent = 'Task readings not available for selected date.';
+      return;
+    }
+    var tol = 0.02;
+    if (Math.abs(curr - oilTaskStartReading) <= tol) {
+      oilCurrentReadingMatchNote.textContent = 'Matched with Start Reading.';
+    } else if (Math.abs(curr - oilTaskCloseReading) <= tol) {
+      oilCurrentReadingMatchNote.textContent = 'Matched with Close Reading.';
+    } else {
+      oilCurrentReadingMatchNote.textContent = 'Outside Start/Close readings.';
+    }
+  }
+
+  function fetchOilTaskReadings() {
+    var vid = vehicleSelect && vehicleSelect.value;
+    var dt = expenseDate && expenseDate.value;
+    oilTaskStartReading = null;
+    oilTaskCloseReading = null;
+    if (oilTaskReadingsMeta) oilTaskReadingsMeta.textContent = '(Start: - | Close: -)';
+    if (!vid || vid === '0' || !dt) {
+      updateOilReadingMatch();
+      return;
+    }
+    fetch('/api/fuel-expense/task-readings?vehicle_id=' + vid + '&fueling_date=' + encodeURIComponent(dt))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var s = (d && d.km_out_task != null) ? parseFloat(d.km_out_task) : null;
+        var c = (d && d.km_in_task != null) ? parseFloat(d.km_in_task) : null;
+        oilTaskStartReading = isFinite(s) ? s : null;
+        oilTaskCloseReading = isFinite(c) ? c : null;
+        if (oilTaskReadingsMeta) {
+          oilTaskReadingsMeta.textContent = '(Start: ' + (oilTaskStartReading != null ? oilTaskStartReading.toFixed(2) : '-') + ' | Close: ' + (oilTaskCloseReading != null ? oilTaskCloseReading.toFixed(2) : '-') + ')';
+        }
+        updateOilReadingMatch();
+      })
+      .catch(function() {
+        updateOilReadingMatch();
+      });
+  }
   if (currentReading) currentReading.addEventListener('input', updateKm);
   if (previousReading) previousReading.addEventListener('input', updateKm);
+  if (currentReading) currentReading.addEventListener('input', updateOilReadingMatch);
+  if (expenseDate) expenseDate.addEventListener('change', fetchOilTaskReadings);
 
   if (vehicleSelect) {
     vehicleSelect.addEventListener('change', function() {
       var vid = this.value;
       previousReading.value = '';
-      if (!vid || vid === '0') return;
+      if (!vid || vid === '0') {
+        fetchOilTaskReadings();
+        return;
+      }
       fetch('/api/oil-expense/last-reading?vehicle_id=' + vid).then(function(r) { return r.json(); }).then(function(d) {
         if (d.previous_reading != null) previousReading.value = d.previous_reading;
         updateKm();
+      }).finally(function() {
+        fetchOilTaskReadings();
       });
     });
   }
 
   updateKm();
+  updateOilReadingMatch();
+  fetchOilTaskReadings();
   updateEntryAmountAndBalance();
 })();
 </script>
