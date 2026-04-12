@@ -4,32 +4,77 @@
 <style>
   .media-wrap { max-width: min(1680px, calc(100vw - 96px)); margin: 0 auto; }
   .media-head { background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); color:#fff; border-radius: 12px; padding: .65rem 1rem; }
-  .media-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap:12px; }
-  .media-card { border:1px solid #e2e8f0; border-radius:10px; background:#fff; overflow:hidden; cursor:pointer; }
-  .media-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); }
-  .media-thumb { width:100%; height:150px; object-fit:cover; background:#0f172a; display:block; pointer-events:none; }
-  .media-name { font-size:.82rem; padding:.45rem .55rem; border-top:1px solid #e2e8f0; word-break:break-word; pointer-events:none; }
+  .media-toolbar { margin: 10px 0 14px 0; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .media-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:12px; }
+  .media-card { border:1px solid #e2e8f0; border-radius:10px; background:#fff; overflow:hidden; cursor:pointer; transition:.2s ease; }
+  .media-card:hover { box-shadow: 0 8px 18px rgba(15,23,42,.12); transform: translateY(-2px); }
+  .media-thumb { width:100%; height:155px; object-fit:cover; background:#0f172a; display:block; pointer-events:none; }
+  .media-meta { padding:.45rem .55rem; border-top:1px solid #e2e8f0; }
+  .media-name { font-size:.82rem; font-weight:600; word-break:break-word; line-height:1.3; }
+  .media-sub { font-size:.75rem; color:#64748b; margin-top:2px; }
 
-  .gv-overlay { position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.92); display:none; flex-direction:column; }
+  .gv-overlay { position:fixed; inset:0; z-index:9999; background:rgba(2,6,23,.94); display:none; flex-direction:column; }
   .gv-overlay.open { display:flex; }
-  .gv-top { flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; padding:10px 16px; color:#e2e8f0; }
-  .gv-top .gv-info { font-size:.9rem; }
-  .gv-top .gv-close { background:none; border:none; color:#fff; font-size:1.4rem; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
-  .gv-top .gv-close:hover { background:rgba(255,255,255,.15); }
-  .gv-stage { flex:1 1 auto; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; min-height:0; }
-  .gv-stage img, .gv-stage video { max-width: calc(100% - 120px); max-height: calc(100% - 20px); object-fit:contain; border-radius:8px; user-select:none; -webkit-user-drag:none; }
-  .gv-arrow { position:absolute; top:50%; transform:translateY(-50%); width:48px; height:48px; border:none; border-radius:50%; background:rgba(255,255,255,.15); color:#fff; font-size:1.3rem; display:flex; align-items:center; justify-content:center; z-index:2; }
+  .gv-top {
+    flex:0 0 auto;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    padding:10px 16px;
+    color:#e2e8f0;
+    border-bottom:1px solid rgba(148,163,184,.22);
+  }
+  .gv-top-left { display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0; }
+  .gv-top .gv-info { font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: min(62vw, 760px); }
+  .gv-tool {
+    border:none; border-radius:8px; color:#fff; background:rgba(255,255,255,.14);
+    min-width:38px; height:36px; padding:0 10px; font-size:.9rem;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .gv-tool:hover { background:rgba(255,255,255,.24); }
+  .gv-close { border-radius:50%; width:38px; height:38px; min-width:38px; }
+
+  .gv-stage {
+    flex:1 1 auto; min-height:0; position:relative; overflow:hidden;
+    display:flex; align-items:center; justify-content:center; touch-action:pan-y;
+  }
+  .gv-stage img, .gv-stage video {
+    max-width: calc(100% - 120px);
+    max-height: calc(100% - 20px);
+    object-fit:contain;
+    border-radius:8px;
+    user-select:none;
+    -webkit-user-drag:none;
+    transform-origin:center center;
+  }
+  .gv-stage img.zoomable { cursor:grab; transition: transform .08s linear; }
+  .gv-stage img.zoomable.dragging { cursor:grabbing; }
+
+  .gv-arrow {
+    position:absolute; top:50%; transform:translateY(-50%);
+    width:48px; height:48px; border:none; border-radius:50%;
+    background:rgba(255,255,255,.15); color:#fff; font-size:1.3rem;
+    display:flex; align-items:center; justify-content:center; z-index:2;
+  }
   .gv-arrow:hover { background:rgba(255,255,255,.3); }
   .gv-arrow.left { left:12px; }
   .gv-arrow.right { right:12px; }
   .gv-loading { color:#94a3b8; font-size:.95rem; position:absolute; }
-  .gv-err { color:#f87171; font-size:.9rem; text-align:center; }
-  .gv-err a { color:#60a5fa; }
-  @media (max-width: 768px) {
-    .gv-stage img, .gv-stage video { max-width: calc(100% - 24px); }
+  .gv-err { color:#fca5a5; font-size:.9rem; text-align:center; }
+  .gv-err a { color:#93c5fd; }
+
+  .pill { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:4px 10px; font-size:.78rem; background:#e2e8f0; color:#0f172a; }
+  .pill.dark { background:#0f172a; color:#e2e8f0; border:1px solid #334155; }
+
+  @media (max-width: 900px) {
+    .gv-top { padding:8px 10px; }
+    .gv-top .gv-info { max-width: 52vw; }
+    .gv-stage img, .gv-stage video { max-width: calc(100% - 16px); max-height: calc(100% - 12px); }
     .gv-arrow { width:36px; height:36px; font-size:1rem; }
     .gv-arrow.left { left:4px; }
     .gv-arrow.right { right:4px; }
+    .gv-tool span.lbl { display:none; }
   }
 </style>
 
@@ -42,7 +87,22 @@
       </div>
       <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
     </div>
+
     {% if media_items %}
+      {% set image_count = media_items|selectattr('type','equalto','image')|list|length %}
+      {% set video_count = media_items|selectattr('type','equalto','video')|list|length %}
+      <div class="media-toolbar">
+        <span class="pill"><i class="bi bi-collection"></i> Total: {{ media_items|length }}</span>
+        <span class="pill"><i class="bi bi-image"></i> Images: {{ image_count }}</span>
+        <span class="pill"><i class="bi bi-camera-video"></i> Videos: {{ video_count }}</span>
+        <button type="button" class="btn btn-sm btn-primary ms-auto" id="shareAllMediaBtn">
+          <i class="bi bi-share-fill me-1"></i>Share All Media
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="copyLinksBtn">
+          <i class="bi bi-clipboard-check me-1"></i>Copy Links
+        </button>
+      </div>
+
       <div class="media-grid" id="mediaGrid">
         {% for m in media_items %}
           <div class="media-card" data-idx="{{ loop.index0 }}">
@@ -51,7 +111,14 @@
             {% else %}
               <img class="media-thumb" src="{{ m.url }}" alt="{{ m.name }}" loading="lazy">
             {% endif %}
-            <div class="media-name">{{ m.name }}</div>
+            <div class="media-meta">
+              <div class="media-name">{{ m.name }}</div>
+              <div class="media-sub">
+                {{ (m.type or 'file')|title }}
+                {% if m.size_label %} | {{ m.size_label }}{% endif %}
+                {% if m.created_at %} | {{ m.created_at }}{% endif %}
+              </div>
+            </div>
           </div>
         {% endfor %}
       </div>
@@ -63,10 +130,21 @@
   </div>
 </div>
 
-<div class="gv-overlay" id="gvOverlay">
+<div class="gv-overlay" id="gvOverlay" aria-hidden="true">
   <div class="gv-top">
-    <span class="gv-info" id="gvInfo">1 / 1</span>
-    <button type="button" class="gv-close" id="gvClose" title="Close (Esc)"><i class="bi bi-x-lg"></i></button>
+    <div class="gv-top-left">
+      <span class="gv-info" id="gvInfo">1 / 1</span>
+      <span class="pill dark" id="gvMetaPill">Image</span>
+    </div>
+    <div class="d-flex align-items-center gap-1">
+      <button type="button" class="gv-tool" id="gvPlayBtn" title="Start/Stop slideshow"><i class="bi bi-play-fill"></i><span class="lbl">Slide</span></button>
+      <button type="button" class="gv-tool" id="gvZoomOutBtn" title="Zoom out (image only)"><i class="bi bi-dash-lg"></i></button>
+      <button type="button" class="gv-tool" id="gvZoomInBtn" title="Zoom in (image only)"><i class="bi bi-plus-lg"></i></button>
+      <button type="button" class="gv-tool" id="gvZoomResetBtn" title="Reset zoom"><i class="bi bi-arrows-angle-contract"></i></button>
+      <button type="button" class="gv-tool" id="gvDownloadBtn" title="Download current"><i class="bi bi-download"></i><span class="lbl">Download</span></button>
+      <button type="button" class="gv-tool" id="gvShareBtn" title="Share current"><i class="bi bi-share"></i><span class="lbl">Share</span></button>
+      <button type="button" class="gv-tool gv-close" id="gvClose" title="Close (Esc)"><i class="bi bi-x-lg"></i></button>
+    </div>
   </div>
   <div class="gv-stage" id="gvStage">
     <button type="button" class="gv-arrow left" id="gvPrev" title="Previous (Left Arrow)"><i class="bi bi-chevron-left"></i></button>
@@ -75,102 +153,312 @@
 </div>
 
 <script>
-(function() {
+(function () {
   var ITEMS = {{ media_items | tojson }};
-  if (!ITEMS || !ITEMS.length) return;
+  if (!Array.isArray(ITEMS) || !ITEMS.length) return;
 
   var overlay = document.getElementById('gvOverlay');
-  var stage   = document.getElementById('gvStage');
-  var info    = document.getElementById('gvInfo');
-  var grid    = document.getElementById('mediaGrid');
-  var cur     = 0;
+  var stage = document.getElementById('gvStage');
+  var info = document.getElementById('gvInfo');
+  var metaPill = document.getElementById('gvMetaPill');
+  var grid = document.getElementById('mediaGrid');
+  var cur = 0;
   var mediaEl = null;
+  var slideshowTimer = null;
+  var lastBodyOverflow = '';
+  var zoom = 1;
+  var panX = 0;
+  var panY = 0;
+  var dragOn = false;
+  var dragStartX = 0;
+  var dragStartY = 0;
+  var touchStartX = 0;
+  var touchStartY = 0;
+  var touchStartTime = 0;
 
-  /* Move overlay out of .main-content to document.body so position:fixed
-     is relative to the viewport, not a transformed/offset parent. */
   document.body.appendChild(overlay);
 
-  function show(i) {
-    cur = ((i % ITEMS.length) + ITEMS.length) % ITEMS.length;
-    var it = ITEMS[cur];
-    if (mediaEl && mediaEl.parentNode) mediaEl.parentNode.removeChild(mediaEl);
+  function resetZoomState() {
+    zoom = 1;
+    panX = 0;
+    panY = 0;
+  }
 
+  function applyZoomTransform() {
+    if (!mediaEl || mediaEl.tagName !== 'IMG') return;
+    mediaEl.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+  }
+
+  function setMeta(it) {
+    var parts = [];
+    parts.push((cur + 1) + ' / ' + ITEMS.length);
+    parts.push(it.name || 'Attachment');
+    info.textContent = parts.join(' | ');
+    var p = (it.type || 'file').toUpperCase();
+    if (it.size_label) p += ' | ' + it.size_label;
+    if (it.created_at) p += ' | ' + it.created_at;
+    metaPill.textContent = p;
+  }
+
+  function clearStageAux() {
     var oldLoad = stage.querySelector('.gv-loading');
     if (oldLoad) oldLoad.remove();
     var oldErr = stage.querySelector('.gv-err');
     if (oldErr) oldErr.remove();
+    var oldMedia = stage.querySelector('img, video');
+    if (oldMedia) oldMedia.remove();
+    mediaEl = null;
+    resetZoomState();
+  }
 
-    info.textContent = (cur + 1) + ' / ' + ITEMS.length + '  \u2014  ' + (it.name || '');
+  function renderCurrent() {
+    cur = ((cur % ITEMS.length) + ITEMS.length) % ITEMS.length;
+    var it = ITEMS[cur];
+    clearStageAux();
+    setMeta(it);
 
     if (it.type === 'video') {
       var v = document.createElement('video');
       v.src = it.url;
       v.controls = true;
       v.autoplay = true;
-      v.preload = 'auto';
-      v.style.outline = 'none';
+      v.preload = 'metadata';
       mediaEl = v;
-      stage.insertBefore(v, stage.querySelector('.gv-arrow.right'));
-    } else {
-      var loader = document.createElement('div');
-      loader.className = 'gv-loading';
-      loader.textContent = 'Loading...';
-      stage.insertBefore(loader, stage.querySelector('.gv-arrow.right'));
-
-      var img = new Image();
-      img.onload = function() {
-        if (loader.parentNode) loader.remove();
-        stage.insertBefore(img, stage.querySelector('.gv-arrow.right'));
-      };
-      img.onerror = function() {
-        if (loader.parentNode) loader.remove();
-        var errDiv = document.createElement('div');
-        errDiv.className = 'gv-err';
-        errDiv.innerHTML = 'Could not load image.<br><a href="' + it.url + '" target="_blank" rel="noopener">Open in new tab</a>';
-        stage.insertBefore(errDiv, stage.querySelector('.gv-arrow.right'));
-      };
-      img.src = it.url;
-      mediaEl = img;
+      stage.insertBefore(v, document.getElementById('gvNext'));
+      return;
     }
+
+    var loader = document.createElement('div');
+    loader.className = 'gv-loading';
+    loader.textContent = 'Loading image...';
+    stage.insertBefore(loader, document.getElementById('gvNext'));
+
+    var img = new Image();
+    img.className = 'zoomable';
+    img.alt = it.name || 'Image';
+    img.onload = function () {
+      if (loader.parentNode) loader.remove();
+      mediaEl = img;
+      stage.insertBefore(img, document.getElementById('gvNext'));
+      applyZoomTransform();
+    };
+    img.onerror = function () {
+      if (loader.parentNode) loader.remove();
+      var errDiv = document.createElement('div');
+      errDiv.className = 'gv-err';
+      errDiv.innerHTML = 'Could not load image.<br><a href="' + it.url + '" target="_blank" rel="noopener">Open in new tab</a>';
+      stage.insertBefore(errDiv, document.getElementById('gvNext'));
+    };
+    img.src = it.url;
   }
 
-  function open(i) {
-    show(i);
+  function showAt(index) {
+    cur = index;
+    renderCurrent();
+  }
+  function showPrev() { showAt(cur - 1); }
+  function showNext() { showAt(cur + 1); }
+
+  function stopSlideshow() {
+    if (slideshowTimer) {
+      clearInterval(slideshowTimer);
+      slideshowTimer = null;
+      document.getElementById('gvPlayBtn').innerHTML = '<i class="bi bi-play-fill"></i><span class="lbl">Slide</span>';
+    }
+  }
+  function toggleSlideshow() {
+    if (slideshowTimer) {
+      stopSlideshow();
+      return;
+    }
+    slideshowTimer = setInterval(function () {
+      showNext();
+    }, 3500);
+    document.getElementById('gvPlayBtn').innerHTML = '<i class="bi bi-pause-fill"></i><span class="lbl">Pause</span>';
+  }
+
+  function openViewer(index) {
+    showAt(index);
     overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+    lastBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
   }
 
-  function close() {
+  function closeViewer() {
     overlay.classList.remove('open');
-    document.body.style.overflow = '';
-    if (mediaEl && mediaEl.parentNode) mediaEl.parentNode.removeChild(mediaEl);
-    mediaEl = null;
-    var rem = stage.querySelectorAll('.gv-loading, .gv-err');
-    rem.forEach(function(el) { el.remove(); });
+    overlay.setAttribute('aria-hidden', 'true');
+    stopSlideshow();
+    clearStageAux();
+    document.body.style.overflow = lastBodyOverflow;
+  }
+
+  function setZoom(delta) {
+    if (!mediaEl || mediaEl.tagName !== 'IMG') return;
+    zoom = Math.max(1, Math.min(5, zoom + delta));
+    if (zoom === 1) {
+      panX = 0;
+      panY = 0;
+    }
+    applyZoomTransform();
+  }
+
+  function downloadCurrent() {
+    var it = ITEMS[cur];
+    if (!it) return;
+    var a = document.createElement('a');
+    a.href = it.url;
+    a.download = it.name || 'attachment';
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function shareCurrent() {
+    var it = ITEMS[cur];
+    if (!it) return;
+    if (navigator.share) {
+      navigator.share({
+        title: 'Maintenance media',
+        text: (it.name || 'Attachment'),
+        url: it.url
+      }).catch(function () {});
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(it.url);
+      alert('Current media link copied.');
+      return;
+    }
+    prompt('Copy this media link:', it.url);
+  }
+
+  function shareAllMedia() {
+    var lines = ITEMS.map(function (it, i) {
+      return (i + 1) + '. ' + (it.name || 'Attachment') + ' - ' + it.url;
+    });
+    var payload = 'Maintenance media links\n\n' + lines.join('\n');
+    if (navigator.share) {
+      navigator.share({
+        title: 'Maintenance media',
+        text: payload.slice(0, 3900),
+        url: window.location.href
+      }).catch(function () {});
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(payload).then(function () {
+        alert('All media links copied.');
+      }).catch(function () {
+        prompt('Copy all media links:', payload);
+      });
+      return;
+    }
+    prompt('Copy all media links:', payload);
+  }
+
+  function copyAllLinks() {
+    var links = ITEMS.map(function (it) { return it.url; }).join('\n');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(links).then(function () {
+        alert('All media URLs copied.');
+      }).catch(function () {
+        prompt('Copy URLs:', links);
+      });
+      return;
+    }
+    prompt('Copy URLs:', links);
   }
 
   if (grid) {
-    grid.addEventListener('click', function(e) {
+    grid.addEventListener('click', function (e) {
       var card = e.target.closest('.media-card');
       if (!card) return;
       var i = parseInt(card.getAttribute('data-idx') || '0', 10);
-      open(i);
+      openViewer(i);
     });
   }
 
-  document.getElementById('gvClose').addEventListener('click', close);
-  document.getElementById('gvPrev').addEventListener('click', function(e) { e.stopPropagation(); show(cur - 1); });
-  document.getElementById('gvNext').addEventListener('click', function(e) { e.stopPropagation(); show(cur + 1); });
+  var shareAllBtn = document.getElementById('shareAllMediaBtn');
+  if (shareAllBtn) shareAllBtn.addEventListener('click', shareAllMedia);
+  var copyLinksBtn = document.getElementById('copyLinksBtn');
+  if (copyLinksBtn) copyLinksBtn.addEventListener('click', copyAllLinks);
 
-  stage.addEventListener('click', function(e) {
-    if (e.target === stage) close();
+  document.getElementById('gvClose').addEventListener('click', closeViewer);
+  document.getElementById('gvPrev').addEventListener('click', function (e) { e.stopPropagation(); showPrev(); });
+  document.getElementById('gvNext').addEventListener('click', function (e) { e.stopPropagation(); showNext(); });
+  document.getElementById('gvPlayBtn').addEventListener('click', function () { toggleSlideshow(); });
+  document.getElementById('gvDownloadBtn').addEventListener('click', downloadCurrent);
+  document.getElementById('gvShareBtn').addEventListener('click', shareCurrent);
+  document.getElementById('gvZoomInBtn').addEventListener('click', function () { setZoom(0.25); });
+  document.getElementById('gvZoomOutBtn').addEventListener('click', function () { setZoom(-0.25); });
+  document.getElementById('gvZoomResetBtn').addEventListener('click', function () {
+    resetZoomState();
+    applyZoomTransform();
   });
 
-  document.addEventListener('keydown', function(e) {
+  stage.addEventListener('click', function (e) {
+    if (e.target === stage) closeViewer();
+  });
+
+  stage.addEventListener('wheel', function (e) {
     if (!overlay.classList.contains('open')) return;
-    if (e.key === 'Escape') { close(); }
-    else if (e.key === 'ArrowLeft')  { e.preventDefault(); show(cur - 1); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); show(cur + 1); }
+    if (!mediaEl || mediaEl.tagName !== 'IMG') return;
+    e.preventDefault();
+    setZoom(e.deltaY > 0 ? -0.15 : 0.15);
+  }, { passive: false });
+
+  stage.addEventListener('mousedown', function (e) {
+    if (!mediaEl || mediaEl.tagName !== 'IMG' || zoom <= 1) return;
+    dragOn = true;
+    mediaEl.classList.add('dragging');
+    dragStartX = e.clientX - panX;
+    dragStartY = e.clientY - panY;
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragOn || !mediaEl || mediaEl.tagName !== 'IMG') return;
+    panX = e.clientX - dragStartX;
+    panY = e.clientY - dragStartY;
+    applyZoomTransform();
+  });
+  window.addEventListener('mouseup', function () {
+    if (!dragOn || !mediaEl || mediaEl.tagName !== 'IMG') return;
+    dragOn = false;
+    mediaEl.classList.remove('dragging');
+  });
+
+  stage.addEventListener('touchstart', function (e) {
+    if (!overlay.classList.contains('open')) return;
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    touchStartTime = Date.now();
+  }, { passive: true });
+  stage.addEventListener('touchend', function (e) {
+    if (!overlay.classList.contains('open')) return;
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    var dx = t.clientX - touchStartX;
+    var dy = t.clientY - touchStartY;
+    var dt = Date.now() - touchStartTime;
+    if (dt < 650 && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0) showPrev();
+      else showNext();
+    }
+  }, { passive: true });
+
+  document.addEventListener('keydown', function (e) {
+    if (!overlay.classList.contains('open')) return;
+    if (e.key === 'Escape') closeViewer();
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); showPrev(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); showNext(); }
+    else if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(0.2); }
+    else if (e.key === '-') { e.preventDefault(); setZoom(-0.2); }
+    else if (e.key === '0') { e.preventDefault(); resetZoomState(); applyZoomTransform(); }
+    else if (e.key === ' ') { e.preventDefault(); toggleSlideshow(); }
   });
 })();
 </script>

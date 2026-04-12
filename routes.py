@@ -18828,6 +18828,39 @@ def maintenance_expense_media(pk):
     if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('maintenance_expense_list'))
+    def _human_size(n):
+        if n is None:
+            return ''
+        size = float(n)
+        units = ['B', 'KB', 'MB', 'GB', 'TB']
+        idx = 0
+        while size >= 1024 and idx < len(units) - 1:
+            size /= 1024.0
+            idx += 1
+        if idx == 0:
+            return f"{int(size)} {units[idx]}"
+        return f"{size:.1f} {units[idx]}"
+
+    def _local_attachment_size_bytes(stored_path):
+        if not stored_path:
+            return None
+        p = str(stored_path).strip()
+        if p.startswith('http://') or p.startswith('https://'):
+            return None
+        upload_root = os.path.abspath(app.config.get('UPLOAD_FOLDER', ''))
+        if not upload_root:
+            return None
+        rel = p.replace('\\', '/').lstrip('/')
+        if rel.startswith('uploads/'):
+            rel = rel[len('uploads/'):]
+        full = os.path.abspath(os.path.join(upload_root, rel.replace('/', os.sep)))
+        if not full.startswith(upload_root):
+            return None
+        try:
+            return os.path.getsize(full)
+        except OSError:
+            return None
+
     media_items = []
     for att in rec.attachments.order_by(MaintenanceExpenseAttachment.created_at.asc(), MaintenanceExpenseAttachment.id.asc()).all():
         url = media_url_filter(att.file_path or '')
@@ -18840,10 +18873,16 @@ def maintenance_expense_media(pk):
                 ftype = 'video'
             else:
                 ftype = 'image'
+        size_bytes = _local_attachment_size_bytes(att.file_path or '')
+        created_at = att.created_at
         media_items.append({
             'url': url,
             'type': ftype,
             'name': att.original_name or os.path.basename(att.file_path or '') or 'Attachment',
+            'created_at': created_at.strftime('%d-%m-%Y %I:%M %p') if created_at else '',
+            'created_at_iso': created_at.isoformat() if created_at else '',
+            'size_bytes': size_bytes,
+            'size_label': _human_size(size_bytes),
         })
     return render_template('maintenance_expense_media.html', rec=rec, media_items=media_items)
 
