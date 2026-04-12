@@ -610,48 +610,89 @@ def accounts_balance_sheet():
             as_of_date = datetime.strptime(request.args['as_of_date'], '%d-%m-%Y').date()
         except ValueError:
             as_of_date = pk_date()
+
     if as_of_date:
-        
-        assets      = Account.query.filter_by(account_type='Asset',     is_active=True).order_by(Account.code).all()
-        liabilities = Account.query.filter_by(account_type='Liability', is_active=True).order_by(Account.code).all()
-        equity      = Account.query.filter_by(account_type='Equity',    is_active=True).order_by(Account.code).all()
-        revenue     = Account.query.filter_by(account_type='Revenue',   is_active=True).order_by(Account.code).all()
-        expenses    = Account.query.filter_by(account_type='Expense',   is_active=True).order_by(Account.code).all()
+        accounts = (
+            Account.query
+            .filter_by(is_active=True)
+            .order_by(Account.account_type.asc(), Account.code.asc(), Account.id.asc())
+            .all()
+        )
+        account_ids = [a.id for a in accounts]
 
         from sqlalchemy import func as _func
-        all_ids = [a.id for a in assets + liabilities + equity + revenue + expenses]
-        _bal_rows = db.session.query(
+        _jnl_rows = db.session.query(
             JournalEntryLine.account_id,
-            _func.sum(JournalEntryLine.debit).label('td'),
-            _func.sum(JournalEntryLine.credit).label('tc'),
+            _func.coalesce(_func.sum(JournalEntryLine.debit), 0).label('td'),
+            _func.coalesce(_func.sum(JournalEntryLine.credit), 0).label('tc'),
         ).join(JournalEntry).filter(
-            JournalEntryLine.account_id.in_(all_ids),
+            JournalEntryLine.account_id.in_(account_ids),
             JournalEntry.entry_date <= as_of_date,
             JournalEntry.is_posted == True,
-        ).group_by(JournalEntryLine.account_id).all()
+        ).group_by(JournalEntryLine.account_id).all() if account_ids else []
 
-        _jnl = {r.account_id: (Decimal(str(r.td or 0)), Decimal(str(r.tc or 0))) for r in _bal_rows}
+        jnl_map = {r.account_id: (Decimal(str(r.td or 0)), Decimal(str(r.tc or 0))) for r in _jnl_rows}
 
-        def _bal(account):
-            opening = Decimal(str(account.opening_balance or 0))
-            debit, credit = _jnl.get(account.id, (Decimal('0'), Decimal('0')))
-            if account.account_type in ('Asset', 'Expense'):
-                return opening + debit - credit
-            return opening + credit - debit
+        grouped = {
+            'Asset': [],
+            'Liability': [],
+            'Equity': [],
+            'Revenue': [],
+            'Expense': [],
+        }
+        totals = {
+            'opening': Decimal('0'),
+            'debit': Decimal('0'),
+            'credit': Decimal('0'),
+            'balance': Decimal('0'),
+            'by_type': {k: Decimal('0') for k in grouped.keys()},
+        }
 
-        total_assets      = sum(_bal(a) for a in assets)
-        total_liabilities = sum(_bal(a) for a in liabilities)
-        total_equity      = sum(_bal(a) for a in equity)
-        total_revenue     = sum(_bal(a) for a in revenue)
-        total_expenses    = sum(_bal(a) for a in expenses)
-        net_income        = total_revenue - total_expenses
+        def _side(account_type, balance):
+            if account_type in ('Asset', 'Expense'):
+                return 'Dr' if balance >= 0 else 'Cr'
+            return 'Cr' if balance >= 0 else 'Dr'
+
+        for acc in accounts:
+            opening = Decimal(str(acc.opening_balance or 0))
+            debit, credit = jnl_map.get(acc.id, (Decimal('0'), Decimal('0')))
+            if acc.account_type in ('Asset', 'Expense'):
+                balance = opening + debit - credit
+            else:
+                balance = opening + credit - debit
+            is_zero = (
+                abs(opening) < Decimal('0.0001')
+                and abs(debit) < Decimal('0.0001')
+                and abs(credit) < Decimal('0.0001')
+                and abs(balance) < Decimal('0.0001')
+            )
+            row = {
+                'account': acc,
+                'opening': opening,
+                'debit': debit,
+                'credit': credit,
+                'balance': balance,
+                'side': _side(acc.account_type, balance),
+                'is_zero': is_zero,
+            }
+            grouped.setdefault(acc.account_type or 'Asset', []).append(row)
+            totals['opening'] += opening
+            totals['debit'] += debit
+            totals['credit'] += credit
+            totals['balance'] += balance
+            if acc.account_type in totals['by_type']:
+                totals['by_type'][acc.account_type] += balance
+
+        total_assets = totals['by_type']['Asset']
+        total_liabilities = totals['by_type']['Liability']
+        total_equity = totals['by_type']['Equity']
+        total_revenue = totals['by_type']['Revenue']
+        total_expenses = totals['by_type']['Expense']
+        net_income = total_revenue - total_expenses
 
         balance_sheet_data = {
-            'assets':      [(a, _bal(a)) for a in assets],
-            'liabilities': [(a, _bal(a)) for a in liabilities],
-            'equity':      [(a, _bal(a)) for a in equity],
-            'revenue':     [(a, _bal(a)) for a in revenue],
-            'expenses':    [(a, _bal(a)) for a in expenses],
+            'grouped': grouped,
+            'totals': totals,
             'total_assets': total_assets,
             'total_liabilities': total_liabilities,
             'total_equity': total_equity,

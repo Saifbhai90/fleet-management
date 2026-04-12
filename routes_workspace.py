@@ -2974,6 +2974,11 @@ def workspace_balance_sheet():
         'by_type': {k: Decimal('0') for k in grouped.keys()},
     }
 
+    def _side(account_type, balance):
+        if account_type in ('Asset', 'Expense'):
+            return 'Dr' if balance >= 0 else 'Cr'
+        return 'Cr' if balance >= 0 else 'Dr'
+
     for acc in accounts:
         opening = Decimal(str(acc.opening_balance or 0))
         debit, credit = jnl_map.get(acc.id, (Decimal('0'), Decimal('0')))
@@ -2981,12 +2986,21 @@ def workspace_balance_sheet():
             balance = opening + debit - credit
         else:
             balance = opening + credit - debit
+        side = _side(acc.account_type, balance)
+        is_zero = (
+            abs(opening) < Decimal('0.0001')
+            and abs(debit) < Decimal('0.0001')
+            and abs(credit) < Decimal('0.0001')
+            and abs(balance) < Decimal('0.0001')
+        )
         row = {
             'account': acc,
             'opening': opening,
             'debit': debit,
             'credit': credit,
             'balance': balance,
+            'side': side,
+            'is_zero': is_zero,
         }
         grouped.setdefault(acc.account_type or 'Asset', []).append(row)
         totals['opening'] += opening

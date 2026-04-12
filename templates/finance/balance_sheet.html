@@ -48,100 +48,57 @@
             </div>
         </div>
         <div class="row g-3 mb-3">
-            <div class="col-6 col-lg-2"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Revenue</small><strong class="text-info">{{ "{:,.2f}".format(balance_sheet_data.total_revenue) }}</strong></div></div></div>
-            <div class="col-6 col-lg-2"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Expenses</small><strong class="text-danger">{{ "{:,.2f}".format(balance_sheet_data.total_expenses) }}</strong></div></div></div>
-            <div class="col-6 col-lg-2"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Net Income</small><strong class="{% if balance_sheet_data.net_income >= 0 %}text-success{% else %}text-danger{% endif %}">{{ "{:,.2f}".format(balance_sheet_data.net_income) }}</strong></div></div></div>
+            <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Total Debit</small><strong class="text-success">{{ "{:,.2f}".format(balance_sheet_data.totals.debit) }}</strong></div></div></div>
+            <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Total Credit</small><strong class="text-danger">{{ "{:,.2f}".format(balance_sheet_data.totals.credit) }}</strong></div></div></div>
+            <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Net Income</small><strong class="{% if balance_sheet_data.net_income >= 0 %}text-success{% else %}text-danger{% endif %}">{{ "{:,.2f}".format(balance_sheet_data.net_income) }}</strong></div></div></div>
+            <div class="col-6 col-lg-3 d-flex align-items-center justify-content-end">
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="bsHideZeroHeads">
+                    <label class="form-check-label small" for="bsHideZeroHeads">Hide 0 value heads</label>
+                </div>
+            </div>
         </div>
-
         {% if as_of_date %}
         <div class="text-muted small mb-2"><i class="bi bi-calendar me-1"></i>As of: <strong>{{ as_of_date.strftime('%d-%m-%Y') }}</strong></div>
         {% endif %}
-
         <div class="card shadow-sm border-0 mb-3">
             <div class="card-body p-0">
                 <table class="table table-hover align-middle mb-0" id="bsTable" style="font-size:.85rem;">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-3" style="width:100px;">Code</th>
+                            <th class="ps-3">Type</th>
+                            <th style="width:100px;">Code</th>
                             <th>Account Name</th>
-                            <th class="text-end pe-3" style="width:160px;">Balance (PKR)</th>
+                            <th class="text-end">Opening</th>
+                            <th class="text-end">Debit</th>
+                            <th class="text-end">Credit</th>
+                            <th class="text-end">Balance</th>
+                            <th class="text-center">Side</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr class="table-success">
-                            <td class="ps-3 fw-bold" colspan="2"><i class="bi bi-graph-up-arrow me-1"></i>Assets</td>
-                            <td class="text-end pe-3 fw-bold">{{ "{:,.2f}".format(balance_sheet_data.total_assets) }}</td>
-                        </tr>
-                        {% for acc, bal in balance_sheet_data.assets %}
-                        <tr>
-                            <td class="ps-4 text-muted">{{ acc.code }}</td>
-                            <td style="padding-left:2rem;">{{ acc.name }}</td>
-                            <td class="text-end pe-3 fw-semibold">{{ "{:,.2f}".format(bal) }}</td>
-                        </tr>
-                        {% endfor %}
-
-                        <tr class="table-danger">
-                            <td class="ps-3 fw-bold" colspan="2"><i class="bi bi-graph-down-arrow me-1"></i>Liabilities</td>
-                            <td class="text-end pe-3 fw-bold">{{ "{:,.2f}".format(balance_sheet_data.total_liabilities) }}</td>
-                        </tr>
-                        {% for acc, bal in balance_sheet_data.liabilities %}
-                        <tr>
-                            <td class="ps-4 text-muted">{{ acc.code }}</td>
-                            <td style="padding-left:2rem;">{{ acc.name }}</td>
-                            <td class="text-end pe-3 fw-semibold">{{ "{:,.2f}".format(bal) }}</td>
-                        </tr>
-                        {% endfor %}
-
-                        <tr class="table-primary">
-                            <td class="ps-3 fw-bold" colspan="2"><i class="bi bi-bank me-1"></i>Equity</td>
-                            <td class="text-end pe-3 fw-bold">{{ "{:,.2f}".format(balance_sheet_data.total_equity) }}</td>
-                        </tr>
-                        {% for acc, bal in balance_sheet_data.equity %}
-                        <tr>
-                            <td class="ps-4 text-muted">{{ acc.code }}</td>
-                            <td style="padding-left:2rem;">{{ acc.name }}</td>
-                            <td class="text-end pe-3 fw-semibold">{{ "{:,.2f}".format(bal) }}</td>
-                        </tr>
-                        {% endfor %}
-
-                        <tr class="table-info">
-                            <td class="ps-3 fw-bold" colspan="2"><i class="bi bi-cash-stack me-1"></i>Revenue</td>
-                            <td class="text-end pe-3 fw-bold">{{ "{:,.2f}".format(balance_sheet_data.total_revenue) }}</td>
-                        </tr>
-                        {% for acc, bal in balance_sheet_data.revenue %}
-                        <tr>
-                            <td class="ps-4 text-muted">{{ acc.code }}</td>
-                            <td style="padding-left:2rem;">{{ acc.name }}</td>
-                            <td class="text-end pe-3 fw-semibold">{{ "{:,.2f}".format(bal) }}</td>
-                        </tr>
-                        {% endfor %}
-
-                        <tr style="background:#fff3cd">
-                            <td class="ps-3 fw-bold" colspan="2"><i class="bi bi-receipt-cutoff me-1"></i>Expenses</td>
-                            <td class="text-end pe-3 fw-bold">{{ "{:,.2f}".format(balance_sheet_data.total_expenses) }}</td>
-                        </tr>
-                        {% for acc, bal in balance_sheet_data.expenses %}
-                        <tr>
-                            <td class="ps-4 text-muted">{{ acc.code }}</td>
-                            <td style="padding-left:2rem;">{{ acc.name }}</td>
-                            <td class="text-end pe-3 fw-semibold">{{ "{:,.2f}".format(bal) }}</td>
-                        </tr>
+                        {% for account_type, rows in balance_sheet_data.grouped.items() %}
+                            {% if rows %}
+                                <tr class="table-secondary bs-type-row" data-group="{{ account_type }}">
+                                    <td class="ps-3 fw-bold" colspan="8">{{ account_type }}</td>
+                                </tr>
+                                {% for r in rows %}
+                                <tr class="bs-account-row" data-group="{{ account_type }}" data-zero="{{ 1 if r.is_zero else 0 }}">
+                                    <td class="ps-3 text-muted">{{ account_type }}</td>
+                                    <td>{{ r.account.code }}</td>
+                                    <td>{{ r.account.name }}</td>
+                                    <td class="text-end">{{ "{:,.2f}".format(r.opening) }}</td>
+                                    <td class="text-end text-success">{{ "{:,.2f}".format(r.debit) }}</td>
+                                    <td class="text-end text-danger">{{ "{:,.2f}".format(r.credit) }}</td>
+                                    <td class="text-end fw-semibold">{{ "{:,.2f}".format(r.balance) }}</td>
+                                    <td class="text-center">
+                                        <span class="badge {% if r.side == 'Dr' %}bg-success-subtle text-success border border-success-subtle{% else %}bg-danger-subtle text-danger border border-danger-subtle{% endif %}">{{ r.side }}</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% endif %}
                         {% endfor %}
                     </tbody>
-                    <tfoot class="table-light">
-                        <tr class="fw-bold">
-                            <td class="ps-3" colspan="2">Total Assets</td>
-                            <td class="text-end pe-3 text-success">{{ "{:,.2f}".format(balance_sheet_data.total_assets) }}</td>
-                        </tr>
-                        <tr class="fw-bold">
-                            <td class="ps-3" colspan="2">Total Liabilities + Equity</td>
-                            <td class="text-end pe-3 text-danger">{{ "{:,.2f}".format(balance_sheet_data.total_liabilities + balance_sheet_data.total_equity) }}</td>
-                        </tr>
-                        <tr class="fw-bold" style="background:#e8f5e9">
-                            <td class="ps-3" colspan="2">Net Income (Revenue - Expenses)</td>
-                            <td class="text-end pe-3 {% if balance_sheet_data.net_income >= 0 %}text-success{% else %}text-danger{% endif %}">{{ "{:,.2f}".format(balance_sheet_data.net_income) }}</td>
-                        </tr>
-                    </tfoot>
                 </table>
             </div>
         </div>
@@ -201,6 +158,23 @@ document.addEventListener('DOMContentLoaded', function(){
             a.download = 'Balance_Sheet.csv';
             a.click();
         });
+    }
+    var hideZero = document.getElementById('bsHideZeroHeads');
+    var applyHide = function(){
+        var enabled = !!(hideZero && hideZero.checked);
+        document.querySelectorAll('#bsTable .bs-account-row').forEach(function(row){
+            var isZero = row.getAttribute('data-zero') === '1';
+            row.style.display = (enabled && isZero) ? 'none' : '';
+        });
+        document.querySelectorAll('#bsTable .bs-type-row').forEach(function(row){
+            var group = row.getAttribute('data-group');
+            var visible = document.querySelector('#bsTable .bs-account-row[data-group="' + group + '"]:not([style*="display: none"])');
+            row.style.display = visible ? '' : 'none';
+        });
+    };
+    if(hideZero){
+        hideZero.addEventListener('change', applyHide);
+        applyHide();
     }
 });
 </script>
