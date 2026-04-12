@@ -6,6 +6,7 @@ from models import (
     db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence,
     Employee, Driver, Party, Company,
     WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFuelOilOpeningExpense, WorkspaceMonthClose, WorkspaceFuelOilMonthClose,
+    WorkspaceFundTransfer,
 )
 from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
@@ -1001,6 +1002,21 @@ def workspace_reverse_journal_entry(journal_entry_id):
             delta = credit - debit
         account.current_balance = Decimal(str(account.current_balance or 0)) - delta
         db.session.add(account)
+    WorkspaceExpense.query.filter_by(journal_entry_id=journal_entry_id).update(
+        {'journal_entry_id': None}, synchronize_session='fetch'
+    )
+    WorkspaceOpeningExpense.query.filter_by(journal_entry_id=journal_entry_id).update(
+        {'journal_entry_id': None}, synchronize_session='fetch'
+    )
+    WorkspaceFuelOilOpeningExpense.query.filter_by(journal_entry_id=journal_entry_id).update(
+        {'journal_entry_id': None}, synchronize_session='fetch'
+    )
+    WorkspaceMonthClose.query.filter_by(workspace_journal_entry_id=journal_entry_id).update(
+        {'workspace_journal_entry_id': None}, synchronize_session='fetch'
+    )
+    WorkspaceFundTransfer.query.filter_by(journal_entry_id=journal_entry_id).update(
+        {'journal_entry_id': None}, synchronize_session='fetch'
+    )
     je = WorkspaceJournalEntry.query.get(journal_entry_id)
     if je:
         db.session.delete(je)
