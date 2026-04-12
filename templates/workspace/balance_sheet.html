@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  {% include "workspace/_nav.html" %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><i class="bi bi-file-earmark-bar-graph me-2 text-primary"></i>Workspace Balance Sheet</h2>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button class="btn btn-outline-success btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body py-2">
+      <form method="GET" class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label form-label-sm mb-1 fw-bold">As of Date</label>
+          <input type="text" name="as_of_date" class="form-control form-control-sm datepicker" value="{{ as_of_date|ddmmyyyy if as_of_date else '' }}" placeholder="dd-mm-yyyy">
+        </div>
+        <div class="col-md-3 d-flex gap-1">
+          <button type="submit" class="btn btn-primary btn-sm flex-fill"><i class="bi bi-funnel me-1"></i>Generate</button>
+          <a href="{{ url_for('workspace_balance_sheet') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i></a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Total Debit</small><strong class="text-success">{{ "{:,.2f}".format(totals.debit) }}</strong></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Total Credit</small><strong class="text-danger">{{ "{:,.2f}".format(totals.credit) }}</strong></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Assets</small><strong class="text-primary">{{ "{:,.2f}".format(totals.by_type['Asset']) }}</strong></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body py-2 text-center"><small class="text-muted d-block">Liabilities</small><strong class="text-warning">{{ "{:,.2f}".format(totals.by_type['Liability']) }}</strong></div></div></div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+      <strong>Debit / Credit / Balance Flow</strong>
+      <small>As of {{ as_of_date|ddmmyyyy if as_of_date else '-' }}</small>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0" id="workspaceBalanceSheetTable">
+        <thead class="table-light">
+          <tr>
+            <th>Type</th>
+            <th>Code</th>
+            <th>Account</th>
+            <th class="text-end">Opening</th>
+            <th class="text-end">Debit</th>
+            <th class="text-end">Credit</th>
+            <th class="text-end">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for account_type, rows in grouped.items() %}
+            {% if rows %}
+              <tr class="table-secondary">
+                <td colspan="7" class="fw-semibold">{{ account_type }}</td>
+              </tr>
+              {% for r in rows %}
+              <tr>
+                <td class="text-muted">{{ account_type }}</td>
+                <td>{{ r.account.code }}</td>
+                <td>{{ r.account.name }}</td>
+                <td class="text-end">{{ "{:,.2f}".format(r.opening) }}</td>
+                <td class="text-end text-success">{{ "{:,.2f}".format(r.debit) }}</td>
+                <td class="text-end text-danger">{{ "{:,.2f}".format(r.credit) }}</td>
+                <td class="text-end fw-semibold">{{ "{:,.2f}".format(r.balance) }}</td>
+              </tr>
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  if(window.fleetTableEnhance) window.fleetTableEnhance('workspaceBalanceSheetTable');
+  if(window.fleetPrintExport) window.fleetPrintExport('workspaceBalanceSheetTable','Workspace Balance Sheet','Workspace_Balance_Sheet.csv');
+});
+</script>
+{% endblock %}

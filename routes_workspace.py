@@ -11,7 +11,7 @@ from models import (
     JournalEntry, JournalEntryLine,
     EmployeeAssignment, FundTransfer, FundTransferCategory,
     WorkspaceParty, WorkspaceProduct, WorkspaceAccount,
-    WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFuelOilOpeningExpense, WorkspaceFundTransfer, WorkspaceJournalEntry, WorkspaceMonthClose, WorkspaceFuelOilMonthClose,
+    WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFuelOilOpeningExpense, WorkspaceFundTransfer, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceMonthClose, WorkspaceFuelOilMonthClose,
     FuelExpense, OilExpense, MaintenanceExpense,
 )
 from routes_finance import check_auth
@@ -2921,6 +2921,87 @@ def workspace_reports():
         expenses_by_type=expenses_by_type,
         transfer_total=transfer_total,
         month_closes=month_closes,
+    )
+
+
+def workspace_balance_sheet():
+    guard, emp = _workspace_guard("workspace_reports")
+    if guard:
+        return guard
+
+    as_of_date = parse_date(request.args.get("as_of_date")) if request.args.get("as_of_date") else pk_date()
+    accounts = (
+        WorkspaceAccount.query
+        .filter_by(employee_id=emp.id, is_active=True)
+        .order_by(WorkspaceAccount.account_type.asc(), WorkspaceAccount.code.asc(), WorkspaceAccount.id.asc())
+        .all()
+    )
+    account_ids = [a.id for a in accounts]
+
+    jnl_map = {}
+    if account_ids:
+        rows = (
+            db.session.query(
+                WorkspaceJournalEntryLine.account_id,
+                db.func.coalesce(db.func.sum(WorkspaceJournalEntryLine.debit), 0),
+                db.func.coalesce(db.func.sum(WorkspaceJournalEntryLine.credit), 0),
+            )
+            .join(WorkspaceJournalEntry, WorkspaceJournalEntry.id == WorkspaceJournalEntryLine.journal_entry_id)
+            .filter(
+                WorkspaceJournalEntry.employee_id == emp.id,
+                WorkspaceJournalEntry.is_posted == True,
+                WorkspaceJournalEntry.entry_date <= as_of_date,
+                WorkspaceJournalEntryLine.account_id.in_(account_ids),
+            )
+            .group_by(WorkspaceJournalEntryLine.account_id)
+            .all()
+        )
+        for r in rows:
+            jnl_map[int(r[0])] = (Decimal(str(r[1] or 0)), Decimal(str(r[2] or 0)))
+
+    grouped = {
+        'Asset': [],
+        'Liability': [],
+        'Equity': [],
+        'Revenue': [],
+        'Expense': [],
+    }
+    totals = {
+        'opening': Decimal('0'),
+        'debit': Decimal('0'),
+        'credit': Decimal('0'),
+        'balance': Decimal('0'),
+        'by_type': {k: Decimal('0') for k in grouped.keys()},
+    }
+
+    for acc in accounts:
+        opening = Decimal(str(acc.opening_balance or 0))
+        debit, credit = jnl_map.get(acc.id, (Decimal('0'), Decimal('0')))
+        if acc.account_type in ('Asset', 'Expense'):
+            balance = opening + debit - credit
+        else:
+            balance = opening + credit - debit
+        row = {
+            'account': acc,
+            'opening': opening,
+            'debit': debit,
+            'credit': credit,
+            'balance': balance,
+        }
+        grouped.setdefault(acc.account_type or 'Asset', []).append(row)
+        totals['opening'] += opening
+        totals['debit'] += debit
+        totals['credit'] += credit
+        totals['balance'] += balance
+        if acc.account_type in totals['by_type']:
+            totals['by_type'][acc.account_type] += balance
+
+    return render_template(
+        "workspace/balance_sheet.html",
+        employee=emp,
+        as_of_date=as_of_date,
+        grouped=grouped,
+        totals=totals,
     )
 
 
