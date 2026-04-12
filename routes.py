@@ -1478,6 +1478,39 @@ def _expense_cleanup_permission(kind):
     return mapping.get(kind) or 'workspace_dashboard'
 
 
+def _latest_expense_cleanup_status(kind, employee_id):
+    if not employee_id:
+        return None
+    kind = str(kind or '').strip().lower()
+    row = (
+        ExpenseDeleteCleanupJob.query
+        .filter_by(employee_id=employee_id, expense_kind=kind)
+        .order_by(ExpenseDeleteCleanupJob.updated_at.desc(), ExpenseDeleteCleanupJob.id.desc())
+        .first()
+    )
+    if not row:
+        return None
+    status = (row.status or '').strip().lower() or 'processing'
+    badge_map = {
+        'success': ('success', 'Cleanup Success'),
+        'partial': ('warning', 'Cleanup Partial'),
+        'error': ('danger', 'Cleanup Failed'),
+        'processing': ('warning', 'Cleanup Running'),
+    }
+    badge_class, label = badge_map.get(status, ('secondary', 'Cleanup Status'))
+    retry_url = None
+    if status in ('partial', 'error') and (row.failed_files or 0) > 0:
+        retry_url = url_for('expense_delete_cleanup_retry', job_id=row.id)
+    return {
+        'label': label,
+        'badge_class': badge_class,
+        'deleted_files': int(row.deleted_files or 0),
+        'total_files': int(row.total_files or 0),
+        'failed_files': int(row.failed_files or 0),
+        'retry_url': retry_url,
+    }
+
+
 def _start_expense_delete_cleanup_worker(kind, expense_id: int, file_paths, employee_id=None, initiated_by_user_id=None, cleanup_job_id=None):
     kind = str(kind or '').strip().lower()
     expense_id = int(expense_id)
@@ -17351,10 +17384,12 @@ def fuel_expense_list():
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     rows = pagination.items
+    cleanup_status = _latest_expense_cleanup_status('fuel', workspace_employee_id)
     return render_template('fuel_expense_list.html', form=form, rows=rows,
                            from_date=from_d, to_date=to_d, totals=totals,
                            pagination=pagination, page=page, per_page=per_page,
-                           district_id=district_id, project_id=project_id, vehicle_id=vehicle_id)
+                           district_id=district_id, project_id=project_id, vehicle_id=vehicle_id,
+                           cleanup_status=cleanup_status)
 
 
 def _workspace_expense_by_choices(employee_id):
@@ -18524,7 +18559,18 @@ def oil_expense_list():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows_with_totals, page, per_page)
     rows_with_totals = pagination.items
-    return render_template('oil_expense_list.html', form=form, rows=rows_with_totals, from_date=from_d, to_date=to_d, totals=totals, pagination=pagination, per_page=per_page)
+    cleanup_status = _latest_expense_cleanup_status('oil', workspace_employee_id)
+    return render_template(
+        'oil_expense_list.html',
+        form=form,
+        rows=rows_with_totals,
+        from_date=from_d,
+        to_date=to_d,
+        totals=totals,
+        pagination=pagination,
+        per_page=per_page,
+        cleanup_status=cleanup_status,
+    )
 
 
 @app.route('/oil-expense/add', methods=['GET', 'POST'])
@@ -19119,7 +19165,18 @@ def maintenance_expense_list():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows_with_totals, page, per_page)
     rows_with_totals = pagination.items
-    return render_template('maintenance_expense_list.html', form=form, rows=rows_with_totals, from_date=from_d, to_date=to_d, totals=totals, pagination=pagination, per_page=per_page)
+    cleanup_status = _latest_expense_cleanup_status('maintenance', workspace_employee_id)
+    return render_template(
+        'maintenance_expense_list.html',
+        form=form,
+        rows=rows_with_totals,
+        from_date=from_d,
+        to_date=to_d,
+        totals=totals,
+        pagination=pagination,
+        per_page=per_page,
+        cleanup_status=cleanup_status,
+    )
 
 
 @app.route('/maintenance-expense/add', methods=['GET', 'POST'])

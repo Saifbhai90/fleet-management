@@ -20,6 +20,17 @@
       </a>
     </div>
   </div>
+  {% if cleanup_status %}
+  <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
+    <span class="badge bg-{{ cleanup_status.badge_class }}-subtle text-{{ cleanup_status.badge_class }} border border-{{ cleanup_status.badge_class }}-subtle">
+      {{ cleanup_status.label }}: {{ cleanup_status.deleted_files }}/{{ cleanup_status.total_files }}
+      {% if cleanup_status.failed_files %} (Failed {{ cleanup_status.failed_files }}){% endif %}
+    </span>
+    {% if cleanup_status.retry_url %}
+    <a href="{{ cleanup_status.retry_url }}" class="btn btn-outline-warning btn-sm py-0 px-2">Retry Cleanup</a>
+    {% endif %}
+  </div>
+  {% endif %}
 
   <div class="card fuel-list-card mb-3">
     <div class="card-header"><i class="bi bi-funnel me-1 text-primary"></i>Filters</div>
