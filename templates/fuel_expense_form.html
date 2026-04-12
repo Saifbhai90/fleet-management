@@ -197,13 +197,6 @@
               <div class="col-6 col-md-3 field-group">
                 <label class="form-label">Fuel Price</label>
                 {{ form.fuel_price(class="form-control", id="fuelPrice", step="0.01", placeholder="0") }}
-                <div id="suggestedPriceWrap" class="mt-1 small text-muted" style="display:none;">
-                  <span id="suggestedPriceText"></span>
-                  <button type="button" id="useSuggestedPriceBtn" class="btn btn-link btn-sm p-0 ms-1">Use</button>
-                </div>
-                <div id="priceHintPanel" class="mt-1 small border rounded p-2 bg-light" style="display:none;">
-                  <span class="fw-semibold text-dark">Recent: </span><span id="priceHintLine"></span>
-                </div>
               </div>
               <div class="col-6 col-md-3 field-group">
                 <label class="form-label">Ltr <small class="text-muted">(Auto)</small></label>
@@ -610,29 +603,6 @@ document.addEventListener('DOMContentLoaded', function() {
   if (amountInput) amountInput.addEventListener('input', computeMpgAndLiters);
   if (fuelPriceInput) fuelPriceInput.addEventListener('input', computeMpgAndLiters);
 
-  var suggestedPriceWrap = document.getElementById('suggestedPriceWrap');
-  var suggestedPriceText = document.getElementById('suggestedPriceText');
-  var useSuggestedPriceBtn = document.getElementById('useSuggestedPriceBtn');
-
-  function fetchSuggestedPrice() {
-    var ft = fuelTypeSelect && fuelTypeSelect.value;
-    if (!suggestedPriceWrap || !suggestedPriceText) return;
-    suggestedPriceWrap.style.display = 'none';
-    if (!ft || ft === '' || (ft !== 'Diesel' && ft !== 'Super' && ft !== 'Petrol')) return;
-    fetch('/api/fuel-expense/suggested-price?fuel_type=' + encodeURIComponent(ft))
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.fuel_price != null) {
-          suggestedPriceText.textContent = 'Latest: Rs ' + parseFloat(data.fuel_price).toFixed(2);
-          suggestedPriceWrap.style.display = 'block';
-          useSuggestedPriceBtn.onclick = function() {
-            fuelPriceInput.value = parseFloat(data.fuel_price).toFixed(2);
-            computeMpgAndLiters();
-          };
-        }
-      });
-  }
-
   function renderHistoryRows(targetEl, rows) {
     if (!targetEl) return;
     if (!rows || !rows.length) {
@@ -669,56 +639,15 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   if (fuelTypeSelect) fuelTypeSelect.addEventListener('change', function() {
-    fetchSuggestedPrice();
     fetchPriceHistory();
     fetchPsoRateForDate();
   });
-
-  var priceHintPanel = document.getElementById('priceHintPanel');
-  var priceHintLine = document.getElementById('priceHintLine');
-
-  function fetchPriceHint() {
-    var ft = fuelTypeSelect && fuelTypeSelect.value;
-    var pumpId = document.getElementById('fuelPumpSelect') && document.getElementById('fuelPumpSelect').value;
-    if (!priceHintPanel || !priceHintLine) return;
-    priceHintLine.textContent = '';
-    priceHintPanel.style.display = 'none';
-    if (!ft || (ft !== 'Diesel' && ft !== 'Super' && ft !== 'Petrol')) return;
-    var url = '/api/fuel-expense/price-hint?fuel_type=' + encodeURIComponent(ft);
-    if (pumpId && pumpId !== '0') url += '&fuel_pump_id=' + pumpId;
-    fetch(url)
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        var parts = [];
-        if (data.current_pump && data.current_pump.length > 0) {
-          var lines = data.current_pump.map(function(e) {
-            return 'Rs ' + e.fuel_price.toFixed(2) + (e.date ? ' (' + e.date + ')' : '');
-          });
-          parts.push('This pump: ' + lines.join(', '));
-        }
-        if (data.other_pumps && data.other_pumps.length > 0) {
-          var otherLines = data.other_pumps.map(function(e) {
-            return (e.pump_name || '') + ': Rs ' + e.fuel_price.toFixed(2);
-          });
-          parts.push('Others: ' + otherLines.join('; '));
-        }
-        if (parts.length) {
-          priceHintLine.textContent = parts.join(' | ');
-          priceHintPanel.style.display = 'block';
-        }
-      });
-  }
-
-  if (fuelPriceInput) {
-    fuelPriceInput.addEventListener('focus', fetchPriceHint);
-  }
 
   var fuelPumpSel = document.getElementById('fuelPumpSelect');
   if (fuelPumpSel) {
     if (fuelPumpSel.tomselect) fuelPumpSel.tomselect.destroy();
     initSearchableDropdowns(fuelPumpSel.parentNode);
     fuelPumpSel.addEventListener('change', function() {
-      fetchPriceHint();
       fetchPriceHistory();
     });
   }
@@ -729,7 +658,6 @@ document.addEventListener('DOMContentLoaded', function() {
   computeMpgAndLiters();
   handlePaymentTypeBehavior();
   updateExpenseByBalanceHint();
-  fetchSuggestedPrice();
   fetchPriceHistory();
   fetchPsoRateForDate();
   fetchFuelMarketScan();
