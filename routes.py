@@ -481,7 +481,9 @@ def api_fuel_market_rate_for_date():
     - Today: live scan allowed (if DB record missing).
     - Non-today dates: DB-only (no live scan).
     """
-    date_str = (request.args.get('date') or '').strip()
+    date_input = (request.args.get('date') or '').strip()
+    parsed_date = parse_date(date_input)
+    date_str = parsed_date.strftime('%Y-%m-%d') if parsed_date else date_input
     scan_data = _read_fuel_market_scan()
     rates = scan_data.get('rates') or {}
 
@@ -506,7 +508,7 @@ def api_fuel_market_rate_for_date():
         'diesel': None,
         'scan_date': date_str,
         'scanned_at': '',
-        'no_record_date': date_str,
+        'no_record_date': date_input or date_str,
     })
 
 
