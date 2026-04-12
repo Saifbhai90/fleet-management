@@ -305,6 +305,7 @@
             <div class="text-danger small mt-1">{{ form.expense_by.errors[0] }}</div>
           {% endif %}
           <small class="text-muted">Select workspace account to credit for this expense (optional).</small>
+          <div id="expenseByBalanceHint" class="small mt-1 text-muted"></div>
         </div>
       </div>
       <div class="action-bar">
@@ -387,6 +388,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var paymentTypeSelect = document.getElementById('paymentTypeSelect');
   var partySelect = document.getElementById('partySelect');
   var expenseBySelect = document.getElementById('expenseBySelect');
+  var expenseByBalanceHint = document.getElementById('expenseByBalanceHint');
   var addJobCategoryBtn = document.getElementById('addJobCategoryBtn');
   var saveJobCategoryBtn = document.getElementById('saveJobCategoryBtn');
   var newJobCategoryName = document.getElementById('newJobCategoryName');
@@ -484,6 +486,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // Prevent browser jump to Expense By control while auto-setting values.
     window.scrollTo(0, scrollY);
     window.setTimeout(function() { window.scrollTo(0, scrollY); }, 0);
+    updateExpenseByBalanceHint();
+  }
+
+  function updateExpenseByBalanceHint() {
+    if (!expenseByBalanceHint || !expenseBySelect) return;
+    var opt = expenseBySelect.options[expenseBySelect.selectedIndex];
+    if (!opt || !opt.value) {
+      expenseByBalanceHint.className = 'small mt-1 text-muted';
+      expenseByBalanceHint.textContent = 'Balance: auto/default account will be used.';
+      return;
+    }
+    var txt = (opt.textContent || '');
+    var m = txt.match(/\|\s*Bal:\s*([+-]?\d[\d,]*(?:\.\d{1,2})?\s*(?:Dr|Cr))/i);
+    if (!m) {
+      expenseByBalanceHint.className = 'small mt-1 text-muted';
+      expenseByBalanceHint.textContent = '';
+      return;
+    }
+    var bal = m[1].trim();
+    var isCr = /\bCr\b/i.test(bal);
+    expenseByBalanceHint.className = 'small mt-1 ' + (isCr ? 'text-danger' : 'text-success');
+    expenseByBalanceHint.textContent = 'Current Balance: ' + bal;
   }
 
   function updateEntryAmount() {
@@ -840,6 +864,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (expenseDate) expenseDate.addEventListener('change', fetchTaskReadingsForMaintenance);
   if (currentReading) currentReading.addEventListener('input', updateCurrentReadingMatch);
   if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', handlePaymentTypeBehavior);
+  if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
   var maintenanceExpenseForm = document.getElementById('maintenanceExpenseForm');
   if (maintenanceExpenseForm) {
     maintenanceExpenseForm.addEventListener('submit', function(e) {
@@ -860,6 +885,7 @@ document.addEventListener('DOMContentLoaded', function() {
   fetchTaskReadingsForMaintenance();
   window.setTimeout(fetchTaskReadingsForMaintenance, 150);
   handlePaymentTypeBehavior();
+  updateExpenseByBalanceHint();
 
   function updateAttachmentHint(text) {
     if (!maintAttachmentPasteHint) return;

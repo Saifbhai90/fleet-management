@@ -266,6 +266,7 @@
           <label class="form-label fw-bold">Expense By (Workspace COA)</label>
           {{ form.expense_by(class="form-select search-select", id="expenseBySelect") }}
           <small class="text-muted">Select workspace account to credit for this expense (optional).</small>
+          <div id="expenseByBalanceHint" class="small mt-1 text-muted"></div>
         </div>
       </div>
       <div class="action-bar">
@@ -292,6 +293,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var paymentTypeSelect = document.getElementById('paymentTypeSelect');
   var cardSwipeDateInput = document.getElementById('cardSwipeDate');
   var expenseBySelect = document.getElementById('expenseBySelect');
+  var expenseByBalanceHint = document.getElementById('expenseByBalanceHint');
   var litersDisplay = document.getElementById('litersDisplay');
   var kmOutTask = document.getElementById('kmOutTask');
   var kmInTask = document.getElementById('kmInTask');
@@ -490,6 +492,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     window.scrollTo(0, scrollY);
     window.setTimeout(function() { window.scrollTo(0, scrollY); }, 0);
+    updateExpenseByBalanceHint();
+  }
+
+  function updateExpenseByBalanceHint() {
+    if (!expenseByBalanceHint || !expenseBySelect) return;
+    var opt = expenseBySelect.options[expenseBySelect.selectedIndex];
+    if (!opt || !opt.value) {
+      expenseByBalanceHint.className = 'small mt-1 text-muted';
+      expenseByBalanceHint.textContent = 'Balance: auto/default account will be used.';
+      return;
+    }
+    var txt = (opt.textContent || '');
+    var m = txt.match(/\|\s*Bal:\s*([+-]?\d[\d,]*(?:\.\d{1,2})?\s*(?:Dr|Cr))/i);
+    if (!m) {
+      expenseByBalanceHint.className = 'small mt-1 text-muted';
+      expenseByBalanceHint.textContent = '';
+      return;
+    }
+    var bal = m[1].trim();
+    var isCr = /\bCr\b/i.test(bal);
+    expenseByBalanceHint.className = 'small mt-1 ' + (isCr ? 'text-danger' : 'text-success');
+    expenseByBalanceHint.textContent = 'Current Balance: ' + bal;
   }
 
   function computeMpgAndLiters() {
@@ -582,6 +606,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (previousReadingInput) previousReadingInput.addEventListener('input', function() { computeKm(); fetchTaskReadings(); });
   if (currentReadingInput) currentReadingInput.addEventListener('input', computeKm);
   if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', handlePaymentTypeBehavior);
+  if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
   if (amountInput) amountInput.addEventListener('input', computeMpgAndLiters);
   if (fuelPriceInput) fuelPriceInput.addEventListener('input', computeMpgAndLiters);
 
@@ -703,6 +728,7 @@ document.addEventListener('DOMContentLoaded', function() {
   computeKm();
   computeMpgAndLiters();
   handlePaymentTypeBehavior();
+  updateExpenseByBalanceHint();
   fetchSuggestedPrice();
   fetchPriceHistory();
   fetchPsoRateForDate();

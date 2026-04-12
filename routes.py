@@ -17414,6 +17414,12 @@ def _workspace_expense_by_choices(employee_id):
             vehicles_by_id[int(veh.id)] = veh
 
     choices = [('', '-- Default (Auto from Workspace COA) --')]
+
+    def _balance_side(account_type, bal):
+        if account_type in ('Asset', 'Expense'):
+            return 'Dr' if bal >= 0 else 'Cr'
+        return 'Cr' if bal >= 0 else 'Dr'
+
     for a in rows:
         # Show only likely payment/counterparty heads for cleaner dropdown.
         if a.account_type == 'Expense' or a.code in ('1000', '5000', '5100'):
@@ -17425,6 +17431,10 @@ def _workspace_expense_by_choices(employee_id):
             vehicle_no = (veh.vehicle_no if veh and getattr(veh, 'vehicle_no', None) else None) or ''
             if vehicle_no:
                 label = f"{label} | Vehicle: {vehicle_no}"
+        bal = Decimal(str(a.current_balance or 0))
+        side = _balance_side(a.account_type, bal)
+        sign = '+' if bal > 0 else ('-' if bal < 0 else '')
+        label = f"{label} | Bal: {sign}{abs(bal):,.2f} {side}"
         choices.append((f'acct-{a.id}', label))
     return choices
 
