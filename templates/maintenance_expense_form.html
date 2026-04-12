@@ -229,7 +229,7 @@
         </div>
         {% endif %}
         {% if rec and rec.attachments.count() %}
-        <div class="mt-2">
+        <div class="mt-2" id="existingFiles">
           <strong>Existing Files:</strong>
           <div class="existing-attachments-grid">
             {% for att in rec.attachments %}

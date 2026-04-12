@@ -7,6 +7,9 @@
   .maint-list-card { border: 1px solid #e9ecef; border-radius: 12px; box-shadow: 0 2px 10px rgba(16,24,40,.06); }
   .maint-list-card .card-header { background: linear-gradient(to right, #fff7ed 0%, #fff 100%); font-weight: 600; font-size: .87rem; }
 </style>
+<style>
+  #maintUploadStatusPanel { position: fixed; right: 18px; bottom: 18px; width: min(420px, calc(100vw - 24px)); z-index: 1040; }
+</style>
 <div class="container-fluid py-3">
   <div class="maint-list-wrap">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 maint-list-head">
@@ -169,6 +172,7 @@
                 {% endif %}
               </td>
               <td class="text-center pe-3">
+                <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}#existingFiles" class="btn btn-outline-success btn-sm" title="View Media"><i class="bi bi-eye"></i></a>
                 <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                 <form action="{{ url_for('maintenance_expense_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this maintenance entry?');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -206,25 +210,21 @@
   </div>
 </div>
 
-<div class="modal fade" id="maintUploadStatusModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header py-2">
-        <h5 class="modal-title"><i class="bi bi-cloud-upload me-2"></i>Upload Status</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div class="progress mb-2" style="height:1.25rem;">
-          <div id="maintUploadModalBar" class="progress-bar" style="width:0%">0%</div>
-        </div>
-        <div id="maintUploadModalMeta" class="small text-muted">0 / 0</div>
-        <pre id="maintUploadModalError" class="small text-danger mt-2 mb-0 d-none" style="white-space:pre-wrap;max-height:150px;overflow:auto;"></pre>
-      </div>
-      <div class="modal-footer py-2">
-        <button type="button" class="btn btn-warning btn-sm d-none" id="maintUploadResumeBtn"><i class="bi bi-arrow-repeat me-1"></i>Resume</button>
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-      </div>
+<div id="maintUploadStatusPanel" class="card shadow border d-none">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center">
+    <h6 class="mb-0"><i class="bi bi-cloud-upload me-2"></i>Upload Status</h6>
+    <button type="button" class="btn-close btn-sm" id="maintUploadPanelClose" aria-label="Close"></button>
+  </div>
+  <div class="card-body py-2">
+    <div class="progress mb-2" style="height:1.25rem;">
+      <div id="maintUploadModalBar" class="progress-bar" style="width:0%">0%</div>
     </div>
+    <div id="maintUploadModalMeta" class="small text-muted">0 / 0</div>
+    <pre id="maintUploadModalError" class="small text-danger mt-2 mb-0 d-none" style="white-space:pre-wrap;max-height:150px;overflow:auto;"></pre>
+  </div>
+  <div class="card-footer py-2 d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-warning btn-sm d-none" id="maintUploadResumeBtn"><i class="bi bi-arrow-repeat me-1"></i>Resume</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="maintUploadPanelHide">Close</button>
   </div>
 </div>
 
@@ -301,8 +301,9 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   var statusBtns = document.querySelectorAll('.maint-upload-status-btn');
-  var modalEl = document.getElementById('maintUploadStatusModal');
-  var modalObj = (window.bootstrap && modalEl) ? new window.bootstrap.Modal(modalEl) : null;
+  var panelEl = document.getElementById('maintUploadStatusPanel');
+  var panelHideBtn = document.getElementById('maintUploadPanelHide');
+  var panelCloseBtn = document.getElementById('maintUploadPanelClose');
   var bar = document.getElementById('maintUploadModalBar');
   var meta = document.getElementById('maintUploadModalMeta');
   var err = document.getElementById('maintUploadModalError');
@@ -378,12 +379,13 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  if (modalEl) {
-    modalEl.addEventListener('hidden.bs.modal', function() {
-      stopPoll();
-      activeId = null;
-    });
+  function hidePanel() {
+    if (panelEl) panelEl.classList.add('d-none');
+    stopPoll();
+    activeId = null;
   }
+  if (panelHideBtn) panelHideBtn.addEventListener('click', hidePanel);
+  if (panelCloseBtn) panelCloseBtn.addEventListener('click', hidePanel);
 
   statusBtns.forEach(function(btn) {
     btn.addEventListener('click', function() {
@@ -394,7 +396,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var failed = parseInt(this.getAttribute('data-failed') || '0', 10);
       var msg = this.getAttribute('data-error') || '';
       paintStatus(st, total, done, failed, msg);
-      if (modalObj) modalObj.show();
+      if (panelEl) panelEl.classList.remove('d-none');
       stopPoll();
       if (st === 'processing' && activeId) {
         pollTimer = window.setInterval(function(){ fetchStatus(activeId); }, 2500);
