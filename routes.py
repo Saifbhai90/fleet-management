@@ -18814,6 +18814,36 @@ def maintenance_expense_delete(pk):
     return redirect(url_for('maintenance_expense_list'))
 
 
+@app.route('/maintenance-expense/<int:pk>/media')
+def maintenance_expense_media(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_expense_list'))
+    media_items = []
+    for att in rec.attachments.order_by(MaintenanceExpenseAttachment.created_at.asc(), MaintenanceExpenseAttachment.id.asc()).all():
+        url = media_url_filter(att.file_path or '')
+        if not url:
+            continue
+        ftype = (att.file_type or '').strip().lower()
+        if ftype not in ('image', 'video'):
+            path = (att.file_path or '').lower()
+            if any(path.endswith(x) for x in ('.mp4', '.webm', '.mov')):
+                ftype = 'video'
+            else:
+                ftype = 'image'
+        media_items.append({
+            'url': url,
+            'type': ftype,
+            'name': att.original_name or os.path.basename(att.file_path or '') or 'Attachment',
+        })
+    return render_template('maintenance_expense_media.html', rec=rec, media_items=media_items)
+
+
 # ────────────────────────────────────────────────
 # Employee Expense - routes now in routes_finance.py
 # ────────────────────────────────────────────────

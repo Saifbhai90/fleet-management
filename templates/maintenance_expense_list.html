@@ -172,7 +172,7 @@
                 {% endif %}
               </td>
               <td class="text-center pe-3">
-                <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}#existingFiles" class="btn btn-outline-success btn-sm" title="View Media"><i class="bi bi-eye"></i></a>
+                <a href="{{ url_for('maintenance_expense_media', pk=r.id) }}" class="btn btn-outline-success btn-sm" title="View Media"><i class="bi bi-eye"></i></a>
                 <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                 <form action="{{ url_for('maintenance_expense_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this maintenance entry?');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Maintenance Media{% endblock %}
+{% block content %}
+<style>
+  .media-wrap { max-width: min(1680px, calc(100vw - 96px)); margin: 0 auto; }
+  .media-head { background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); color:#fff; border-radius: 12px; padding: .65rem 1rem; }
+  .media-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap:12px; }
+  .media-card { border:1px solid #e2e8f0; border-radius:10px; background:#fff; overflow:hidden; }
+  .media-thumb { width:100%; height:150px; object-fit:cover; background:#0f172a; display:block; }
+  .media-name { font-size:.82rem; padding:.45rem .55rem; border-top:1px solid #e2e8f0; word-break:break-word; }
+  .viewer-backdrop { position:fixed; inset:0; background:rgba(2,6,23,.88); z-index:2000; display:none; }
+  .viewer-backdrop.show { display:block; }
+  .viewer-inner { position:absolute; inset:56px 72px 56px 72px; display:flex; align-items:center; justify-content:center; }
+  .viewer-img, .viewer-video { max-width:100%; max-height:100%; border-radius:10px; box-shadow:0 10px 28px rgba(0,0,0,.5); background:#000; }
+  .viewer-btn { position:absolute; top:50%; transform:translateY(-50%); width:44px; height:44px; border:none; border-radius:50%; background:rgba(255,255,255,.18); color:#fff; font-size:1.2rem; }
+  .viewer-btn:hover { background:rgba(255,255,255,.28); }
+  .viewer-prev { left:18px; }
+  .viewer-next { right:18px; }
+  .viewer-close { position:absolute; top:14px; right:16px; width:40px; height:40px; border:none; border-radius:50%; background:rgba(255,255,255,.18); color:#fff; font-size:1.15rem; }
+  .viewer-meta { position:absolute; left:18px; bottom:14px; right:18px; color:#e2e8f0; font-size:.9rem; text-shadow:0 1px 2px rgba(0,0,0,.8); }
+  @media (max-width: 768px) {
+    .viewer-inner { inset:56px 14px 72px 14px; }
+  }
+</style>
+
+<div class="container-fluid py-3">
+  <div class="media-wrap">
+    <div class="d-flex justify-content-between align-items-center mb-3 media-head">
+      <div>
+        <h5 class="mb-0"><i class="bi bi-images me-2"></i>Maintenance Media Gallery</h5>
+        <small>Vehicle: {{ rec.vehicle.vehicle_no if rec.vehicle else '-' }} | Date: {{ rec.expense_date|ddmmyyyy }}</small>
+      </div>
+      <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
+    </div>
+
+    {% if media_items %}
+      <div class="media-grid">
+        {% for m in media_items %}
+          <button type="button" class="media-card p-0 text-start media-open-btn"
+                  data-idx="{{ loop.index0 }}" data-type="{{ m.type }}" data-url="{{ m.url }}" data-name="{{ m.name|e }}">
+            {% if m.type == 'video' %}
+              <video class="media-thumb" src="{{ m.url }}" preload="metadata" muted></video>
+            {% else %}
+              <img class="media-thumb" src="{{ m.url }}" alt="{{ m.name }}">
+            {% endif %}
+            <div class="media-name">{{ m.name }}</div>
+          </button>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="card border-0 shadow-sm"><div class="card-body text-center text-muted py-5">
+        <i class="bi bi-image display-6 d-block mb-2"></i>No media found for this maintenance entry.
+      </div></div>
+    {% endif %}
+  </div>
+</div>
+
+<div id="viewerBackdrop" class="viewer-backdrop" aria-hidden="true">
+  <button type="button" class="viewer-close" id="viewerCloseBtn" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+  <button type="button" class="viewer-btn viewer-prev" id="viewerPrevBtn" aria-label="Previous"><i class="bi bi-chevron-left"></i></button>
+  <button type="button" class="viewer-btn viewer-next" id="viewerNextBtn" aria-label="Next"><i class="bi bi-chevron-right"></i></button>
+  <div class="viewer-inner" id="viewerInner"></div>
+  <div class="viewer-meta" id="viewerMeta"></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var openBtns = document.querySelectorAll('.media-open-btn');
+  var backdrop = document.getElementById('viewerBackdrop');
+  var inner = document.getElementById('viewerInner');
+  var meta = document.getElementById('viewerMeta');
+  var closeBtn = document.getElementById('viewerCloseBtn');
+  var prevBtn = document.getElementById('viewerPrevBtn');
+  var nextBtn = document.getElementById('viewerNextBtn');
+  var items = [];
+  var idx = 0;
+
+  openBtns.forEach(function(btn) {
+    items.push({
+      type: (btn.getAttribute('data-type') || 'image').toLowerCase(),
+      url: btn.getAttribute('data-url') || '',
+      name: btn.getAttribute('data-name') || 'Attachment'
+    });
+  });
+  if (!items.length) return;
+
+  function renderCurrent() {
+    if (!inner) return;
+    inner.innerHTML = '';
+    var it = items[idx];
+    if (!it) return;
+    if (it.type === 'video') {
+      var v = document.createElement('video');
+      v.className = 'viewer-video';
+      v.src = it.url;
+      v.controls = true;
+      v.autoplay = true;
+      v.preload = 'metadata';
+      inner.appendChild(v);
+    } else {
+      var img = document.createElement('img');
+      img.className = 'viewer-img';
+      img.src = it.url;
+      img.alt = it.name || 'Image';
+      inner.appendChild(img);
+    }
+    if (meta) meta.textContent = (idx + 1) + ' / ' + items.length + ' - ' + (it.name || 'Attachment');
+  }
+
+  function openViewer(i) {
+    idx = Math.max(0, Math.min(items.length - 1, i));
+    renderCurrent();
+    backdrop.classList.add('show');
+    backdrop.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeViewer() {
+    backdrop.classList.remove('show');
+    backdrop.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    if (inner) inner.innerHTML = '';
+  }
+  function prev() { idx = (idx - 1 + items.length) % items.length; renderCurrent(); }
+  function next() { idx = (idx + 1) % items.length; renderCurrent(); }
+
+  openBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var i = parseInt(btn.getAttribute('data-idx') || '0', 10);
+      openViewer(i);
+    });
+  });
+  if (closeBtn) closeBtn.addEventListener('click', closeViewer);
+  if (prevBtn) prevBtn.addEventListener('click', prev);
+  if (nextBtn) nextBtn.addEventListener('click', next);
+  if (backdrop) {
+    backdrop.addEventListener('click', function(e) {
+      if (e.target === backdrop) closeViewer();
+    });
+  }
+  document.addEventListener('keydown', function(e) {
+    if (!backdrop.classList.contains('show')) return;
+    if (e.key === 'Escape') closeViewer();
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
+  });
+});
+</script>
+{% endblock %}
