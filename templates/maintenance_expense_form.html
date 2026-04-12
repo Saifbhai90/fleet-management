@@ -343,7 +343,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (expenseBySelect && expenseBySelect.options) {
     for (var e = 0; e < expenseBySelect.options.length; e += 1) {
       var opt = expenseBySelect.options[e];
-      if ((opt.textContent || '').toLowerCase().indexOf('1100 - workspace cash') === 0) {
+      if ((opt.textContent || '').toLowerCase().indexOf('1110 - hbl bank') === 0) {
         cashExpenseByValue = opt.value;
         break;
       }
@@ -367,6 +367,9 @@ document.addEventListener('DOMContentLoaded', function() {
         expenseBySelect.value = cashExpenseByValue;
         if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
       }
+    } else {
+      expenseBySelect.value = '';
+      if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue('', true);
     }
   }
 

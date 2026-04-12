@@ -16854,6 +16854,18 @@ def _workspace_default_cash_expense_by(employee_id):
     return f'acct-{cash_account.id}' if cash_account else ''
 
 
+def _workspace_default_hbl_expense_by(employee_id):
+    if not employee_id:
+        return ''
+    ensure_workspace_base_accounts(employee_id)
+    hbl_account = WorkspaceAccount.query.filter_by(
+        employee_id=employee_id,
+        code='1110',
+        is_active=True,
+    ).first()
+    return f'acct-{hbl_account.id}' if hbl_account else ''
+
+
 def _workspace_account_id_from_expense_by(expense_by_val, employee_id):
     if not expense_by_val:
         return None
@@ -18121,7 +18133,7 @@ def maintenance_expense_form(pk=None):
         _workspace_reverse_expense_journals('MaintenanceExpense', rec.id, workspace_employee_id)
         expense_by_val = form.expense_by.data or ''
         if payment_type == 'Cash':
-            expense_by_val = expense_by_val or _workspace_default_cash_expense_by(workspace_employee_id)
+            expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
         selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
 
         _workspace_post_expense_journal(
