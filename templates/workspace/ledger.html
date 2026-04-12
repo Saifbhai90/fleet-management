@@ -21,7 +21,7 @@
           <label class="form-label fw-semibold">Account</label>
           <select name="account_id" class="form-select search-select">
             {% for a in accounts %}
-            <option value="{{ a.id }}" {% if account_id == a.id %}selected{% endif %}>{{ a.code }} - {{ a.name }}</option>
+            <option value="{{ a.id }}" {% if account_id == a.id %}selected{% endif %}>{{ account_display_map.get(a.id, (a.code ~ ' - ' ~ a.name)) }}</option>
             {% endfor %}
           </select>
         </div>
@@ -35,7 +35,10 @@
         </div>
         <div class="col-lg-2 col-md-6">
           <label class="form-label fw-semibold">Category</label>
-          <input type="text" class="form-control" name="category" value="{{ category or '' }}" placeholder="Optional">
+          <input type="hidden" name="category_filter" id="catHidden" value="{{ (selected_categories or [])|join(',') }}">
+          <div id="catMultiWrap">
+            <button type="button" class="form-select text-start" id="catMultiBtn" style="overflow:hidden;text-overflow:ellipsis;padding-right:20px;line-height:1.5;">-- All Categories --</button>
+          </div>
         </div>
         <div class="col-lg-2 col-md-12 d-flex gap-2">
           <button class="btn btn-primary flex-fill"><i class="bi bi-search me-1"></i>View</button>
@@ -52,11 +55,11 @@
     {% set ns.total_credit = ns.total_credit + (t.credit or 0)|float %}
   {% endfor %}
   <div class="row g-3 mb-3">
-    <div class="col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Selected Account</small><h6 class="mb-0">{{ ledger.account.code }} - {{ ledger.account.name }}</h6></div></div></div>
-    <div class="col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Opening Balance</small><h5 class="mb-0">{{ '%.2f'|format((ledger.opening_balance or 0)|float) }}</h5></div></div></div>
-    <div class="col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Debit</small><h5 class="mb-0 text-success">{{ '%.2f'|format(ns.total_debit) }}</h5></div></div></div>
-    <div class="col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Credit</small><h5 class="mb-0 text-danger">{{ '%.2f'|format(ns.total_credit) }}</h5></div></div></div>
-    <div class="col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Closing Balance</small><h5 class="mb-0 {{ 'text-danger' if (ledger.closing_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((ledger.closing_balance or 0)|float) }}</h5></div></div></div>
+    <div class="col-lg-2 col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Selected Account</small><h6 class="mb-0">{{ ledger.account.code }} - {{ ledger.account.name }}</h6></div></div></div>
+    <div class="col-lg-2 col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Opening Balance</small><h5 class="mb-0">{{ '%.2f'|format((ledger.opening_balance or 0)|float) }}</h5></div></div></div>
+    <div class="col-lg-2 col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Debit</small><h5 class="mb-0 text-success">{{ '%.2f'|format(ns.total_debit) }}</h5></div></div></div>
+    <div class="col-lg-2 col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Credit</small><h5 class="mb-0 text-danger">{{ '%.2f'|format(ns.total_credit) }}</h5></div></div></div>
+    <div class="col-lg-4 col-md-12"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Closing Balance</small><h5 class="mb-0 {{ 'text-danger' if (ledger.closing_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((ledger.closing_balance or 0)|float) }}</h5></div></div></div>
   </div>
 
   <div class="card border-0 shadow-sm">
@@ -73,9 +76,9 @@
             <td>{{ t.date|ddmmyyyy }}</td>
             <td>{{ t.entry_number }}</td>
             <td>
-              {% if (t.reference_type or '') == 'FundTransfer' and transfer_map and transfer_map.get(t.reference_id) %}
+              {% if (t.reference_type or '') == 'WorkspaceFundTransfer' and transfer_map and transfer_map.get(t.reference_id) %}
                 <a href="{{ url_for('workspace_ledger_transfer_detail', transfer_id=t.reference_id) }}" class="fw-semibold text-decoration-none">
-                  {{ transfer_map.get(t.reference_id) }}
+                  {{ transfer_map.get(t.reference_id) }} (ID: {{ t.reference_id }})
                 </a>
               {% else %}
                 -
@@ -101,6 +104,25 @@
 document.addEventListener('DOMContentLoaded', function(){
   if(window.fleetTableEnhance) window.fleetTableEnhance('workspaceLedgerTable');
   if(window.fleetPrintExport) window.fleetPrintExport('workspaceLedgerTable','Workspace Ledger','Workspace_Ledger.csv');
+  var CATS_RAW = [
+    ['Workspace Close', 'Workspace Close'],
+    {% for c in (category_choices or []) %}
+    ['{{ c|e }}', '{{ c|e }}']{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+  var _seenCats = {};
+  var CATS = CATS_RAW.filter(function(x){
+    var k = (x && x[0] ? String(x[0]).trim().toLowerCase() : '');
+    if(!k || _seenCats[k]) return false;
+    _seenCats[k] = true;
+    return true;
+  });
+  var PRE = [
+    {% for c in (selected_categories or []) %}
+    '{{ c|e }}'{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+  if(window._catMultiSelect) window._catMultiSelect('catMultiBtn', 'catHidden', CATS, PRE);
 });
 </script>
 {% endblock %}

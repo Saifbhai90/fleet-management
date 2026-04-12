@@ -7,7 +7,7 @@ from sqlalchemy import and_, or_, cast, String
 from sqlalchemy.orm import aliased
 
 from models import (
-    db, Employee, Driver, Party, Account, District, Project,
+    db, Employee, Driver, Party, Account, District, Project, Vehicle,
     JournalEntry, JournalEntryLine,
     EmployeeAssignment, FundTransfer, FundTransferCategory,
     WorkspaceParty, WorkspaceProduct, WorkspaceAccount,
@@ -2551,31 +2551,92 @@ def workspace_ledger():
     if guard:
         return guard
     accounts = WorkspaceAccount.query.filter_by(employee_id=emp.id).order_by(WorkspaceAccount.code).all()
+    driver_ids = sorted({
+        int(a.entity_id) for a in accounts
+        if (a.entity_type or '').strip().lower() == 'driver' and a.entity_id
+    })
+    drivers_by_id = {}
+    if driver_ids:
+        for drv in Driver.query.filter(Driver.id.in_(driver_ids)).all():
+            drivers_by_id[int(drv.id)] = drv
+
+    def _driver_vehicle_no(drv):
+        if not drv:
+            return None
+        if getattr(drv, 'vehicle', None) and getattr(drv.vehicle, 'vehicle_no', None):
+            return drv.vehicle.vehicle_no
+        if getattr(drv, 'vehicle_id', None):
+            v = Vehicle.query.get(drv.vehicle_id)
+            if v and v.vehicle_no:
+                return v.vehicle_no
+        v = Vehicle.query.filter_by(driver_id=drv.id).order_by(Vehicle.id.desc()).first()
+        return v.vehicle_no if v and v.vehicle_no else None
+
+    account_display_map = {}
+    for a in accounts:
+        label = f"{a.code} - {a.name}"
+        if (a.entity_type or '').strip().lower() == 'driver' and a.entity_id:
+            drv = drivers_by_id.get(int(a.entity_id))
+            if drv:
+                v_no = _driver_vehicle_no(drv)
+                if v_no:
+                    label = f"{label} | Vehicle: {v_no}"
+        account_display_map[a.id] = label
+
     account_id = request.args.get("account_id", type=int) or (accounts[0].id if accounts else None)
     from_date = parse_date(request.args.get("from_date"))
     to_date = parse_date(request.args.get("to_date"))
-    category = (request.args.get("category") or "").strip() or None
-    ledger = workspace_get_account_ledger(account_id, from_date=from_date, to_date=to_date, category=category) if account_id else None
+    category_filter_raw = (request.args.get("category_filter") or "").strip()
+    selected_categories = [c.strip() for c in category_filter_raw.split(",") if c.strip()]
+    if not selected_categories:
+        single_cat = (request.args.get("category") or "").strip()
+        if single_cat:
+            selected_categories = [single_cat]
+    category = selected_categories[0] if len(selected_categories) == 1 else None
+    category_param = selected_categories if len(selected_categories) > 1 else category
+    ledger = workspace_get_account_ledger(account_id, from_date=from_date, to_date=to_date, category=category_param) if account_id else None
+    category_choices = []
+    try:
+        category_choices = [
+            c[0] for c in db.session.query(WorkspaceJournalEntry.category)
+            .filter(
+                WorkspaceJournalEntry.employee_id == emp.id,
+                WorkspaceJournalEntry.category.isnot(None),
+                WorkspaceJournalEntry.category != ""
+            )
+            .distinct()
+            .order_by(WorkspaceJournalEntry.category.asc())
+            .all()
+            if c and c[0]
+        ]
+    except Exception:
+        category_choices = []
     transfer_map = {}
     if ledger and ledger.get("transactions"):
         transfer_ids = [
             int(t.get("reference_id"))
             for t in ledger["transactions"]
-            if (t.get("reference_type") or "") == "FundTransfer" and t.get("reference_id")
+            if (t.get("reference_type") or "") == "WorkspaceFundTransfer" and t.get("reference_id")
         ]
         if transfer_ids:
-            rows = FundTransfer.query.filter(FundTransfer.id.in_(sorted(set(transfer_ids)))).all()
-            transfer_map = {r.id: r.transfer_number for r in rows if r and r.transfer_number}
+            rows = WorkspaceFundTransfer.query.filter(
+                WorkspaceFundTransfer.employee_id == emp.id,
+                WorkspaceFundTransfer.id.in_(sorted(set(transfer_ids)))
+            ).all()
+            transfer_map = {r.id: (r.transfer_number or f"WT-{r.id}") for r in rows if r}
     return render_template(
         "workspace/ledger.html",
         employee=emp,
         accounts=accounts,
+        account_display_map=account_display_map,
         account_id=account_id,
         ledger=ledger,
         transfer_map=transfer_map,
         from_date=from_date,
         to_date=to_date,
         category=category,
+        selected_categories=selected_categories,
+        category_choices=category_choices,
     )
 
 
@@ -2610,22 +2671,21 @@ def workspace_ledger_transfer_detail(transfer_id):
     guard, emp = _workspace_guard("workspace_ledger")
     if guard:
         return guard
-    transfer = FundTransfer.query.get_or_404(transfer_id)
-    if not any([transfer.from_employee_id == emp.id, transfer.to_employee_id == emp.id]):
-        flash("This transfer is not linked with selected workspace employee.", "danger")
-        return redirect(url_for("workspace_ledger"))
+    transfer = WorkspaceFundTransfer.query.filter_by(id=transfer_id, employee_id=emp.id).first_or_404()
 
     workspace_rows = WorkspaceJournalEntry.query.filter_by(
         employee_id=emp.id,
-        reference_type="FundTransfer",
+        reference_type="WorkspaceFundTransfer",
         reference_id=transfer.id,
     ).order_by(WorkspaceJournalEntry.entry_date.asc(), WorkspaceJournalEntry.id.asc()).all()
+    from_account_name = f"{transfer.from_account.code} - {transfer.from_account.name}" if transfer.from_account else "-"
+    to_account_name = f"{transfer.to_account.code} - {transfer.to_account.name}" if transfer.to_account else "-"
     return render_template(
         "workspace/ledger_transfer_detail.html",
         employee=emp,
         transfer=transfer,
-        from_account_name=_resolve_transfer_account_name("from", transfer),
-        to_account_name=_resolve_transfer_account_name("to", transfer),
+        from_account_name=from_account_name,
+        to_account_name=to_account_name,
         workspace_rows=workspace_rows,
     )
 

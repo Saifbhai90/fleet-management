@@ -17,9 +17,9 @@
         <div class="col-md-3"><small class="text-muted d-block">Amount</small><span class="fw-semibold">{{ "%.2f"|format((transfer.amount or 0)|float) }}</span></div>
         <div class="col-md-3"><small class="text-muted d-block">Payment Mode</small><span class="fw-semibold">{{ transfer.payment_mode or '-' }}</span></div>
         <div class="col-md-3"><small class="text-muted d-block">Category</small><span class="fw-semibold">{{ transfer.category or '-' }}</span></div>
-        <div class="col-md-6"><small class="text-muted d-block">From</small><span class="fw-semibold">{{ transfer.from_name }}</span><div class="small text-muted">Account: {{ from_account_name }}</div></div>
-        <div class="col-md-6"><small class="text-muted d-block">To</small><span class="fw-semibold">{{ transfer.to_name }}</span><div class="small text-muted">Account: {{ to_account_name }}</div></div>
-        <div class="col-md-3"><small class="text-muted d-block">Salary Toggle</small><span class="fw-semibold">{{ 'ON' if transfer.is_salary else 'OFF' }}</span></div>
+        <div class="col-md-6"><small class="text-muted d-block">From</small><span class="fw-semibold">{{ transfer.from_account.name if transfer.from_account else '-' }}</span><div class="small text-muted">Account: {{ from_account_name }}</div></div>
+        <div class="col-md-6"><small class="text-muted d-block">To</small><span class="fw-semibold">{{ transfer.to_account.name if transfer.to_account else '-' }}</span><div class="small text-muted">Account: {{ to_account_name }}</div></div>
+        <div class="col-md-3"><small class="text-muted d-block">Transfer ID</small><span class="fw-semibold">#{{ transfer.id }}</span></div>
         <div class="col-md-3"><small class="text-muted d-block">Reference No</small><span class="fw-semibold">{{ transfer.reference_no or '-' }}</span></div>
         <div class="col-md-6"><small class="text-muted d-block">Description</small><span class="fw-semibold">{{ transfer.description or '-' }}</span></div>
       </div>

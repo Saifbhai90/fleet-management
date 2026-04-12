@@ -1058,7 +1058,12 @@ def workspace_get_account_ledger(account_id, from_date=None, to_date=None, categ
     if to_date:
         q = q.filter(WorkspaceJournalEntry.entry_date <= to_date)
     if category:
-        q = q.filter(WorkspaceJournalEntry.category == category)
+        if isinstance(category, (list, tuple, set)):
+            cats = [str(c).strip() for c in category if str(c).strip()]
+            if cats:
+                q = q.filter(WorkspaceJournalEntry.category.in_(cats))
+        else:
+            q = q.filter(WorkspaceJournalEntry.category == category)
     q = q.order_by(WorkspaceJournalEntry.entry_date.asc(), WorkspaceJournalEntry.id.asc(), WorkspaceJournalEntryLine.sort_order.asc())
 
     tx = []
