@@ -16932,11 +16932,38 @@ def _workspace_reverse_expense_journals(reference_type, reference_id, employee_i
         workspace_reverse_journal_entry(je.id)
 
 
+_WORKSPACE_REGULAR_EXPENSE_SYNC_AVAILABLE = None
+
+
+def _workspace_regular_expense_sync_available():
+    global _WORKSPACE_REGULAR_EXPENSE_SYNC_AVAILABLE
+    if _WORKSPACE_REGULAR_EXPENSE_SYNC_AVAILABLE is not None:
+        return _WORKSPACE_REGULAR_EXPENSE_SYNC_AVAILABLE
+    try:
+        insp = inspect(db.engine)
+        if not insp.has_table('workspace_expense'):
+            _WORKSPACE_REGULAR_EXPENSE_SYNC_AVAILABLE = False
+            return False
+        cols = {c.get('name') for c in insp.get_columns('workspace_expense')}
+        required = {
+            'employee_id', 'expense_number', 'expense_date', 'expense_type',
+            'description', 'amount', 'payment_mode', 'category',
+            'workspace_party_id', 'journal_entry_id',
+        }
+        _WORKSPACE_REGULAR_EXPENSE_SYNC_AVAILABLE = required.issubset(cols)
+    except Exception:
+        _WORKSPACE_REGULAR_EXPENSE_SYNC_AVAILABLE = False
+    return _WORKSPACE_REGULAR_EXPENSE_SYNC_AVAILABLE
+
+
 def _workspace_regular_expense_number(reference_type, reference_id):
     if not reference_type or not reference_id:
         return ''
     key = str(reference_type).strip()
-    rid = int(reference_id)
+    try:
+        rid = int(reference_id)
+    except (TypeError, ValueError):
+        return ''
     mapping = {
         'FuelExpense': 'FUEL',
         'OilExpense': 'OIL',
@@ -16949,6 +16976,8 @@ def _workspace_regular_expense_number(reference_type, reference_id):
 def _workspace_sync_regular_expense(employee_id, reference_type, reference_id, expense_date, amount,
                                     description, expense_type, payment_mode, category,
                                     workspace_party_id=None, journal_entry_id=None):
+    if not _workspace_regular_expense_sync_available():
+        return None
     if not employee_id:
         return None
     exp_no = _workspace_regular_expense_number(reference_type, reference_id)
@@ -16984,6 +17013,8 @@ def _workspace_sync_regular_expense(employee_id, reference_type, reference_id, e
 
 
 def _workspace_delete_regular_expense(employee_id, reference_type, reference_id):
+    if not _workspace_regular_expense_sync_available():
+        return
     if not employee_id:
         return
     exp_no = _workspace_regular_expense_number(reference_type, reference_id)
