@@ -260,6 +260,8 @@ document.addEventListener('DOMContentLoaded', function() {
       var hasItems = !!rows.length && sugBox.style.display !== 'none';
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
+        e.stopImmediatePropagation();
+        e.stopPropagation();
         if (hasItems) {
           if (_active < 0) _active = 0;
           if (_active >= 0 && rows[_active]) {
