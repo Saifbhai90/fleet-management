@@ -815,9 +815,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (taskReadingsMeta) {
           taskReadingsMeta.textContent = '(Start: ' + (taskStartReading != null ? taskStartReading.toFixed(2) : '-') + ' | Close: ' + (taskCloseReading != null ? taskCloseReading.toFixed(2) : '-') + ')';
         }
-        if (currentReading && !String(currentReading.value || '').trim() && taskCloseReading != null) {
-          currentReading.value = taskCloseReading.toFixed(2);
-        }
         updateCurrentReadingMatch();
       })
       .catch(function() {
