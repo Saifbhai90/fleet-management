@@ -17391,12 +17391,9 @@ def fuel_expense_edit(pk):
                 db.session.commit()
             flash('Fuel expense updated.', 'success')
             return redirect(url_for('fuel_expense_list'))
-        except Exception as _fuel_save_exc:
+        except Exception:
             db.session.rollback()
-            import traceback as _tb
-            _err_detail = _tb.format_exc()
-            app.logger.error('FUEL EDIT SAVE ERROR:\n%s', _err_detail)
-            return f'<h3>Fuel Edit Save Debug</h3><pre>{_err_detail}</pre>', 500
+            raise
     return render_template('fuel_expense_form.html', form=form, title='Edit Fuel Expense', rec=rec)
 
 
@@ -17952,12 +17949,9 @@ def oil_expense_form(pk=None):
 
             flash('Oil expense saved.', 'success')
             return redirect(url_for('oil_expense_list'))
-        except Exception as _oil_save_exc:
+        except Exception:
             db.session.rollback()
-            import traceback as _tb
-            _err_detail = _tb.format_exc()
-            app.logger.error('OIL EDIT SAVE ERROR:\n%s', _err_detail)
-            return f'<h3>Oil Edit Save Debug</h3><pre>{_err_detail}</pre>', 500
+            raise
     return render_template(
         'oil_expense_form.html',
         form=form,
@@ -18416,12 +18410,9 @@ def maintenance_expense_form(pk=None):
                 db.session.commit()
             flash('Maintenance expense saved.', 'success')
             return redirect(url_for('maintenance_expense_list'))
-        except Exception as _maint_save_exc:
+        except Exception:
             db.session.rollback()
-            import traceback as _tb
-            _err_detail = _tb.format_exc()
-            app.logger.error('MAINTENANCE SAVE ERROR:\n%s', _err_detail)
-            return f'<h3>Maintenance Save Debug</h3><pre>{_err_detail}</pre>', 500
+            raise
     elif request.method == 'POST':
         if form.errors:
             flash('Form save nahi hua. Required fields check karein.', 'danger')
