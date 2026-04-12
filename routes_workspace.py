@@ -1,6 +1,6 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from calendar import monthrange
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from flask import flash, redirect, render_template, request, session, url_for, make_response, jsonify
 from sqlalchemy import and_, or_, cast, String
@@ -8,10 +8,12 @@ from sqlalchemy.orm import aliased
 
 from models import (
     db, Employee, Driver, Party, Account, District, Project, Vehicle,
+    VehicleDailyTask,
     JournalEntry, JournalEntryLine,
     EmployeeAssignment, FundTransfer, FundTransferCategory,
     WorkspaceParty, WorkspaceProduct, WorkspaceAccount,
     WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFuelOilOpeningExpense, WorkspaceFundTransfer, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceMonthClose, WorkspaceFuelOilMonthClose,
+    WorkspaceMpgReportInput,
     FuelExpense, OilExpense, MaintenanceExpense,
 )
 from routes_finance import check_auth
@@ -3056,6 +3058,226 @@ def workspace_reports():
         expenses_by_type=expenses_by_type,
         transfer_total=transfer_total,
         month_closes=month_closes,
+    )
+
+
+def workspace_mpg_report():
+    guard, emp = _workspace_guard("workspace_reports")
+    if guard:
+        return guard
+
+    today = pk_date()
+    default_from_date = today - timedelta(days=30)
+    from_date = parse_date(request.values.get("from_date")) or default_from_date
+    to_date = parse_date(request.values.get("to_date")) or today
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    def _to_dec(value, fallback=Decimal("0")):
+        if value is None or value == "":
+            return fallback
+        try:
+            return Decimal(str(value))
+        except Exception:
+            return fallback
+
+    def _parse_decimal_input(raw_value):
+        raw = (raw_value or "").strip()
+        if not raw:
+            return None, False
+        try:
+            return Decimal(raw.replace(",", "")), False
+        except (InvalidOperation, ValueError):
+            return None, True
+
+    fuel_rows = (
+        FuelExpense.query
+        .filter(
+            FuelExpense.employee_id == emp.id,
+            FuelExpense.fueling_date >= from_date,
+            FuelExpense.fueling_date <= to_date,
+        )
+        .order_by(FuelExpense.vehicle_id.asc(), FuelExpense.fueling_date.asc(), FuelExpense.id.asc())
+        .all()
+    )
+
+    entries_by_vehicle = {}
+    for row in fuel_rows:
+        entries_by_vehicle.setdefault(int(row.vehicle_id), []).append(row)
+
+    vehicle_ids = sorted(entries_by_vehicle.keys())
+    vehicles_by_id = {}
+    if vehicle_ids:
+        for vehicle in Vehicle.query.filter(Vehicle.id.in_(vehicle_ids)).all():
+            vehicles_by_id[int(vehicle.id)] = vehicle
+
+    task_close_reading_map = {}
+    if vehicle_ids:
+        task_rows = (
+            VehicleDailyTask.query
+            .filter(
+                VehicleDailyTask.vehicle_id.in_(vehicle_ids),
+                VehicleDailyTask.task_date == to_date,
+            )
+            .order_by(VehicleDailyTask.vehicle_id.asc(), VehicleDailyTask.id.desc())
+            .all()
+        )
+        for task in task_rows:
+            v_id = int(task.vehicle_id)
+            if v_id in task_close_reading_map:
+                continue
+            task_close_reading_map[v_id] = _to_dec(task.close_reading, None)
+
+    saved_inputs = {}
+    if vehicle_ids:
+        for rec in WorkspaceMpgReportInput.query.filter(
+            WorkspaceMpgReportInput.employee_id == emp.id,
+            WorkspaceMpgReportInput.from_date == from_date,
+            WorkspaceMpgReportInput.to_date == to_date,
+            WorkspaceMpgReportInput.vehicle_id.in_(vehicle_ids),
+        ).all():
+            saved_inputs[int(rec.vehicle_id)] = rec
+
+    if request.method == "POST":
+        has_invalid = False
+        for vehicle_id in vehicle_ids:
+            current_meter, current_meter_invalid = _parse_decimal_input(request.form.get(f"current_odoo_meter_{vehicle_id}"))
+            today_fuel, today_fuel_invalid = _parse_decimal_input(request.form.get(f"today_fuel_{vehicle_id}"))
+            if current_meter_invalid or today_fuel_invalid:
+                has_invalid = True
+                continue
+
+            existing = saved_inputs.get(vehicle_id)
+            if current_meter is None and today_fuel is None:
+                if existing:
+                    db.session.delete(existing)
+                continue
+
+            if not existing:
+                existing = WorkspaceMpgReportInput(
+                    employee_id=emp.id,
+                    vehicle_id=vehicle_id,
+                    from_date=from_date,
+                    to_date=to_date,
+                    created_by_user_id=session.get("user_id"),
+                )
+                db.session.add(existing)
+                saved_inputs[vehicle_id] = existing
+
+            existing.current_odoo_meter_reading = current_meter
+            existing.today_fuel = today_fuel
+
+        if has_invalid:
+            db.session.rollback()
+            flash("Some numeric inputs are invalid. Please enter valid numbers only.", "danger")
+        else:
+            db.session.commit()
+            flash("MPG report inputs saved successfully.", "success")
+        return redirect(url_for("workspace_mpg_report", from_date=from_date.isoformat(), to_date=to_date.isoformat()))
+
+    report_rows = []
+    for idx, vehicle_id in enumerate(vehicle_ids, start=1):
+        vehicle = vehicles_by_id.get(vehicle_id)
+        if not vehicle:
+            continue
+        rows = entries_by_vehicle.get(vehicle_id) or []
+        if not rows:
+            continue
+
+        latest_entry = rows[-1]
+        same_start_date_rows = [r for r in rows if r.fueling_date == from_date]
+        same_end_date_rows = [r for r in rows if r.fueling_date == to_date]
+        first_row_for_prev = same_start_date_rows[0] if same_start_date_rows else rows[0]
+        last_row_for_current = same_end_date_rows[-1] if same_end_date_rows else rows[-1]
+
+        previous_reading = _to_dec(first_row_for_prev.previous_reading, None)
+        current_reading = _to_dec(last_row_for_current.current_reading, None)
+        km = (current_reading - previous_reading) if (previous_reading is not None and current_reading is not None) else None
+
+        price_values = [_to_dec(r.fuel_price, None) for r in rows if r.fuel_price is not None]
+        avg_fuel_price = (sum(price_values, Decimal("0")) / Decimal(len(price_values))) if price_values else None
+        total_ltr = sum((_to_dec(r.liters, Decimal("0")) for r in rows), Decimal("0"))
+        total_amount = sum((_to_dec(r.amount, Decimal("0")) for r in rows), Decimal("0"))
+        mpg = (km / total_ltr) if (km is not None and total_ltr > 0) else None
+
+        target_mpg = _to_dec(vehicle.target_mpg, Decimal("0"))
+        tank_capacity = _to_dec(vehicle.fuel_tank_capacity, Decimal("0"))
+
+        fuel_deduction = None
+        short_kms = None
+        with_full_tank_next_fueling = None
+        if target_mpg > 0 and km is not None and avg_fuel_price is not None:
+            fuel_deduction = (total_ltr - (km / target_mpg)) * avg_fuel_price
+        if target_mpg > 0 and km is not None:
+            short_kms = (total_ltr * target_mpg) - km
+        if target_mpg > 0 and current_reading is not None and short_kms is not None:
+            with_full_tank_next_fueling = current_reading + short_kms + (tank_capacity * target_mpg)
+
+        current_date_reading = task_close_reading_map.get(vehicle_id)
+        saved = saved_inputs.get(vehicle_id)
+        current_odoo_meter_reading = _to_dec(saved.current_odoo_meter_reading, None) if saved else None
+        today_fuel = _to_dec(saved.today_fuel, None) if saved else None
+        meter_base = current_odoo_meter_reading if current_odoo_meter_reading is not None else current_date_reading
+
+        remaining_kms_from_fueling = (
+            with_full_tank_next_fueling - meter_base
+            if (with_full_tank_next_fueling is not None and meter_base is not None)
+            else None
+        )
+        in_tank_current_ltr = (
+            remaining_kms_from_fueling / target_mpg
+            if (remaining_kms_from_fueling is not None and target_mpg > 0)
+            else None
+        )
+        fueling_ltr_with_target = (
+            tank_capacity - in_tank_current_ltr
+            if (in_tank_current_ltr is not None and tank_capacity is not None)
+            else None
+        )
+        fueling_amount = (
+            fueling_ltr_with_target * avg_fuel_price
+            if (fueling_ltr_with_target is not None and avg_fuel_price is not None)
+            else None
+        )
+        balance_amount = (
+            fueling_amount - today_fuel
+            if (fueling_amount is not None and today_fuel is not None)
+            else None
+        )
+
+        report_rows.append({
+            "sr_no": idx,
+            "vehicle": vehicle,
+            "entry_date": latest_entry.fueling_date,
+            "slip_no": latest_entry.slip_no,
+            "previous_reading": previous_reading,
+            "current_reading": current_reading,
+            "km": km,
+            "avg_fuel_price": avg_fuel_price,
+            "total_ltr": total_ltr,
+            "mpg": mpg,
+            "amount": total_amount,
+            "fuel_deduction": fuel_deduction,
+            "short_kms": short_kms,
+            "with_full_tank_next_fueling": with_full_tank_next_fueling,
+            "current_date_reading": current_date_reading,
+            "current_odoo_meter_reading": current_odoo_meter_reading,
+            "remaining_kms_from_fueling": remaining_kms_from_fueling,
+            "in_tank_current_ltr": in_tank_current_ltr,
+            "fueling_ltr_with_target": fueling_ltr_with_target,
+            "fueling_amount": fueling_amount,
+            "today_fuel": today_fuel,
+            "balance_amount": balance_amount,
+            "target_mpg": target_mpg,
+            "tank_capacity": tank_capacity,
+        })
+
+    return render_template(
+        "workspace/mpg_report.html",
+        employee=emp,
+        from_date=from_date,
+        to_date=to_date,
+        rows=report_rows,
     )
 
 

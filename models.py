@@ -2306,6 +2306,31 @@ class ExpenseDeleteCleanupJob(db.Model):
     initiated_by = db.relationship('User', backref='expense_delete_cleanup_jobs', lazy='select')
 
 
+class WorkspaceMpgReportInput(db.Model):
+    __tablename__ = 'workspace_mpg_report_input'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'employee_id', 'vehicle_id', 'from_date', 'to_date',
+            name='uq_workspace_mpg_input_scope'
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id', ondelete='CASCADE'), nullable=False, index=True)
+    from_date = db.Column(db.Date, nullable=False, index=True)
+    to_date = db.Column(db.Date, nullable=False, index=True)
+    current_odoo_meter_reading = db.Column(db.Numeric(12, 2), nullable=True)
+    today_fuel = db.Column(db.Numeric(12, 2), nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('workspace_mpg_report_inputs', lazy='dynamic'))
+    vehicle = db.relationship('Vehicle', backref=db.backref('workspace_mpg_report_inputs', lazy='dynamic'))
+    created_by = db.relationship('User', backref='workspace_mpg_report_inputs_created', lazy='select')
+
+
 # ────────────────────────────────────────────────
 # App Releases (for admin-managed in-app updates)
 # ────────────────────────────────────────────────

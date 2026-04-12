@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  {% include "workspace/_nav.html" %}
+
+  <style>
+    .mpg-hero {
+      border: 0;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
+      color: #fff;
+    }
+    .mpg-hero .muted-light { color: rgba(255, 255, 255, .84); }
+  </style>
+
+  <div class="card mpg-hero shadow-sm mb-3">
+    <div class="card-body p-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+          <span class="badge text-bg-light mb-2"><i class="bi bi-speedometer2 me-1"></i>Workspace MPG Analytics</span>
+          <h3 class="mb-1">MPG Report</h3>
+          <div class="muted-light">Fuel efficiency, deduction aur next fueling forecast (vehicle wise).</div>
+          <div class="muted-light small mt-1">Employee: <strong>{{ employee.name }}</strong></div>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-light btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+          <button class="btn btn-outline-light btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+          <a href="{{ url_for('workspace_reports') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>Reports</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">From Date</label>
+          <input type="date" class="form-control" name="from_date" value="{{ from_date.isoformat() if from_date else '' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">To Date</label>
+          <input type="date" class="form-control" name="to_date" value="{{ to_date.isoformat() if to_date else '' }}">
+        </div>
+        <div class="col-md-6">
+          <button class="btn btn-primary"><i class="bi bi-funnel me-1"></i>Apply Filter</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <form method="post">
+    <input type="hidden" name="from_date" value="{{ from_date.isoformat() if from_date else '' }}">
+    <input type="hidden" name="to_date" value="{{ to_date.isoformat() if to_date else '' }}">
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <strong>Vehicle MPG Detail</strong>
+        <div class="d-flex align-items-center gap-2">
+          <span class="small text-muted">{{ rows|length }} vehicle(s)</span>
+          <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-save me-1"></i>Save Inputs</button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle mb-0" id="workspaceMpgReportTable">
+          <thead class="table-light">
+            <tr>
+              <th>Sr.No.</th>
+              <th>Vehicle No.</th>
+              <th>Entry Date</th>
+              <th>SLIP NO.</th>
+              <th class="text-end">Previous Reading</th>
+              <th class="text-end">Current Reading</th>
+              <th class="text-end">KM</th>
+              <th class="text-end">Avg. Fuel Price</th>
+              <th class="text-end">Total LTR</th>
+              <th class="text-end">MPG</th>
+              <th class="text-end">Amount</th>
+              <th class="text-end">FUEL DEDUCTION</th>
+              <th class="text-end">Short Km's</th>
+              <th class="text-end">With Full Tank Next Fueling Reading</th>
+              <th class="text-end">Current Date Reading</th>
+              <th class="text-end">Current Odoo Meter Reading</th>
+              <th class="text-end">R. KM's from Fueling</th>
+              <th class="text-end">In Tank Current Ltr</th>
+              <th class="text-end">Fueling LTR With Target MPG</th>
+              <th class="text-end">Fueling Amount</th>
+              <th class="text-end">Today Fuel</th>
+              <th class="text-end">Balance Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td>{{ r.sr_no }}</td>
+              <td>
+                <div class="fw-semibold">{{ r.vehicle.vehicle_no }}</div>
+                <div class="small text-muted">Target MPG: {{ "{:,.2f}".format(r.target_mpg or 0) }} | Tank: {{ "{:,.2f}".format(r.tank_capacity or 0) }} L</div>
+              </td>
+              <td>{{ r.entry_date|ddmmyyyy if r.entry_date else '-' }}</td>
+              <td>{{ r.slip_no or '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.previous_reading) if r.previous_reading is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.current_reading) if r.current_reading is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.km) if r.km is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.avg_fuel_price) if r.avg_fuel_price is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.total_ltr) if r.total_ltr is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.mpg) if r.mpg is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.amount) if r.amount is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.fuel_deduction) if r.fuel_deduction is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.short_kms) if r.short_kms is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.with_full_tank_next_fueling) if r.with_full_tank_next_fueling is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.current_date_reading) if r.current_date_reading is not none else '-' }}</td>
+              <td class="text-end" style="min-width: 170px;">
+                <input
+                  type="text"
+                  class="form-control form-control-sm text-end"
+                  name="current_odoo_meter_{{ r.vehicle.id }}"
+                  value="{{ "{:,.2f}".format(r.current_odoo_meter_reading) if r.current_odoo_meter_reading is not none else '' }}"
+                  placeholder="Meter reading"
+                >
+              </td>
+              <td class="text-end">{{ "{:,.2f}".format(r.remaining_kms_from_fueling) if r.remaining_kms_from_fueling is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.in_tank_current_ltr) if r.in_tank_current_ltr is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.fueling_ltr_with_target) if r.fueling_ltr_with_target is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(r.fueling_amount) if r.fueling_amount is not none else '-' }}</td>
+              <td class="text-end" style="min-width: 150px;">
+                <input
+                  type="text"
+                  class="form-control form-control-sm text-end"
+                  name="today_fuel_{{ r.vehicle.id }}"
+                  value="{{ "{:,.2f}".format(r.today_fuel) if r.today_fuel is not none else '' }}"
+                  placeholder="Today fuel amount"
+                >
+              </td>
+              <td class="text-end fw-semibold">{{ "{:,.2f}".format(r.balance_amount) if r.balance_amount is not none else '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="22" class="text-center text-muted py-4">
+                No fuel entries found for the selected date range.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  if(window.fleetTableEnhance){
+    window.fleetTableEnhance('workspaceMpgReportTable');
+  }
+  if(window.fleetPrintExport){
+    window.fleetPrintExport(
+      'workspaceMpgReportTable',
+      'Workspace MPG Report',
+      'Workspace_MPG_Report.csv'
+    );
+  }
+});
+</script>
+{% endblock %}
