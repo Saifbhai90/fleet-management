@@ -88,7 +88,7 @@
                   </a>
                 {% elif expense_ref_map and expense_ref_map.get(_exp_key) %}
                   {% if t.reference_type == 'FuelExpense' %}
-                    <a href="{{ url_for('fuel_expense_edit', pk=t.reference_id) }}" class="fw-semibold text-decoration-none">
+                    <a href="{{ url_for('fuel_expense_view', pk=t.reference_id) }}" class="fw-semibold text-decoration-none">
                       {{ expense_ref_map.get(_exp_key) }}
                     </a>
                   {% elif t.reference_type == 'OilExpense' %}

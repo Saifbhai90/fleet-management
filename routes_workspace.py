@@ -2737,7 +2737,7 @@ def workspace_ledger_journal_detail(journal_entry_id):
     expense_url = None
     expense_label = None
     if je.reference_type == 'FuelExpense' and je.reference_id:
-        expense_url = url_for('fuel_expense_edit', pk=je.reference_id)
+        expense_url = url_for('fuel_expense_view', pk=je.reference_id)
         expense_label = f'Fuel Expense #{je.reference_id}'
     elif je.reference_type == 'OilExpense' and je.reference_id:
         expense_url = url_for('oil_expense_form', pk=je.reference_id)

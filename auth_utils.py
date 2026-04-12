@@ -188,6 +188,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('fuel_expense_list', 'fuel_expense'),
     ('fuel_expense_add', 'fuel_expense_add'),
     ('fuel_expense_edit', 'fuel_expense_edit'),
+    ('fuel_expense_view', 'fuel_expense'),
     ('fuel_expense_media', 'fuel_expense'),
     ('fuel_expense_media_download', 'fuel_expense'),
     ('fuel_expense_media_download_all', 'fuel_expense'),

@@ -17287,6 +17287,34 @@ def _workspace_account_id_from_expense_by(expense_by_val, employee_id):
     return acct.id if acct else None
 
 
+def _workspace_expense_by_for_reference(employee_id, reference_type, reference_id):
+    if not employee_id or not reference_type or not reference_id:
+        return ''
+    rows = WorkspaceJournalEntry.query.filter_by(
+        employee_id=employee_id,
+        reference_type=reference_type,
+        reference_id=reference_id,
+    ).order_by(WorkspaceJournalEntry.id.desc()).all()
+    if not rows:
+        return ''
+    transfer_rows = [je for je in rows if (je.entry_type or '').strip().lower() == 'transfer']
+    for je in transfer_rows:
+        credit_lines = sorted(
+            [ln for ln in (je.lines or []) if Decimal(str(ln.credit or 0)) > 0],
+            key=lambda x: Decimal(str(x.credit or 0)),
+            reverse=True,
+        )
+        for ln in credit_lines:
+            acct = WorkspaceAccount.query.filter_by(
+                id=ln.account_id,
+                employee_id=employee_id,
+                is_active=True,
+            ).first()
+            if acct:
+                return f'acct-{acct.id}'
+    return ''
+
+
 def _require_workspace_employee_for_expense_management():
     """Expense Management is now part of Employee Workspace."""
     if not session.get('workspace_employee_id'):
@@ -17741,6 +17769,7 @@ def fuel_expense_edit(pk):
         form.current_reading.data = rec.current_reading
         form.amount.data = rec.amount
         form.fuel_price.data = rec.fuel_price
+        form.expense_by.data = _workspace_expense_by_for_reference(workspace_employee_id, 'FuelExpense', rec.id)
     if request.method == 'POST' and form.validate_on_submit():
         vehicle_id = form.vehicle_id.data
         if vehicle_id == 0:
@@ -17902,6 +17931,19 @@ def fuel_expense_edit(pk):
             db.session.rollback()
             raise
     return render_template('fuel_expense_form.html', form=form, title='Edit Fuel Expense', rec=rec)
+
+
+@app.route('/expenses/fuel/<int:pk>/view')
+def fuel_expense_view(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = FuelExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('fuel_expense_list'))
+    return render_template('fuel_expense_detail.html', rec=rec, title='Fuel Expense Detail')
 
 
 @app.route('/expenses/fuel/<int:pk>/delete', methods=['POST'])
