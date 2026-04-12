@@ -68,7 +68,7 @@ import xlsxwriter
 from sqlalchemy import func, text, inspect, or_, cast, and_
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, pk_now, pk_date, pk_time
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
 from flask_wtf.csrf import CSRFError, validate_csrf
@@ -18254,7 +18254,7 @@ def maintenance_expense_list():
     form.project_id.data = project_id
     form.vehicle_id.data = vehicle_id
 
-    query = MaintenanceExpense.query.options(selectinload(MaintenanceExpense.attachments)).filter(
+    query = MaintenanceExpense.query.filter(
         MaintenanceExpense.expense_date >= from_d,
         MaintenanceExpense.expense_date <= to_d
     )
