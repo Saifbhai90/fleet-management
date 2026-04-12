@@ -619,6 +619,14 @@ def accounts_balance_sheet():
             .all()
         )
         account_ids = [a.id for a in accounts]
+        driver_ids = sorted({
+            int(a.entity_id) for a in accounts
+            if (a.entity_type or "").strip().lower() == "driver" and a.entity_id
+        })
+        drivers_by_id = {}
+        if driver_ids:
+            for drv in Driver.query.filter(Driver.id.in_(driver_ids)).all():
+                drivers_by_id[int(drv.id)] = drv
 
         from sqlalchemy import func as _func
         _jnl_rows = db.session.query(
@@ -653,6 +661,13 @@ def accounts_balance_sheet():
                 return 'Dr' if balance >= 0 else 'Cr'
             return 'Cr' if balance >= 0 else 'Dr'
 
+        def _account_display_name(acc):
+            if (acc.entity_type or "").strip().lower() == "driver" and acc.entity_id:
+                drv = drivers_by_id.get(int(acc.entity_id))
+                if drv and getattr(drv, "vehicle", None) and getattr(drv.vehicle, "vehicle_no", None):
+                    return f"{acc.name} | Vehicle: {drv.vehicle.vehicle_no}"
+            return acc.name
+
         for acc in accounts:
             opening = Decimal(str(acc.opening_balance or 0))
             debit, credit = jnl_map.get(acc.id, (Decimal('0'), Decimal('0')))
@@ -674,6 +689,7 @@ def accounts_balance_sheet():
                 'balance': balance,
                 'side': _side(acc.account_type, balance),
                 'is_zero': is_zero,
+                'display_name': _account_display_name(acc),
             }
             grouped.setdefault(acc.account_type or 'Asset', []).append(row)
             totals['opening'] += opening
