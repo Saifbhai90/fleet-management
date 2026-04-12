@@ -17788,7 +17788,7 @@ def oil_expense_form(pk=None):
             if rec:
                 old_items = list(rec.items.all())
                 _apply_oil_expense_items_balance(old_items, reverse=True)
-                rec.items.delete()
+                OilExpenseItem.query.filter_by(oil_expense_id=rec.id).delete()
             else:
                 rec = OilExpense(
                     district_id=form.district_id.data or None,
@@ -18278,7 +18278,7 @@ def maintenance_expense_form(pk=None):
 
         try:
             if rec:
-                rec.items.delete()
+                MaintenanceExpenseItem.query.filter_by(maintenance_expense_id=rec.id).delete()
             else:
                 rec = MaintenanceExpense(
                     district_id=form.district_id.data or None,
