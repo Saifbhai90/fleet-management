@@ -86,7 +86,11 @@
                                 <tr class="bs-account-row" data-group="{{ account_type }}" data-zero="{{ 1 if r.is_zero else 0 }}">
                                     <td class="ps-3 text-muted">{{ account_type }}</td>
                                     <td>{{ r.account.code }}</td>
-                                    <td>{{ r.display_name or r.account.name }}</td>
+                                    <td>
+                                        <a href="{{ url_for('accounts_account_ledger', account_id=r.account.id) }}" class="fw-semibold text-decoration-none">
+                                            {{ r.display_name or r.account.name }}
+                                        </a>
+                                    </td>
                                     <td class="text-end">{{ "{:,.2f}".format(r.opening) }}</td>
                                     <td class="text-end text-success">{{ "{:,.2f}".format(r.debit) }}</td>
                                     <td class="text-end text-danger">{{ "{:,.2f}".format(r.credit) }}</td>
