@@ -924,6 +924,14 @@ class MaintenanceExpense(db.Model):
     payment_type = db.Column(db.String(20), nullable=True)  # Cash | Credit
     workspace_party_id = db.Column(db.Integer, db.ForeignKey('workspace_party.id'), nullable=True, index=True)
     total_bill_amount = db.Column(db.Numeric(15, 2), nullable=True)
+    upload_status = db.Column(db.String(20), nullable=True, default='success', index=True)  # processing|success|error|partial
+    upload_total = db.Column(db.Integer, nullable=False, default=0)
+    upload_done = db.Column(db.Integer, nullable=False, default=0)
+    upload_failed = db.Column(db.Integer, nullable=False, default=0)
+    upload_error = db.Column(db.Text, nullable=True)
+    upload_manifest_json = db.Column(db.Text, nullable=True)  # pending temp-file manifest for resume
+    upload_started_at = db.Column(db.DateTime, nullable=True)
+    upload_finished_at = db.Column(db.DateTime, nullable=True)
     remarks = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
 

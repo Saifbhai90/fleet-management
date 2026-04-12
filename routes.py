@@ -71,13 +71,16 @@ from sqlalchemy.exc import OperationalError, IntegrityError
 from sqlalchemy.orm import joinedload
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, pk_now, pk_date, pk_time
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
-from flask_wtf.csrf import CSRFError, validate_csrf
+from flask_wtf.csrf import CSRFError
 from werkzeug.security import generate_password_hash
 import re
 import os
 import json
+import uuid
 import tempfile
 import time as _time_mod
+import threading
+import mimetypes
 from werkzeug.utils import secure_filename
 from r2_storage import upload_image_file, upload_image_bytes
 from freeze_utils import (
@@ -1219,6 +1222,158 @@ def _add_expense_attachments_direct_client(payload, *, attachment_model, fk_kwar
             app.logger.warning('Direct attachment row failed (%s): %s', key, ex)
             failed.append(orig or key)
     return failed
+
+
+_maintenance_upload_lock = threading.Lock()
+_maintenance_upload_active = set()
+
+
+def _maintenance_upload_queue_root():
+    root = os.path.join(app.config['UPLOAD_FOLDER'], 'maintenance_upload_queue')
+    os.makedirs(root, exist_ok=True)
+    return root
+
+
+def _prepare_maintenance_upload_manifest(files, expense_id):
+    """
+    Persist request files to a queue folder quickly and return manifest for background upload.
+    """
+    allowed_image_ct = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+    allowed_video_ct = {'video/mp4', 'video/webm', 'video/quicktime'}
+    max_bytes = _expense_attachment_max_bytes()
+    batch_id = f"{expense_id}_{pk_now().strftime('%Y%m%d%H%M%S%f')}"
+    batch_dir = os.path.join(_maintenance_upload_queue_root(), batch_id)
+    os.makedirs(batch_dir, exist_ok=True)
+    manifest = []
+    skipped = []
+    for f in files or []:
+        if not f or not getattr(f, 'filename', None):
+            continue
+        fn = secure_filename(f.filename)
+        if not fn:
+            continue
+        sz = _filestorage_byte_size(f)
+        if sz is not None and sz > max_bytes:
+            skipped.append(f'{fn} (max {max_bytes // (1024 * 1024)} MB)')
+            continue
+        ext_lo = os.path.splitext(fn)[1].lower()
+        content_type = (f.content_type or '').lower()
+        if content_type in allowed_image_ct or ext_lo in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
+            ftype = 'image'
+        elif content_type in allowed_video_ct or ext_lo in {'.mp4', '.webm', '.mov'}:
+            ftype = 'video'
+        else:
+            skipped.append(f'{fn} (unsupported)')
+            continue
+        unique = f"{uuid.uuid4().hex}_{fn}"
+        temp_path = os.path.join(batch_dir, unique)
+        f.seek(0)
+        f.save(temp_path)
+        manifest.append({
+            'temp_path': temp_path,
+            'original_name': fn,
+            'file_type': ftype,
+            'content_type': (f.content_type or mimetypes.guess_type(fn)[0] or '').strip(),
+        })
+    return manifest, skipped
+
+
+def _start_maintenance_upload_worker(expense_id: int):
+    with _maintenance_upload_lock:
+        if expense_id in _maintenance_upload_active:
+            return False
+        _maintenance_upload_active.add(expense_id)
+
+    def _runner():
+        try:
+            _process_maintenance_upload_job(expense_id)
+        finally:
+            with _maintenance_upload_lock:
+                _maintenance_upload_active.discard(expense_id)
+
+    t = threading.Thread(target=_runner, daemon=True, name=f'maint-upload-{expense_id}')
+    t.start()
+    return True
+
+
+def _process_maintenance_upload_job(expense_id: int):
+    with app.app_context():
+        rec = MaintenanceExpense.query.get(expense_id)
+        if not rec:
+            return
+        try:
+            manifest = json.loads(rec.upload_manifest_json or '[]')
+        except Exception:
+            manifest = []
+        if not manifest:
+            rec.upload_status = 'success'
+            rec.upload_failed = 0
+            rec.upload_error = None
+            rec.upload_finished_at = pk_now()
+            db.session.commit()
+            return
+        rec.upload_status = 'processing'
+        rec.upload_started_at = pk_now()
+        rec.upload_finished_at = None
+        rec.upload_error = None
+        db.session.commit()
+
+        remaining = []
+        errors = []
+        done = int(rec.upload_done or 0)
+        for item in manifest:
+            temp_path = (item.get('temp_path') or '').strip()
+            original_name = (item.get('original_name') or '').strip()
+            ftype = (item.get('file_type') or '').strip().lower()
+            if not temp_path or not os.path.isfile(temp_path):
+                errors.append(f'{original_name or "file"}: temp file missing')
+                remaining.append(item)
+                continue
+            try:
+                from werkzeug.datastructures import FileStorage
+                with open(temp_path, 'rb') as fp:
+                    fs = FileStorage(stream=fp, filename=original_name, content_type=(item.get('content_type') or None))
+                    stored = _save_expense_attachment_path(
+                        fs,
+                        ftype if ftype in ('image', 'video') else 'image',
+                        original_name,
+                        'maintenance_expense',
+                        app.config['UPLOAD_FOLDER'],
+                        f'maintenance_expense/{rec.id}',
+                    )
+                db.session.add(MaintenanceExpenseAttachment(
+                    maintenance_expense_id=rec.id,
+                    file_path=stored,
+                    file_type=(ftype if ftype in ('image', 'video') else None),
+                    original_name=(original_name[:255] if original_name else None),
+                ))
+                done += 1
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+            except Exception as ex:
+                app.logger.warning('Maintenance queued upload failed (%s): %s', original_name or temp_path, ex)
+                errors.append(f'{original_name or "file"}: {ex}')
+                remaining.append(item)
+            rec.upload_done = done
+            rec.upload_failed = len(remaining)
+            rec.upload_manifest_json = json.dumps(remaining)
+            rec.upload_error = '\n'.join(errors[-10:]) if errors else None
+            db.session.commit()
+
+        rec.upload_failed = len(remaining)
+        rec.upload_manifest_json = json.dumps(remaining)
+        rec.upload_error = '\n'.join(errors[-10:]) if errors else None
+        rec.upload_finished_at = pk_now()
+        if remaining and done > 0:
+            rec.upload_status = 'partial'
+        elif remaining:
+            rec.upload_status = 'error'
+        else:
+            rec.upload_status = 'success'
+            rec.upload_error = None
+        db.session.commit()
 
 
 def _delete_stored_expense_attachment(file_path):
@@ -18144,62 +18299,54 @@ def api_maintenance_expense_products():
     return jsonify([{'id': p.id, 'name': p.name} for p in products])
 
 
-@app.route('/api/expense-upload/presign', methods=['POST'])
-def api_expense_upload_presign():
-    """Return presigned PUT URLs so the browser can upload expense media directly to R2 (bypasses Render)."""
-    if not session.get('user_id'):
-        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+@app.route('/api/maintenance-expense/upload-status/<int:pk>')
+def api_maintenance_expense_upload_status(pk):
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    total = int(rec.upload_total or 0)
+    done = int(rec.upload_done or 0)
+    failed = int(rec.upload_failed or 0)
+    status = (rec.upload_status or ('success' if total == 0 else 'processing')).strip().lower()
+    pct = int(round((done / total) * 100)) if total > 0 else 100
+    return jsonify({
+        'ok': True,
+        'id': rec.id,
+        'status': status,
+        'total': total,
+        'done': done,
+        'failed': failed,
+        'percent': max(0, min(100, pct)),
+        'error': (rec.upload_error or ''),
+    })
+
+
+@app.route('/maintenance-expense/<int:pk>/upload-resume', methods=['POST'])
+def maintenance_expense_upload_resume(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
     try:
-        validate_csrf(request.headers.get('X-CSRFToken'))
+        manifest = json.loads(rec.upload_manifest_json or '[]')
     except Exception:
-        return jsonify({'ok': False, 'error': 'csrf'}), 400
-    if not _expense_attachment_r2_ready():
-        return jsonify({'ok': False, 'error': 'r2_unconfigured'}), 503
-    data = request.get_json(silent=True) or {}
-    folder = (data.get('folder') or '').strip()
-    if folder not in ('maintenance_expense', 'fuel_expense', 'oil_expense'):
-        return jsonify({'ok': False, 'error': 'invalid_folder'}), 400
-    files_meta = data.get('files')
-    if not isinstance(files_meta, list) or not files_meta:
-        return jsonify({'ok': False, 'error': 'files_required'}), 400
-    if len(files_meta) > 35:
-        return jsonify({'ok': False, 'error': 'batch_too_large', 'max': 35}), 400
-    from r2_storage import build_expense_object_key, presigned_put_object_url, R2_PUBLIC_URL
-    out = []
-    try:
-        for meta in files_meta:
-            if not isinstance(meta, dict):
-                continue
-            name = (meta.get('name') or '').strip()
-            ct = (meta.get('content_type') or 'application/octet-stream').strip() or 'application/octet-stream'
-            if not name:
-                continue
-            key, safe_name = build_expense_object_key(folder, name)
-            upload_url = presigned_put_object_url(key, ct, expires_in=3600)
-            ext = os.path.splitext(key)[1].lower()
-            if ext in {'.mp4', '.webm', '.mov'}:
-                ftype = 'video'
-            elif ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
-                ftype = 'image'
-            else:
-                continue
-            out.append({
-                'key': key,
-                'upload_url': upload_url,
-                'public_url': f"{R2_PUBLIC_URL.rstrip('/')}/{key}",
-                'content_type': ct,
-                'original_name': safe_name,
-                'file_type': ftype,
-            })
-    except ValueError as ve:
-        return jsonify({'ok': False, 'error': str(ve)}), 400
-    except Exception:
-        app.logger.exception('api_expense_upload_presign')
-        return jsonify({'ok': False, 'error': 'presign_failed'}), 500
-    return jsonify({'ok': True, 'items': out})
+        manifest = []
+    if not manifest:
+        return jsonify({'ok': False, 'error': 'nothing_to_resume'})
+    rec.upload_status = 'processing'
+    rec.upload_error = None
+    rec.upload_started_at = pk_now()
+    rec.upload_finished_at = None
+    db.session.commit()
+    started = _start_maintenance_upload_worker(rec.id)
+    return jsonify({'ok': True, 'started': bool(started)})
 
 
 @app.route('/maintenance-expenses')
@@ -18302,7 +18449,8 @@ def maintenance_expense_form(pk=None):
     if _guard:
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    maintenance_direct_r2 = _expense_attachment_r2_ready()
+    # User-requested flow: keep uploads in backend processing (no blocking modal on form submit).
+    maintenance_direct_r2 = False
     default_district_id = _workspace_employee_default_district_id(workspace_employee_id)
     rec = MaintenanceExpense.query.get_or_404(pk) if pk else None
     if rec and workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
@@ -18590,42 +18738,35 @@ def maintenance_expense_form(pk=None):
             )
             db.session.commit()
 
-            direct_raw = (request.form.get('attachments_direct_json') or '').strip()
             files = request.files.getlist('attachments')
             has_new_files = bool(files and any(f and getattr(f, 'filename', None) for f in files))
-            if direct_raw and not has_new_files:
+            if has_new_files:
                 try:
-                    payload = json.loads(direct_raw)
-                    failed_att = _add_expense_attachments_direct_client(
-                        payload,
-                        attachment_model=MaintenanceExpenseAttachment,
-                        fk_kwargs={'maintenance_expense_id': rec.id},
-                        folder_prefix='maintenance_expense',
-                    )
+                    manifest, skipped_att = _prepare_maintenance_upload_manifest(files, rec.id)
+                    rec.upload_total = len(manifest)
+                    rec.upload_done = 0
+                    rec.upload_failed = 0
+                    rec.upload_error = None
+                    rec.upload_finished_at = None
+                    if manifest:
+                        rec.upload_status = 'processing'
+                        rec.upload_started_at = pk_now()
+                        rec.upload_manifest_json = json.dumps(manifest)
+                    else:
+                        rec.upload_status = 'success'
+                        rec.upload_started_at = None
+                        rec.upload_manifest_json = None
+                        rec.upload_finished_at = pk_now()
                     db.session.commit()
-                    if failed_att:
-                        flash('Kuch direct-upload attachments save nahi ho sakin: ' + '; '.join(failed_att), 'warning')
-                except json.JSONDecodeError:
-                    flash('Attachments JSON invalid — dubara upload try karein.', 'warning')
+                    if manifest:
+                        _start_maintenance_upload_worker(rec.id)
+                        flash(f'Upload background me start ho gaya ({len(manifest)} file). Status list me live dekhein.', 'info')
+                    if skipped_att:
+                        flash('Kuch files queue me nahi gayin: ' + '; '.join(skipped_att), 'warning')
                 except Exception:
                     db.session.rollback()
-                    app.logger.exception('Maintenance direct attachment save')
-                    flash('Maintenance save ho gaya lekin cloud attachment links save nahi ho sakin.', 'warning')
-            elif has_new_files:
-                try:
-                    failed_att = _add_expense_attachments_from_request(
-                        files,
-                        r2_folder='maintenance_expense',
-                        attachment_model=MaintenanceExpenseAttachment,
-                        fk_kwargs={'maintenance_expense_id': rec.id},
-                    )
-                    db.session.commit()
-                    if failed_att:
-                        flash('Kuch attachments save nahi ho sakin: ' + '; '.join(failed_att), 'warning')
-                except Exception:
-                    db.session.rollback()
-                    app.logger.exception('Maintenance expense attachment save')
-                    flash('Maintenance save ho gaya lekin attachments save nahi ho sakin. Edit se dubara files attach karein.', 'warning')
+                    app.logger.exception('Maintenance async attachment queue save')
+                    flash('Maintenance save ho gaya lekin files queue me add nahi ho sakin.', 'warning')
             flash('Maintenance expense saved.', 'success')
             return redirect(url_for('maintenance_expense_list'))
         except Exception:
