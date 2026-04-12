@@ -17311,85 +17311,92 @@ def fuel_expense_edit(pk):
             meter_reading_matched = 'Yes' if lo <= curr_f <= hi else 'No'
         else:
             meter_reading_matched = 'No'
-        expense_by_val = form.expense_by.data or ''
-        if payment_type == 'Cash':
-            expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
-        _workspace_reverse_expense_journals('FuelExpense', rec.id, workspace_employee_id)
-        rec.district_id = district_id
-        rec.project_id = project_id
-        rec.vehicle_id = vehicle_id
-        rec.employee_id = workspace_employee_id
-        rec.fueling_date = fueling_date
-        rec.card_swipe_date = card_swipe_date
-        rec.payment_type = payment_type
-        rec.slip_no = slip_no
-        rec.fuel_type = fuel_type
-        rec.workspace_pump_id = workspace_pump_id
-        rec.previous_reading = previous_reading
-        rec.current_reading = current_reading
-        rec.km = km
-        rec.fuel_price = fuel_price
-        rec.liters = liters
-        rec.mpg = mpg
-        rec.amount = amount
-        rec.km_out_task = km_out_task
-        rec.km_in_task = km_in_task
-        rec.meter_reading_matched = meter_reading_matched
-        fuel_je = _workspace_post_expense_journal(
-            employee_id=workspace_employee_id,
-            reference_type='FuelExpense',
-            reference_id=rec.id,
-            expense_date=fueling_date,
-            amount=amount_f,
-            description=f'Fuel expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
-            category_code='Fuel',
-            workspace_party_id=workspace_pump_id,
-            credit_account_id=_workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id),
-        )
-        _workspace_sync_regular_expense(
-            employee_id=workspace_employee_id,
-            reference_type='FuelExpense',
-            reference_id=rec.id,
-            expense_date=fueling_date,
-            amount=amount_f,
-            description=f'Fuel expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
-            expense_type='Fuel Expense',
-            payment_mode=(payment_type or 'Cash'),
-            category='Fuel',
-            workspace_party_id=workspace_pump_id,
-            journal_entry_id=(fuel_je.id if fuel_je else None),
-        )
-        db.session.commit()
-        allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
-        allowed_video = {'video/mp4', 'video/webm', 'video/quicktime'}
-        files = request.files.getlist('attachments')
-        if files:
-            subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'fuel_expense', str(rec.id))
-            os.makedirs(subdir, exist_ok=True)
-            for f in files:
-                if not f or not f.filename:
-                    continue
-                fn = secure_filename(f.filename)
-                if not fn:
-                    continue
-                ext = os.path.splitext(fn)[1].lower()
-                content_type = f.content_type or ''
-                if content_type in allowed_image or ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
-                    file_type = 'image'
-                elif content_type in allowed_video or ext in {'.mp4', '.webm', '.mov'}:
-                    file_type = 'video'
-                else:
-                    continue
-                base, ext = os.path.splitext(fn)
-                unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
-                path = os.path.join(subdir, unique)
-                f.save(path)
-                rel_path = os.path.join('fuel_expense', str(rec.id), unique)
-                att = FuelExpenseAttachment(fuel_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
-                db.session.add(att)
+        try:
+            expense_by_val = form.expense_by.data or ''
+            if payment_type == 'Cash':
+                expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
+            _workspace_reverse_expense_journals('FuelExpense', rec.id, workspace_employee_id)
+            rec.district_id = district_id
+            rec.project_id = project_id
+            rec.vehicle_id = vehicle_id
+            rec.employee_id = workspace_employee_id
+            rec.fueling_date = fueling_date
+            rec.card_swipe_date = card_swipe_date
+            rec.payment_type = payment_type
+            rec.slip_no = slip_no
+            rec.fuel_type = fuel_type
+            rec.workspace_pump_id = workspace_pump_id
+            rec.previous_reading = previous_reading
+            rec.current_reading = current_reading
+            rec.km = km
+            rec.fuel_price = fuel_price
+            rec.liters = liters
+            rec.mpg = mpg
+            rec.amount = amount
+            rec.km_out_task = km_out_task
+            rec.km_in_task = km_in_task
+            rec.meter_reading_matched = meter_reading_matched
+            fuel_je = _workspace_post_expense_journal(
+                employee_id=workspace_employee_id,
+                reference_type='FuelExpense',
+                reference_id=rec.id,
+                expense_date=fueling_date,
+                amount=amount_f,
+                description=f'Fuel expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                category_code='Fuel',
+                workspace_party_id=workspace_pump_id,
+                credit_account_id=_workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id),
+            )
+            _workspace_sync_regular_expense(
+                employee_id=workspace_employee_id,
+                reference_type='FuelExpense',
+                reference_id=rec.id,
+                expense_date=fueling_date,
+                amount=amount_f,
+                description=f'Fuel expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                expense_type='Fuel Expense',
+                payment_mode=(payment_type or 'Cash'),
+                category='Fuel',
+                workspace_party_id=workspace_pump_id,
+                journal_entry_id=(fuel_je.id if fuel_je else None),
+            )
             db.session.commit()
-        flash('Fuel expense updated.', 'success')
-        return redirect(url_for('fuel_expense_list'))
+            allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+            allowed_video = {'video/mp4', 'video/webm', 'video/quicktime'}
+            files = request.files.getlist('attachments')
+            if files:
+                subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'fuel_expense', str(rec.id))
+                os.makedirs(subdir, exist_ok=True)
+                for f in files:
+                    if not f or not f.filename:
+                        continue
+                    fn = secure_filename(f.filename)
+                    if not fn:
+                        continue
+                    ext = os.path.splitext(fn)[1].lower()
+                    content_type = f.content_type or ''
+                    if content_type in allowed_image or ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
+                        file_type = 'image'
+                    elif content_type in allowed_video or ext in {'.mp4', '.webm', '.mov'}:
+                        file_type = 'video'
+                    else:
+                        continue
+                    base, ext = os.path.splitext(fn)
+                    unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
+                    path = os.path.join(subdir, unique)
+                    f.save(path)
+                    rel_path = os.path.join('fuel_expense', str(rec.id), unique)
+                    att = FuelExpenseAttachment(fuel_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
+                    db.session.add(att)
+                db.session.commit()
+            flash('Fuel expense updated.', 'success')
+            return redirect(url_for('fuel_expense_list'))
+        except Exception as _fuel_save_exc:
+            db.session.rollback()
+            import traceback as _tb
+            _err_detail = _tb.format_exc()
+            app.logger.error('FUEL EDIT SAVE ERROR:\n%s', _err_detail)
+            return f'<h3>Fuel Edit Save Debug</h3><pre>{_err_detail}</pre>', 500
     return render_template('fuel_expense_form.html', form=form, title='Edit Fuel Expense', rec=rec)
 
 
@@ -17777,173 +17784,180 @@ def oil_expense_form(pk=None):
                 'price': price, 'amount': amount
             })
 
-        if rec:
-            old_items = list(rec.items.all())
-            _apply_oil_expense_items_balance(old_items, reverse=True)
-            rec.items.delete()
-        else:
-            rec = OilExpense(
-                district_id=form.district_id.data or None,
-                project_id=form.project_id.data or None,
+        try:
+            if rec:
+                old_items = list(rec.items.all())
+                _apply_oil_expense_items_balance(old_items, reverse=True)
+                rec.items.delete()
+            else:
+                rec = OilExpense(
+                    district_id=form.district_id.data or None,
+                    project_id=form.project_id.data or None,
+                    employee_id=workspace_employee_id,
+                    vehicle_id=vehicle_id,
+                    expense_date=expense_date,
+                    card_swipe_date=card_swipe_date,
+                    previous_reading=prev_reading,
+                    current_reading=curr_reading,
+                    km=km,
+                    remarks=remarks
+                )
+                db.session.add(rec)
+            db.session.flush()
+
+            if rec.id:
+                rec.district_id = form.district_id.data or None
+                rec.project_id = form.project_id.data or None
+                rec.employee_id = workspace_employee_id
+                rec.vehicle_id = vehicle_id
+                rec.expense_date = expense_date
+                rec.card_swipe_date = card_swipe_date
+                rec.previous_reading = prev_reading
+                rec.current_reading = curr_reading
+                rec.km = km
+                rec.remarks = remarks
+
+            for idx, it in enumerate(items_data):
+                item = OilExpenseItem(
+                    oil_expense_id=rec.id,
+                    product_id=it['product_id'],
+                    payment_type=it['payment_type'] or None,
+                    purchase_qty=it['purchase_qty'],
+                    used_qty=it['used_qty'],
+                    qty=it['purchase_qty'],
+                    price=it['price'],
+                    amount=it['amount'],
+                    sort_order=idx
+                )
+                db.session.add(item)
+            db.session.flush()
+            _apply_oil_expense_items_balance(rec.items.all(), reverse=False)
+            _workspace_reverse_expense_journals('OilExpense', rec.id, workspace_employee_id)
+            items_total = sum(float(it.amount or 0) for it in rec.items)
+            if total_bill_amount is None:
+                total_bill_error = 'Total Bill Amount is required.'
+            elif abs(float(total_bill_amount) - float(items_total)) > 0.01:
+                total_bill_error = 'Total Bill Amount must match product lines total.'
+
+            if total_bill_error or party_error:
+                db.session.rollback()
+                if total_bill_error:
+                    flash(total_bill_error, 'danger')
+                if party_error:
+                    flash(party_error, 'danger')
+                return render_template(
+                    'oil_expense_form.html',
+                    form=form,
+                    rec=rec if rec and rec.id else None,
+                    title='Edit Oil Expense' if rec else 'Add Oil Expense',
+                    products_for_oil=products_for_oil,
+                    workspace_parties=workspace_parties,
+                    selected_party_id=selected_party_id,
+                    entered_total_bill=entered_total_bill,
+                    total_bill_error=total_bill_error,
+                    party_error=party_error,
+                )
+
+            rec.workspace_party_id = selected_party_id_int
+            rec.total_bill_amount = total_bill_amount
+            expense_by_val = form.expense_by.data or ''
+            oil_payment_type = 'Credit' if selected_party_id_int else 'Cash'
+            if oil_payment_type == 'Cash':
+                expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
+            selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
+            oil_je = _workspace_post_expense_journal(
                 employee_id=workspace_employee_id,
-                vehicle_id=vehicle_id,
+                reference_type='OilExpense',
+                reference_id=rec.id,
                 expense_date=expense_date,
-                card_swipe_date=card_swipe_date,
-                previous_reading=prev_reading,
-                current_reading=curr_reading,
-                km=km,
-                remarks=remarks
+                amount=items_total,
+                description=f'Oil expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                category_code='Oil',
+                workspace_party_id=selected_party_id_int if oil_payment_type == 'Credit' else None,
+                credit_account_id=(selected_credit_account_id if oil_payment_type == 'Cash' else None),
             )
-            db.session.add(rec)
-        db.session.flush()
-
-        if rec.id:
-            rec.district_id = form.district_id.data or None
-            rec.project_id = form.project_id.data or None
-            rec.employee_id = workspace_employee_id
-            rec.vehicle_id = vehicle_id
-            rec.expense_date = expense_date
-            rec.card_swipe_date = card_swipe_date
-            rec.previous_reading = prev_reading
-            rec.current_reading = curr_reading
-            rec.km = km
-            rec.remarks = remarks
-
-        for idx, it in enumerate(items_data):
-            item = OilExpenseItem(
-                oil_expense_id=rec.id,
-                product_id=it['product_id'],
-                payment_type=it['payment_type'] or None,
-                purchase_qty=it['purchase_qty'],
-                used_qty=it['used_qty'],
-                qty=it['purchase_qty'],
-                price=it['price'],
-                amount=it['amount'],
-                sort_order=idx
+            if oil_payment_type == 'Credit' and selected_party_id_int and selected_credit_account_id:
+                party_acct = ensure_workspace_counterparty_account(workspace_employee_id, party_id=selected_party_id_int)
+                if party_acct and selected_credit_account_id != party_acct.id:
+                    settle_amount = Decimal(str(items_total or 0))
+                    if settle_amount > 0:
+                        workspace_create_journal_entry(
+                            employee_id=workspace_employee_id,
+                            entry_type='Transfer',
+                            entry_date=expense_date or pk_date(),
+                            description=f'Oil credit settlement vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                            lines=[
+                                {
+                                    'account_id': party_acct.id,
+                                    'debit': settle_amount,
+                                    'credit': 0,
+                                    'description': 'Party payable settled',
+                                },
+                                {
+                                    'account_id': selected_credit_account_id,
+                                    'debit': 0,
+                                    'credit': settle_amount,
+                                    'description': 'Paid via selected Expense By account',
+                                },
+                            ],
+                            reference_type='OilExpense',
+                            reference_id=rec.id,
+                            created_by_user_id=session.get('user_id'),
+                            category='Oil',
+                        )
+            _workspace_sync_regular_expense(
+                employee_id=workspace_employee_id,
+                reference_type='OilExpense',
+                reference_id=rec.id,
+                expense_date=expense_date,
+                amount=items_total,
+                description=f'Oil expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                expense_type='Oil Expense',
+                payment_mode=oil_payment_type,
+                category='Oil',
+                workspace_party_id=selected_party_id_int if oil_payment_type == 'Credit' else None,
+                journal_entry_id=(oil_je.id if oil_je else None),
             )
-            db.session.add(item)
-        db.session.flush()
-        _apply_oil_expense_items_balance(rec.items.all(), reverse=False)
-        _workspace_reverse_expense_journals('OilExpense', rec.id, workspace_employee_id)
-        items_total = sum(float(it.amount or 0) for it in rec.items)
-        if total_bill_amount is None:
-            total_bill_error = 'Total Bill Amount is required.'
-        elif abs(float(total_bill_amount) - float(items_total)) > 0.01:
-            total_bill_error = 'Total Bill Amount must match product lines total.'
-
-        if total_bill_error or party_error:
-            db.session.rollback()
-            if total_bill_error:
-                flash(total_bill_error, 'danger')
-            if party_error:
-                flash(party_error, 'danger')
-            return render_template(
-                'oil_expense_form.html',
-                form=form,
-                rec=rec if rec and rec.id else None,
-                title='Edit Oil Expense' if rec else 'Add Oil Expense',
-                products_for_oil=products_for_oil,
-                workspace_parties=workspace_parties,
-                selected_party_id=selected_party_id,
-                entered_total_bill=entered_total_bill,
-                total_bill_error=total_bill_error,
-                party_error=party_error,
-            )
-
-        rec.workspace_party_id = selected_party_id_int
-        rec.total_bill_amount = total_bill_amount
-        expense_by_val = form.expense_by.data or ''
-        oil_payment_type = 'Credit' if selected_party_id_int else 'Cash'
-        if oil_payment_type == 'Cash':
-            expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
-        selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
-        oil_je = _workspace_post_expense_journal(
-            employee_id=workspace_employee_id,
-            reference_type='OilExpense',
-            reference_id=rec.id,
-            expense_date=expense_date,
-            amount=items_total,
-            description=f'Oil expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
-            category_code='Oil',
-            workspace_party_id=selected_party_id_int if oil_payment_type == 'Credit' else None,
-            credit_account_id=(selected_credit_account_id if oil_payment_type == 'Cash' else None),
-        )
-        if oil_payment_type == 'Credit' and selected_party_id_int and selected_credit_account_id:
-            party_acct = ensure_workspace_counterparty_account(workspace_employee_id, party_id=selected_party_id_int)
-            if party_acct and selected_credit_account_id != party_acct.id:
-                settle_amount = Decimal(str(items_total or 0))
-                if settle_amount > 0:
-                    workspace_create_journal_entry(
-                        employee_id=workspace_employee_id,
-                        entry_type='Transfer',
-                        entry_date=expense_date or pk_date(),
-                        description=f'Oil credit settlement vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
-                        lines=[
-                            {
-                                'account_id': party_acct.id,
-                                'debit': settle_amount,
-                                'credit': 0,
-                                'description': 'Party payable settled',
-                            },
-                            {
-                                'account_id': selected_credit_account_id,
-                                'debit': 0,
-                                'credit': settle_amount,
-                                'description': 'Paid via selected Expense By account',
-                            },
-                        ],
-                        reference_type='OilExpense',
-                        reference_id=rec.id,
-                        created_by_user_id=session.get('user_id'),
-                        category='Oil',
-                    )
-        _workspace_sync_regular_expense(
-            employee_id=workspace_employee_id,
-            reference_type='OilExpense',
-            reference_id=rec.id,
-            expense_date=expense_date,
-            amount=items_total,
-            description=f'Oil expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
-            expense_type='Oil Expense',
-            payment_mode=oil_payment_type,
-            category='Oil',
-            workspace_party_id=selected_party_id_int if oil_payment_type == 'Credit' else None,
-            journal_entry_id=(oil_je.id if oil_je else None),
-        )
-        db.session.commit()
-
-        allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
-        allowed_video = {'video/mp4', 'video/webm', 'video/quicktime'}
-        files = request.files.getlist('attachments')
-        if files:
-            subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'oil_expense', str(rec.id))
-            os.makedirs(subdir, exist_ok=True)
-            for f in files:
-                if not f or not f.filename:
-                    continue
-                fn = secure_filename(f.filename)
-                if not fn:
-                    continue
-                ext = os.path.splitext(fn)[1].lower()
-                content_type = f.content_type or ''
-                if content_type in allowed_image or ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
-                    file_type = 'image'
-                elif content_type in allowed_video or ext in {'.mp4', '.webm', '.mov'}:
-                    file_type = 'video'
-                else:
-                    continue
-                base, ext = os.path.splitext(fn)
-                unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
-                path = os.path.join(subdir, unique)
-                f.save(path)
-                rel_path = os.path.join('oil_expense', str(rec.id), unique)
-                att = OilExpenseAttachment(oil_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
-                db.session.add(att)
-
             db.session.commit()
 
-        flash('Oil expense saved.', 'success')
-        return redirect(url_for('oil_expense_list'))
+            allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+            allowed_video = {'video/mp4', 'video/webm', 'video/quicktime'}
+            files = request.files.getlist('attachments')
+            if files:
+                subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'oil_expense', str(rec.id))
+                os.makedirs(subdir, exist_ok=True)
+                for f in files:
+                    if not f or not f.filename:
+                        continue
+                    fn = secure_filename(f.filename)
+                    if not fn:
+                        continue
+                    ext = os.path.splitext(fn)[1].lower()
+                    content_type = f.content_type or ''
+                    if content_type in allowed_image or ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
+                        file_type = 'image'
+                    elif content_type in allowed_video or ext in {'.mp4', '.webm', '.mov'}:
+                        file_type = 'video'
+                    else:
+                        continue
+                    base, ext = os.path.splitext(fn)
+                    unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
+                    path = os.path.join(subdir, unique)
+                    f.save(path)
+                    rel_path = os.path.join('oil_expense', str(rec.id), unique)
+                    att = OilExpenseAttachment(oil_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
+                    db.session.add(att)
+
+                db.session.commit()
+
+            flash('Oil expense saved.', 'success')
+            return redirect(url_for('oil_expense_list'))
+        except Exception as _oil_save_exc:
+            db.session.rollback()
+            import traceback as _tb
+            _err_detail = _tb.format_exc()
+            app.logger.error('OIL EDIT SAVE ERROR:\n%s', _err_detail)
+            return f'<h3>Oil Edit Save Debug</h3><pre>{_err_detail}</pre>', 500
     return render_template(
         'oil_expense_form.html',
         form=form,
@@ -18262,148 +18276,152 @@ def maintenance_expense_form(pk=None):
                 workspace_parties=workspace_parties,
             )
 
-        if rec:
-            rec.items.delete()
-        else:
-            rec = MaintenanceExpense(
-                district_id=form.district_id.data or None,
-                project_id=form.project_id.data or None,
+        try:
+            if rec:
+                rec.items.delete()
+            else:
+                rec = MaintenanceExpense(
+                    district_id=form.district_id.data or None,
+                    project_id=form.project_id.data or None,
+                    employee_id=workspace_employee_id,
+                    vehicle_id=vehicle_id,
+                    expense_date=expense_date,
+                    current_reading=curr_reading,
+                    previous_reading=None,
+                    km=None,
+                    job_category=job_category,
+                    job_interval_mode=job_interval_mode,
+                    payment_type=payment_type,
+                    workspace_party_id=(workspace_party_id if payment_type == 'Credit' else None),
+                    total_bill_amount=entered_total_bill_num,
+                    remarks=remarks
+                )
+                db.session.add(rec)
+            db.session.flush()
+            if rec.id:
+                rec.district_id = form.district_id.data or None
+                rec.project_id = form.project_id.data or None
+                rec.employee_id = workspace_employee_id
+                rec.vehicle_id = vehicle_id
+                rec.expense_date = expense_date
+                rec.current_reading = curr_reading
+                rec.previous_reading = None
+                rec.km = None
+                rec.job_category = job_category
+                rec.job_interval_mode = job_interval_mode
+                rec.payment_type = payment_type
+                rec.workspace_party_id = workspace_party_id if payment_type == 'Credit' else None
+                rec.total_bill_amount = entered_total_bill_num
+                rec.remarks = remarks
+            for idx, it in enumerate(items_data):
+                item = MaintenanceExpenseItem(
+                    maintenance_expense_id=rec.id,
+                    product_id=it['product_id'],
+                    qty=it['qty'],
+                    price=it['price'],
+                    amount=it['amount'],
+                    sort_order=idx
+                )
+                db.session.add(item)
+            _workspace_reverse_expense_journals('MaintenanceExpense', rec.id, workspace_employee_id)
+            expense_by_val = form.expense_by.data or ''
+            if payment_type == 'Cash':
+                expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
+            selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
+
+            maintenance_je = _workspace_post_expense_journal(
                 employee_id=workspace_employee_id,
-                vehicle_id=vehicle_id,
+                reference_type='MaintenanceExpense',
+                reference_id=rec.id,
                 expense_date=expense_date,
-                current_reading=curr_reading,
-                previous_reading=None,
-                km=None,
-                job_category=job_category,
-                job_interval_mode=job_interval_mode,
-                payment_type=payment_type,
-                workspace_party_id=(workspace_party_id if payment_type == 'Credit' else None),
-                total_bill_amount=entered_total_bill_num,
-                remarks=remarks
+                amount=items_total,
+                description=f'Maintenance expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                category_code='Maintenance',
+                workspace_party_id=workspace_party_id if payment_type == 'Credit' else None,
+                credit_account_id=(selected_credit_account_id if payment_type == 'Cash' else None),
             )
-            db.session.add(rec)
-        db.session.flush()
-        if rec.id:
-            rec.district_id = form.district_id.data or None
-            rec.project_id = form.project_id.data or None
-            rec.employee_id = workspace_employee_id
-            rec.vehicle_id = vehicle_id
-            rec.expense_date = expense_date
-            rec.current_reading = curr_reading
-            rec.previous_reading = None
-            rec.km = None
-            rec.job_category = job_category
-            rec.job_interval_mode = job_interval_mode
-            rec.payment_type = payment_type
-            rec.workspace_party_id = workspace_party_id if payment_type == 'Credit' else None
-            rec.total_bill_amount = entered_total_bill_num
-            rec.remarks = remarks
-        for idx, it in enumerate(items_data):
-            item = MaintenanceExpenseItem(
-                maintenance_expense_id=rec.id,
-                product_id=it['product_id'],
-                qty=it['qty'],
-                price=it['price'],
-                amount=it['amount'],
-                sort_order=idx
+
+            if payment_type == 'Credit' and workspace_party_id and selected_credit_account_id:
+                party_acct = ensure_workspace_counterparty_account(workspace_employee_id, party_id=workspace_party_id)
+                if party_acct and selected_credit_account_id != party_acct.id:
+                    settle_amount = Decimal(str(items_total or 0))
+                    if settle_amount > 0:
+                        workspace_create_journal_entry(
+                            employee_id=workspace_employee_id,
+                            entry_type='Transfer',
+                            entry_date=expense_date or pk_date(),
+                            description=f'Maintenance credit settlement vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                            lines=[
+                                {
+                                    'account_id': party_acct.id,
+                                    'debit': settle_amount,
+                                    'credit': 0,
+                                    'description': 'Party payable settled',
+                                },
+                                {
+                                    'account_id': selected_credit_account_id,
+                                    'debit': 0,
+                                    'credit': settle_amount,
+                                    'description': 'Paid via selected Expense By account',
+                                },
+                            ],
+                            reference_type='MaintenanceExpense',
+                            reference_id=rec.id,
+                            created_by_user_id=session.get('user_id'),
+                            category='Maintenance',
+                        )
+            _workspace_sync_regular_expense(
+                employee_id=workspace_employee_id,
+                reference_type='MaintenanceExpense',
+                reference_id=rec.id,
+                expense_date=expense_date,
+                amount=items_total,
+                description=f'Maintenance expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                expense_type='Maintenance Expense',
+                payment_mode=(payment_type or 'Cash'),
+                category='Maintenance',
+                workspace_party_id=workspace_party_id if payment_type == 'Credit' else None,
+                journal_entry_id=(maintenance_je.id if maintenance_je else None),
             )
-            db.session.add(item)
-        _workspace_reverse_expense_journals('MaintenanceExpense', rec.id, workspace_employee_id)
-        expense_by_val = form.expense_by.data or ''
-        if payment_type == 'Cash':
-            expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
-        selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
-
-        maintenance_je = _workspace_post_expense_journal(
-            employee_id=workspace_employee_id,
-            reference_type='MaintenanceExpense',
-            reference_id=rec.id,
-            expense_date=expense_date,
-            amount=items_total,
-            description=f'Maintenance expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
-            category_code='Maintenance',
-            workspace_party_id=workspace_party_id if payment_type == 'Credit' else None,
-            credit_account_id=(selected_credit_account_id if payment_type == 'Cash' else None),
-        )
-
-        # Credit flow:
-        # 1) Expense booked against party (payable)
-        # 2) If Expense By account is selected, immediately settle party against that account.
-        if payment_type == 'Credit' and workspace_party_id and selected_credit_account_id:
-            party_acct = ensure_workspace_counterparty_account(workspace_employee_id, party_id=workspace_party_id)
-            if party_acct and selected_credit_account_id != party_acct.id:
-                settle_amount = Decimal(str(items_total or 0))
-                if settle_amount > 0:
-                    workspace_create_journal_entry(
-                        employee_id=workspace_employee_id,
-                        entry_type='Transfer',
-                        entry_date=expense_date or pk_date(),
-                        description=f'Maintenance credit settlement vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
-                        lines=[
-                            {
-                                'account_id': party_acct.id,
-                                'debit': settle_amount,
-                                'credit': 0,
-                                'description': 'Party payable settled',
-                            },
-                            {
-                                'account_id': selected_credit_account_id,
-                                'debit': 0,
-                                'credit': settle_amount,
-                                'description': 'Paid via selected Expense By account',
-                            },
-                        ],
-                        reference_type='MaintenanceExpense',
-                        reference_id=rec.id,
-                        created_by_user_id=session.get('user_id'),
-                        category='Maintenance',
-                    )
-        _workspace_sync_regular_expense(
-            employee_id=workspace_employee_id,
-            reference_type='MaintenanceExpense',
-            reference_id=rec.id,
-            expense_date=expense_date,
-            amount=items_total,
-            description=f'Maintenance expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
-            expense_type='Maintenance Expense',
-            payment_mode=(payment_type or 'Cash'),
-            category='Maintenance',
-            workspace_party_id=workspace_party_id if payment_type == 'Credit' else None,
-            journal_entry_id=(maintenance_je.id if maintenance_je else None),
-        )
-        db.session.commit()
-
-        allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
-        allowed_video = {'video/mp4', 'video/webm', 'video/quicktime'}
-        files = request.files.getlist('attachments')
-        if files:
-            subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'maintenance_expense', str(rec.id))
-            os.makedirs(subdir, exist_ok=True)
-            for f in files:
-                if not f or not f.filename:
-                    continue
-                fn = secure_filename(f.filename)
-                if not fn:
-                    continue
-                ext = os.path.splitext(fn)[1].lower()
-                content_type = f.content_type or ''
-                if content_type in allowed_image or ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
-                    file_type = 'image'
-                elif content_type in allowed_video or ext in {'.mp4', '.webm', '.mov'}:
-                    file_type = 'video'
-                else:
-                    continue
-                base, ext = os.path.splitext(fn)
-                unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
-                path = os.path.join(subdir, unique)
-                f.save(path)
-                rel_path = os.path.join('maintenance_expense', str(rec.id), unique)
-                att = MaintenanceExpenseAttachment(maintenance_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
-                db.session.add(att)
-
             db.session.commit()
-        flash('Maintenance expense saved.', 'success')
-        return redirect(url_for('maintenance_expense_list'))
+
+            allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+            allowed_video = {'video/mp4', 'video/webm', 'video/quicktime'}
+            files = request.files.getlist('attachments')
+            if files:
+                subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'maintenance_expense', str(rec.id))
+                os.makedirs(subdir, exist_ok=True)
+                for f in files:
+                    if not f or not f.filename:
+                        continue
+                    fn = secure_filename(f.filename)
+                    if not fn:
+                        continue
+                    ext = os.path.splitext(fn)[1].lower()
+                    content_type = f.content_type or ''
+                    if content_type in allowed_image or ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
+                        file_type = 'image'
+                    elif content_type in allowed_video or ext in {'.mp4', '.webm', '.mov'}:
+                        file_type = 'video'
+                    else:
+                        continue
+                    base, ext = os.path.splitext(fn)
+                    unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
+                    path = os.path.join(subdir, unique)
+                    f.save(path)
+                    rel_path = os.path.join('maintenance_expense', str(rec.id), unique)
+                    att = MaintenanceExpenseAttachment(maintenance_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
+                    db.session.add(att)
+
+                db.session.commit()
+            flash('Maintenance expense saved.', 'success')
+            return redirect(url_for('maintenance_expense_list'))
+        except Exception as _maint_save_exc:
+            db.session.rollback()
+            import traceback as _tb
+            _err_detail = _tb.format_exc()
+            app.logger.error('MAINTENANCE SAVE ERROR:\n%s', _err_detail)
+            return f'<h3>Maintenance Save Debug</h3><pre>{_err_detail}</pre>', 500
     elif request.method == 'POST':
         if form.errors:
             flash('Form save nahi hua. Required fields check karein.', 'danger')
