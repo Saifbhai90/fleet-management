@@ -221,3 +221,44 @@ def upload_binary_file(
             last_exc = e
     raise last_exc or RuntimeError("Unknown error uploading binary file to R2")
 
+
+# Browser direct-upload (presigned PUT) — extension whitelist must match routes._add_expense_attachments_from_request
+_EXPENSE_DIRECT_UPLOAD_EXTS = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm", ".mov"})
+_EXPENSE_DIRECT_UPLOAD_FOLDERS = frozenset({"maintenance_expense", "fuel_expense", "oil_expense"})
+
+
+def expense_direct_upload_folder_ok(folder: str) -> bool:
+    return (folder or "").strip() in _EXPENSE_DIRECT_UPLOAD_FOLDERS
+
+
+def build_expense_object_key(folder: str, original_filename: str) -> tuple[str, str]:
+    """
+    Build a unique R2 object key under folder. Returns (key, safe_display_name).
+
+    Raises ValueError if extension is not allowed.
+    """
+    folder = (folder or "").strip().rstrip("/")
+    if folder not in _EXPENSE_DIRECT_UPLOAD_FOLDERS:
+        raise ValueError("Invalid upload folder")
+    fn = secure_filename(original_filename) or "file"
+    ext = os.path.splitext(fn)[1].lower()
+    if ext not in _EXPENSE_DIRECT_UPLOAD_EXTS:
+        raise ValueError("Unsupported file type for direct upload")
+    uid = uuid.uuid4().hex
+    key = f"{folder}/{uid}{ext}"
+    return key, fn
+
+
+def presigned_put_object_url(key: str, content_type: str, expires_in: int = 3600) -> str:
+    """Return a presigned URL for HTTP PUT. Caller must send same Content-Type header on PUT."""
+    client = _get_s3_client()
+    return client.generate_presigned_url(
+        ClientMethod="put_object",
+        Params={
+            "Bucket": R2_BUCKET_NAME,
+            "Key": key,
+            "ContentType": (content_type or "application/octet-stream").strip() or "application/octet-stream",
+        },
+        ExpiresIn=max(60, min(int(expires_in or 3600), 86400)),
+    )
+

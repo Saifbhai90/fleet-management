@@ -68,10 +68,10 @@ import xlsxwriter
 from sqlalchemy import func, text, inspect, or_, cast, and_
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, pk_now, pk_date, pk_time
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
-from flask_wtf.csrf import CSRFError
+from flask_wtf.csrf import CSRFError, validate_csrf
 from werkzeug.security import generate_password_hash
 import re
 import os
@@ -1173,6 +1173,51 @@ def _add_expense_attachments_from_request(files, *, r2_folder, attachment_model,
         except Exception as ex:
             app.logger.warning('Expense attachment skipped (%s): %s', fn, ex)
             failed.append(fn)
+    return failed
+
+
+def _add_expense_attachments_direct_client(payload, *, attachment_model, fk_kwargs, folder_prefix):
+    """
+    Persist attachment rows after the browser uploaded objects via presigned PUT to R2.
+    Validates that public_url matches this app's R2_PUBLIC_URL + key and key prefix.
+    """
+    failed = []
+    if not isinstance(payload, list):
+        return ['Invalid attachment payload']
+    try:
+        import r2_storage as _r2
+        base = _r2.R2_PUBLIC_URL.rstrip('/')
+    except Exception:
+        return ['R2 not configured']
+    prefix = (folder_prefix or '').strip().rstrip('/') + '/'
+    for item in payload:
+        if not isinstance(item, dict):
+            failed.append('invalid row')
+            continue
+        key = (item.get('key') or '').strip()
+        public_url = (item.get('public_url') or '').strip()
+        ft = (item.get('file_type') or '').strip().lower()
+        orig = ((item.get('original_name') or '')[:255]).strip() or None
+        if ft not in ('image', 'video'):
+            failed.append(orig or key or 'bad file_type')
+            continue
+        if not key.startswith(prefix):
+            failed.append(orig or 'bad key prefix')
+            continue
+        if f'{base}/{key}' != public_url:
+            failed.append(orig or key or 'url mismatch')
+            continue
+        try:
+            row = attachment_model(
+                file_path=public_url,
+                file_type=ft,
+                original_name=orig,
+                **fk_kwargs,
+            )
+            db.session.add(row)
+        except Exception as ex:
+            app.logger.warning('Direct attachment row failed (%s): %s', key, ex)
+            failed.append(orig or key)
     return failed
 
 
@@ -18099,6 +18144,64 @@ def api_maintenance_expense_products():
     return jsonify([{'id': p.id, 'name': p.name} for p in products])
 
 
+@app.route('/api/expense-upload/presign', methods=['POST'])
+def api_expense_upload_presign():
+    """Return presigned PUT URLs so the browser can upload expense media directly to R2 (bypasses Render)."""
+    if not session.get('user_id'):
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    try:
+        validate_csrf(request.headers.get('X-CSRFToken'))
+    except Exception:
+        return jsonify({'ok': False, 'error': 'csrf'}), 400
+    if not _expense_attachment_r2_ready():
+        return jsonify({'ok': False, 'error': 'r2_unconfigured'}), 503
+    data = request.get_json(silent=True) or {}
+    folder = (data.get('folder') or '').strip()
+    if folder not in ('maintenance_expense', 'fuel_expense', 'oil_expense'):
+        return jsonify({'ok': False, 'error': 'invalid_folder'}), 400
+    files_meta = data.get('files')
+    if not isinstance(files_meta, list) or not files_meta:
+        return jsonify({'ok': False, 'error': 'files_required'}), 400
+    if len(files_meta) > 35:
+        return jsonify({'ok': False, 'error': 'batch_too_large', 'max': 35}), 400
+    from r2_storage import build_expense_object_key, presigned_put_object_url, R2_PUBLIC_URL
+    out = []
+    try:
+        for meta in files_meta:
+            if not isinstance(meta, dict):
+                continue
+            name = (meta.get('name') or '').strip()
+            ct = (meta.get('content_type') or 'application/octet-stream').strip() or 'application/octet-stream'
+            if not name:
+                continue
+            key, safe_name = build_expense_object_key(folder, name)
+            upload_url = presigned_put_object_url(key, ct, expires_in=3600)
+            ext = os.path.splitext(key)[1].lower()
+            if ext in {'.mp4', '.webm', '.mov'}:
+                ftype = 'video'
+            elif ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
+                ftype = 'image'
+            else:
+                continue
+            out.append({
+                'key': key,
+                'upload_url': upload_url,
+                'public_url': f"{R2_PUBLIC_URL.rstrip('/')}/{key}",
+                'content_type': ct,
+                'original_name': safe_name,
+                'file_type': ftype,
+            })
+    except ValueError as ve:
+        return jsonify({'ok': False, 'error': str(ve)}), 400
+    except Exception:
+        app.logger.exception('api_expense_upload_presign')
+        return jsonify({'ok': False, 'error': 'presign_failed'}), 500
+    return jsonify({'ok': True, 'items': out})
+
+
 @app.route('/maintenance-expenses')
 def maintenance_expense_list():
     _guard = _require_workspace_employee_for_expense_management()
@@ -18151,7 +18254,7 @@ def maintenance_expense_list():
     form.project_id.data = project_id
     form.vehicle_id.data = vehicle_id
 
-    query = MaintenanceExpense.query.filter(
+    query = MaintenanceExpense.query.options(selectinload(MaintenanceExpense.attachments)).filter(
         MaintenanceExpense.expense_date >= from_d,
         MaintenanceExpense.expense_date <= to_d
     )
@@ -18199,6 +18302,7 @@ def maintenance_expense_form(pk=None):
     if _guard:
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
+    maintenance_direct_r2 = _expense_attachment_r2_ready()
     default_district_id = _workspace_employee_default_district_id(workspace_employee_id)
     rec = MaintenanceExpense.query.get_or_404(pk) if pk else None
     if rec and workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
@@ -18260,6 +18364,7 @@ def maintenance_expense_form(pk=None):
                 selected_payment_type=selected_payment_type,
                 selected_party_id=selected_party_id,
                 workspace_parties=workspace_parties,
+                maintenance_direct_r2=maintenance_direct_r2,
             )
         expense_date = form.expense_date.data
         curr_reading = form.current_reading.data
@@ -18305,6 +18410,7 @@ def maintenance_expense_form(pk=None):
                 selected_payment_type=selected_payment_type,
                 selected_party_id=selected_party_id,
                 workspace_parties=workspace_parties,
+                maintenance_direct_r2=maintenance_direct_r2,
             )
 
         product_ids = request.form.getlist('product_id')
@@ -18353,6 +18459,7 @@ def maintenance_expense_form(pk=None):
                 selected_payment_type=selected_payment_type,
                 selected_party_id=selected_party_id,
                 workspace_parties=workspace_parties,
+                maintenance_direct_r2=maintenance_direct_r2,
             )
 
         if abs(items_total - entered_total_bill_num) > 0.01:
@@ -18371,6 +18478,7 @@ def maintenance_expense_form(pk=None):
                 selected_payment_type=selected_payment_type,
                 selected_party_id=selected_party_id,
                 workspace_parties=workspace_parties,
+                maintenance_direct_r2=maintenance_direct_r2,
             )
 
         try:
@@ -18482,8 +18590,28 @@ def maintenance_expense_form(pk=None):
             )
             db.session.commit()
 
+            direct_raw = (request.form.get('attachments_direct_json') or '').strip()
             files = request.files.getlist('attachments')
-            if files:
+            has_new_files = bool(files and any(f and getattr(f, 'filename', None) for f in files))
+            if direct_raw and not has_new_files:
+                try:
+                    payload = json.loads(direct_raw)
+                    failed_att = _add_expense_attachments_direct_client(
+                        payload,
+                        attachment_model=MaintenanceExpenseAttachment,
+                        fk_kwargs={'maintenance_expense_id': rec.id},
+                        folder_prefix='maintenance_expense',
+                    )
+                    db.session.commit()
+                    if failed_att:
+                        flash('Kuch direct-upload attachments save nahi ho sakin: ' + '; '.join(failed_att), 'warning')
+                except json.JSONDecodeError:
+                    flash('Attachments JSON invalid — dubara upload try karein.', 'warning')
+                except Exception:
+                    db.session.rollback()
+                    app.logger.exception('Maintenance direct attachment save')
+                    flash('Maintenance save ho gaya lekin cloud attachment links save nahi ho sakin.', 'warning')
+            elif has_new_files:
                 try:
                     failed_att = _add_expense_attachments_from_request(
                         files,
@@ -18521,6 +18649,7 @@ def maintenance_expense_form(pk=None):
         selected_payment_type=selected_payment_type,
         selected_party_id=selected_party_id,
         workspace_parties=workspace_parties,
+        maintenance_direct_r2=maintenance_direct_r2,
     )
 
 

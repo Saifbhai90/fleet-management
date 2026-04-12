@@ -88,6 +88,7 @@
               <th>Payment Type</th>
               <th>Party Name</th>
               <th>Total Bill</th>
+              <th class="text-center">Media</th>
               <th class="text-center pe-3">Actions</th>
             </tr>
           </thead>
@@ -121,6 +122,26 @@
               <td>{{ r.payment_type or '-' }}</td>
               <td>{{ r.workspace_party.name if r.workspace_party else '-' }}</td>
               <td>{{ "%.2f"|format((r.total_bill_amount or 0)|float) if r.total_bill_amount is not none else '-' }}</td>
+              <td class="text-center">
+                {% set ns = namespace(cloud=0, local=0, n=0) %}
+                {% for a in r.attachments %}
+                  {% set ns.n = ns.n + 1 %}
+                  {% if a.file_path and (a.file_path.startswith('http://') or a.file_path.startswith('https://')) %}
+                    {% set ns.cloud = ns.cloud + 1 %}
+                  {% elif a.file_path %}
+                    {% set ns.local = ns.local + 1 %}
+                  {% endif %}
+                {% endfor %}
+                {% if ns.n == 0 %}
+                  <span class="text-muted" title="No attachments">—</span>
+                {% elif ns.local == 0 %}
+                  <span class="badge bg-success" title="{{ ns.n }} file(s) on Cloudflare / R2">Cloud</span>
+                {% elif ns.cloud == 0 %}
+                  <span class="badge bg-warning text-dark" title="{{ ns.n }} file(s) on app server disk">Local</span>
+                {% else %}
+                  <span class="badge bg-info text-dark" title="Some cloud, some local">Mixed</span>
+                {% endif %}
+              </td>
               <td class="text-center pe-3">
                 <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                 <form action="{{ url_for('maintenance_expense_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this maintenance entry?');">
@@ -131,7 +152,7 @@
             </tr>
             {% else %}
             <tr id="maintenanceNoDataRow">
-              <td colspan="14" class="text-center py-5 text-muted">
+              <td colspan="15" class="text-center py-5 text-muted">
                 <i class="bi bi-wrench display-6 d-block mb-2"></i>
                 No maintenance entries. <a href="{{ url_for('maintenance_expense_form') }}">Add Maintenance</a>
               </td>
