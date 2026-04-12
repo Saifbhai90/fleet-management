@@ -300,7 +300,7 @@
       <div class="row g-3 mb-3">
         <div class="col-md-6 field-group">
           <label class="form-label fw-bold">Expense By (Workspace COA)</label>
-          {{ form.expense_by(class="form-select search-select", id="expenseBySelect") }}
+          {{ form.expense_by(class="form-select search-select", id="expenseBySelect", tabindex="-1") }}
           {% if form.expense_by.errors %}
             <div class="text-danger small mt-1">{{ form.expense_by.errors[0] }}</div>
           {% endif %}
@@ -309,7 +309,7 @@
       </div>
       <div class="action-bar">
         <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-secondary">Cancel</a>
-        {{ form.submit(class="btn btn-primary") }}
+        {{ form.submit(class="btn btn-primary", id="maintSaveBtn") }}
       </div>
     </div>
   </form>
@@ -401,7 +401,17 @@ document.addEventListener('DOMContentLoaded', function() {
   var cashExpenseByValue = '';
   var maintAttachmentFiles = document.getElementById('maintAttachmentFiles');
   var maintAttachmentPasteHint = document.getElementById('maintAttachmentPasteHint');
+  var maintSaveBtn = document.getElementById('maintSaveBtn');
   var maintPriceHistoryPanel = document.getElementById('maintPriceHistoryPanel');
+  function focusEntryProduct() {
+    if (!entryProductSelect) return;
+    if (entryProductSelect.tomselect) {
+      entryProductSelect.tomselect.focus();
+      return;
+    }
+    entryProductSelect.focus();
+  }
+
   var maintSamePartyRows = document.getElementById('maintSamePartyRows');
   var maintOtherPartyRows = document.getElementById('maintOtherPartyRows');
   var maintSamePartyEmpty = document.getElementById('maintSamePartyEmpty');
@@ -571,12 +581,16 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function clearEntryRow() {
-    entryProductSelect.value = '';
+    if (entryProductSelect.tomselect) {
+      entryProductSelect.tomselect.setValue('', true);
+    } else {
+      entryProductSelect.value = '';
+    }
     entryQty.value = '0';
     entryPrice.value = '0';
     entryAmount.value = '';
     updateEntryAmount();
-    entryProductSelect.focus();
+    focusEntryProduct();
   }
 
   function addEntryToList() {
@@ -886,6 +900,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (maintAttachmentFiles) {
     maintAttachmentFiles.addEventListener('change', function() { updateAttachmentHint(''); });
+    maintAttachmentFiles.addEventListener('keydown', function(e) {
+      if (e.key === 'Tab' && !e.shiftKey && maintSaveBtn) {
+        e.preventDefault();
+        maintSaveBtn.focus();
+      }
+    });
     document.addEventListener('paste', function(e) {
       if (!canPasteIntoMaintenanceForm()) return;
       var items = (e.clipboardData && e.clipboardData.items) ? Array.prototype.slice.call(e.clipboardData.items) : [];
