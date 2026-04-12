@@ -375,6 +375,8 @@ def workspace_home():
     else:
         net_balance_status = "Settled"
 
+    snapshot = _workspace_dashboard_financial_snapshot(emp.id)
+
     stats = {
         "parties": WorkspaceParty.query.filter_by(employee_id=emp.id, is_active=True).count(),
         "products": WorkspaceProduct.query.filter_by(employee_id=emp.id, is_active=True).count(),
@@ -386,12 +388,125 @@ def workspace_home():
         "net_balance": net_balance,
         "net_balance_status": net_balance_status,
         "month_close_adjustment": close_credit_total,
+        "bank_balance_total": snapshot["bank_total"],
+        "receivable_total": snapshot["receivable_total"],
+        "payable_total": snapshot["payable_total"],
         "open_closes": WorkspaceMonthClose.query.filter(
             WorkspaceMonthClose.employee_id == emp.id,
             WorkspaceMonthClose.status != "Closed",
         ).count(),
     }
     return render_template("workspace/dashboard.html", employee=emp, stats=stats, scope=scope)
+
+
+def _workspace_dashboard_financial_snapshot(employee_id):
+    accounts = (
+        WorkspaceAccount.query
+        .filter_by(employee_id=employee_id, is_active=True)
+        .order_by(WorkspaceAccount.code.asc(), WorkspaceAccount.id.asc())
+        .all()
+    )
+    account_ids = [a.id for a in accounts]
+    jnl_map = {}
+    if account_ids:
+        rows = (
+            db.session.query(
+                WorkspaceJournalEntryLine.account_id,
+                db.func.coalesce(db.func.sum(WorkspaceJournalEntryLine.debit), 0),
+                db.func.coalesce(db.func.sum(WorkspaceJournalEntryLine.credit), 0),
+            )
+            .join(WorkspaceJournalEntry, WorkspaceJournalEntry.id == WorkspaceJournalEntryLine.journal_entry_id)
+            .filter(
+                WorkspaceJournalEntry.employee_id == employee_id,
+                WorkspaceJournalEntry.is_posted == True,
+                WorkspaceJournalEntryLine.account_id.in_(account_ids),
+            )
+            .group_by(WorkspaceJournalEntryLine.account_id)
+            .all()
+        )
+        for r in rows:
+            jnl_map[int(r[0])] = (Decimal(str(r[1] or 0)), Decimal(str(r[2] or 0)))
+
+    party_ids = [a.entity_id for a in accounts if a.entity_type == "party" and a.entity_id]
+    driver_ids = [a.entity_id for a in accounts if a.entity_type == "driver" and a.entity_id]
+    party_map = {p.id: p for p in WorkspaceParty.query.filter(WorkspaceParty.id.in_(party_ids)).all()} if party_ids else {}
+    driver_map = {d.id: d for d in Driver.query.filter(Driver.id.in_(driver_ids)).all()} if driver_ids else {}
+
+    bank_keywords = (
+        "bank", "hbl", "ubl", "mcb", "meezan", "alfalah", "allied", "askari", "faysal", "soneri", "habib",
+        "easypaisa", "jazzcash", "jazz cash", "wallet",
+    )
+
+    def _signed_balance(acc, opening, debit, credit):
+        if (acc.account_type or "") in ("Asset", "Expense"):
+            return opening + debit - credit
+        return opening + credit - debit
+
+    def _side(acc_type, bal):
+        if (acc_type or "") in ("Asset", "Expense"):
+            return "Dr" if bal >= 0 else "Cr"
+        return "Cr" if bal >= 0 else "Dr"
+
+    def _display_name(acc):
+        if acc.entity_type == "party" and acc.entity_id and acc.entity_id in party_map:
+            p = party_map[acc.entity_id]
+            p_type = (p.party_type or "").strip()
+            return f"{p.name} ({p_type})" if p_type else p.name
+        if acc.entity_type == "driver" and acc.entity_id and acc.entity_id in driver_map:
+            d = driver_map[acc.entity_id]
+            vehicle_no = d.vehicle.vehicle_no if getattr(d, "vehicle", None) else ""
+            return f"{d.name} | {vehicle_no}" if vehicle_no else d.name
+        return acc.name or "-"
+
+    bank_rows = []
+    receivable_rows = []
+    payable_rows = []
+
+    for acc in accounts:
+        opening = Decimal(str(acc.opening_balance or 0))
+        debit, credit = jnl_map.get(acc.id, (Decimal("0"), Decimal("0")))
+        balance = _signed_balance(acc, opening, debit, credit)
+        side = _side(acc.account_type, balance)
+        row = {
+            "account": acc,
+            "display_name": _display_name(acc),
+            "opening": opening,
+            "debit": debit,
+            "credit": credit,
+            "balance": balance,
+            "side": side,
+            "abs_balance": abs(balance),
+        }
+
+        text_blob = f"{acc.code or ''} {acc.name or ''} {acc.description or ''}".lower()
+        is_bank = (
+            (acc.account_type == "Asset")
+            and (acc.entity_type not in ("party", "driver"))
+            and any(k in text_blob for k in bank_keywords)
+        )
+        if is_bank:
+            bank_rows.append(row)
+
+        if acc.entity_type in ("party", "driver"):
+            if balance < 0:
+                rec_row = dict(row)
+                rec_row["abs_balance"] = abs(balance)
+                rec_row["side"] = "Dr"
+                receivable_rows.append(rec_row)
+            elif balance > 0:
+                pay_row = dict(row)
+                pay_row["abs_balance"] = abs(balance)
+                pay_row["side"] = "Cr"
+                payable_rows.append(pay_row)
+
+    return {
+        "bank_rows": bank_rows,
+        "receivable_rows": receivable_rows,
+        "payable_rows": payable_rows,
+        "bank_total": sum((r["balance"] for r in bank_rows), Decimal("0")),
+        "receivable_total": sum((r["abs_balance"] for r in receivable_rows), Decimal("0")),
+        "payable_total": sum((r["abs_balance"] for r in payable_rows), Decimal("0")),
+    }
 
 
 def workspace_select_employee():
@@ -2921,6 +3036,59 @@ def workspace_reports():
         expenses_by_type=expenses_by_type,
         transfer_total=transfer_total,
         month_closes=month_closes,
+    )
+
+
+def workspace_dashboard_financial_report(kind):
+    guard, emp = _workspace_guard("workspace_dashboard")
+    if guard:
+        return guard
+
+    report_kind = (kind or "").strip().lower()
+    snapshot = _workspace_dashboard_financial_snapshot(emp.id)
+    if report_kind == "bank":
+        rows = snapshot["bank_rows"]
+        total = snapshot["bank_total"]
+        title = "Balance in Bank Details"
+        subtitle = "HBL Bank, Easypaisa, JazzCash aur dusre bank/wallet accounts ka current balance."
+        icon = "bi-bank"
+        accent = "primary"
+        total_label = "Net Bank Balance"
+        csv_name = "Workspace_Bank_Balance_Details.csv"
+    elif report_kind == "receivable":
+        rows = snapshot["receivable_rows"]
+        total = snapshot["receivable_total"]
+        title = "Receivable from Parties & Drivers"
+        subtitle = "Jin party/driver se payment leni hai un ka detail breakup."
+        icon = "bi-arrow-down-circle"
+        accent = "success"
+        total_label = "Total Receivable"
+        csv_name = "Workspace_Receivable_Details.csv"
+    elif report_kind == "payable":
+        rows = snapshot["payable_rows"]
+        total = snapshot["payable_total"]
+        title = "Payable to Parties & Drivers"
+        subtitle = "Jin party/driver ko payment deni hai un ka detail breakup."
+        icon = "bi-arrow-up-circle"
+        accent = "danger"
+        total_label = "Total Payable"
+        csv_name = "Workspace_Payable_Details.csv"
+    else:
+        flash("Invalid report type.", "danger")
+        return redirect(url_for("workspace_home"))
+
+    return render_template(
+        "workspace/dashboard_financial_report.html",
+        employee=emp,
+        report_kind=report_kind,
+        rows=rows,
+        total=total,
+        title=title,
+        subtitle=subtitle,
+        icon=icon,
+        accent=accent,
+        total_label=total_label,
+        csv_name=csv_name,
     )
 
 

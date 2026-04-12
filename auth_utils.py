@@ -240,6 +240,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('workspace_ledger_transfer_detail', 'workspace_ledger'),
     ('workspace_ledger_journal_detail', 'workspace_ledger'),
     ('workspace_balance_sheet', 'workspace_reports'),
+    ('workspace_dashboard_financial_report', 'workspace_dashboard'),
     ('workspace_month_close', 'workspace_month_close'),
     ('workspace_reports', 'workspace_reports'),
     # Finance

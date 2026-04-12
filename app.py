@@ -496,7 +496,7 @@ from routes_workspace import (
     workspace_fuel_oil_opening_import, workspace_fuel_oil_opening_import_template,
     workspace_fuel_oil_month_close, workspace_fuel_oil_month_close_list, workspace_fuel_oil_month_close_reverse,
     workspace_fund_transfers_list, workspace_fund_transfer_form, workspace_fund_transfer_delete,
-    workspace_ledger, workspace_ledger_transfer_detail, workspace_ledger_journal_detail, workspace_balance_sheet, workspace_month_close, workspace_month_close_list, workspace_month_close_reverse, workspace_reports,
+    workspace_ledger, workspace_ledger_transfer_detail, workspace_ledger_journal_detail, workspace_balance_sheet, workspace_month_close, workspace_month_close_list, workspace_month_close_reverse, workspace_reports, workspace_dashboard_financial_report,
     workspace_transfer_description_suggestions_api,
 )  # noqa: E402
 
@@ -620,6 +620,7 @@ app.add_url_rule('/workspace/month-close', 'workspace_month_close', workspace_mo
 app.add_url_rule('/workspace/month-close/list', 'workspace_month_close_list', workspace_month_close_list)
 app.add_url_rule('/workspace/month-close/<int:pk>/reverse', 'workspace_month_close_reverse', workspace_month_close_reverse, methods=['POST'])
 app.add_url_rule('/workspace/reports', 'workspace_reports', workspace_reports)
+app.add_url_rule('/workspace/dashboard-report/<string:kind>', 'workspace_dashboard_financial_report', workspace_dashboard_financial_report)
 
 # ── Payroll Module ──────────────────────────────────────────────────────────
 app.add_url_rule('/payroll/salary-config', 'payroll_salary_config_list', payroll_salary_config_list)

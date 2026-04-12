@@ -90,7 +90,40 @@
             </div>
           </div>
         </div>
-        <div class="col-lg-2 col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Transfers</small><h4 class="mb-0">{{ '%.2f'|format(stats.transfers|float) }}</h4></div></div></div>
+        <div class="col-lg-2 col-md-4">
+          <a href="{{ url_for('workspace_dashboard_financial_report', kind='bank') }}" class="ws-module-card h-100 p-3">
+            <small class="text-muted">Balance in Bank</small>
+            <h4 class="mb-1 {{ 'text-danger' if (stats.bank_balance_total or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((stats.bank_balance_total or 0)|float) }}</h4>
+            <small class="text-muted">HBL / Easypaisa / JazzCash + others</small>
+          </a>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-lg-6 col-md-6">
+          <a href="{{ url_for('workspace_dashboard_financial_report', kind='receivable') }}" class="ws-module-card h-100 p-3">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <small class="text-muted">Receivable from Parties/Drivers</small>
+                <h4 class="mb-1 text-success">{{ '%.2f'|format((stats.receivable_total or 0)|float) }}</h4>
+                <small class="text-muted">Jin se payment leni hai</small>
+              </div>
+              <span class="ws-module-icon bg-success-subtle text-success"><i class="bi bi-arrow-down-circle"></i></span>
+            </div>
+          </a>
+        </div>
+        <div class="col-lg-6 col-md-6">
+          <a href="{{ url_for('workspace_dashboard_financial_report', kind='payable') }}" class="ws-module-card h-100 p-3">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <small class="text-muted">Payable to Parties/Drivers</small>
+                <h4 class="mb-1 text-danger">{{ '%.2f'|format((stats.payable_total or 0)|float) }}</h4>
+                <small class="text-muted">Jin ko payment deni hai</small>
+              </div>
+              <span class="ws-module-icon bg-danger-subtle text-danger"><i class="bi bi-arrow-up-circle"></i></span>
+            </div>
+          </a>
+        </div>
       </div>
       {% if (stats.month_close_adjustment or 0)|float > 0 %}
       <div class="small text-muted mb-3">
