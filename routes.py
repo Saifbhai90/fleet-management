@@ -17469,22 +17469,22 @@ def fuel_expense_add():
     form.fuel_pump_id.choices = [(0, '-- Select Pump --')] + [(p.id, p.name) for p in pumps]
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
     default_district_id = _workspace_employee_default_district_id(workspace_employee_id)
+    selected_district_id = request.args.get('district_id', type=int) if request.method == 'GET' else request.form.get('district_id', type=int)
+    selected_project_id = request.args.get('project_id', type=int) if request.method == 'GET' else request.form.get('project_id', type=int)
+    if request.method == 'GET' and not selected_district_id and default_district_id:
+        selected_district_id = default_district_id
+    if selected_district_id:
+        projects = Project.query.join(project_district).filter(project_district.c.district_id == selected_district_id).order_by(Project.name).all()
+        form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in projects]
+    if selected_project_id:
+        q = Vehicle.query.filter(Vehicle.project_id == selected_project_id)
+        if selected_district_id:
+            q = q.filter(Vehicle.district_id == selected_district_id)
+        vehicles = q.order_by(Vehicle.vehicle_no).all()
+        form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicles]
     if request.method == 'GET':
-        district_id = request.args.get('district_id', type=int)
-        project_id = request.args.get('project_id', type=int)
-        if not district_id and default_district_id:
-            district_id = default_district_id
-        if district_id:
-            projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
-            form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in projects]
-        if project_id:
-            q = Vehicle.query.filter(Vehicle.project_id == project_id)
-            if district_id:
-                q = q.filter(Vehicle.district_id == district_id)
-            vehicles = q.order_by(Vehicle.vehicle_no).all()
-            form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicles]
-        form.district_id.data = district_id or 0
-        form.project_id.data = project_id or 0
+        form.district_id.data = selected_district_id or 0
+        form.project_id.data = selected_project_id or 0
         if not form.fueling_date.data:
             form.fueling_date.data = pk_date()
     if request.method == 'POST' and form.validate_on_submit():
@@ -17604,6 +17604,8 @@ def fuel_expense_add():
                 flash('Fuel save ho gaya lekin files queue me add nahi ho sakin.', 'warning')
         flash('Fuel expense saved.', 'success')
         return redirect(url_for('fuel_expense_list'))
+    elif request.method == 'POST' and form.errors:
+        flash('Fuel form save nahi hua. Required fields aur selected options check karein.', 'danger')
     return render_template('fuel_expense_form.html', form=form, rec=None, title='Add Fuel Expense')
 
 
