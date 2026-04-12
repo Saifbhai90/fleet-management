@@ -246,8 +246,9 @@
         Photos / Videos
       </div>
       <div class="form-section-body">
-        <input type="file" name="attachments" multiple accept="image/*,video/*" class="form-control">
-        <small class="text-muted">Multiple images/videos can be selected.</small>
+        <input type="file" name="attachments" id="fuelAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
+        <small class="text-muted">Multiple images/videos can be selected. You can also paste with Ctrl+V.</small>
+        <div class="small text-success mt-1" id="fuelAttachmentPasteHint"></div>
         {% if rec and rec.attachments.count() %}
         <div class="mt-2">
           <strong>Existing:</strong>
@@ -297,6 +298,8 @@ document.addEventListener('DOMContentLoaded', function() {
   var meterMatched = document.getElementById('meterMatched');
   var kmDisplay = document.getElementById('kmDisplay');
   var mpgDisplay = document.getElementById('mpgDisplay');
+  var fuelAttachmentFiles = document.getElementById('fuelAttachmentFiles');
+  var fuelAttachmentPasteHint = document.getElementById('fuelAttachmentPasteHint');
   var samePumpHistoryWrap = document.getElementById('samePumpHistoryWrap');
   var allPumpHistoryWrap = document.getElementById('allPumpHistoryWrap');
   var psoRateDatePanel = document.getElementById('psoRateDatePanel');
@@ -704,6 +707,61 @@ document.addEventListener('DOMContentLoaded', function() {
   fetchPriceHistory();
   fetchPsoRateForDate();
   fetchFuelMarketScan();
+
+  function updateAttachmentHint(text) {
+    if (!fuelAttachmentPasteHint) return;
+    if (text) {
+      fuelAttachmentPasteHint.textContent = text;
+      return;
+    }
+    var count = (fuelAttachmentFiles && fuelAttachmentFiles.files) ? fuelAttachmentFiles.files.length : 0;
+    fuelAttachmentPasteHint.textContent = count ? (count + ' file(s) ready for upload.') : '';
+  }
+
+  function canPasteIntoFuelForm() {
+    var formEl = document.getElementById('fuelExpenseForm');
+    if (!formEl) return false;
+    var active = document.activeElement;
+    return !active || formEl.contains(active);
+  }
+
+  function appendPastedFiles(fileList) {
+    if (!fuelAttachmentFiles || !window.DataTransfer) return;
+    var current = Array.prototype.slice.call(fuelAttachmentFiles.files || []);
+    var dt = new DataTransfer();
+    current.forEach(function(f) { dt.items.add(f); });
+    var added = 0;
+    Array.prototype.slice.call(fileList || []).forEach(function(f) {
+      if (!f) return;
+      var ct = String(f.type || '').toLowerCase();
+      if (ct.indexOf('image/') === 0 || ct.indexOf('video/') === 0) {
+        dt.items.add(f);
+        added += 1;
+      }
+    });
+    if (added > 0) {
+      fuelAttachmentFiles.files = dt.files;
+      updateAttachmentHint(added + ' file(s) pasted from clipboard.');
+    }
+  }
+
+  if (fuelAttachmentFiles) {
+    fuelAttachmentFiles.addEventListener('change', function() { updateAttachmentHint(''); });
+    document.addEventListener('paste', function(e) {
+      if (!canPasteIntoFuelForm()) return;
+      var items = (e.clipboardData && e.clipboardData.items) ? Array.prototype.slice.call(e.clipboardData.items) : [];
+      var files = [];
+      items.forEach(function(it) {
+        if (it && it.kind === 'file') {
+          var f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      });
+      if (!files.length) return;
+      appendPastedFiles(files);
+      e.preventDefault();
+    });
+  }
 
   window.setTimeout(function() {
     if (districtSelect && districtSelect.tomselect) {

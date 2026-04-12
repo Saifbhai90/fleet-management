@@ -221,7 +221,8 @@
       <div class="form-section-header">Photos / Videos</div>
       <div class="form-section-body">
         <input type="file" name="attachments" id="maintAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
-        <small class="text-muted">Multiple images or videos allowed. Har file ~120 MB se chhoti rakhein (barri videos compress kar ke lagayen).{% if maintenance_direct_r2 %} <strong>Cloudflare par seedha upload</strong> (server par bojh kam) — R2 bucket par CORS allow karein is site ke domain ke liye.{% endif %}</small>
+        <small class="text-muted">Multiple images or videos allowed. You can also paste with Ctrl+V. Har file ~120 MB se chhoti rakhein (barri videos compress kar ke lagayen).{% if maintenance_direct_r2 %} <strong>Cloudflare par seedha upload</strong> (server par bojh kam) — R2 bucket par CORS allow karein is site ke domain ke liye.{% endif %}</small>
+        <div class="small text-success mt-1" id="maintAttachmentPasteHint"></div>
         {% if maintenance_direct_r2 %}
         <div class="form-check mt-2">
           <input class="form-check-input" type="checkbox" id="maintForceServerUpload" name="maint_force_server_upload" value="1">
@@ -356,6 +357,8 @@ document.addEventListener('DOMContentLoaded', function() {
   var taskCloseReading = null;
   var totalBillInput = document.getElementById('totalBillInput');
   var cashExpenseByValue = '';
+  var maintAttachmentFiles = document.getElementById('maintAttachmentFiles');
+  var maintAttachmentPasteHint = document.getElementById('maintAttachmentPasteHint');
 
   var productsForMaintenance = [{% for p in products_for_maintenance %}{id:{{ p.id }},name:{{ p.name | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}];
 
@@ -721,6 +724,61 @@ document.addEventListener('DOMContentLoaded', function() {
   fetchTaskReadingsForMaintenance();
   window.setTimeout(fetchTaskReadingsForMaintenance, 150);
   handlePaymentTypeBehavior();
+
+  function updateAttachmentHint(text) {
+    if (!maintAttachmentPasteHint) return;
+    if (text) {
+      maintAttachmentPasteHint.textContent = text;
+      return;
+    }
+    var count = (maintAttachmentFiles && maintAttachmentFiles.files) ? maintAttachmentFiles.files.length : 0;
+    maintAttachmentPasteHint.textContent = count ? (count + ' file(s) ready for upload.') : '';
+  }
+
+  function canPasteIntoMaintenanceForm() {
+    var formNode = document.getElementById('maintenanceExpenseForm');
+    if (!formNode) return false;
+    var active = document.activeElement;
+    return !active || formNode.contains(active);
+  }
+
+  function appendPastedFiles(fileList) {
+    if (!maintAttachmentFiles || !window.DataTransfer) return;
+    var current = Array.prototype.slice.call(maintAttachmentFiles.files || []);
+    var dt = new DataTransfer();
+    current.forEach(function(f) { dt.items.add(f); });
+    var added = 0;
+    Array.prototype.slice.call(fileList || []).forEach(function(f) {
+      if (!f) return;
+      var ct = String(f.type || '').toLowerCase();
+      if (ct.indexOf('image/') === 0 || ct.indexOf('video/') === 0) {
+        dt.items.add(f);
+        added += 1;
+      }
+    });
+    if (added > 0) {
+      maintAttachmentFiles.files = dt.files;
+      updateAttachmentHint(added + ' file(s) pasted from clipboard.');
+    }
+  }
+
+  if (maintAttachmentFiles) {
+    maintAttachmentFiles.addEventListener('change', function() { updateAttachmentHint(''); });
+    document.addEventListener('paste', function(e) {
+      if (!canPasteIntoMaintenanceForm()) return;
+      var items = (e.clipboardData && e.clipboardData.items) ? Array.prototype.slice.call(e.clipboardData.items) : [];
+      var files = [];
+      items.forEach(function(it) {
+        if (it && it.kind === 'file') {
+          var f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      });
+      if (!files.length) return;
+      appendPastedFiles(files);
+      e.preventDefault();
+    });
+  }
 });
 </script>
 <script>

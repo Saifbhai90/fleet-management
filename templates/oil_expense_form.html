@@ -208,8 +208,9 @@
     <div class="form-section">
       <div class="form-section-header">Photos / Videos</div>
       <div class="form-section-body">
-        <input type="file" name="attachments" multiple accept="image/*,video/*" class="form-control">
-        <small class="text-muted">Multiple images or videos allowed.</small>
+        <input type="file" name="attachments" id="oilAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
+        <small class="text-muted">Multiple images or videos allowed. You can also paste with Ctrl+V.</small>
+        <div class="small text-success mt-1" id="oilAttachmentPasteHint"></div>
         {% if rec and rec.attachments.count() %}
         <div class="mt-2">
           <strong>Existing:</strong>
@@ -286,6 +287,8 @@
   var totalBillInput = document.getElementById('totalBillInput');
   var partySelect = document.getElementById('partySelect');
   var expenseBySelect = document.getElementById('expenseBySelect');
+  var oilAttachmentFiles = document.getElementById('oilAttachmentFiles');
+  var oilAttachmentPasteHint = document.getElementById('oilAttachmentPasteHint');
   var cashExpenseByValue = '';
   var oilTaskStartReading = null;
   var oilTaskCloseReading = null;
@@ -593,6 +596,61 @@
       if (!validateBeforeSubmit()) {
         e.preventDefault();
       }
+    });
+  }
+
+  function updateAttachmentHint(text) {
+    if (!oilAttachmentPasteHint) return;
+    if (text) {
+      oilAttachmentPasteHint.textContent = text;
+      return;
+    }
+    var count = (oilAttachmentFiles && oilAttachmentFiles.files) ? oilAttachmentFiles.files.length : 0;
+    oilAttachmentPasteHint.textContent = count ? (count + ' file(s) ready for upload.') : '';
+  }
+
+  function canPasteIntoOilForm() {
+    var formNode = document.getElementById('oilExpenseForm');
+    if (!formNode) return false;
+    var active = document.activeElement;
+    return !active || formNode.contains(active);
+  }
+
+  function appendPastedFiles(fileList) {
+    if (!oilAttachmentFiles || !window.DataTransfer) return;
+    var current = Array.prototype.slice.call(oilAttachmentFiles.files || []);
+    var dt = new DataTransfer();
+    current.forEach(function(f) { dt.items.add(f); });
+    var added = 0;
+    Array.prototype.slice.call(fileList || []).forEach(function(f) {
+      if (!f) return;
+      var ct = String(f.type || '').toLowerCase();
+      if (ct.indexOf('image/') === 0 || ct.indexOf('video/') === 0) {
+        dt.items.add(f);
+        added += 1;
+      }
+    });
+    if (added > 0) {
+      oilAttachmentFiles.files = dt.files;
+      updateAttachmentHint(added + ' file(s) pasted from clipboard.');
+    }
+  }
+
+  if (oilAttachmentFiles) {
+    oilAttachmentFiles.addEventListener('change', function() { updateAttachmentHint(''); });
+    document.addEventListener('paste', function(e) {
+      if (!canPasteIntoOilForm()) return;
+      var items = (e.clipboardData && e.clipboardData.items) ? Array.prototype.slice.call(e.clipboardData.items) : [];
+      var files = [];
+      items.forEach(function(it) {
+        if (it && it.kind === 'file') {
+          var f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      });
+      if (!files.length) return;
+      appendPastedFiles(files);
+      e.preventDefault();
     });
   }
 })();
