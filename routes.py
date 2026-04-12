@@ -17657,7 +17657,11 @@ def oil_expense_form(pk=None):
     form = OilExpenseForm(obj=rec)
     total_bill_error = ''
     party_error = ''
-    entered_total_bill = (request.form.get('total_bill_amount') or '').strip() if request.method == 'POST' else ''
+    entered_total_bill = (
+        (request.form.get('total_bill_amount') or '').strip()
+        if request.method == 'POST'
+        else (f"{float(rec.total_bill_amount):.2f}" if rec and rec.total_bill_amount is not None else '')
+    )
     selected_party_id = (request.form.get('workspace_party_id') or '').strip() if request.method == 'POST' else ''
     workspace_parties = WorkspaceParty.query.filter_by(
         employee_id=workspace_employee_id,
@@ -17680,6 +17684,8 @@ def oil_expense_form(pk=None):
             form.project_id.data = rec.project_id
         if rec.vehicle_id:
             form.vehicle_id.data = rec.vehicle_id
+        if rec.total_bill_amount is not None:
+            entered_total_bill = f"{float(rec.total_bill_amount):.2f}"
         if getattr(rec, 'workspace_party_id', None):
             selected_party_id = str(rec.workspace_party_id)
         if getattr(rec, 'total_bill_amount', None) is not None:
@@ -18123,7 +18129,11 @@ def maintenance_expense_form(pk=None):
         return redirect(url_for('maintenance_expense_list'))
     form = MaintenanceExpenseForm(obj=rec)
     total_bill_error = ''
-    entered_total_bill = (request.form.get('total_bill_amount') or '').strip() if request.method == 'POST' else ''
+    entered_total_bill = (
+        (request.form.get('total_bill_amount') or '').strip()
+        if request.method == 'POST'
+        else (f"{float(rec.total_bill_amount):.2f}" if rec and rec.total_bill_amount is not None else '')
+    )
     party_error = ''
     selected_payment_type = (request.form.get('payment_type') or (getattr(rec, 'payment_type', None) if rec else '') or 'Cash').strip()
     selected_party_id = (request.form.get('workspace_party_id') or (str(getattr(rec, 'workspace_party_id', '') or '') if rec else '')).strip()
@@ -18148,6 +18158,8 @@ def maintenance_expense_form(pk=None):
             form.project_id.data = rec.project_id
         if rec.vehicle_id:
             form.vehicle_id.data = rec.vehicle_id
+        if rec.total_bill_amount is not None:
+            entered_total_bill = f"{float(rec.total_bill_amount):.2f}"
     elif request.method == 'GET':
         if default_district_id:
             form.district_id.data = default_district_id
@@ -18179,6 +18191,20 @@ def maintenance_expense_form(pk=None):
         job_interval_mode = (request.form.get('job_interval_mode') or '').strip().lower()
         if job_interval_mode not in ('interval_km', 'interval_day'):
             job_interval_mode = None
+        task_start_reading, task_close_reading = _fuel_expense_task_readings(vehicle_id, expense_date)
+        prev_reading = float(task_start_reading) if task_start_reading is not None else None
+        close_reading = float(task_close_reading) if task_close_reading is not None else None
+        if curr_reading is None and close_reading is not None:
+            curr_reading = close_reading
+        try:
+            curr_reading = float(curr_reading) if curr_reading is not None else None
+        except (TypeError, ValueError):
+            curr_reading = None
+        if prev_reading is None:
+            prev_reading = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'maintenance')
+        km_reading = None
+        if prev_reading is not None and curr_reading is not None:
+            km_reading = float(curr_reading) - float(prev_reading)
         payment_type = (request.form.get('payment_type') or 'Cash').strip()
         if payment_type not in ('Cash', 'Credit'):
             payment_type = 'Cash'
@@ -18281,8 +18307,8 @@ def maintenance_expense_form(pk=None):
                     vehicle_id=vehicle_id,
                     expense_date=expense_date,
                     current_reading=curr_reading,
-                    previous_reading=None,
-                    km=None,
+                    previous_reading=prev_reading,
+                    km=km_reading,
                     job_category=job_category,
                     job_interval_mode=job_interval_mode,
                     payment_type=payment_type,
@@ -18299,8 +18325,8 @@ def maintenance_expense_form(pk=None):
                 rec.vehicle_id = vehicle_id
                 rec.expense_date = expense_date
                 rec.current_reading = curr_reading
-                rec.previous_reading = None
-                rec.km = None
+                rec.previous_reading = prev_reading
+                rec.km = km_reading
                 rec.job_category = job_category
                 rec.job_interval_mode = job_interval_mode
                 rec.payment_type = payment_type
