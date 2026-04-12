@@ -29,6 +29,13 @@
   .oil-form-wrap .form-control, .oil-form-wrap .form-select { border-radius: 8px; font-size: 0.95rem; padding: 0.52rem 0.7rem; min-height: 40px; }
   .oil-form-wrap .form-control.bg-light { background-color: #f1f3f5 !important; cursor: default; }
   .oil-form-wrap .field-group { margin-bottom: 0.55rem; }
+  .oil-price-history-panel { border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 8px; margin-top: 8px; display: none; }
+  .oil-price-history-title { font-size: .82rem; font-weight: 700; color: #1d4ed8; margin-bottom: 4px; font-style: italic; }
+  .oil-price-history-table-wrap { max-height: 140px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
+  .oil-price-history-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  .oil-price-history-table th, .oil-price-history-table td { border: 1px solid #e2e8f0; padding: 2px 6px; white-space: nowrap; }
+  .oil-price-history-table thead th { background: #f1f5f9; position: sticky; top: 0; z-index: 1; }
+  .oil-price-history-empty { font-size: .78rem; color: #64748b; padding: 6px; }
   .oil-form-wrap #itemsTable thead th { font-size: 0.86rem; }
   .oil-form-wrap #itemsTable td { font-size: 0.9rem; }
   .oil-form-wrap #itemsTable input, .oil-form-wrap #itemsTable select { font-size: 0.9rem; padding: 0.42rem 0.5rem; min-height: 36px; }
@@ -141,6 +148,41 @@
           </div>
           <div class="col-md-2">
             <button type="button" class="btn btn-sm btn-primary w-100" id="addToListBtn"><i class="bi bi-plus-lg"></i> Add to list</button>
+          </div>
+        </div>
+        <div class="oil-price-history-panel" id="oilPriceHistoryPanel">
+          <div class="oil-price-history-title">Item previously purchase to this party</div>
+          <div class="oil-price-history-table-wrap mb-2">
+            <table class="oil-price-history-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Invoice No</th>
+                  <th>Qty</th>
+                  <th>Price</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="oilSamePartyRows"></tbody>
+            </table>
+            <div class="oil-price-history-empty d-none" id="oilSamePartyEmpty">No history for selected party.</div>
+          </div>
+          <div class="oil-price-history-title">Same item purchase to other parties</div>
+          <div class="oil-price-history-table-wrap">
+            <table class="oil-price-history-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Invoice No</th>
+                  <th>Party</th>
+                  <th>Qty</th>
+                  <th>Price</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="oilOtherPartyRows"></tbody>
+            </table>
+            <div class="oil-price-history-empty d-none" id="oilOtherPartyEmpty">No history from other parties.</div>
           </div>
         </div>
         <table class="table table-bordered table-sm mb-0" id="itemsTable">
@@ -289,6 +331,11 @@
   var expenseBySelect = document.getElementById('expenseBySelect');
   var oilAttachmentFiles = document.getElementById('oilAttachmentFiles');
   var oilAttachmentPasteHint = document.getElementById('oilAttachmentPasteHint');
+  var oilPriceHistoryPanel = document.getElementById('oilPriceHistoryPanel');
+  var oilSamePartyRows = document.getElementById('oilSamePartyRows');
+  var oilOtherPartyRows = document.getElementById('oilOtherPartyRows');
+  var oilSamePartyEmpty = document.getElementById('oilSamePartyEmpty');
+  var oilOtherPartyEmpty = document.getElementById('oilOtherPartyEmpty');
   var cashExpenseByValue = '';
   var oilTaskStartReading = null;
   var oilTaskCloseReading = null;
@@ -362,6 +409,13 @@
   entryPurchaseQty.addEventListener('input', updateEntryAmountAndBalance);
   entryUsedQty.addEventListener('input', updateEntryAmountAndBalance);
   entryPrice.addEventListener('input', updateEntryAmountAndBalance);
+  entryPrice.addEventListener('focus', fetchOilPriceHistory);
+  entryPrice.addEventListener('blur', function() { window.setTimeout(hidePriceHistoryPanel, 120); });
+  if (entryUsedQty) {
+    entryUsedQty.addEventListener('keydown', function(e) {
+      if (e.key === 'Tab' && !e.shiftKey) window.setTimeout(fetchOilPriceHistory, 0);
+    });
+  }
 
   function escapeHtml(text) {
     return String(text || '')
@@ -370,6 +424,66 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function renderPriceHistoryRows(targetBody, targetEmpty, rows, includeParty) {
+    if (!targetBody || !targetEmpty) return;
+    targetBody.innerHTML = '';
+    if (!rows || !rows.length) {
+      targetEmpty.classList.remove('d-none');
+      return;
+    }
+    targetEmpty.classList.add('d-none');
+    rows.forEach(function(r) {
+      var tr = document.createElement('tr');
+      var cols = [
+        escapeHtml(r.date_label || '-'),
+        escapeHtml(r.invoice_no || '-'),
+      ];
+      if (includeParty) cols.push(escapeHtml(r.party_name || '-'));
+      cols.push(
+        escapeHtml(r.qty_label || '-'),
+        escapeHtml(r.price_label || '-'),
+        escapeHtml(r.total_label || '-')
+      );
+      tr.innerHTML = cols.map(function(c) { return '<td>' + c + '</td>'; }).join('');
+      targetBody.appendChild(tr);
+    });
+  }
+
+  function hidePriceHistoryPanel() {
+    if (oilPriceHistoryPanel) oilPriceHistoryPanel.style.display = 'none';
+  }
+
+  function showPriceHistoryPanel() {
+    if (oilPriceHistoryPanel) oilPriceHistoryPanel.style.display = 'block';
+  }
+
+  function fetchOilPriceHistory() {
+    if (!entryProductSelect || !entryPrice) return;
+    var pid = entryProductSelect.value;
+    if (!pid) {
+      hidePriceHistoryPanel();
+      return;
+    }
+    var partyId = (partySelect && partySelect.value) ? partySelect.value : '';
+    var recId = {{ rec.id if rec else 'null' }};
+    var url = '/api/oil-expense/product-price-history?product_id=' + encodeURIComponent(pid);
+    if (partyId) url += '&workspace_party_id=' + encodeURIComponent(partyId);
+    if (recId) url += '&current_id=' + encodeURIComponent(recId);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var sameRows = (data && data.same_party) ? data.same_party : [];
+        var otherRows = (data && data.other_parties) ? data.other_parties : [];
+        renderPriceHistoryRows(oilSamePartyRows, oilSamePartyEmpty, sameRows, false);
+        renderPriceHistoryRows(oilOtherPartyRows, oilOtherPartyEmpty, otherRows, true);
+        showPriceHistoryPanel();
+        entryPrice.focus();
+      })
+      .catch(function() {
+        hidePriceHistoryPanel();
+      });
   }
 
   function clearEntryRow() {
@@ -381,6 +495,7 @@
     entryAmount.value = '';
     entryBalanceQty.value = '';
     updateEntryAmountAndBalance();
+    hidePriceHistoryPanel();
     entryProductSelect.focus();
   }
 

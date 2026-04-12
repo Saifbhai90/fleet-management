@@ -333,11 +333,13 @@ ENDPOINT_PERMISSION_MAP = [
     ('api_oil_expense_last_reading', 'oil_expense'),
     ('api_oil_expense_products_for_oil', 'oil_expense'),
     ('api_oil_expense_product_balance', 'oil_expense'),
+    ('api_oil_expense_product_price_history', 'oil_expense'),
     ('api_oil_expense_upload_status', 'oil_expense'),
     ('oil_expense_upload_resume', 'oil_expense'),
     # Maintenance expense helper APIs
     ('api_maintenance_expense_last_reading', 'maintenance_expense'),
     ('api_maintenance_expense_products', 'maintenance_expense'),
+    ('api_maintenance_expense_product_price_history', 'maintenance_expense'),
     ('api_maintenance_expense_upload_status', 'maintenance_expense'),
     ('maintenance_expense_upload_resume', 'maintenance_expense'),
     # Attendance helper APIs

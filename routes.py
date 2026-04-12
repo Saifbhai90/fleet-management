@@ -17888,6 +17888,112 @@ def api_oil_expense_product_balance(product_id):
     return jsonify({'product_id': product_id, 'balance_qty': qty})
 
 
+def _expense_history_num_label(val):
+    try:
+        n = float(val)
+    except (TypeError, ValueError):
+        return '-'
+    return f'{n:.2f}'
+
+
+def _build_oil_product_price_history(product_id, workspace_party_id=None, current_id=None, workspace_employee_id=None):
+    q = db.session.query(OilExpenseItem, OilExpense, WorkspaceParty).join(
+        OilExpense, OilExpense.id == OilExpenseItem.oil_expense_id
+    ).outerjoin(
+        WorkspaceParty, WorkspaceParty.id == OilExpense.workspace_party_id
+    ).filter(
+        OilExpenseItem.product_id == product_id
+    )
+    if workspace_employee_id:
+        q = q.filter(OilExpense.employee_id == workspace_employee_id)
+    if current_id:
+        q = q.filter(OilExpense.id != current_id)
+    rows = q.order_by(OilExpense.expense_date.desc(), OilExpense.id.desc(), OilExpenseItem.id.desc()).limit(120).all()
+
+    same_party = []
+    other_parties = []
+    for it, rec, party in rows:
+        qty = float(it.purchase_qty if it.purchase_qty is not None else (it.qty if it.qty is not None else 0))
+        price = float(it.price or 0)
+        if qty <= 0 and price <= 0:
+            continue
+        total = float(it.amount) if it.amount is not None else (qty * price)
+        row = {
+            'date_label': rec.expense_date.strftime('%d-%m-%Y') if rec.expense_date else '-',
+            'invoice_no': f'OIL-{rec.id}',
+            'party_name': (party.name if party else '-'),
+            'qty_label': _expense_history_num_label(qty),
+            'price_label': _expense_history_num_label(price),
+            'total_label': _expense_history_num_label(total),
+        }
+        if workspace_party_id and rec.workspace_party_id == workspace_party_id:
+            same_party.append(row)
+        elif rec.workspace_party_id and rec.workspace_party_id != workspace_party_id:
+            other_parties.append(row)
+        elif not workspace_party_id:
+            other_parties.append(row)
+    return same_party[:8], other_parties[:8]
+
+
+def _build_maintenance_product_price_history(product_id, workspace_party_id=None, current_id=None, workspace_employee_id=None):
+    q = db.session.query(MaintenanceExpenseItem, MaintenanceExpense, WorkspaceParty).join(
+        MaintenanceExpense, MaintenanceExpense.id == MaintenanceExpenseItem.maintenance_expense_id
+    ).outerjoin(
+        WorkspaceParty, WorkspaceParty.id == MaintenanceExpense.workspace_party_id
+    ).filter(
+        MaintenanceExpenseItem.product_id == product_id
+    )
+    if workspace_employee_id:
+        q = q.filter(MaintenanceExpense.employee_id == workspace_employee_id)
+    if current_id:
+        q = q.filter(MaintenanceExpense.id != current_id)
+    rows = q.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc(), MaintenanceExpenseItem.id.desc()).limit(120).all()
+
+    same_party = []
+    other_parties = []
+    for it, rec, party in rows:
+        qty = float(it.qty or 0)
+        price = float(it.price or 0)
+        if qty <= 0 and price <= 0:
+            continue
+        total = float(it.amount) if it.amount is not None else (qty * price)
+        row = {
+            'date_label': rec.expense_date.strftime('%d-%m-%Y') if rec.expense_date else '-',
+            'invoice_no': f'MAINT-{rec.id}',
+            'party_name': (party.name if party else '-'),
+            'qty_label': _expense_history_num_label(qty),
+            'price_label': _expense_history_num_label(price),
+            'total_label': _expense_history_num_label(total),
+        }
+        if workspace_party_id and rec.workspace_party_id == workspace_party_id:
+            same_party.append(row)
+        elif rec.workspace_party_id and rec.workspace_party_id != workspace_party_id:
+            other_parties.append(row)
+        elif not workspace_party_id:
+            other_parties.append(row)
+    return same_party[:8], other_parties[:8]
+
+
+@app.route('/api/oil-expense/product-price-history')
+def api_oil_expense_product_price_history():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    product_id = request.args.get('product_id', type=int)
+    if not product_id:
+        return jsonify({'ok': True, 'same_party': [], 'other_parties': []})
+    workspace_party_id = request.args.get('workspace_party_id', type=int)
+    current_id = request.args.get('current_id', type=int)
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    same_party, other_parties = _build_oil_product_price_history(
+        product_id=product_id,
+        workspace_party_id=workspace_party_id,
+        current_id=current_id,
+        workspace_employee_id=workspace_employee_id,
+    )
+    return jsonify({'ok': True, 'same_party': same_party, 'other_parties': other_parties})
+
+
 def _get_or_create_product_balance(product_id):
     bal = ProductBalance.query.filter_by(product_id=product_id).first()
     if not bal:
@@ -18497,6 +18603,26 @@ def api_maintenance_expense_products():
     workspace_employee_id = _workspace_employee_id_for_expenses()
     products = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
     return jsonify([{'id': p.id, 'name': p.name} for p in products])
+
+
+@app.route('/api/maintenance-expense/product-price-history')
+def api_maintenance_expense_product_price_history():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    product_id = request.args.get('product_id', type=int)
+    if not product_id:
+        return jsonify({'ok': True, 'same_party': [], 'other_parties': []})
+    workspace_party_id = request.args.get('workspace_party_id', type=int)
+    current_id = request.args.get('current_id', type=int)
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    same_party, other_parties = _build_maintenance_product_price_history(
+        product_id=product_id,
+        workspace_party_id=workspace_party_id,
+        current_id=current_id,
+        workspace_employee_id=workspace_employee_id,
+    )
+    return jsonify({'ok': True, 'same_party': same_party, 'other_parties': other_parties})
 
 
 @app.route('/api/maintenance-expense/upload-status/<int:pk>')

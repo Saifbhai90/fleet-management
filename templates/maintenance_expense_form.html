@@ -16,6 +16,13 @@
   .maint-form-wrap .form-control.bg-light { background-color: #f1f3f5 !important; cursor: default; }
   .maint-form-wrap .field-group { margin-bottom: 0.55rem; }
   .maint-form-wrap .entry-hint { font-size: 0.86rem; }
+  .maint-price-history-panel { border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 8px; margin-top: 8px; display: none; }
+  .maint-price-history-title { font-size: .82rem; font-weight: 700; color: #1d4ed8; margin-bottom: 4px; font-style: italic; }
+  .maint-price-history-table-wrap { max-height: 140px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
+  .maint-price-history-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  .maint-price-history-table th, .maint-price-history-table td { border: 1px solid #e2e8f0; padding: 2px 6px; white-space: nowrap; }
+  .maint-price-history-table thead th { background: #f1f5f9; position: sticky; top: 0; z-index: 1; }
+  .maint-price-history-empty { font-size: .78rem; color: #64748b; padding: 6px; }
   .maint-form-wrap #itemsTable thead th { font-size: 0.86rem; }
   .maint-form-wrap #itemsTable td { font-size: 0.9rem; }
   .maint-form-wrap #itemsTable input, .maint-form-wrap #itemsTable select { font-size: 0.9rem; padding: 0.42rem 0.5rem; min-height: 36px; }
@@ -172,6 +179,41 @@
           </div>
           <div class="col-md-2">
             <button type="button" class="btn btn-sm btn-primary w-100" id="addToListBtn"><i class="bi bi-plus-lg"></i> Add to list</button>
+          </div>
+        </div>
+        <div class="maint-price-history-panel" id="maintPriceHistoryPanel">
+          <div class="maint-price-history-title">Item previously purchase to this party</div>
+          <div class="maint-price-history-table-wrap mb-2">
+            <table class="maint-price-history-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Invoice No</th>
+                  <th>Qty</th>
+                  <th>Price</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="maintSamePartyRows"></tbody>
+            </table>
+            <div class="maint-price-history-empty d-none" id="maintSamePartyEmpty">No history for selected party.</div>
+          </div>
+          <div class="maint-price-history-title">Same item purchase to other parties</div>
+          <div class="maint-price-history-table-wrap">
+            <table class="maint-price-history-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Invoice No</th>
+                  <th>Party</th>
+                  <th>Qty</th>
+                  <th>Price</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="maintOtherPartyRows"></tbody>
+            </table>
+            <div class="maint-price-history-empty d-none" id="maintOtherPartyEmpty">No history from other parties.</div>
           </div>
         </div>
         <table class="table table-bordered table-sm mb-0" id="itemsTable">
@@ -359,6 +401,11 @@ document.addEventListener('DOMContentLoaded', function() {
   var cashExpenseByValue = '';
   var maintAttachmentFiles = document.getElementById('maintAttachmentFiles');
   var maintAttachmentPasteHint = document.getElementById('maintAttachmentPasteHint');
+  var maintPriceHistoryPanel = document.getElementById('maintPriceHistoryPanel');
+  var maintSamePartyRows = document.getElementById('maintSamePartyRows');
+  var maintOtherPartyRows = document.getElementById('maintOtherPartyRows');
+  var maintSamePartyEmpty = document.getElementById('maintSamePartyEmpty');
+  var maintOtherPartyEmpty = document.getElementById('maintOtherPartyEmpty');
 
   var productsForMaintenance = [{% for p in products_for_maintenance %}{id:{{ p.id }},name:{{ p.name | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}];
 
@@ -434,6 +481,75 @@ document.addEventListener('DOMContentLoaded', function() {
     var price = parseFloat(entryPrice.value) || 0;
     entryAmount.value = (qty * price).toFixed(2);
   }
+
+  function escHtml(txt) {
+    return String(txt || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function renderPriceHistoryRows(targetBody, targetEmpty, rows, includeParty) {
+    if (!targetBody || !targetEmpty) return;
+    targetBody.innerHTML = '';
+    if (!rows || !rows.length) {
+      targetEmpty.classList.remove('d-none');
+      return;
+    }
+    targetEmpty.classList.add('d-none');
+    rows.forEach(function(r) {
+      var tr = document.createElement('tr');
+      var cols = [
+        escHtml(r.date_label || '-'),
+        escHtml(r.invoice_no || '-'),
+      ];
+      if (includeParty) cols.push(escHtml(r.party_name || '-'));
+      cols.push(
+        escHtml(r.qty_label || '-'),
+        escHtml(r.price_label || '-'),
+        escHtml(r.total_label || '-')
+      );
+      tr.innerHTML = cols.map(function(c) { return '<td>' + c + '</td>'; }).join('');
+      targetBody.appendChild(tr);
+    });
+  }
+
+  function hidePriceHistoryPanel() {
+    if (maintPriceHistoryPanel) maintPriceHistoryPanel.style.display = 'none';
+  }
+
+  function showPriceHistoryPanel() {
+    if (maintPriceHistoryPanel) maintPriceHistoryPanel.style.display = 'block';
+  }
+
+  function fetchMaintenancePriceHistory() {
+    if (!entryProductSelect || !entryPrice) return;
+    var pid = entryProductSelect.value;
+    if (!pid) {
+      hidePriceHistoryPanel();
+      return;
+    }
+    var partyId = (partySelect && partySelect.value) ? partySelect.value : '';
+    var recId = {{ rec.id if rec else 'null' }};
+    var url = '/api/maintenance-expense/product-price-history?product_id=' + encodeURIComponent(pid);
+    if (partyId) url += '&workspace_party_id=' + encodeURIComponent(partyId);
+    if (recId) url += '&current_id=' + encodeURIComponent(recId);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var sameRows = (data && data.same_party) ? data.same_party : [];
+        var otherRows = (data && data.other_parties) ? data.other_parties : [];
+        renderPriceHistoryRows(maintSamePartyRows, maintSamePartyEmpty, sameRows, false);
+        renderPriceHistoryRows(maintOtherPartyRows, maintOtherPartyEmpty, otherRows, true);
+        showPriceHistoryPanel();
+        entryPrice.focus();
+      })
+      .catch(function() {
+        hidePriceHistoryPanel();
+      });
+  }
   function escapeHtml(text) {
     return String(text || '')
       .replace(/&/g, '&amp;')
@@ -444,6 +560,15 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   entryQty.addEventListener('input', updateEntryAmount);
   entryPrice.addEventListener('input', updateEntryAmount);
+  entryPrice.addEventListener('focus', fetchMaintenancePriceHistory);
+  entryPrice.addEventListener('blur', function() { window.setTimeout(hidePriceHistoryPanel, 120); });
+  if (entryQty) {
+    entryQty.addEventListener('keydown', function(e) {
+      if (e.key === 'Tab' && !e.shiftKey) {
+        window.setTimeout(fetchMaintenancePriceHistory, 0);
+      }
+    });
+  }
 
   function clearEntryRow() {
     entryProductSelect.value = '';
