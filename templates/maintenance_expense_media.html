@@ -95,12 +95,9 @@
         <span class="pill"><i class="bi bi-collection"></i> Total: {{ media_items|length }}</span>
         <span class="pill"><i class="bi bi-image"></i> Images: {{ image_count }}</span>
         <span class="pill"><i class="bi bi-camera-video"></i> Videos: {{ video_count }}</span>
-        <button type="button" class="btn btn-sm btn-primary ms-auto" id="shareAllMediaBtn">
-          <i class="bi bi-share-fill me-1"></i>Share All Media
-        </button>
-        <button type="button" class="btn btn-sm btn-outline-primary" id="copyLinksBtn">
-          <i class="bi bi-clipboard-check me-1"></i>Copy Links
-        </button>
+        <a href="{{ url_for('maintenance_expense_media_download_all', pk=rec.id) }}" class="btn btn-sm btn-success ms-auto">
+          <i class="bi bi-download me-1"></i>All Media Download
+        </a>
       </div>
 
       <div class="media-grid" id="mediaGrid">
@@ -142,7 +139,6 @@
       <button type="button" class="gv-tool" id="gvZoomInBtn" title="Zoom in (image only)"><i class="bi bi-plus-lg"></i></button>
       <button type="button" class="gv-tool" id="gvZoomResetBtn" title="Reset zoom"><i class="bi bi-arrows-angle-contract"></i></button>
       <button type="button" class="gv-tool" id="gvDownloadBtn" title="Download current"><i class="bi bi-download"></i><span class="lbl">Download</span></button>
-      <button type="button" class="gv-tool" id="gvShareBtn" title="Share current"><i class="bi bi-share"></i><span class="lbl">Share</span></button>
       <button type="button" class="gv-tool gv-close" id="gvClose" title="Close (Esc)"><i class="bi bi-x-lg"></i></button>
     </div>
   </div>
@@ -306,70 +302,13 @@
   function downloadCurrent() {
     var it = ITEMS[cur];
     if (!it) return;
+    var dlUrl = it.download_url || it.url;
     var a = document.createElement('a');
-    a.href = it.url;
+    a.href = dlUrl;
     a.download = it.name || 'attachment';
-    a.target = '_blank';
-    a.rel = 'noopener';
     document.body.appendChild(a);
     a.click();
     a.remove();
-  }
-
-  function shareCurrent() {
-    var it = ITEMS[cur];
-    if (!it) return;
-    if (navigator.share) {
-      navigator.share({
-        title: 'Maintenance media',
-        text: (it.name || 'Attachment'),
-        url: it.url
-      }).catch(function () {});
-      return;
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(it.url);
-      alert('Current media link copied.');
-      return;
-    }
-    prompt('Copy this media link:', it.url);
-  }
-
-  function shareAllMedia() {
-    var lines = ITEMS.map(function (it, i) {
-      return (i + 1) + '. ' + (it.name || 'Attachment') + ' - ' + it.url;
-    });
-    var payload = 'Maintenance media links\n\n' + lines.join('\n');
-    if (navigator.share) {
-      navigator.share({
-        title: 'Maintenance media',
-        text: payload.slice(0, 3900),
-        url: window.location.href
-      }).catch(function () {});
-      return;
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(payload).then(function () {
-        alert('All media links copied.');
-      }).catch(function () {
-        prompt('Copy all media links:', payload);
-      });
-      return;
-    }
-    prompt('Copy all media links:', payload);
-  }
-
-  function copyAllLinks() {
-    var links = ITEMS.map(function (it) { return it.url; }).join('\n');
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(links).then(function () {
-        alert('All media URLs copied.');
-      }).catch(function () {
-        prompt('Copy URLs:', links);
-      });
-      return;
-    }
-    prompt('Copy URLs:', links);
   }
 
   if (grid) {
@@ -381,17 +320,11 @@
     });
   }
 
-  var shareAllBtn = document.getElementById('shareAllMediaBtn');
-  if (shareAllBtn) shareAllBtn.addEventListener('click', shareAllMedia);
-  var copyLinksBtn = document.getElementById('copyLinksBtn');
-  if (copyLinksBtn) copyLinksBtn.addEventListener('click', copyAllLinks);
-
   document.getElementById('gvClose').addEventListener('click', closeViewer);
   document.getElementById('gvPrev').addEventListener('click', function (e) { e.stopPropagation(); showPrev(); });
   document.getElementById('gvNext').addEventListener('click', function (e) { e.stopPropagation(); showNext(); });
   document.getElementById('gvPlayBtn').addEventListener('click', function () { toggleSlideshow(); });
   document.getElementById('gvDownloadBtn').addEventListener('click', downloadCurrent);
-  document.getElementById('gvShareBtn').addEventListener('click', shareCurrent);
   document.getElementById('gvZoomInBtn').addEventListener('click', function () { setZoom(0.25); });
   document.getElementById('gvZoomOutBtn').addEventListener('click', function () { setZoom(-0.25); });
   document.getElementById('gvZoomResetBtn').addEventListener('click', function () {

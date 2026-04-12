@@ -1,5 +1,5 @@
 # Force Rebuild — all syntax verified clean, pushing to unblock Render deploy queue
-from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session, send_file, abort, make_response
+from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session, send_file, abort, make_response, after_this_request
 from app import app, db, csrf
 from models import (
     Company, Project, Vehicle, Driver, ParkingStation, District, EmployeePost, Employee, EmployeeDocument,
@@ -78,9 +78,11 @@ import os
 import json
 import uuid
 import tempfile
+import zipfile
 import time as _time_mod
 import threading
 import mimetypes
+from urllib.request import Request, urlopen
 from werkzeug.utils import secure_filename
 from r2_storage import upload_image_file, upload_image_bytes
 from freeze_utils import (
@@ -18861,6 +18863,23 @@ def maintenance_expense_media(pk):
         except OSError:
             return None
 
+    def _local_attachment_full_path(stored_path):
+        if not stored_path:
+            return None
+        p = str(stored_path).strip()
+        if p.startswith('http://') or p.startswith('https://'):
+            return None
+        upload_root = os.path.abspath(app.config.get('UPLOAD_FOLDER', ''))
+        if not upload_root:
+            return None
+        rel = p.replace('\\', '/').lstrip('/')
+        if rel.startswith('uploads/'):
+            rel = rel[len('uploads/'):]
+        full = os.path.abspath(os.path.join(upload_root, rel.replace('/', os.sep)))
+        if not full.startswith(upload_root):
+            return None
+        return full if os.path.isfile(full) else None
+
     media_items = []
     for att in rec.attachments.order_by(MaintenanceExpenseAttachment.created_at.asc(), MaintenanceExpenseAttachment.id.asc()).all():
         url = media_url_filter(att.file_path or '')
@@ -18883,8 +18902,177 @@ def maintenance_expense_media(pk):
             'created_at_iso': created_at.isoformat() if created_at else '',
             'size_bytes': size_bytes,
             'size_label': _human_size(size_bytes),
+            'download_url': url_for('maintenance_expense_media_download', pk=rec.id, att_id=att.id),
+            'is_local_file': bool(_local_attachment_full_path(att.file_path or '')),
         })
     return render_template('maintenance_expense_media.html', rec=rec, media_items=media_items)
+
+
+def _maintenance_attachment_download_name(att):
+    name = secure_filename((att.original_name or '').strip())
+    if not name:
+        base = secure_filename(os.path.basename(att.file_path or '').strip()) or f'attachment_{att.id}'
+        name = base
+    if '.' not in name:
+        if (att.file_type or '').lower() == 'video':
+            name += '.mp4'
+        else:
+            name += '.jpg'
+    return name
+
+
+def _maintenance_attachment_local_full_path(stored_path):
+    if not stored_path:
+        return None
+    p = str(stored_path).strip()
+    if p.startswith('http://') or p.startswith('https://'):
+        return None
+    upload_root = os.path.abspath(app.config.get('UPLOAD_FOLDER', ''))
+    if not upload_root:
+        return None
+    rel = p.replace('\\', '/').lstrip('/')
+    if rel.startswith('uploads/'):
+        rel = rel[len('uploads/'):]
+    full = os.path.abspath(os.path.join(upload_root, rel.replace('/', os.sep)))
+    if not full.startswith(upload_root):
+        return None
+    return full if os.path.isfile(full) else None
+
+
+def _maintenance_attachment_read_bytes(stored_path):
+    full = _maintenance_attachment_local_full_path(stored_path)
+    if full:
+        with open(full, 'rb') as fh:
+            data = fh.read()
+        mt, _ = mimetypes.guess_type(full)
+        return data, (mt or 'application/octet-stream')
+
+    url = media_url_filter(stored_path or '')
+    if not url:
+        return b'', 'application/octet-stream'
+    req = Request(url, headers={'User-Agent': 'fleet-manager/maintenance-media-download'})
+    with urlopen(req, timeout=90) as resp:
+        data = resp.read()
+        ct = (resp.headers.get('Content-Type') or 'application/octet-stream').split(';')[0].strip()
+    return data, (ct or 'application/octet-stream')
+
+
+@app.route('/maintenance-expense/<int:pk>/media/download/<int:att_id>')
+@app.route('/maintenance-expenses/<int:pk>/media/download/<int:att_id>')
+def maintenance_expense_media_download(pk, att_id):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceExpense.query.filter_by(id=pk).first()
+    if not rec:
+        flash('Media record not found (maybe deleted).', 'warning')
+        return redirect(url_for('maintenance_expense_list'))
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_expense_list'))
+    att = MaintenanceExpenseAttachment.query.filter_by(id=att_id, maintenance_expense_id=rec.id).first()
+    if not att:
+        flash('Attachment not found.', 'warning')
+        return redirect(url_for('maintenance_expense_media', pk=rec.id))
+
+    dl_name = _maintenance_attachment_download_name(att)
+    local_full = _maintenance_attachment_local_full_path(att.file_path or '')
+    if local_full:
+        return send_file(local_full, as_attachment=True, download_name=dl_name, conditional=True, max_age=0)
+
+    try:
+        blob, mime = _maintenance_attachment_read_bytes(att.file_path or '')
+    except Exception as ex:
+        app.logger.warning('Maintenance media download failed (%s): %s', att.id, ex)
+        flash('Download failed for this attachment.', 'danger')
+        return redirect(url_for('maintenance_expense_media', pk=rec.id))
+    if not blob:
+        flash('Attachment file is empty.', 'warning')
+        return redirect(url_for('maintenance_expense_media', pk=rec.id))
+    return send_file(BytesIO(blob), as_attachment=True, download_name=dl_name, mimetype=(mime or 'application/octet-stream'), max_age=0)
+
+
+@app.route('/maintenance-expense/<int:pk>/media/download-all')
+@app.route('/maintenance-expenses/<int:pk>/media/download-all')
+def maintenance_expense_media_download_all(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceExpense.query.filter_by(id=pk).first()
+    if not rec:
+        flash('Media record not found (maybe deleted).', 'warning')
+        return redirect(url_for('maintenance_expense_list'))
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_expense_list'))
+
+    atts = rec.attachments.order_by(MaintenanceExpenseAttachment.created_at.asc(), MaintenanceExpenseAttachment.id.asc()).all()
+    if not atts:
+        flash('No media files available for download.', 'warning')
+        return redirect(url_for('maintenance_expense_media', pk=rec.id))
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    zip_path = tmp.name
+    tmp.close()
+    added = 0
+    used = set()
+    try:
+        with zipfile.ZipFile(zip_path, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+            for idx, att in enumerate(atts, 1):
+                base_name = _maintenance_attachment_download_name(att)
+                file_name = base_name
+                n = 2
+                while file_name.lower() in used:
+                    root, ext = os.path.splitext(base_name)
+                    file_name = f'{root}_{n}{ext}'
+                    n += 1
+                used.add(file_name.lower())
+
+                local_full = _maintenance_attachment_local_full_path(att.file_path or '')
+                if local_full:
+                    try:
+                        zf.write(local_full, arcname=file_name)
+                        added += 1
+                        continue
+                    except Exception as ex:
+                        app.logger.warning('Maintenance zip local add failed (%s): %s', att.id, ex)
+                try:
+                    blob, _mime = _maintenance_attachment_read_bytes(att.file_path or '')
+                    if blob:
+                        zf.writestr(file_name, blob)
+                        added += 1
+                except Exception as ex:
+                    app.logger.warning('Maintenance zip remote fetch failed (%s): %s', att.id, ex)
+        if added == 0:
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
+            flash('No files could be packed for download.', 'danger')
+            return redirect(url_for('maintenance_expense_media', pk=rec.id))
+    except Exception as ex:
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
+        app.logger.warning('Maintenance zip creation failed (%s): %s', rec.id, ex)
+        flash('Unable to prepare media ZIP right now.', 'danger')
+        return redirect(url_for('maintenance_expense_media', pk=rec.id))
+
+    @after_this_request
+    def _cleanup_zip(resp):
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
+        return resp
+
+    veh = secure_filename((rec.vehicle.vehicle_no if rec.vehicle else 'vehicle') or 'vehicle')
+    date_part = rec.expense_date.strftime('%Y%m%d') if rec.expense_date else pk_now().strftime('%Y%m%d')
+    archive_name = f'maintenance_media_{veh}_{date_part}.zip'
+    return send_file(zip_path, as_attachment=True, download_name=archive_name, mimetype='application/zip', max_age=0)
 
 
 # ────────────────────────────────────────────────
