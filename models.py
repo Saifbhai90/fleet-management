@@ -259,6 +259,8 @@ class Vehicle(db.Model):
     phone_no = db.Column(db.String(20))
     active_date = db.Column(db.Date, index=True)
     driver_capacity = db.Column(db.Integer, default=1)
+    target_mpg = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    fuel_tank_capacity = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     remarks = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=pk_now)
 

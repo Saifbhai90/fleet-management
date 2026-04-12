@@ -3629,6 +3629,8 @@ def vehicle_form(id=None):
             vehicle_no_normalized = (form.vehicle_no.data or '').strip()
             form.populate_obj(vehicle)
             vehicle.vehicle_no = vehicle_no_normalized
+            vehicle.target_mpg = form.target_mpg.data if form.target_mpg.data is not None else 0
+            vehicle.fuel_tank_capacity = form.fuel_tank_capacity.data if form.fuel_tank_capacity.data is not None else 0
 
             # Duplicate vehicle_no check (case-insensitive, ignore current record)
             existing_q = Vehicle.query.filter(

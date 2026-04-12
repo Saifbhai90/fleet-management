@@ -86,6 +86,8 @@ class VehicleForm(FlaskForm):
         render_kw={'class': 'form-select search-select'}
     )
     driver_capacity = IntegerField('Driver Capacity', validators=[DataRequired(), NumberRange(min=1)])
+    target_mpg = DecimalField('Target MPG', validators=[Optional(), NumberRange(min=0)], places=2)
+    fuel_tank_capacity = DecimalField('Fuel Tank Capacity (Liters)', validators=[Optional(), NumberRange(min=0)], places=2)
 
     phone_no = StringField('Vehicle Phone No', validators=[Optional(), Length(max=20)])
     active_date = DateField(
