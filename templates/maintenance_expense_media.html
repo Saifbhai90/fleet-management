@@ -5,21 +5,31 @@
   .media-wrap { max-width: min(1680px, calc(100vw - 96px)); margin: 0 auto; }
   .media-head { background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); color:#fff; border-radius: 12px; padding: .65rem 1rem; }
   .media-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap:12px; }
-  .media-card { border:1px solid #e2e8f0; border-radius:10px; background:#fff; overflow:hidden; }
-  .media-thumb { width:100%; height:150px; object-fit:cover; background:#0f172a; display:block; }
-  .media-name { font-size:.82rem; padding:.45rem .55rem; border-top:1px solid #e2e8f0; word-break:break-word; }
-  .viewer-backdrop { position:fixed; inset:0; background:rgba(2,6,23,.88); z-index:2000; display:none; }
-  .viewer-backdrop.show { display:block; }
-  .viewer-inner { position:absolute; inset:56px 72px 56px 72px; display:flex; align-items:center; justify-content:center; }
-  .viewer-img, .viewer-video { max-width:100%; max-height:100%; border-radius:10px; box-shadow:0 10px 28px rgba(0,0,0,.5); background:#000; }
-  .viewer-btn { position:absolute; top:50%; transform:translateY(-50%); width:44px; height:44px; border:none; border-radius:50%; background:rgba(255,255,255,.18); color:#fff; font-size:1.2rem; }
-  .viewer-btn:hover { background:rgba(255,255,255,.28); }
-  .viewer-prev { left:18px; }
-  .viewer-next { right:18px; }
-  .viewer-close { position:absolute; top:14px; right:16px; width:40px; height:40px; border:none; border-radius:50%; background:rgba(255,255,255,.18); color:#fff; font-size:1.15rem; }
-  .viewer-meta { position:absolute; left:18px; bottom:14px; right:18px; color:#e2e8f0; font-size:.9rem; text-shadow:0 1px 2px rgba(0,0,0,.8); }
+  .media-card { border:1px solid #e2e8f0; border-radius:10px; background:#fff; overflow:hidden; cursor:pointer; }
+  .media-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+  .media-thumb { width:100%; height:150px; object-fit:cover; background:#0f172a; display:block; pointer-events:none; }
+  .media-name { font-size:.82rem; padding:.45rem .55rem; border-top:1px solid #e2e8f0; word-break:break-word; pointer-events:none; }
+
+  .gv-overlay { position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.92); display:none; flex-direction:column; }
+  .gv-overlay.open { display:flex; }
+  .gv-top { flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; padding:10px 16px; color:#e2e8f0; }
+  .gv-top .gv-info { font-size:.9rem; }
+  .gv-top .gv-close { background:none; border:none; color:#fff; font-size:1.4rem; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+  .gv-top .gv-close:hover { background:rgba(255,255,255,.15); }
+  .gv-stage { flex:1 1 auto; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; min-height:0; }
+  .gv-stage img, .gv-stage video { max-width: calc(100% - 120px); max-height: calc(100% - 20px); object-fit:contain; border-radius:8px; user-select:none; -webkit-user-drag:none; }
+  .gv-arrow { position:absolute; top:50%; transform:translateY(-50%); width:48px; height:48px; border:none; border-radius:50%; background:rgba(255,255,255,.15); color:#fff; font-size:1.3rem; display:flex; align-items:center; justify-content:center; z-index:2; }
+  .gv-arrow:hover { background:rgba(255,255,255,.3); }
+  .gv-arrow.left { left:12px; }
+  .gv-arrow.right { right:12px; }
+  .gv-loading { color:#94a3b8; font-size:.95rem; position:absolute; }
+  .gv-err { color:#f87171; font-size:.9rem; text-align:center; }
+  .gv-err a { color:#60a5fa; }
   @media (max-width: 768px) {
-    .viewer-inner { inset:56px 14px 72px 14px; }
+    .gv-stage img, .gv-stage video { max-width: calc(100% - 24px); }
+    .gv-arrow { width:36px; height:36px; font-size:1rem; }
+    .gv-arrow.left { left:4px; }
+    .gv-arrow.right { right:4px; }
   }
 </style>
 
@@ -32,18 +42,17 @@
       </div>
       <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
     </div>
-
     {% if media_items %}
-      <div class="media-grid">
+      <div class="media-grid" id="mediaGrid">
         {% for m in media_items %}
-          <button type="button" class="media-card p-0 text-start media-open-btn" data-idx="{{ loop.index0 }}">
+          <div class="media-card" data-idx="{{ loop.index0 }}">
             {% if m.type == 'video' %}
               <video class="media-thumb" src="{{ m.url }}" preload="metadata" muted></video>
             {% else %}
-              <img class="media-thumb" src="{{ m.url }}" alt="{{ m.name }}">
+              <img class="media-thumb" src="{{ m.url }}" alt="{{ m.name }}" loading="lazy">
             {% endif %}
             <div class="media-name">{{ m.name }}</div>
-          </button>
+          </div>
         {% endfor %}
       </div>
     {% else %}
@@ -54,107 +63,111 @@
   </div>
 </div>
 
-<div id="viewerBackdrop" class="viewer-backdrop" aria-hidden="true">
-  <button type="button" class="viewer-close" id="viewerCloseBtn" aria-label="Close"><i class="bi bi-x-lg"></i></button>
-  <button type="button" class="viewer-btn viewer-prev" id="viewerPrevBtn" aria-label="Previous"><i class="bi bi-chevron-left"></i></button>
-  <button type="button" class="viewer-btn viewer-next" id="viewerNextBtn" aria-label="Next"><i class="bi bi-chevron-right"></i></button>
-  <div class="viewer-inner" id="viewerInner"></div>
-  <div class="viewer-meta" id="viewerMeta"></div>
+<div class="gv-overlay" id="gvOverlay">
+  <div class="gv-top">
+    <span class="gv-info" id="gvInfo">1 / 1</span>
+    <button type="button" class="gv-close" id="gvClose" title="Close (Esc)"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <div class="gv-stage" id="gvStage">
+    <button type="button" class="gv-arrow left" id="gvPrev" title="Previous (Left Arrow)"><i class="bi bi-chevron-left"></i></button>
+    <button type="button" class="gv-arrow right" id="gvNext" title="Next (Right Arrow)"><i class="bi bi-chevron-right"></i></button>
+  </div>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  var openBtns = document.querySelectorAll('.media-open-btn');
-  var backdrop = document.getElementById('viewerBackdrop');
-  var inner = document.getElementById('viewerInner');
-  var meta = document.getElementById('viewerMeta');
-  var closeBtn = document.getElementById('viewerCloseBtn');
-  var prevBtn = document.getElementById('viewerPrevBtn');
-  var nextBtn = document.getElementById('viewerNextBtn');
-  var items = {{ media_items | tojson }};
-  var idx = 0;
+(function() {
+  var ITEMS = {{ media_items | tojson }};
+  if (!ITEMS || !ITEMS.length) return;
 
-  if (!Array.isArray(items) || !items.length) return;
+  var overlay = document.getElementById('gvOverlay');
+  var stage   = document.getElementById('gvStage');
+  var info    = document.getElementById('gvInfo');
+  var grid    = document.getElementById('mediaGrid');
+  var cur     = 0;
+  var mediaEl = null;
 
-  function renderCurrent() {
-    if (!inner) return;
-    inner.innerHTML = '';
-    var it = items[idx];
-    if (!it) return;
+  function show(i) {
+    cur = ((i % ITEMS.length) + ITEMS.length) % ITEMS.length;
+    var it = ITEMS[cur];
+    if (mediaEl && mediaEl.parentNode) mediaEl.parentNode.removeChild(mediaEl);
+
+    var oldLoad = stage.querySelector('.gv-loading');
+    if (oldLoad) oldLoad.remove();
+    var oldErr = stage.querySelector('.gv-err');
+    if (oldErr) oldErr.remove();
+
+    info.textContent = (cur + 1) + ' / ' + ITEMS.length + '  —  ' + (it.name || '');
+
     if (it.type === 'video') {
       var v = document.createElement('video');
-      v.className = 'viewer-video';
       v.src = it.url;
       v.controls = true;
       v.autoplay = true;
-      v.preload = 'metadata';
-      inner.appendChild(v);
+      v.preload = 'auto';
+      v.style.outline = 'none';
+      mediaEl = v;
+      stage.insertBefore(v, stage.querySelector('.gv-arrow.right'));
     } else {
-      var loading = document.createElement('div');
-      loading.className = 'text-light small';
-      loading.textContent = 'Loading image...';
-      inner.appendChild(loading);
-      var img = document.createElement('img');
-      img.className = 'viewer-img';
+      var loader = document.createElement('div');
+      loader.className = 'gv-loading';
+      loader.textContent = 'Loading...';
+      stage.insertBefore(loader, stage.querySelector('.gv-arrow.right'));
+
+      var img = new Image();
+      img.onload = function() {
+        if (loader.parentNode) loader.remove();
+        stage.insertBefore(img, stage.querySelector('.gv-arrow.right'));
+      };
+      img.onerror = function() {
+        if (loader.parentNode) loader.remove();
+        var errDiv = document.createElement('div');
+        errDiv.className = 'gv-err';
+        errDiv.innerHTML = 'Image load nahi ho saki.<br><a href="' + it.url + '" target="_blank">Open in new tab</a>';
+        stage.insertBefore(errDiv, stage.querySelector('.gv-arrow.right'));
+      };
       img.src = it.url;
-      img.alt = it.name || 'Image';
-      img.addEventListener('load', function() {
-        if (loading && loading.parentNode) loading.parentNode.removeChild(loading);
-      });
-      img.addEventListener('error', function() {
-        if (loading && loading.parentNode) loading.parentNode.removeChild(loading);
-        if (meta) {
-          meta.textContent = 'Image load issue. New tab me open karein.';
-        }
-        var link = document.createElement('a');
-        link.href = it.url;
-        link.target = '_blank';
-        link.rel = 'noopener';
-        link.className = 'btn btn-sm btn-light ms-2';
-        link.textContent = 'Open in new tab';
-        inner.appendChild(link);
-      });
-      inner.appendChild(img);
+      mediaEl = img;
     }
-    if (meta) meta.textContent = (idx + 1) + ' / ' + items.length + ' - ' + (it.name || 'Attachment');
   }
 
-  function openViewer(i) {
-    idx = Math.max(0, Math.min(items.length - 1, i));
-    renderCurrent();
-    backdrop.classList.add('show');
-    backdrop.setAttribute('aria-hidden', 'false');
+  function open(i) {
+    show(i);
+    overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
   }
-  function closeViewer() {
-    backdrop.classList.remove('show');
-    backdrop.setAttribute('aria-hidden', 'true');
-    document.body.style.overflow = '';
-    if (inner) inner.innerHTML = '';
-  }
-  function prev() { idx = (idx - 1 + items.length) % items.length; renderCurrent(); }
-  function next() { idx = (idx + 1) % items.length; renderCurrent(); }
 
-  openBtns.forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var i = parseInt(btn.getAttribute('data-idx') || '0', 10);
-      openViewer(i);
-    });
-  });
-  if (closeBtn) closeBtn.addEventListener('click', closeViewer);
-  if (prevBtn) prevBtn.addEventListener('click', prev);
-  if (nextBtn) nextBtn.addEventListener('click', next);
-  if (backdrop) {
-    backdrop.addEventListener('click', function(e) {
-      if (e.target === backdrop) closeViewer();
+  function close() {
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+    if (mediaEl && mediaEl.parentNode) mediaEl.parentNode.removeChild(mediaEl);
+    mediaEl = null;
+    var rem = stage.querySelectorAll('.gv-loading, .gv-err');
+    rem.forEach(function(el) { el.remove(); });
+  }
+
+  if (grid) {
+    grid.addEventListener('click', function(e) {
+      var card = e.target.closest('.media-card');
+      if (!card) return;
+      var i = parseInt(card.getAttribute('data-idx') || '0', 10);
+      open(i);
     });
   }
-  document.addEventListener('keydown', function(e) {
-    if (!backdrop.classList.contains('show')) return;
-    if (e.key === 'Escape') closeViewer();
-    if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
-    if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
+
+  document.getElementById('gvClose').addEventListener('click', close);
+  document.getElementById('gvPrev').addEventListener('click', function(e) { e.stopPropagation(); show(cur - 1); });
+  document.getElementById('gvNext').addEventListener('click', function(e) { e.stopPropagation(); show(cur + 1); });
+
+  stage.addEventListener('click', function(e) {
+    if (e.target === stage) close();
   });
-});
+
+  document.addEventListener('keydown', function(e) {
+    if (!overlay.classList.contains('open')) return;
+    if (e.key === 'Escape') { close(); }
+    else if (e.key === 'ArrowLeft')  { e.preventDefault(); show(cur - 1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); show(cur + 1); }
+  });
+})();
 </script>
 {% endblock %}
