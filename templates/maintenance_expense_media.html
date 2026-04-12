@@ -36,8 +36,7 @@
     {% if media_items %}
       <div class="media-grid">
         {% for m in media_items %}
-          <button type="button" class="media-card p-0 text-start media-open-btn"
-                  data-idx="{{ loop.index0 }}" data-type="{{ m.type }}" data-url="{{ m.url }}" data-name="{{ m.name|e }}">
+          <button type="button" class="media-card p-0 text-start media-open-btn" data-idx="{{ loop.index0 }}">
             {% if m.type == 'video' %}
               <video class="media-thumb" src="{{ m.url }}" preload="metadata" muted></video>
             {% else %}
@@ -76,10 +75,15 @@ document.addEventListener('DOMContentLoaded', function() {
   var idx = 0;
 
   openBtns.forEach(function(btn) {
+    var thumb = btn.querySelector('.media-thumb');
+    var nmEl = btn.querySelector('.media-name');
+    var isVideo = thumb && thumb.tagName && thumb.tagName.toLowerCase() === 'video';
+    var src = thumb ? (thumb.getAttribute('src') || '') : '';
+    var nm = nmEl ? (nmEl.textContent || '').trim() : 'Attachment';
     items.push({
-      type: (btn.getAttribute('data-type') || 'image').toLowerCase(),
-      url: btn.getAttribute('data-url') || '',
-      name: btn.getAttribute('data-name') || 'Attachment'
+      type: isVideo ? 'video' : 'image',
+      url: src,
+      name: nm || 'Attachment'
     });
   });
   if (!items.length) return;
@@ -102,6 +106,18 @@ document.addEventListener('DOMContentLoaded', function() {
       img.className = 'viewer-img';
       img.src = it.url;
       img.alt = it.name || 'Image';
+      img.addEventListener('error', function() {
+        if (meta) {
+          meta.textContent = 'Image load issue. New tab me open karein.';
+        }
+        var link = document.createElement('a');
+        link.href = it.url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.className = 'btn btn-sm btn-light ms-2';
+        link.textContent = 'Open in new tab';
+        inner.appendChild(link);
+      });
       inner.appendChild(img);
     }
     if (meta) meta.textContent = (idx + 1) + ' / ' + items.length + ' - ' + (it.name || 'Attachment');
