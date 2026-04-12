@@ -181,7 +181,7 @@
             {% if rec and rec.items.count() %}
               {% for it in rec.items %}
               <tr class="item-row" data-product-id="{{ it.product_id }}">
-                <td><input type="hidden" name="product_id" value="{{ it.product_id }}"><span class="product-name">{{ it.product.name }}</span></td>
+                <td><input type="hidden" name="product_id" value="{{ it.product_id }}"><span class="product-name">{{ it.product.name if it.product else ('Product #' ~ it.product_id) }}</span></td>
                 <td><input type="number" name="qty" class="form-control form-control-sm item-qty" step="0.01" min="0" value="{{ it.qty }}" placeholder="0"></td>
                 <td><input type="number" name="price" class="form-control form-control-sm item-price" step="0.01" min="0" value="{{ it.price }}" placeholder="0"></td>
                 <td><input type="text" class="form-control form-control-sm bg-light item-amount" readonly placeholder="0"></td>

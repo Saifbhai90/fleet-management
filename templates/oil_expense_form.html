@@ -162,7 +162,7 @@
               <tr class="item-row" data-product-id="{{ it.product_id }}">
                 <td>
                   <input type="hidden" name="product_id" value="{{ it.product_id }}">
-                  <span class="product-name">{{ it.product.name }}</span>
+                  <span class="product-name">{{ it.product.name if it.product else ('Product #' ~ it.product_id) }}</span>
                 </td>
                 <td>
                   <select name="payment_type" class="form-select form-select-sm">
