@@ -17218,12 +17218,37 @@ def fuel_expense_list():
 def _workspace_expense_by_choices(employee_id):
     ensure_workspace_base_accounts(employee_id)
     rows = WorkspaceAccount.query.filter_by(employee_id=employee_id, is_active=True).order_by(WorkspaceAccount.code.asc()).all()
+    driver_ids = sorted({
+        int(a.entity_id) for a in rows
+        if (a.entity_type or '').strip().lower() == 'driver' and a.entity_id
+    })
+    drivers_by_id = {}
+    if driver_ids:
+        for drv in Driver.query.filter(Driver.id.in_(driver_ids)).all():
+            drivers_by_id[int(drv.id)] = drv
+    vehicle_ids = sorted({
+        int(getattr(drv, 'vehicle_id', 0) or 0)
+        for drv in drivers_by_id.values()
+        if getattr(drv, 'vehicle_id', None)
+    })
+    vehicles_by_id = {}
+    if vehicle_ids:
+        for veh in Vehicle.query.filter(Vehicle.id.in_(vehicle_ids)).all():
+            vehicles_by_id[int(veh.id)] = veh
+
     choices = [('', '-- Default (Auto from Workspace COA) --')]
     for a in rows:
         # Show only likely payment/counterparty heads for cleaner dropdown.
         if a.account_type == 'Expense' or a.code in ('1000', '5000', '5100'):
             continue
-        choices.append((f'acct-{a.id}', f"{a.code} - {a.name} ({a.account_type})"))
+        label = f"{a.code} - {a.name} ({a.account_type})"
+        if (a.entity_type or '').strip().lower() == 'driver' and a.entity_id:
+            drv = drivers_by_id.get(int(a.entity_id))
+            veh = vehicles_by_id.get(int(drv.vehicle_id)) if drv and getattr(drv, 'vehicle_id', None) else None
+            vehicle_no = (veh.vehicle_no if veh and getattr(veh, 'vehicle_no', None) else None) or ''
+            if vehicle_no:
+                label = f"{label} | Vehicle: {vehicle_no}"
+        choices.append((f'acct-{a.id}', label))
     return choices
 
 
