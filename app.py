@@ -295,6 +295,27 @@ if _run_startup_tasks:
             print("Migrations applied (flask db upgrade).")
         except Exception as _e:
             print(f"Migration upgrade skip: {_e}")
+        # Auto-sync R2 CORS for browser direct uploads (non-fatal)
+        try:
+            _auto_cors = (os.environ.get('R2_AUTO_SYNC_CORS', 'true') or 'true').strip().lower() in ('1', 'true', 'yes')
+            if _auto_cors:
+                _origins = []
+                for _k in ('APP_BASE_URL', 'PUBLIC_BASE_URL', 'RENDER_EXTERNAL_URL'):
+                    _v = (os.environ.get(_k) or '').strip().rstrip('/')
+                    if _v.startswith('http://') or _v.startswith('https://'):
+                        _origins.append(_v)
+                _extra = (os.environ.get('R2_CORS_ALLOWED_ORIGINS') or '').strip()
+                if _extra:
+                    _origins.extend([x.strip().rstrip('/') for x in _extra.split(',') if x.strip()])
+                _origins = list(dict.fromkeys(_origins))
+                if _origins:
+                    from r2_storage import ensure_expense_upload_cors
+                    _changed, _msg = ensure_expense_upload_cors(_origins)
+                    print(f"R2 CORS sync: {_msg}; origins={len(_origins)}; changed={_changed}")
+                else:
+                    print("R2 CORS sync skipped: no origins configured.")
+        except Exception as _e:
+            print(f"R2 CORS sync skip: {_e}")
         # Ensure notification.created_by_user_id and related tables exist (SQLite fallback if migration not run)
         try:
             uri = (app.config.get('SQLALCHEMY_DATABASE_URI') or '').strip()

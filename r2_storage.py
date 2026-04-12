@@ -7,6 +7,7 @@ import boto3
 from boto3.s3.transfer import TransferConfig
 from werkzeug.utils import secure_filename
 from botocore.config import Config
+from botocore.exceptions import ClientError
 from PIL import Image
 
 
@@ -261,4 +262,41 @@ def presigned_put_object_url(key: str, content_type: str, expires_in: int = 3600
         },
         ExpiresIn=max(60, min(int(expires_in or 3600), 86400)),
     )
+
+
+def ensure_expense_upload_cors(allowed_origins: list[str]) -> tuple[bool, str]:
+    """
+    Ensure bucket CORS supports browser direct PUT uploads.
+
+    Returns (changed, message). Non-fatal on failures.
+    """
+    origins = [str(o).strip() for o in (allowed_origins or []) if str(o).strip()]
+    if not origins:
+        return False, "no origins"
+    client = _get_s3_client()
+    target_rule = {
+        "AllowedOrigins": sorted(set(origins)),
+        "AllowedMethods": ["PUT", "GET", "HEAD"],
+        "AllowedHeaders": ["*"],
+        "ExposeHeaders": ["ETag"],
+        "MaxAgeSeconds": 3600,
+    }
+    cors_rules = []
+    try:
+        current = client.get_bucket_cors(Bucket=R2_BUCKET_NAME) or {}
+        cors_rules = (current.get("CORSRules") or [])
+    except ClientError as ce:
+        code = ((ce.response or {}).get("Error") or {}).get("Code", "")
+        if code not in ("NoSuchCORSConfiguration", "NoSuchCORS"):
+            raise
+    except Exception:
+        # If read fails for transient reason, proceed with write attempt.
+        cors_rules = []
+    if target_rule in cors_rules:
+        return False, "already configured"
+    # Keep non-duplicate existing rules and append our upload rule.
+    new_rules = [r for r in cors_rules if r != target_rule]
+    new_rules.append(target_rule)
+    client.put_bucket_cors(Bucket=R2_BUCKET_NAME, CORSConfiguration={"CORSRules": new_rules})
+    return True, "updated"
 
