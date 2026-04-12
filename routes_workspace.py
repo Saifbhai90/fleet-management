@@ -12,6 +12,7 @@ from models import (
     EmployeeAssignment, FundTransfer, FundTransferCategory,
     WorkspaceParty, WorkspaceProduct, WorkspaceAccount,
     WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFuelOilOpeningExpense, WorkspaceFundTransfer, WorkspaceJournalEntry, WorkspaceMonthClose, WorkspaceFuelOilMonthClose,
+    FuelExpense, OilExpense, MaintenanceExpense,
 )
 from routes_finance import check_auth
 from auth_utils import get_user_context
@@ -2612,6 +2613,7 @@ def workspace_ledger():
     except Exception:
         category_choices = []
     transfer_map = {}
+    expense_ref_map = {}
     if ledger and ledger.get("transactions"):
         transfer_ids = [
             int(t.get("reference_id"))
@@ -2624,6 +2626,42 @@ def workspace_ledger():
                 WorkspaceFundTransfer.id.in_(sorted(set(transfer_ids)))
             ).all()
             transfer_map = {r.id: (r.transfer_number or f"WT-{r.id}") for r in rows if r}
+        fuel_ids = [
+            int(t.get("reference_id"))
+            for t in ledger["transactions"]
+            if (t.get("reference_type") or "") == "FuelExpense" and t.get("reference_id")
+        ]
+        if fuel_ids:
+            rows = FuelExpense.query.filter(
+                FuelExpense.employee_id == emp.id,
+                FuelExpense.id.in_(sorted(set(fuel_ids)))
+            ).all()
+            for r in rows:
+                expense_ref_map[f"FuelExpense:{r.id}"] = f"Fuel Expense #{r.id}"
+        oil_ids = [
+            int(t.get("reference_id"))
+            for t in ledger["transactions"]
+            if (t.get("reference_type") or "") == "OilExpense" and t.get("reference_id")
+        ]
+        if oil_ids:
+            rows = OilExpense.query.filter(
+                OilExpense.employee_id == emp.id,
+                OilExpense.id.in_(sorted(set(oil_ids)))
+            ).all()
+            for r in rows:
+                expense_ref_map[f"OilExpense:{r.id}"] = f"Oil Expense #{r.id}"
+        maint_ids = [
+            int(t.get("reference_id"))
+            for t in ledger["transactions"]
+            if (t.get("reference_type") or "") == "MaintenanceExpense" and t.get("reference_id")
+        ]
+        if maint_ids:
+            rows = MaintenanceExpense.query.filter(
+                MaintenanceExpense.employee_id == emp.id,
+                MaintenanceExpense.id.in_(sorted(set(maint_ids)))
+            ).all()
+            for r in rows:
+                expense_ref_map[f"MaintenanceExpense:{r.id}"] = f"Maintenance Expense #{r.id}"
     return render_template(
         "workspace/ledger.html",
         employee=emp,
@@ -2632,6 +2670,7 @@ def workspace_ledger():
         account_id=account_id,
         ledger=ledger,
         transfer_map=transfer_map,
+        expense_ref_map=expense_ref_map,
         from_date=from_date,
         to_date=to_date,
         category=category,
@@ -2687,6 +2726,31 @@ def workspace_ledger_transfer_detail(transfer_id):
         from_account_name=from_account_name,
         to_account_name=to_account_name,
         workspace_rows=workspace_rows,
+    )
+
+
+def workspace_ledger_journal_detail(journal_entry_id):
+    guard, emp = _workspace_guard("workspace_ledger")
+    if guard:
+        return guard
+    je = WorkspaceJournalEntry.query.filter_by(id=journal_entry_id, employee_id=emp.id).first_or_404()
+    expense_url = None
+    expense_label = None
+    if je.reference_type == 'FuelExpense' and je.reference_id:
+        expense_url = url_for('fuel_expense_edit', pk=je.reference_id)
+        expense_label = f'Fuel Expense #{je.reference_id}'
+    elif je.reference_type == 'OilExpense' and je.reference_id:
+        expense_url = url_for('oil_expense_form', pk=je.reference_id)
+        expense_label = f'Oil Expense #{je.reference_id}'
+    elif je.reference_type == 'MaintenanceExpense' and je.reference_id:
+        expense_url = url_for('maintenance_expense_form', pk=je.reference_id)
+        expense_label = f'Maintenance Expense #{je.reference_id}'
+    return render_template(
+        "workspace/ledger_journal_detail.html",
+        employee=emp,
+        je=je,
+        expense_url=expense_url,
+        expense_label=expense_label,
     )
 
 

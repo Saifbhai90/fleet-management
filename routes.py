@@ -17480,6 +17480,45 @@ def _workspace_post_expense_journal(employee_id, reference_type, reference_id, e
     )
 
 
+def _workspace_post_credit_settlement_journal(employee_id, reference_type, reference_id, expense_date, amount,
+                                              category_code, workspace_party_id, credit_account_id, description):
+    if not employee_id or not workspace_party_id or not credit_account_id:
+        return None
+    settle_amount = Decimal(str(amount or 0))
+    if settle_amount <= 0:
+        return None
+    try:
+        party_acct = ensure_workspace_counterparty_account(employee_id, party_id=workspace_party_id)
+    except Exception:
+        party_acct = None
+    if not party_acct or int(credit_account_id) == int(party_acct.id):
+        return None
+    return workspace_create_journal_entry(
+        employee_id=employee_id,
+        entry_type='Transfer',
+        entry_date=expense_date or pk_date(),
+        description=description or 'Credit settlement',
+        lines=[
+            {
+                'account_id': party_acct.id,
+                'debit': settle_amount,
+                'credit': 0,
+                'description': 'Party payable settled',
+            },
+            {
+                'account_id': credit_account_id,
+                'debit': 0,
+                'credit': settle_amount,
+                'description': 'Paid via selected Expense By account',
+            },
+        ],
+        reference_type=reference_type,
+        reference_id=reference_id,
+        created_by_user_id=session.get('user_id'),
+        category=category_code,
+    )
+
+
 @app.route('/expenses/fuel/add', methods=['GET', 'POST'])
 def fuel_expense_add():
     _guard = _require_workspace_employee_for_expense_management()
@@ -17534,6 +17573,9 @@ def fuel_expense_add():
         workspace_pump_id = form.fuel_pump_id.data or None
         if workspace_pump_id == 0:
             workspace_pump_id = None
+        if not workspace_pump_id:
+            flash('Please select a fuel pump name.', 'danger')
+            return render_template('fuel_expense_form.html', form=form, title='Add Fuel Expense')
         previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
         if previous_reading is None:
@@ -17561,6 +17603,9 @@ def fuel_expense_add():
         expense_by_val = form.expense_by.data or ''
         if payment_type == 'Cash':
             expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
+        selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
+        reading_text = f"{prev_f:g} to {curr_f:g}"
+        fuel_expense_desc = f"Fueling expense / {vehicle.vehicle_no} / Reading {reading_text}"
         rec = FuelExpense(
             district_id=district_id, project_id=project_id, vehicle_id=vehicle_id,
             employee_id=workspace_employee_id,
@@ -17578,18 +17623,39 @@ def fuel_expense_add():
             reference_id=rec.id,
             expense_date=fueling_date,
             amount=amount_f,
-            description=f'Fuel expense vehicle {vehicle.vehicle_no}',
+            description=fuel_expense_desc,
             category_code='Fuel',
-            workspace_party_id=workspace_pump_id,
-            credit_account_id=_workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id),
+            workspace_party_id=workspace_pump_id if payment_type == 'Credit' else None,
+            credit_account_id=(selected_credit_account_id if payment_type == 'Cash' else None),
         )
+        if payment_type == 'Credit' and workspace_pump_id and selected_credit_account_id:
+            selected_credit = WorkspaceAccount.query.filter_by(
+                id=selected_credit_account_id,
+                employee_id=workspace_employee_id,
+                is_active=True,
+            ).first()
+            pump_obj = WorkspaceParty.query.filter_by(employee_id=workspace_employee_id, id=workspace_pump_id).first()
+            _workspace_post_credit_settlement_journal(
+                employee_id=workspace_employee_id,
+                reference_type='FuelExpense',
+                reference_id=rec.id,
+                expense_date=fueling_date,
+                amount=amount_f,
+                category_code='Fuel',
+                workspace_party_id=workspace_pump_id,
+                credit_account_id=selected_credit_account_id,
+                description=(
+                    f"Cash paid by {(selected_credit.name if selected_credit else f'Account {selected_credit_account_id}')}"
+                    f" to {(pump_obj.name if pump_obj else 'Pump')} for Cash fueling"
+                ),
+            )
         _workspace_sync_regular_expense(
             employee_id=workspace_employee_id,
             reference_type='FuelExpense',
             reference_id=rec.id,
             expense_date=fueling_date,
             amount=amount_f,
-            description=f'Fuel expense vehicle {vehicle.vehicle_no}',
+            description=fuel_expense_desc,
             expense_type='Fuel Expense',
             payment_mode=(payment_type or 'Cash'),
             category='Fuel',
@@ -17697,6 +17763,9 @@ def fuel_expense_edit(pk):
         workspace_pump_id = form.fuel_pump_id.data or None
         if workspace_pump_id == 0:
             workspace_pump_id = None
+        if not workspace_pump_id:
+            flash('Please select a fuel pump name.', 'danger')
+            return render_template('fuel_expense_form.html', form=form, title='Edit Fuel Expense', rec=rec)
         previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
         if previous_reading is None:
@@ -17728,6 +17797,9 @@ def fuel_expense_edit(pk):
             expense_by_val = form.expense_by.data or ''
             if payment_type == 'Cash':
                 expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
+            selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
+            reading_text = f"{prev_f:g} to {curr_f:g}"
+            fuel_expense_desc = f"Fueling expense / {vehicle_obj.vehicle_no} / Reading {reading_text}"
             _workspace_reverse_expense_journals('FuelExpense', rec.id, workspace_employee_id)
             rec.district_id = district_id
             rec.project_id = project_id
@@ -17755,18 +17827,39 @@ def fuel_expense_edit(pk):
                 reference_id=rec.id,
                 expense_date=fueling_date,
                 amount=amount_f,
-                description=f'Fuel expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                description=fuel_expense_desc,
                 category_code='Fuel',
-                workspace_party_id=workspace_pump_id,
-                credit_account_id=_workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id),
+                workspace_party_id=workspace_pump_id if payment_type == 'Credit' else None,
+                credit_account_id=(selected_credit_account_id if payment_type == 'Cash' else None),
             )
+            if payment_type == 'Credit' and workspace_pump_id and selected_credit_account_id:
+                selected_credit = WorkspaceAccount.query.filter_by(
+                    id=selected_credit_account_id,
+                    employee_id=workspace_employee_id,
+                    is_active=True,
+                ).first()
+                pump_obj = WorkspaceParty.query.filter_by(employee_id=workspace_employee_id, id=workspace_pump_id).first()
+                _workspace_post_credit_settlement_journal(
+                    employee_id=workspace_employee_id,
+                    reference_type='FuelExpense',
+                    reference_id=rec.id,
+                    expense_date=fueling_date,
+                    amount=amount_f,
+                    category_code='Fuel',
+                    workspace_party_id=workspace_pump_id,
+                    credit_account_id=selected_credit_account_id,
+                    description=(
+                        f"Cash paid by {(selected_credit.name if selected_credit else f'Account {selected_credit_account_id}')}"
+                        f" to {(pump_obj.name if pump_obj else 'Pump')} for Cash fueling"
+                    ),
+                )
             _workspace_sync_regular_expense(
                 employee_id=workspace_employee_id,
                 reference_type='FuelExpense',
                 reference_id=rec.id,
                 expense_date=fueling_date,
                 amount=amount_f,
-                description=f'Fuel expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                description=fuel_expense_desc,
                 expense_type='Fuel Expense',
                 payment_mode=(payment_type or 'Cash'),
                 category='Fuel',
@@ -18445,34 +18538,26 @@ def oil_expense_form(pk=None):
                 credit_account_id=(selected_credit_account_id if oil_payment_type == 'Cash' else None),
             )
             if oil_payment_type == 'Credit' and selected_party_id_int and selected_credit_account_id:
-                party_acct = ensure_workspace_counterparty_account(workspace_employee_id, party_id=selected_party_id_int)
-                if party_acct and selected_credit_account_id != party_acct.id:
-                    settle_amount = Decimal(str(items_total or 0))
-                    if settle_amount > 0:
-                        workspace_create_journal_entry(
-                            employee_id=workspace_employee_id,
-                            entry_type='Transfer',
-                            entry_date=expense_date or pk_date(),
-                            description=f'Oil credit settlement vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
-                            lines=[
-                                {
-                                    'account_id': party_acct.id,
-                                    'debit': settle_amount,
-                                    'credit': 0,
-                                    'description': 'Party payable settled',
-                                },
-                                {
-                                    'account_id': selected_credit_account_id,
-                                    'debit': 0,
-                                    'credit': settle_amount,
-                                    'description': 'Paid via selected Expense By account',
-                                },
-                            ],
-                            reference_type='OilExpense',
-                            reference_id=rec.id,
-                            created_by_user_id=session.get('user_id'),
-                            category='Oil',
-                        )
+                selected_credit = WorkspaceAccount.query.filter_by(
+                    id=selected_credit_account_id,
+                    employee_id=workspace_employee_id,
+                    is_active=True,
+                ).first()
+                party_obj = WorkspaceParty.query.filter_by(employee_id=workspace_employee_id, id=selected_party_id_int).first()
+                _workspace_post_credit_settlement_journal(
+                    employee_id=workspace_employee_id,
+                    reference_type='OilExpense',
+                    reference_id=rec.id,
+                    expense_date=expense_date,
+                    amount=items_total,
+                    category_code='Oil',
+                    workspace_party_id=selected_party_id_int,
+                    credit_account_id=selected_credit_account_id,
+                    description=(
+                        f"Cash paid by {(selected_credit.name if selected_credit else f'Account {selected_credit_account_id}')}"
+                        f" to {(party_obj.name if party_obj else 'Party')} for Oil expense"
+                    ),
+                )
             _workspace_sync_regular_expense(
                 employee_id=workspace_employee_id,
                 reference_type='OilExpense',
@@ -19048,34 +19133,26 @@ def maintenance_expense_form(pk=None):
             )
 
             if payment_type == 'Credit' and workspace_party_id and selected_credit_account_id:
-                party_acct = ensure_workspace_counterparty_account(workspace_employee_id, party_id=workspace_party_id)
-                if party_acct and selected_credit_account_id != party_acct.id:
-                    settle_amount = Decimal(str(items_total or 0))
-                    if settle_amount > 0:
-                        workspace_create_journal_entry(
-                            employee_id=workspace_employee_id,
-                            entry_type='Transfer',
-                            entry_date=expense_date or pk_date(),
-                            description=f'Maintenance credit settlement vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
-                            lines=[
-                                {
-                                    'account_id': party_acct.id,
-                                    'debit': settle_amount,
-                                    'credit': 0,
-                                    'description': 'Party payable settled',
-                                },
-                                {
-                                    'account_id': selected_credit_account_id,
-                                    'debit': 0,
-                                    'credit': settle_amount,
-                                    'description': 'Paid via selected Expense By account',
-                                },
-                            ],
-                            reference_type='MaintenanceExpense',
-                            reference_id=rec.id,
-                            created_by_user_id=session.get('user_id'),
-                            category='Maintenance',
-                        )
+                selected_credit = WorkspaceAccount.query.filter_by(
+                    id=selected_credit_account_id,
+                    employee_id=workspace_employee_id,
+                    is_active=True,
+                ).first()
+                party_obj = WorkspaceParty.query.filter_by(employee_id=workspace_employee_id, id=workspace_party_id).first()
+                _workspace_post_credit_settlement_journal(
+                    employee_id=workspace_employee_id,
+                    reference_type='MaintenanceExpense',
+                    reference_id=rec.id,
+                    expense_date=expense_date,
+                    amount=items_total,
+                    category_code='Maintenance',
+                    workspace_party_id=workspace_party_id,
+                    credit_account_id=selected_credit_account_id,
+                    description=(
+                        f"Cash paid by {(selected_credit.name if selected_credit else f'Account {selected_credit_account_id}')}"
+                        f" to {(party_obj.name if party_obj else 'Party')} for Maintenance expense"
+                    ),
+                )
             _workspace_sync_regular_expense(
                 employee_id=workspace_employee_id,
                 reference_type='MaintenanceExpense',

@@ -80,6 +80,29 @@
                 <a href="{{ url_for('workspace_ledger_transfer_detail', transfer_id=t.reference_id) }}" class="fw-semibold text-decoration-none">
                   {{ transfer_map.get(t.reference_id) }} (ID: {{ t.reference_id }})
                 </a>
+              {% elif (t.reference_type or '') in ('FuelExpense', 'OilExpense', 'MaintenanceExpense') and t.reference_id %}
+                {% set _exp_key = (t.reference_type ~ ':' ~ t.reference_id) %}
+                {% if t.entry_type == 'Transfer' and t.journal_entry_id %}
+                  <a href="{{ url_for('workspace_ledger_journal_detail', journal_entry_id=t.journal_entry_id) }}" class="fw-semibold text-decoration-none">
+                    JV #{{ t.journal_entry_id }}
+                  </a>
+                {% elif expense_ref_map and expense_ref_map.get(_exp_key) %}
+                  {% if t.reference_type == 'FuelExpense' %}
+                    <a href="{{ url_for('fuel_expense_edit', pk=t.reference_id) }}" class="fw-semibold text-decoration-none">
+                      {{ expense_ref_map.get(_exp_key) }}
+                    </a>
+                  {% elif t.reference_type == 'OilExpense' %}
+                    <a href="{{ url_for('oil_expense_form', pk=t.reference_id) }}" class="fw-semibold text-decoration-none">
+                      {{ expense_ref_map.get(_exp_key) }}
+                    </a>
+                  {% else %}
+                    <a href="{{ url_for('maintenance_expense_form', pk=t.reference_id) }}" class="fw-semibold text-decoration-none">
+                      {{ expense_ref_map.get(_exp_key) }}
+                    </a>
+                  {% endif %}
+                {% else %}
+                  -
+                {% endif %}
               {% else %}
                 -
               {% endif %}

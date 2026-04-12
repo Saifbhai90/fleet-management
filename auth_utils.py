@@ -233,6 +233,8 @@ ENDPOINT_PERMISSION_MAP = [
     ('workspace_fund_transfer_edit', 'workspace_transfer_edit'),
     ('workspace_fund_transfer_delete', 'workspace_transfer_delete'),
     ('workspace_ledger', 'workspace_ledger'),
+    ('workspace_ledger_transfer_detail', 'workspace_ledger'),
+    ('workspace_ledger_journal_detail', 'workspace_ledger'),
     ('workspace_month_close', 'workspace_month_close'),
     ('workspace_reports', 'workspace_reports'),
     # Finance
