@@ -488,12 +488,14 @@ def _workspace_dashboard_financial_snapshot(employee_id):
             bank_rows.append(row)
 
         if acc.entity_type in ("party", "driver"):
-            if balance < 0:
+            # Counterparty accounts are Asset heads:
+            # +ve (Dr) means receivable from party/driver, -ve (Cr) means payable to them.
+            if balance > 0:
                 rec_row = dict(row)
                 rec_row["abs_balance"] = abs(balance)
                 rec_row["side"] = "Dr"
                 receivable_rows.append(rec_row)
-            elif balance > 0:
+            elif balance < 0:
                 pay_row = dict(row)
                 pay_row["abs_balance"] = abs(balance)
                 pay_row["side"] = "Cr"
