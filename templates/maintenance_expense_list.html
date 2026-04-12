@@ -124,6 +124,7 @@
               <td class="text-center pe-3">
                 <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                 <form action="{{ url_for('maintenance_expense_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this maintenance entry?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
                 </form>
               </td>
