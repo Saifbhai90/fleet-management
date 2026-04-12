@@ -261,22 +261,20 @@
     var emg = parseFloat(row.dataset.emg) || 0;
     var closeInp = row.querySelector('.close-input');
     var close = closeInp.value.trim() === '' ? NaN : parseFloat(closeInp.value);
-    var kmsDriven = (close >= start ? close - start : 0);
+    var kmsDriven = close - start;
     var kmsDiff = (isNaN(close) ? NaN : kmsDriven - tracker);
     var pctDiff = (kmsDriven && kmsDriven !== 0 && !isNaN(kmsDiff)) ? ((kmsDiff / kmsDriven) * 100).toFixed(1) + '%' : (isNaN(close) ? '-' : 'Driven KM Zero');
     row.querySelector('.kms-driven').textContent = isNaN(close) ? '-' : kmsDriven.toFixed(2);
 
     var taskInp = row.querySelector('input[name*="_tasks_count"]');
-    var tasks = (taskInp && taskInp.value.trim() !== '') ? parseInt(taskInp.value) || 0 : null;
-    var tdCell = row.querySelector('.task-diff');
-    if (tasks !== null) {
-      var td = tasks - emg;
-      tdCell.textContent = td;
-      tdCell.className = 'text-center task-diff' + (td !== 0 ? ' text-danger fw-bold' : '');
-    } else {
-      tdCell.textContent = '-';
-      tdCell.className = 'text-center task-diff';
+    var tasks = 0;
+    if (taskInp) {
+      tasks = taskInp.value.trim() === '' ? 0 : (parseInt(taskInp.value, 10) || 0);
     }
+    var tdCell = row.querySelector('.task-diff');
+    var td = tasks - emg;
+    tdCell.textContent = td;
+    tdCell.className = 'text-center task-diff' + (td !== 0 ? ' text-danger fw-bold' : '');
 
     row.querySelector('.kms-diff').textContent = isNaN(kmsDiff) ? '-' : kmsDiff.toFixed(2);
     row.querySelector('.pct-diff').textContent = pctDiff;
