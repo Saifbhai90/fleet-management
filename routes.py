@@ -1113,16 +1113,48 @@ def _save_expense_attachment_path(file_storage, file_type, original_fn, r2_folde
     return '/'.join((rel_prefix.strip('/'), unique))
 
 
+def _expense_attachment_max_bytes():
+    try:
+        mb = int(os.environ.get('EXPENSE_ATTACHMENT_MAX_MB', '120'))
+    except ValueError:
+        mb = 120
+    return max(1, mb) * 1024 * 1024
+
+
+def _filestorage_byte_size(file_storage):
+    """Best-effort uploaded size; None if stream is not measurable."""
+    try:
+        file_storage.seek(0)
+        stream = file_storage.stream
+        stream.seek(0, 2)
+        n = int(stream.tell())
+        stream.seek(0)
+        file_storage.seek(0)
+        return n
+    except Exception:
+        try:
+            file_storage.seek(0)
+        except Exception:
+            pass
+        return None
+
+
 def _add_expense_attachments_from_request(files, *, r2_folder, attachment_model, fk_kwargs):
-    """Append attachment rows; caller commits. fk_kwargs e.g. {'fuel_expense_id': rec.id}."""
+    """Append attachment rows; caller commits. Returns list of skipped filenames + reasons."""
     allowed_image_ct = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
     allowed_video_ct = {'video/mp4', 'video/webm', 'video/quicktime'}
     upload_root = app.config['UPLOAD_FOLDER']
+    max_bytes = _expense_attachment_max_bytes()
+    failed = []
     for f in files or []:
         if not f or not f.filename:
             continue
         fn = secure_filename(f.filename)
         if not fn:
+            continue
+        sz = _filestorage_byte_size(f)
+        if sz is not None and sz > max_bytes:
+            failed.append(f'{fn} (max {max_bytes // (1024 * 1024)} MB)')
             continue
         ext_lo = os.path.splitext(fn)[1].lower()
         content_type = (f.content_type or '').lower()
@@ -1134,9 +1166,14 @@ def _add_expense_attachments_from_request(files, *, r2_folder, attachment_model,
             continue
         fk_id = next(iter(fk_kwargs.values()))
         rel_prefix = f"{r2_folder}/{fk_id}"
-        stored = _save_expense_attachment_path(f, ft, fn, r2_folder, upload_root, rel_prefix)
-        row = attachment_model(file_path=stored, file_type=ft, original_name=fn, **fk_kwargs)
-        db.session.add(row)
+        try:
+            stored = _save_expense_attachment_path(f, ft, fn, r2_folder, upload_root, rel_prefix)
+            row = attachment_model(file_path=stored, file_type=ft, original_name=fn, **fk_kwargs)
+            db.session.add(row)
+        except Exception as ex:
+            app.logger.warning('Expense attachment skipped (%s): %s', fn, ex)
+            failed.append(fn)
+    return failed
 
 
 def _delete_stored_expense_attachment(file_path):
@@ -17277,13 +17314,20 @@ def fuel_expense_add():
         db.session.commit()
         files = request.files.getlist('attachments')
         if files:
-            _add_expense_attachments_from_request(
-                files,
-                r2_folder='fuel_expense',
-                attachment_model=FuelExpenseAttachment,
-                fk_kwargs={'fuel_expense_id': rec.id},
-            )
-            db.session.commit()
+            try:
+                failed_att = _add_expense_attachments_from_request(
+                    files,
+                    r2_folder='fuel_expense',
+                    attachment_model=FuelExpenseAttachment,
+                    fk_kwargs={'fuel_expense_id': rec.id},
+                )
+                db.session.commit()
+                if failed_att:
+                    flash('Kuch attachments save nahi ho sakin: ' + '; '.join(failed_att), 'warning')
+            except Exception:
+                db.session.rollback()
+                app.logger.exception('Fuel expense attachment save')
+                flash('Fuel record save ho gaya lekin attachments save nahi ho sakin. Edit se dubara files attach karein.', 'warning')
         flash('Fuel expense saved.', 'success')
         return redirect(url_for('fuel_expense_list'))
     return render_template('fuel_expense_form.html', form=form, rec=None, title='Add Fuel Expense')
@@ -17431,13 +17475,20 @@ def fuel_expense_edit(pk):
             db.session.commit()
             files = request.files.getlist('attachments')
             if files:
-                _add_expense_attachments_from_request(
-                    files,
-                    r2_folder='fuel_expense',
-                    attachment_model=FuelExpenseAttachment,
-                    fk_kwargs={'fuel_expense_id': rec.id},
-                )
-                db.session.commit()
+                try:
+                    failed_att = _add_expense_attachments_from_request(
+                        files,
+                        r2_folder='fuel_expense',
+                        attachment_model=FuelExpenseAttachment,
+                        fk_kwargs={'fuel_expense_id': rec.id},
+                    )
+                    db.session.commit()
+                    if failed_att:
+                        flash('Kuch attachments save nahi ho sakin: ' + '; '.join(failed_att), 'warning')
+                except Exception:
+                    db.session.rollback()
+                    app.logger.exception('Fuel expense attachment save (edit)')
+                    flash('Fuel update save ho gayi lekin nayi attachments save nahi ho sakin. Edit se dubara try karein.', 'warning')
             flash('Fuel expense updated.', 'success')
             return redirect(url_for('fuel_expense_list'))
         except Exception:
@@ -17969,13 +18020,20 @@ def oil_expense_form(pk=None):
 
             files = request.files.getlist('attachments')
             if files:
-                _add_expense_attachments_from_request(
-                    files,
-                    r2_folder='oil_expense',
-                    attachment_model=OilExpenseAttachment,
-                    fk_kwargs={'oil_expense_id': rec.id},
-                )
-                db.session.commit()
+                try:
+                    failed_att = _add_expense_attachments_from_request(
+                        files,
+                        r2_folder='oil_expense',
+                        attachment_model=OilExpenseAttachment,
+                        fk_kwargs={'oil_expense_id': rec.id},
+                    )
+                    db.session.commit()
+                    if failed_att:
+                        flash('Kuch attachments save nahi ho sakin: ' + '; '.join(failed_att), 'warning')
+                except Exception:
+                    db.session.rollback()
+                    app.logger.exception('Oil expense attachment save')
+                    flash('Oil record save ho gaya lekin attachments save nahi ho sakin. Edit se dubara files attach karein.', 'warning')
 
             flash('Oil expense saved.', 'success')
             return redirect(url_for('oil_expense_list'))
@@ -18426,13 +18484,20 @@ def maintenance_expense_form(pk=None):
 
             files = request.files.getlist('attachments')
             if files:
-                _add_expense_attachments_from_request(
-                    files,
-                    r2_folder='maintenance_expense',
-                    attachment_model=MaintenanceExpenseAttachment,
-                    fk_kwargs={'maintenance_expense_id': rec.id},
-                )
-                db.session.commit()
+                try:
+                    failed_att = _add_expense_attachments_from_request(
+                        files,
+                        r2_folder='maintenance_expense',
+                        attachment_model=MaintenanceExpenseAttachment,
+                        fk_kwargs={'maintenance_expense_id': rec.id},
+                    )
+                    db.session.commit()
+                    if failed_att:
+                        flash('Kuch attachments save nahi ho sakin: ' + '; '.join(failed_att), 'warning')
+                except Exception:
+                    db.session.rollback()
+                    app.logger.exception('Maintenance expense attachment save')
+                    flash('Maintenance save ho gaya lekin attachments save nahi ho sakin. Edit se dubara files attach karein.', 'warning')
             flash('Maintenance expense saved.', 'success')
             return redirect(url_for('maintenance_expense_list'))
         except Exception:

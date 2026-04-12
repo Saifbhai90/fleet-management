@@ -4,6 +4,7 @@ import uuid
 from typing import Optional, Tuple
 
 import boto3
+from boto3.s3.transfer import TransferConfig
 from werkzeug.utils import secure_filename
 from botocore.config import Config
 from PIL import Image
@@ -169,8 +170,9 @@ def upload_binary_file(
     max_retries: int = 3,
 ) -> Optional[str]:
     """
-    Upload raw file bytes to R2 (e.g. expense videos) preserving a safe extension.
+    Upload large binaries (e.g. expense videos) to R2 using multipart streaming.
 
+    Avoids loading the whole file into RAM (important for Render / small workers).
     Returns the public URL, or None if empty input.
     """
     if not file_storage:
@@ -181,20 +183,38 @@ def upload_binary_file(
     if ext not in _VIDEO_EXT_TO_CT:
         ext = ".mp4"
     content_type = _VIDEO_EXT_TO_CT.get(ext, "application/octet-stream")
-    data = file_storage.read()
-    if not data:
-        return None
     client = _get_s3_client()
     uid = uuid.uuid4().hex
     key = f"{folder.rstrip('/')}/{uid}{ext}"
+    xfer = TransferConfig(
+        multipart_threshold=8 * 1024 * 1024,
+        multipart_chunksize=8 * 1024 * 1024,
+        max_concurrency=4,
+        use_threads=True,
+    )
     last_exc: Exception | None = None
     for _ in range(max_retries):
         try:
-            client.put_object(
-                Bucket=R2_BUCKET_NAME,
-                Key=key,
-                Body=data,
-                ContentType=content_type,
+            file_storage.seek(0)
+            stream = file_storage.stream
+            try:
+                stream.seek(0)
+            except Exception:
+                pass
+            # Empty body check without reading whole file into RAM
+            try:
+                end_pos = stream.seek(0, os.SEEK_END)
+                if end_pos == 0:
+                    return None
+                stream.seek(0)
+            except Exception:
+                file_storage.seek(0)
+            client.upload_fileobj(
+                stream,
+                R2_BUCKET_NAME,
+                key,
+                ExtraArgs={"ContentType": content_type},
+                Config=xfer,
             )
             return f"{R2_PUBLIC_URL}/{key}"
         except Exception as e:

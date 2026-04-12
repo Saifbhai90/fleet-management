@@ -784,7 +784,7 @@ class FuelExpenseAttachment(db.Model):
     __tablename__ = 'fuel_expense_attachment'
     id = db.Column(db.Integer, primary_key=True)
     fuel_expense_id = db.Column(db.Integer, db.ForeignKey('fuel_expense.id'), nullable=False)
-    file_path = db.Column(db.String(500), nullable=False)
+    file_path = db.Column(db.String(2048), nullable=False)  # local relative path or full R2/CDN URL
     file_type = db.Column(db.String(20), nullable=True)
     original_name = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
@@ -896,7 +896,7 @@ class OilExpenseAttachment(db.Model):
     __tablename__ = 'oil_expense_attachment'
     id = db.Column(db.Integer, primary_key=True)
     oil_expense_id = db.Column(db.Integer, db.ForeignKey('oil_expense.id'), nullable=False)
-    file_path = db.Column(db.String(500), nullable=False)
+    file_path = db.Column(db.String(2048), nullable=False)
     file_type = db.Column(db.String(20), nullable=True)  # image, video
     original_name = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
@@ -965,7 +965,7 @@ class MaintenanceExpenseAttachment(db.Model):
     __tablename__ = 'maintenance_expense_attachment'
     id = db.Column(db.Integer, primary_key=True)
     maintenance_expense_id = db.Column(db.Integer, db.ForeignKey('maintenance_expense.id'), nullable=False)
-    file_path = db.Column(db.String(500), nullable=False)
+    file_path = db.Column(db.String(2048), nullable=False)
     file_type = db.Column(db.String(20), nullable=True)
     original_name = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
