@@ -10,7 +10,7 @@ from models import (
     Party, Product, FuelExpense, FuelExpenseAttachment, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
     WorkspaceProduct,
-    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceVehicleReadingSetup,
+    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceVehicleReadingSetup, WorkspaceExpense,
     Notification, NotificationRead,
     User, Role, Permission,
     LoginLog, ActivityLog, ClientActivityLog,
@@ -16932,6 +16932,68 @@ def _workspace_reverse_expense_journals(reference_type, reference_id, employee_i
         workspace_reverse_journal_entry(je.id)
 
 
+def _workspace_regular_expense_number(reference_type, reference_id):
+    if not reference_type or not reference_id:
+        return ''
+    key = str(reference_type).strip()
+    rid = int(reference_id)
+    mapping = {
+        'FuelExpense': 'FUEL',
+        'OilExpense': 'OIL',
+        'MaintenanceExpense': 'MAINT',
+    }
+    prefix = mapping.get(key, key.upper()[:12])
+    return f'{prefix}-{rid}'
+
+
+def _workspace_sync_regular_expense(employee_id, reference_type, reference_id, expense_date, amount,
+                                    description, expense_type, payment_mode, category,
+                                    workspace_party_id=None, journal_entry_id=None):
+    if not employee_id:
+        return None
+    exp_no = _workspace_regular_expense_number(reference_type, reference_id)
+    if not exp_no:
+        return None
+    amount_val = Decimal(str(amount or 0))
+    existing = WorkspaceExpense.query.filter_by(
+        employee_id=employee_id,
+        expense_number=exp_no,
+    ).first()
+    if amount_val <= Decimal('0'):
+        if existing:
+            db.session.delete(existing)
+        return None
+    if not existing:
+        existing = WorkspaceExpense(
+            employee_id=employee_id,
+            expense_number=exp_no,
+            created_by_user_id=session.get('user_id'),
+        )
+        db.session.add(existing)
+    existing.expense_date = expense_date or pk_date()
+    existing.expense_type = expense_type or reference_type or 'Expense'
+    existing.workspace_party_id = workspace_party_id
+    existing.workspace_product_id = None
+    existing.to_driver_id = None
+    existing.description = description or existing.expense_type
+    existing.amount = amount_val
+    existing.payment_mode = payment_mode or 'Cash'
+    existing.category = category or None
+    existing.journal_entry_id = journal_entry_id
+    return existing
+
+
+def _workspace_delete_regular_expense(employee_id, reference_type, reference_id):
+    if not employee_id:
+        return
+    exp_no = _workspace_regular_expense_number(reference_type, reference_id)
+    if not exp_no:
+        return
+    row = WorkspaceExpense.query.filter_by(employee_id=employee_id, expense_number=exp_no).first()
+    if row:
+        db.session.delete(row)
+
+
 def _workspace_post_expense_journal(employee_id, reference_type, reference_id, expense_date, amount, description, category_code, workspace_party_id=None, credit_account_id=None):
     if not employee_id:
         return None
@@ -17057,7 +17119,7 @@ def fuel_expense_add():
             meter_reading_matched = 'No'
         expense_by_val = form.expense_by.data or ''
         if payment_type == 'Cash':
-            expense_by_val = expense_by_val or _workspace_default_cash_expense_by(workspace_employee_id)
+            expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
         rec = FuelExpense(
             district_id=district_id, project_id=project_id, vehicle_id=vehicle_id,
             employee_id=workspace_employee_id,
@@ -17069,7 +17131,7 @@ def fuel_expense_add():
         )
         db.session.add(rec)
         db.session.flush()
-        _workspace_post_expense_journal(
+        fuel_je = _workspace_post_expense_journal(
             employee_id=workspace_employee_id,
             reference_type='FuelExpense',
             reference_id=rec.id,
@@ -17079,6 +17141,19 @@ def fuel_expense_add():
             category_code='Fuel',
             workspace_party_id=workspace_pump_id,
             credit_account_id=_workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id),
+        )
+        _workspace_sync_regular_expense(
+            employee_id=workspace_employee_id,
+            reference_type='FuelExpense',
+            reference_id=rec.id,
+            expense_date=fueling_date,
+            amount=amount_f,
+            description=f'Fuel expense vehicle {vehicle.vehicle_no}',
+            expense_type='Fuel Expense',
+            payment_mode=(payment_type or 'Cash'),
+            category='Fuel',
+            workspace_party_id=workspace_pump_id,
+            journal_entry_id=(fuel_je.id if fuel_je else None),
         )
 
         db.session.commit()
@@ -17207,7 +17282,7 @@ def fuel_expense_edit(pk):
             meter_reading_matched = 'No'
         expense_by_val = form.expense_by.data or ''
         if payment_type == 'Cash':
-            expense_by_val = expense_by_val or _workspace_default_cash_expense_by(workspace_employee_id)
+            expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
         _workspace_reverse_expense_journals('FuelExpense', rec.id, workspace_employee_id)
         rec.district_id = district_id
         rec.project_id = project_id
@@ -17229,7 +17304,7 @@ def fuel_expense_edit(pk):
         rec.km_out_task = km_out_task
         rec.km_in_task = km_in_task
         rec.meter_reading_matched = meter_reading_matched
-        _workspace_post_expense_journal(
+        fuel_je = _workspace_post_expense_journal(
             employee_id=workspace_employee_id,
             reference_type='FuelExpense',
             reference_id=rec.id,
@@ -17239,6 +17314,19 @@ def fuel_expense_edit(pk):
             category_code='Fuel',
             workspace_party_id=workspace_pump_id,
             credit_account_id=_workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id),
+        )
+        _workspace_sync_regular_expense(
+            employee_id=workspace_employee_id,
+            reference_type='FuelExpense',
+            reference_id=rec.id,
+            expense_date=fueling_date,
+            amount=amount_f,
+            description=f'Fuel expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+            expense_type='Fuel Expense',
+            payment_mode=(payment_type or 'Cash'),
+            category='Fuel',
+            workspace_party_id=workspace_pump_id,
+            journal_entry_id=(fuel_je.id if fuel_je else None),
         )
         db.session.commit()
         allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
@@ -17285,6 +17373,7 @@ def fuel_expense_delete(pk):
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('fuel_expense_list'))
     _workspace_reverse_expense_journals('FuelExpense', rec.id, workspace_employee_id)
+    _workspace_delete_regular_expense(workspace_employee_id, 'FuelExpense', rec.id)
     for att in rec.attachments:
         full_path = os.path.join(app.config['UPLOAD_FOLDER'], att.file_path)
         if os.path.isfile(full_path):
@@ -17732,7 +17821,12 @@ def oil_expense_form(pk=None):
 
         rec.workspace_party_id = selected_party_id_int
         rec.total_bill_amount = total_bill_amount
-        _workspace_post_expense_journal(
+        expense_by_val = form.expense_by.data or ''
+        oil_payment_type = 'Credit' if selected_party_id_int else 'Cash'
+        if oil_payment_type == 'Cash':
+            expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
+        selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
+        oil_je = _workspace_post_expense_journal(
             employee_id=workspace_employee_id,
             reference_type='OilExpense',
             reference_id=rec.id,
@@ -17740,8 +17834,50 @@ def oil_expense_form(pk=None):
             amount=items_total,
             description=f'Oil expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
             category_code='Oil',
-            workspace_party_id=selected_party_id_int,
-            credit_account_id=_workspace_account_id_from_expense_by(form.expense_by.data, workspace_employee_id),
+            workspace_party_id=selected_party_id_int if oil_payment_type == 'Credit' else None,
+            credit_account_id=(selected_credit_account_id if oil_payment_type == 'Cash' else None),
+        )
+        if oil_payment_type == 'Credit' and selected_party_id_int and selected_credit_account_id:
+            party_acct = ensure_workspace_counterparty_account(workspace_employee_id, party_id=selected_party_id_int)
+            if party_acct and selected_credit_account_id != party_acct.id:
+                settle_amount = Decimal(str(items_total or 0))
+                if settle_amount > 0:
+                    workspace_create_journal_entry(
+                        employee_id=workspace_employee_id,
+                        entry_type='Transfer',
+                        entry_date=expense_date or pk_date(),
+                        description=f'Oil credit settlement vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                        lines=[
+                            {
+                                'account_id': party_acct.id,
+                                'debit': settle_amount,
+                                'credit': 0,
+                                'description': 'Party payable settled',
+                            },
+                            {
+                                'account_id': selected_credit_account_id,
+                                'debit': 0,
+                                'credit': settle_amount,
+                                'description': 'Paid via selected Expense By account',
+                            },
+                        ],
+                        reference_type='OilExpense',
+                        reference_id=rec.id,
+                        created_by_user_id=session.get('user_id'),
+                        category='Oil',
+                    )
+        _workspace_sync_regular_expense(
+            employee_id=workspace_employee_id,
+            reference_type='OilExpense',
+            reference_id=rec.id,
+            expense_date=expense_date,
+            amount=items_total,
+            description=f'Oil expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+            expense_type='Oil Expense',
+            payment_mode=oil_payment_type,
+            category='Oil',
+            workspace_party_id=selected_party_id_int if oil_payment_type == 'Credit' else None,
+            journal_entry_id=(oil_je.id if oil_je else None),
         )
         db.session.commit()
 
@@ -17802,6 +17938,7 @@ def oil_expense_delete(pk):
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('oil_expense_list'))
     _workspace_reverse_expense_journals('OilExpense', rec.id, workspace_employee_id)
+    _workspace_delete_regular_expense(workspace_employee_id, 'OilExpense', rec.id)
     items = list(rec.items.all())
     _apply_oil_expense_items_balance(items, reverse=True)
     for att in rec.attachments:
@@ -18146,7 +18283,7 @@ def maintenance_expense_form(pk=None):
             expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
         selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
 
-        _workspace_post_expense_journal(
+        maintenance_je = _workspace_post_expense_journal(
             employee_id=workspace_employee_id,
             reference_type='MaintenanceExpense',
             reference_id=rec.id,
@@ -18190,6 +18327,19 @@ def maintenance_expense_form(pk=None):
                         created_by_user_id=session.get('user_id'),
                         category='Maintenance',
                     )
+        _workspace_sync_regular_expense(
+            employee_id=workspace_employee_id,
+            reference_type='MaintenanceExpense',
+            reference_id=rec.id,
+            expense_date=expense_date,
+            amount=items_total,
+            description=f'Maintenance expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+            expense_type='Maintenance Expense',
+            payment_mode=(payment_type or 'Cash'),
+            category='Maintenance',
+            workspace_party_id=workspace_party_id if payment_type == 'Credit' else None,
+            journal_entry_id=(maintenance_je.id if maintenance_je else None),
+        )
         db.session.commit()
 
         allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
@@ -18255,6 +18405,7 @@ def maintenance_expense_delete(pk):
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('maintenance_expense_list'))
     _workspace_reverse_expense_journals('MaintenanceExpense', rec.id, workspace_employee_id)
+    _workspace_delete_regular_expense(workspace_employee_id, 'MaintenanceExpense', rec.id)
     for att in rec.attachments:
         full_path = os.path.join(app.config['UPLOAD_FOLDER'], att.file_path)
         if os.path.isfile(full_path):

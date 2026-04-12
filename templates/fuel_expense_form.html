@@ -308,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (expenseBySelect && expenseBySelect.options) {
     for (var e = 0; e < expenseBySelect.options.length; e += 1) {
       var opt = expenseBySelect.options[e];
-      if ((opt.textContent || '').toLowerCase().indexOf('1100 - workspace cash') === 0) {
+      if ((opt.textContent || '').toLowerCase().indexOf('1110 - hbl bank') === 0) {
         cashExpenseByValue = opt.value;
         break;
       }
@@ -471,6 +471,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
     if (!expenseBySelect) return;
+    var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
     if (paymentType === 'Cash') {
       if (cashExpenseByValue) {
         expenseBySelect.value = cashExpenseByValue;
@@ -478,12 +479,14 @@ document.addEventListener('DOMContentLoaded', function() {
           expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
         }
       }
-    } else {
+    } else if (paymentType === 'Credit') {
       expenseBySelect.value = '';
       if (expenseBySelect.tomselect) {
         expenseBySelect.tomselect.setValue('', true);
       }
     }
+    window.scrollTo(0, scrollY);
+    window.setTimeout(function() { window.scrollTo(0, scrollY); }, 0);
   }
 
   function computeMpgAndLiters() {

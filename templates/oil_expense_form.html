@@ -284,6 +284,9 @@
   var entryBalanceQty = document.getElementById('entryBalanceQty');
   var addToListBtn = document.getElementById('addToListBtn');
   var totalBillInput = document.getElementById('totalBillInput');
+  var partySelect = document.getElementById('partySelect');
+  var expenseBySelect = document.getElementById('expenseBySelect');
+  var cashExpenseByValue = '';
   var oilTaskStartReading = null;
   var oilTaskCloseReading = null;
 
@@ -320,6 +323,31 @@
     .then(function(r) { return r.json(); })
     .then(function(arr) { if (arr && arr.length) _populateOilProducts(arr); })
     .catch(function() {});
+
+  if (expenseBySelect && expenseBySelect.options) {
+    for (var e = 0; e < expenseBySelect.options.length; e += 1) {
+      var opt = expenseBySelect.options[e];
+      if ((opt.textContent || '').toLowerCase().indexOf('1110 - hbl bank') === 0) {
+        cashExpenseByValue = opt.value;
+        break;
+      }
+    }
+  }
+
+  function handleOilExpenseByBehavior() {
+    if (!expenseBySelect) return;
+    var isCredit = !!(partySelect && partySelect.value);
+    var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    if (isCredit) {
+      expenseBySelect.value = '';
+      if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue('', true);
+    } else if (cashExpenseByValue) {
+      expenseBySelect.value = cashExpenseByValue;
+      if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
+    }
+    window.scrollTo(0, scrollY);
+    window.setTimeout(function() { window.scrollTo(0, scrollY); }, 0);
+  }
 
   function updateEntryAmountAndBalance() {
     var purchase = parseFloat(entryPurchaseQty.value) || 0;
@@ -534,6 +562,7 @@
   if (previousReading) previousReading.addEventListener('input', updateKm);
   if (currentReading) currentReading.addEventListener('input', updateOilReadingMatch);
   if (expenseDate) expenseDate.addEventListener('change', fetchOilTaskReadings);
+  if (partySelect) partySelect.addEventListener('change', handleOilExpenseByBehavior);
 
   if (vehicleSelect) {
     vehicleSelect.addEventListener('change', function() {
@@ -556,6 +585,7 @@
   updateOilReadingMatch();
   fetchOilTaskReadings();
   updateEntryAmountAndBalance();
+  handleOilExpenseByBehavior();
 
   var formEl = document.getElementById('oilExpenseForm');
   if (formEl) {
