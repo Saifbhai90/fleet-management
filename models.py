@@ -765,6 +765,14 @@ class FuelExpense(db.Model):
     km_out_task = db.Column(db.Numeric(12, 2), nullable=True)          # KM out (Day Start) from task report
     km_in_task = db.Column(db.Numeric(12, 2), nullable=True)          # KM In (Day Close) from task report
     meter_reading_matched = db.Column(db.String(10), nullable=True)    # Yes / No
+    upload_status = db.Column(db.String(20), nullable=True, default='success', index=True)  # processing|success|error|partial
+    upload_total = db.Column(db.Integer, nullable=False, default=0)
+    upload_done = db.Column(db.Integer, nullable=False, default=0)
+    upload_failed = db.Column(db.Integer, nullable=False, default=0)
+    upload_error = db.Column(db.Text, nullable=True)
+    upload_manifest_json = db.Column(db.Text, nullable=True)
+    upload_started_at = db.Column(db.DateTime, nullable=True)
+    upload_finished_at = db.Column(db.DateTime, nullable=True)
 
     created_at = db.Column(db.DateTime, default=pk_now)
 
@@ -852,6 +860,14 @@ class OilExpense(db.Model):
     km = db.Column(db.Numeric(12, 2), nullable=True)  # current - previous
     workspace_party_id = db.Column(db.Integer, db.ForeignKey('workspace_party.id'), nullable=True, index=True)
     total_bill_amount = db.Column(db.Numeric(15, 2), nullable=True)
+    upload_status = db.Column(db.String(20), nullable=True, default='success', index=True)  # processing|success|error|partial
+    upload_total = db.Column(db.Integer, nullable=False, default=0)
+    upload_done = db.Column(db.Integer, nullable=False, default=0)
+    upload_failed = db.Column(db.Integer, nullable=False, default=0)
+    upload_error = db.Column(db.Text, nullable=True)
+    upload_manifest_json = db.Column(db.Text, nullable=True)
+    upload_started_at = db.Column(db.DateTime, nullable=True)
+    upload_finished_at = db.Column(db.DateTime, nullable=True)
     remarks = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
 

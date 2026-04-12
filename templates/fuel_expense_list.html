@@ -6,6 +6,7 @@
   .fuel-list-head { background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%); color:#fff; border-radius: 12px; padding: .65rem 1rem; }
   .fuel-list-card { border: 1px solid #e9ecef; border-radius: 12px; box-shadow: 0 2px 10px rgba(16,24,40,.06); }
   .fuel-list-card .card-header { background: linear-gradient(to right, #f8f9fa 0%, #fff 100%); font-weight: 600; font-size: .87rem; }
+  #fuelUploadStatusPanel { position: fixed; right: 18px; bottom: 18px; width: min(420px, calc(100vw - 24px)); z-index: 1040; }
 </style>
 <div class="container-fluid py-3">
   <div class="fuel-list-wrap">
@@ -95,6 +96,8 @@
               <th>MPG</th>
               <th>Amount</th>
               <th>Matched</th>
+              <th class="text-center">Upload Status</th>
+              <th class="text-center">Media</th>
               <th class="text-center pe-3">Actions</th>
             </tr>
           </thead>
@@ -126,7 +129,53 @@
                   <span class="badge bg-secondary">No</span>
                 {% endif %}
               </td>
+              <td class="text-center">
+                {% set up_status = (r.upload_status or 'success')|lower %}
+                {% set up_total = r.upload_total or 0 %}
+                {% set up_done = r.upload_done or 0 %}
+                {% set up_failed = r.upload_failed or 0 %}
+                {% if up_status == 'processing' %}
+                  <button type="button" class="btn btn-sm p-0 border-0 bg-transparent fuel-upload-status-btn"
+                          data-id="{{ r.id }}" data-status="{{ up_status }}" data-total="{{ up_total }}" data-done="{{ up_done }}"
+                          data-failed="{{ up_failed }}" data-error="{{ (r.upload_error or '')|e }}">
+                    <span class="badge bg-warning text-dark">Processing {{ up_done }}/{{ up_total }}</span>
+                  </button>
+                {% elif up_status in ['error', 'partial'] %}
+                  <button type="button" class="btn btn-sm p-0 border-0 bg-transparent fuel-upload-status-btn"
+                          data-id="{{ r.id }}" data-status="{{ up_status }}" data-total="{{ up_total }}" data-done="{{ up_done }}"
+                          data-failed="{{ up_failed }}" data-error="{{ (r.upload_error or '')|e }}">
+                    <span class="badge bg-danger">{{ 'Partial' if up_status == 'partial' else 'Error' }}</span>
+                  </button>
+                {% else %}
+                  <button type="button" class="btn btn-sm p-0 border-0 bg-transparent fuel-upload-status-btn"
+                          data-id="{{ r.id }}" data-status="success" data-total="{{ up_total }}" data-done="{{ up_done }}"
+                          data-failed="{{ up_failed }}" data-error="">
+                    <span class="badge bg-success">Success</span>
+                  </button>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% set ns = namespace(cloud=0, local=0, n=0) %}
+                {% for a in r.attachments %}
+                  {% set ns.n = ns.n + 1 %}
+                  {% if a.file_path and (a.file_path.startswith('http://') or a.file_path.startswith('https://')) %}
+                    {% set ns.cloud = ns.cloud + 1 %}
+                  {% elif a.file_path %}
+                    {% set ns.local = ns.local + 1 %}
+                  {% endif %}
+                {% endfor %}
+                {% if ns.n == 0 %}
+                  <span class="text-muted">—</span>
+                {% elif ns.local == 0 %}
+                  <span class="badge bg-success" title="{{ ns.n }} file(s) on Cloudflare / R2">Cloud</span>
+                {% elif ns.cloud == 0 %}
+                  <span class="badge bg-warning text-dark" title="{{ ns.n }} file(s) on app server disk">Local</span>
+                {% else %}
+                  <span class="badge bg-info text-dark" title="Some cloud, some local">Mixed</span>
+                {% endif %}
+              </td>
               <td class="text-center pe-3">
+                <a href="{{ url_for('fuel_expense_media', pk=r.id) }}" class="btn btn-outline-success btn-sm" title="View Media"><i class="bi bi-eye"></i></a>
                 <a href="{{ url_for('fuel_expense_edit', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                 <form action="{{ url_for('fuel_expense_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this fuel expense entry?');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -136,7 +185,7 @@
             </tr>
             {% else %}
             <tr id="fuelExpenseNoDataRow">
-              <td colspan="20" class="text-center py-5 text-muted">
+              <td colspan="22" class="text-center py-5 text-muted">
                 <i class="bi bi-fuel-pump display-6 d-block mb-2"></i>
                 No fuel expense entries. <a href="{{ url_for('fuel_expense_add') }}">Add Fuel Expense</a>
               </td>
@@ -161,7 +210,7 @@
               <td>{{ totals.total_liters|round(2) }}</td>
               <td>{{ totals.avg_mpg|round(2) if totals.avg_mpg is not none else '-' }}</td>
               <td>{{ totals.total_amount|round(2) }}</td>
-              <td colspan="2"></td>
+              <td colspan="4"></td>
             </tr>
           </tfoot>
           {% endif %}
@@ -169,6 +218,23 @@
       </div>
     </div>
   </div>
+  </div>
+</div>
+<div id="fuelUploadStatusPanel" class="card shadow border d-none">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center">
+    <h6 class="mb-0"><i class="bi bi-cloud-upload me-2"></i>Upload Status</h6>
+    <button type="button" class="btn-close btn-sm" id="fuelUploadPanelClose" aria-label="Close"></button>
+  </div>
+  <div class="card-body py-2">
+    <div class="progress mb-2" style="height:1.25rem;">
+      <div id="fuelUploadModalBar" class="progress-bar" style="width:0%">0%</div>
+    </div>
+    <div id="fuelUploadModalMeta" class="small text-muted">0 / 0</div>
+    <pre id="fuelUploadModalError" class="small text-danger mt-2 mb-0 d-none" style="white-space:pre-wrap;max-height:150px;overflow:auto;"></pre>
+  </div>
+  <div class="card-footer py-2 d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-warning btn-sm d-none" id="fuelUploadResumeBtn"><i class="bi bi-arrow-repeat me-1"></i>Resume</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="fuelUploadPanelHide">Close</button>
   </div>
 </div>
 <script>
@@ -247,6 +313,96 @@
       });
     }
   }
+
+  var statusBtns = document.querySelectorAll('.fuel-upload-status-btn');
+  var panelEl = document.getElementById('fuelUploadStatusPanel');
+  var panelHideBtn = document.getElementById('fuelUploadPanelHide');
+  var panelCloseBtn = document.getElementById('fuelUploadPanelClose');
+  var bar = document.getElementById('fuelUploadModalBar');
+  var meta = document.getElementById('fuelUploadModalMeta');
+  var err = document.getElementById('fuelUploadModalError');
+  var resumeBtn = document.getElementById('fuelUploadResumeBtn');
+  var activeId = null;
+  var pollTimer = null;
+
+  function csrfToken() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+  function paintStatus(st, total, done, failed, msg) {
+    var pct = total ? Math.round(100 * done / total) : (st === 'success' ? 100 : 0);
+    if (bar) {
+      bar.style.width = pct + '%';
+      bar.textContent = pct + '%';
+      bar.classList.remove('bg-success', 'bg-warning', 'bg-danger', 'bg-info');
+      bar.classList.add(st === 'success' ? 'bg-success' : (st === 'processing' ? 'bg-warning' : (st === 'partial' ? 'bg-info' : 'bg-danger')));
+    }
+    if (meta) meta.textContent = (done || 0) + ' / ' + (total || 0) + ' uploaded, failed: ' + (failed || 0) + ' [' + st + ']';
+    if (err) {
+      if (msg) {
+        err.textContent = msg;
+        err.classList.remove('d-none');
+      } else {
+        err.textContent = '';
+        err.classList.add('d-none');
+      }
+    }
+    if (resumeBtn) resumeBtn.classList.toggle('d-none', !(st === 'error' || st === 'partial'));
+  }
+  function stopPoll() { if (pollTimer) { window.clearInterval(pollTimer); pollTimer = null; } }
+  function fetchStatus(id) {
+    return fetch('/api/fuel-expense/upload-status/' + id)
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if (!j || !j.ok) throw new Error((j && j.error) || 'status error');
+        paintStatus(j.status || 'error', j.total || 0, j.done || 0, j.failed || 0, j.error || '');
+        if (j.status !== 'processing') stopPoll();
+      })
+      .catch(function(e){
+        paintStatus('error', 0, 0, 0, String(e));
+        stopPoll();
+      });
+  }
+  if (resumeBtn) {
+    resumeBtn.addEventListener('click', function() {
+      if (!activeId) return;
+      resumeBtn.disabled = true;
+      fetch('/fuel-expense/' + activeId + '/upload-resume', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken() }
+      }).then(function(r){ return r.json(); }).then(function(j){
+        resumeBtn.disabled = false;
+        if (!j || !j.ok) throw new Error((j && j.error) || 'resume failed');
+        paintStatus('processing', 0, 0, 0, '');
+        stopPoll();
+        pollTimer = window.setInterval(function(){ fetchStatus(activeId); }, 2500);
+        fetchStatus(activeId);
+      }).catch(function(e){
+        resumeBtn.disabled = false;
+        paintStatus('error', 0, 0, 0, String(e));
+      });
+    });
+  }
+  function hidePanel() { if (panelEl) panelEl.classList.add('d-none'); stopPoll(); activeId = null; }
+  if (panelHideBtn) panelHideBtn.addEventListener('click', hidePanel);
+  if (panelCloseBtn) panelCloseBtn.addEventListener('click', hidePanel);
+  statusBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      activeId = this.getAttribute('data-id');
+      var st = (this.getAttribute('data-status') || 'success').toLowerCase();
+      var total = parseInt(this.getAttribute('data-total') || '0', 10);
+      var done = parseInt(this.getAttribute('data-done') || '0', 10);
+      var failed = parseInt(this.getAttribute('data-failed') || '0', 10);
+      var msg = this.getAttribute('data-error') || '';
+      paintStatus(st, total, done, failed, msg);
+      if (panelEl) panelEl.classList.remove('d-none');
+      stopPoll();
+      if (st === 'processing' && activeId) {
+        pollTimer = window.setInterval(function(){ fetchStatus(activeId); }, 2500);
+        fetchStatus(activeId);
+      }
+    });
+  });
 })();
 </script>
 <script>

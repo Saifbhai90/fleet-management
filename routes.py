@@ -1226,25 +1226,24 @@ def _add_expense_attachments_direct_client(payload, *, attachment_model, fk_kwar
     return failed
 
 
-_maintenance_upload_lock = threading.Lock()
-_maintenance_upload_active = set()
+_expense_upload_lock = threading.Lock()
+_expense_upload_active = set()
 
 
-def _maintenance_upload_queue_root():
-    root = os.path.join(app.config['UPLOAD_FOLDER'], 'maintenance_upload_queue')
+def _expense_upload_queue_root(kind):
+    root = os.path.join(app.config['UPLOAD_FOLDER'], 'expense_upload_queue', str(kind).strip().lower())
     os.makedirs(root, exist_ok=True)
     return root
 
 
-def _prepare_maintenance_upload_manifest(files, expense_id):
-    """
-    Persist request files to a queue folder quickly and return manifest for background upload.
-    """
+def _prepare_expense_upload_manifest(files, kind, expense_id):
+    """Persist request files quickly and return manifest for background upload."""
     allowed_image_ct = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
     allowed_video_ct = {'video/mp4', 'video/webm', 'video/quicktime'}
     max_bytes = _expense_attachment_max_bytes()
-    batch_id = f"{expense_id}_{pk_now().strftime('%Y%m%d%H%M%S%f')}"
-    batch_dir = os.path.join(_maintenance_upload_queue_root(), batch_id)
+    kind = str(kind or '').strip().lower() or 'maintenance'
+    batch_id = f"{kind}_{expense_id}_{pk_now().strftime('%Y%m%d%H%M%S%f')}"
+    batch_dir = os.path.join(_expense_upload_queue_root(kind), batch_id)
     os.makedirs(batch_dir, exist_ok=True)
     manifest = []
     skipped = []
@@ -1280,27 +1279,61 @@ def _prepare_maintenance_upload_manifest(files, expense_id):
     return manifest, skipped
 
 
-def _start_maintenance_upload_worker(expense_id: int):
-    with _maintenance_upload_lock:
-        if expense_id in _maintenance_upload_active:
+def _expense_upload_kind_config(kind):
+    kind = str(kind or '').strip().lower()
+    mapping = {
+        'maintenance': {
+            'record_model': MaintenanceExpense,
+            'attachment_model': MaintenanceExpenseAttachment,
+            'fk_field': 'maintenance_expense_id',
+            'folder': 'maintenance_expense',
+            'log_prefix': 'Maintenance',
+        },
+        'fuel': {
+            'record_model': FuelExpense,
+            'attachment_model': FuelExpenseAttachment,
+            'fk_field': 'fuel_expense_id',
+            'folder': 'fuel_expense',
+            'log_prefix': 'Fuel',
+        },
+        'oil': {
+            'record_model': OilExpense,
+            'attachment_model': OilExpenseAttachment,
+            'fk_field': 'oil_expense_id',
+            'folder': 'oil_expense',
+            'log_prefix': 'Oil',
+        },
+    }
+    return mapping.get(kind)
+
+
+def _start_expense_upload_worker(kind, expense_id: int):
+    kind = str(kind or '').strip().lower()
+    key = (kind, int(expense_id))
+    with _expense_upload_lock:
+        if key in _expense_upload_active:
             return False
-        _maintenance_upload_active.add(expense_id)
+        _expense_upload_active.add(key)
 
     def _runner():
         try:
-            _process_maintenance_upload_job(expense_id)
+            _process_expense_upload_job(kind, expense_id)
         finally:
-            with _maintenance_upload_lock:
-                _maintenance_upload_active.discard(expense_id)
+            with _expense_upload_lock:
+                _expense_upload_active.discard(key)
 
-    t = threading.Thread(target=_runner, daemon=True, name=f'maint-upload-{expense_id}')
+    t = threading.Thread(target=_runner, daemon=True, name=f'{kind}-upload-{expense_id}')
     t.start()
     return True
 
 
-def _process_maintenance_upload_job(expense_id: int):
+def _process_expense_upload_job(kind, expense_id: int):
+    kind = str(kind or '').strip().lower()
+    cfg = _expense_upload_kind_config(kind)
+    if not cfg:
+        return
     with app.app_context():
-        rec = MaintenanceExpense.query.get(expense_id)
+        rec = cfg['record_model'].query.get(expense_id)
         if not rec:
             return
         try:
@@ -1339,15 +1372,17 @@ def _process_maintenance_upload_job(expense_id: int):
                         fs,
                         ftype if ftype in ('image', 'video') else 'image',
                         original_name,
-                        'maintenance_expense',
+                        cfg['folder'],
                         app.config['UPLOAD_FOLDER'],
-                        f'maintenance_expense/{rec.id}',
+                        f"{cfg['folder']}/{rec.id}",
                     )
-                db.session.add(MaintenanceExpenseAttachment(
-                    maintenance_expense_id=rec.id,
-                    file_path=stored,
-                    file_type=(ftype if ftype in ('image', 'video') else None),
-                    original_name=(original_name[:255] if original_name else None),
+                db.session.add(cfg['attachment_model'](
+                    **{
+                        cfg['fk_field']: rec.id,
+                        'file_path': stored,
+                        'file_type': (ftype if ftype in ('image', 'video') else None),
+                        'original_name': (original_name[:255] if original_name else None),
+                    }
                 ))
                 done += 1
                 try:
@@ -1355,7 +1390,7 @@ def _process_maintenance_upload_job(expense_id: int):
                 except OSError:
                     pass
             except Exception as ex:
-                app.logger.warning('Maintenance queued upload failed (%s): %s', original_name or temp_path, ex)
+                app.logger.warning('%s queued upload failed (%s): %s', cfg['log_prefix'], original_name or temp_path, ex)
                 errors.append(f'{original_name or "file"}: {ex}')
                 remaining.append(item)
             rec.upload_done = done
@@ -1376,6 +1411,30 @@ def _process_maintenance_upload_job(expense_id: int):
             rec.upload_status = 'success'
             rec.upload_error = None
         db.session.commit()
+
+
+def _prepare_maintenance_upload_manifest(files, expense_id):
+    return _prepare_expense_upload_manifest(files, 'maintenance', expense_id)
+
+
+def _start_maintenance_upload_worker(expense_id: int):
+    return _start_expense_upload_worker('maintenance', expense_id)
+
+
+def _prepare_fuel_upload_manifest(files, expense_id):
+    return _prepare_expense_upload_manifest(files, 'fuel', expense_id)
+
+
+def _start_fuel_upload_worker(expense_id: int):
+    return _start_expense_upload_worker('fuel', expense_id)
+
+
+def _prepare_oil_upload_manifest(files, expense_id):
+    return _prepare_expense_upload_manifest(files, 'oil', expense_id)
+
+
+def _start_oil_upload_worker(expense_id: int):
+    return _start_expense_upload_worker('oil', expense_id)
 
 
 def _delete_stored_expense_attachment(file_path):
@@ -17515,21 +17574,34 @@ def fuel_expense_add():
 
         db.session.commit()
         files = request.files.getlist('attachments')
-        if files:
+        has_new_files = bool(files and any(f and getattr(f, 'filename', None) for f in files))
+        if has_new_files:
             try:
-                failed_att = _add_expense_attachments_from_request(
-                    files,
-                    r2_folder='fuel_expense',
-                    attachment_model=FuelExpenseAttachment,
-                    fk_kwargs={'fuel_expense_id': rec.id},
-                )
+                manifest, skipped_att = _prepare_fuel_upload_manifest(files, rec.id)
+                rec.upload_total = len(manifest)
+                rec.upload_done = 0
+                rec.upload_failed = 0
+                rec.upload_error = None
+                rec.upload_finished_at = None
+                if manifest:
+                    rec.upload_status = 'processing'
+                    rec.upload_started_at = pk_now()
+                    rec.upload_manifest_json = json.dumps(manifest)
+                else:
+                    rec.upload_status = 'success'
+                    rec.upload_started_at = None
+                    rec.upload_manifest_json = None
+                    rec.upload_finished_at = pk_now()
                 db.session.commit()
-                if failed_att:
-                    flash('Kuch attachments save nahi ho sakin: ' + '; '.join(failed_att), 'warning')
+                if manifest:
+                    _start_fuel_upload_worker(rec.id)
+                    flash(f'Upload background me start ho gaya ({len(manifest)} file). Status list me live dekhein.', 'info')
+                if skipped_att:
+                    flash('Kuch files queue me nahi gayin: ' + '; '.join(skipped_att), 'warning')
             except Exception:
                 db.session.rollback()
-                app.logger.exception('Fuel expense attachment save')
-                flash('Fuel record save ho gaya lekin attachments save nahi ho sakin. Edit se dubara files attach karein.', 'warning')
+                app.logger.exception('Fuel async attachment queue save')
+                flash('Fuel save ho gaya lekin files queue me add nahi ho sakin.', 'warning')
         flash('Fuel expense saved.', 'success')
         return redirect(url_for('fuel_expense_list'))
     return render_template('fuel_expense_form.html', form=form, rec=None, title='Add Fuel Expense')
@@ -17676,21 +17748,34 @@ def fuel_expense_edit(pk):
             )
             db.session.commit()
             files = request.files.getlist('attachments')
-            if files:
+            has_new_files = bool(files and any(f and getattr(f, 'filename', None) for f in files))
+            if has_new_files:
                 try:
-                    failed_att = _add_expense_attachments_from_request(
-                        files,
-                        r2_folder='fuel_expense',
-                        attachment_model=FuelExpenseAttachment,
-                        fk_kwargs={'fuel_expense_id': rec.id},
-                    )
+                    manifest, skipped_att = _prepare_fuel_upload_manifest(files, rec.id)
+                    rec.upload_total = len(manifest)
+                    rec.upload_done = 0
+                    rec.upload_failed = 0
+                    rec.upload_error = None
+                    rec.upload_finished_at = None
+                    if manifest:
+                        rec.upload_status = 'processing'
+                        rec.upload_started_at = pk_now()
+                        rec.upload_manifest_json = json.dumps(manifest)
+                    else:
+                        rec.upload_status = 'success'
+                        rec.upload_started_at = None
+                        rec.upload_manifest_json = None
+                        rec.upload_finished_at = pk_now()
                     db.session.commit()
-                    if failed_att:
-                        flash('Kuch attachments save nahi ho sakin: ' + '; '.join(failed_att), 'warning')
+                    if manifest:
+                        _start_fuel_upload_worker(rec.id)
+                        flash(f'Upload background me start ho gaya ({len(manifest)} file). Status list me live dekhein.', 'info')
+                    if skipped_att:
+                        flash('Kuch files queue me nahi gayin: ' + '; '.join(skipped_att), 'warning')
                 except Exception:
                     db.session.rollback()
-                    app.logger.exception('Fuel expense attachment save (edit)')
-                    flash('Fuel update save ho gayi lekin nayi attachments save nahi ho sakin. Edit se dubara try karein.', 'warning')
+                    app.logger.exception('Fuel async attachment queue save (edit)')
+                    flash('Fuel update save ho gayi lekin files queue me add nahi ho sakin.', 'warning')
             flash('Fuel expense updated.', 'success')
             return redirect(url_for('fuel_expense_list'))
         except Exception:
@@ -17717,6 +17802,56 @@ def fuel_expense_delete(pk):
     db.session.commit()
     flash('Fuel expense deleted.', 'success')
     return redirect(url_for('fuel_expense_list'))
+
+
+@app.route('/api/fuel-expense/upload-status/<int:pk>')
+def api_fuel_expense_upload_status(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = FuelExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    total = int(rec.upload_total or 0)
+    done = int(rec.upload_done or 0)
+    failed = int(rec.upload_failed or 0)
+    status = (rec.upload_status or ('success' if total == 0 else 'processing')).strip().lower()
+    pct = int(round((done / total) * 100)) if total > 0 else 100
+    return jsonify({
+        'ok': True,
+        'id': rec.id,
+        'status': status,
+        'total': total,
+        'done': done,
+        'failed': failed,
+        'percent': max(0, min(100, pct)),
+        'error': (rec.upload_error or ''),
+    })
+
+
+@app.route('/fuel-expense/<int:pk>/upload-resume', methods=['POST'])
+def fuel_expense_upload_resume(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = FuelExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    try:
+        manifest = json.loads(rec.upload_manifest_json or '[]')
+    except Exception:
+        manifest = []
+    if not manifest:
+        return jsonify({'ok': False, 'error': 'nothing_to_resume'})
+    rec.upload_status = 'processing'
+    rec.upload_error = None
+    rec.upload_started_at = pk_now()
+    rec.upload_finished_at = None
+    db.session.commit()
+    started = _start_fuel_upload_worker(rec.id)
+    return jsonify({'ok': True, 'started': bool(started)})
 
 
 # ────────────────────────────────────────────────
@@ -18221,21 +18356,34 @@ def oil_expense_form(pk=None):
             db.session.commit()
 
             files = request.files.getlist('attachments')
-            if files:
+            has_new_files = bool(files and any(f and getattr(f, 'filename', None) for f in files))
+            if has_new_files:
                 try:
-                    failed_att = _add_expense_attachments_from_request(
-                        files,
-                        r2_folder='oil_expense',
-                        attachment_model=OilExpenseAttachment,
-                        fk_kwargs={'oil_expense_id': rec.id},
-                    )
+                    manifest, skipped_att = _prepare_oil_upload_manifest(files, rec.id)
+                    rec.upload_total = len(manifest)
+                    rec.upload_done = 0
+                    rec.upload_failed = 0
+                    rec.upload_error = None
+                    rec.upload_finished_at = None
+                    if manifest:
+                        rec.upload_status = 'processing'
+                        rec.upload_started_at = pk_now()
+                        rec.upload_manifest_json = json.dumps(manifest)
+                    else:
+                        rec.upload_status = 'success'
+                        rec.upload_started_at = None
+                        rec.upload_manifest_json = None
+                        rec.upload_finished_at = pk_now()
                     db.session.commit()
-                    if failed_att:
-                        flash('Kuch attachments save nahi ho sakin: ' + '; '.join(failed_att), 'warning')
+                    if manifest:
+                        _start_oil_upload_worker(rec.id)
+                        flash(f'Upload background me start ho gaya ({len(manifest)} file). Status list me live dekhein.', 'info')
+                    if skipped_att:
+                        flash('Kuch files queue me nahi gayin: ' + '; '.join(skipped_att), 'warning')
                 except Exception:
                     db.session.rollback()
-                    app.logger.exception('Oil expense attachment save')
-                    flash('Oil record save ho gaya lekin attachments save nahi ho sakin. Edit se dubara files attach karein.', 'warning')
+                    app.logger.exception('Oil async attachment queue save')
+                    flash('Oil save ho gaya lekin files queue me add nahi ho sakin.', 'warning')
 
             flash('Oil expense saved.', 'success')
             return redirect(url_for('oil_expense_list'))
@@ -18276,6 +18424,56 @@ def oil_expense_delete(pk):
     db.session.commit()
     flash('Oil expense deleted.', 'success')
     return redirect(url_for('oil_expense_list'))
+
+
+@app.route('/api/oil-expense/upload-status/<int:pk>')
+def api_oil_expense_upload_status(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    total = int(rec.upload_total or 0)
+    done = int(rec.upload_done or 0)
+    failed = int(rec.upload_failed or 0)
+    status = (rec.upload_status or ('success' if total == 0 else 'processing')).strip().lower()
+    pct = int(round((done / total) * 100)) if total > 0 else 100
+    return jsonify({
+        'ok': True,
+        'id': rec.id,
+        'status': status,
+        'total': total,
+        'done': done,
+        'failed': failed,
+        'percent': max(0, min(100, pct)),
+        'error': (rec.upload_error or ''),
+    })
+
+
+@app.route('/oil-expense/<int:pk>/upload-resume', methods=['POST'])
+def oil_expense_upload_resume(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    try:
+        manifest = json.loads(rec.upload_manifest_json or '[]')
+    except Exception:
+        manifest = []
+    if not manifest:
+        return jsonify({'ok': False, 'error': 'nothing_to_resume'})
+    rec.upload_status = 'processing'
+    rec.upload_error = None
+    rec.upload_started_at = pk_now()
+    rec.upload_finished_at = None
+    db.session.commit()
+    started = _start_oil_upload_worker(rec.id)
+    return jsonify({'ok': True, 'started': bool(started)})
 
 
 # ────────────────────────────────────────────────
@@ -19072,6 +19270,368 @@ def maintenance_expense_media_download_all(pk):
     veh = secure_filename((rec.vehicle.vehicle_no if rec.vehicle else 'vehicle') or 'vehicle')
     date_part = rec.expense_date.strftime('%Y%m%d') if rec.expense_date else pk_now().strftime('%Y%m%d')
     archive_name = f'maintenance_media_{veh}_{date_part}.zip'
+    return send_file(zip_path, as_attachment=True, download_name=archive_name, mimetype='application/zip', max_age=0)
+
+
+@app.route('/fuel-expense/<int:pk>/media')
+@app.route('/fuel-expenses/<int:pk>/media')
+def fuel_expense_media(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = FuelExpense.query.filter_by(id=pk).first()
+    if not rec:
+        flash('Media record not found (maybe deleted).', 'warning')
+        return redirect(url_for('fuel_expense_list'))
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('fuel_expense_list'))
+
+    def _human_size(n):
+        if n is None:
+            return ''
+        size = float(n)
+        units = ['B', 'KB', 'MB', 'GB', 'TB']
+        idx = 0
+        while size >= 1024 and idx < len(units) - 1:
+            size /= 1024.0
+            idx += 1
+        if idx == 0:
+            return f"{int(size)} {units[idx]}"
+        return f"{size:.1f} {units[idx]}"
+
+    media_items = []
+    for att in rec.attachments.order_by(FuelExpenseAttachment.created_at.asc(), FuelExpenseAttachment.id.asc()).all():
+        url = media_url_filter(att.file_path or '')
+        if not url:
+            continue
+        ftype = (att.file_type or '').strip().lower()
+        if ftype not in ('image', 'video'):
+            path = (att.file_path or '').lower()
+            if any(path.endswith(x) for x in ('.mp4', '.webm', '.mov')):
+                ftype = 'video'
+            else:
+                ftype = 'image'
+        local_full = _maintenance_attachment_local_full_path(att.file_path or '')
+        size_bytes = os.path.getsize(local_full) if local_full else None
+        created_at = att.created_at
+        media_items.append({
+            'url': url,
+            'type': ftype,
+            'name': att.original_name or os.path.basename(att.file_path or '') or 'Attachment',
+            'created_at': created_at.strftime('%d-%m-%Y %I:%M %p') if created_at else '',
+            'created_at_iso': created_at.isoformat() if created_at else '',
+            'size_bytes': size_bytes,
+            'size_label': _human_size(size_bytes),
+            'download_url': url_for('fuel_expense_media_download', pk=rec.id, att_id=att.id),
+            'is_local_file': bool(local_full),
+        })
+    date_label = rec.fueling_date.strftime('%d-%m-%Y') if rec.fueling_date else '-'
+    return render_template(
+        'maintenance_expense_media.html',
+        rec=rec,
+        media_items=media_items,
+        media_title='Fuel Media Gallery',
+        media_date_label=date_label,
+        back_url=url_for('fuel_expense_list'),
+        download_all_url=url_for('fuel_expense_media_download_all', pk=rec.id),
+    )
+
+
+@app.route('/fuel-expense/<int:pk>/media/download/<int:att_id>')
+@app.route('/fuel-expenses/<int:pk>/media/download/<int:att_id>')
+def fuel_expense_media_download(pk, att_id):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = FuelExpense.query.filter_by(id=pk).first()
+    if not rec:
+        flash('Media record not found (maybe deleted).', 'warning')
+        return redirect(url_for('fuel_expense_list'))
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('fuel_expense_list'))
+    att = FuelExpenseAttachment.query.filter_by(id=att_id, fuel_expense_id=rec.id).first()
+    if not att:
+        flash('Attachment not found.', 'warning')
+        return redirect(url_for('fuel_expense_media', pk=rec.id))
+
+    dl_name = _maintenance_attachment_download_name(att)
+    local_full = _maintenance_attachment_local_full_path(att.file_path or '')
+    if local_full:
+        return send_file(local_full, as_attachment=True, download_name=dl_name, conditional=True, max_age=0)
+    try:
+        blob, mime = _maintenance_attachment_read_bytes(att.file_path or '')
+    except Exception as ex:
+        app.logger.warning('Fuel media download failed (%s): %s', att.id, ex)
+        flash('Download failed for this attachment.', 'danger')
+        return redirect(url_for('fuel_expense_media', pk=rec.id))
+    if not blob:
+        flash('Attachment file is empty.', 'warning')
+        return redirect(url_for('fuel_expense_media', pk=rec.id))
+    return send_file(BytesIO(blob), as_attachment=True, download_name=dl_name, mimetype=(mime or 'application/octet-stream'), max_age=0)
+
+
+@app.route('/fuel-expense/<int:pk>/media/download-all')
+@app.route('/fuel-expenses/<int:pk>/media/download-all')
+def fuel_expense_media_download_all(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = FuelExpense.query.filter_by(id=pk).first()
+    if not rec:
+        flash('Media record not found (maybe deleted).', 'warning')
+        return redirect(url_for('fuel_expense_list'))
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('fuel_expense_list'))
+    atts = rec.attachments.order_by(FuelExpenseAttachment.created_at.asc(), FuelExpenseAttachment.id.asc()).all()
+    if not atts:
+        flash('No media files available for download.', 'warning')
+        return redirect(url_for('fuel_expense_media', pk=rec.id))
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    zip_path = tmp.name
+    tmp.close()
+    added = 0
+    used = set()
+    try:
+        with zipfile.ZipFile(zip_path, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+            for att in atts:
+                base_name = _maintenance_attachment_download_name(att)
+                file_name = base_name
+                n = 2
+                while file_name.lower() in used:
+                    root, ext = os.path.splitext(base_name)
+                    file_name = f'{root}_{n}{ext}'
+                    n += 1
+                used.add(file_name.lower())
+                local_full = _maintenance_attachment_local_full_path(att.file_path or '')
+                if local_full:
+                    try:
+                        zf.write(local_full, arcname=file_name)
+                        added += 1
+                        continue
+                    except Exception:
+                        pass
+                try:
+                    blob, _mime = _maintenance_attachment_read_bytes(att.file_path or '')
+                    if blob:
+                        zf.writestr(file_name, blob)
+                        added += 1
+                except Exception:
+                    pass
+        if added == 0:
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
+            flash('No files could be packed for download.', 'danger')
+            return redirect(url_for('fuel_expense_media', pk=rec.id))
+    except Exception as ex:
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
+        app.logger.warning('Fuel zip creation failed (%s): %s', rec.id, ex)
+        flash('Unable to prepare media ZIP right now.', 'danger')
+        return redirect(url_for('fuel_expense_media', pk=rec.id))
+
+    @after_this_request
+    def _cleanup_fuel_zip(resp):
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
+        return resp
+
+    veh = secure_filename((rec.vehicle.vehicle_no if rec.vehicle else 'vehicle') or 'vehicle')
+    date_part = rec.fueling_date.strftime('%Y%m%d') if rec.fueling_date else pk_now().strftime('%Y%m%d')
+    archive_name = f'fuel_media_{veh}_{date_part}.zip'
+    return send_file(zip_path, as_attachment=True, download_name=archive_name, mimetype='application/zip', max_age=0)
+
+
+@app.route('/oil-expense/<int:pk>/media')
+@app.route('/oil-expenses/<int:pk>/media')
+def oil_expense_media(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilExpense.query.filter_by(id=pk).first()
+    if not rec:
+        flash('Media record not found (maybe deleted).', 'warning')
+        return redirect(url_for('oil_expense_list'))
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('oil_expense_list'))
+
+    def _human_size(n):
+        if n is None:
+            return ''
+        size = float(n)
+        units = ['B', 'KB', 'MB', 'GB', 'TB']
+        idx = 0
+        while size >= 1024 and idx < len(units) - 1:
+            size /= 1024.0
+            idx += 1
+        if idx == 0:
+            return f"{int(size)} {units[idx]}"
+        return f"{size:.1f} {units[idx]}"
+
+    media_items = []
+    for att in rec.attachments.order_by(OilExpenseAttachment.created_at.asc(), OilExpenseAttachment.id.asc()).all():
+        url = media_url_filter(att.file_path or '')
+        if not url:
+            continue
+        ftype = (att.file_type or '').strip().lower()
+        if ftype not in ('image', 'video'):
+            path = (att.file_path or '').lower()
+            if any(path.endswith(x) for x in ('.mp4', '.webm', '.mov')):
+                ftype = 'video'
+            else:
+                ftype = 'image'
+        local_full = _maintenance_attachment_local_full_path(att.file_path or '')
+        size_bytes = os.path.getsize(local_full) if local_full else None
+        created_at = att.created_at
+        media_items.append({
+            'url': url,
+            'type': ftype,
+            'name': att.original_name or os.path.basename(att.file_path or '') or 'Attachment',
+            'created_at': created_at.strftime('%d-%m-%Y %I:%M %p') if created_at else '',
+            'created_at_iso': created_at.isoformat() if created_at else '',
+            'size_bytes': size_bytes,
+            'size_label': _human_size(size_bytes),
+            'download_url': url_for('oil_expense_media_download', pk=rec.id, att_id=att.id),
+            'is_local_file': bool(local_full),
+        })
+    date_label = rec.expense_date.strftime('%d-%m-%Y') if rec.expense_date else '-'
+    return render_template(
+        'maintenance_expense_media.html',
+        rec=rec,
+        media_items=media_items,
+        media_title='Oil Media Gallery',
+        media_date_label=date_label,
+        back_url=url_for('oil_expense_list'),
+        download_all_url=url_for('oil_expense_media_download_all', pk=rec.id),
+    )
+
+
+@app.route('/oil-expense/<int:pk>/media/download/<int:att_id>')
+@app.route('/oil-expenses/<int:pk>/media/download/<int:att_id>')
+def oil_expense_media_download(pk, att_id):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilExpense.query.filter_by(id=pk).first()
+    if not rec:
+        flash('Media record not found (maybe deleted).', 'warning')
+        return redirect(url_for('oil_expense_list'))
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('oil_expense_list'))
+    att = OilExpenseAttachment.query.filter_by(id=att_id, oil_expense_id=rec.id).first()
+    if not att:
+        flash('Attachment not found.', 'warning')
+        return redirect(url_for('oil_expense_media', pk=rec.id))
+
+    dl_name = _maintenance_attachment_download_name(att)
+    local_full = _maintenance_attachment_local_full_path(att.file_path or '')
+    if local_full:
+        return send_file(local_full, as_attachment=True, download_name=dl_name, conditional=True, max_age=0)
+    try:
+        blob, mime = _maintenance_attachment_read_bytes(att.file_path or '')
+    except Exception as ex:
+        app.logger.warning('Oil media download failed (%s): %s', att.id, ex)
+        flash('Download failed for this attachment.', 'danger')
+        return redirect(url_for('oil_expense_media', pk=rec.id))
+    if not blob:
+        flash('Attachment file is empty.', 'warning')
+        return redirect(url_for('oil_expense_media', pk=rec.id))
+    return send_file(BytesIO(blob), as_attachment=True, download_name=dl_name, mimetype=(mime or 'application/octet-stream'), max_age=0)
+
+
+@app.route('/oil-expense/<int:pk>/media/download-all')
+@app.route('/oil-expenses/<int:pk>/media/download-all')
+def oil_expense_media_download_all(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilExpense.query.filter_by(id=pk).first()
+    if not rec:
+        flash('Media record not found (maybe deleted).', 'warning')
+        return redirect(url_for('oil_expense_list'))
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('oil_expense_list'))
+    atts = rec.attachments.order_by(OilExpenseAttachment.created_at.asc(), OilExpenseAttachment.id.asc()).all()
+    if not atts:
+        flash('No media files available for download.', 'warning')
+        return redirect(url_for('oil_expense_media', pk=rec.id))
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    zip_path = tmp.name
+    tmp.close()
+    added = 0
+    used = set()
+    try:
+        with zipfile.ZipFile(zip_path, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+            for att in atts:
+                base_name = _maintenance_attachment_download_name(att)
+                file_name = base_name
+                n = 2
+                while file_name.lower() in used:
+                    root, ext = os.path.splitext(base_name)
+                    file_name = f'{root}_{n}{ext}'
+                    n += 1
+                used.add(file_name.lower())
+                local_full = _maintenance_attachment_local_full_path(att.file_path or '')
+                if local_full:
+                    try:
+                        zf.write(local_full, arcname=file_name)
+                        added += 1
+                        continue
+                    except Exception:
+                        pass
+                try:
+                    blob, _mime = _maintenance_attachment_read_bytes(att.file_path or '')
+                    if blob:
+                        zf.writestr(file_name, blob)
+                        added += 1
+                except Exception:
+                    pass
+        if added == 0:
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
+            flash('No files could be packed for download.', 'danger')
+            return redirect(url_for('oil_expense_media', pk=rec.id))
+    except Exception as ex:
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
+        app.logger.warning('Oil zip creation failed (%s): %s', rec.id, ex)
+        flash('Unable to prepare media ZIP right now.', 'danger')
+        return redirect(url_for('oil_expense_media', pk=rec.id))
+
+    @after_this_request
+    def _cleanup_oil_zip(resp):
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
+        return resp
+
+    veh = secure_filename((rec.vehicle.vehicle_no if rec.vehicle else 'vehicle') or 'vehicle')
+    date_part = rec.expense_date.strftime('%Y%m%d') if rec.expense_date else pk_now().strftime('%Y%m%d')
+    archive_name = f'oil_media_{veh}_{date_part}.zip'
     return send_file(zip_path, as_attachment=True, download_name=archive_name, mimetype='application/zip', max_age=0)
 
 

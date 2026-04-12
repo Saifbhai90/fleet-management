@@ -82,10 +82,10 @@
   <div class="media-wrap">
     <div class="d-flex justify-content-between align-items-center mb-3 media-head">
       <div>
-        <h5 class="mb-0"><i class="bi bi-images me-2"></i>Maintenance Media Gallery</h5>
-        <small>Vehicle: {{ rec.vehicle.vehicle_no if rec.vehicle else '-' }} | Date: {{ rec.expense_date|ddmmyyyy }}</small>
+        <h5 class="mb-0"><i class="bi bi-images me-2"></i>{{ media_title or 'Maintenance Media Gallery' }}</h5>
+        <small>Vehicle: {{ rec.vehicle.vehicle_no if rec.vehicle else '-' }} | Date: {{ media_date_label or (rec.expense_date|ddmmyyyy if rec.expense_date else '-') }}</small>
       </div>
-      <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
+      <a href="{{ back_url or url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
     </div>
 
     {% if media_items %}
@@ -95,7 +95,7 @@
         <span class="pill"><i class="bi bi-collection"></i> Total: {{ media_items|length }}</span>
         <span class="pill"><i class="bi bi-image"></i> Images: {{ image_count }}</span>
         <span class="pill"><i class="bi bi-camera-video"></i> Videos: {{ video_count }}</span>
-        <a href="{{ url_for('maintenance_expense_media_download_all', pk=rec.id) }}" class="btn btn-sm btn-success ms-auto">
+        <a href="{{ download_all_url or url_for('maintenance_expense_media_download_all', pk=rec.id) }}" class="btn btn-sm btn-success ms-auto">
           <i class="bi bi-download me-1"></i>All Media Download
         </a>
       </div>

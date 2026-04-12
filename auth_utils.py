@@ -188,10 +188,16 @@ ENDPOINT_PERMISSION_MAP = [
     ('fuel_expense_list', 'fuel_expense'),
     ('fuel_expense_add', 'fuel_expense_add'),
     ('fuel_expense_edit', 'fuel_expense_edit'),
+    ('fuel_expense_media', 'fuel_expense'),
+    ('fuel_expense_media_download', 'fuel_expense'),
+    ('fuel_expense_media_download_all', 'fuel_expense'),
     ('fuel_expense_delete', 'fuel_expense_delete'),
     # Oil & Lubricants
     ('oil_expense_list', 'oil_expense'),
     ('oil_expense_form', 'oil_expense_add'),
+    ('oil_expense_media', 'oil_expense'),
+    ('oil_expense_media_download', 'oil_expense'),
+    ('oil_expense_media_download_all', 'oil_expense'),
     ('oil_expense_delete', 'oil_expense_delete'),
     # Maintenance
     ('maintenance_expense_list', 'maintenance_expense'),
@@ -321,10 +327,14 @@ ENDPOINT_PERMISSION_MAP = [
     ('api_fuel_expense_task_readings', 'fuel_expense'),
     ('api_fuel_expense_suggested_price', 'fuel_expense'),
     ('api_fuel_expense_price_hint', 'fuel_expense'),
+    ('api_fuel_expense_upload_status', 'fuel_expense'),
+    ('fuel_expense_upload_resume', 'fuel_expense'),
     # Oil expense helper APIs
     ('api_oil_expense_last_reading', 'oil_expense'),
     ('api_oil_expense_products_for_oil', 'oil_expense'),
     ('api_oil_expense_product_balance', 'oil_expense'),
+    ('api_oil_expense_upload_status', 'oil_expense'),
+    ('oil_expense_upload_resume', 'oil_expense'),
     # Maintenance expense helper APIs
     ('api_maintenance_expense_last_reading', 'maintenance_expense'),
     ('api_maintenance_expense_products', 'maintenance_expense'),
