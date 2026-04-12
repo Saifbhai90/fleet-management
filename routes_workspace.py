@@ -2740,10 +2740,10 @@ def workspace_ledger_journal_detail(journal_entry_id):
         expense_url = url_for('fuel_expense_view', pk=je.reference_id)
         expense_label = f'Fuel Expense #{je.reference_id}'
     elif je.reference_type == 'OilExpense' and je.reference_id:
-        expense_url = url_for('oil_expense_form', pk=je.reference_id)
+        expense_url = url_for('oil_expense_view', pk=je.reference_id)
         expense_label = f'Oil Expense #{je.reference_id}'
     elif je.reference_type == 'MaintenanceExpense' and je.reference_id:
-        expense_url = url_for('maintenance_expense_form', pk=je.reference_id)
+        expense_url = url_for('maintenance_expense_view', pk=je.reference_id)
         expense_label = f'Maintenance Expense #{je.reference_id}'
     return render_template(
         "workspace/ledger_journal_detail.html",

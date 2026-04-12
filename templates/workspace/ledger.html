@@ -92,11 +92,11 @@
                       {{ expense_ref_map.get(_exp_key) }}
                     </a>
                   {% elif t.reference_type == 'OilExpense' %}
-                    <a href="{{ url_for('oil_expense_form', pk=t.reference_id) }}" class="fw-semibold text-decoration-none">
+                    <a href="{{ url_for('oil_expense_view', pk=t.reference_id) }}" class="fw-semibold text-decoration-none">
                       {{ expense_ref_map.get(_exp_key) }}
                     </a>
                   {% else %}
-                    <a href="{{ url_for('maintenance_expense_form', pk=t.reference_id) }}" class="fw-semibold text-decoration-none">
+                    <a href="{{ url_for('maintenance_expense_view', pk=t.reference_id) }}" class="fw-semibold text-decoration-none">
                       {{ expense_ref_map.get(_exp_key) }}
                     </a>
                   {% endif %}

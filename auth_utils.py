@@ -196,6 +196,7 @@ ENDPOINT_PERMISSION_MAP = [
     # Oil & Lubricants
     ('oil_expense_list', 'oil_expense'),
     ('oil_expense_form', 'oil_expense_add'),
+    ('oil_expense_view', 'oil_expense'),
     ('oil_expense_media', 'oil_expense'),
     ('oil_expense_media_download', 'oil_expense'),
     ('oil_expense_media_download_all', 'oil_expense'),
@@ -203,6 +204,7 @@ ENDPOINT_PERMISSION_MAP = [
     # Maintenance
     ('maintenance_expense_list', 'maintenance_expense'),
     ('maintenance_expense_form', 'maintenance_expense_add'),
+    ('maintenance_expense_view', 'maintenance_expense'),
     ('maintenance_expense_media', 'maintenance_expense'),
     ('maintenance_expense_media_download', 'maintenance_expense'),
     ('maintenance_expense_media_download_all', 'maintenance_expense'),

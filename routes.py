@@ -17492,14 +17492,15 @@ def _workspace_post_expense_journal(employee_id, reference_type, reference_id, e
         except Exception:
             pass
 
+    line_desc = description or 'Expense posted'
     return workspace_create_journal_entry(
         employee_id=employee_id,
         entry_type='Expense',
         entry_date=expense_date or pk_date(),
         description=description or reference_type,
         lines=[
-            {'account_id': expense_head.id, 'debit': amount_val, 'credit': 0, 'description': description or 'Expense posted'},
-            {'account_id': credit_account_id, 'debit': 0, 'credit': amount_val, 'description': 'Expense settled'},
+            {'account_id': expense_head.id, 'debit': amount_val, 'credit': 0, 'description': line_desc},
+            {'account_id': credit_account_id, 'debit': 0, 'credit': amount_val, 'description': line_desc},
         ],
         reference_type=reference_type,
         reference_id=reference_id,
@@ -17521,23 +17522,24 @@ def _workspace_post_credit_settlement_journal(employee_id, reference_type, refer
         party_acct = None
     if not party_acct or int(credit_account_id) == int(party_acct.id):
         return None
+    settle_desc = description or 'Credit settlement'
     return workspace_create_journal_entry(
         employee_id=employee_id,
         entry_type='Transfer',
         entry_date=expense_date or pk_date(),
-        description=description or 'Credit settlement',
+        description=settle_desc,
         lines=[
             {
                 'account_id': party_acct.id,
                 'debit': settle_amount,
                 'credit': 0,
-                'description': 'Party payable settled',
+                'description': settle_desc,
             },
             {
                 'account_id': credit_account_id,
                 'debit': 0,
                 'credit': settle_amount,
-                'description': 'Paid via selected Expense By account',
+                'description': settle_desc,
             },
         ],
         reference_type=reference_type,
@@ -18664,6 +18666,19 @@ def oil_expense_form(pk=None):
     )
 
 
+@app.route('/oil-expense/<int:pk>/view')
+def oil_expense_view(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('oil_expense_list'))
+    return render_template('oil_expense_detail.html', rec=rec, title='Oil Expense Detail')
+
+
 @app.route('/oil-expense/delete/<int:pk>', methods=['POST'])
 def oil_expense_delete(pk):
     _guard = _require_workspace_employee_for_expense_management()
@@ -19264,6 +19279,19 @@ def maintenance_expense_form(pk=None):
         workspace_parties=workspace_parties,
         maintenance_direct_r2=maintenance_direct_r2,
     )
+
+
+@app.route('/maintenance-expense/<int:pk>/view')
+def maintenance_expense_view(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_expense_list'))
+    return render_template('maintenance_expense_detail.html', rec=rec, title='Maintenance Expense Detail')
 
 
 @app.route('/maintenance-expense/delete/<int:pk>', methods=['POST'])
