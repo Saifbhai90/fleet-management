@@ -1071,6 +1071,93 @@ def media_url_filter(path):
         return path
     return url_for('uploaded_file', filename=path)
 
+
+def _expense_attachment_r2_ready():
+    try:
+        import r2_storage as _r2
+        return bool(
+            _r2.R2_PUBLIC_URL
+            and _r2.R2_ACCESS_KEY_ID
+            and _r2.R2_SECRET_ACCESS_KEY
+            and _r2.R2_ENDPOINT_URL
+            and _r2.R2_BUCKET_NAME
+        )
+    except Exception:
+        return False
+
+
+def _save_expense_attachment_path(file_storage, file_type, original_fn, r2_folder, upload_root, rel_prefix):
+    """Store image/video on R2 when configured, else under upload_root/rel_prefix. Returns DB file_path value."""
+    if _expense_attachment_r2_ready():
+        try:
+            from r2_storage import upload_image_file, upload_binary_file
+            file_storage.seek(0)
+            if file_type == 'image':
+                url = upload_image_file(file_storage, folder=r2_folder)
+            else:
+                url = upload_binary_file(file_storage, folder=r2_folder, original_filename=original_fn)
+            if url:
+                return url
+        except Exception as e:
+            app.logger.warning('R2 expense media upload failed (%s): %s', r2_folder, e)
+    file_storage.seek(0)
+    fn = secure_filename(original_fn or '') or 'file'
+    base, ext = os.path.splitext(fn)
+    if not base:
+        base = 'file'
+    unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
+    subdir = os.path.join(upload_root, rel_prefix.replace('/', os.sep))
+    os.makedirs(subdir, exist_ok=True)
+    path = os.path.join(subdir, unique)
+    file_storage.save(path)
+    return '/'.join((rel_prefix.strip('/'), unique))
+
+
+def _add_expense_attachments_from_request(files, *, r2_folder, attachment_model, fk_kwargs):
+    """Append attachment rows; caller commits. fk_kwargs e.g. {'fuel_expense_id': rec.id}."""
+    allowed_image_ct = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+    allowed_video_ct = {'video/mp4', 'video/webm', 'video/quicktime'}
+    upload_root = app.config['UPLOAD_FOLDER']
+    for f in files or []:
+        if not f or not f.filename:
+            continue
+        fn = secure_filename(f.filename)
+        if not fn:
+            continue
+        ext_lo = os.path.splitext(fn)[1].lower()
+        content_type = (f.content_type or '').lower()
+        if content_type in allowed_image_ct or ext_lo in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
+            ft = 'image'
+        elif content_type in allowed_video_ct or ext_lo in {'.mp4', '.webm', '.mov'}:
+            ft = 'video'
+        else:
+            continue
+        fk_id = next(iter(fk_kwargs.values()))
+        rel_prefix = f"{r2_folder}/{fk_id}"
+        stored = _save_expense_attachment_path(f, ft, fn, r2_folder, upload_root, rel_prefix)
+        row = attachment_model(file_path=stored, file_type=ft, original_name=fn, **fk_kwargs)
+        db.session.add(row)
+
+
+def _delete_stored_expense_attachment(file_path):
+    if not file_path:
+        return
+    fp = (file_path or '').strip()
+    if fp.startswith('http://') or fp.startswith('https://'):
+        try:
+            from r2_storage import delete_file_by_url
+            delete_file_by_url(fp)
+        except Exception:
+            pass
+        return
+    full_path = os.path.join(app.config['UPLOAD_FOLDER'], fp)
+    if os.path.isfile(full_path):
+        try:
+            os.remove(full_path)
+        except OSError:
+            pass
+
+
 # ────────────────────────────────────────────────
 # Dashboard / Home
 # ────────────────────────────────────────────────
@@ -17188,33 +17275,14 @@ def fuel_expense_add():
         )
 
         db.session.commit()
-        allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
-        allowed_video = {'video/mp4', 'video/webm', 'video/quicktime'}
         files = request.files.getlist('attachments')
         if files:
-            subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'fuel_expense', str(rec.id))
-            os.makedirs(subdir, exist_ok=True)
-            for f in files:
-                if not f or not f.filename:
-                    continue
-                fn = secure_filename(f.filename)
-                if not fn:
-                    continue
-                ext = os.path.splitext(fn)[1].lower()
-                content_type = f.content_type or ''
-                if content_type in allowed_image or ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
-                    file_type = 'image'
-                elif content_type in allowed_video or ext in {'.mp4', '.webm', '.mov'}:
-                    file_type = 'video'
-                else:
-                    continue
-                base, ext = os.path.splitext(fn)
-                unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
-                path = os.path.join(subdir, unique)
-                f.save(path)
-                rel_path = os.path.join('fuel_expense', str(rec.id), unique)
-                att = FuelExpenseAttachment(fuel_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
-                db.session.add(att)
+            _add_expense_attachments_from_request(
+                files,
+                r2_folder='fuel_expense',
+                attachment_model=FuelExpenseAttachment,
+                fk_kwargs={'fuel_expense_id': rec.id},
+            )
             db.session.commit()
         flash('Fuel expense saved.', 'success')
         return redirect(url_for('fuel_expense_list'))
@@ -17361,33 +17429,14 @@ def fuel_expense_edit(pk):
                 journal_entry_id=(fuel_je.id if fuel_je else None),
             )
             db.session.commit()
-            allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
-            allowed_video = {'video/mp4', 'video/webm', 'video/quicktime'}
             files = request.files.getlist('attachments')
             if files:
-                subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'fuel_expense', str(rec.id))
-                os.makedirs(subdir, exist_ok=True)
-                for f in files:
-                    if not f or not f.filename:
-                        continue
-                    fn = secure_filename(f.filename)
-                    if not fn:
-                        continue
-                    ext = os.path.splitext(fn)[1].lower()
-                    content_type = f.content_type or ''
-                    if content_type in allowed_image or ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
-                        file_type = 'image'
-                    elif content_type in allowed_video or ext in {'.mp4', '.webm', '.mov'}:
-                        file_type = 'video'
-                    else:
-                        continue
-                    base, ext = os.path.splitext(fn)
-                    unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
-                    path = os.path.join(subdir, unique)
-                    f.save(path)
-                    rel_path = os.path.join('fuel_expense', str(rec.id), unique)
-                    att = FuelExpenseAttachment(fuel_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
-                    db.session.add(att)
+                _add_expense_attachments_from_request(
+                    files,
+                    r2_folder='fuel_expense',
+                    attachment_model=FuelExpenseAttachment,
+                    fk_kwargs={'fuel_expense_id': rec.id},
+                )
                 db.session.commit()
             flash('Fuel expense updated.', 'success')
             return redirect(url_for('fuel_expense_list'))
@@ -17410,12 +17459,7 @@ def fuel_expense_delete(pk):
     _workspace_reverse_expense_journals('FuelExpense', rec.id, workspace_employee_id)
     _workspace_delete_regular_expense(workspace_employee_id, 'FuelExpense', rec.id)
     for att in rec.attachments:
-        full_path = os.path.join(app.config['UPLOAD_FOLDER'], att.file_path)
-        if os.path.isfile(full_path):
-            try:
-                os.remove(full_path)
-            except OSError:
-                pass
+        _delete_stored_expense_attachment(att.file_path)
     db.session.delete(rec)
     db.session.commit()
     flash('Fuel expense deleted.', 'success')
@@ -17923,34 +17967,14 @@ def oil_expense_form(pk=None):
             )
             db.session.commit()
 
-            allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
-            allowed_video = {'video/mp4', 'video/webm', 'video/quicktime'}
             files = request.files.getlist('attachments')
             if files:
-                subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'oil_expense', str(rec.id))
-                os.makedirs(subdir, exist_ok=True)
-                for f in files:
-                    if not f or not f.filename:
-                        continue
-                    fn = secure_filename(f.filename)
-                    if not fn:
-                        continue
-                    ext = os.path.splitext(fn)[1].lower()
-                    content_type = f.content_type or ''
-                    if content_type in allowed_image or ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
-                        file_type = 'image'
-                    elif content_type in allowed_video or ext in {'.mp4', '.webm', '.mov'}:
-                        file_type = 'video'
-                    else:
-                        continue
-                    base, ext = os.path.splitext(fn)
-                    unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
-                    path = os.path.join(subdir, unique)
-                    f.save(path)
-                    rel_path = os.path.join('oil_expense', str(rec.id), unique)
-                    att = OilExpenseAttachment(oil_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
-                    db.session.add(att)
-
+                _add_expense_attachments_from_request(
+                    files,
+                    r2_folder='oil_expense',
+                    attachment_model=OilExpenseAttachment,
+                    fk_kwargs={'oil_expense_id': rec.id},
+                )
                 db.session.commit()
 
             flash('Oil expense saved.', 'success')
@@ -17987,12 +18011,7 @@ def oil_expense_delete(pk):
     items = list(rec.items.all())
     _apply_oil_expense_items_balance(items, reverse=True)
     for att in rec.attachments:
-        full_path = os.path.join(app.config['UPLOAD_FOLDER'], att.file_path)
-        if os.path.isfile(full_path):
-            try:
-                os.remove(full_path)
-            except OSError:
-                pass
+        _delete_stored_expense_attachment(att.file_path)
     db.session.delete(rec)
     db.session.commit()
     flash('Oil expense deleted.', 'success')
@@ -18405,34 +18424,14 @@ def maintenance_expense_form(pk=None):
             )
             db.session.commit()
 
-            allowed_image = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
-            allowed_video = {'video/mp4', 'video/webm', 'video/quicktime'}
             files = request.files.getlist('attachments')
             if files:
-                subdir = os.path.join(app.config['UPLOAD_FOLDER'], 'maintenance_expense', str(rec.id))
-                os.makedirs(subdir, exist_ok=True)
-                for f in files:
-                    if not f or not f.filename:
-                        continue
-                    fn = secure_filename(f.filename)
-                    if not fn:
-                        continue
-                    ext = os.path.splitext(fn)[1].lower()
-                    content_type = f.content_type or ''
-                    if content_type in allowed_image or ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
-                        file_type = 'image'
-                    elif content_type in allowed_video or ext in {'.mp4', '.webm', '.mov'}:
-                        file_type = 'video'
-                    else:
-                        continue
-                    base, ext = os.path.splitext(fn)
-                    unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
-                    path = os.path.join(subdir, unique)
-                    f.save(path)
-                    rel_path = os.path.join('maintenance_expense', str(rec.id), unique)
-                    att = MaintenanceExpenseAttachment(maintenance_expense_id=rec.id, file_path=rel_path, file_type=file_type, original_name=fn)
-                    db.session.add(att)
-
+                _add_expense_attachments_from_request(
+                    files,
+                    r2_folder='maintenance_expense',
+                    attachment_model=MaintenanceExpenseAttachment,
+                    fk_kwargs={'maintenance_expense_id': rec.id},
+                )
                 db.session.commit()
             flash('Maintenance expense saved.', 'success')
             return redirect(url_for('maintenance_expense_list'))
@@ -18473,12 +18472,7 @@ def maintenance_expense_delete(pk):
     _workspace_reverse_expense_journals('MaintenanceExpense', rec.id, workspace_employee_id)
     _workspace_delete_regular_expense(workspace_employee_id, 'MaintenanceExpense', rec.id)
     for att in rec.attachments:
-        full_path = os.path.join(app.config['UPLOAD_FOLDER'], att.file_path)
-        if os.path.isfile(full_path):
-            try:
-                os.remove(full_path)
-            except OSError:
-                pass
+        _delete_stored_expense_attachment(att.file_path)
     db.session.delete(rec)
     db.session.commit()
     flash('Maintenance expense deleted.', 'success')

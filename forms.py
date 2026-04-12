@@ -1139,8 +1139,6 @@ class MaintenanceExpenseForm(FlaskForm):
     vehicle_id = SelectField('Vehicle No', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
     expense_date = DateField('Date', format='%d-%m-%Y', validators=[DataRequired()],
                              render_kw={"class": "form-control datepicker"})
-    previous_reading = DecimalField('Previous Reading', validators=[Optional()],
-                                    render_kw={"class": "form-control", "step": "0.01", "readonly": True})
     current_reading = DecimalField('Current Reading', validators=[Optional()],
                                    render_kw={"class": "form-control", "step": "0.01"})
     remarks = TextAreaField('Remarks', validators=[Optional()], render_kw={"rows": 2})

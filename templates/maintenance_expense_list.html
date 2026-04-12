@@ -81,7 +81,7 @@
               <th>Vehicle</th>
               <th>Date</th>
               <th>Job Category</th>
-              <th>Prev / Curr / KM</th>
+              <th>Current Reading</th>
               <th>Items</th>
               <th>Total Qty</th>
               <th>Amount</th>
@@ -108,7 +108,7 @@
                   -
                 {% endif %}
               </td>
-              <td>{{ r.previous_reading|round(2) if r.previous_reading is not none else '-' }} / {{ r.current_reading|round(2) if r.current_reading is not none else '-' }} / {{ r.km|round(2) if r.km is not none else '-' }}</td>
+              <td>{{ r.current_reading|round(2) if r.current_reading is not none else '-' }}</td>
               <td>
                 {% for it in r.items %}
                   {{ it.product.name }}{% if not loop.last %}, {% endif %}

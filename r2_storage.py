@@ -4,6 +4,7 @@ import uuid
 from typing import Optional, Tuple
 
 import boto3
+from werkzeug.utils import secure_filename
 from botocore.config import Config
 from PIL import Image
 
@@ -152,4 +153,51 @@ def upload_pdf_file(file_storage, folder: str = "drivers/documents", max_retries
         except Exception as e:
             last_exc = e
     raise last_exc or RuntimeError("Unknown error uploading PDF to R2")
+
+
+_VIDEO_EXT_TO_CT = {
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+}
+
+
+def upload_binary_file(
+    file_storage,
+    folder: str,
+    original_filename: str = "",
+    max_retries: int = 3,
+) -> Optional[str]:
+    """
+    Upload raw file bytes to R2 (e.g. expense videos) preserving a safe extension.
+
+    Returns the public URL, or None if empty input.
+    """
+    if not file_storage:
+        return None
+    name_src = (original_filename or getattr(file_storage, "filename", "") or "").strip()
+    fn = secure_filename(name_src) or "media"
+    ext = os.path.splitext(fn)[1].lower()
+    if ext not in _VIDEO_EXT_TO_CT:
+        ext = ".mp4"
+    content_type = _VIDEO_EXT_TO_CT.get(ext, "application/octet-stream")
+    data = file_storage.read()
+    if not data:
+        return None
+    client = _get_s3_client()
+    uid = uuid.uuid4().hex
+    key = f"{folder.rstrip('/')}/{uid}{ext}"
+    last_exc: Exception | None = None
+    for _ in range(max_retries):
+        try:
+            client.put_object(
+                Bucket=R2_BUCKET_NAME,
+                Key=key,
+                Body=data,
+                ContentType=content_type,
+            )
+            return f"{R2_PUBLIC_URL}/{key}"
+        except Exception as e:
+            last_exc = e
+    raise last_exc or RuntimeError("Unknown error uploading binary file to R2")
 

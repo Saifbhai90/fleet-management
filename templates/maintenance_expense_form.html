@@ -73,14 +73,7 @@
               <div class="text-danger small mt-1">{{ form.expense_date.errors[0] }}</div>
             {% endif %}
           </div>
-          <div class="col-md-3 field-group">
-            <label class="form-label">Previous Reading</label>
-            {{ form.previous_reading(class="form-control bg-light", id="previousReading", step="0.01", readonly=true, placeholder="Auto from task start") }}
-            {% if form.previous_reading.errors %}
-              <div class="text-danger small mt-1">{{ form.previous_reading.errors[0] }}</div>
-            {% endif %}
-          </div>
-          <div class="col-md-3 field-group">
+          <div class="col-md-5 field-group">
             <label class="form-label">Current Reading <small class="text-muted" id="taskReadingsMeta">(Start: - | Close: -)</small></label>
             {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
             {% if form.current_reading.errors %}
@@ -88,7 +81,7 @@
             {% endif %}
             <small class="reading-match-note text-muted" id="currentReadingMatchNote">Enter reading to check match with task start/close.</small>
           </div>
-          <div class="col-md-3 field-group job-category-group">
+          <div class="col-md-4 field-group job-category-group">
             <label class="form-label">Job Category</label>
             <div class="input-group">
               <select name="job_category" id="jobCategorySelect" class="form-select search-select">
@@ -231,7 +224,7 @@
           <strong>Existing Files:</strong>
           <div class="existing-attachments-grid">
             {% for att in rec.attachments %}
-              {% set att_url = url_for('uploaded_file', filename=att.file_path) %}
+              {% set att_url = att.file_path|media_url %}
               <a href="{{ att_url }}" target="_blank" class="existing-attachment-card text-decoration-none text-body">
                 {% if att.file_type == 'image' %}
                   <img src="{{ att_url }}" alt="{{ att.original_name or 'Attachment image' }}" loading="lazy">
@@ -306,7 +299,6 @@
 document.addEventListener('DOMContentLoaded', function() {
   var districtSelect = document.getElementById('districtSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
-  var previousReading = document.getElementById('previousReading');
   var currentReading = document.getElementById('currentReading');
   var expenseDate = document.getElementById('expenseDate');
   var taskReadingsMeta = document.getElementById('taskReadingsMeta');
@@ -664,9 +656,6 @@ document.addEventListener('DOMContentLoaded', function() {
         taskCloseReading = isFinite(c) ? c : null;
         if (taskReadingsMeta) {
           taskReadingsMeta.textContent = '(Start: ' + (taskStartReading != null ? taskStartReading.toFixed(2) : '-') + ' | Close: ' + (taskCloseReading != null ? taskCloseReading.toFixed(2) : '-') + ')';
-        }
-        if (previousReading && taskStartReading != null) {
-          previousReading.value = taskStartReading.toFixed(2);
         }
         if (currentReading && !String(currentReading.value || '').trim() && taskCloseReading != null) {
           currentReading.value = taskCloseReading.toFixed(2);

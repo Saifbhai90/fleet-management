@@ -252,7 +252,7 @@
         <div class="mt-2">
           <strong>Existing:</strong>
           {% for att in rec.attachments %}
-          <a href="{{ url_for('uploaded_file', filename=att.file_path) }}" target="_blank" class="me-2">{{ att.original_name or att.file_path }}</a>
+          <a href="{{ att.file_path|media_url }}" target="_blank" class="me-2">{{ att.original_name or att.file_path }}</a>
           {% endfor %}
         </div>
         {% endif %}
