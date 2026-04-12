@@ -288,14 +288,20 @@ def _ensure_workspace_driver_accounts(employee):
         q = q.filter(Driver.district_id.in_(district_ids))
     if project_ids:
         q = q.filter(Driver.project_id.in_(project_ids))
+    candidates = q.order_by(Driver.name).all()
+    if not candidates:
+        return 0
+    candidate_ids = [int(d.id) for d in candidates]
+    existing_ids = {
+        int(r[0]) for r in db.session.query(WorkspaceAccount.entity_id).filter(
+            WorkspaceAccount.employee_id == employee.id,
+            WorkspaceAccount.entity_type == "driver",
+            WorkspaceAccount.entity_id.in_(candidate_ids),
+        ).all() if r and r[0]
+    }
     created = 0
-    for drv in q.order_by(Driver.name).all():
-        exists = WorkspaceAccount.query.filter_by(
-            employee_id=employee.id,
-            entity_type="driver",
-            entity_id=drv.id,
-        ).first()
-        if exists:
+    for drv in candidates:
+        if int(drv.id) in existing_ids:
             continue
         ensure_workspace_counterparty_account(employee.id, driver_id=drv.id)
         created += 1
@@ -2556,7 +2562,19 @@ def workspace_fund_transfer_form(pk=None):
 
     # Ensure counterparty accounts exist so To Account shows drivers + parties directly.
     parties = WorkspaceParty.query.filter_by(employee_id=emp.id, is_active=True).order_by(WorkspaceParty.name).all()
+    party_ids = [int(p.id) for p in parties if p and p.id]
+    existing_party_ids = set()
+    if party_ids:
+        existing_party_ids = {
+            int(r[0]) for r in db.session.query(WorkspaceAccount.entity_id).filter(
+                WorkspaceAccount.employee_id == emp.id,
+                WorkspaceAccount.entity_type == "party",
+                WorkspaceAccount.entity_id.in_(party_ids),
+            ).all() if r and r[0]
+        }
     for p in parties:
+        if int(p.id) in existing_party_ids:
+            continue
         try:
             ensure_workspace_counterparty_account(emp.id, party_id=p.id)
         except Exception:
