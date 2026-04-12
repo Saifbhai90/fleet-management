@@ -260,11 +260,12 @@
     var tracker = parseFloat(row.dataset.tracker) || 0;
     var emg = parseFloat(row.dataset.emg) || 0;
     var closeInp = row.querySelector('.close-input');
-    var close = closeInp.value.trim() === '' ? NaN : parseFloat(closeInp.value);
+    var close = closeInp.value.trim() === '' ? 0 : parseFloat(closeInp.value);
+    if (isNaN(close)) close = 0;
     var kmsDriven = close - start;
-    var kmsDiff = (isNaN(close) ? NaN : kmsDriven - tracker);
-    var pctDiff = (kmsDriven && kmsDriven !== 0 && !isNaN(kmsDiff)) ? ((kmsDiff / kmsDriven) * 100).toFixed(1) + '%' : (isNaN(close) ? '-' : 'Driven KM Zero');
-    row.querySelector('.kms-driven').textContent = isNaN(close) ? '-' : kmsDriven.toFixed(2);
+    var kmsDiff = kmsDriven - tracker;
+    var pctDiff = (kmsDriven !== 0) ? ((kmsDiff / kmsDriven) * 100).toFixed(1) + '%' : 'Driven KM Zero';
+    row.querySelector('.kms-driven').textContent = kmsDriven.toFixed(2);
 
     var taskInp = row.querySelector('input[name*="_tasks_count"]');
     var tasks = 0;
