@@ -209,6 +209,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('maintenance_expense_media_download', 'maintenance_expense'),
     ('maintenance_expense_media_download_all', 'maintenance_expense'),
     ('maintenance_expense_delete', 'maintenance_expense_delete'),
+    ('expense_delete_cleanup_retry', 'workspace_dashboard'),
     # Employee Expenses
     ('employee_expense_list', 'employee_expense'),
     # Employee Workspace

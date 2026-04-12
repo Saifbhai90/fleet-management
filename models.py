@@ -2281,6 +2281,29 @@ class WorkspaceFuelOilMonthClose(db.Model):
     fuel_oil_openings = db.relationship('WorkspaceFuelOilOpeningExpense', backref='fuel_oil_month_close', lazy='dynamic')
 
 
+class ExpenseDeleteCleanupJob(db.Model):
+    __tablename__ = 'expense_delete_cleanup_job'
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    expense_kind = db.Column(db.String(20), nullable=False, index=True)  # fuel|oil|maintenance
+    expense_id = db.Column(db.Integer, nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False, default='processing', index=True)  # processing|success|partial|error
+    total_files = db.Column(db.Integer, nullable=False, default=0)
+    deleted_files = db.Column(db.Integer, nullable=False, default=0)
+    failed_files = db.Column(db.Integer, nullable=False, default=0)
+    pending_paths_json = db.Column(db.Text, nullable=True)  # failed paths for retry
+    last_error = db.Column(db.Text, nullable=True)
+    retry_count = db.Column(db.Integer, nullable=False, default=0)
+    initiated_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+    finished_at = db.Column(db.DateTime, nullable=True)
+
+    employee = db.relationship('Employee', backref=db.backref('expense_delete_cleanup_jobs', lazy='dynamic'))
+    initiated_by = db.relationship('User', backref='expense_delete_cleanup_jobs', lazy='select')
+
+
 # ────────────────────────────────────────────────
 # App Releases (for admin-managed in-app updates)
 # ────────────────────────────────────────────────

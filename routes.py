@@ -10,7 +10,7 @@ from models import (
     Party, Product, FuelExpense, FuelExpenseAttachment, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
     WorkspaceProduct,
-    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceVehicleReadingSetup, WorkspaceExpense,
+    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceVehicleReadingSetup, WorkspaceExpense, ExpenseDeleteCleanupJob,
     Notification, NotificationRead,
     User, Role, Permission,
     LoginLog, ActivityLog, ClientActivityLog,
@@ -1228,6 +1228,8 @@ def _add_expense_attachments_direct_client(payload, *, attachment_model, fk_kwar
 
 _expense_upload_lock = threading.Lock()
 _expense_upload_active = set()
+_expense_delete_lock = threading.Lock()
+_expense_delete_active = set()
 
 
 def _expense_upload_queue_root(kind):
@@ -1454,6 +1456,146 @@ def _delete_stored_expense_attachment(file_path):
             os.remove(full_path)
         except OSError:
             pass
+
+
+def _expense_cleanup_list_link(kind):
+    kind = str(kind or '').strip().lower()
+    mapping = {
+        'fuel': '/expenses/fuel',
+        'oil': '/oil-expenses',
+        'maintenance': '/maintenance-expenses',
+    }
+    return mapping.get(kind) or '/workspace'
+
+
+def _expense_cleanup_permission(kind):
+    kind = str(kind or '').strip().lower()
+    mapping = {
+        'fuel': 'fuel_expense',
+        'oil': 'oil_expense',
+        'maintenance': 'maintenance_expense',
+    }
+    return mapping.get(kind) or 'workspace_dashboard'
+
+
+def _start_expense_delete_cleanup_worker(kind, expense_id: int, file_paths, employee_id=None, initiated_by_user_id=None, cleanup_job_id=None):
+    kind = str(kind or '').strip().lower()
+    expense_id = int(expense_id)
+    if not cleanup_job_id and not employee_id:
+        return False
+
+    with app.app_context():
+        job = None
+        if cleanup_job_id:
+            job = ExpenseDeleteCleanupJob.query.filter_by(id=int(cleanup_job_id)).first()
+        if not job:
+            cleanup_paths = [str(p).strip() for p in (file_paths or []) if str(p).strip()]
+            if not cleanup_paths:
+                return False
+            job = ExpenseDeleteCleanupJob(
+                employee_id=int(employee_id),
+                expense_kind=kind,
+                expense_id=expense_id,
+                status='processing',
+                total_files=len(cleanup_paths),
+                deleted_files=0,
+                failed_files=0,
+                pending_paths_json=json.dumps(cleanup_paths),
+                initiated_by_user_id=initiated_by_user_id,
+                retry_count=0,
+            )
+            db.session.add(job)
+            db.session.commit()
+        else:
+            try:
+                existing_failed = json.loads(job.pending_paths_json or '[]')
+            except Exception:
+                existing_failed = []
+            if not existing_failed:
+                return False
+            job.status = 'processing'
+            job.last_error = None
+            job.finished_at = None
+            job.retry_count = int(job.retry_count or 0) + 1
+            db.session.commit()
+
+        key = ('job', int(job.id))
+        with _expense_delete_lock:
+            if key in _expense_delete_active:
+                return False
+            _expense_delete_active.add(key)
+
+    def _runner():
+        try:
+            with app.app_context():
+                current = ExpenseDeleteCleanupJob.query.filter_by(id=int(job.id)).first()
+                if not current:
+                    return
+                try:
+                    cleanup_paths = json.loads(current.pending_paths_json or '[]')
+                except Exception:
+                    cleanup_paths = []
+                cleanup_paths = [str(p).strip() for p in cleanup_paths if str(p).strip()]
+                total = len(cleanup_paths)
+                failed_paths = []
+                for p in cleanup_paths:
+                    try:
+                        _delete_stored_expense_attachment(p)
+                    except Exception:
+                        failed_paths.append(p)
+                failed = len(failed_paths)
+                success = max(0, total - failed)
+                current.total_files = total
+                current.deleted_files = success
+                current.failed_files = failed
+                current.pending_paths_json = json.dumps(failed_paths)
+                current.finished_at = pk_now()
+                if failed == 0:
+                    current.status = 'success'
+                    current.last_error = None
+                elif success > 0:
+                    current.status = 'partial'
+                    current.last_error = f'{failed} file(s) failed to delete.'
+                else:
+                    current.status = 'error'
+                    current.last_error = 'All file deletions failed.'
+                notif_link = _expense_cleanup_list_link(kind)
+                notif_text = 'Open List'
+                if failed > 0:
+                    notif_link = f'/workspace/expense-delete-cleanup/{current.id}/retry'
+                    notif_text = 'Retry Cleanup'
+                kind_title = (kind or 'expense').title()
+                n = Notification(
+                    title=f'{kind_title} media cleanup completed',
+                    message=(
+                        f'Expense #{expense_id} delete cleanup finished. '
+                        f'Deleted {success}/{total} file(s).'
+                        + ('' if failed == 0 else f' Failed: {failed}.')
+                    ),
+                    link=notif_link,
+                    link_text=notif_text,
+                    notification_type=('warning' if failed else 'info'),
+                    created_by_user_id=(current.initiated_by_user_id or initiated_by_user_id),
+                    required_permission=_expense_cleanup_permission(kind),
+                )
+                db.session.add(n)
+                db.session.commit()
+        except Exception as exc:
+            with app.app_context():
+                current = ExpenseDeleteCleanupJob.query.filter_by(id=int(job.id)).first()
+                if current:
+                    current.status = 'error'
+                    current.last_error = str(exc)
+                    current.finished_at = pk_now()
+                    db.session.commit()
+            app.logger.exception('%s delete cleanup failed for expense #%s', kind, expense_id)
+        finally:
+            with _expense_delete_lock:
+                _expense_delete_active.discard(('job', int(job.id)))
+
+    t = threading.Thread(target=_runner, daemon=True, name=f'{kind}-delete-{expense_id}-{job.id}')
+    t.start()
+    return True
 
 
 # ────────────────────────────────────────────────
@@ -17958,14 +18100,55 @@ def fuel_expense_delete(pk):
     if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('fuel_expense_list'))
+    attachment_paths = [att.file_path for att in rec.attachments.all() if att and getattr(att, 'file_path', None)]
+    rec_id = rec.id
+    initiated_by_user_id = session.get('user_id')
     _workspace_reverse_expense_journals('FuelExpense', rec.id, workspace_employee_id)
     _workspace_delete_regular_expense(workspace_employee_id, 'FuelExpense', rec.id)
-    for att in rec.attachments:
-        _delete_stored_expense_attachment(att.file_path)
     db.session.delete(rec)
     db.session.commit()
-    flash('Fuel expense deleted.', 'success')
+    _start_expense_delete_cleanup_worker('fuel', rec_id, attachment_paths, employee_id=workspace_employee_id, initiated_by_user_id=initiated_by_user_id)
+    flash('Fuel expense deleted. Media cleanup background me continue ho rahi hai.', 'success')
     return redirect(url_for('fuel_expense_list'))
+
+
+@app.route('/workspace/expense-delete-cleanup/<int:job_id>/retry')
+def expense_delete_cleanup_retry(job_id):
+    job = ExpenseDeleteCleanupJob.query.get_or_404(job_id)
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    if not workspace_employee_id and job.employee_id:
+        session['workspace_employee_id'] = int(job.employee_id)
+        workspace_employee_id = int(job.employee_id)
+    if workspace_employee_id and job.employee_id and int(job.employee_id) != int(workspace_employee_id):
+        flash('This cleanup job does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('workspace_dashboard'))
+    kind = (job.expense_kind or '').strip().lower()
+    redirect_map = {
+        'fuel': 'fuel_expense_list',
+        'oil': 'oil_expense_list',
+        'maintenance': 'maintenance_expense_list',
+    }
+    redirect_endpoint = redirect_map.get(kind, 'workspace_dashboard')
+    try:
+        pending_paths = json.loads(job.pending_paths_json or '[]')
+    except Exception:
+        pending_paths = []
+    pending_paths = [str(p).strip() for p in pending_paths if str(p).strip()]
+    if not pending_paths:
+        flash('No failed files left to retry for this cleanup job.', 'info')
+        return redirect(url_for(redirect_endpoint))
+    started = _start_expense_delete_cleanup_worker(
+        kind,
+        int(job.expense_id or 0),
+        pending_paths,
+        cleanup_job_id=job.id,
+        initiated_by_user_id=session.get('user_id'),
+    )
+    if started:
+        flash('Cleanup retry started in background. Notification bell me result mil jayega.', 'info')
+    else:
+        flash('Cleanup retry already running or could not be started.', 'warning')
+    return redirect(url_for(redirect_endpoint))
 
 
 @app.route('/api/fuel-expense/upload-status/<int:pk>')
@@ -18689,15 +18872,17 @@ def oil_expense_delete(pk):
     if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('oil_expense_list'))
+    attachment_paths = [att.file_path for att in rec.attachments.all() if att and getattr(att, 'file_path', None)]
+    rec_id = rec.id
+    initiated_by_user_id = session.get('user_id')
     _workspace_reverse_expense_journals('OilExpense', rec.id, workspace_employee_id)
     _workspace_delete_regular_expense(workspace_employee_id, 'OilExpense', rec.id)
     items = list(rec.items.all())
     _apply_oil_expense_items_balance(items, reverse=True)
-    for att in rec.attachments:
-        _delete_stored_expense_attachment(att.file_path)
     db.session.delete(rec)
     db.session.commit()
-    flash('Oil expense deleted.', 'success')
+    _start_expense_delete_cleanup_worker('oil', rec_id, attachment_paths, employee_id=workspace_employee_id, initiated_by_user_id=initiated_by_user_id)
+    flash('Oil expense deleted. Media cleanup background me continue ho rahi hai.', 'success')
     return redirect(url_for('oil_expense_list'))
 
 
@@ -19304,13 +19489,15 @@ def maintenance_expense_delete(pk):
     if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('maintenance_expense_list'))
+    attachment_paths = [att.file_path for att in rec.attachments.all() if att and getattr(att, 'file_path', None)]
+    initiated_by_user_id = session.get('user_id')
     _workspace_reverse_expense_journals('MaintenanceExpense', rec.id, workspace_employee_id)
     _workspace_delete_regular_expense(workspace_employee_id, 'MaintenanceExpense', rec.id)
-    for att in rec.attachments:
-        _delete_stored_expense_attachment(att.file_path)
+    rec_id = rec.id
     db.session.delete(rec)
     db.session.commit()
-    flash('Maintenance expense deleted.', 'success')
+    _start_expense_delete_cleanup_worker('maintenance', rec_id, attachment_paths, employee_id=workspace_employee_id, initiated_by_user_id=initiated_by_user_id)
+    flash('Maintenance expense deleted. Media cleanup background me continue ho rahi hai.', 'success')
     return redirect(url_for('maintenance_expense_list'))
 
 
