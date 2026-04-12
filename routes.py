@@ -18815,12 +18815,16 @@ def maintenance_expense_delete(pk):
 
 
 @app.route('/maintenance-expense/<int:pk>/media')
+@app.route('/maintenance-expenses/<int:pk>/media')
 def maintenance_expense_media(pk):
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    rec = MaintenanceExpense.query.get_or_404(pk)
+    rec = MaintenanceExpense.query.filter_by(id=pk).first()
+    if not rec:
+        flash('Media record not found (maybe deleted).', 'warning')
+        return redirect(url_for('maintenance_expense_list'))
     if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('maintenance_expense_list'))
