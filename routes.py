@@ -17448,49 +17448,54 @@ def oil_expense_list():
     if not is_master_or_admin and allowed_vehicles:
         vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
     form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
+    today = pk_date()
     from_date = request.args.get('from_date', '').strip()
     to_date = request.args.get('to_date', '').strip()
     district_id = request.args.get('district_id', type=int) or 0
     project_id = request.args.get('project_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
-    if from_date or to_date or district_id or project_id or vehicle_id:
-        from_d = parse_date(from_date) if from_date else pk_date().replace(day=1)
-        to_d = parse_date(to_date) if to_date else pk_date()
-        if not from_d:
-            from_d = pk_date().replace(day=1)
-        if not to_d:
-            to_d = pk_date()
-        query = OilExpense.query.filter(
-            OilExpense.expense_date >= from_d,
-            OilExpense.expense_date <= to_d
-        )
-        if workspace_employee_id:
-            query = query.filter(
-                db.or_(
-                    OilExpense.employee_id == workspace_employee_id,
-                    OilExpense.employee_id.is_(None),
-                )
+    from_d = parse_date(from_date) if from_date else today
+    to_d = parse_date(to_date) if to_date else today
+    if not from_d:
+        from_d = today
+    if not to_d:
+        to_d = today
+    if from_d > to_d:
+        from_d, to_d = to_d, from_d
+    form.from_date.data = from_d
+    form.to_date.data = to_d
+    form.district_id.data = district_id
+    form.project_id.data = project_id
+    form.vehicle_id.data = vehicle_id
+
+    query = OilExpense.query.filter(
+        OilExpense.expense_date >= from_d,
+        OilExpense.expense_date <= to_d
+    )
+    if workspace_employee_id:
+        query = query.filter(
+            db.or_(
+                OilExpense.employee_id == workspace_employee_id,
+                OilExpense.employee_id.is_(None),
             )
-        
-        # Apply user data scope
-        if not is_master_or_admin:
-            if allowed_projects:
-                query = query.filter(OilExpense.project_id.in_(list(allowed_projects)))
-            if allowed_districts:
-                query = query.filter(OilExpense.district_id.in_(list(allowed_districts)))
-            if allowed_vehicles:
-                query = query.filter(OilExpense.vehicle_id.in_(list(allowed_vehicles)))
-        
-        if district_id:
-            query = query.filter(OilExpense.district_id == district_id)
-        if project_id:
-            query = query.filter(OilExpense.project_id == project_id)
-        if vehicle_id:
-            query = query.filter(OilExpense.vehicle_id == vehicle_id)
-        rows = query.order_by(OilExpense.expense_date.desc(), OilExpense.id.desc()).all()
-    else:
-        from_d = to_d = None
-        rows = []
+        )
+
+    # Apply user data scope
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(OilExpense.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(OilExpense.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(OilExpense.vehicle_id.in_(list(allowed_vehicles)))
+
+    if district_id:
+        query = query.filter(OilExpense.district_id == district_id)
+    if project_id:
+        query = query.filter(OilExpense.project_id == project_id)
+    if vehicle_id:
+        query = query.filter(OilExpense.vehicle_id == vehicle_id)
+    rows = query.order_by(OilExpense.expense_date.desc(), OilExpense.id.desc()).all()
     # Attach item totals per row for list display
     rows_with_totals = []
     for r in rows:
@@ -17867,49 +17872,54 @@ def maintenance_expense_list():
     if not is_master_or_admin and allowed_vehicles:
         vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
     form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
+    today = pk_date()
     from_date = request.args.get('from_date', '').strip()
     to_date = request.args.get('to_date', '').strip()
     district_id = request.args.get('district_id', type=int) or 0
     project_id = request.args.get('project_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
-    if from_date or to_date or district_id or project_id or vehicle_id:
-        from_d = parse_date(from_date) if from_date else pk_date().replace(day=1)
-        to_d = parse_date(to_date) if to_date else pk_date()
-        if not from_d:
-            from_d = pk_date().replace(day=1)
-        if not to_d:
-            to_d = pk_date()
-        query = MaintenanceExpense.query.filter(
-            MaintenanceExpense.expense_date >= from_d,
-            MaintenanceExpense.expense_date <= to_d
-        )
-        if workspace_employee_id:
-            query = query.filter(
-                db.or_(
-                    MaintenanceExpense.employee_id == workspace_employee_id,
-                    MaintenanceExpense.employee_id.is_(None),
-                )
+    from_d = parse_date(from_date) if from_date else today
+    to_d = parse_date(to_date) if to_date else today
+    if not from_d:
+        from_d = today
+    if not to_d:
+        to_d = today
+    if from_d > to_d:
+        from_d, to_d = to_d, from_d
+    form.from_date.data = from_d
+    form.to_date.data = to_d
+    form.district_id.data = district_id
+    form.project_id.data = project_id
+    form.vehicle_id.data = vehicle_id
+
+    query = MaintenanceExpense.query.filter(
+        MaintenanceExpense.expense_date >= from_d,
+        MaintenanceExpense.expense_date <= to_d
+    )
+    if workspace_employee_id:
+        query = query.filter(
+            db.or_(
+                MaintenanceExpense.employee_id == workspace_employee_id,
+                MaintenanceExpense.employee_id.is_(None),
             )
-        
-        # Apply user data scope
-        if not is_master_or_admin:
-            if allowed_projects:
-                query = query.filter(MaintenanceExpense.project_id.in_(list(allowed_projects)))
-            if allowed_districts:
-                query = query.filter(MaintenanceExpense.district_id.in_(list(allowed_districts)))
-            if allowed_vehicles:
-                query = query.filter(MaintenanceExpense.vehicle_id.in_(list(allowed_vehicles)))
-        
-        if district_id:
-            query = query.filter(MaintenanceExpense.district_id == district_id)
-        if project_id:
-            query = query.filter(MaintenanceExpense.project_id == project_id)
-        if vehicle_id:
-            query = query.filter(MaintenanceExpense.vehicle_id == vehicle_id)
-        rows = query.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).all()
-    else:
-        from_d = to_d = None
-        rows = []
+        )
+
+    # Apply user data scope
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(MaintenanceExpense.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(MaintenanceExpense.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(MaintenanceExpense.vehicle_id.in_(list(allowed_vehicles)))
+
+    if district_id:
+        query = query.filter(MaintenanceExpense.district_id == district_id)
+    if project_id:
+        query = query.filter(MaintenanceExpense.project_id == project_id)
+    if vehicle_id:
+        query = query.filter(MaintenanceExpense.vehicle_id == vehicle_id)
+    rows = query.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).all()
     rows_with_totals = []
     for r in rows:
         total_qty = sum(float(it.qty or 0) for it in r.items)

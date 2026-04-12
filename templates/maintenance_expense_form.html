@@ -362,6 +362,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
     if (!expenseBySelect) return;
+    var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
     if (isCash) {
       if (cashExpenseByValue) {
         expenseBySelect.value = cashExpenseByValue;
@@ -371,6 +372,9 @@ document.addEventListener('DOMContentLoaded', function() {
       expenseBySelect.value = '';
       if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue('', true);
     }
+    // Prevent browser jump to Expense By control while auto-setting values.
+    window.scrollTo(0, scrollY);
+    window.setTimeout(function() { window.scrollTo(0, scrollY); }, 0);
   }
 
   function updateEntryAmount() {
