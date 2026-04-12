@@ -17103,7 +17103,7 @@ def api_fuel_expense_price_history():
     })
 
 
-@app.route('/expenses/fuel')
+@app.route('/expenses/fuel', methods=['GET', 'POST'])
 def fuel_expense_list():
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
