@@ -72,7 +72,7 @@
                   <select name="from_account_id" class="form-select search-select" required>
                     <option value="">-- Select --</option>
                     {% for a in accounts %}
-                    <option value="{{ a.id }}" {% if row and row.from_account_id == a.id %}selected{% endif %}>{{ a.code }} - {{ a.name }}</option>
+                    <option value="{{ a.id }}" {% if row and row.from_account_id == a.id %}selected{% endif %}>{{ account_display_map.get(a.id, (a.code ~ ' - ' ~ a.name)) }}</option>
                     {% endfor %}
                   </select>
                 </div>
@@ -81,7 +81,7 @@
                   <select name="to_account_id" class="form-select search-select" required>
                     <option value="">-- Select --</option>
                     {% for a in accounts %}
-                    <option value="{{ a.id }}" {% if row and row.to_account_id == a.id %}selected{% endif %}>{{ a.code }} - {{ a.name }} ({{ a.account_type }})</option>
+                    <option value="{{ a.id }}" {% if row and row.to_account_id == a.id %}selected{% endif %}>{{ account_display_map.get(a.id, (a.code ~ ' - ' ~ a.name)) }} ({{ a.account_type }})</option>
                     {% endfor %}
                   </select>
                 </div>

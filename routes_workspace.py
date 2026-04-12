@@ -2447,6 +2447,37 @@ def workspace_fund_transfer_form(pk=None):
 
     accounts = WorkspaceAccount.query.filter_by(employee_id=emp.id, is_active=True).order_by(WorkspaceAccount.code).all()
     categories = FundTransferCategory.query.order_by(FundTransferCategory.name).all()
+    driver_ids = sorted({
+        int(a.entity_id) for a in accounts
+        if (a.entity_type or '').strip().lower() == 'driver' and a.entity_id
+    })
+    drivers_by_id = {}
+    if driver_ids:
+        for drv in Driver.query.filter(Driver.id.in_(driver_ids)).all():
+            drivers_by_id[int(drv.id)] = drv
+
+    def _driver_vehicle_no(drv):
+        if not drv:
+            return None
+        if getattr(drv, 'vehicle', None) and getattr(drv.vehicle, 'vehicle_no', None):
+            return drv.vehicle.vehicle_no
+        if getattr(drv, 'vehicle_id', None):
+            v = Vehicle.query.get(drv.vehicle_id)
+            if v and v.vehicle_no:
+                return v.vehicle_no
+        v = Vehicle.query.filter_by(driver_id=drv.id).order_by(Vehicle.id.desc()).first()
+        return v.vehicle_no if v and v.vehicle_no else None
+
+    account_display_map = {}
+    for a in accounts:
+        base = f"{a.code} - {a.name}"
+        if (a.entity_type or '').strip().lower() == 'driver' and a.entity_id:
+            drv = drivers_by_id.get(int(a.entity_id))
+            if drv:
+                v_no = _driver_vehicle_no(drv)
+                if v_no:
+                    base = f"{base} | Vehicle: {v_no}"
+        account_display_map[a.id] = base
 
     if request.method == "POST":
         try:
@@ -2454,15 +2485,15 @@ def workspace_fund_transfer_form(pk=None):
             amount = Decimal(str((request.form.get("amount") or "").strip()))
         except Exception:
             flash("Date and amount are required.", "danger")
-            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, categories=categories, existing_attachment=(row.attachment if row else None))
+            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, account_display_map=account_display_map, categories=categories, existing_attachment=(row.attachment if row else None))
         from_account_id = request.form.get("from_account_id", type=int)
         to_account_id = request.form.get("to_account_id", type=int)
         if not from_account_id:
             flash("From account is required.", "danger")
-            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, categories=categories, existing_attachment=(row.attachment if row else None))
+            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, account_display_map=account_display_map, categories=categories, existing_attachment=(row.attachment if row else None))
         if not to_account_id:
             flash("To account is required.", "danger")
-            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, categories=categories, existing_attachment=(row.attachment if row else None))
+            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, account_display_map=account_display_map, categories=categories, existing_attachment=(row.attachment if row else None))
 
         attachment_url = _upload_workspace_transfer_attachment(request.files.get("attachment"))
 
@@ -2499,7 +2530,7 @@ def workspace_fund_transfer_form(pk=None):
         db.session.commit()
         flash("Workspace transfer saved.", "success")
         return redirect(url_for("workspace_fund_transfers_list"))
-    return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, categories=categories, existing_attachment=(row.attachment if row else None))
+    return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, account_display_map=account_display_map, categories=categories, existing_attachment=(row.attachment if row else None))
 
 
 def workspace_fund_transfer_delete(pk):
