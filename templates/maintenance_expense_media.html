@@ -71,22 +71,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var closeBtn = document.getElementById('viewerCloseBtn');
   var prevBtn = document.getElementById('viewerPrevBtn');
   var nextBtn = document.getElementById('viewerNextBtn');
-  var items = [];
+  var items = {{ media_items | tojson }};
   var idx = 0;
 
-  openBtns.forEach(function(btn) {
-    var thumb = btn.querySelector('.media-thumb');
-    var nmEl = btn.querySelector('.media-name');
-    var isVideo = thumb && thumb.tagName && thumb.tagName.toLowerCase() === 'video';
-    var src = thumb ? (thumb.getAttribute('src') || '') : '';
-    var nm = nmEl ? (nmEl.textContent || '').trim() : 'Attachment';
-    items.push({
-      type: isVideo ? 'video' : 'image',
-      url: src,
-      name: nm || 'Attachment'
-    });
-  });
-  if (!items.length) return;
+  if (!Array.isArray(items) || !items.length) return;
 
   function renderCurrent() {
     if (!inner) return;
@@ -102,11 +90,19 @@ document.addEventListener('DOMContentLoaded', function() {
       v.preload = 'metadata';
       inner.appendChild(v);
     } else {
+      var loading = document.createElement('div');
+      loading.className = 'text-light small';
+      loading.textContent = 'Loading image...';
+      inner.appendChild(loading);
       var img = document.createElement('img');
       img.className = 'viewer-img';
       img.src = it.url;
       img.alt = it.name || 'Image';
+      img.addEventListener('load', function() {
+        if (loading && loading.parentNode) loading.parentNode.removeChild(loading);
+      });
       img.addEventListener('error', function() {
+        if (loading && loading.parentNode) loading.parentNode.removeChild(loading);
         if (meta) {
           meta.textContent = 'Image load issue. New tab me open karein.';
         }
