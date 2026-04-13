@@ -3216,10 +3216,9 @@ def workspace_mpg_report():
         current_reading = _to_dec(last_row_for_current.current_reading, None)
         km = (current_reading - previous_reading) if (previous_reading is not None and current_reading is not None) else None
 
-        price_values = [_to_dec(r.fuel_price, None) for r in rows if r.fuel_price is not None]
-        avg_fuel_price = (sum(price_values, Decimal("0")) / Decimal(len(price_values))) if price_values else None
         total_ltr = sum((_to_dec(r.liters, Decimal("0")) for r in rows), Decimal("0"))
         total_amount = sum((_to_dec(r.amount, Decimal("0")) for r in rows), Decimal("0"))
+        avg_fuel_price = (total_amount / total_ltr) if total_ltr > 0 else None
         mpg = (km / total_ltr) if (km is not None and total_ltr > 0) else None
 
         target_mpg = _to_dec(vehicle.target_mpg, Decimal("0"))
