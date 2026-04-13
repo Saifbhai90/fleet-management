@@ -285,7 +285,8 @@
 </div>
 
 <script>
-(function() {
+document.addEventListener('DOMContentLoaded', function() {
+
   var formEl = document.getElementById('oilExpenseForm');
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
@@ -322,7 +323,11 @@
   var oilTaskStartReading = null;
   var oilTaskCloseReading = null;
 
-  var productsForOil = [{% for p in products_for_oil %}{id:{{ p.id }},name:{{ p.name | tojson }},default_price:{{ p.default_price if p.default_price is not none else 'null' }}}{% if not loop.last %},{% endif %}{% endfor %}];
+  var serverDistrictId = {{ (form.district_id.data or 0) | tojson }};
+  var serverProjectId  = {{ (form.project_id.data  or 0) | tojson }};
+  var serverVehicleId  = {{ (form.vehicle_id.data  or 0) | tojson }};
+
+  var productsForOil = [];
 
   function _populateOilProducts(arr) {
     productsForOil = arr;
@@ -356,6 +361,18 @@
     .then(function(arr) { if (arr && arr.length) _populateOilProducts(arr); })
     .catch(function() {});
 
+  function _tsVal(sel) {
+    if (!sel) return '';
+    if (sel.tomselect) return sel.tomselect.getValue() || '';
+    return sel.value || '';
+  }
+
+  function _tsSet(sel, val) {
+    if (!sel) return;
+    sel.value = val;
+    if (sel.tomselect) sel.tomselect.setValue(String(val), true);
+  }
+
   if (expenseBySelect && expenseBySelect.options) {
     for (var e = 0; e < expenseBySelect.options.length; e += 1) {
       var opt = expenseBySelect.options[e];
@@ -365,40 +382,43 @@
       }
     }
   }
+  if (!cashExpenseByValue && expenseBySelect && expenseBySelect.tomselect) {
+    var tsOpts = expenseBySelect.tomselect.options;
+    for (var k in tsOpts) {
+      if (tsOpts.hasOwnProperty(k) && (tsOpts[k].text || '').toLowerCase().indexOf('1110 - hbl bank') >= 0) {
+        cashExpenseByValue = k;
+        break;
+      }
+    }
+  }
+
+  function setCardSwipeDateEnabled(enabled) {
+    if (!cardSwipeDateInput) return;
+    cardSwipeDateInput.disabled = !enabled;
+    if (!enabled) cardSwipeDateInput.value = '';
+    var fp = cardSwipeDateInput._flatpickr;
+    if (fp) {
+      if (fp.altInput) fp.altInput.disabled = !enabled;
+      if (fp._input) fp._input.disabled = !enabled;
+      if (!enabled && typeof fp.clear === 'function') fp.clear();
+    }
+  }
 
   function handleOilExpenseByBehavior(forceReset) {
     if (!paymentTypeSelect) return;
-    var paymentType = paymentTypeSelect.value || '';
+    var paymentType = _tsVal(paymentTypeSelect);
     var cardDisabled = (paymentType === 'Cash' || paymentType === 'Credit' || paymentType === 'In Hand Stock');
-    if (cardSwipeDateInput) {
-      cardSwipeDateInput.disabled = cardDisabled;
-      if (cardDisabled) {
-        cardSwipeDateInput.value = '';
-      }
-    }
+    setCardSwipeDateEnabled(!cardDisabled);
     if (!expenseBySelect) return;
     var shouldForce = !!forceReset;
     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
     if (paymentType === 'Cash') {
-      if (cashExpenseByValue && (shouldForce || !expenseBySelect.value)) {
-        expenseBySelect.value = cashExpenseByValue;
-        if (expenseBySelect.tomselect) {
-          expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
-        }
+      if (cashExpenseByValue && (shouldForce || !_tsVal(expenseBySelect))) {
+        _tsSet(expenseBySelect, cashExpenseByValue);
       }
-    } else if (paymentType === 'Credit') {
+    } else if (paymentType === 'Credit' || paymentType === 'In Hand Stock') {
       if (shouldForce) {
-        expenseBySelect.value = '';
-        if (expenseBySelect.tomselect) {
-          expenseBySelect.tomselect.setValue('', true);
-        }
-      }
-    } else if (paymentType === 'In Hand Stock') {
-      if (shouldForce) {
-        expenseBySelect.value = '';
-        if (expenseBySelect.tomselect) {
-          expenseBySelect.tomselect.setValue('', true);
-        }
+        _tsSet(expenseBySelect, '');
       }
     }
     window.scrollTo(0, scrollY);
@@ -645,13 +665,14 @@
 
   function validateBeforeSubmit() {
     if (!totalBillInput) return true;
-    var pType = paymentTypeSelect ? paymentTypeSelect.value : '';
+    var pType = _tsVal(paymentTypeSelect);
     if (!pType) {
       alert('Payment Type select karein.');
-      if (paymentTypeSelect) paymentTypeSelect.focus();
+      if (paymentTypeSelect && paymentTypeSelect.tomselect) paymentTypeSelect.tomselect.focus();
+      else if (paymentTypeSelect) paymentTypeSelect.focus();
       return false;
     }
-    if (!partySelect || !partySelect.value) {
+    if (!_tsVal(partySelect)) {
       alert('Party Name select karna لازمی hai.');
       if (partySelect && partySelect.tomselect) {
         partySelect.tomselect.focus();
@@ -717,7 +738,7 @@
   }
 
   function fetchOilTaskReadings() {
-    var vid = vehicleSelect && vehicleSelect.value;
+    var vid = _tsVal(vehicleSelect);
     var dt = expenseDate && expenseDate.value;
     oilTaskStartReading = null;
     oilTaskCloseReading = null;
@@ -746,11 +767,8 @@
   if (previousReading) previousReading.addEventListener('input', updateKm);
   if (currentReading) currentReading.addEventListener('input', updateOilReadingMatch);
   if (expenseDate) expenseDate.addEventListener('change', function() {
-    if (vehicleSelect) {
-      vehicleSelect.dispatchEvent(new Event('change'));
-    } else {
-      fetchOilTaskReadings();
-    }
+    fetchOilLastReading();
+    fetchOilTaskReadings();
   });
   if (partySelect) partySelect.addEventListener('change', function() { handleOilExpenseByBehavior(false); });
   if (paymentTypeSelect) {
@@ -759,52 +777,88 @@
     });
   }
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
+  if (expenseBySelect && expenseBySelect.tomselect) {
+    expenseBySelect.tomselect.control_input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        expenseBySelect.tomselect.close();
+        expenseBySelect.tomselect.blur();
+        if (currentReading) currentReading.focus();
+      }
+    });
+  }
+
+  function _loadProjectsForDistrict(did, thenSelectProjectId, thenCallback) {
+    if (projectSelect.tomselect) projectSelect.tomselect.destroy();
+    if (vehicleSelect && vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
+    projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+    if (vehicleSelect) vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+    if (vehicleSelect) initSearchableDropdowns(vehicleSelect.parentNode);
+    if (!did || did === '0' || did === 0) {
+      initSearchableDropdowns(projectSelect.parentNode);
+      if (thenCallback) thenCallback();
+      return;
+    }
+    fetch('/get_projects_by_district/' + did)
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        arr.forEach(function(p) {
+          var o = document.createElement('option');
+          o.value = p.id;
+          o.textContent = p.name;
+          projectSelect.appendChild(o);
+        });
+        initSearchableDropdowns(projectSelect.parentNode);
+        if (thenSelectProjectId) _tsSet(projectSelect, thenSelectProjectId);
+        if (thenCallback) thenCallback();
+      })
+      .catch(function() {
+        initSearchableDropdowns(projectSelect.parentNode);
+        if (thenCallback) thenCallback();
+      });
+  }
+
+  function _loadVehiclesForProject(pid, did, thenSelectVehicleId, thenCallback) {
+    if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
+    vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+    if (!pid || pid === '0' || pid === 0) {
+      initSearchableDropdowns(vehicleSelect.parentNode);
+      if (thenCallback) thenCallback();
+      return;
+    }
+    var url = '/get_vehicles_by_project_district?project_id=' + pid;
+    if (did && did !== '0' && did !== 0) url += '&district_id=' + did;
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        arr.forEach(function(v) {
+          var o = document.createElement('option');
+          o.value = v.id;
+          o.textContent = v.vehicle_no;
+          vehicleSelect.appendChild(o);
+        });
+        initSearchableDropdowns(vehicleSelect.parentNode);
+        if (thenSelectVehicleId) _tsSet(vehicleSelect, thenSelectVehicleId);
+        if (thenCallback) thenCallback();
+      })
+      .catch(function() {
+        initSearchableDropdowns(vehicleSelect.parentNode);
+        if (thenCallback) thenCallback();
+      });
+  }
+
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
-      var did = this.value;
-      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
-      if (vehicleSelect && vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
-      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
-      if (vehicleSelect) vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
-      if (vehicleSelect) initSearchableDropdowns(vehicleSelect.parentNode);
-      if (did && did !== '0') {
-        fetch('/get_projects_by_district/' + did)
-          .then(function(r) { return r.json(); })
-          .then(function(arr) {
-            arr.forEach(function(p) {
-              var o = document.createElement('option');
-              o.value = p.id;
-              o.textContent = p.name;
-              projectSelect.appendChild(o);
-            });
-            initSearchableDropdowns(projectSelect.parentNode);
-          });
-      } else {
-        initSearchableDropdowns(projectSelect.parentNode);
-      }
+      var did = _tsVal(districtSelect);
+      _loadProjectsForDistrict(did, null, null);
     });
   }
   if (projectSelect && vehicleSelect) {
     projectSelect.addEventListener('change', function() {
-      var pid = projectSelect.value;
-      var did = districtSelect ? districtSelect.value : '';
-      if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
-      vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
-      if (pid && pid !== '0') {
-        var url = '/get_vehicles_by_project_district?project_id=' + pid;
-        if (did && did !== '0') url += '&district_id=' + did;
-        fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
-          arr.forEach(function(v) {
-            var o = document.createElement('option');
-            o.value = v.id;
-            o.textContent = v.vehicle_no;
-            vehicleSelect.appendChild(o);
-          });
-          initSearchableDropdowns(vehicleSelect.parentNode);
-        });
-      } else {
-        initSearchableDropdowns(vehicleSelect.parentNode);
-      }
+      var pid = _tsVal(projectSelect);
+      var did = _tsVal(districtSelect);
+      _loadVehiclesForProject(pid, did, null, null);
     });
   }
   if (entryProductSelect) {
@@ -822,7 +876,7 @@
 
   function fetchOilLastReading() {
     if (!previousReading) return;
-    var vid = vehicleSelect && vehicleSelect.value;
+    var vid = _tsVal(vehicleSelect);
     previousReading.value = '';
     if (!vid || vid === '0') {
       fetchOilTaskReadings();
@@ -863,12 +917,32 @@
     currentReading.addEventListener('change', fetchOilLastReading);
   }
 
-  if (vehicleSelect) {
-    vehicleSelect.dispatchEvent(new Event('change'));
-  } else {
-    fetchOilLastReading();
-    fetchOilTaskReadings();
+  function _runInitialLoadChain() {
+    var did = serverDistrictId;
+    var pid = serverProjectId;
+    var vid = serverVehicleId;
+
+    if (did && did !== 0) {
+      _tsSet(districtSelect, did);
+    }
+
+    if (did && did !== 0 && projectSelect) {
+      _loadProjectsForDistrict(did, pid || null, function() {
+        var selectedPid = _tsVal(projectSelect);
+        if (selectedPid && selectedPid !== '0' && vehicleSelect) {
+          _loadVehiclesForProject(selectedPid, did, vid || null, function() {
+            fetchOilLastReading();
+          });
+        } else {
+          fetchOilLastReading();
+        }
+      });
+    } else {
+      fetchOilLastReading();
+    }
   }
+
+  _runInitialLoadChain();
   window.setTimeout(function() { fetchOilTaskReadings(); }, 250);
   updateKm();
   updateOilReadingMatch();
@@ -949,6 +1023,15 @@
       e.preventDefault();
     });
   }
-})();
+
+  window.setTimeout(function() {
+    if (districtSelect && districtSelect.tomselect) {
+      districtSelect.tomselect.focus();
+    } else if (districtSelect) {
+      districtSelect.focus();
+    }
+  }, 100);
+
+});
 </script>
 {% endblock %}
