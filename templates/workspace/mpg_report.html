@@ -36,11 +36,11 @@
       <form method="get" class="row g-2 align-items-end">
         <div class="col-md-2">
           <label class="form-label small fw-semibold">From Date</label>
-          <input type="date" class="form-control" name="from_date" value="{{ from_date.isoformat() if from_date else '' }}">
+          <input type="text" class="form-control form-control-sm datepicker" name="from_date" placeholder="dd-mm-yyyy" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}">
         </div>
         <div class="col-md-2">
           <label class="form-label small fw-semibold">To Date</label>
-          <input type="date" class="form-control" name="to_date" value="{{ to_date.isoformat() if to_date else '' }}">
+          <input type="text" class="form-control form-control-sm datepicker" name="to_date" placeholder="dd-mm-yyyy" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}">
         </div>
         <div class="col-md-2">
           <label class="form-label small fw-semibold">District</label>
@@ -78,8 +78,8 @@
   </div>
 
   <form method="post">
-    <input type="hidden" name="from_date" value="{{ from_date.isoformat() if from_date else '' }}">
-    <input type="hidden" name="to_date" value="{{ to_date.isoformat() if to_date else '' }}">
+    <input type="hidden" name="from_date" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}">
+    <input type="hidden" name="to_date" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}">
     <input type="hidden" name="district_id" value="{{ district_id or '' }}">
     <input type="hidden" name="project_id" value="{{ project_id or '' }}">
     <input type="hidden" name="vehicle_id" value="{{ vehicle_id or '' }}">
@@ -111,8 +111,8 @@
               <th class="text-end">FUEL DEDUCTION</th>
               <th class="text-end">Short Km's</th>
               <th class="text-end">With Full Tank Next Fueling Reading</th>
-              <th class="text-end">Current Date Reading</th>
-              <th class="text-end">Current Odoo Meter Reading</th>
+              <th class="text-end" id="thCurrentDateReading">Current Date Reading</th>
+              <th class="text-end" id="thCurrentOdooMeter">Current Odoo Meter Reading</th>
               <th class="text-end">R. KM's from Fueling</th>
               <th class="text-end">In Tank Current Ltr</th>
               <th class="text-end">Fueling LTR With Target MPG</th>
@@ -149,7 +149,7 @@
               <td class="text-end">{{ "{:,.2f}".format(r.short_kms) if r.short_kms is not none else '-' }}</td>
               <td class="text-end">{{ "{:,.2f}".format(r.with_full_tank_next_fueling) if r.with_full_tank_next_fueling is not none else '-' }}</td>
               <td class="text-end current-date-reading-cell">{{ "{:,.2f}".format(r.current_date_reading) if r.current_date_reading is not none else '-' }}</td>
-              <td class="text-end" style="min-width: 170px;">
+              <td class="text-end current-odoo-meter-cell" style="min-width: 170px;">
                 <input
                   type="text"
                   class="form-control form-control-sm text-end current-odoo-input"
@@ -191,13 +191,6 @@
 document.addEventListener('DOMContentLoaded', function(){
   if(window.fleetTableEnhance){
     window.fleetTableEnhance('workspaceMpgReportTable');
-  }
-  if(window.fleetPrintExport){
-    window.fleetPrintExport(
-      'workspaceMpgReportTable',
-      'Workspace MPG Report',
-      'Workspace_MPG_Report.csv'
-    );
   }
 
   const table = document.getElementById('workspaceMpgReportTable');
@@ -255,6 +248,134 @@ document.addEventListener('DOMContentLoaded', function(){
       return '-';
     }
     return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  const printBtn = document.getElementById('btnPrintReport');
+  const exportBtn = document.getElementById('btnExportReport');
+  const printTitle = {{ print_report_title|tojson }};
+
+  function hasOdooReading(tableEl){
+    if(!tableEl) return false;
+    return Array.from(tableEl.querySelectorAll('tbody tr.mpg-data-row .current-odoo-input'))
+      .some(function(inp){ return parseNumber(inp.value) != null; });
+  }
+
+  function removeColumnByIndex(tableEl, columnIndex){
+    if(!tableEl || columnIndex < 0) return;
+    tableEl.querySelectorAll('tr').forEach(function(tr){
+      if(tr.children && tr.children[columnIndex]){
+        tr.children[columnIndex].remove();
+      }
+    });
+  }
+
+  function buildPrintableClone(sourceTable){
+    if(!sourceTable) return null;
+    const clone = sourceTable.cloneNode(true);
+    clone.querySelectorAll('.ft-filter-wrap').forEach(function(el){ el.remove(); });
+    clone.querySelectorAll('tbody tr').forEach(function(row){
+      if(row.style.display === 'none'){
+        row.remove();
+      }
+    });
+
+    clone.querySelectorAll('input').forEach(function(inp){
+      const span = document.createElement('span');
+      span.textContent = (inp.value || '').trim() || '-';
+      inp.replaceWith(span);
+    });
+
+    const headRow = clone.querySelector('thead tr');
+    if(headRow){
+      const thDate = headRow.querySelector('#thCurrentDateReading');
+      const thOdoo = headRow.querySelector('#thCurrentOdooMeter');
+      const idxDate = thDate ? Array.from(headRow.children).indexOf(thDate) : -1;
+      const idxOdoo = thOdoo ? Array.from(headRow.children).indexOf(thOdoo) : -1;
+      const showOdoo = hasOdooReading(sourceTable);
+      if(showOdoo){
+        removeColumnByIndex(clone, idxDate);
+      } else {
+        removeColumnByIndex(clone, idxOdoo);
+      }
+    }
+    return clone;
+  }
+
+  function downloadCsvFromTable(tableEl, filename){
+    if(!tableEl) return;
+    const rows = [];
+    const headerCells = Array.from(tableEl.querySelectorAll('thead th')).map(function(th){
+      return '"' + (th.textContent || '').trim().replace(/"/g, '""') + '"';
+    });
+    rows.push(headerCells.join(','));
+
+    tableEl.querySelectorAll('tbody tr').forEach(function(tr){
+      const cells = Array.from(tr.querySelectorAll('td')).map(function(td){
+        return '"' + (td.textContent || '').trim().replace(/"/g, '""') + '"';
+      });
+      if(cells.length){
+        rows.push(cells.join(','));
+      }
+    });
+
+    const csv = '\uFEFF' + rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+  }
+
+  if(printBtn){
+    printBtn.addEventListener('click', function(){
+      printBtn.disabled = true;
+      printBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+      const clone = buildPrintableClone(table);
+      if(!clone){
+        printBtn.disabled = false;
+        printBtn.innerHTML = '<i class="bi bi-eye me-1"></i>Print / Preview';
+        return;
+      }
+      const w = window.open('', '_blank');
+      w.document.write('<!DOCTYPE html><html><head><title>' + printTitle + '</title>');
+      w.document.write('<style>');
+      w.document.write('@page{size:A4 landscape;margin:6mm;}');
+      w.document.write('body{font-family:Arial,sans-serif;margin:0;padding:8px 10px;background:#fff;color:#111;}');
+      w.document.write('.toolbar{position:sticky;top:0;z-index:99;background:#1e293b;color:#fff;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:0 0 6px 6px;box-shadow:0 2px 8px rgba(0,0,0,.2);margin:-8px -10px 8px;}');
+      w.document.write('.toolbar h4{margin:0;font-size:13px;font-weight:600;}');
+      w.document.write('.toolbar button{padding:4px 12px;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;}');
+      w.document.write('.btn-p{background:#3b82f6;color:#fff;}.btn-c{background:#64748b;color:#fff;margin-left:6px;}');
+      w.document.write('h3{text-align:center;margin:6px 0 8px;font-size:12px;line-height:1.3;}');
+      w.document.write('.table-wrap{overflow:visible;}');
+      w.document.write('table{width:100%;border-collapse:collapse;table-layout:fixed;}');
+      w.document.write('th,td{border:1px solid #666;padding:2px 3px;vertical-align:top;white-space:normal;word-break:break-word;line-height:1.2;font-size:8px;}');
+      w.document.write('th{background:#eef2f7;font-weight:700;}');
+      w.document.write('.text-end{text-align:right;}.text-center{text-align:center;}');
+      w.document.write('@media print{.toolbar{display:none!important;} body{padding:0;}}');
+      w.document.write('</style></head><body>');
+      w.document.write('<div class="toolbar"><h4>' + printTitle + '</h4><div>');
+      w.document.write('<button class="btn-p" onclick="window.print()">Print</button>');
+      w.document.write('<button class="btn-c" onclick="window.close()">Close</button>');
+      w.document.write('</div></div>');
+      w.document.write('<h3>' + printTitle + '</h3>');
+      w.document.write('<div class="table-wrap">' + clone.outerHTML + '</div>');
+      w.document.write('</body></html>');
+      w.document.close();
+      w.focus();
+      printBtn.disabled = false;
+      printBtn.innerHTML = '<i class="bi bi-eye me-1"></i>Print / Preview';
+    });
+  }
+
+  if(exportBtn){
+    exportBtn.addEventListener('click', function(){
+      exportBtn.disabled = true;
+      exportBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+      const clone = buildPrintableClone(table);
+      downloadCsvFromTable(clone, 'Workspace_MPG_Report.csv');
+      exportBtn.disabled = false;
+      exportBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>Export';
+    });
   }
 
   function recalculateMpgRow(row){

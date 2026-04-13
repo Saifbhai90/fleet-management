@@ -3067,8 +3067,7 @@ def workspace_mpg_report():
         return guard
 
     today = pk_date()
-    default_from_date = today - timedelta(days=30)
-    from_date = parse_date(request.values.get("from_date")) or default_from_date
+    from_date = parse_date(request.values.get("from_date")) or today
     to_date = parse_date(request.values.get("to_date")) or today
     district_id = request.values.get("district_id", type=int) or 0
     project_id = request.values.get("project_id", type=int) or 0
@@ -3293,6 +3292,18 @@ def workspace_mpg_report():
             "tank_capacity": tank_capacity,
         })
 
+    districts = District.query.order_by(District.name.asc()).all()
+    projects = Project.query.order_by(Project.name.asc()).all()
+    vehicles = Vehicle.query.order_by(Vehicle.vehicle_no.asc()).all()
+    district_obj = next((d for d in districts if int(d.id) == int(district_id)), None) if district_id else None
+    project_obj = next((p for p in projects if int(p.id) == int(project_id)), None) if project_id else None
+    selected_district_name = district_obj.name if district_obj else "All Districts"
+    selected_project_name = project_obj.name if project_obj else "All Projects"
+    print_report_title = (
+        f"{selected_district_name} ({selected_project_name}) "
+        f"Fuel MPG SUMMARY(Date: {from_date.strftime('%d-%m-%Y')} To {to_date.strftime('%d-%m-%Y')})"
+    )
+
     return render_template(
         "workspace/mpg_report.html",
         employee=emp,
@@ -3301,10 +3312,11 @@ def workspace_mpg_report():
         district_id=district_id,
         project_id=project_id,
         vehicle_id=vehicle_id,
-        districts=District.query.order_by(District.name.asc()).all(),
-        projects=Project.query.order_by(Project.name.asc()).all(),
-        vehicles=Vehicle.query.order_by(Vehicle.vehicle_no.asc()).all(),
+        districts=districts,
+        projects=projects,
+        vehicles=vehicles,
         rows=report_rows,
+        print_report_title=print_report_title,
     )
 
 
