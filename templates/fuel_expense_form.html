@@ -304,6 +304,14 @@ document.addEventListener('DOMContentLoaded', function() {
   var taskStartReading = null;
   var taskCloseReading = null;
   var cashExpenseByValue = '';
+  function setFuelTypeAuto(fuelType) {
+    var ft = (fuelType || '').trim();
+    if (fuelTypeSelect && ft) fuelTypeSelect.value = ft;
+    if (fuelTypeDisplay) fuelTypeDisplay.value = ft;
+  }
+  if (fuelTypeSelect && fuelTypeSelect.value) {
+    setFuelTypeAuto(fuelTypeSelect.value);
+  }
   if (expenseBySelect && expenseBySelect.options) {
     for (var e = 0; e < expenseBySelect.options.length; e += 1) {
       var opt = expenseBySelect.options[e];
@@ -325,8 +333,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
     if (!vid || vid === '0') {
       if (previousReadingInput) previousReadingInput.value = '';
-      if (fuelTypeSelect) fuelTypeSelect.value = '';
-      if (fuelTypeDisplay) fuelTypeDisplay.value = '';
+      setFuelTypeAuto('');
       computeKm();
       return;
     }
@@ -339,11 +346,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (data.previous_reading != null && previousReadingInput) {
           previousReadingInput.value = data.previous_reading;
         }
-        if (data.fuel_type && fuelTypeSelect) {
-          fuelTypeSelect.value = data.fuel_type;
-          if (fuelTypeDisplay) fuelTypeDisplay.value = data.fuel_type;
-        } else if (fuelTypeDisplay) {
-          fuelTypeDisplay.value = '';
+        if (data.fuel_type) {
+          setFuelTypeAuto(data.fuel_type);
+        } else if (fuelTypeSelect && fuelTypeSelect.value) {
+          setFuelTypeAuto(fuelTypeSelect.value);
         }
         fetchSuggestedPrice();
         fetchPriceHistory();
@@ -596,8 +602,10 @@ document.addEventListener('DOMContentLoaded', function() {
     vehicleSelect.addEventListener('change', function() {
       var selected = vehicleSelect.options[vehicleSelect.selectedIndex];
       var selectedFuel = selected ? (selected.getAttribute('data-fuel-type') || '') : '';
-      if (fuelTypeSelect) fuelTypeSelect.value = selectedFuel;
-      if (fuelTypeDisplay) fuelTypeDisplay.value = selectedFuel;
+      if (!selectedFuel && fuelTypeSelect && fuelTypeSelect.value) {
+        selectedFuel = fuelTypeSelect.value;
+      }
+      setFuelTypeAuto(selectedFuel);
       fetchSuggestedPrice();
       fetchPriceHistory();
       fetchPsoRateForDate();
