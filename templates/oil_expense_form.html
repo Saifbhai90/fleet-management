@@ -774,20 +774,49 @@ document.addEventListener('DOMContentLoaded', function() {
   if (paymentTypeSelect) {
     paymentTypeSelect.addEventListener('change', function() {
       handleOilExpenseByBehavior(true);
+      window.setTimeout(function() {
+        if (partySelect && partySelect.tomselect) partySelect.tomselect.focus();
+        else if (partySelect) partySelect.focus();
+      }, 50);
+    });
+  }
+  if (partySelect) {
+    partySelect.addEventListener('change', function() {
+      window.setTimeout(function() {
+        if (expenseBySelect && expenseBySelect.tomselect) expenseBySelect.tomselect.focus();
+        else if (expenseBySelect) expenseBySelect.focus();
+      }, 50);
     });
   }
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
-  if (expenseBySelect && expenseBySelect.tomselect) {
-    expenseBySelect.tomselect.control_input.addEventListener('keydown', function(e) {
+
+  function _setupExpenseByEnterKey() {
+    if (!expenseBySelect || !expenseBySelect.tomselect) return;
+    var ts = expenseBySelect.tomselect;
+    ts.on('item_add', function() {
+      updateExpenseByBalanceHint();
+      window.setTimeout(function() {
+        ts.close();
+        ts.blur();
+        if (currentReading) currentReading.focus();
+      }, 30);
+    });
+    ts.control_input.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
+        var isOpen = ts.isOpen;
+        var activeOption = isOpen ? ts.dropdown_content.querySelector('.active') : null;
+        if (activeOption && isOpen && ts.control_input.value.length > 0) {
+          return;
+        }
         e.preventDefault();
         e.stopImmediatePropagation();
-        expenseBySelect.tomselect.close();
-        expenseBySelect.tomselect.blur();
+        ts.close();
+        ts.blur();
         if (currentReading) currentReading.focus();
       }
     });
   }
+  _setupExpenseByEnterKey();
 
   function _loadProjectsForDistrict(did, thenSelectProjectId, thenCallback) {
     if (projectSelect.tomselect) projectSelect.tomselect.destroy();
