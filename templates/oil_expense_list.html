@@ -46,7 +46,7 @@
         </div>
         <div class="col-md-2">
           <label class="form-label small">District</label>
-          <select name="district_id" id="districtSelect" class="form-select form-select-sm">
+          <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select">
             {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if request.args.get('district_id')|int == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -54,7 +54,7 @@
         </div>
         <div class="col-md-2">
           <label class="form-label small">Project</label>
-          <select name="project_id" id="projectSelect" class="form-select form-select-sm">
+          <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
             {% for val, label in form.project_id.choices %}
               <option value="{{ val }}" {% if request.args.get('project_id')|int == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -62,7 +62,7 @@
         </div>
         <div class="col-md-2">
           <label class="form-label small">Vehicle</label>
-          <select name="vehicle_id" id="vehicleSelect" class="form-select form-select-sm">
+          <select name="vehicle_id" id="vehicleSelect" class="form-select form-select-sm search-select">
             {% for val, label in form.vehicle_id.choices %}
               <option value="{{ val }}" {% if request.args.get('vehicle_id')|int == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
