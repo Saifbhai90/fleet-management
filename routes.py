@@ -18810,16 +18810,13 @@ def oil_expense_form(pk=None):
         project_q = project_q.join(project_district).filter(project_district.c.district_id == selected_district_id)
     form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
 
-    vehicle_q = Vehicle.query
     if selected_project_id:
-        vehicle_q = vehicle_q.filter(Vehicle.project_id == selected_project_id)
-    if selected_district_id:
-        vehicle_q = vehicle_q.filter(Vehicle.district_id == selected_district_id)
-    form.vehicle_id.choices = [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
-    if not form.vehicle_id.choices:
-        form.vehicle_id.choices = [(0, '-- No Vehicle --')]
+        vehicle_q = Vehicle.query.filter(Vehicle.project_id == selected_project_id)
+        if selected_district_id:
+            vehicle_q = vehicle_q.filter(Vehicle.district_id == selected_district_id)
+        form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
     else:
-        form.vehicle_id.choices.insert(0, (0, '-- Select Vehicle --'))
+        form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
 
     if request.method == 'GET' and rec:
         if rec.district_id:
