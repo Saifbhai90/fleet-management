@@ -114,7 +114,7 @@
           </thead>
           <tbody>
             {% for r in rows %}
-            <tr class="fuel-expense-row">
+            <tr class="fuel-expense-row" data-fuel-price="{{ r.fuel_price if r.fuel_price is not none else '' }}">
               <td class="ps-3">{{ loop.index }}</td>
               <td>{{ r.district.name if r.district else '-' }}</td>
               <td class="fw-medium">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
@@ -207,7 +207,7 @@
           <tfoot class="table-light fw-semibold">
             <tr>
               <td colspan="4" class="ps-3">Total</td>
-              <td></td>
+              <td id="fuelExpenseAvgPriceCell">{{ totals.get('avg_fuel_price')|round(2) if totals.get('avg_fuel_price') is not none else '-' }}</td>
               <td></td>
               <td></td>
               <td></td>
@@ -309,6 +309,26 @@
   var table = document.getElementById('fuelExpenseTable');
   if (searchInput && table) {
     var tbody = table.querySelector('tbody');
+    var avgFuelPriceCell = table.querySelector('#fuelExpenseAvgPriceCell');
+    function updateVisibleAvgFuelPrice(dataRows) {
+      if (!avgFuelPriceCell) return;
+      var sum = 0;
+      var count = 0;
+      dataRows.forEach(function(row) {
+        if (row.style.display === 'none') return;
+        var raw = (row.getAttribute('data-fuel-price') || '').trim();
+        if (!raw) return;
+        var num = Number(raw);
+        if (!Number.isFinite(num)) return;
+        sum += num;
+        count += 1;
+      });
+      if (count) {
+        avgFuelPriceCell.textContent = (sum / count).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      } else {
+        avgFuelPriceCell.textContent = '-';
+      }
+    }
     if (tbody) {
       var dataRows = Array.from(tbody.querySelectorAll('tr.fuel-expense-row'));
       var noDataRow = tbody.querySelector('tr#fuelExpenseNoDataRow') || tbody.querySelector('tr[colspan]') || null;
@@ -321,7 +341,9 @@
           if (show) visible++;
         });
         if (noDataRow) noDataRow.style.display = (dataRows.length === 0 || (q && visible === 0)) ? '' : 'none';
+        updateVisibleAvgFuelPrice(dataRows);
       });
+      updateVisibleAvgFuelPrice(dataRows);
     }
   }
 
