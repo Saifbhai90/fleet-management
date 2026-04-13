@@ -17376,11 +17376,10 @@ def fuel_expense_list():
         total_km = sum(float(r.km or 0) for r in all_rows)
         total_liters = sum(float(r.liters or 0) for r in all_rows)
         total_amount = sum(float(r.amount or 0) for r in all_rows)
-        fuel_prices = [float(r.fuel_price) for r in all_rows if r.fuel_price is not None]
         first_prev = all_rows[-1].previous_reading
         last_curr = all_rows[0].current_reading
         avg_mpg = round(total_km / total_liters, 2) if total_liters else None
-        avg_fuel_price = round(sum(fuel_prices) / len(fuel_prices), 2) if fuel_prices else None
+        avg_fuel_price = round(total_amount / total_liters, 2) if total_liters else None
         totals = {'total_km': total_km, 'total_liters': total_liters, 'total_amount': total_amount,
                   'first_previous_reading': float(first_prev) if first_prev else None,
                   'last_current_reading': float(last_curr) if last_curr else None,

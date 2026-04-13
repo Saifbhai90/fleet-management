@@ -114,7 +114,7 @@
           </thead>
           <tbody>
             {% for r in rows %}
-            <tr class="fuel-expense-row" data-fuel-price="{{ r.fuel_price if r.fuel_price is not none else '' }}">
+            <tr class="fuel-expense-row" data-liters="{{ r.liters if r.liters is not none else '' }}" data-amount="{{ r.amount if r.amount is not none else '' }}">
               <td class="ps-3">{{ loop.index }}</td>
               <td>{{ r.district.name if r.district else '-' }}</td>
               <td class="fw-medium">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
@@ -207,7 +207,7 @@
           <tfoot class="table-light fw-semibold">
             <tr>
               <td colspan="4" class="ps-3">Total</td>
-              <td id="fuelExpenseAvgPriceCell">{{ totals.get('avg_fuel_price')|round(2) if totals.get('avg_fuel_price') is not none else '-' }}</td>
+              <td></td>
               <td></td>
               <td></td>
               <td></td>
@@ -217,7 +217,7 @@
               <td>{{ totals.first_previous_reading|round(2) if totals.first_previous_reading is not none else '-' }}</td>
               <td>{{ totals.last_current_reading|round(2) if totals.last_current_reading is not none else '-' }}</td>
               <td>{{ totals.total_km|round(2) }}</td>
-              <td></td>
+              <td id="fuelExpenseAvgPriceCell" title="Total Amount/Total Ltr = Weighted Average price">{{ totals.get('avg_fuel_price')|round(2) if totals.get('avg_fuel_price') is not none else '-' }}</td>
               <td>{{ totals.total_liters|round(2) }}</td>
               <td>{{ totals.avg_mpg|round(2) if totals.avg_mpg is not none else '-' }}</td>
               <td>{{ totals.total_amount|round(2) }}</td>
@@ -312,19 +312,20 @@
     var avgFuelPriceCell = table.querySelector('#fuelExpenseAvgPriceCell');
     function updateVisibleAvgFuelPrice(dataRows) {
       if (!avgFuelPriceCell) return;
-      var sum = 0;
-      var count = 0;
+      var totalAmount = 0;
+      var totalLiters = 0;
       dataRows.forEach(function(row) {
         if (row.style.display === 'none') return;
-        var raw = (row.getAttribute('data-fuel-price') || '').trim();
-        if (!raw) return;
-        var num = Number(raw);
-        if (!Number.isFinite(num)) return;
-        sum += num;
-        count += 1;
+        var litersRaw = (row.getAttribute('data-liters') || '').trim();
+        var amountRaw = (row.getAttribute('data-amount') || '').trim();
+        var liters = Number(litersRaw);
+        var amount = Number(amountRaw);
+        if (!Number.isFinite(liters) || !Number.isFinite(amount) || liters <= 0) return;
+        totalLiters += liters;
+        totalAmount += amount;
       });
-      if (count) {
-        avgFuelPriceCell.textContent = (sum / count).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (totalLiters > 0) {
+        avgFuelPriceCell.textContent = (totalAmount / totalLiters).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       } else {
         avgFuelPriceCell.textContent = '-';
       }
