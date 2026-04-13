@@ -96,7 +96,7 @@
     <i class="bi bi-broadcast me-1"></i>PSO scan status loading...
   </div>
 
-  <form method="POST" action="" id="fuelExpenseForm" enctype="multipart/form-data">
+  <form method="POST" action="" id="fuelExpenseForm" data-record-id="{{ rec.id if rec else '' }}" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
 
     <div class="row g-0">
@@ -273,6 +273,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
 
+  var fuelExpenseForm = document.getElementById('fuelExpenseForm');
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
@@ -320,6 +321,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function fetchLastReading() {
     var vid = vehicleSelect && vehicleSelect.value;
+    var fDate = fuelingDateInput && fuelingDateInput.value;
+    var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
     if (!vid || vid === '0') {
       if (previousReadingInput) previousReadingInput.value = '';
       if (fuelTypeSelect) fuelTypeSelect.value = '';
@@ -327,7 +330,10 @@ document.addEventListener('DOMContentLoaded', function() {
       computeKm();
       return;
     }
-    fetch('/api/fuel-expense/last-reading?vehicle_id=' + vid)
+    var url = '/api/fuel-expense/last-reading?vehicle_id=' + encodeURIComponent(vid);
+    if (fDate) url += '&fueling_date=' + encodeURIComponent(fDate);
+    if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (data.previous_reading != null && previousReadingInput) {
@@ -597,7 +603,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  if (fuelingDateInput) fuelingDateInput.addEventListener('change', function() { fetchTaskReadings(); fetchPsoRateForDate(); });
+  if (fuelingDateInput) fuelingDateInput.addEventListener('change', function() { fetchLastReading(); fetchTaskReadings(); fetchPsoRateForDate(); });
   if (previousReadingInput) previousReadingInput.addEventListener('input', function() { computeKm(); fetchTaskReadings(); });
   if (currentReadingInput) {
     currentReadingInput.addEventListener('input', computeKm);

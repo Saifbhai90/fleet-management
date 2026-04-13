@@ -50,7 +50,7 @@
     </div>
   </div>
 
-  <form method="POST" action="" id="oilExpenseForm" enctype="multipart/form-data">
+  <form method="POST" action="" id="oilExpenseForm" data-record-id="{{ rec.id if rec else '' }}" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
 
     <div class="form-section">
@@ -703,7 +703,13 @@
   if (currentReading) currentReading.addEventListener('input', updateKm);
   if (previousReading) previousReading.addEventListener('input', updateKm);
   if (currentReading) currentReading.addEventListener('input', updateOilReadingMatch);
-  if (expenseDate) expenseDate.addEventListener('change', fetchOilTaskReadings);
+  if (expenseDate) expenseDate.addEventListener('change', function() {
+    if (vehicleSelect) {
+      vehicleSelect.dispatchEvent(new Event('change'));
+    } else {
+      fetchOilTaskReadings();
+    }
+  });
   if (partySelect) partySelect.addEventListener('change', handleOilExpenseByBehavior);
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
 
@@ -715,7 +721,12 @@
         fetchOilTaskReadings();
         return;
       }
-      fetch('/api/oil-expense/last-reading?vehicle_id=' + vid).then(function(r) { return r.json(); }).then(function(d) {
+      var recId = formEl ? (formEl.getAttribute('data-record-id') || '') : '';
+      var expDateVal = expenseDate && expenseDate.value ? expenseDate.value : '';
+      var url = '/api/oil-expense/last-reading?vehicle_id=' + encodeURIComponent(vid);
+      if (expDateVal) url += '&expense_date=' + encodeURIComponent(expDateVal);
+      if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+      fetch(url).then(function(r) { return r.json(); }).then(function(d) {
         if (d.previous_reading != null) previousReading.value = d.previous_reading;
         updateKm();
       }).finally(function() {

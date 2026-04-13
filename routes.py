@@ -17122,20 +17122,71 @@ def _fuel_expense_task_readings(vehicle_id, task_date):
     return km_out, km_in
 
 
+def _fuel_expense_previous_reading(vehicle_id, fueling_date=None, exclude_id=None, workspace_employee_id=None):
+    if not vehicle_id:
+        return None
+    q = FuelExpense.query.filter(FuelExpense.vehicle_id == vehicle_id)
+    if exclude_id:
+        q = q.filter(FuelExpense.id != exclude_id)
+    if fueling_date:
+        if exclude_id:
+            q = q.filter(
+                db.or_(
+                    FuelExpense.fueling_date < fueling_date,
+                    db.and_(FuelExpense.fueling_date == fueling_date, FuelExpense.id < int(exclude_id)),
+                )
+            )
+        else:
+            q = q.filter(FuelExpense.fueling_date <= fueling_date)
+    last_entry = q.order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
+    if last_entry and last_entry.current_reading is not None:
+        return float(last_entry.current_reading)
+    return _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'fuel')
+
+
+def _resequence_vehicle_fuel_expenses(vehicle_id, workspace_employee_id=None):
+    if not vehicle_id:
+        return
+    rows = FuelExpense.query.filter(
+        FuelExpense.vehicle_id == vehicle_id
+    ).order_by(FuelExpense.fueling_date.asc(), FuelExpense.id.asc()).all()
+    previous_current = None
+    for idx, row in enumerate(rows):
+        if idx == 0:
+            if row.previous_reading is None:
+                row.previous_reading = _fallback_vehicle_previous_reading(
+                    workspace_employee_id or row.employee_id, vehicle_id, 'fuel'
+                )
+        else:
+            row.previous_reading = previous_current
+
+        prev_val = float(row.previous_reading) if row.previous_reading is not None else None
+        curr_val = float(row.current_reading) if row.current_reading is not None else None
+        row.km = (curr_val - prev_val) if (prev_val is not None and curr_val is not None) else None
+        liters_val = float(row.liters) if row.liters is not None else None
+        row.mpg = round(float(row.km) / liters_val, 2) if (row.km is not None and liters_val and liters_val > 0) else None
+
+        previous_current = curr_val
+
+
 @app.route('/api/fuel-expense/last-reading')
 def api_fuel_expense_last_reading():
     """Return last fueling entry's current_reading for vehicle_id (for Previous Reading)."""
     vehicle_id = request.args.get('vehicle_id', type=int)
+    fueling_date = parse_date(request.args.get('fueling_date', ''))
+    exclude_id = request.args.get('exclude_id', type=int)
     if not vehicle_id:
         return jsonify({'previous_reading': None, 'fuel_type': None})
     vehicle = Vehicle.query.get(vehicle_id)
     vehicle_fuel_type = (vehicle.fuel_type if vehicle and vehicle.fuel_type else 'Petrol')
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    last_entry = FuelExpense.query.filter_by(vehicle_id=vehicle_id).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
-    if last_entry and last_entry.current_reading is not None:
-        return jsonify({'previous_reading': float(last_entry.current_reading), 'fuel_type': vehicle_fuel_type})
-    fallback = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'fuel')
-    return jsonify({'previous_reading': fallback, 'fuel_type': vehicle_fuel_type})
+    previous_reading = _fuel_expense_previous_reading(
+        vehicle_id=vehicle_id,
+        fueling_date=fueling_date,
+        exclude_id=exclude_id,
+        workspace_employee_id=workspace_employee_id,
+    )
+    return jsonify({'previous_reading': previous_reading, 'fuel_type': vehicle_fuel_type})
 
 
 @app.route('/api/fuel-expense/task-readings')
@@ -17800,11 +17851,11 @@ def fuel_expense_add():
         previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
         if previous_reading is None:
-            last_entry = FuelExpense.query.filter_by(vehicle_id=vehicle_id).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
-            if last_entry and last_entry.current_reading is not None:
-                previous_reading = float(last_entry.current_reading)
-            else:
-                previous_reading = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'fuel') or 0
+            previous_reading = _fuel_expense_previous_reading(
+                vehicle_id=vehicle_id,
+                fueling_date=fueling_date,
+                workspace_employee_id=workspace_employee_id,
+            ) or 0
         prev_f = float(previous_reading)
         curr_f = float(current_reading)
         km = curr_f - prev_f
@@ -17838,6 +17889,7 @@ def fuel_expense_add():
         )
         db.session.add(rec)
         db.session.flush()
+        _resequence_vehicle_fuel_expenses(vehicle_id, workspace_employee_id)
         fuel_je = _workspace_post_expense_journal(
             employee_id=workspace_employee_id,
             reference_type='FuelExpense',
@@ -17991,14 +18043,12 @@ def fuel_expense_edit(pk):
         previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
         if previous_reading is None:
-            last_entry = FuelExpense.query.filter(
-                FuelExpense.vehicle_id == vehicle_id,
-                FuelExpense.id != pk
-            ).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
-            if last_entry and last_entry.current_reading is not None:
-                previous_reading = float(last_entry.current_reading)
-            else:
-                previous_reading = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'fuel') or 0
+            previous_reading = _fuel_expense_previous_reading(
+                vehicle_id=vehicle_id,
+                fueling_date=fueling_date,
+                exclude_id=pk,
+                workspace_employee_id=workspace_employee_id,
+            ) or 0
         prev_f = float(previous_reading)
         curr_f = float(current_reading)
         km = curr_f - prev_f
@@ -18043,6 +18093,7 @@ def fuel_expense_edit(pk):
             rec.km_out_task = km_out_task
             rec.km_in_task = km_in_task
             rec.meter_reading_matched = meter_reading_matched
+            _resequence_vehicle_fuel_expenses(vehicle_id, workspace_employee_id)
             fuel_je = _workspace_post_expense_journal(
                 employee_id=workspace_employee_id,
                 reference_type='FuelExpense',
@@ -18152,9 +18203,11 @@ def fuel_expense_delete(pk):
     attachment_paths = [att.file_path for att in rec.attachments.all() if att and getattr(att, 'file_path', None)]
     rec_id = rec.id
     initiated_by_user_id = session.get('user_id')
+    vehicle_id = rec.vehicle_id
     _workspace_reverse_expense_journals('FuelExpense', rec.id, workspace_employee_id)
     _workspace_delete_regular_expense(workspace_employee_id, 'FuelExpense', rec.id)
     db.session.delete(rec)
+    _resequence_vehicle_fuel_expenses(vehicle_id, workspace_employee_id)
     db.session.commit()
     _start_expense_delete_cleanup_worker('fuel', rec_id, attachment_paths, employee_id=workspace_employee_id, initiated_by_user_id=initiated_by_user_id)
     flash('Fuel expense deleted. Media cleanup background me continue ho rahi hai.', 'success')
@@ -18256,18 +18309,64 @@ def fuel_expense_upload_resume(pk):
 @app.route('/api/oil-expense/last-reading')
 def api_oil_expense_last_reading():
     vehicle_id = request.args.get('vehicle_id', type=int)
+    expense_date = parse_date(request.args.get('expense_date', ''))
+    exclude_id = request.args.get('exclude_id', type=int)
     if not vehicle_id:
         return jsonify({})
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    last_entry = OilExpense.query.filter_by(vehicle_id=vehicle_id).order_by(
-        OilExpense.expense_date.desc(), OilExpense.id.desc()
-    ).first()
-    if last_entry and last_entry.current_reading is not None:
-        return jsonify({'previous_reading': float(last_entry.current_reading)})
-    fallback = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'oil')
-    if fallback is None:
+    previous_reading = _oil_expense_previous_reading(
+        vehicle_id=vehicle_id,
+        expense_date=expense_date,
+        exclude_id=exclude_id,
+        workspace_employee_id=workspace_employee_id,
+    )
+    if previous_reading is None:
         return jsonify({})
-    return jsonify({'previous_reading': fallback})
+    return jsonify({'previous_reading': previous_reading})
+
+
+def _oil_expense_previous_reading(vehicle_id, expense_date=None, exclude_id=None, workspace_employee_id=None):
+    if not vehicle_id:
+        return None
+    q = OilExpense.query.filter(OilExpense.vehicle_id == vehicle_id)
+    if exclude_id:
+        q = q.filter(OilExpense.id != exclude_id)
+    if expense_date:
+        if exclude_id:
+            q = q.filter(
+                db.or_(
+                    OilExpense.expense_date < expense_date,
+                    db.and_(OilExpense.expense_date == expense_date, OilExpense.id < int(exclude_id)),
+                )
+            )
+        else:
+            q = q.filter(OilExpense.expense_date <= expense_date)
+    last_entry = q.order_by(OilExpense.expense_date.desc(), OilExpense.id.desc()).first()
+    if last_entry and last_entry.current_reading is not None:
+        return float(last_entry.current_reading)
+    return _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'oil')
+
+
+def _resequence_vehicle_oil_expenses(vehicle_id, workspace_employee_id=None):
+    if not vehicle_id:
+        return
+    rows = OilExpense.query.filter(
+        OilExpense.vehicle_id == vehicle_id
+    ).order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
+    previous_current = None
+    for idx, row in enumerate(rows):
+        if idx == 0:
+            if row.previous_reading is None:
+                row.previous_reading = _fallback_vehicle_previous_reading(
+                    workspace_employee_id or row.employee_id, vehicle_id, 'oil'
+                )
+        else:
+            row.previous_reading = previous_current
+
+        prev_val = float(row.previous_reading) if row.previous_reading is not None else None
+        curr_val = float(row.current_reading) if row.current_reading is not None else None
+        row.km = (curr_val - prev_val) if (prev_val is not None and curr_val is not None) else None
+        previous_current = curr_val
 
 
 @app.route('/api/oil-expense/products-for-oil')
@@ -18662,13 +18761,12 @@ def oil_expense_form(pk=None):
         prev_reading = form.previous_reading.data
         curr_reading = form.current_reading.data
         if prev_reading is None:
-            last_entry = OilExpense.query.filter_by(vehicle_id=vehicle_id).order_by(
-                OilExpense.expense_date.desc(), OilExpense.id.desc()
-            ).first()
-            if last_entry and last_entry.current_reading is not None:
-                prev_reading = float(last_entry.current_reading)
-            else:
-                prev_reading = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'oil')
+            prev_reading = _oil_expense_previous_reading(
+                vehicle_id=vehicle_id,
+                expense_date=expense_date,
+                exclude_id=(rec.id if rec else None),
+                workspace_employee_id=workspace_employee_id,
+            )
         km = None
         if prev_reading is not None and curr_reading is not None:
             try:
@@ -18764,6 +18862,7 @@ def oil_expense_form(pk=None):
                 rec.current_reading = curr_reading
                 rec.km = km
                 rec.remarks = remarks
+            _resequence_vehicle_oil_expenses(vehicle_id, workspace_employee_id)
 
             for idx, it in enumerate(items_data):
                 item = OilExpenseItem(
@@ -18935,11 +19034,13 @@ def oil_expense_delete(pk):
     attachment_paths = [att.file_path for att in rec.attachments.all() if att and getattr(att, 'file_path', None)]
     rec_id = rec.id
     initiated_by_user_id = session.get('user_id')
+    vehicle_id = rec.vehicle_id
     _workspace_reverse_expense_journals('OilExpense', rec.id, workspace_employee_id)
     _workspace_delete_regular_expense(workspace_employee_id, 'OilExpense', rec.id)
     items = list(rec.items.all())
     _apply_oil_expense_items_balance(items, reverse=True)
     db.session.delete(rec)
+    _resequence_vehicle_oil_expenses(vehicle_id, workspace_employee_id)
     db.session.commit()
     _start_expense_delete_cleanup_worker('oil', rec_id, attachment_paths, employee_id=workspace_employee_id, initiated_by_user_id=initiated_by_user_id)
     flash('Oil expense deleted. Media cleanup background me continue ho rahi hai.', 'success')
@@ -19002,14 +19103,68 @@ def oil_expense_upload_resume(pk):
 @app.route('/api/maintenance-expense/last-reading')
 def api_maintenance_expense_last_reading():
     vehicle_id = request.args.get('vehicle_id', type=int)
+    expense_date = parse_date(request.args.get('expense_date', ''))
+    exclude_id = request.args.get('exclude_id', type=int)
     if not vehicle_id:
         return jsonify({})
-    last_entry = MaintenanceExpense.query.filter_by(vehicle_id=vehicle_id).order_by(
-        MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()
-    ).first()
-    if not last_entry or last_entry.current_reading is None:
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    previous_reading = _maintenance_expense_previous_reading(
+        vehicle_id=vehicle_id,
+        expense_date=expense_date,
+        exclude_id=exclude_id,
+        workspace_employee_id=workspace_employee_id,
+    )
+    if previous_reading is None:
         return jsonify({})
-    return jsonify({'previous_reading': float(last_entry.current_reading)})
+    return jsonify({'previous_reading': previous_reading})
+
+
+def _maintenance_expense_previous_reading(vehicle_id, expense_date=None, exclude_id=None, workspace_employee_id=None):
+    if not vehicle_id:
+        return None
+    q = MaintenanceExpense.query.filter(MaintenanceExpense.vehicle_id == vehicle_id)
+    if exclude_id:
+        q = q.filter(MaintenanceExpense.id != exclude_id)
+    if expense_date:
+        if exclude_id:
+            q = q.filter(
+                db.or_(
+                    MaintenanceExpense.expense_date < expense_date,
+                    db.and_(MaintenanceExpense.expense_date == expense_date, MaintenanceExpense.id < int(exclude_id)),
+                )
+            )
+        else:
+            q = q.filter(MaintenanceExpense.expense_date <= expense_date)
+    last_entry = q.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).first()
+    if last_entry and last_entry.current_reading is not None:
+        return float(last_entry.current_reading)
+    fallback = _fallback_vehicle_previous_reading(workspace_employee_id, vehicle_id, 'maintenance')
+    return float(fallback) if fallback is not None else None
+
+
+def _resequence_vehicle_maintenance_expenses(vehicle_id, workspace_employee_id=None):
+    if not vehicle_id:
+        return
+    rows = MaintenanceExpense.query.filter(
+        MaintenanceExpense.vehicle_id == vehicle_id
+    ).order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
+    previous_current = None
+    for idx, row in enumerate(rows):
+        if idx == 0:
+            if row.previous_reading is None:
+                row.previous_reading = _maintenance_expense_previous_reading(
+                    vehicle_id=vehicle_id,
+                    expense_date=row.expense_date,
+                    exclude_id=row.id,
+                    workspace_employee_id=(workspace_employee_id or row.employee_id),
+                )
+        else:
+            row.previous_reading = previous_current
+
+        prev_val = float(row.previous_reading) if row.previous_reading is not None else None
+        curr_val = float(row.current_reading) if row.current_reading is not None else None
+        row.km = (curr_val - prev_val) if (prev_val is not None and curr_val is not None) else None
+        previous_current = curr_val
 
 
 @app.route('/api/maintenance-expense/products-for-maintenance')
@@ -19273,7 +19428,14 @@ def maintenance_expense_form(pk=None):
         if job_interval_mode not in ('interval_km', 'interval_day'):
             job_interval_mode = None
         task_start_reading, task_close_reading = _fuel_expense_task_readings(vehicle_id, expense_date)
-        prev_reading = float(task_start_reading) if task_start_reading is not None else None
+        prev_reading = _maintenance_expense_previous_reading(
+            vehicle_id=vehicle_id,
+            expense_date=expense_date,
+            exclude_id=(rec.id if rec else None),
+            workspace_employee_id=workspace_employee_id,
+        )
+        if prev_reading is None and task_start_reading is not None:
+            prev_reading = float(task_start_reading)
         close_reading = float(task_close_reading) if task_close_reading is not None else None
         if curr_reading is None and close_reading is not None:
             curr_reading = close_reading
@@ -19417,6 +19579,7 @@ def maintenance_expense_form(pk=None):
                 rec.workspace_party_id = workspace_party_id if payment_type == 'Credit' else None
                 rec.total_bill_amount = entered_total_bill_num
                 rec.remarks = remarks
+            _resequence_vehicle_maintenance_expenses(vehicle_id, workspace_employee_id)
             for idx, it in enumerate(items_data):
                 item = MaintenanceExpenseItem(
                     maintenance_expense_id=rec.id,
@@ -19562,10 +19725,12 @@ def maintenance_expense_delete(pk):
         return redirect(url_for('maintenance_expense_list'))
     attachment_paths = [att.file_path for att in rec.attachments.all() if att and getattr(att, 'file_path', None)]
     initiated_by_user_id = session.get('user_id')
+    vehicle_id = rec.vehicle_id
     _workspace_reverse_expense_journals('MaintenanceExpense', rec.id, workspace_employee_id)
     _workspace_delete_regular_expense(workspace_employee_id, 'MaintenanceExpense', rec.id)
     rec_id = rec.id
     db.session.delete(rec)
+    _resequence_vehicle_maintenance_expenses(vehicle_id, workspace_employee_id)
     db.session.commit()
     _start_expense_delete_cleanup_worker('maintenance', rec_id, attachment_paths, employee_id=workspace_employee_id, initiated_by_user_id=initiated_by_user_id)
     flash('Maintenance expense deleted. Media cleanup background me continue ho rahi hai.', 'success')
