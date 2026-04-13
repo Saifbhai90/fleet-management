@@ -39,6 +39,9 @@
   .oil-form-wrap #itemsTable thead th { font-size: 0.86rem; }
   .oil-form-wrap #itemsTable td { font-size: 0.9rem; }
   .oil-form-wrap #itemsTable input, .oil-form-wrap #itemsTable select { font-size: 0.9rem; padding: 0.42rem 0.5rem; min-height: 36px; }
+  .oil-form-wrap .mini-field { max-width: 110px; }
+  .oil-form-wrap .compact-field .form-control,
+  .oil-form-wrap .compact-field .form-select { min-height: 36px; padding-top: 0.4rem; padding-bottom: 0.4rem; }
   .oil-form-wrap .action-bar { padding: 0.78rem 1rem; background: #f8fafc; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 0.5rem; }
   .oil-form-wrap .btn { font-size: 0.92rem; }
 </style>
@@ -67,24 +70,21 @@
           </div>
           <div class="col-md-3 field-group">
             <label class="form-label">Vehicle <span class="text-danger">*</span></label>
-            <div class="d-flex gap-2 align-items-center">
-              {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
-              <a href="{{ url_for('vehicle_reading_setup_form') }}" class="btn btn-outline-success btn-sm text-nowrap" title="Set Fuel/Oil previous readings">Set Reading</a>
-            </div>
+            {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
           </div>
           <div class="col-md-3 field-group">
             <label class="form-label">Oil Change Date <span class="text-danger">*</span></label>
             {{ form.expense_date(class="form-control datepicker", id="expenseDate") }}
           </div>
-          <div class="col-md-3 field-group">
+          <div class="col-md-2 field-group compact-field">
             <label class="form-label">Payment Type</label>
             {{ form.payment_type(class="form-select search-select", id="paymentTypeSelect") }}
           </div>
-          <div class="col-md-3 field-group">
+          <div class="col-md-2 field-group compact-field">
             <label class="form-label">Card Swipe Date</label>
             {{ form.card_swipe_date(class="form-control datepicker", id="cardSwipeDate") }}
           </div>
-          <div class="col-md-3 field-group">
+          <div class="col-md-4 field-group">
             <label class="form-label fw-bold">Party Name (Workspace)</label>
             <select name="workspace_party_id" id="partySelect" class="form-select search-select">
               <option value="">-- Select Party --</option>
@@ -96,11 +96,10 @@
               <div class="text-danger small mt-1">{{ party_error }}</div>
             {% endif %}
           </div>
-          <div class="col-md-3 field-group">
-            <label class="form-label fw-bold">Expense By (Workspace COA)</label>
+          <div class="col-md-4 field-group">
+            <label class="form-label fw-bold">Expense By (Workspace COA) <span id="expenseByBalanceHint" class="small ms-1 text-muted"></span></label>
             {{ form.expense_by(class="form-select search-select", id="expenseBySelect") }}
             <small class="text-muted">Select workspace account to credit for this expense (optional).</small>
-            <div id="expenseByBalanceHint" class="small mt-1 text-muted"></div>
           </div>
           <div class="col-md-3 field-group">
             <label class="form-label">Previous Reading</label>
@@ -146,13 +145,13 @@
               <option value="">-- Search / Select --</option>
             </select>
           </div>
-          <div class="col-md-2">
+          <div class="col-md-1">
             <label class="form-label mb-0">Purchase Qty</label>
-            <input type="number" id="entryPurchaseQty" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
+            <input type="number" id="entryPurchaseQty" class="form-control form-control-sm mini-field" step="0.01" min="0" placeholder="0" value="0">
           </div>
-          <div class="col-md-2">
+          <div class="col-md-1">
             <label class="form-label mb-0">Used Qty</label>
-            <input type="number" id="entryUsedQty" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
+            <input type="number" id="entryUsedQty" class="form-control form-control-sm mini-field" step="0.01" min="0" placeholder="0" value="0">
           </div>
           <div class="col-md-2">
             <label class="form-label mb-0">Price</label>
@@ -166,7 +165,7 @@
             <label class="form-label mb-0">Balance Qty</label>
             <input type="text" id="entryBalanceQty" class="form-control form-control-sm bg-light" readonly placeholder="0">
           </div>
-          <div class="col-md-2">
+          <div class="col-md-3">
             <button type="button" class="btn btn-sm btn-primary w-100" id="addToListBtn"><i class="bi bi-plus-lg"></i> Add to list</button>
           </div>
         </div>
@@ -251,25 +250,27 @@
     </div>
 
     <div class="form-section">
-      <div class="form-section-header">Remarks</div>
+      <div class="form-section-header">Remarks & Attachments</div>
       <div class="form-section-body">
-        {{ form.remarks(class="form-control", rows=2) }}
-      </div>
-    </div>
-
-    <div class="form-section">
-      <div class="form-section-header">Photos / Videos</div>
-      <div class="form-section-body">
-        <input type="file" name="attachments" id="oilAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
-        <small class="text-muted">Multiple images or videos allowed. You can also paste with Ctrl+V.</small>
-        <div class="small text-success mt-1" id="oilAttachmentPasteHint"></div>
-        {% if rec and rec.attachments.count() %}
-        <div class="mt-2">
-          <strong>Existing:</strong>
-          {% for att in rec.attachments %}
-          <a href="{{ att.file_path|media_url }}" target="_blank" class="me-2">{{ att.original_name or att.file_path }}</a>
-          {% endfor %}
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Remarks</label>
+            {{ form.remarks(class="form-control", rows=1) }}
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Photos / Videos</label>
+            <input type="file" name="attachments" id="oilAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
+            <small class="text-muted">Multiple images or videos allowed. You can also paste with Ctrl+V.</small>
+            <div class="small text-success mt-1" id="oilAttachmentPasteHint"></div>
+          </div>
         </div>
+        {% if rec and rec.attachments.count() %}
+          <div class="mt-2">
+            <strong>Existing:</strong>
+            {% for att in rec.attachments %}
+            <a href="{{ att.file_path|media_url }}" target="_blank" class="me-2">{{ att.original_name or att.file_path }}</a>
+            {% endfor %}
+          </div>
         {% endif %}
       </div>
     </div>
@@ -338,6 +339,12 @@
       sel.appendChild(o);
     });
     _reinitSearchableDropdown(sel.parentNode);
+    if (sel.tomselect && sel.tomselect.control_input) {
+      sel.tomselect.control_input.addEventListener('focus', function() {
+        var row = document.getElementById('entryRow');
+        if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
     itemsBody.querySelectorAll('.item-row').forEach(function(tr) { bindListRow(tr); });
     updateTotals();
   }
@@ -364,29 +371,30 @@
   function handleOilExpenseByBehavior(forceReset) {
     if (!expenseBySelect) return;
     var shouldForce = !!forceReset;
-    var isCredit = !!(paymentTypeSelect && paymentTypeSelect.value === 'Credit');
+    var mode = paymentTypeSelect && paymentTypeSelect.value ? paymentTypeSelect.value : '';
+    var isCredit = (mode === 'Credit');
+    var isCash = (mode === 'Cash');
+    var needsCardDate = (mode === 'Card');
+    var cardDisabled = (mode === 'Cash' || mode === 'Credit' || mode === 'In Hand Stock');
     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-    if (partySelect) {
-      if (!isCredit && partySelect.value) {
-        partySelect.value = '';
-        if (partySelect.tomselect) partySelect.tomselect.setValue('', true);
+    if (cardSwipeDateInput) {
+      if (cardDisabled && cardSwipeDateInput.value) {
+        cardSwipeDateInput.value = '';
       }
-      partySelect.disabled = !isCredit;
-      if (partySelect.tomselect && partySelect.tomselect.control_input) {
-        partySelect.tomselect.control_input.disabled = !isCredit;
-      }
-    }
-    if (cardSwipeDateInput && paymentTypeSelect && (paymentTypeSelect.value === 'Cash' || paymentTypeSelect.value === 'Credit')) {
-      cardSwipeDateInput.value = '';
+      cardSwipeDateInput.disabled = cardDisabled;
+      cardSwipeDateInput.required = needsCardDate;
     }
     if (isCredit) {
       if (shouldForce) {
         expenseBySelect.value = '';
         if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue('', true);
       }
-    } else if (cashExpenseByValue && (shouldForce || !expenseBySelect.value)) {
+    } else if (isCash && cashExpenseByValue && (shouldForce || !expenseBySelect.value)) {
       expenseBySelect.value = cashExpenseByValue;
       if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
+    } else if (!isCash && !isCredit && shouldForce) {
+      expenseBySelect.value = '';
+      if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue('', true);
     }
     window.scrollTo(0, scrollY);
     window.setTimeout(function() { window.scrollTo(0, scrollY); }, 0);
@@ -397,21 +405,21 @@
     if (!expenseByBalanceHint || !expenseBySelect) return;
     var opt = expenseBySelect.options[expenseBySelect.selectedIndex];
     if (!opt || !opt.value) {
-      expenseByBalanceHint.className = 'small mt-1 text-muted';
-      expenseByBalanceHint.textContent = 'Balance: auto/default account will be used.';
+      expenseByBalanceHint.className = 'small ms-1 text-muted';
+      expenseByBalanceHint.textContent = '(Bal: auto/default)';
       return;
     }
     var txt = (opt.textContent || '');
     var m = txt.match(/\|\s*Bal:\s*([+-]?\d[\d,]*(?:\.\d{1,2})?\s*(?:Dr|Cr))/i);
     if (!m) {
-      expenseByBalanceHint.className = 'small mt-1 text-muted';
+      expenseByBalanceHint.className = 'small ms-1 text-muted';
       expenseByBalanceHint.textContent = '';
       return;
     }
     var bal = m[1].trim();
     var isCr = /\bCr\b/i.test(bal);
-    expenseByBalanceHint.className = 'small mt-1 ' + (isCr ? 'text-danger' : 'text-success');
-    expenseByBalanceHint.textContent = 'Current Balance: ' + bal;
+    expenseByBalanceHint.className = 'small ms-1 ' + (isCr ? 'text-danger' : 'text-success');
+    expenseByBalanceHint.textContent = '(Bal: ' + bal + ')';
   }
 
   function updateEntryAmountAndBalance() {
@@ -510,7 +518,11 @@
     entryBalanceQty.value = '';
     updateEntryAmountAndBalance();
     hidePriceHistoryPanel();
-    entryProductSelect.focus();
+    if (entryProductSelect && entryProductSelect.tomselect) {
+      entryProductSelect.tomselect.focus();
+    } else {
+      entryProductSelect.focus();
+    }
   }
 
   function addEntryToList() {
@@ -615,6 +627,26 @@
 
   function validateBeforeSubmit() {
     if (!totalBillInput) return true;
+    var pType = paymentTypeSelect && paymentTypeSelect.value ? paymentTypeSelect.value : '';
+    if (!pType) {
+      alert('Payment Type select karein.');
+      if (paymentTypeSelect) paymentTypeSelect.focus();
+      return false;
+    }
+    if (!partySelect || !partySelect.value) {
+      alert('Party Name select karna لازمی hai.');
+      if (partySelect && partySelect.tomselect) {
+        partySelect.tomselect.focus();
+      } else if (partySelect) {
+        partySelect.focus();
+      }
+      return false;
+    }
+    if (pType === 'Card' && (!cardSwipeDateInput || !cardSwipeDateInput.value)) {
+      alert('Payment Type Card ho to Card Swipe Date required hai.');
+      if (cardSwipeDateInput) cardSwipeDateInput.focus();
+      return false;
+    }
     var listTotal = parseFloat(document.getElementById('totalBillAmount').textContent || '0') || 0;
     var entered = parseFloat(totalBillInput.value || '0');
     if (!isFinite(entered) || entered <= 0) {
@@ -700,6 +732,32 @@
   if (partySelect) partySelect.addEventListener('change', function() { handleOilExpenseByBehavior(false); });
   if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', function() { handleOilExpenseByBehavior(true); });
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
+  if (partySelect) {
+    partySelect.addEventListener('change', function() {
+      var mode = paymentTypeSelect && paymentTypeSelect.value ? paymentTypeSelect.value : '';
+      if (mode === 'Cash') {
+        if (expenseBySelect && expenseBySelect.tomselect) {
+          expenseBySelect.tomselect.focus();
+        } else if (expenseBySelect) {
+          expenseBySelect.focus();
+        }
+      } else if (mode === 'Credit') {
+        if (currentReading) currentReading.focus();
+      }
+    });
+  }
+  if (entryProductSelect) {
+    entryProductSelect.addEventListener('focus', function() {
+      var row = document.getElementById('entryRow');
+      if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }
+  if (totalBillInput) {
+    totalBillInput.addEventListener('focus', function() {
+      var topSection = document.querySelector('.oil-form-wrap .form-section');
+      if (topSection) topSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
 
   function fetchOilLastReading() {
     if (!previousReading) return;

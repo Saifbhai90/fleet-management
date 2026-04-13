@@ -18822,8 +18822,36 @@ def oil_expense_form(pk=None):
         expense_date = form.expense_date.data
         card_swipe_date = form.card_swipe_date.data
         payment_type = (form.payment_type.data or '').strip() or None
-        if payment_type in ('Cash', 'Credit'):
+        if payment_type in ('Cash', 'Credit', 'In Hand Stock'):
             card_swipe_date = None
+        if not payment_type:
+            flash('Payment Type required hai.', 'danger')
+            return render_template(
+                'oil_expense_form.html',
+                form=form,
+                rec=rec,
+                title='Edit Oil Expense' if rec else 'Add Oil Expense',
+                products_for_oil=products_for_oil,
+                workspace_parties=workspace_parties,
+                selected_party_id=selected_party_id,
+                entered_total_bill=entered_total_bill,
+                total_bill_error=total_bill_error,
+                party_error=party_error,
+            )
+        if payment_type == 'Card' and not card_swipe_date:
+            flash('Payment Type Card ho to Card Swipe Date required hai.', 'danger')
+            return render_template(
+                'oil_expense_form.html',
+                form=form,
+                rec=rec,
+                title='Edit Oil Expense' if rec else 'Add Oil Expense',
+                products_for_oil=products_for_oil,
+                workspace_parties=workspace_parties,
+                selected_party_id=selected_party_id,
+                entered_total_bill=entered_total_bill,
+                total_bill_error=total_bill_error,
+                party_error=party_error,
+            )
         prev_reading = form.previous_reading.data
         curr_reading = form.current_reading.data
         if prev_reading is None:
@@ -18852,10 +18880,8 @@ def oil_expense_form(pk=None):
             if not valid_party:
                 party_error = 'Selected party is invalid for this workspace.'
                 selected_party_id_int = None
-        if payment_type == 'Credit' and not selected_party_id_int:
-            party_error = 'Credit payment ke liye Party Name select karna zaroori hai.'
-        if payment_type != 'Credit':
-            selected_party_id_int = None
+        if not selected_party_id_int:
+            party_error = 'Party Name (Workspace) select karna zaroori hai.'
         entered_total_bill = (request.form.get('total_bill_amount') or '').strip()
         total_bill_amount = None
         if entered_total_bill:
