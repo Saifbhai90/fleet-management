@@ -84,7 +84,7 @@
             <label class="form-label">Card Swipe Date</label>
             {{ form.card_swipe_date(class="form-control datepicker", id="cardSwipeDate") }}
           </div>
-          <div class="col-md-4 field-group">
+          <div class="col-md-8 field-group">
             <label class="form-label fw-bold">Party Name (Workspace)</label>
             <select name="workspace_party_id" id="partySelect" class="form-select search-select">
               <option value="">-- Select Party --</option>
@@ -95,11 +95,6 @@
             {% if party_error %}
               <div class="text-danger small mt-1">{{ party_error }}</div>
             {% endif %}
-          </div>
-          <div class="col-md-4 field-group">
-            <label class="form-label fw-bold">Expense By (Workspace COA) <span id="expenseByBalanceHint" class="small ms-1 text-muted"></span></label>
-            {{ form.expense_by(class="form-select search-select", id="expenseBySelect") }}
-            <small class="text-muted">Select workspace account to credit for this expense (optional).</small>
           </div>
           <div class="col-md-3 field-group">
             <label class="form-label">Previous Reading</label>
@@ -252,6 +247,14 @@
     <div class="form-section">
       <div class="form-section-header">Remarks & Attachments</div>
       <div class="form-section-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-6 field-group">
+            <label class="form-label fw-bold">Expense By (Workspace COA)</label>
+            {{ form.expense_by(class="form-select search-select", id="expenseBySelect") }}
+            <small class="text-muted">Select workspace account to credit for this expense (optional).</small>
+            <div id="expenseByBalanceHint" class="small mt-1 text-muted"></div>
+          </div>
+        </div>
         <div class="row g-2">
           <div class="col-md-4">
             <label class="form-label">Remarks</label>
@@ -410,16 +413,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var cardDisabled = (paymentType === 'Cash' || paymentType === 'Credit' || paymentType === 'In Hand Stock');
     setCardSwipeDateEnabled(!cardDisabled);
     if (!expenseBySelect) return;
-    var shouldForce = !!forceReset;
     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
     if (paymentType === 'Cash') {
-      if (cashExpenseByValue && (shouldForce || !_tsVal(expenseBySelect))) {
+      if (cashExpenseByValue) {
         _tsSet(expenseBySelect, cashExpenseByValue);
       }
-    } else if (paymentType === 'Credit' || paymentType === 'In Hand Stock') {
-      if (shouldForce) {
-        _tsSet(expenseBySelect, '');
-      }
+    } else if (forceReset) {
+      _tsSet(expenseBySelect, '');
     }
     window.scrollTo(0, scrollY);
     window.setTimeout(function() { window.scrollTo(0, scrollY); }, 0);
@@ -430,20 +430,20 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!expenseByBalanceHint || !expenseBySelect) return;
     var opt = expenseBySelect.options[expenseBySelect.selectedIndex];
     if (!opt || !opt.value) {
-      expenseByBalanceHint.className = 'small ms-1 text-muted';
+      expenseByBalanceHint.className = 'small text-muted';
       expenseByBalanceHint.textContent = '(Bal: auto/default)';
       return;
     }
     var txt = (opt.textContent || '');
     var m = txt.match(/\|\s*Bal:\s*([+-]?\d[\d,]*(?:\.\d{1,2})?\s*(?:Dr|Cr))/i);
     if (!m) {
-      expenseByBalanceHint.className = 'small ms-1 text-muted';
+      expenseByBalanceHint.className = 'small text-muted';
       expenseByBalanceHint.textContent = '';
       return;
     }
     var bal = m[1].trim();
     var isCr = /\bCr\b/i.test(bal);
-    expenseByBalanceHint.className = 'small ms-1 ' + (isCr ? 'text-danger' : 'text-success');
+    expenseByBalanceHint.className = 'small ' + (isCr ? 'text-danger' : 'text-success');
     expenseByBalanceHint.textContent = '(Bal: ' + bal + ')';
   }
 
@@ -777,17 +777,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
-  if (expenseBySelect && expenseBySelect.tomselect) {
-    expenseBySelect.tomselect.control_input.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        expenseBySelect.tomselect.close();
-        expenseBySelect.tomselect.blur();
-        if (currentReading) currentReading.focus();
-      }
-    });
-  }
 
   function _loadProjectsForDistrict(did, thenSelectProjectId, thenCallback) {
     if (projectSelect.tomselect) projectSelect.tomselect.destroy();
@@ -1044,14 +1033,6 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
     });
   }
-
-  window.setTimeout(function() {
-    if (districtSelect && districtSelect.tomselect) {
-      districtSelect.tomselect.focus();
-    } else if (districtSelect) {
-      districtSelect.focus();
-    }
-  }, 100);
 
 });
 </script>
