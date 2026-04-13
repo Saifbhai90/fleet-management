@@ -318,17 +318,11 @@
   var oilOtherPartyRows = document.getElementById('oilOtherPartyRows');
   var oilSamePartyEmpty = document.getElementById('oilSamePartyEmpty');
   var oilOtherPartyEmpty = document.getElementById('oilOtherPartyEmpty');
-  var cashExpenseByValue = {{ (hbl_expense_by_value or '') | tojson }};
+  var cashExpenseByValue = '';
   var oilTaskStartReading = null;
   var oilTaskCloseReading = null;
 
   var productsForOil = [{% for p in products_for_oil %}{id:{{ p.id }},name:{{ p.name | tojson }},default_price:{{ p.default_price if p.default_price is not none else 'null' }}}{% if not loop.last %},{% endif %}{% endfor %}];
-
-  function _reinitSearchableDropdown(scopeEl) {
-    if (typeof initSearchableDropdowns === 'function') {
-      initSearchableDropdowns(scopeEl);
-    }
-  }
 
   function _populateOilProducts(arr) {
     productsForOil = arr;
@@ -342,7 +336,7 @@
       o.setAttribute('data-name', p.name || '');
       sel.appendChild(o);
     });
-    _reinitSearchableDropdown(sel.parentNode);
+    initSearchableDropdowns(sel.parentNode);
     if (sel.tomselect && sel.tomselect.control_input) {
       sel.tomselect.control_input.addEventListener('focus', function() {
         var row = document.getElementById('entryRow');
@@ -357,140 +351,55 @@
     _populateOilProducts(productsForOil);
   }
 
-  function resetSelectOptions(selectEl, placeholderText) {
-    if (!selectEl) return;
-    if (selectEl.tomselect) selectEl.tomselect.destroy();
-    selectEl.innerHTML = '<option value="0">' + placeholderText + '</option>';
-  }
-
-  function loadProjectsByDistrict(districtId, selectedProjectId) {
-    if (!projectSelect) return Promise.resolve();
-    resetSelectOptions(projectSelect, '-- Select Project --');
-    resetSelectOptions(vehicleSelect, '-- Select Vehicle --');
-    if (vehicleSelect) _reinitSearchableDropdown(vehicleSelect.parentNode);
-    if (!districtId || districtId === '0') {
-      _reinitSearchableDropdown(projectSelect.parentNode);
-      return Promise.resolve();
-    }
-    return fetch('/get_projects_by_district/' + encodeURIComponent(districtId))
-      .then(function(r) { return r.json(); })
-      .then(function(arr) {
-        (arr || []).forEach(function(p) {
-          var o = document.createElement('option');
-          o.value = p.id;
-          o.textContent = p.name;
-          projectSelect.appendChild(o);
-        });
-        if (selectedProjectId) projectSelect.value = String(selectedProjectId);
-        _reinitSearchableDropdown(projectSelect.parentNode);
-        if (selectedProjectId && projectSelect.tomselect) {
-          projectSelect.tomselect.setValue(String(selectedProjectId), true);
-        }
-      })
-      .catch(function() {
-        _reinitSearchableDropdown(projectSelect.parentNode);
-      });
-  }
-
-  function loadVehiclesByProject(projectId, districtId, selectedVehicleId) {
-    if (!vehicleSelect) return Promise.resolve();
-    resetSelectOptions(vehicleSelect, '-- Select Vehicle --');
-    if (!projectId || projectId === '0') {
-      _reinitSearchableDropdown(vehicleSelect.parentNode);
-      return Promise.resolve();
-    }
-    var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(projectId);
-    if (districtId && districtId !== '0') url += '&district_id=' + encodeURIComponent(districtId);
-    return fetch(url)
-      .then(function(r) { return r.json(); })
-      .then(function(arr) {
-        (arr || []).forEach(function(v) {
-          var o = document.createElement('option');
-          o.value = v.id;
-          o.textContent = v.vehicle_no;
-          vehicleSelect.appendChild(o);
-        });
-        if (selectedVehicleId) vehicleSelect.value = String(selectedVehicleId);
-        _reinitSearchableDropdown(vehicleSelect.parentNode);
-        if (selectedVehicleId && vehicleSelect.tomselect) {
-          vehicleSelect.tomselect.setValue(String(selectedVehicleId), true);
-        }
-      })
-      .catch(function() {
-        _reinitSearchableDropdown(vehicleSelect.parentNode);
-      });
-  }
-
   fetch('/api/oil-expense/products-for-oil')
     .then(function(r) { return r.json(); })
     .then(function(arr) { if (arr && arr.length) _populateOilProducts(arr); })
     .catch(function() {});
 
-  if (!cashExpenseByValue && expenseBySelect && expenseBySelect.options) {
+  if (expenseBySelect && expenseBySelect.options) {
     for (var e = 0; e < expenseBySelect.options.length; e += 1) {
       var opt = expenseBySelect.options[e];
-      var label = (opt.textContent || '').toLowerCase().replace(/\s+/g, ' ').trim();
-      if (label.indexOf('hbl bank') >= 0 || label.indexOf('1110 - hbl') >= 0) {
+      if ((opt.textContent || '').toLowerCase().indexOf('1110 - hbl bank') >= 0) {
         cashExpenseByValue = opt.value;
         break;
       }
     }
   }
 
-  function setCardSwipeDateEnabled(enabled) {
-    if (!cardSwipeDateInput) return;
-    var fp = cardSwipeDateInput._flatpickr;
-    if (!enabled) {
-      if (fp) { fp.clear(); fp.close(); }
-      else { cardSwipeDateInput.value = ''; }
-      cardSwipeDateInput.disabled = true;
-      if (fp && fp.altInput) fp.altInput.disabled = true;
-      if (fp && fp._input) fp._input.disabled = true;
-      var wrapper = cardSwipeDateInput.closest('.field-group');
-      if (wrapper) wrapper.style.opacity = '0.5';
-    } else {
-      cardSwipeDateInput.disabled = false;
-      if (fp && fp.altInput) fp.altInput.disabled = false;
-      if (fp && fp._input) fp._input.disabled = false;
-      var wrapper = cardSwipeDateInput.closest('.field-group');
-      if (wrapper) wrapper.style.opacity = '1';
-    }
-  }
-
-  function setTomSelectValue(selectEl, val) {
-    if (!selectEl) return;
-    var ts = selectEl.tomselect;
-    if (ts) {
-      ts.setValue(val, true);
-    } else {
-      selectEl.value = val;
-      window.setTimeout(function() {
-        if (selectEl.tomselect) selectEl.tomselect.setValue(val, true);
-      }, 200);
-    }
-  }
-
   function handleOilExpenseByBehavior(forceReset) {
+    if (!paymentTypeSelect) return;
+    var paymentType = paymentTypeSelect.value || '';
+    var cardDisabled = (paymentType === 'Cash' || paymentType === 'Credit' || paymentType === 'In Hand Stock');
+    if (cardSwipeDateInput) {
+      cardSwipeDateInput.disabled = cardDisabled;
+      if (cardDisabled) {
+        cardSwipeDateInput.value = '';
+      }
+    }
     if (!expenseBySelect) return;
     var shouldForce = !!forceReset;
-    var mode = paymentTypeSelect ? (paymentTypeSelect.tomselect ? paymentTypeSelect.tomselect.getValue() : paymentTypeSelect.value) : '';
-    var isCredit = (mode === 'Credit');
-    var isCash = (mode === 'Cash');
-    var needsCardDate = (mode === 'Card');
-    var cardDisabled = (mode === 'Cash' || mode === 'Credit' || mode === 'In Hand Stock');
     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-    setCardSwipeDateEnabled(!cardDisabled);
-    if (cardSwipeDateInput) cardSwipeDateInput.required = needsCardDate;
-    if (isCredit) {
+    if (paymentType === 'Cash') {
+      if (cashExpenseByValue && (shouldForce || !expenseBySelect.value)) {
+        expenseBySelect.value = cashExpenseByValue;
+        if (expenseBySelect.tomselect) {
+          expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
+        }
+      }
+    } else if (paymentType === 'Credit') {
       if (shouldForce) {
-        setTomSelectValue(expenseBySelect, '');
+        expenseBySelect.value = '';
+        if (expenseBySelect.tomselect) {
+          expenseBySelect.tomselect.setValue('', true);
+        }
       }
-    } else if (isCash && cashExpenseByValue) {
-      if (shouldForce || !expenseBySelect.value || (expenseBySelect.tomselect && !expenseBySelect.tomselect.getValue())) {
-        setTomSelectValue(expenseBySelect, cashExpenseByValue);
+    } else if (paymentType === 'In Hand Stock') {
+      if (shouldForce) {
+        expenseBySelect.value = '';
+        if (expenseBySelect.tomselect) {
+          expenseBySelect.tomselect.setValue('', true);
+        }
       }
-    } else if (!isCash && !isCredit && shouldForce) {
-      setTomSelectValue(expenseBySelect, '');
     }
     window.scrollTo(0, scrollY);
     window.setTimeout(function() { window.scrollTo(0, scrollY); }, 0);
@@ -736,13 +645,13 @@
 
   function validateBeforeSubmit() {
     if (!totalBillInput) return true;
-    var pType = getTsVal(paymentTypeSelect);
+    var pType = paymentTypeSelect ? paymentTypeSelect.value : '';
     if (!pType) {
       alert('Payment Type select karein.');
       if (paymentTypeSelect) paymentTypeSelect.focus();
       return false;
     }
-    if (!partySelect || !getTsVal(partySelect)) {
+    if (!partySelect || !partySelect.value) {
       alert('Party Name select karna لازمی hai.');
       if (partySelect && partySelect.tomselect) {
         partySelect.tomselect.focus();
@@ -808,7 +717,7 @@
   }
 
   function fetchOilTaskReadings() {
-    var vid = getTsVal(vehicleSelect);
+    var vid = vehicleSelect && vehicleSelect.value;
     var dt = expenseDate && expenseDate.value;
     oilTaskStartReading = null;
     oilTaskCloseReading = null;
@@ -847,77 +756,55 @@
   if (paymentTypeSelect) {
     paymentTypeSelect.addEventListener('change', function() {
       handleOilExpenseByBehavior(true);
-      var mode = getTsVal(paymentTypeSelect);
-      if (mode === 'Card') {
-        window.setTimeout(function() {
-          if (cardSwipeDateInput && !cardSwipeDateInput.disabled) {
-            var fp = cardSwipeDateInput._flatpickr;
-            if (fp) fp.open(); else cardSwipeDateInput.focus();
-          }
-        }, 50);
-      } else if (partySelect) {
-        window.setTimeout(function() {
-          if (partySelect.tomselect) partySelect.tomselect.focus();
-          else partySelect.focus();
-        }, 50);
-      }
     });
   }
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
-  if (expenseBySelect) {
-    var bindEnterForExpenseBy = function(inputEl) {
-      if (!inputEl) return;
-      inputEl.addEventListener('keydown', function(e) {
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        var ts = expenseBySelect.tomselect;
-        if (ts) { ts.close(); ts.blur(); }
-        if (currentReading) window.setTimeout(function() { currentReading.focus(); }, 30);
-      }, true);
-    };
-    var _tryBindExpenseByEnter = function() {
-      if (expenseBySelect.tomselect && expenseBySelect.tomselect.control_input) {
-        bindEnterForExpenseBy(expenseBySelect.tomselect.control_input);
-      } else {
-        window.setTimeout(_tryBindExpenseByEnter, 150);
-      }
-    };
-    _tryBindExpenseByEnter();
-  }
-  if (partySelect) {
-    partySelect.addEventListener('change', function() {
-      var mode = getTsVal(paymentTypeSelect);
-      if (mode === 'Cash') {
-        window.setTimeout(function() {
-          if (expenseBySelect && expenseBySelect.tomselect) expenseBySelect.tomselect.focus();
-          else if (expenseBySelect) expenseBySelect.focus();
-        }, 50);
-      } else if (mode === 'Credit') {
-        window.setTimeout(function() { if (currentReading) currentReading.focus(); }, 50);
-      }
-    });
-  }
-  function getTsVal(el) {
-    if (!el) return '';
-    if (el.tomselect) return el.tomselect.getValue() || '';
-    return el.value || '';
-  }
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
-      var did = getTsVal(districtSelect);
-      loadProjectsByDistrict(did, null).then(function() {
-        loadVehiclesByProject('', did, null);
-      });
+      var did = this.value;
+      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
+      if (vehicleSelect && vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
+      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+      if (vehicleSelect) vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+      if (vehicleSelect) initSearchableDropdowns(vehicleSelect.parentNode);
+      if (did && did !== '0') {
+        fetch('/get_projects_by_district/' + did)
+          .then(function(r) { return r.json(); })
+          .then(function(arr) {
+            arr.forEach(function(p) {
+              var o = document.createElement('option');
+              o.value = p.id;
+              o.textContent = p.name;
+              projectSelect.appendChild(o);
+            });
+            initSearchableDropdowns(projectSelect.parentNode);
+          });
+      } else {
+        initSearchableDropdowns(projectSelect.parentNode);
+      }
     });
   }
   if (projectSelect && vehicleSelect) {
     projectSelect.addEventListener('change', function() {
-      var pid = getTsVal(projectSelect);
-      var did = getTsVal(districtSelect);
-      loadVehiclesByProject(pid, did, null).then(function() {
-        if (vehicleSelect) vehicleSelect.dispatchEvent(new Event('change'));
-      });
+      var pid = projectSelect.value;
+      var did = districtSelect ? districtSelect.value : '';
+      if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
+      vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+      if (pid && pid !== '0') {
+        var url = '/get_vehicles_by_project_district?project_id=' + pid;
+        if (did && did !== '0') url += '&district_id=' + did;
+        fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
+          arr.forEach(function(v) {
+            var o = document.createElement('option');
+            o.value = v.id;
+            o.textContent = v.vehicle_no;
+            vehicleSelect.appendChild(o);
+          });
+          initSearchableDropdowns(vehicleSelect.parentNode);
+        });
+      } else {
+        initSearchableDropdowns(vehicleSelect.parentNode);
+      }
     });
   }
   if (entryProductSelect) {
@@ -935,7 +822,7 @@
 
   function fetchOilLastReading() {
     if (!previousReading) return;
-    var vid = getTsVal(vehicleSelect);
+    var vid = vehicleSelect && vehicleSelect.value;
     previousReading.value = '';
     if (!vid || vid === '0') {
       fetchOilTaskReadings();
@@ -976,45 +863,19 @@
     currentReading.addEventListener('change', fetchOilLastReading);
   }
 
-  var initialDistrict = {{ (form.district_id.data or 0) | tojson }};
-  var initialProject = {{ (form.project_id.data or 0) | tojson }};
-  var initialVehicle = {{ (form.vehicle_id.data or 0) | tojson }};
-
-  function runInitialLoad() {
-    var did = String(initialDistrict || '');
-    var pid = String(initialProject || '');
-    var vid = String(initialVehicle || '');
-    if (did && did !== '0' && districtSelect) {
-      if (districtSelect.tomselect) districtSelect.tomselect.setValue(did, true);
-      else districtSelect.value = did;
-    }
-    if (did && did !== '0' && districtSelect && projectSelect && vehicleSelect) {
-      loadProjectsByDistrict(did, pid).then(function() {
-        return loadVehiclesByProject(pid, did, vid);
-      }).then(function() {
-        window.setTimeout(function() {
-          vehicleSelect.dispatchEvent(new Event('change'));
-        }, 50);
-      });
-    } else if (vehicleSelect && vid && vid !== '0') {
-      if (vehicleSelect.tomselect) vehicleSelect.tomselect.setValue(vid, true);
-      window.setTimeout(function() {
-        vehicleSelect.dispatchEvent(new Event('change'));
-      }, 50);
-    } else if (vehicleSelect) {
-      vehicleSelect.dispatchEvent(new Event('change'));
-    } else {
-      fetchOilTaskReadings();
-    }
+  if (vehicleSelect) {
+    vehicleSelect.dispatchEvent(new Event('change'));
+  } else {
+    fetchOilLastReading();
+    fetchOilTaskReadings();
   }
-
-  window.setTimeout(runInitialLoad, 100);
+  window.setTimeout(function() { fetchOilTaskReadings(); }, 250);
   updateKm();
   updateOilReadingMatch();
   updateEntryAmountAndBalance();
   updateDefaultPriceHint();
-  window.setTimeout(function() { handleOilExpenseByBehavior(false); }, 200);
-  window.setTimeout(function() { updateExpenseByBalanceHint(); }, 300);
+  handleOilExpenseByBehavior(false);
+  updateExpenseByBalanceHint();
 
   var oilSubmitLocked = false;
   if (formEl) {
