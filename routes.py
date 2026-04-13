@@ -17613,12 +17613,18 @@ def _workspace_employee_default_district_id(employee_id):
 
 
 def _fallback_vehicle_previous_reading(employee_id, vehicle_id, mode):
-    if not employee_id or not vehicle_id:
+    if not vehicle_id:
         return None
-    setup = WorkspaceVehicleReadingSetup.query.filter_by(
-        employee_id=employee_id,
-        vehicle_id=vehicle_id,
-    ).first()
+    setup = None
+    if employee_id:
+        setup = WorkspaceVehicleReadingSetup.query.filter_by(
+            employee_id=employee_id,
+            vehicle_id=vehicle_id,
+        ).first()
+    if not setup:
+        setup = WorkspaceVehicleReadingSetup.query.filter_by(
+            vehicle_id=vehicle_id,
+        ).order_by(WorkspaceVehicleReadingSetup.id.desc()).first()
     if not setup:
         return None
     if mode == 'fuel':
