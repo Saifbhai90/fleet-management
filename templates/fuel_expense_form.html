@@ -744,6 +744,21 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  var fuelForm = document.getElementById('fuelExpenseForm');
+  var fuelSubmitLocked = false;
+  if (fuelForm) {
+    fuelForm.addEventListener('submit', function(e) {
+      if (fuelSubmitLocked) {
+        e.preventDefault();
+        return;
+      }
+      fuelSubmitLocked = true;
+      fuelForm.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
+        btn.disabled = true;
+      });
+    });
+  }
+
   window.setTimeout(function() {
     if (districtSelect && districtSelect.tomselect) {
       districtSelect.tomselect.focus();

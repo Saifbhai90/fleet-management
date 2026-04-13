@@ -751,11 +751,21 @@
   updateExpenseByBalanceHint();
 
   var formEl = document.getElementById('oilExpenseForm');
+  var oilSubmitLocked = false;
   if (formEl) {
     formEl.addEventListener('submit', function(e) {
+      if (oilSubmitLocked) {
+        e.preventDefault();
+        return;
+      }
       if (!validateBeforeSubmit()) {
         e.preventDefault();
+        return;
       }
+      oilSubmitLocked = true;
+      formEl.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
+        btn.disabled = true;
+      });
     });
   }
 
