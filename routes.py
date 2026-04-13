@@ -17418,7 +17418,7 @@ def fuel_expense_list():
         query = query.filter(FuelExpense.project_id == project_id)
     if vehicle_id:
         query = query.filter(FuelExpense.vehicle_id == vehicle_id)
-    query = query.order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc())
+    query = query.order_by(FuelExpense.fueling_date.asc(), FuelExpense.id.asc())
 
     # Aggregate totals from all matching rows (before pagination)
     all_rows = query.all()
@@ -18652,7 +18652,7 @@ def oil_expense_list():
         query = query.filter(OilExpense.project_id == project_id)
     if vehicle_id:
         query = query.filter(OilExpense.vehicle_id == vehicle_id)
-    rows = query.order_by(OilExpense.expense_date.desc(), OilExpense.id.desc()).all()
+    rows = query.order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
     # Attach item totals per row for list display
     rows_with_totals = []
     for r in rows:
@@ -19323,7 +19323,7 @@ def maintenance_expense_list():
         query = query.filter(MaintenanceExpense.project_id == project_id)
     if vehicle_id:
         query = query.filter(MaintenanceExpense.vehicle_id == vehicle_id)
-    rows = query.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).all()
+    rows = query.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
     rows_with_totals = []
     for r in rows:
         total_qty = sum(float(it.qty or 0) for it in r.items)
