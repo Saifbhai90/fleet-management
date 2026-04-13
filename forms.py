@@ -1113,6 +1113,7 @@ class OilExpenseForm(FlaskForm):
     vehicle_id = SelectField('Vehicle No', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
     expense_date = DateField('Oil Change Date', format='%d-%m-%Y', validators=[DataRequired()],
                              render_kw={"class": "form-control datepicker"})
+    payment_type = SelectField('Payment Type', choices=OIL_PAYMENT_TYPE_CHOICES, validators=[Optional()], render_kw={'class': 'form-select search-select'})
     card_swipe_date = DateField('Card Swipe Date', format='%d-%m-%Y', validators=[Optional()],
                                 render_kw={"class": "form-control datepicker"})
     previous_reading = DecimalField('Previous Reading', validators=[Optional()],

@@ -18790,6 +18790,7 @@ def oil_expense_form(pk=None):
             form.project_id.data = rec.project_id
         if rec.vehicle_id:
             form.vehicle_id.data = rec.vehicle_id
+        form.payment_type.data = rec.payment_type or ''
         if rec.total_bill_amount is not None:
             entered_total_bill = f"{float(rec.total_bill_amount):.2f}"
         if getattr(rec, 'workspace_party_id', None):
@@ -18820,6 +18821,9 @@ def oil_expense_form(pk=None):
             )
         expense_date = form.expense_date.data
         card_swipe_date = form.card_swipe_date.data
+        payment_type = (form.payment_type.data or '').strip() or None
+        if payment_type in ('Cash', 'Credit'):
+            card_swipe_date = None
         prev_reading = form.previous_reading.data
         curr_reading = form.current_reading.data
         if prev_reading is None:
@@ -18848,6 +18852,10 @@ def oil_expense_form(pk=None):
             if not valid_party:
                 party_error = 'Selected party is invalid for this workspace.'
                 selected_party_id_int = None
+        if payment_type == 'Credit' and not selected_party_id_int:
+            party_error = 'Credit payment ke liye Party Name select karna zaroori hai.'
+        if payment_type != 'Credit':
+            selected_party_id_int = None
         entered_total_bill = (request.form.get('total_bill_amount') or '').strip()
         total_bill_amount = None
         if entered_total_bill:
@@ -18859,12 +18867,11 @@ def oil_expense_form(pk=None):
             total_bill_error = 'Total Bill Amount must be greater than zero.'
 
         product_ids = request.form.getlist('product_id')
-        payment_types = request.form.getlist('payment_type')
         purchase_qtys = request.form.getlist('purchase_qty')
         used_qtys = request.form.getlist('used_qty')
         prices = request.form.getlist('price')
         items_data = []
-        n = max(len(product_ids or [0]), len(payment_types or [0]), len(purchase_qtys or [0]), len(used_qtys or [0]), len(prices or [0]))
+        n = max(len(product_ids or [0]), len(purchase_qtys or [0]), len(used_qtys or [0]), len(prices or [0]))
         for i in range(n):
             pid = product_ids[i] if i < len(product_ids or []) else None
             try:
@@ -18873,7 +18880,6 @@ def oil_expense_form(pk=None):
                 pid = None
             if not pid:
                 continue
-            pt = payment_types[i] if i < len(payment_types or []) else ''
             try:
                 purchase_qty = float(purchase_qtys[i]) if i < len(purchase_qtys or []) and purchase_qtys[i] else 0
             except (TypeError, ValueError):
@@ -18888,7 +18894,7 @@ def oil_expense_form(pk=None):
                 price = 0
             amount = (purchase_qty * price) if price else None
             items_data.append({
-                'product_id': pid, 'payment_type': pt,
+                'product_id': pid,
                 'purchase_qty': purchase_qty, 'used_qty': used_qty,
                 'price': price, 'amount': amount
             })
@@ -18906,6 +18912,7 @@ def oil_expense_form(pk=None):
                     vehicle_id=vehicle_id,
                     expense_date=expense_date,
                     card_swipe_date=card_swipe_date,
+                    payment_type=payment_type,
                     previous_reading=prev_reading,
                     current_reading=curr_reading,
                     km=km,
@@ -18921,6 +18928,7 @@ def oil_expense_form(pk=None):
                 rec.vehicle_id = vehicle_id
                 rec.expense_date = expense_date
                 rec.card_swipe_date = card_swipe_date
+                rec.payment_type = payment_type
                 rec.previous_reading = prev_reading
                 rec.current_reading = curr_reading
                 rec.km = km
@@ -18931,7 +18939,7 @@ def oil_expense_form(pk=None):
                 item = OilExpenseItem(
                     oil_expense_id=rec.id,
                     product_id=it['product_id'],
-                    payment_type=it['payment_type'] or None,
+                    payment_type=None,
                     purchase_qty=it['purchase_qty'],
                     used_qty=it['used_qty'],
                     qty=it['purchase_qty'],
@@ -18971,7 +18979,7 @@ def oil_expense_form(pk=None):
             rec.workspace_party_id = selected_party_id_int
             rec.total_bill_amount = total_bill_amount
             expense_by_val = form.expense_by.data or ''
-            oil_payment_type = 'Credit' if selected_party_id_int else 'Cash'
+            oil_payment_type = payment_type or 'Cash'
             if oil_payment_type == 'Cash':
                 expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
             selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
@@ -18983,7 +18991,7 @@ def oil_expense_form(pk=None):
                 amount=items_total,
                 description=f'Oil expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
                 category_code='Oil',
-                workspace_party_id=selected_party_id_int if oil_payment_type == 'Credit' else None,
+                workspace_party_id=(selected_party_id_int if oil_payment_type == 'Credit' else None),
                 credit_account_id=(selected_credit_account_id if oil_payment_type == 'Cash' else None),
             )
             if oil_payment_type == 'Credit' and selected_party_id_int and selected_credit_account_id:
