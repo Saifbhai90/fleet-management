@@ -34,16 +34,44 @@
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
       <form method="get" class="row g-2 align-items-end">
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label small fw-semibold">From Date</label>
           <input type="date" class="form-control" name="from_date" value="{{ from_date.isoformat() if from_date else '' }}">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label small fw-semibold">To Date</label>
           <input type="date" class="form-control" name="to_date" value="{{ to_date.isoformat() if to_date else '' }}">
         </div>
-        <div class="col-md-6">
-          <button class="btn btn-primary"><i class="bi bi-funnel me-1"></i>Apply Filter</button>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">District</label>
+          <select class="form-select search-select" id="mpgDistrictFilter" name="district_id">
+            <option value="0">-- All Districts --</option>
+            {% for d in districts %}
+            <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Project</label>
+          <select class="form-select search-select" id="mpgProjectFilter" name="project_id">
+            <option value="0">-- All Projects --</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Vehicle No.</label>
+          <select class="form-select search-select" id="mpgVehicleFilter" name="vehicle_id">
+            <option value="0">-- All Vehicles --</option>
+            {% for v in vehicles %}
+            <option value="{{ v.id }}" {% if vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+          <button class="btn btn-primary flex-fill"><i class="bi bi-funnel me-1"></i>Apply Filter</button>
+          <a href="{{ url_for('workspace_mpg_report') }}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
         </div>
       </form>
     </div>
@@ -52,12 +80,16 @@
   <form method="post">
     <input type="hidden" name="from_date" value="{{ from_date.isoformat() if from_date else '' }}">
     <input type="hidden" name="to_date" value="{{ to_date.isoformat() if to_date else '' }}">
+    <input type="hidden" name="district_id" value="{{ district_id or '' }}">
+    <input type="hidden" name="project_id" value="{{ project_id or '' }}">
+    <input type="hidden" name="vehicle_id" value="{{ vehicle_id or '' }}">
 
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-light d-flex justify-content-between align-items-center">
         <strong>Vehicle MPG Detail</strong>
         <div class="d-flex align-items-center gap-2">
           <span class="small text-muted">{{ rows|length }} vehicle(s)</span>
+          <input type="text" class="form-control form-control-sm" id="mpgTableSearch" placeholder="Search all columns (multi word)..." style="width: 260px;" autocomplete="off">
           <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-save me-1"></i>Save Inputs</button>
         </div>
       </div>
@@ -91,7 +123,14 @@
           </thead>
           <tbody>
             {% for r in rows %}
-            <tr>
+            <tr
+              class="mpg-data-row"
+              data-with-full="{{ r.with_full_tank_next_fueling if r.with_full_tank_next_fueling is not none else '' }}"
+              data-current-date="{{ r.current_date_reading if r.current_date_reading is not none else '' }}"
+              data-target-mpg="{{ r.target_mpg if r.target_mpg is not none else '' }}"
+              data-tank-capacity="{{ r.tank_capacity if r.tank_capacity is not none else '' }}"
+              data-avg-fuel-price="{{ r.avg_fuel_price if r.avg_fuel_price is not none else '' }}"
+            >
               <td>{{ r.sr_no }}</td>
               <td>
                 <div class="fw-semibold">{{ r.vehicle.vehicle_no }}</div>
@@ -109,30 +148,30 @@
               <td class="text-end">{{ "{:,.2f}".format(r.fuel_deduction) if r.fuel_deduction is not none else '-' }}</td>
               <td class="text-end">{{ "{:,.2f}".format(r.short_kms) if r.short_kms is not none else '-' }}</td>
               <td class="text-end">{{ "{:,.2f}".format(r.with_full_tank_next_fueling) if r.with_full_tank_next_fueling is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.current_date_reading) if r.current_date_reading is not none else '-' }}</td>
+              <td class="text-end current-date-reading-cell">{{ "{:,.2f}".format(r.current_date_reading) if r.current_date_reading is not none else '-' }}</td>
               <td class="text-end" style="min-width: 170px;">
                 <input
                   type="text"
-                  class="form-control form-control-sm text-end"
+                  class="form-control form-control-sm text-end current-odoo-input"
                   name="current_odoo_meter_{{ r.vehicle.id }}"
                   value="{{ "{:,.2f}".format(r.current_odoo_meter_reading) if r.current_odoo_meter_reading is not none else '' }}"
                   placeholder="Meter reading"
                 >
               </td>
-              <td class="text-end">{{ "{:,.2f}".format(r.remaining_kms_from_fueling) if r.remaining_kms_from_fueling is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.in_tank_current_ltr) if r.in_tank_current_ltr is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.fueling_ltr_with_target) if r.fueling_ltr_with_target is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.fueling_amount) if r.fueling_amount is not none else '-' }}</td>
+              <td class="text-end remaining-kms-cell">{{ "{:,.2f}".format(r.remaining_kms_from_fueling) if r.remaining_kms_from_fueling is not none else '-' }}</td>
+              <td class="text-end in-tank-current-ltr-cell">{{ "{:,.2f}".format(r.in_tank_current_ltr) if r.in_tank_current_ltr is not none else '-' }}</td>
+              <td class="text-end fueling-ltr-with-target-cell">{{ "{:,.2f}".format(r.fueling_ltr_with_target) if r.fueling_ltr_with_target is not none else '-' }}</td>
+              <td class="text-end fueling-amount-cell">{{ "{:,.2f}".format(r.fueling_amount) if r.fueling_amount is not none else '-' }}</td>
               <td class="text-end" style="min-width: 150px;">
                 <input
                   type="text"
-                  class="form-control form-control-sm text-end"
+                  class="form-control form-control-sm text-end today-fuel-input"
                   name="today_fuel_{{ r.vehicle.id }}"
                   value="{{ "{:,.2f}".format(r.today_fuel) if r.today_fuel is not none else '' }}"
                   placeholder="Today fuel amount"
                 >
               </td>
-              <td class="text-end fw-semibold">{{ "{:,.2f}".format(r.balance_amount) if r.balance_amount is not none else '-' }}</td>
+              <td class="text-end fw-semibold balance-amount-cell">{{ "{:,.2f}".format(r.balance_amount) if r.balance_amount is not none else '-' }}</td>
             </tr>
             {% else %}
             <tr>
@@ -159,6 +198,206 @@ document.addEventListener('DOMContentLoaded', function(){
       'Workspace MPG Report',
       'Workspace_MPG_Report.csv'
     );
+  }
+
+  const table = document.getElementById('workspaceMpgReportTable');
+  const searchInput = document.getElementById('mpgTableSearch');
+  if(table && searchInput){
+    const tbody = table.tBodies[0];
+    const dataRows = Array.from(tbody.querySelectorAll('tr.mpg-data-row'));
+    const emptyServerRow = dataRows.length === 0 ? tbody.querySelector('tr') : null;
+    let noMatchRow = null;
+
+    const applySearch = function(){
+      const terms = (searchInput.value || '')
+        .toLowerCase()
+        .split(/\s+/)
+        .map(function(t){ return t.trim(); })
+        .filter(Boolean);
+
+      let visibleCount = 0;
+      dataRows.forEach(function(row){
+        const haystack = (row.innerText || '').toLowerCase().replace(/\s+/g, ' ');
+        const isMatch = terms.every(function(term){ return haystack.indexOf(term) !== -1; });
+        row.style.display = isMatch ? '' : 'none';
+        if(isMatch){
+          visibleCount += 1;
+        }
+      });
+
+      if(emptyServerRow){
+        emptyServerRow.style.display = terms.length ? 'none' : '';
+      }
+
+      if(!noMatchRow){
+        noMatchRow = document.createElement('tr');
+        noMatchRow.innerHTML = '<td colspan="22" class="text-center text-muted py-3">No matching rows found.</td>';
+        noMatchRow.style.display = 'none';
+        tbody.appendChild(noMatchRow);
+      }
+      noMatchRow.style.display = (dataRows.length > 0 && visibleCount === 0) ? '' : 'none';
+    };
+
+    searchInput.addEventListener('input', applySearch);
+  }
+
+  function parseNumber(value){
+    const normalized = String(value == null ? '' : value).replace(/,/g, '').trim();
+    if(!normalized){
+      return null;
+    }
+    const num = Number(normalized);
+    return Number.isFinite(num) ? num : null;
+  }
+
+  function formatOrDash(value){
+    if(value == null || !Number.isFinite(value)){
+      return '-';
+    }
+    return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function recalculateMpgRow(row){
+    if(!row){
+      return;
+    }
+    const withFull = parseNumber(row.dataset.withFull);
+    const currentDateReading = parseNumber(row.dataset.currentDate);
+    const targetMpg = parseNumber(row.dataset.targetMpg);
+    const tankCapacity = parseNumber(row.dataset.tankCapacity);
+    const avgFuelPrice = parseNumber(row.dataset.avgFuelPrice);
+
+    const currentOdooInput = row.querySelector('.current-odoo-input');
+    const todayFuelInput = row.querySelector('.today-fuel-input');
+    const remainingCell = row.querySelector('.remaining-kms-cell');
+    const inTankCell = row.querySelector('.in-tank-current-ltr-cell');
+    const fuelingLtrCell = row.querySelector('.fueling-ltr-with-target-cell');
+    const fuelingAmountCell = row.querySelector('.fueling-amount-cell');
+    const balanceAmountCell = row.querySelector('.balance-amount-cell');
+
+    const currentOdooReading = parseNumber(currentOdooInput ? currentOdooInput.value : '');
+    const todayFuel = parseNumber(todayFuelInput ? todayFuelInput.value : '');
+    const meterBase = currentOdooReading != null ? currentOdooReading : currentDateReading;
+
+    const remainingKms = (withFull != null && meterBase != null) ? (withFull - meterBase) : null;
+    const inTankCurrentLtr = (remainingKms != null && targetMpg != null && targetMpg > 0) ? (remainingKms / targetMpg) : null;
+    const fuelingLtrWithTarget = (inTankCurrentLtr != null && tankCapacity != null) ? (tankCapacity - inTankCurrentLtr) : null;
+    const fuelingAmount = (fuelingLtrWithTarget != null && avgFuelPrice != null) ? (fuelingLtrWithTarget * avgFuelPrice) : null;
+    const balanceAmount = (fuelingAmount != null) ? (todayFuel != null ? (fuelingAmount - todayFuel) : fuelingAmount) : null;
+
+    if(remainingCell) remainingCell.textContent = formatOrDash(remainingKms);
+    if(inTankCell) inTankCell.textContent = formatOrDash(inTankCurrentLtr);
+    if(fuelingLtrCell) fuelingLtrCell.textContent = formatOrDash(fuelingLtrWithTarget);
+    if(fuelingAmountCell) fuelingAmountCell.textContent = formatOrDash(fuelingAmount);
+    if(balanceAmountCell) balanceAmountCell.textContent = formatOrDash(balanceAmount);
+  }
+
+  const mpgRows = Array.from(document.querySelectorAll('#workspaceMpgReportTable tbody tr.mpg-data-row'));
+  mpgRows.forEach(function(row){
+    const currentOdooInput = row.querySelector('.current-odoo-input');
+    const todayFuelInput = row.querySelector('.today-fuel-input');
+    if(currentOdooInput){
+      currentOdooInput.addEventListener('input', function(){ recalculateMpgRow(row); });
+    }
+    if(todayFuelInput){
+      todayFuelInput.addEventListener('input', function(){ recalculateMpgRow(row); });
+    }
+    recalculateMpgRow(row);
+  });
+
+  const districtSelect = document.getElementById('mpgDistrictFilter');
+  const projectSelect = document.getElementById('mpgProjectFilter');
+  const vehicleSelect = document.getElementById('mpgVehicleFilter');
+  const initialProjectOptions = projectSelect ? projectSelect.innerHTML : '';
+  const initialVehicleOptions = vehicleSelect ? vehicleSelect.innerHTML : '';
+
+  function reinitSearchSelect(selectEl){
+    if(!selectEl) return;
+    if(selectEl.tomselect){
+      selectEl.tomselect.destroy();
+    }
+    if(window.initSearchableDropdowns){
+      window.initSearchableDropdowns(selectEl.parentNode || document);
+    }
+  }
+
+  function setOptions(selectEl, defaultLabel, rows, valueKey, textKey){
+    if(!selectEl) return;
+    selectEl.innerHTML = '<option value="0">' + defaultLabel + '</option>';
+    (rows || []).forEach(function(item){
+      const option = document.createElement('option');
+      option.value = item[valueKey];
+      option.textContent = item[textKey];
+      selectEl.appendChild(option);
+    });
+  }
+
+  if(districtSelect && projectSelect){
+    districtSelect.addEventListener('change', function(){
+      const did = districtSelect.value || '0';
+
+      if(did === '0'){
+        projectSelect.innerHTML = initialProjectOptions;
+        reinitSearchSelect(projectSelect);
+        if(vehicleSelect){
+          vehicleSelect.innerHTML = initialVehicleOptions;
+          reinitSearchSelect(vehicleSelect);
+        }
+        return;
+      }
+
+      fetch('/get_projects_by_district/' + encodeURIComponent(did))
+        .then(function(resp){ return resp.json(); })
+        .then(function(projects){
+          const previousProjectValue = projectSelect.value || '0';
+          setOptions(projectSelect, '-- All Projects --', projects, 'id', 'name');
+          const hasPreviousProject = projects.some(function(p){ return String(p.id) === String(previousProjectValue); });
+          projectSelect.value = hasPreviousProject ? previousProjectValue : '0';
+          reinitSearchSelect(projectSelect);
+          projectSelect.dispatchEvent(new Event('change'));
+        })
+        .catch(function(){
+          projectSelect.innerHTML = initialProjectOptions;
+          reinitSearchSelect(projectSelect);
+        });
+    });
+  }
+
+  if(projectSelect && vehicleSelect){
+    projectSelect.addEventListener('change', function(){
+      const pid = projectSelect.value || '0';
+      const did = districtSelect ? (districtSelect.value || '0') : '0';
+
+      if(pid === '0'){
+        vehicleSelect.innerHTML = initialVehicleOptions;
+        reinitSearchSelect(vehicleSelect);
+        return;
+      }
+
+      let url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid);
+      if(did !== '0'){
+        url += '&district_id=' + encodeURIComponent(did);
+      }
+      fetch(url)
+        .then(function(resp){ return resp.json(); })
+        .then(function(vehicles){
+          const previousVehicleValue = vehicleSelect.value || '0';
+          setOptions(vehicleSelect, '-- All Vehicles --', vehicles, 'id', 'vehicle_no');
+          const hasPreviousVehicle = vehicles.some(function(v){ return String(v.id) === String(previousVehicleValue); });
+          vehicleSelect.value = hasPreviousVehicle ? previousVehicleValue : '0';
+          reinitSearchSelect(vehicleSelect);
+        })
+        .catch(function(){
+          vehicleSelect.innerHTML = initialVehicleOptions;
+          reinitSearchSelect(vehicleSelect);
+        });
+    });
+  }
+
+  if(districtSelect && districtSelect.value && districtSelect.value !== '0'){
+    districtSelect.dispatchEvent(new Event('change'));
+  } else if(projectSelect && projectSelect.value && projectSelect.value !== '0'){
+    projectSelect.dispatchEvent(new Event('change'));
   }
 });
 </script>

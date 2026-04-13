@@ -3070,6 +3070,9 @@ def workspace_mpg_report():
     default_from_date = today - timedelta(days=30)
     from_date = parse_date(request.values.get("from_date")) or default_from_date
     to_date = parse_date(request.values.get("to_date")) or today
+    district_id = request.values.get("district_id", type=int) or 0
+    project_id = request.values.get("project_id", type=int) or 0
+    vehicle_id = request.values.get("vehicle_id", type=int) or 0
     if from_date > to_date:
         from_date, to_date = to_date, from_date
 
@@ -3090,13 +3093,20 @@ def workspace_mpg_report():
         except (InvalidOperation, ValueError):
             return None, True
 
+    fuel_q = FuelExpense.query.filter(
+        FuelExpense.employee_id == emp.id,
+        FuelExpense.fueling_date >= from_date,
+        FuelExpense.fueling_date <= to_date,
+    )
+    if district_id:
+        fuel_q = fuel_q.filter(FuelExpense.district_id == district_id)
+    if project_id:
+        fuel_q = fuel_q.filter(FuelExpense.project_id == project_id)
+    if vehicle_id:
+        fuel_q = fuel_q.filter(FuelExpense.vehicle_id == vehicle_id)
+
     fuel_rows = (
-        FuelExpense.query
-        .filter(
-            FuelExpense.employee_id == emp.id,
-            FuelExpense.fueling_date >= from_date,
-            FuelExpense.fueling_date <= to_date,
-        )
+        fuel_q
         .order_by(FuelExpense.vehicle_id.asc(), FuelExpense.fueling_date.asc(), FuelExpense.id.asc())
         .all()
     )
@@ -3178,7 +3188,14 @@ def workspace_mpg_report():
         else:
             db.session.commit()
             flash("MPG report inputs saved successfully.", "success")
-        return redirect(url_for("workspace_mpg_report", from_date=from_date.isoformat(), to_date=to_date.isoformat()))
+        return redirect(url_for(
+            "workspace_mpg_report",
+            from_date=from_date.isoformat(),
+            to_date=to_date.isoformat(),
+            district_id=district_id or "",
+            project_id=project_id or "",
+            vehicle_id=vehicle_id or "",
+        ))
 
     report_rows = []
     for idx, vehicle_id in enumerate(vehicle_ids, start=1):
@@ -3247,7 +3264,7 @@ def workspace_mpg_report():
         balance_amount = (
             fueling_amount - today_fuel
             if (fueling_amount is not None and today_fuel is not None)
-            else None
+            else fueling_amount
         )
 
         report_rows.append({
@@ -3282,6 +3299,12 @@ def workspace_mpg_report():
         employee=emp,
         from_date=from_date,
         to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        vehicle_id=vehicle_id,
+        districts=District.query.order_by(District.name.asc()).all(),
+        projects=Project.query.order_by(Project.name.asc()).all(),
+        vehicles=Vehicle.query.order_by(Vehicle.vehicle_no.asc()).all(),
         rows=report_rows,
     )
 
