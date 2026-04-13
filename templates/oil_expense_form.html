@@ -421,7 +421,8 @@
   if (expenseBySelect && expenseBySelect.options) {
     for (var e = 0; e < expenseBySelect.options.length; e += 1) {
       var opt = expenseBySelect.options[e];
-      if ((opt.textContent || '').toLowerCase().indexOf('1110 - hbl bank') === 0) {
+      var label = (opt.textContent || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      if (label.indexOf('hbl bank') >= 0 || label.indexOf('1110 - hbl') >= 0) {
         cashExpenseByValue = opt.value;
         break;
       }
@@ -790,7 +791,21 @@
     }
   });
   if (partySelect) partySelect.addEventListener('change', function() { handleOilExpenseByBehavior(false); });
-  if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', function() { handleOilExpenseByBehavior(true); });
+  if (paymentTypeSelect) {
+    paymentTypeSelect.addEventListener('change', function() {
+      handleOilExpenseByBehavior(true);
+      var mode = paymentTypeSelect.value || '';
+      if (mode === 'Card' && cardSwipeDateInput && !cardSwipeDateInput.disabled) {
+        cardSwipeDateInput.focus();
+      } else if (partySelect) {
+        if (partySelect.tomselect) {
+          partySelect.tomselect.focus();
+        } else {
+          partySelect.focus();
+        }
+      }
+    });
+  }
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
   if (partySelect) {
     partySelect.addEventListener('change', function() {
