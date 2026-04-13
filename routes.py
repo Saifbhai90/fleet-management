@@ -18787,6 +18787,7 @@ def oil_expense_form(pk=None):
         is_active=True
     ).order_by(WorkspaceParty.name).all()
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
+    hbl_expense_by_value = _workspace_default_hbl_expense_by(workspace_employee_id)
     products_for_oil = _workspace_products_for_expense_form(workspace_employee_id, 'Oil')
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     selected_district_id = None
@@ -18855,6 +18856,7 @@ def oil_expense_form(pk=None):
                 entered_total_bill=entered_total_bill,
                 total_bill_error=total_bill_error,
                 party_error=party_error,
+                hbl_expense_by_value=hbl_expense_by_value,
             )
         expense_date = form.expense_date.data
         card_swipe_date = form.card_swipe_date.data
@@ -18874,6 +18876,7 @@ def oil_expense_form(pk=None):
                 entered_total_bill=entered_total_bill,
                 total_bill_error=total_bill_error,
                 party_error=party_error,
+                hbl_expense_by_value=hbl_expense_by_value,
             )
         if payment_type == 'Card' and not card_swipe_date:
             flash('Payment Type Card ho to Card Swipe Date required hai.', 'danger')
@@ -18888,6 +18891,7 @@ def oil_expense_form(pk=None):
                 entered_total_bill=entered_total_bill,
                 total_bill_error=total_bill_error,
                 party_error=party_error,
+                hbl_expense_by_value=hbl_expense_by_value,
             )
         prev_reading = form.previous_reading.data
         curr_reading = form.current_reading.data
@@ -19037,6 +19041,7 @@ def oil_expense_form(pk=None):
                     entered_total_bill=entered_total_bill,
                     total_bill_error=total_bill_error,
                     party_error=party_error,
+                    hbl_expense_by_value=hbl_expense_by_value,
                 )
 
             rec.workspace_party_id = selected_party_id_int
@@ -19139,6 +19144,7 @@ def oil_expense_form(pk=None):
         entered_total_bill=entered_total_bill,
         total_bill_error=total_bill_error,
         party_error=party_error,
+        hbl_expense_by_value=hbl_expense_by_value,
     )
 
 

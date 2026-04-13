@@ -317,7 +317,7 @@
   var oilOtherPartyRows = document.getElementById('oilOtherPartyRows');
   var oilSamePartyEmpty = document.getElementById('oilSamePartyEmpty');
   var oilOtherPartyEmpty = document.getElementById('oilOtherPartyEmpty');
-  var cashExpenseByValue = '';
+  var cashExpenseByValue = {{ (hbl_expense_by_value or '') | tojson }};
   var oilTaskStartReading = null;
   var oilTaskCloseReading = null;
 
@@ -419,7 +419,7 @@
     .then(function(arr) { if (arr && arr.length) _populateOilProducts(arr); })
     .catch(function() {});
 
-  if (expenseBySelect && expenseBySelect.options) {
+  if (!cashExpenseByValue && expenseBySelect && expenseBySelect.options) {
     for (var e = 0; e < expenseBySelect.options.length; e += 1) {
       var opt = expenseBySelect.options[e];
       var label = (opt.textContent || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -832,18 +832,20 @@
       inputEl.addEventListener('keydown', function(e) {
         if (e.key !== 'Enter') return;
         e.preventDefault();
-        if (currentReading) currentReading.focus();
-      });
+        e.stopImmediatePropagation();
+        var ts = expenseBySelect.tomselect;
+        if (ts) { ts.close(); ts.blur(); }
+        if (currentReading) window.setTimeout(function() { currentReading.focus(); }, 30);
+      }, true);
     };
-    if (expenseBySelect.tomselect && expenseBySelect.tomselect.control_input) {
-      bindEnterForExpenseBy(expenseBySelect.tomselect.control_input);
-    } else {
-      window.setTimeout(function() {
-        if (expenseBySelect.tomselect && expenseBySelect.tomselect.control_input) {
-          bindEnterForExpenseBy(expenseBySelect.tomselect.control_input);
-        }
-      }, 250);
-    }
+    var _tryBindExpenseByEnter = function() {
+      if (expenseBySelect.tomselect && expenseBySelect.tomselect.control_input) {
+        bindEnterForExpenseBy(expenseBySelect.tomselect.control_input);
+      } else {
+        window.setTimeout(_tryBindExpenseByEnter, 150);
+      }
+    };
+    _tryBindExpenseByEnter();
   }
   if (partySelect) {
     partySelect.addEventListener('change', function() {
@@ -933,7 +935,19 @@
   var initialDistrict = districtSelect ? districtSelect.value : '';
   var initialProject = projectSelect ? projectSelect.value : '';
   var initialVehicle = vehicleSelect ? vehicleSelect.value : '';
-  if (districtSelect && projectSelect && vehicleSelect) {
+  var backendHasProjects = projectSelect && projectSelect.options.length > 1;
+  var backendHasVehicles = vehicleSelect && vehicleSelect.options.length > 1;
+  if (backendHasProjects && backendHasVehicles) {
+    if (projectSelect.tomselect) projectSelect.tomselect.destroy();
+    _reinitSearchableDropdown(projectSelect.parentNode);
+    if (initialProject) projectSelect.value = String(initialProject);
+    if (projectSelect.tomselect) projectSelect.tomselect.setValue(String(initialProject || ''), true);
+    if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
+    _reinitSearchableDropdown(vehicleSelect.parentNode);
+    if (initialVehicle) vehicleSelect.value = String(initialVehicle);
+    if (vehicleSelect.tomselect) vehicleSelect.tomselect.setValue(String(initialVehicle || ''), true);
+    vehicleSelect.dispatchEvent(new Event('change'));
+  } else if (districtSelect && projectSelect && vehicleSelect && initialDistrict && initialDistrict !== '0') {
     loadProjectsByDistrict(initialDistrict, initialProject).then(function() {
       return loadVehiclesByProject(initialProject, initialDistrict, initialVehicle);
     }).then(function() {
