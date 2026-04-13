@@ -716,26 +716,34 @@
   if (partySelect) partySelect.addEventListener('change', function() { handleOilExpenseByBehavior(true); });
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
 
-  if (vehicleSelect) {
-    vehicleSelect.addEventListener('change', function() {
-      var vid = this.value;
-      previousReading.value = '';
-      if (!vid || vid === '0') {
-        fetchOilTaskReadings();
-        return;
-      }
-      var recId = formEl ? (formEl.getAttribute('data-record-id') || '') : '';
-      var expDateVal = expenseDate && expenseDate.value ? expenseDate.value : '';
-      var url = '/api/oil-expense/last-reading?vehicle_id=' + encodeURIComponent(vid);
-      if (expDateVal) url += '&expense_date=' + encodeURIComponent(expDateVal);
-      if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
-      fetch(url).then(function(r) { return r.json(); }).then(function(d) {
-        if (d.previous_reading != null) previousReading.value = d.previous_reading;
-        updateKm();
-      }).finally(function() {
-        fetchOilTaskReadings();
-      });
+  function fetchOilLastReading() {
+    if (!previousReading) return;
+    var vid = vehicleSelect && vehicleSelect.value;
+    previousReading.value = '';
+    if (!vid || vid === '0') {
+      fetchOilTaskReadings();
+      return;
+    }
+    var recId = formEl ? (formEl.getAttribute('data-record-id') || '') : '';
+    var expDateVal = expenseDate && expenseDate.value ? expenseDate.value : '';
+    var currentReadingVal = currentReading && currentReading.value ? currentReading.value : '';
+    var url = '/api/oil-expense/last-reading?vehicle_id=' + encodeURIComponent(vid);
+    if (expDateVal) url += '&expense_date=' + encodeURIComponent(expDateVal);
+    if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    if (currentReadingVal) url += '&current_reading=' + encodeURIComponent(currentReadingVal);
+    fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+      if (d.previous_reading != null) previousReading.value = d.previous_reading;
+      updateKm();
+    }).finally(function() {
+      fetchOilTaskReadings();
     });
+  }
+
+  if (vehicleSelect) {
+    vehicleSelect.addEventListener('change', fetchOilLastReading);
+  }
+  if (currentReading) {
+    currentReading.addEventListener('change', fetchOilLastReading);
   }
 
   if (vehicleSelect) {

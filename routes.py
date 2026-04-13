@@ -17122,14 +17122,32 @@ def _fuel_expense_task_readings(vehicle_id, task_date):
     return km_out, km_in
 
 
-def _fuel_expense_previous_reading(vehicle_id, fueling_date=None, exclude_id=None, workspace_employee_id=None):
+def _fuel_expense_previous_reading(vehicle_id, fueling_date=None, exclude_id=None, workspace_employee_id=None, current_reading=None):
     if not vehicle_id:
         return None
     q = FuelExpense.query.filter(FuelExpense.vehicle_id == vehicle_id)
     if exclude_id:
         q = q.filter(FuelExpense.id != exclude_id)
+    if fueling_date and current_reading is not None:
+        try:
+            curr_val = float(current_reading)
+        except (TypeError, ValueError):
+            curr_val = None
+        if curr_val is not None:
+            same_day_prev = q.filter(
+                FuelExpense.fueling_date == fueling_date,
+                FuelExpense.current_reading.isnot(None),
+                FuelExpense.current_reading < curr_val,
+            ).order_by(
+                FuelExpense.current_reading.desc(),
+                FuelExpense.id.desc(),
+            ).first()
+            if same_day_prev and same_day_prev.current_reading is not None:
+                return float(same_day_prev.current_reading)
     if fueling_date:
-        if exclude_id:
+        if current_reading is not None:
+            q = q.filter(FuelExpense.fueling_date < fueling_date)
+        elif exclude_id:
             q = q.filter(
                 db.or_(
                     FuelExpense.fueling_date < fueling_date,
@@ -17149,7 +17167,12 @@ def _resequence_vehicle_fuel_expenses(vehicle_id, workspace_employee_id=None):
         return
     rows = FuelExpense.query.filter(
         FuelExpense.vehicle_id == vehicle_id
-    ).order_by(FuelExpense.fueling_date.asc(), FuelExpense.id.asc()).all()
+    ).order_by(
+        FuelExpense.fueling_date.asc(),
+        db.case((FuelExpense.current_reading.is_(None), 1), else_=0).asc(),
+        FuelExpense.current_reading.asc(),
+        FuelExpense.id.asc(),
+    ).all()
     previous_current = None
     for idx, row in enumerate(rows):
         if idx == 0:
@@ -17175,6 +17198,7 @@ def api_fuel_expense_last_reading():
     vehicle_id = request.args.get('vehicle_id', type=int)
     fueling_date = parse_date(request.args.get('fueling_date', ''))
     exclude_id = request.args.get('exclude_id', type=int)
+    current_reading = request.args.get('current_reading', type=float)
     if not vehicle_id:
         return jsonify({'previous_reading': None, 'fuel_type': None})
     vehicle = Vehicle.query.get(vehicle_id)
@@ -17185,6 +17209,7 @@ def api_fuel_expense_last_reading():
         fueling_date=fueling_date,
         exclude_id=exclude_id,
         workspace_employee_id=workspace_employee_id,
+        current_reading=current_reading,
     )
     return jsonify({'previous_reading': previous_reading, 'fuel_type': vehicle_fuel_type})
 
@@ -17418,7 +17443,12 @@ def fuel_expense_list():
         query = query.filter(FuelExpense.project_id == project_id)
     if vehicle_id:
         query = query.filter(FuelExpense.vehicle_id == vehicle_id)
-    query = query.order_by(FuelExpense.fueling_date.asc(), FuelExpense.id.asc())
+    query = query.order_by(
+        FuelExpense.fueling_date.asc(),
+        db.case((FuelExpense.current_reading.is_(None), 1), else_=0).asc(),
+        FuelExpense.current_reading.asc(),
+        FuelExpense.id.asc(),
+    )
 
     # Aggregate totals from all matching rows (before pagination)
     all_rows = query.all()
@@ -17855,6 +17885,7 @@ def fuel_expense_add():
                 vehicle_id=vehicle_id,
                 fueling_date=fueling_date,
                 workspace_employee_id=workspace_employee_id,
+                current_reading=current_reading,
             ) or 0
         prev_f = float(previous_reading)
         curr_f = float(current_reading)
@@ -18048,6 +18079,7 @@ def fuel_expense_edit(pk):
                 fueling_date=fueling_date,
                 exclude_id=pk,
                 workspace_employee_id=workspace_employee_id,
+                current_reading=current_reading,
             ) or 0
         prev_f = float(previous_reading)
         curr_f = float(current_reading)
@@ -18311,6 +18343,7 @@ def api_oil_expense_last_reading():
     vehicle_id = request.args.get('vehicle_id', type=int)
     expense_date = parse_date(request.args.get('expense_date', ''))
     exclude_id = request.args.get('exclude_id', type=int)
+    current_reading = request.args.get('current_reading', type=float)
     if not vehicle_id:
         return jsonify({})
     workspace_employee_id = _workspace_employee_id_for_expenses()
@@ -18319,20 +18352,39 @@ def api_oil_expense_last_reading():
         expense_date=expense_date,
         exclude_id=exclude_id,
         workspace_employee_id=workspace_employee_id,
+        current_reading=current_reading,
     )
     if previous_reading is None:
         return jsonify({})
     return jsonify({'previous_reading': previous_reading})
 
 
-def _oil_expense_previous_reading(vehicle_id, expense_date=None, exclude_id=None, workspace_employee_id=None):
+def _oil_expense_previous_reading(vehicle_id, expense_date=None, exclude_id=None, workspace_employee_id=None, current_reading=None):
     if not vehicle_id:
         return None
     q = OilExpense.query.filter(OilExpense.vehicle_id == vehicle_id)
     if exclude_id:
         q = q.filter(OilExpense.id != exclude_id)
+    if expense_date and current_reading is not None:
+        try:
+            curr_val = float(current_reading)
+        except (TypeError, ValueError):
+            curr_val = None
+        if curr_val is not None:
+            same_day_prev = q.filter(
+                OilExpense.expense_date == expense_date,
+                OilExpense.current_reading.isnot(None),
+                OilExpense.current_reading < curr_val,
+            ).order_by(
+                OilExpense.current_reading.desc(),
+                OilExpense.id.desc(),
+            ).first()
+            if same_day_prev and same_day_prev.current_reading is not None:
+                return float(same_day_prev.current_reading)
     if expense_date:
-        if exclude_id:
+        if current_reading is not None:
+            q = q.filter(OilExpense.expense_date < expense_date)
+        elif exclude_id:
             q = q.filter(
                 db.or_(
                     OilExpense.expense_date < expense_date,
@@ -18352,7 +18404,12 @@ def _resequence_vehicle_oil_expenses(vehicle_id, workspace_employee_id=None):
         return
     rows = OilExpense.query.filter(
         OilExpense.vehicle_id == vehicle_id
-    ).order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
+    ).order_by(
+        OilExpense.expense_date.asc(),
+        db.case((OilExpense.current_reading.is_(None), 1), else_=0).asc(),
+        OilExpense.current_reading.asc(),
+        OilExpense.id.asc(),
+    ).all()
     previous_current = None
     for idx, row in enumerate(rows):
         if idx == 0:
@@ -18652,7 +18709,12 @@ def oil_expense_list():
         query = query.filter(OilExpense.project_id == project_id)
     if vehicle_id:
         query = query.filter(OilExpense.vehicle_id == vehicle_id)
-    rows = query.order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
+    rows = query.order_by(
+        OilExpense.expense_date.asc(),
+        db.case((OilExpense.current_reading.is_(None), 1), else_=0).asc(),
+        OilExpense.current_reading.asc(),
+        OilExpense.id.asc(),
+    ).all()
     # Attach item totals per row for list display
     rows_with_totals = []
     for r in rows:
@@ -18766,6 +18828,7 @@ def oil_expense_form(pk=None):
                 expense_date=expense_date,
                 exclude_id=(rec.id if rec else None),
                 workspace_employee_id=workspace_employee_id,
+                current_reading=curr_reading,
             )
         km = None
         if prev_reading is not None and curr_reading is not None:
@@ -19105,6 +19168,7 @@ def api_maintenance_expense_last_reading():
     vehicle_id = request.args.get('vehicle_id', type=int)
     expense_date = parse_date(request.args.get('expense_date', ''))
     exclude_id = request.args.get('exclude_id', type=int)
+    current_reading = request.args.get('current_reading', type=float)
     if not vehicle_id:
         return jsonify({})
     workspace_employee_id = _workspace_employee_id_for_expenses()
@@ -19113,20 +19177,39 @@ def api_maintenance_expense_last_reading():
         expense_date=expense_date,
         exclude_id=exclude_id,
         workspace_employee_id=workspace_employee_id,
+        current_reading=current_reading,
     )
     if previous_reading is None:
         return jsonify({})
     return jsonify({'previous_reading': previous_reading})
 
 
-def _maintenance_expense_previous_reading(vehicle_id, expense_date=None, exclude_id=None, workspace_employee_id=None):
+def _maintenance_expense_previous_reading(vehicle_id, expense_date=None, exclude_id=None, workspace_employee_id=None, current_reading=None):
     if not vehicle_id:
         return None
     q = MaintenanceExpense.query.filter(MaintenanceExpense.vehicle_id == vehicle_id)
     if exclude_id:
         q = q.filter(MaintenanceExpense.id != exclude_id)
+    if expense_date and current_reading is not None:
+        try:
+            curr_val = float(current_reading)
+        except (TypeError, ValueError):
+            curr_val = None
+        if curr_val is not None:
+            same_day_prev = q.filter(
+                MaintenanceExpense.expense_date == expense_date,
+                MaintenanceExpense.current_reading.isnot(None),
+                MaintenanceExpense.current_reading < curr_val,
+            ).order_by(
+                MaintenanceExpense.current_reading.desc(),
+                MaintenanceExpense.id.desc(),
+            ).first()
+            if same_day_prev and same_day_prev.current_reading is not None:
+                return float(same_day_prev.current_reading)
     if expense_date:
-        if exclude_id:
+        if current_reading is not None:
+            q = q.filter(MaintenanceExpense.expense_date < expense_date)
+        elif exclude_id:
             q = q.filter(
                 db.or_(
                     MaintenanceExpense.expense_date < expense_date,
@@ -19147,7 +19230,12 @@ def _resequence_vehicle_maintenance_expenses(vehicle_id, workspace_employee_id=N
         return
     rows = MaintenanceExpense.query.filter(
         MaintenanceExpense.vehicle_id == vehicle_id
-    ).order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
+    ).order_by(
+        MaintenanceExpense.expense_date.asc(),
+        db.case((MaintenanceExpense.current_reading.is_(None), 1), else_=0).asc(),
+        MaintenanceExpense.current_reading.asc(),
+        MaintenanceExpense.id.asc(),
+    ).all()
     previous_current = None
     for idx, row in enumerate(rows):
         if idx == 0:
@@ -19323,7 +19411,12 @@ def maintenance_expense_list():
         query = query.filter(MaintenanceExpense.project_id == project_id)
     if vehicle_id:
         query = query.filter(MaintenanceExpense.vehicle_id == vehicle_id)
-    rows = query.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
+    rows = query.order_by(
+        MaintenanceExpense.expense_date.asc(),
+        db.case((MaintenanceExpense.current_reading.is_(None), 1), else_=0).asc(),
+        MaintenanceExpense.current_reading.asc(),
+        MaintenanceExpense.id.asc(),
+    ).all()
     rows_with_totals = []
     for r in rows:
         total_qty = sum(float(it.qty or 0) for it in r.items)
@@ -19433,6 +19526,7 @@ def maintenance_expense_form(pk=None):
             expense_date=expense_date,
             exclude_id=(rec.id if rec else None),
             workspace_employee_id=workspace_employee_id,
+            current_reading=curr_reading,
         )
         if prev_reading is None and task_start_reading is not None:
             prev_reading = float(task_start_reading)

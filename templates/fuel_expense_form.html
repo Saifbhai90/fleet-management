@@ -330,6 +330,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function fetchLastReading() {
     var vid = vehicleSelect && vehicleSelect.value;
     var fDate = fuelingDateInput && fuelingDateInput.value;
+    var currReadingVal = currentReadingInput && currentReadingInput.value ? currentReadingInput.value : '';
     var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
     if (!vid || vid === '0') {
       if (previousReadingInput) previousReadingInput.value = '';
@@ -340,6 +341,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var url = '/api/fuel-expense/last-reading?vehicle_id=' + encodeURIComponent(vid);
     if (fDate) url += '&fueling_date=' + encodeURIComponent(fDate);
     if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    if (currReadingVal) url += '&current_reading=' + encodeURIComponent(currReadingVal);
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {
@@ -618,7 +620,10 @@ document.addEventListener('DOMContentLoaded', function() {
   if (previousReadingInput) previousReadingInput.addEventListener('input', function() { computeKm(); fetchTaskReadings(); });
   if (currentReadingInput) {
     currentReadingInput.addEventListener('input', computeKm);
-    currentReadingInput.addEventListener('change', computeKm);
+    currentReadingInput.addEventListener('change', function() {
+      computeKm();
+      fetchLastReading();
+    });
   }
   if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', function() { handlePaymentTypeBehavior(true); });
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
