@@ -386,14 +386,17 @@
     }
   }
 
-  function handleOilExpenseByBehavior() {
+  function handleOilExpenseByBehavior(forceReset) {
     if (!expenseBySelect) return;
+    var shouldForce = !!forceReset;
     var isCredit = !!(partySelect && partySelect.value);
     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
     if (isCredit) {
-      expenseBySelect.value = '';
-      if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue('', true);
-    } else if (cashExpenseByValue) {
+      if (shouldForce) {
+        expenseBySelect.value = '';
+        if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue('', true);
+      }
+    } else if (cashExpenseByValue && (shouldForce || !expenseBySelect.value)) {
       expenseBySelect.value = cashExpenseByValue;
       if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
     }
@@ -710,7 +713,7 @@
       fetchOilTaskReadings();
     }
   });
-  if (partySelect) partySelect.addEventListener('change', handleOilExpenseByBehavior);
+  if (partySelect) partySelect.addEventListener('change', function() { handleOilExpenseByBehavior(true); });
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
 
   if (vehicleSelect) {
@@ -735,11 +738,16 @@
     });
   }
 
+  if (vehicleSelect) {
+    vehicleSelect.dispatchEvent(new Event('change'));
+  } else {
+    fetchOilTaskReadings();
+  }
+  window.setTimeout(function() { fetchOilTaskReadings(); }, 250);
   updateKm();
   updateOilReadingMatch();
-  fetchOilTaskReadings();
   updateEntryAmountAndBalance();
-  handleOilExpenseByBehavior();
+  handleOilExpenseByBehavior(false);
   updateExpenseByBalanceHint();
 
   var formEl = document.getElementById('oilExpenseForm');

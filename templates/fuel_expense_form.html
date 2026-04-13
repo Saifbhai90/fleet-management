@@ -466,7 +466,7 @@ document.addEventListener('DOMContentLoaded', function() {
       .catch(function() { renderFuelMarketStatus(null); });
   }
 
-  function handlePaymentTypeBehavior() {
+  function handlePaymentTypeBehavior(forceReset) {
     if (!paymentTypeSelect) return;
     var paymentType = paymentTypeSelect.value || '';
     var cardDisabled = paymentType === 'Cash' || paymentType === 'Credit';
@@ -477,18 +477,21 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
     if (!expenseBySelect) return;
+    var shouldForce = !!forceReset;
     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
     if (paymentType === 'Cash') {
-      if (cashExpenseByValue) {
+      if (cashExpenseByValue && (shouldForce || !expenseBySelect.value)) {
         expenseBySelect.value = cashExpenseByValue;
         if (expenseBySelect.tomselect) {
           expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
         }
       }
     } else if (paymentType === 'Credit') {
-      expenseBySelect.value = '';
-      if (expenseBySelect.tomselect) {
-        expenseBySelect.tomselect.setValue('', true);
+      if (shouldForce) {
+        expenseBySelect.value = '';
+        if (expenseBySelect.tomselect) {
+          expenseBySelect.tomselect.setValue('', true);
+        }
       }
     }
     window.scrollTo(0, scrollY);
@@ -609,7 +612,7 @@ document.addEventListener('DOMContentLoaded', function() {
     currentReadingInput.addEventListener('input', computeKm);
     currentReadingInput.addEventListener('change', computeKm);
   }
-  if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', handlePaymentTypeBehavior);
+  if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', function() { handlePaymentTypeBehavior(true); });
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
   if (amountInput) amountInput.addEventListener('input', computeMpgAndLiters);
   if (fuelPriceInput) fuelPriceInput.addEventListener('input', computeMpgAndLiters);
@@ -663,11 +666,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  fetchLastReading();
-  fetchTaskReadings();
+  if (vehicleSelect) {
+    vehicleSelect.dispatchEvent(new Event('change'));
+  } else {
+    fetchLastReading();
+    fetchTaskReadings();
+  }
+  window.setTimeout(function() { fetchTaskReadings(); }, 250);
   computeKm();
   computeMpgAndLiters();
-  handlePaymentTypeBehavior();
+  handlePaymentTypeBehavior(false);
   updateExpenseByBalanceHint();
   fetchPriceHistory();
   fetchPsoRateForDate();

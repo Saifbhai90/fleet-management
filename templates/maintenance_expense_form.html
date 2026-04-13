@@ -461,8 +461,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  function handlePaymentTypeBehavior() {
+  function handlePaymentTypeBehavior(forceReset) {
     if (!paymentTypeSelect) return;
+    var shouldForce = !!forceReset;
     var pType = paymentTypeSelect.value || 'Cash';
     var isCash = pType === 'Cash';
     if (partySelect) {
@@ -475,13 +476,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!expenseBySelect) return;
     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
     if (isCash) {
-      if (cashExpenseByValue) {
+      if (cashExpenseByValue && (shouldForce || !expenseBySelect.value)) {
         expenseBySelect.value = cashExpenseByValue;
         if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
       }
     } else {
-      expenseBySelect.value = '';
-      if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue('', true);
+      if (shouldForce) {
+        expenseBySelect.value = '';
+        if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue('', true);
+      }
     }
     // Prevent browser jump to Expense By control while auto-setting values.
     window.scrollTo(0, scrollY);
@@ -861,9 +864,15 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   if (vehicleSelect) vehicleSelect.addEventListener('change', fetchTaskReadingsForMaintenance);
-  if (expenseDate) expenseDate.addEventListener('change', fetchTaskReadingsForMaintenance);
+  if (expenseDate) expenseDate.addEventListener('change', function() {
+    if (vehicleSelect) {
+      vehicleSelect.dispatchEvent(new Event('change'));
+    } else {
+      fetchTaskReadingsForMaintenance();
+    }
+  });
   if (currentReading) currentReading.addEventListener('input', updateCurrentReadingMatch);
-  if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', handlePaymentTypeBehavior);
+  if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', function() { handlePaymentTypeBehavior(true); });
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
   var maintenanceExpenseForm = document.getElementById('maintenanceExpenseForm');
   if (maintenanceExpenseForm) {
@@ -882,9 +891,13 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 120);
 
   updateEntryAmount();
-  fetchTaskReadingsForMaintenance();
-  window.setTimeout(fetchTaskReadingsForMaintenance, 150);
-  handlePaymentTypeBehavior();
+  if (vehicleSelect) {
+    vehicleSelect.dispatchEvent(new Event('change'));
+  } else {
+    fetchTaskReadingsForMaintenance();
+  }
+  window.setTimeout(fetchTaskReadingsForMaintenance, 250);
+  handlePaymentTypeBehavior(false);
   updateExpenseByBalanceHint();
 
   function updateAttachmentHint(text) {
