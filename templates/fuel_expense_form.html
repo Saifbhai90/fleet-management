@@ -364,7 +364,8 @@ document.addEventListener('DOMContentLoaded', function() {
         kmInTask.value = data.km_in_task != null ? data.km_in_task : '';
         taskStartReading = parseNum(data.km_out_task);
         taskCloseReading = parseNum(data.km_in_task);
-        updateMatchedState();
+        // Recompute KM with fresh task readings when previous reading is not available.
+        computeKm();
       });
   }
 
@@ -386,8 +387,9 @@ document.addEventListener('DOMContentLoaded', function() {
   function computeKm() {
     var prev = parseNum(previousReadingInput ? previousReadingInput.value : null);
     var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
-    if (prev != null && curr != null) {
-      kmDisplay.value = (curr - prev).toFixed(2);
+    var baseReading = prev != null ? prev : taskStartReading;
+    if (baseReading != null && curr != null) {
+      kmDisplay.value = (curr - baseReading).toFixed(2);
     } else {
       kmDisplay.value = '';
     }
@@ -597,7 +599,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (fuelingDateInput) fuelingDateInput.addEventListener('change', function() { fetchTaskReadings(); fetchPsoRateForDate(); });
   if (previousReadingInput) previousReadingInput.addEventListener('input', function() { computeKm(); fetchTaskReadings(); });
-  if (currentReadingInput) currentReadingInput.addEventListener('input', computeKm);
+  if (currentReadingInput) {
+    currentReadingInput.addEventListener('input', computeKm);
+    currentReadingInput.addEventListener('change', computeKm);
+  }
   if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', handlePaymentTypeBehavior);
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
   if (amountInput) amountInput.addEventListener('input', computeMpgAndLiters);
