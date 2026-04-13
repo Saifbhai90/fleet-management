@@ -286,6 +286,8 @@
 
 <script>
 (function() {
+  var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
   var previousReading = document.getElementById('previousReading');
   var currentReading = document.getElementById('currentReading');
@@ -351,6 +353,64 @@
 
   if (productsForOil.length) {
     _populateOilProducts(productsForOil);
+  }
+
+  function resetSelectOptions(selectEl, placeholderText) {
+    if (!selectEl) return;
+    if (selectEl.tomselect) selectEl.tomselect.destroy();
+    selectEl.innerHTML = '<option value="0">' + placeholderText + '</option>';
+  }
+
+  function loadProjectsByDistrict(districtId, selectedProjectId) {
+    if (!projectSelect) return Promise.resolve();
+    resetSelectOptions(projectSelect, '-- Select Project --');
+    resetSelectOptions(vehicleSelect, '-- Select Vehicle --');
+    if (vehicleSelect) _reinitSearchableDropdown(vehicleSelect.parentNode);
+    if (!districtId || districtId === '0') {
+      _reinitSearchableDropdown(projectSelect.parentNode);
+      return Promise.resolve();
+    }
+    return fetch('/get_projects_by_district/' + encodeURIComponent(districtId))
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        (arr || []).forEach(function(p) {
+          var o = document.createElement('option');
+          o.value = p.id;
+          o.textContent = p.name;
+          projectSelect.appendChild(o);
+        });
+        if (selectedProjectId) projectSelect.value = String(selectedProjectId);
+        _reinitSearchableDropdown(projectSelect.parentNode);
+      })
+      .catch(function() {
+        _reinitSearchableDropdown(projectSelect.parentNode);
+      });
+  }
+
+  function loadVehiclesByProject(projectId, districtId, selectedVehicleId) {
+    if (!vehicleSelect) return Promise.resolve();
+    resetSelectOptions(vehicleSelect, '-- Select Vehicle --');
+    if (!projectId || projectId === '0') {
+      _reinitSearchableDropdown(vehicleSelect.parentNode);
+      return Promise.resolve();
+    }
+    var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(projectId);
+    if (districtId && districtId !== '0') url += '&district_id=' + encodeURIComponent(districtId);
+    return fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        (arr || []).forEach(function(v) {
+          var o = document.createElement('option');
+          o.value = v.id;
+          o.textContent = v.vehicle_no;
+          vehicleSelect.appendChild(o);
+        });
+        if (selectedVehicleId) vehicleSelect.value = String(selectedVehicleId);
+        _reinitSearchableDropdown(vehicleSelect.parentNode);
+      })
+      .catch(function() {
+        _reinitSearchableDropdown(vehicleSelect.parentNode);
+      });
   }
 
   fetch('/api/oil-expense/products-for-oil')
@@ -746,6 +806,21 @@
       }
     });
   }
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = districtSelect.value;
+      loadProjectsByDistrict(did, null);
+    });
+  }
+  if (projectSelect && vehicleSelect) {
+    projectSelect.addEventListener('change', function() {
+      var pid = projectSelect.value;
+      var did = districtSelect ? districtSelect.value : '';
+      loadVehiclesByProject(pid, did, null).then(function() {
+        if (vehicleSelect) vehicleSelect.dispatchEvent(new Event('change'));
+      });
+    });
+  }
   if (entryProductSelect) {
     entryProductSelect.addEventListener('focus', function() {
       var row = document.getElementById('entryRow');
@@ -789,7 +864,16 @@
     currentReading.addEventListener('change', fetchOilLastReading);
   }
 
-  if (vehicleSelect) {
+  var initialDistrict = districtSelect ? districtSelect.value : '';
+  var initialProject = projectSelect ? projectSelect.value : '';
+  var initialVehicle = vehicleSelect ? vehicleSelect.value : '';
+  if (districtSelect && projectSelect && vehicleSelect) {
+    loadProjectsByDistrict(initialDistrict, initialProject).then(function() {
+      return loadVehiclesByProject(initialProject, initialDistrict, initialVehicle);
+    }).then(function() {
+      vehicleSelect.dispatchEvent(new Event('change'));
+    });
+  } else if (vehicleSelect) {
     vehicleSelect.dispatchEvent(new Event('change'));
   } else {
     fetchOilTaskReadings();
