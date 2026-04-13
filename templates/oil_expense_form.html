@@ -154,7 +154,7 @@
             <input type="number" id="entryUsedQty" class="form-control form-control-sm mini-field" step="0.01" min="0" placeholder="0" value="0">
           </div>
           <div class="col-md-2">
-            <label class="form-label mb-0">Price</label>
+            <label class="form-label mb-0">Price <span id="entryDefaultPriceHint" class="text-muted small ms-1"></span></label>
             <input type="number" id="entryPrice" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
           </div>
           <div class="col-md-1">
@@ -302,6 +302,7 @@
   var entryPurchaseQty = document.getElementById('entryPurchaseQty');
   var entryUsedQty = document.getElementById('entryUsedQty');
   var entryPrice = document.getElementById('entryPrice');
+  var entryDefaultPriceHint = document.getElementById('entryDefaultPriceHint');
   var entryAmount = document.getElementById('entryAmount');
   var entryBalanceQty = document.getElementById('entryBalanceQty');
   var addToListBtn = document.getElementById('addToListBtn');
@@ -320,7 +321,7 @@
   var oilTaskStartReading = null;
   var oilTaskCloseReading = null;
 
-  var productsForOil = [{% for p in products_for_oil %}{id:{{ p.id }},name:{{ p.name | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}];
+  var productsForOil = [{% for p in products_for_oil %}{id:{{ p.id }},name:{{ p.name | tojson }},default_price:{{ p.default_price if p.default_price is not none else 'null' }}}{% if not loop.last %},{% endif %}{% endfor %}];
 
   function _reinitSearchableDropdown(scopeEl) {
     if (typeof initSearchableDropdowns === 'function') {
@@ -490,9 +491,21 @@
     entryAmount.value = (purchase * price).toFixed(2);
     entryBalanceQty.value = (purchase - used).toFixed(2);
   }
+  function updateDefaultPriceHint() {
+    if (!entryDefaultPriceHint || !entryProductSelect) return;
+    var pid = entryProductSelect.value;
+    var p = productsForOil.find(function(x) { return String(x.id) === String(pid); });
+    var dp = p && p.default_price != null ? parseFloat(p.default_price) : null;
+    if (dp != null && isFinite(dp)) {
+      entryDefaultPriceHint.textContent = '(Default: ' + dp.toFixed(2) + ')';
+    } else {
+      entryDefaultPriceHint.textContent = '';
+    }
+  }
   entryPurchaseQty.addEventListener('input', updateEntryAmountAndBalance);
   entryUsedQty.addEventListener('input', updateEntryAmountAndBalance);
   entryPrice.addEventListener('input', updateEntryAmountAndBalance);
+  if (entryProductSelect) entryProductSelect.addEventListener('change', updateDefaultPriceHint);
   entryPrice.addEventListener('focus', fetchOilPriceHistory);
   entryPrice.addEventListener('blur', function() { window.setTimeout(hidePriceHistoryPanel, 120); });
   if (entryUsedQty) {
@@ -578,6 +591,7 @@
     entryAmount.value = '';
     entryBalanceQty.value = '';
     updateEntryAmountAndBalance();
+    updateDefaultPriceHint();
     hidePriceHistoryPanel();
     if (entryProductSelect && entryProductSelect.tomselect) {
       entryProductSelect.tomselect.focus();
@@ -736,20 +750,25 @@
   function updateOilReadingMatch() {
     if (!oilCurrentReadingMatchNote) return;
     var curr = parseFloat(currentReading && currentReading.value ? currentReading.value : '');
+    oilCurrentReadingMatchNote.classList.remove('text-success', 'text-danger', 'text-muted');
     if (!isFinite(curr)) {
+      oilCurrentReadingMatchNote.classList.add('text-muted');
       oilCurrentReadingMatchNote.textContent = 'Enter reading to check match with task start/close.';
       return;
     }
     if (oilTaskStartReading == null || oilTaskCloseReading == null) {
+      oilCurrentReadingMatchNote.classList.add('text-muted');
       oilCurrentReadingMatchNote.textContent = 'Task readings not available for selected date.';
       return;
     }
     var tol = 0.02;
-    if (Math.abs(curr - oilTaskStartReading) <= tol) {
-      oilCurrentReadingMatchNote.textContent = 'Matched with Start Reading.';
-    } else if (Math.abs(curr - oilTaskCloseReading) <= tol) {
-      oilCurrentReadingMatchNote.textContent = 'Matched with Close Reading.';
+    var low = Math.min(oilTaskStartReading, oilTaskCloseReading);
+    var high = Math.max(oilTaskStartReading, oilTaskCloseReading);
+    if (Math.abs(curr - oilTaskStartReading) <= tol || Math.abs(curr - oilTaskCloseReading) <= tol || (curr >= low && curr <= high)) {
+      oilCurrentReadingMatchNote.classList.add('text-success');
+      oilCurrentReadingMatchNote.textContent = 'Matched (within Start/Close range).';
     } else {
+      oilCurrentReadingMatchNote.classList.add('text-danger');
       oilCurrentReadingMatchNote.textContent = 'Outside Start/Close readings.';
     }
   }
@@ -807,6 +826,25 @@
     });
   }
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
+  if (expenseBySelect) {
+    var bindEnterForExpenseBy = function(inputEl) {
+      if (!inputEl) return;
+      inputEl.addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        if (currentReading) currentReading.focus();
+      });
+    };
+    if (expenseBySelect.tomselect && expenseBySelect.tomselect.control_input) {
+      bindEnterForExpenseBy(expenseBySelect.tomselect.control_input);
+    } else {
+      window.setTimeout(function() {
+        if (expenseBySelect.tomselect && expenseBySelect.tomselect.control_input) {
+          bindEnterForExpenseBy(expenseBySelect.tomselect.control_input);
+        }
+      }, 250);
+    }
+  }
   if (partySelect) {
     partySelect.addEventListener('change', function() {
       var mode = paymentTypeSelect && paymentTypeSelect.value ? paymentTypeSelect.value : '';
@@ -910,6 +948,7 @@
   updateKm();
   updateOilReadingMatch();
   updateEntryAmountAndBalance();
+  updateDefaultPriceHint();
   handleOilExpenseByBehavior(false);
   updateExpenseByBalanceHint();
 

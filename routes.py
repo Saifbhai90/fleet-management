@@ -18436,7 +18436,14 @@ def _resequence_vehicle_oil_expenses(vehicle_id, workspace_employee_id=None):
 def api_oil_expense_products_for_oil():
     workspace_employee_id = _workspace_employee_id_for_expenses()
     products = _workspace_products_for_expense_form(workspace_employee_id, 'Oil')
-    return jsonify([{'id': p.id, 'name': p.name} for p in products])
+    return jsonify([
+        {
+            'id': p.id,
+            'name': p.name,
+            'default_price': float(p.default_price) if p.default_price is not None else None,
+        }
+        for p in products
+    ])
 
 
 @app.route('/api/oil-expense/product-balance/<int:product_id>')
@@ -18782,8 +18789,32 @@ def oil_expense_form(pk=None):
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
     products_for_oil = _workspace_products_for_expense_form(workspace_employee_id, 'Oil')
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
-    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    form.vehicle_id.choices = [(v.id, v.vehicle_no) for v in Vehicle.query.order_by(Vehicle.vehicle_no).all()]
+    selected_district_id = None
+    selected_project_id = None
+    if request.method == 'POST':
+        selected_district_id = form.district_id.data or None
+        selected_project_id = form.project_id.data or None
+    elif rec:
+        selected_district_id = rec.district_id or None
+        selected_project_id = rec.project_id or None
+    else:
+        selected_district_id = default_district_id or None
+    if selected_district_id == 0:
+        selected_district_id = None
+    if selected_project_id == 0:
+        selected_project_id = None
+
+    project_q = Project.query
+    if selected_district_id:
+        project_q = project_q.join(project_district).filter(project_district.c.district_id == selected_district_id)
+    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+
+    vehicle_q = Vehicle.query
+    if selected_project_id:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == selected_project_id)
+    if selected_district_id:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == selected_district_id)
+    form.vehicle_id.choices = [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
     if not form.vehicle_id.choices:
         form.vehicle_id.choices = [(0, '-- No Vehicle --')]
     else:
