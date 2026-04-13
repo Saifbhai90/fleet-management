@@ -3117,9 +3117,14 @@ def workspace_mpg_report():
             VehicleDailyTask.query
             .filter(
                 VehicleDailyTask.vehicle_id.in_(vehicle_ids),
-                VehicleDailyTask.task_date == to_date,
+                VehicleDailyTask.task_date <= to_date,
+                VehicleDailyTask.close_reading.isnot(None),
             )
-            .order_by(VehicleDailyTask.vehicle_id.asc(), VehicleDailyTask.id.desc())
+            .order_by(
+                VehicleDailyTask.vehicle_id.asc(),
+                VehicleDailyTask.task_date.desc(),
+                VehicleDailyTask.id.desc(),
+            )
             .all()
         )
         for task in task_rows:
