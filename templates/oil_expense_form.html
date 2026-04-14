@@ -378,6 +378,40 @@ document.addEventListener('DOMContentLoaded', function() {
     if (sel.tomselect) sel.tomselect.setValue(String(val), true);
   }
 
+  function _isEnterKey(e) {
+    return e && (e.key === 'Enter' || e.key === 'NumpadEnter');
+  }
+
+  function _focusPartySelect() {
+    if (!partySelect) return;
+    if (partySelect.tomselect) {
+      partySelect.tomselect.focus();
+      return;
+    }
+    partySelect.focus();
+  }
+
+  function _focusCurrentReading() {
+    if (!currentReading) return;
+    currentReading.focus();
+    if (typeof currentReading.select === 'function') currentReading.select();
+  }
+
+  function _handlePaymentTypeEnter(e) {
+    if (!_isEnterKey(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    _focusPartySelect();
+  }
+
+  function _handlePartyEnter(e) {
+    if (!_isEnterKey(e)) return;
+    if (!_tsVal(partySelect)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    _focusCurrentReading();
+  }
+
   if (expenseBySelect && expenseBySelect.options) {
     for (var e = 0; e < expenseBySelect.options.length; e += 1) {
       var opt = expenseBySelect.options[e];
@@ -394,6 +428,19 @@ document.addEventListener('DOMContentLoaded', function() {
         cashExpenseByValue = k;
         break;
       }
+    }
+  }
+
+  if (paymentTypeSelect) {
+    paymentTypeSelect.addEventListener('keydown', _handlePaymentTypeEnter);
+    if (paymentTypeSelect.tomselect && paymentTypeSelect.tomselect.control_input) {
+      paymentTypeSelect.tomselect.control_input.addEventListener('keydown', _handlePaymentTypeEnter);
+    }
+  }
+  if (partySelect) {
+    partySelect.addEventListener('keydown', _handlePartyEnter);
+    if (partySelect.tomselect && partySelect.tomselect.control_input) {
+      partySelect.tomselect.control_input.addEventListener('keydown', _handlePartyEnter);
     }
   }
 
