@@ -17230,19 +17230,50 @@ def api_fuel_expense_task_readings():
 
 @app.route('/api/fuel-expense/suggested-price')
 def api_fuel_expense_suggested_price():
-    """Return latest fuel_price for the given fuel_type (Diesel or Super) from last expense entry."""
+    """Return suggested fuel price by same date and/or same pump context."""
     fuel_type = request.args.get('fuel_type', '').strip()
     normalized = 'Super' if fuel_type == 'Petrol' else fuel_type
+    fuel_pump_id = request.args.get('fuel_pump_id', type=int)
+    fueling_date = parse_date(request.args.get('fueling_date', ''))
+    exclude_id = request.args.get('exclude_id', type=int) or request.args.get('current_id', type=int)
+    workspace_employee_id = _workspace_employee_id_for_expenses()
     if normalized not in ('Diesel', 'Super'):
-        return jsonify({'fuel_price': None})
+        return jsonify({'fuel_price': None, 'source': ''})
     if normalized == 'Super':
         fuel_filter = FuelExpense.fuel_type.in_(('Super', 'Petrol'))
     else:
         fuel_filter = FuelExpense.fuel_type == normalized
-    last_entry = FuelExpense.query.filter(fuel_filter, FuelExpense.fuel_price.isnot(None)).order_by(
-        FuelExpense.fueling_date.desc(), FuelExpense.id.desc()
-    ).first()
-    return jsonify({'fuel_price': float(last_entry.fuel_price) if last_entry and last_entry.fuel_price else None})
+    base_q = FuelExpense.query.filter(fuel_filter, FuelExpense.fuel_price.isnot(None))
+    if workspace_employee_id:
+        base_q = base_q.filter(FuelExpense.employee_id == workspace_employee_id)
+    if exclude_id:
+        base_q = base_q.filter(FuelExpense.id != exclude_id)
+
+    suggested_row = None
+    source = ''
+    if fuel_pump_id and fueling_date:
+        suggested_row = base_q.filter(
+            FuelExpense.workspace_pump_id == fuel_pump_id,
+            FuelExpense.fueling_date == fueling_date,
+        ).order_by(FuelExpense.id.desc()).first()
+        if suggested_row:
+            source = 'same_date_same_pump'
+    if not suggested_row and fueling_date:
+        suggested_row = base_q.filter(
+            FuelExpense.fueling_date == fueling_date,
+        ).order_by(FuelExpense.id.desc()).first()
+        if suggested_row:
+            source = 'same_date'
+    if not suggested_row and fuel_pump_id:
+        suggested_row = base_q.filter(
+            FuelExpense.workspace_pump_id == fuel_pump_id,
+        ).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
+        if suggested_row:
+            source = 'same_pump'
+    return jsonify({
+        'fuel_price': float(suggested_row.fuel_price) if suggested_row and suggested_row.fuel_price is not None else None,
+        'source': source,
+    })
 
 
 @app.route('/api/fuel-expense/price-hint')
@@ -18469,7 +18500,7 @@ def _expense_history_num_label(val):
     return f'{n:.2f}'
 
 
-def _build_oil_product_price_history(product_id, workspace_party_id=None, current_id=None, workspace_employee_id=None):
+def _build_oil_product_price_history(product_id, workspace_party_id=None, current_id=None, workspace_employee_id=None, expense_date=None):
     q = db.session.query(OilExpenseItem, OilExpense, WorkspaceParty).join(
         OilExpense, OilExpense.id == OilExpenseItem.oil_expense_id
     ).outerjoin(
@@ -18485,6 +18516,10 @@ def _build_oil_product_price_history(product_id, workspace_party_id=None, curren
 
     same_party = []
     other_parties = []
+    match_same_date_same_party = None
+    match_same_date = None
+    match_same_party = None
+    match_any = None
     for it, rec, party in rows:
         qty = float(it.purchase_qty if it.purchase_qty is not None else (it.qty if it.qty is not None else 0))
         price = float(it.price or 0)
@@ -18505,10 +18540,28 @@ def _build_oil_product_price_history(product_id, workspace_party_id=None, curren
             other_parties.append(row)
         elif not workspace_party_id:
             other_parties.append(row)
-    return same_party[:8], other_parties[:8]
+        if price <= 0:
+            continue
+        rec_date = rec.expense_date
+        if match_any is None:
+            match_any = price
+        if workspace_party_id and rec.workspace_party_id == workspace_party_id and match_same_party is None:
+            match_same_party = price
+        if expense_date and rec_date == expense_date and match_same_date is None:
+            match_same_date = price
+        if expense_date and workspace_party_id and rec_date == expense_date and rec.workspace_party_id == workspace_party_id and match_same_date_same_party is None:
+            match_same_date_same_party = price
+    suggested_price = match_same_date_same_party
+    if suggested_price is None:
+        suggested_price = match_same_date
+    if suggested_price is None:
+        suggested_price = match_same_party
+    if suggested_price is None:
+        suggested_price = match_any
+    return same_party[:8], other_parties[:8], suggested_price
 
 
-def _build_maintenance_product_price_history(product_id, workspace_party_id=None, current_id=None, workspace_employee_id=None):
+def _build_maintenance_product_price_history(product_id, workspace_party_id=None, current_id=None, workspace_employee_id=None, expense_date=None):
     q = db.session.query(MaintenanceExpenseItem, MaintenanceExpense, WorkspaceParty).join(
         MaintenanceExpense, MaintenanceExpense.id == MaintenanceExpenseItem.maintenance_expense_id
     ).outerjoin(
@@ -18524,6 +18577,10 @@ def _build_maintenance_product_price_history(product_id, workspace_party_id=None
 
     same_party = []
     other_parties = []
+    match_same_date_same_party = None
+    match_same_date = None
+    match_same_party = None
+    match_any = None
     for it, rec, party in rows:
         qty = float(it.qty or 0)
         price = float(it.price or 0)
@@ -18544,7 +18601,25 @@ def _build_maintenance_product_price_history(product_id, workspace_party_id=None
             other_parties.append(row)
         elif not workspace_party_id:
             other_parties.append(row)
-    return same_party[:8], other_parties[:8]
+        if price <= 0:
+            continue
+        rec_date = rec.expense_date
+        if match_any is None:
+            match_any = price
+        if workspace_party_id and rec.workspace_party_id == workspace_party_id and match_same_party is None:
+            match_same_party = price
+        if expense_date and rec_date == expense_date and match_same_date is None:
+            match_same_date = price
+        if expense_date and workspace_party_id and rec_date == expense_date and rec.workspace_party_id == workspace_party_id and match_same_date_same_party is None:
+            match_same_date_same_party = price
+    suggested_price = match_same_date_same_party
+    if suggested_price is None:
+        suggested_price = match_same_date
+    if suggested_price is None:
+        suggested_price = match_same_party
+    if suggested_price is None:
+        suggested_price = match_any
+    return same_party[:8], other_parties[:8], suggested_price
 
 
 @app.route('/api/oil-expense/product-price-history')
@@ -18554,17 +18629,19 @@ def api_oil_expense_product_price_history():
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
     product_id = request.args.get('product_id', type=int)
     if not product_id:
-        return jsonify({'ok': True, 'same_party': [], 'other_parties': []})
+        return jsonify({'ok': True, 'same_party': [], 'other_parties': [], 'suggested_price': None})
     workspace_party_id = request.args.get('workspace_party_id', type=int)
     current_id = request.args.get('current_id', type=int)
+    expense_date = parse_date(request.args.get('expense_date', ''))
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    same_party, other_parties = _build_oil_product_price_history(
+    same_party, other_parties, suggested_price = _build_oil_product_price_history(
         product_id=product_id,
         workspace_party_id=workspace_party_id,
         current_id=current_id,
         workspace_employee_id=workspace_employee_id,
+        expense_date=expense_date,
     )
-    return jsonify({'ok': True, 'same_party': same_party, 'other_parties': other_parties})
+    return jsonify({'ok': True, 'same_party': same_party, 'other_parties': other_parties, 'suggested_price': suggested_price})
 
 
 def _get_or_create_product_balance(product_id):
@@ -19365,17 +19442,19 @@ def api_maintenance_expense_product_price_history():
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
     product_id = request.args.get('product_id', type=int)
     if not product_id:
-        return jsonify({'ok': True, 'same_party': [], 'other_parties': []})
+        return jsonify({'ok': True, 'same_party': [], 'other_parties': [], 'suggested_price': None})
     workspace_party_id = request.args.get('workspace_party_id', type=int)
     current_id = request.args.get('current_id', type=int)
+    expense_date = parse_date(request.args.get('expense_date', ''))
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    same_party, other_parties = _build_maintenance_product_price_history(
+    same_party, other_parties, suggested_price = _build_maintenance_product_price_history(
         product_id=product_id,
         workspace_party_id=workspace_party_id,
         current_id=current_id,
         workspace_employee_id=workspace_employee_id,
+        expense_date=expense_date,
     )
-    return jsonify({'ok': True, 'same_party': same_party, 'other_parties': other_parties})
+    return jsonify({'ok': True, 'same_party': same_party, 'other_parties': other_parties, 'suggested_price': suggested_price})
 
 
 @app.route('/api/maintenance-expense/upload-status/<int:pk>')

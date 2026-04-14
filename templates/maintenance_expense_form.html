@@ -542,6 +542,26 @@ document.addEventListener('DOMContentLoaded', function() {
       entryDefaultPriceHint.textContent = '';
     }
   }
+  function applyMaintenanceSuggestedPrice(data) {
+    if (!entryPrice) return;
+    entryPrice.setAttribute('placeholder', '0');
+    var suggested = (data && data.suggested_price != null) ? parseFloat(data.suggested_price) : null;
+    if (suggested == null || !isFinite(suggested) || suggested <= 0) {
+      if (entryPrice.dataset.autoSuggested === '1') {
+        entryPrice.value = '';
+        entryPrice.dataset.autoSuggested = '0';
+      }
+      updateEntryAmount();
+      return;
+    }
+    entryPrice.setAttribute('placeholder', 'Suggested: ' + suggested.toFixed(2));
+    var entered = parseFloat(entryPrice.value || '');
+    if (!isFinite(entered) || entered <= 0 || entryPrice.dataset.autoSuggested === '1') {
+      entryPrice.value = suggested.toFixed(2);
+      entryPrice.dataset.autoSuggested = '1';
+    }
+    updateEntryAmount();
+  }
 
   function escHtml(txt) {
     return String(txt || '')
@@ -585,21 +605,29 @@ document.addEventListener('DOMContentLoaded', function() {
     if (maintPriceHistoryPanel) maintPriceHistoryPanel.style.display = 'block';
   }
 
-  function fetchMaintenancePriceHistory() {
+  function fetchMaintenancePriceHistory(showPanel) {
     if (!entryProductSelect || !entryPrice) return;
+    var shouldShowPanel = showPanel !== false;
     var pid = entryProductSelect.value;
     if (!pid) {
       hidePriceHistoryPanel();
       return;
     }
     var partyId = (partySelect && partySelect.value) ? partySelect.value : '';
+    var expDateVal = (expenseDate && expenseDate.value) ? expenseDate.value : '';
     var recId = {{ rec.id if rec else 'null' }};
     var url = '/api/maintenance-expense/product-price-history?product_id=' + encodeURIComponent(pid);
     if (partyId) url += '&workspace_party_id=' + encodeURIComponent(partyId);
+    if (expDateVal) url += '&expense_date=' + encodeURIComponent(expDateVal);
     if (recId) url += '&current_id=' + encodeURIComponent(recId);
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {
+        applyMaintenanceSuggestedPrice(data);
+        if (!shouldShowPanel) {
+          hidePriceHistoryPanel();
+          return;
+        }
         var sameRows = (data && data.same_party) ? data.same_party : [];
         var otherRows = (data && data.other_parties) ? data.other_parties : [];
         renderPriceHistoryRows(maintSamePartyRows, maintSamePartyEmpty, sameRows, false);
@@ -620,8 +648,8 @@ document.addEventListener('DOMContentLoaded', function() {
       .replace(/'/g, '&#039;');
   }
   entryQty.addEventListener('input', updateEntryAmount);
-  entryPrice.addEventListener('input', updateEntryAmount);
-  if (entryProductSelect) entryProductSelect.addEventListener('change', updateDefaultPriceHint);
+  entryPrice.addEventListener('input', function() { entryPrice.dataset.autoSuggested = '0'; updateEntryAmount(); });
+  if (entryProductSelect) entryProductSelect.addEventListener('change', function() { updateDefaultPriceHint(); fetchMaintenancePriceHistory(false); });
   entryPrice.addEventListener('focus', fetchMaintenancePriceHistory);
   entryPrice.addEventListener('blur', function() { window.setTimeout(hidePriceHistoryPanel, 120); });
   if (entryQty) {
@@ -639,7 +667,8 @@ document.addEventListener('DOMContentLoaded', function() {
       entryProductSelect.value = '';
     }
     entryQty.value = '0';
-    entryPrice.value = '0';
+    entryPrice.value = '';
+    entryPrice.dataset.autoSuggested = '0';
     entryAmount.value = '';
     updateEntryAmount();
     updateDefaultPriceHint();
@@ -896,9 +925,13 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
       fetchTaskReadingsForMaintenance();
     }
+    if (entryProductSelect && entryProductSelect.value) fetchMaintenancePriceHistory(false);
   });
   if (currentReading) currentReading.addEventListener('input', updateCurrentReadingMatch);
   if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', function() { handlePaymentTypeBehavior(true); });
+  if (partySelect) partySelect.addEventListener('change', function() {
+    if (entryProductSelect && entryProductSelect.value) fetchMaintenancePriceHistory(false);
+  });
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
   var maintenanceExpenseForm = document.getElementById('maintenanceExpenseForm');
   var maintenanceSubmitLocked = false;

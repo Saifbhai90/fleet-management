@@ -511,10 +511,30 @@ document.addEventListener('DOMContentLoaded', function() {
       entryDefaultPriceHint.textContent = '';
     }
   }
+  function applyOilSuggestedPrice(data) {
+    if (!entryPrice) return;
+    entryPrice.setAttribute('placeholder', '0');
+    var suggested = (data && data.suggested_price != null) ? parseFloat(data.suggested_price) : null;
+    if (suggested == null || !isFinite(suggested) || suggested <= 0) {
+      if (entryPrice.dataset.autoSuggested === '1') {
+        entryPrice.value = '';
+        entryPrice.dataset.autoSuggested = '0';
+      }
+      updateEntryAmountAndBalance();
+      return;
+    }
+    entryPrice.setAttribute('placeholder', 'Suggested: ' + suggested.toFixed(2));
+    var entered = parseFloat(entryPrice.value || '');
+    if (!isFinite(entered) || entered <= 0 || entryPrice.dataset.autoSuggested === '1') {
+      entryPrice.value = suggested.toFixed(2);
+      entryPrice.dataset.autoSuggested = '1';
+    }
+    updateEntryAmountAndBalance();
+  }
   entryPurchaseQty.addEventListener('input', updateEntryAmountAndBalance);
   entryUsedQty.addEventListener('input', updateEntryAmountAndBalance);
-  entryPrice.addEventListener('input', updateEntryAmountAndBalance);
-  if (entryProductSelect) entryProductSelect.addEventListener('change', updateDefaultPriceHint);
+  entryPrice.addEventListener('input', function() { entryPrice.dataset.autoSuggested = '0'; updateEntryAmountAndBalance(); });
+  if (entryProductSelect) entryProductSelect.addEventListener('change', function() { updateDefaultPriceHint(); fetchOilPriceHistory(false); });
   entryPrice.addEventListener('focus', fetchOilPriceHistory);
   entryPrice.addEventListener('blur', function() { window.setTimeout(hidePriceHistoryPanel, 120); });
   if (entryUsedQty) {
@@ -565,21 +585,29 @@ document.addEventListener('DOMContentLoaded', function() {
     if (oilPriceHistoryPanel) oilPriceHistoryPanel.style.display = 'block';
   }
 
-  function fetchOilPriceHistory() {
+  function fetchOilPriceHistory(showPanel) {
     if (!entryProductSelect || !entryPrice) return;
+    var shouldShowPanel = showPanel !== false;
     var pid = entryProductSelect.value;
     if (!pid) {
       hidePriceHistoryPanel();
       return;
     }
     var partyId = (partySelect && partySelect.value) ? partySelect.value : '';
+    var expDateVal = (expenseDate && expenseDate.value) ? expenseDate.value : '';
     var recId = {{ rec.id if rec else 'null' }};
     var url = '/api/oil-expense/product-price-history?product_id=' + encodeURIComponent(pid);
     if (partyId) url += '&workspace_party_id=' + encodeURIComponent(partyId);
+    if (expDateVal) url += '&expense_date=' + encodeURIComponent(expDateVal);
     if (recId) url += '&current_id=' + encodeURIComponent(recId);
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {
+        applyOilSuggestedPrice(data);
+        if (!shouldShowPanel) {
+          hidePriceHistoryPanel();
+          return;
+        }
         var sameRows = (data && data.same_party) ? data.same_party : [];
         var otherRows = (data && data.other_parties) ? data.other_parties : [];
         renderPriceHistoryRows(oilSamePartyRows, oilSamePartyEmpty, sameRows, false);
@@ -596,7 +624,8 @@ document.addEventListener('DOMContentLoaded', function() {
     entryProductSelect.value = '';
     entryPurchaseQty.value = '0';
     entryUsedQty.value = '0';
-    entryPrice.value = '0';
+    entryPrice.value = '';
+    entryPrice.dataset.autoSuggested = '0';
     entryAmount.value = '';
     entryBalanceQty.value = '';
     updateEntryAmountAndBalance();
@@ -810,10 +839,12 @@ document.addEventListener('DOMContentLoaded', function() {
   if (expenseDate) expenseDate.addEventListener('change', function() {
     fetchOilLastReading();
     fetchOilTaskReadings();
+    if (entryProductSelect && entryProductSelect.value) fetchOilPriceHistory(false);
   });
   if (partySelect) {
     partySelect.addEventListener('change', function() {
       handleOilExpenseByBehavior(false);
+      if (entryProductSelect && entryProductSelect.value) fetchOilPriceHistory(false);
       if (_tsVal(partySelect)) {
         // Keep behavior consistent across Cash/Credit: always continue to Current Reading.
         window.setTimeout(_focusCurrentReading, 0);

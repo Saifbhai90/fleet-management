@@ -277,6 +277,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
+  var fuelPumpSelect = document.getElementById('fuelPumpSelect');
   var fuelingDateInput = document.getElementById('fuelingDate');
   var previousReadingInput = document.getElementById('previousReading');
   var currentReadingInput = document.getElementById('currentReading');
@@ -329,17 +330,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function fetchSuggestedPrice() {
     var ft = fuelTypeSelect && fuelTypeSelect.value;
+    var fDate = fuelingDateInput && fuelingDateInput.value;
+    var pumpId = fuelPumpSelect && fuelPumpSelect.value;
+    var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
+    if (fuelPriceInput) fuelPriceInput.setAttribute('placeholder', '0');
     if (!ft || (ft !== 'Diesel' && ft !== 'Super' && ft !== 'Petrol')) return;
-    fetch('/api/fuel-expense/suggested-price?fuel_type=' + encodeURIComponent(ft))
+    var url = '/api/fuel-expense/suggested-price?fuel_type=' + encodeURIComponent(ft);
+    if (fDate) url += '&fueling_date=' + encodeURIComponent(fDate);
+    if (pumpId && pumpId !== '0') url += '&fuel_pump_id=' + encodeURIComponent(pumpId);
+    if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (!data || data.fuel_price == null || !fuelPriceInput) return;
+        if (!fuelPriceInput) return;
+        if (!data || data.fuel_price == null) {
+          if (fuelPriceInput.dataset.autoSuggested === '1') {
+            fuelPriceInput.value = '';
+            fuelPriceInput.dataset.autoSuggested = '0';
+            computeMpgAndLiters();
+          }
+          return;
+        }
         var suggested = parseFloat(data.fuel_price);
         if (!isFinite(suggested) || suggested <= 0) return;
         fuelPriceInput.setAttribute('placeholder', 'Suggested: ' + suggested.toFixed(2));
         var entered = parseNum(fuelPriceInput.value);
-        if (entered == null || entered <= 0) {
+        if (entered == null || entered <= 0 || fuelPriceInput.dataset.autoSuggested === '1') {
           fuelPriceInput.value = suggested.toFixed(2);
+          fuelPriceInput.dataset.autoSuggested = '1';
           computeMpgAndLiters();
         }
       })
@@ -635,7 +653,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  if (fuelingDateInput) fuelingDateInput.addEventListener('change', function() { fetchLastReading(); fetchTaskReadings(); fetchPsoRateForDate(); });
+  if (fuelingDateInput) fuelingDateInput.addEventListener('change', function() { fetchLastReading(); fetchTaskReadings(); fetchPsoRateForDate(); fetchSuggestedPrice(); });
   if (previousReadingInput) previousReadingInput.addEventListener('input', function() { computeKm(); fetchTaskReadings(); });
   if (currentReadingInput) {
     currentReadingInput.addEventListener('input', computeKm);
@@ -647,7 +665,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', function() { handlePaymentTypeBehavior(true); });
   if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
   if (amountInput) amountInput.addEventListener('input', computeMpgAndLiters);
-  if (fuelPriceInput) fuelPriceInput.addEventListener('input', computeMpgAndLiters);
+  if (fuelPriceInput) fuelPriceInput.addEventListener('input', function() { fuelPriceInput.dataset.autoSuggested = '0'; computeMpgAndLiters(); });
 
   function renderHistoryRows(targetEl, rows) {
     if (!targetEl) return;
@@ -685,6 +703,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   if (fuelTypeSelect) fuelTypeSelect.addEventListener('change', function() {
+    fetchSuggestedPrice();
     fetchPriceHistory();
     fetchPsoRateForDate();
   });
@@ -695,6 +714,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initSearchableDropdowns(fuelPumpSel.parentNode);
     fuelPumpSel.addEventListener('change', function() {
       fetchPriceHistory();
+      fetchSuggestedPrice();
     });
   }
 
