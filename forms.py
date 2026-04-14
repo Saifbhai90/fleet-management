@@ -1082,7 +1082,7 @@ class FuelExpenseForm(FlaskForm):
                              render_kw={"class": "form-control datepicker"})
     card_swipe_date = DateField('Card Swipe Date', format='%d-%m-%Y', validators=[Optional()],
                                  render_kw={"class": "form-control datepicker"})
-    payment_type = SelectField('Payment Type', choices=PAYMENT_TYPE_CHOICES, validators=[Optional()], render_kw={'class': 'form-select search-select'})
+    payment_type = SelectField('Payment Type', choices=PAYMENT_TYPE_CHOICES, validators=[DataRequired(message='Payment Type is required.')], render_kw={'class': 'form-select search-select'})
     slip_no = StringField('Slip No', validators=[Optional(), Length(max=50)], render_kw={"placeholder": "e.g. 4270"})
     fuel_type = SelectField('Fuel Type', choices=FUEL_TYPE_CHOICES, validators=[Optional()], render_kw={'class': 'form-select search-select'})
     fuel_pump_id = SelectField('Fuel Pump Name', coerce=int, validators=[Optional()], choices=[(0, '-- Select Pump --')], render_kw={'class': 'form-select search-select'})

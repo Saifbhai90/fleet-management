@@ -17873,7 +17873,11 @@ def fuel_expense_add():
             project_id = vehicle.project_id
         fueling_date = form.fueling_date.data
         card_swipe_date = form.card_swipe_date.data
-        payment_type = (form.payment_type.data or '').strip() or None
+        payment_type = (form.payment_type.data or '').strip()
+        allowed_payment_types = ('Cash', 'Credit', 'Tp/Card', 'Shl/Card')
+        if payment_type not in allowed_payment_types:
+            flash('Please select a valid payment type.', 'danger')
+            return render_template('fuel_expense_form.html', form=form, title='Add Fuel Expense')
         if payment_type in ('Cash', 'Credit'):
             card_swipe_date = None
         slip_no = (form.slip_no.data or '').strip() or None
@@ -17967,9 +17971,9 @@ def fuel_expense_add():
             amount=amount_f,
             description=fuel_expense_desc,
             expense_type='Fuel Expense',
-            payment_mode=(payment_type or 'Cash'),
+            payment_mode=payment_type,
             category='Fuel',
-            workspace_party_id=workspace_pump_id,
+            workspace_party_id=(workspace_pump_id if payment_type == 'Credit' else None),
             journal_entry_id=(fuel_je.id if fuel_je else None),
         )
 
@@ -18065,7 +18069,11 @@ def fuel_expense_edit(pk):
             project_id = None
         fueling_date = form.fueling_date.data
         card_swipe_date = form.card_swipe_date.data
-        payment_type = (form.payment_type.data or '').strip() or None
+        payment_type = (form.payment_type.data or '').strip()
+        allowed_payment_types = ('Cash', 'Credit', 'Tp/Card', 'Shl/Card')
+        if payment_type not in allowed_payment_types:
+            flash('Please select a valid payment type.', 'danger')
+            return render_template('fuel_expense_form.html', form=form, title='Edit Fuel Expense', rec=rec)
         if payment_type in ('Cash', 'Credit'):
             card_swipe_date = None
         slip_no = (form.slip_no.data or '').strip() or None
@@ -18172,9 +18180,9 @@ def fuel_expense_edit(pk):
                 amount=amount_f,
                 description=fuel_expense_desc,
                 expense_type='Fuel Expense',
-                payment_mode=(payment_type or 'Cash'),
+                payment_mode=payment_type,
                 category='Fuel',
-                workspace_party_id=workspace_pump_id,
+                workspace_party_id=(workspace_pump_id if payment_type == 'Credit' else None),
                 journal_entry_id=(fuel_je.id if fuel_je else None),
             )
             db.session.commit()
@@ -19561,12 +19569,33 @@ def maintenance_expense_form(pk=None):
         is_active=True,
     ).order_by(WorkspaceParty.name.asc()).all()
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
-    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
-    form.vehicle_id.choices = [(v.id, v.vehicle_no) for v in Vehicle.query.order_by(Vehicle.vehicle_no).all()]
-    if not form.vehicle_id.choices:
-        form.vehicle_id.choices = [(0, '-- No Vehicle --')]
+    selected_district_id = None
+    selected_project_id = None
+    if request.method == 'POST':
+        selected_district_id = form.district_id.data or None
+        selected_project_id = form.project_id.data or None
+    elif rec:
+        selected_district_id = rec.district_id or None
+        selected_project_id = rec.project_id or None
     else:
-        form.vehicle_id.choices.insert(0, (0, '-- Select Vehicle --'))
+        selected_district_id = default_district_id or None
+    if selected_district_id == 0:
+        selected_district_id = None
+    if selected_project_id == 0:
+        selected_project_id = None
+
+    project_q = Project.query
+    if selected_district_id:
+        project_q = project_q.join(project_district).filter(project_district.c.district_id == selected_district_id)
+    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+
+    if selected_project_id:
+        vehicle_q = Vehicle.query.filter(Vehicle.project_id == selected_project_id)
+        if selected_district_id:
+            vehicle_q = vehicle_q.filter(Vehicle.district_id == selected_district_id)
+        form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
+    else:
+        form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
     if request.method == 'GET' and rec:
         if rec.district_id:
             form.district_id.data = rec.district_id
@@ -19603,6 +19632,73 @@ def maintenance_expense_form(pk=None):
                 workspace_parties=workspace_parties,
                 maintenance_direct_r2=maintenance_direct_r2,
             )
+        district_id = form.district_id.data or None
+        if district_id == 0:
+            district_id = None
+        project_id = form.project_id.data or None
+        if project_id == 0:
+            project_id = None
+        vehicle_obj = Vehicle.query.get_or_404(vehicle_id)
+        if project_id and int(vehicle_obj.project_id or 0) != int(project_id):
+            flash('Selected vehicle does not belong to selected project.', 'danger')
+            return render_template(
+                'maintenance_expense_form.html',
+                form=form,
+                rec=rec,
+                title='Edit Maintenance' if rec else 'Add Maintenance',
+                products_for_maintenance=products_for_maintenance,
+                job_categories=job_categories,
+                total_bill_error=total_bill_error,
+                entered_total_bill=entered_total_bill,
+                party_error=party_error,
+                selected_payment_type=selected_payment_type,
+                selected_party_id=selected_party_id,
+                workspace_parties=workspace_parties,
+                maintenance_direct_r2=maintenance_direct_r2,
+            )
+        if district_id and int(vehicle_obj.district_id or 0) != int(district_id):
+            flash('Selected vehicle does not belong to selected district.', 'danger')
+            return render_template(
+                'maintenance_expense_form.html',
+                form=form,
+                rec=rec,
+                title='Edit Maintenance' if rec else 'Add Maintenance',
+                products_for_maintenance=products_for_maintenance,
+                job_categories=job_categories,
+                total_bill_error=total_bill_error,
+                entered_total_bill=entered_total_bill,
+                party_error=party_error,
+                selected_payment_type=selected_payment_type,
+                selected_party_id=selected_party_id,
+                workspace_parties=workspace_parties,
+                maintenance_direct_r2=maintenance_direct_r2,
+            )
+        if district_id and project_id:
+            linked = Project.query.join(project_district).filter(
+                Project.id == project_id,
+                project_district.c.district_id == district_id,
+            ).first()
+            if not linked:
+                flash('Selected project is not linked with selected district.', 'danger')
+                return render_template(
+                    'maintenance_expense_form.html',
+                    form=form,
+                    rec=rec,
+                    title='Edit Maintenance' if rec else 'Add Maintenance',
+                    products_for_maintenance=products_for_maintenance,
+                    job_categories=job_categories,
+                    total_bill_error=total_bill_error,
+                    entered_total_bill=entered_total_bill,
+                    party_error=party_error,
+                    selected_payment_type=selected_payment_type,
+                    selected_party_id=selected_party_id,
+                    workspace_parties=workspace_parties,
+                    maintenance_direct_r2=maintenance_direct_r2,
+                )
+        if not project_id:
+            project_id = vehicle_obj.project_id
+        if not district_id:
+            district_id = vehicle_obj.district_id
         expense_date = form.expense_date.data
         curr_reading = form.current_reading.data
         remarks = form.remarks.data
@@ -19746,8 +19842,8 @@ def maintenance_expense_form(pk=None):
                 MaintenanceExpenseItem.query.filter_by(maintenance_expense_id=rec.id).delete()
             else:
                 rec = MaintenanceExpense(
-                    district_id=form.district_id.data or None,
-                    project_id=form.project_id.data or None,
+                    district_id=district_id,
+                    project_id=project_id,
                     employee_id=workspace_employee_id,
                     vehicle_id=vehicle_id,
                     expense_date=expense_date,
@@ -19764,8 +19860,8 @@ def maintenance_expense_form(pk=None):
                 db.session.add(rec)
             db.session.flush()
             if rec.id:
-                rec.district_id = form.district_id.data or None
-                rec.project_id = form.project_id.data or None
+                rec.district_id = district_id
+                rec.project_id = project_id
                 rec.employee_id = workspace_employee_id
                 rec.vehicle_id = vehicle_id
                 rec.expense_date = expense_date

@@ -327,6 +327,25 @@ document.addEventListener('DOMContentLoaded', function() {
     return isNaN(n) ? null : n;
   }
 
+  function fetchSuggestedPrice() {
+    var ft = fuelTypeSelect && fuelTypeSelect.value;
+    if (!ft || (ft !== 'Diesel' && ft !== 'Super' && ft !== 'Petrol')) return;
+    fetch('/api/fuel-expense/suggested-price?fuel_type=' + encodeURIComponent(ft))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || data.fuel_price == null || !fuelPriceInput) return;
+        var suggested = parseFloat(data.fuel_price);
+        if (!isFinite(suggested) || suggested <= 0) return;
+        fuelPriceInput.setAttribute('placeholder', 'Suggested: ' + suggested.toFixed(2));
+        var entered = parseNum(fuelPriceInput.value);
+        if (entered == null || entered <= 0) {
+          fuelPriceInput.value = suggested.toFixed(2);
+          computeMpgAndLiters();
+        }
+      })
+      .catch(function() {});
+  }
+
   function fetchLastReading() {
     var vid = vehicleSelect && vehicleSelect.value;
     var fDate = fuelingDateInput && fuelingDateInput.value;
