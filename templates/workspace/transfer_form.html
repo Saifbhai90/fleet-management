@@ -42,7 +42,7 @@
               <div class="row g-3">
                 <div class="col-md-3">
                   <label class="form-label">Transfer Date</label>
-                  <input type="text" name="transfer_date" class="form-control datepicker" value="{{ row.transfer_date|ddmmyyyy if row and row.transfer_date else '' }}" placeholder="dd-mm-yyyy" required>
+                  <input type="text" id="wsTransferDateInput" name="transfer_date" class="form-control datepicker" value="{{ row.transfer_date|ddmmyyyy if row and row.transfer_date else '' }}" placeholder="dd-mm-yyyy" required>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Amount</label>
@@ -148,6 +148,16 @@ document.addEventListener('DOMContentLoaded', function() {
   var attachPreview = document.getElementById('wsAttachPreview');
   var attachPreviewImg = document.getElementById('wsAttachPreviewImg');
   var saveBtn = document.getElementById('wsTransferSaveBtn');
+  var transferDateInput = document.getElementById('wsTransferDateInput');
+
+  if (transferDateInput) {
+    window.setTimeout(function() {
+      transferDateInput.focus();
+      if (typeof transferDateInput.select === 'function') {
+        transferDateInput.select();
+      }
+    }, 80);
+  }
 
   function showAttachPreview(file) {
     if (!file || !file.type || file.type.indexOf('image/') !== 0) return;
