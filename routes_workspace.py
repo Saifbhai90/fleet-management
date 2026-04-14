@@ -3071,7 +3071,7 @@ def workspace_mpg_report():
     to_date = parse_date(request.values.get("to_date")) or today
     district_id = request.values.get("district_id", type=int) or 0
     project_id = request.values.get("project_id", type=int) or 0
-    vehicle_id = request.values.get("vehicle_id", type=int) or 0
+    selected_vehicle_id = request.values.get("vehicle_id", type=int) or 0
     if from_date > to_date:
         from_date, to_date = to_date, from_date
 
@@ -3101,8 +3101,8 @@ def workspace_mpg_report():
         fuel_q = fuel_q.filter(FuelExpense.district_id == district_id)
     if project_id:
         fuel_q = fuel_q.filter(FuelExpense.project_id == project_id)
-    if vehicle_id:
-        fuel_q = fuel_q.filter(FuelExpense.vehicle_id == vehicle_id)
+    if selected_vehicle_id:
+        fuel_q = fuel_q.filter(FuelExpense.vehicle_id == selected_vehicle_id)
 
     fuel_rows = (
         fuel_q
@@ -3154,14 +3154,14 @@ def workspace_mpg_report():
 
     if request.method == "POST":
         has_invalid = False
-        for vehicle_id in vehicle_ids:
-            current_meter, current_meter_invalid = _parse_decimal_input(request.form.get(f"current_odoo_meter_{vehicle_id}"))
-            today_fuel, today_fuel_invalid = _parse_decimal_input(request.form.get(f"today_fuel_{vehicle_id}"))
+        for loop_vehicle_id in vehicle_ids:
+            current_meter, current_meter_invalid = _parse_decimal_input(request.form.get(f"current_odoo_meter_{loop_vehicle_id}"))
+            today_fuel, today_fuel_invalid = _parse_decimal_input(request.form.get(f"today_fuel_{loop_vehicle_id}"))
             if current_meter_invalid or today_fuel_invalid:
                 has_invalid = True
                 continue
 
-            existing = saved_inputs.get(vehicle_id)
+            existing = saved_inputs.get(loop_vehicle_id)
             if current_meter is None and today_fuel is None:
                 if existing:
                     db.session.delete(existing)
@@ -3170,13 +3170,13 @@ def workspace_mpg_report():
             if not existing:
                 existing = WorkspaceMpgReportInput(
                     employee_id=emp.id,
-                    vehicle_id=vehicle_id,
+                    vehicle_id=loop_vehicle_id,
                     from_date=from_date,
                     to_date=to_date,
                     created_by_user_id=session.get("user_id"),
                 )
                 db.session.add(existing)
-                saved_inputs[vehicle_id] = existing
+                saved_inputs[loop_vehicle_id] = existing
 
             existing.current_odoo_meter_reading = current_meter
             existing.today_fuel = today_fuel
@@ -3193,15 +3193,15 @@ def workspace_mpg_report():
             to_date=to_date.isoformat(),
             district_id=district_id or "",
             project_id=project_id or "",
-            vehicle_id=vehicle_id or "",
+            vehicle_id=selected_vehicle_id or "",
         ))
 
     report_rows = []
-    for idx, vehicle_id in enumerate(vehicle_ids, start=1):
-        vehicle = vehicles_by_id.get(vehicle_id)
+    for idx, row_vehicle_id in enumerate(vehicle_ids, start=1):
+        vehicle = vehicles_by_id.get(row_vehicle_id)
         if not vehicle:
             continue
-        rows = entries_by_vehicle.get(vehicle_id) or []
+        rows = entries_by_vehicle.get(row_vehicle_id) or []
         if not rows:
             continue
 
@@ -3233,8 +3233,8 @@ def workspace_mpg_report():
         if target_mpg > 0 and current_reading is not None and short_kms is not None:
             with_full_tank_next_fueling = current_reading + short_kms + (tank_capacity * target_mpg)
 
-        current_date_reading = task_close_reading_map.get(vehicle_id)
-        saved = saved_inputs.get(vehicle_id)
+        current_date_reading = task_close_reading_map.get(row_vehicle_id)
+        saved = saved_inputs.get(row_vehicle_id)
         current_odoo_meter_reading = _to_dec(saved.current_odoo_meter_reading, None) if saved else None
         today_fuel = _to_dec(saved.today_fuel, None) if saved else None
         meter_base = current_odoo_meter_reading if current_odoo_meter_reading is not None else current_date_reading
@@ -3311,7 +3311,7 @@ def workspace_mpg_report():
         to_date=to_date,
         district_id=district_id,
         project_id=project_id,
-        vehicle_id=vehicle_id,
+        vehicle_id=selected_vehicle_id,
         districts=districts,
         projects=projects,
         vehicles=vehicles,
