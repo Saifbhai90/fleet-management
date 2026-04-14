@@ -18846,6 +18846,7 @@ def oil_expense_form(pk=None):
             form.project_id.data = rec.project_id
         if rec.vehicle_id:
             form.vehicle_id.data = rec.vehicle_id
+        form.expense_by.data = _workspace_expense_by_for_reference(workspace_employee_id, 'OilExpense', rec.id)
         form.payment_type.data = rec.payment_type or ''
         if rec.total_bill_amount is not None:
             entered_total_bill = f"{float(rec.total_bill_amount):.2f}"
@@ -19572,6 +19573,7 @@ def maintenance_expense_form(pk=None):
             form.project_id.data = rec.project_id
         if rec.vehicle_id:
             form.vehicle_id.data = rec.vehicle_id
+        form.expense_by.data = _workspace_expense_by_for_reference(workspace_employee_id, 'MaintenanceExpense', rec.id)
         if rec.total_bill_amount is not None:
             entered_total_bill = f"{float(rec.total_bill_amount):.2f}"
     elif request.method == 'GET':
