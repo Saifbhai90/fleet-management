@@ -17385,20 +17385,11 @@ def api_fuel_expense_price_history():
     fuel_pump_id = request.args.get('fuel_pump_id', type=int)
     fueling_date = parse_date(request.args.get('fueling_date', ''))
     employee_id = _workspace_employee_id_for_expenses()
-    if normalized not in ('Diesel', 'Super'):
-        return jsonify({'selected_pump': [], 'all_pumps': [], 'date_snapshot': []})
-
-    if normalized == 'Super':
-        fuel_filter = FuelExpense.fuel_type.in_(('Super', 'Petrol'))
-    else:
-        fuel_filter = FuelExpense.fuel_type == normalized
-
-    base_q = FuelExpense.query.filter(
-        fuel_filter,
+    any_price_q = FuelExpense.query.filter(
         FuelExpense.fuel_price.isnot(None),
     )
     if employee_id:
-        base_q = base_q.filter(FuelExpense.employee_id == employee_id)
+        any_price_q = any_price_q.filter(FuelExpense.employee_id == employee_id)
 
     def _fmt_row(r):
         pump_name = ''
@@ -17412,6 +17403,30 @@ def api_fuel_expense_price_history():
             'vehicle_no': r.vehicle.vehicle_no if r.vehicle else '',
             'fuel_price': float(r.fuel_price),
         }
+
+    pump_or_date_rows = []
+    if fuel_pump_id or fueling_date:
+        filters = []
+        if fuel_pump_id:
+            filters.append(or_(FuelExpense.workspace_pump_id == fuel_pump_id, FuelExpense.fuel_pump_id == fuel_pump_id))
+        if fueling_date:
+            filters.append(FuelExpense.fueling_date == fueling_date)
+        pump_or_date_rows = [
+            _fmt_row(r) for r in any_price_q.filter(or_(*filters)).order_by(
+                FuelExpense.fueling_date.desc(),
+                FuelExpense.id.desc(),
+            ).limit(3).all()
+        ]
+
+    if normalized not in ('Diesel', 'Super'):
+        return jsonify({'pump_or_date': pump_or_date_rows, 'selected_pump': [], 'all_pumps': [], 'date_snapshot': []})
+
+    if normalized == 'Super':
+        fuel_filter = FuelExpense.fuel_type.in_(('Super', 'Petrol'))
+    else:
+        fuel_filter = FuelExpense.fuel_type == normalized
+
+    base_q = any_price_q.filter(fuel_filter)
 
     selected_pump_rows = []
     if fuel_pump_id:
@@ -17437,6 +17452,7 @@ def api_fuel_expense_price_history():
             if len(date_snapshot_rows) >= 5:
                 break
     return jsonify({
+        'pump_or_date': pump_or_date_rows,
         'selected_pump': selected_pump_rows,
         'all_pumps': [_fmt_row(r) for r in all_rows],
         'date_snapshot': date_snapshot_rows,
