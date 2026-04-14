@@ -19,7 +19,7 @@
         <div class="col-md-3"><small class="text-muted d-block">Vehicle</small><span class="fw-semibold">{{ rec.vehicle.vehicle_no if rec.vehicle else '-' }}</span></div>
         <div class="col-md-3"><small class="text-muted d-block">Party</small><span class="fw-semibold">{{ rec.workspace_party.name if rec.workspace_party else '-' }}</span></div>
         <div class="col-md-3"><small class="text-muted d-block">Total Bill</small><span class="fw-semibold">{{ "%.2f"|format((rec.total_bill_amount or 0)|float) }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Card Swipe Date</small><span class="fw-semibold">{{ rec.card_swipe_date|ddmmyyyy if rec.card_swipe_date else '-' }}</span></div>
+        <div class="col-md-3"><small class="text-muted d-block">Payment Type</small><span class="fw-semibold">{{ rec.payment_type or '-' }}</span></div>
 
         <div class="col-md-3"><small class="text-muted d-block">Previous Reading</small><span class="fw-semibold">{{ "%.2f"|format((rec.previous_reading or 0)|float) }}</span></div>
         <div class="col-md-3"><small class="text-muted d-block">Current Reading</small><span class="fw-semibold">{{ "%.2f"|format((rec.current_reading or 0)|float) }}</span></div>

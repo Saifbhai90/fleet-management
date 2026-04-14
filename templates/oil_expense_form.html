@@ -80,10 +80,6 @@
             <label class="form-label">Payment Type</label>
             {{ form.payment_type(class="form-select search-select", id="paymentTypeSelect") }}
           </div>
-          <div class="col-md-2 field-group compact-field">
-            <label class="form-label">Card Swipe Date</label>
-            {{ form.card_swipe_date(class="form-control datepicker", id="cardSwipeDate") }}
-          </div>
           <div class="col-md-8 field-group">
             <label class="form-label fw-bold">Party Name (Workspace)</label>
             <select name="workspace_party_id" id="partySelect" class="form-select search-select">
@@ -299,7 +295,6 @@ document.addEventListener('DOMContentLoaded', function() {
   var kmDisplay = document.getElementById('kmDisplay');
   var expenseDate = document.getElementById('expenseDate');
   var paymentTypeSelect = document.getElementById('paymentTypeSelect');
-  var cardSwipeDateInput = document.getElementById('cardSwipeDate');
   var oilTaskReadingsMeta = document.getElementById('oilTaskReadingsMeta');
   var oilCurrentReadingMatchNote = document.getElementById('oilCurrentReadingMatchNote');
   var itemsBody = document.getElementById('itemsBody');
@@ -330,7 +325,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var serverProjectId  = {{ (form.project_id.data  or 0) | tojson }};
   var serverVehicleId  = {{ (form.vehicle_id.data  or 0) | tojson }};
 
-  var productsForOil = [{% for p in products_for_oil %}{id:{{ p.id }},name:{{ p.name | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}];
+  var productsForOil = [{% for p in products_for_oil %}{id:{{ p.id }},name:{{ p.name | tojson }},default_price:{% if p.default_price is not none %}{{ (p.default_price|float) }}{% else %}null{% endif %}}{% if not loop.last %},{% endif %}{% endfor %}];
 
   function _populateOilProducts(arr) {
     productsForOil = arr;
@@ -345,6 +340,11 @@ document.addEventListener('DOMContentLoaded', function() {
       sel.appendChild(o);
     });
     initSearchableDropdowns(sel.parentNode);
+    if (sel.tomselect) {
+      sel.tomselect.on('change', function() {
+        updateDefaultPriceHint();
+      });
+    }
     if (sel.tomselect && sel.tomselect.control_input) {
       sel.tomselect.control_input.addEventListener('focus', function() {
         var row = document.getElementById('entryRow');
@@ -397,23 +397,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  function setCardSwipeDateEnabled(enabled) {
-    if (!cardSwipeDateInput) return;
-    cardSwipeDateInput.disabled = !enabled;
-    if (!enabled) cardSwipeDateInput.value = '';
-    var fp = cardSwipeDateInput._flatpickr;
-    if (fp) {
-      if (fp.altInput) fp.altInput.disabled = !enabled;
-      if (fp._input) fp._input.disabled = !enabled;
-      if (!enabled && typeof fp.clear === 'function') fp.clear();
-    }
-  }
-
   function handleOilExpenseByBehavior(forceReset) {
     if (!paymentTypeSelect) return;
     var paymentType = _tsVal(paymentTypeSelect);
-    var cardDisabled = (paymentType === 'Cash' || paymentType === 'Credit' || paymentType === 'In Hand Stock');
-    setCardSwipeDateEnabled(!cardDisabled);
     if (!expenseBySelect) return;
     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
     if (paymentType === 'Cash') {
@@ -681,11 +667,6 @@ document.addEventListener('DOMContentLoaded', function() {
       } else if (partySelect) {
         partySelect.focus();
       }
-      return false;
-    }
-    if (pType === 'Card' && (!cardSwipeDateInput || !cardSwipeDateInput.value)) {
-      alert('Payment Type Card ho to Card Swipe Date required hai.');
-      if (cardSwipeDateInput) cardSwipeDateInput.focus();
       return false;
     }
     var listTotal = parseFloat(document.getElementById('totalBillAmount').textContent || '0') || 0;

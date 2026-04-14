@@ -170,7 +170,7 @@
             <input type="number" id="entryQty" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
           </div>
           <div class="col-md-2">
-            <label class="form-label mb-0">Price</label>
+            <label class="form-label mb-0">Price <span id="entryDefaultPriceHint" class="text-muted small ms-1"></span></label>
             <input type="number" id="entryPrice" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
           </div>
           <div class="col-md-2">
@@ -381,6 +381,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var entryProductSelect = document.getElementById('entryProductSelect');
   var entryQty = document.getElementById('entryQty');
   var entryPrice = document.getElementById('entryPrice');
+  var entryDefaultPriceHint = document.getElementById('entryDefaultPriceHint');
   var entryAmount = document.getElementById('entryAmount');
   var addToListBtn = document.getElementById('addToListBtn');
   var jobCategorySelect = document.getElementById('jobCategorySelect');
@@ -419,7 +420,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var maintSamePartyEmpty = document.getElementById('maintSamePartyEmpty');
   var maintOtherPartyEmpty = document.getElementById('maintOtherPartyEmpty');
 
-  var productsForMaintenance = [{% for p in products_for_maintenance %}{id:{{ p.id }},name:{{ p.name | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}];
+  var productsForMaintenance = [{% for p in products_for_maintenance %}{id:{{ p.id }},name:{{ p.name | tojson }},default_price:{% if p.default_price is not none %}{{ (p.default_price|float) }}{% else %}null{% endif %}}{% if not loop.last %},{% endif %}{% endfor %}];
 
   function _reinitSearchableDropdown(scopeEl) {
     if (typeof initSearchableDropdowns === 'function') {
@@ -438,6 +439,11 @@ document.addEventListener('DOMContentLoaded', function() {
       entryProductSelect.appendChild(o);
     });
     _reinitSearchableDropdown(entryProductSelect.parentNode);
+    if (entryProductSelect.tomselect) {
+      entryProductSelect.tomselect.on('change', function() {
+        updateDefaultPriceHint();
+      });
+    }
     itemsBody.querySelectorAll('.item-row').forEach(function(tr) { bindListRow(tr); });
     updateTotals();
   }
@@ -519,6 +525,18 @@ document.addEventListener('DOMContentLoaded', function() {
     entryAmount.value = (qty * price).toFixed(2);
   }
 
+  function updateDefaultPriceHint() {
+    if (!entryDefaultPriceHint || !entryProductSelect) return;
+    var pid = entryProductSelect.value;
+    var p = productsForMaintenance.find(function(x) { return String(x.id) === String(pid); });
+    var dp = p && p.default_price != null ? parseFloat(p.default_price) : null;
+    if (dp != null && isFinite(dp)) {
+      entryDefaultPriceHint.textContent = '(Default: ' + dp.toFixed(2) + ')';
+    } else {
+      entryDefaultPriceHint.textContent = '';
+    }
+  }
+
   function escHtml(txt) {
     return String(txt || '')
       .replace(/&/g, '&amp;')
@@ -597,6 +615,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   entryQty.addEventListener('input', updateEntryAmount);
   entryPrice.addEventListener('input', updateEntryAmount);
+  if (entryProductSelect) entryProductSelect.addEventListener('change', updateDefaultPriceHint);
   entryPrice.addEventListener('focus', fetchMaintenancePriceHistory);
   entryPrice.addEventListener('blur', function() { window.setTimeout(hidePriceHistoryPanel, 120); });
   if (entryQty) {
@@ -617,6 +636,7 @@ document.addEventListener('DOMContentLoaded', function() {
     entryPrice.value = '0';
     entryAmount.value = '';
     updateEntryAmount();
+    updateDefaultPriceHint();
     focusEntryProduct();
   }
 
@@ -907,6 +927,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 120);
 
   updateEntryAmount();
+  updateDefaultPriceHint();
   if (vehicleSelect) {
     vehicleSelect.dispatchEvent(new Event('change'));
   } else {

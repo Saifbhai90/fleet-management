@@ -824,10 +824,8 @@ FUEL_TYPE_CHOICES = [
 
 OIL_PAYMENT_TYPE_CHOICES = [
     ('', '-- Select --'),
-    ('Card', 'Card'),
-    ('Credit', 'Credit'),
     ('Cash', 'Cash'),
-    ('In Hand Stock', 'In Hand Stock'),
+    ('Credit', 'Credit'),
 ]
 
 PARTY_TYPE_CHOICES = [
@@ -1114,8 +1112,6 @@ class OilExpenseForm(FlaskForm):
     expense_date = DateField('Oil Change Date', format='%d-%m-%Y', validators=[DataRequired()],
                              render_kw={"class": "form-control datepicker"})
     payment_type = SelectField('Payment Type', choices=OIL_PAYMENT_TYPE_CHOICES, validators=[Optional()], render_kw={'class': 'form-select search-select'})
-    card_swipe_date = DateField('Card Swipe Date', format='%d-%m-%Y', validators=[Optional()],
-                                render_kw={"class": "form-control datepicker"})
     previous_reading = DecimalField('Previous Reading', validators=[Optional()],
                                     render_kw={"class": "form-control", "step": "0.01", "readonly": True})
     current_reading = DecimalField('Current Reading', validators=[Optional()],

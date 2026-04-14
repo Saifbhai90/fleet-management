@@ -18856,27 +18856,11 @@ def oil_expense_form(pk=None):
                 hbl_expense_by_value=hbl_expense_by_value,
             )
         expense_date = form.expense_date.data
-        card_swipe_date = form.card_swipe_date.data
         payment_type = (form.payment_type.data or '').strip() or None
-        if payment_type in ('Cash', 'Credit', 'In Hand Stock'):
-            card_swipe_date = None
+        if payment_type not in ('Cash', 'Credit'):
+            payment_type = None
         if not payment_type:
             flash('Payment Type required hai.', 'danger')
-            return render_template(
-                'oil_expense_form.html',
-                form=form,
-                rec=rec,
-                title='Edit Oil Expense' if rec else 'Add Oil Expense',
-                products_for_oil=products_for_oil,
-                workspace_parties=workspace_parties,
-                selected_party_id=selected_party_id,
-                entered_total_bill=entered_total_bill,
-                total_bill_error=total_bill_error,
-                party_error=party_error,
-                hbl_expense_by_value=hbl_expense_by_value,
-            )
-        if payment_type == 'Card' and not card_swipe_date:
-            flash('Payment Type Card ho to Card Swipe Date required hai.', 'danger')
             return render_template(
                 'oil_expense_form.html',
                 form=form,
@@ -18975,7 +18959,7 @@ def oil_expense_form(pk=None):
                     employee_id=workspace_employee_id,
                     vehicle_id=vehicle_id,
                     expense_date=expense_date,
-                    card_swipe_date=card_swipe_date,
+                    card_swipe_date=None,
                     payment_type=payment_type,
                     previous_reading=prev_reading,
                     current_reading=curr_reading,
@@ -18991,7 +18975,7 @@ def oil_expense_form(pk=None):
                 rec.employee_id = workspace_employee_id
                 rec.vehicle_id = vehicle_id
                 rec.expense_date = expense_date
-                rec.card_swipe_date = card_swipe_date
+                rec.card_swipe_date = None
                 rec.payment_type = payment_type
                 rec.previous_reading = prev_reading
                 rec.current_reading = curr_reading
@@ -19333,7 +19317,14 @@ def _resequence_vehicle_maintenance_expenses(vehicle_id, workspace_employee_id=N
 def api_maintenance_expense_products():
     workspace_employee_id = _workspace_employee_id_for_expenses()
     products = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
-    return jsonify([{'id': p.id, 'name': p.name} for p in products])
+    return jsonify([
+        {
+            'id': p.id,
+            'name': p.name,
+            'default_price': float(p.default_price) if p.default_price is not None else None,
+        }
+        for p in products
+    ])
 
 
 @app.route('/api/maintenance-expense/product-price-history')
