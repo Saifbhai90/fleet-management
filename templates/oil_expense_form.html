@@ -330,7 +330,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var serverProjectId  = {{ (form.project_id.data  or 0) | tojson }};
   var serverVehicleId  = {{ (form.vehicle_id.data  or 0) | tojson }};
 
-  var productsForOil = [{% for p in products_for_oil %}{id:{{ p.id }},name:{{ p.name | tojson }},default_price:{% if p.default_price is not none %}{{ p.default_price }}{% else %}null{% endif %}}{% if not loop.last %},{% endif %}{% endfor %}];
+  var productsForOil = [{% for p in products_for_oil %}{id:{{ p.id }},name:{{ p.name | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}];
 
   function _populateOilProducts(arr) {
     productsForOil = arr;
