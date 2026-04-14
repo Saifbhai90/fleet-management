@@ -82,6 +82,13 @@
   .fuel-form-wrap .price-history-row { font-size: 0.8rem; color: #334155; border-top: 1px dashed #dbe4ef; padding: 0.2rem 0; }
   .fuel-form-wrap .price-history-row:first-child { border-top: 0; }
   .fuel-form-wrap .price-history-empty { font-size: 0.8rem; color: #94a3b8; }
+  .fuel-form-wrap .inline-insight-box {
+    border: 1px solid #dbe4ef;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    padding: 0.55rem 0.65rem;
+  }
+  .fuel-form-wrap .inline-insight-title { font-size: 0.82rem; font-weight: 700; color: #1d4ed8; margin-bottom: 0.28rem; }
   .fuel-form-wrap .insight-panel-grid { display: grid; grid-template-columns: 1fr; gap: 0.6rem; }
   .fuel-form-wrap .insight-box { border: 1px solid #dbe4ef; border-radius: 10px; background: linear-gradient(180deg, #f8fbff 0%, #fff 100%); padding: 0.6rem; min-height: 138px; }
   .fuel-form-wrap .insight-title { font-size: 0.83rem; font-weight: 700; color: #1d4ed8; margin-bottom: 0.35rem; }
@@ -224,6 +231,12 @@
                       <i class="bi bi-fuel-pump me-1"></i><span id="psoRateDateText"></span>
                     </div>
                   </div>
+                  <div class="col-12 field-group">
+                    <div class="inline-insight-box">
+                      <div class="inline-insight-title">Fuel Price Insights (Selected Pump + Fuel Type)</div>
+                      <div id="inlineSamePumpHistoryWrap" class="price-history-empty">No data.</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -321,6 +334,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var mpgDisplay = document.getElementById('mpgDisplay');
   var fuelAttachmentFiles = document.getElementById('fuelAttachmentFiles');
   var fuelAttachmentPasteHint = document.getElementById('fuelAttachmentPasteHint');
+  var inlineSamePumpHistoryWrap = document.getElementById('inlineSamePumpHistoryWrap');
   var datePumpHistoryWrap = document.getElementById('datePumpHistoryWrap');
   var samePumpHistoryWrap = document.getElementById('samePumpHistoryWrap');
   var allPumpHistoryWrap = document.getElementById('allPumpHistoryWrap');
@@ -714,6 +728,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var ft = fuelTypeSelect && fuelTypeSelect.value;
     var pumpId = document.getElementById('fuelPumpSelect') && document.getElementById('fuelPumpSelect').value;
     var fDate = (fuelingDateInput && fuelingDateInput.value) || '';
+    renderHistoryRows(inlineSamePumpHistoryWrap, []);
     renderHistoryRows(datePumpHistoryWrap, []);
     renderHistoryRows(samePumpHistoryWrap, []);
     renderHistoryRows(allPumpHistoryWrap, []);
@@ -722,10 +737,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pumpId && pumpId !== '0') url += '&fuel_pump_id=' + encodeURIComponent(pumpId);
     if (fDate) url += '&fueling_date=' + encodeURIComponent(fDate);
     fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+      renderHistoryRows(inlineSamePumpHistoryWrap, data && data.selected_pump ? data.selected_pump : []);
       renderHistoryRows(datePumpHistoryWrap, data && data.date_snapshot ? data.date_snapshot : []);
       renderHistoryRows(samePumpHistoryWrap, data && data.selected_pump ? data.selected_pump : []);
       renderHistoryRows(allPumpHistoryWrap, data && data.all_pumps ? data.all_pumps : []);
     }).catch(function() {
+      renderHistoryRows(inlineSamePumpHistoryWrap, []);
       renderHistoryRows(datePumpHistoryWrap, []);
       renderHistoryRows(samePumpHistoryWrap, []);
       renderHistoryRows(allPumpHistoryWrap, []);
