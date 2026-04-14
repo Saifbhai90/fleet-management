@@ -127,9 +127,11 @@ FREEZE_FORM_CATALOG = [
     ('Expenses - Fuel Add', 'fuel_expense_add'),
     ('Expenses - Fuel Edit', 'fuel_expense_edit'),
     ('Expenses - Fuel Delete', 'fuel_expense_delete'),
-    ('Expenses - Oil Add/Edit', 'oil_expense_form'),
+    ('Expenses - Oil Add', 'oil_expense_form:add'),
+    ('Expenses - Oil Edit', 'oil_expense_form:edit'),
     ('Expenses - Oil Delete', 'oil_expense_delete'),
-    ('Expenses - Maintenance Add/Edit', 'maintenance_expense_form'),
+    ('Expenses - Maintenance Add', 'maintenance_expense_form:add'),
+    ('Expenses - Maintenance Edit', 'maintenance_expense_form:edit'),
     ('Expenses - Maintenance Delete', 'maintenance_expense_delete'),
     ('Books - Stock Entry', 'book_stock_entry'),
     ('Books - Stock Edit', 'book_stock_edit'),
@@ -153,11 +155,26 @@ FREEZE_FORM_CATALOG = [
 # so previously saved checkbox selections continue to work after endpoint cleanup.
 FREEZE_ENDPOINT_ALIASES = {
     'fuel_expense_new': 'fuel_expense_add',
-    'oil_expense_new': 'oil_expense_form',
-    'oil_expense_edit': 'oil_expense_form',
-    'maintenance_expense_new': 'maintenance_expense_form',
-    'maintenance_expense_edit': 'maintenance_expense_form',
+    'oil_expense_new': 'oil_expense_form:add',
+    'oil_expense_edit': 'oil_expense_form:edit',
+    'oil_expense_form': ('oil_expense_form:add', 'oil_expense_form:edit'),
+    'maintenance_expense_new': 'maintenance_expense_form:add',
+    'maintenance_expense_edit': 'maintenance_expense_form:edit',
+    'maintenance_expense_form': ('maintenance_expense_form:add', 'maintenance_expense_form:edit'),
 }
+
+
+def _normalize_endpoint_tokens(values: set) -> set:
+    normalized = set()
+    for ep in set(values or set()):
+        mapped = FREEZE_ENDPOINT_ALIASES.get(ep, ep)
+        if isinstance(mapped, (tuple, list, set)):
+            normalized.update({str(x).strip() for x in mapped if str(x).strip()})
+        else:
+            val = str(mapped).strip()
+            if val:
+                normalized.add(val)
+    return normalized
 
 
 def _to_bool(v) -> bool:
@@ -192,7 +209,7 @@ def get_freeze_config() -> dict:
     updated_by = (SystemSetting.get('freeze_data_updated_by', '') or '').strip()
     updated_at = (SystemSetting.get('freeze_data_updated_at', '') or '').strip()
     raw_allowed = _parse_csv_set(SystemSetting.get('freeze_data_allowed_endpoints', ''))
-    allowed_endpoints = {FREEZE_ENDPOINT_ALIASES.get(ep, ep) for ep in raw_allowed}
+    allowed_endpoints = _normalize_endpoint_tokens(raw_allowed)
     catalog_endpoints = {ep for _, ep in FREEZE_FORM_CATALOG}
     effective_allowed = {ep for ep in allowed_endpoints if ep in catalog_endpoints}
     return {
@@ -220,10 +237,26 @@ def save_freeze_config(*, enabled: bool, before_date: date, after_date: date, al
     SystemSetting.set('freeze_data_before_date', before_date.isoformat() if before_date else '')
     SystemSetting.set('freeze_data_after_date', after_date.isoformat() if after_date else '')
     SystemSetting.set('freeze_data_reason', (reason or '').strip())
-    normalized_allowed = {FREEZE_ENDPOINT_ALIASES.get(ep, ep) for ep in set(allowed_endpoints or set())}
+    normalized_allowed = _normalize_endpoint_tokens(set(allowed_endpoints or set()))
     SystemSetting.set('freeze_data_allowed_endpoints', _set_to_csv(normalized_allowed))
     SystemSetting.set('freeze_data_updated_by', (updated_by or '').strip())
     SystemSetting.set('freeze_data_updated_at', (updated_at or '').strip())
+
+
+def get_freeze_request_codes(req: Request, endpoint: str) -> list:
+    endpoint = (endpoint or '').strip()
+    if not endpoint:
+        return []
+    codes = []
+    view_args = getattr(req, 'view_args', None) or {}
+    if endpoint == 'oil_expense_form':
+        op = 'edit' if view_args.get('pk') else 'add'
+        codes.append(f'oil_expense_form:{op}')
+    elif endpoint == 'maintenance_expense_form':
+        op = 'edit' if view_args.get('pk') else 'add'
+        codes.append(f'maintenance_expense_form:{op}')
+    codes.append(endpoint)
+    return codes
 
 
 def is_freeze_protected_request(req: Request, endpoint: str, cfg: dict = None) -> bool:
@@ -236,7 +269,9 @@ def is_freeze_protected_request(req: Request, endpoint: str, cfg: dict = None) -
     if any(tok in endpoint for tok in FREEZE_SAFE_ENDPOINT_TOKENS):
         return False
     cfg = cfg or {}
-    if endpoint in (cfg.get('allowed_set') or set()):
+    allowed = cfg.get('allowed_set') or set()
+    request_codes = get_freeze_request_codes(req, endpoint)
+    if any(code in allowed for code in request_codes):
         return False
     return True
 

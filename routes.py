@@ -6282,6 +6282,44 @@ def form_control():
     freeze_cfg = get_freeze_config()
     freeze_forms = get_freeze_form_catalog()
     freeze_allowed_set = set(freeze_cfg.get('allowed_set') or set())
+    def _build_freeze_matrix_rows(forms_catalog, allowed_set):
+        rows_map = {}
+        for form_label, endpoint_code in (forms_catalog or []):
+            lbl = (form_label or '').strip()
+            ep = (endpoint_code or '').strip()
+            lower = lbl.lower()
+            op = None
+            base_label = lbl
+            if lower.endswith(' add'):
+                op = 'add'
+                base_label = lbl[:-4].strip()
+            elif lower.endswith(' edit'):
+                op = 'edit'
+                base_label = lbl[:-5].strip()
+            elif lower.endswith(' delete'):
+                op = 'delete'
+                base_label = lbl[:-7].strip()
+            row = rows_map.setdefault(base_label, {
+                'label': base_label,
+                'add': None,
+                'edit': None,
+                'delete': None,
+                'other': [],
+            })
+            cell = {
+                'endpoint': ep,
+                'applied': ep not in allowed_set,  # tick = freeze apply
+            }
+            if op in ('add', 'edit', 'delete'):
+                row[op] = cell
+            else:
+                row['other'].append({
+                    'label': lbl,
+                    'endpoint': ep,
+                    'applied': ep not in allowed_set,
+                })
+        return sorted(rows_map.values(), key=lambda x: x['label'].lower())
+    freeze_matrix_rows = _build_freeze_matrix_rows(freeze_forms, freeze_allowed_set)
     oil_family_options = _get_vehicle_family_options()
     oil_change_limits = _get_vehicle_family_oil_change_limits()
 
@@ -6300,6 +6338,7 @@ def form_control():
             att_settings=att_settings,
             freeze_cfg=freeze_cfg,
             freeze_forms=freeze_forms,
+            freeze_matrix_rows=freeze_matrix_rows,
             freeze_allowed_set=freeze_allowed_set,
             oil_family_options=oil_family_options,
             oil_change_limits=oil_change_limits,
@@ -6510,6 +6549,7 @@ def form_control():
         att_settings=att_settings,
         freeze_cfg=freeze_cfg,
         freeze_forms=freeze_forms,
+        freeze_matrix_rows=freeze_matrix_rows,
         freeze_allowed_set=freeze_allowed_set,
         oil_family_options=oil_family_options,
         oil_change_limits=oil_change_limits,
