@@ -17406,17 +17406,36 @@ def api_fuel_expense_price_history():
 
     pump_or_date_rows = []
     if fuel_pump_id or fueling_date:
-        filters = []
-        if fuel_pump_id:
-            filters.append(or_(FuelExpense.workspace_pump_id == fuel_pump_id, FuelExpense.fuel_pump_id == fuel_pump_id))
+        picked_ids = set()
+        picked_rows = []
+
+        def _append_rows(query_rows):
+            for row in query_rows:
+                if row.id in picked_ids:
+                    continue
+                picked_ids.add(row.id)
+                picked_rows.append(row)
+                if len(picked_rows) >= 3:
+                    break
+
+        # If date is selected, date-matched rows should appear first.
         if fueling_date:
-            filters.append(FuelExpense.fueling_date == fueling_date)
-        pump_or_date_rows = [
-            _fmt_row(r) for r in any_price_q.filter(or_(*filters)).order_by(
+            date_rows = any_price_q.filter(
+                FuelExpense.fueling_date == fueling_date
+            ).order_by(FuelExpense.id.desc()).limit(3).all()
+            _append_rows(date_rows)
+
+        # Fill remaining slots from selected pump history when available.
+        if fuel_pump_id and len(picked_rows) < 3:
+            pump_rows = any_price_q.filter(
+                or_(FuelExpense.workspace_pump_id == fuel_pump_id, FuelExpense.fuel_pump_id == fuel_pump_id)
+            ).order_by(
                 FuelExpense.fueling_date.desc(),
                 FuelExpense.id.desc(),
-            ).limit(3).all()
-        ]
+            ).limit(10).all()
+            _append_rows(pump_rows)
+
+        pump_or_date_rows = [_fmt_row(r) for r in picked_rows[:3]]
 
     if normalized not in ('Diesel', 'Super'):
         return jsonify({'pump_or_date': pump_or_date_rows, 'selected_pump': [], 'all_pumps': [], 'date_snapshot': []})
