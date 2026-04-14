@@ -857,6 +857,7 @@ class OilExpense(db.Model):
     vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False)
     expense_date = db.Column(db.Date, nullable=False)
     card_swipe_date = db.Column(db.Date, nullable=True)
+    payment_type = db.Column(db.String(20), nullable=True)  # Cash | Credit
     previous_reading = db.Column(db.Numeric(12, 2), nullable=True)
     current_reading = db.Column(db.Numeric(12, 2), nullable=True)
     km = db.Column(db.Numeric(12, 2), nullable=True)  # current - previous
