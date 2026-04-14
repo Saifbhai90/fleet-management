@@ -498,6 +498,20 @@
             <div class="alert alert-light border small">
               <div class="fw-semibold mb-1"><i class="bi bi-grid-3x3-gap me-1"></i>Per Form Freeze Matrix</div>
               <div class="text-muted mb-2">Tick = freeze apply (block). Untick = freeze bypass (allow access).</div>
+              <div class="row g-2 mb-2">
+                <div class="col-md-8 col-lg-6">
+                  <input
+                    type="text"
+                    id="freezeMatrixSearch"
+                    class="form-control form-control-sm"
+                    placeholder="Search forms (real-time, multi-word) e.g. expense delete"
+                    autocomplete="off"
+                  >
+                </div>
+                <div class="col-md-4 col-lg-6 d-flex align-items-center">
+                  <span id="freezeMatrixSearchMeta" class="text-muted small">Showing all forms</span>
+                </div>
+              </div>
               <div class="table-responsive">
                 <table class="table table-sm table-bordered align-middle mb-0">
                   <thead class="table-light">
@@ -509,9 +523,9 @@
                       <th style="width: 28%;">Other</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody id="freezeMatrixBody">
                     {% for row in freeze_matrix_rows %}
-                    <tr>
+                    <tr data-freeze-row="1">
                       <td class="fw-semibold">{{ row.label }}</td>
                       <td class="text-center">
                         {% if row.add %}
@@ -548,6 +562,9 @@
                       </td>
                     </tr>
                     {% endfor %}
+                    <tr id="freezeMatrixNoResults" class="d-none">
+                      <td colspan="5" class="text-center text-muted py-2">No form matched your search.</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -723,6 +740,43 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   scopeSel.addEventListener('change', toggleFields);
   toggleFields();
+
+  const freezeMatrixSearch = document.getElementById('freezeMatrixSearch');
+  const freezeMatrixBody = document.getElementById('freezeMatrixBody');
+  const freezeMatrixNoResults = document.getElementById('freezeMatrixNoResults');
+  const freezeMatrixSearchMeta = document.getElementById('freezeMatrixSearchMeta');
+
+  function normalizeSearchText(v) {
+    return String(v || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function filterFreezeMatrix() {
+    if (!freezeMatrixSearch || !freezeMatrixBody) return;
+    const query = normalizeSearchText(freezeMatrixSearch.value);
+    const terms = query ? query.split(' ').filter(Boolean) : [];
+    const rows = freezeMatrixBody.querySelectorAll('tr[data-freeze-row="1"]');
+    let visible = 0;
+    rows.forEach(function(row) {
+      const hay = normalizeSearchText(row.innerText || row.textContent || '');
+      const matched = !terms.length || terms.every(function(t) { return hay.indexOf(t) !== -1; });
+      row.classList.toggle('d-none', !matched);
+      if (matched) visible += 1;
+    });
+    if (freezeMatrixNoResults) {
+      freezeMatrixNoResults.classList.toggle('d-none', visible > 0);
+    }
+    if (freezeMatrixSearchMeta) {
+      freezeMatrixSearchMeta.textContent = terms.length
+        ? ('Showing ' + visible + ' matched form(s)')
+        : 'Showing all forms';
+    }
+  }
+
+  if (freezeMatrixSearch) {
+    freezeMatrixSearch.addEventListener('input', filterFreezeMatrix);
+    freezeMatrixSearch.addEventListener('search', filterFreezeMatrix);
+    filterFreezeMatrix();
+  }
 });
 </script>
 {% endblock %}
