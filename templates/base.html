@@ -2152,26 +2152,6 @@
             </div>
         {% endif %}
     {% endwith %}
-    {% if freeze_data_status and freeze_data_status.is_effective %}
-      <div class="container-fluid pt-2">
-        <div class="alert alert-warning border-0 shadow-sm d-flex align-items-center justify-content-between mb-2">
-          <div>
-            <i class="bi bi-shield-lock-fill me-1"></i>
-            <strong>Data Freeze Active:</strong>
-            {% if freeze_data_status.future_lock_active %}
-              Future-date entries are blocked.
-              {% if freeze_data_status.before_display or freeze_data_status.after_display %}|{% endif %}
-            {% endif %}
-            {% if freeze_data_status.before_display %}On/Before <strong>{{ freeze_data_status.before_display }}</strong>{% endif %}
-            {% if freeze_data_status.before_display and freeze_data_status.after_display %} and {% endif %}
-            {% if freeze_data_status.after_display %}On/After <strong>{{ freeze_data_status.after_display }}</strong>{% endif %}
-            {% if freeze_data_status.before_display or freeze_data_status.after_display %}dates are blocked for add/edit.{% endif %}
-            {% if freeze_data_status.reason %}<span class="ms-1">Reason: {{ freeze_data_status.reason }}</span>{% endif %}
-          </div>
-          <a class="btn btn-sm btn-outline-dark" href="{{ url_for('form_control', settings_tab='freeze') }}">Review</a>
-        </div>
-      </div>
-    {% endif %}
     <style>
     /* ── AJAX Live-Search ─────────────────────────────────────────── */
 
