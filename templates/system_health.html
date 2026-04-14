@@ -117,6 +117,28 @@
 }
 .auto-refresh-toggle.active .dot { background:#10b981; }
 .auto-refresh-toggle:not(.active) .dot { background:#94a3b8; }
+.diag-pill {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:4px 10px; border-radius:999px; font-size:0.72rem; font-weight:700;
+}
+.diag-pill-danger { background:#fee2e2; color:#b91c1c; }
+.diag-pill-warning { background:#fef3c7; color:#92400e; }
+.diag-pill-success { background:#dcfce7; color:#166534; }
+.diag-pill-info { background:#e0f2fe; color:#0369a1; }
+.diag-analysis-item {
+    border:1px solid #e5e7eb; border-radius:10px; padding:8px 10px; margin-bottom:8px; font-size:0.8rem;
+}
+.diag-analysis-item:last-child { margin-bottom:0; }
+.diag-analysis-item.danger { border-color:#fecaca; background:#fef2f2; color:#b91c1c; }
+.diag-analysis-item.warning { border-color:#fde68a; background:#fffbeb; color:#92400e; }
+.diag-analysis-item.success { border-color:#86efac; background:#f0fdf4; color:#166534; }
+.diag-analysis-item.info { border-color:#bae6fd; background:#f0f9ff; color:#075985; }
+.diag-mini-table { width:100%; border-collapse:collapse; font-size:0.76rem; }
+.diag-mini-table th, .diag-mini-table td { border:1px solid #e5e7eb; padding:5px 7px; white-space:nowrap; }
+.diag-mini-table thead th { background:#f8fafc; color:#475569; position:sticky; top:0; z-index:1; }
+.diag-mini-wrap { max-height:240px; overflow:auto; border:1px solid #e5e7eb; border-radius:10px; background:#fff; }
+.diag-text-danger { color:#b91c1c !important; font-weight:700; }
+.diag-text-warning { color:#92400e !important; font-weight:700; }
 </style>
 {% endblock %}
 
@@ -185,6 +207,21 @@
     </div>
 </div>
 
+<ul class="nav nav-tabs mb-3" id="shTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="sh-overview-tab" data-bs-toggle="tab" data-bs-target="#sh-overview-panel" type="button" role="tab" aria-controls="sh-overview-panel" aria-selected="true">
+            <i class="bi bi-grid-1x2-fill me-1"></i>Overview
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="sh-diagnostics-tab" data-bs-toggle="tab" data-bs-target="#sh-diagnostics-panel" type="button" role="tab" aria-controls="sh-diagnostics-panel" aria-selected="false">
+            <i class="bi bi-activity me-1"></i>Diagnostics & Analysis
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+<div class="tab-pane fade show active" id="sh-overview-panel" role="tabpanel" aria-labelledby="sh-overview-tab">
 {# ═════════════════════════════════════════
    ROW 1 — 8 KPI cards (added RAM + FCM)
 ═════════════════════════════════════════ #}
@@ -703,6 +740,116 @@
 
 </div>
 
+<div class="tab-pane fade" id="sh-diagnostics-panel" role="tabpanel" aria-labelledby="sh-diagnostics-tab">
+    {% set diag = data.diagnostics or {} %}
+    <div class="row g-2 mb-2">
+        <div class="col-lg-4">
+            <div class="sh-card sh-card-info">
+                <div class="lbl mb-2"><i class="bi bi-wifi me-1"></i>Client Network (Live)</div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i id="diagNetSignalIcon" class="bi bi-reception-3 fs-5 text-success"></i>
+                    <span id="diagNetSpeed" class="val-md" style="font-size:1.2rem;">-- Mbps</span>
+                </div>
+                <div class="sub" id="diagNetMeta">Measuring...</div>
+                <div class="sub mt-1" id="diagNetRtt">RTT: -- ms</div>
+                <div class="sub mt-1" style="font-size:0.68rem;color:#94a3b8;">Signal color/strength helps confirm network-side issues.</div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="sh-card {% if (diag.error_count or 0) > 0 %}sh-card-danger{% elif (diag.p95_ms or 0) >= 900 %}sh-card-warning{% else %}sh-card-success{% endif %}">
+                <div class="lbl mb-2"><i class="bi bi-cpu me-1"></i>Software Runtime Snapshot</div>
+                <div class="d-flex gap-2 flex-wrap mb-2">
+                    <span class="diag-pill {% if (diag.error_count or 0) > 0 %}diag-pill-danger{% else %}diag-pill-success{% endif %}">
+                        5xx Errors: <strong id="diagErrCount">{{ diag.error_count or 0 }}</strong>
+                    </span>
+                    <span class="diag-pill {% if (diag.p95_ms or 0) >= 1800 %}diag-pill-danger{% elif (diag.p95_ms or 0) >= 900 %}diag-pill-warning{% else %}diag-pill-success{% endif %}">
+                        P95: <strong id="diagP95">{{ diag.p95_ms if diag.p95_ms is not none else '-' }}</strong> ms
+                    </span>
+                </div>
+                <div class="sub">Window: last <strong>{{ diag.window_minutes or 15 }}</strong> min</div>
+                <div class="sub">Samples: <strong id="diagReqCount">{{ diag.request_count or 0 }}</strong></div>
+                <div class="sub">Avg response: <strong id="diagAvgMs">{{ diag.avg_ms if diag.avg_ms is not none else '-' }}</strong> ms</div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="sh-card sh-card-amber">
+                <div class="lbl mb-2"><i class="bi bi-chat-left-text me-1"></i>Auto Analysis Report</div>
+                <div id="diagAnalysisWrap">
+                    {% for item in diag.analysis or [] %}
+                    <div class="diag-analysis-item {{ item.level }}">
+                        <i class="bi {% if item.level == 'danger' %}bi-exclamation-triangle-fill{% elif item.level == 'warning' %}bi-exclamation-circle-fill{% elif item.level == 'success' %}bi-check-circle-fill{% else %}bi-info-circle-fill{% endif %} me-1"></i>
+                        {{ item.text }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-2">
+        <div class="col-lg-8">
+            <div class="sh-card">
+                <div class="lbl mb-2"><i class="bi bi-signpost-split me-1"></i>Top Slow Routes (Software side)</div>
+                <div class="diag-mini-wrap">
+                    <table class="diag-mini-table">
+                        <thead>
+                            <tr>
+                                <th>Route</th>
+                                <th>Hits</th>
+                                <th>Avg ms</th>
+                                <th>P95 ms</th>
+                                <th>Max ms</th>
+                                <th>Errors</th>
+                            </tr>
+                        </thead>
+                        <tbody id="diagSlowRoutesBody">
+                            {% for r in diag.top_slow_routes or [] %}
+                            <tr>
+                                <td title="{{ r.path or r.route }}">{{ r.route }}</td>
+                                <td>{{ r.hits }}</td>
+                                <td class="{% if r.avg_ms >= 1200 %}diag-text-danger{% elif r.avg_ms >= 700 %}diag-text-warning{% endif %}">{{ r.avg_ms }}</td>
+                                <td class="{% if r.p95_ms >= 1800 %}diag-text-danger{% elif r.p95_ms >= 900 %}diag-text-warning{% endif %}">{{ r.p95_ms }}</td>
+                                <td>{{ r.max_ms }}</td>
+                                <td class="{% if r.error_count > 0 %}diag-text-danger{% endif %}">{{ r.error_count }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="sh-card sh-card-danger">
+                <div class="lbl mb-2"><i class="bi bi-bug-fill me-1"></i>Recent Server Errors</div>
+                <div class="diag-mini-wrap">
+                    <table class="diag-mini-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Status</th>
+                                <th>Route</th>
+                                <th>ms</th>
+                            </tr>
+                        </thead>
+                        <tbody id="diagRecentErrorsBody">
+                            {% for e in diag.recent_errors or [] %}
+                            <tr>
+                                <td>{{ e.time }}</td>
+                                <td class="diag-text-danger">{{ e.status }}</td>
+                                <td title="{{ e.route }}">{{ e.route }}</td>
+                                <td>{{ e.ms }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+</div>
+
 {# ═════════════════════════════════════════
    Auto-Refresh JS + Sparkline Rendering
 ═════════════════════════════════════════ #}
@@ -867,6 +1014,131 @@
 
     _startTimer();
     setInterval(_updateAgoLabel, 5000);
+})();
+</script>
+<script>
+(function() {
+    function _escHtml(v) {
+        return String(v || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function _renderDiagRows(diag) {
+        var slowBody = document.getElementById('diagSlowRoutesBody');
+        var errBody = document.getElementById('diagRecentErrorsBody');
+        var anaWrap = document.getElementById('diagAnalysisWrap');
+        var reqCount = document.getElementById('diagReqCount');
+        var avgMs = document.getElementById('diagAvgMs');
+        var p95 = document.getElementById('diagP95');
+        var errCount = document.getElementById('diagErrCount');
+        if (!diag) return;
+        if (reqCount) reqCount.textContent = diag.request_count != null ? diag.request_count : 0;
+        if (avgMs) avgMs.textContent = diag.avg_ms != null ? diag.avg_ms : '-';
+        if (p95) p95.textContent = diag.p95_ms != null ? diag.p95_ms : '-';
+        if (errCount) errCount.textContent = diag.error_count != null ? diag.error_count : 0;
+
+        if (slowBody) {
+            var slow = diag.top_slow_routes || [];
+            slowBody.innerHTML = slow.map(function(r) {
+                var avgCls = r.avg_ms >= 1200 ? 'diag-text-danger' : (r.avg_ms >= 700 ? 'diag-text-warning' : '');
+                var p95Cls = r.p95_ms >= 1800 ? 'diag-text-danger' : (r.p95_ms >= 900 ? 'diag-text-warning' : '');
+                var errCls = r.error_count > 0 ? 'diag-text-danger' : '';
+                return '<tr>' +
+                    '<td title="' + _escHtml(r.path || r.route) + '">' + _escHtml(r.route) + '</td>' +
+                    '<td>' + _escHtml(r.hits) + '</td>' +
+                    '<td class="' + avgCls + '">' + _escHtml(r.avg_ms) + '</td>' +
+                    '<td class="' + p95Cls + '">' + _escHtml(r.p95_ms) + '</td>' +
+                    '<td>' + _escHtml(r.max_ms) + '</td>' +
+                    '<td class="' + errCls + '">' + _escHtml(r.error_count) + '</td>' +
+                '</tr>';
+            }).join('') || '<tr><td colspan="6" class="text-muted">No route timing sample yet.</td></tr>';
+        }
+
+        if (errBody) {
+            var errs = diag.recent_errors || [];
+            errBody.innerHTML = errs.map(function(e) {
+                return '<tr>' +
+                    '<td>' + _escHtml(e.time) + '</td>' +
+                    '<td class="diag-text-danger">' + _escHtml(e.status) + '</td>' +
+                    '<td title="' + _escHtml(e.route) + '">' + _escHtml(e.route) + '</td>' +
+                    '<td>' + _escHtml(e.ms) + '</td>' +
+                '</tr>';
+            }).join('') || '<tr><td colspan="4" class="text-muted">No recent 5xx errors.</td></tr>';
+        }
+
+        if (anaWrap) {
+            var analysis = diag.analysis || [];
+            anaWrap.innerHTML = analysis.map(function(item) {
+                var level = item.level || 'info';
+                var icon = 'bi-info-circle-fill';
+                if (level === 'danger') icon = 'bi-exclamation-triangle-fill';
+                else if (level === 'warning') icon = 'bi-exclamation-circle-fill';
+                else if (level === 'success') icon = 'bi-check-circle-fill';
+                return '<div class="diag-analysis-item ' + _escHtml(level) + '">' +
+                    '<i class="bi ' + icon + ' me-1"></i>' + _escHtml(item.text) +
+                '</div>';
+            }).join('') || '<div class="diag-analysis-item info">No analysis available.</div>';
+        }
+    }
+
+    function _refreshDiagnostics() {
+        fetch('{{ url_for("system_health_diagnostics_api") }}')
+            .then(function(r) { return r.json(); })
+            .then(function(d) { _renderDiagRows(d); })
+            .catch(function() {});
+    }
+
+    function _netSignalLevel(speedMbps, rtt) {
+        if (speedMbps >= 6 && rtt <= 120) return 4;
+        if (speedMbps >= 3 && rtt <= 220) return 3;
+        if (speedMbps >= 1 && rtt <= 450) return 2;
+        if (speedMbps > 0) return 1;
+        return 0;
+    }
+
+    function _setNetUi(mbps, rtt, meta) {
+        var icon = document.getElementById('diagNetSignalIcon');
+        var speed = document.getElementById('diagNetSpeed');
+        var rttEl = document.getElementById('diagNetRtt');
+        var metaEl = document.getElementById('diagNetMeta');
+        var level = _netSignalLevel(mbps, rtt);
+        if (icon) {
+            icon.className = 'bi bi-reception-' + level + ' fs-5';
+            if (level >= 3) icon.classList.add('text-success');
+            else if (level === 2) icon.classList.add('text-warning');
+            else icon.classList.add('text-danger');
+        }
+        if (speed) speed.textContent = (isFinite(mbps) ? mbps.toFixed(2) : '--') + ' Mbps';
+        if (rttEl) rttEl.textContent = 'RTT: ' + (isFinite(rtt) ? Math.round(rtt) : '--') + ' ms';
+        if (metaEl) metaEl.textContent = meta || 'Live network quality sample.';
+    }
+
+    function _refreshNetworkSample() {
+        var t0 = performance.now();
+        fetch('/network-probe?kb=32&t=' + Date.now(), { cache: 'no-store' })
+            .then(function(r) { return r.text(); })
+            .then(function(txt) {
+                var elapsedSec = Math.max((performance.now() - t0) / 1000, 0.001);
+                var bytes = (txt || '').length;
+                var mbps = (bytes * 8) / (elapsedSec * 1000 * 1000);
+                var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                var rtt = conn && conn.rtt ? conn.rtt : ((performance.now() - t0));
+                var meta = conn ? ((conn.effectiveType || 'unknown') + ' · downlink ' + (conn.downlink || '?') + ' Mbps') : 'Browser network API limited';
+                _setNetUi(mbps, rtt, meta);
+            })
+            .catch(function() {
+                _setNetUi(0, 999, 'Probe failed. Check network or CDN path.');
+            });
+    }
+
+    _refreshDiagnostics();
+    _refreshNetworkSample();
+    setInterval(_refreshDiagnostics, 60000);
+    setInterval(_refreshNetworkSample, 12000);
 })();
 </script>
 {% endblock %}

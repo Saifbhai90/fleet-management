@@ -21771,6 +21771,7 @@ _HEALTH_CACHE_TTL  = 900
 _api_latency_ms    = _sh_coll.deque(maxlen=100)
 _latency_history   = _sh_coll.deque(maxlen=24)
 _session_history   = _sh_coll.deque(maxlen=24)
+_route_perf_log    = _sh_coll.deque(maxlen=2500)
 _last_backup_ts    = {'ts': None}
 _health_alert_sent = {'db': False, 'r2': False}
 _app_start_time    = _sh_time.time()
@@ -21789,6 +21790,18 @@ def _sh_after_request(response):
         ms = round((_sh_time.time() - g._sh_t0) * 1000, 1)
         if request.path.startswith('/api/'):
             _api_latency_ms.append(ms)
+        try:
+            if not (request.path.startswith('/static/') or request.path.startswith('/assets/')):
+                _route_perf_log.append({
+                    'ts': int(_sh_time.time()),
+                    'method': request.method,
+                    'path': request.path,
+                    'endpoint': request.endpoint or '',
+                    'ms': ms,
+                    'status': int(getattr(response, 'status_code', 0) or 0),
+                })
+        except Exception:
+            pass
     return response
 
 
@@ -21848,6 +21861,101 @@ def _maybe_send_health_alert(data):
             pass
 
 
+def _build_route_diagnostics(window_minutes=15):
+    now_ts = int(_sh_time.time())
+    cutoff = now_ts - (int(window_minutes) * 60)
+    recent = [x for x in list(_route_perf_log) if int(x.get('ts', 0)) >= cutoff]
+    route_buckets = {}
+    for row in recent:
+        key = row.get('endpoint') or row.get('path') or 'unknown'
+        b = route_buckets.setdefault(key, {'times': [], 'errors': 0, 'path': row.get('path') or ''})
+        t = float(row.get('ms') or 0)
+        if t > 0:
+            b['times'].append(t)
+        st = int(row.get('status') or 0)
+        if st >= 500:
+            b['errors'] += 1
+
+    top_slow = []
+    for route_key, b in route_buckets.items():
+        times = sorted(b['times'])
+        if not times:
+            continue
+        hits = len(times)
+        avg = round(sum(times) / hits, 1)
+        p95 = round(times[max(0, int(hits * 0.95) - 1)], 1)
+        mx = round(times[-1], 1)
+        top_slow.append({
+            'route': route_key,
+            'path': b['path'],
+            'hits': hits,
+            'avg_ms': avg,
+            'p95_ms': p95,
+            'max_ms': mx,
+            'error_count': int(b['errors']),
+        })
+    top_slow.sort(key=lambda x: (x['p95_ms'], x['avg_ms']), reverse=True)
+    top_slow = top_slow[:8]
+
+    recent_errors = []
+    for row in sorted(recent, key=lambda x: x.get('ts', 0), reverse=True):
+        st = int(row.get('status') or 0)
+        if st < 500:
+            continue
+        recent_errors.append({
+            'time': datetime.utcfromtimestamp(int(row.get('ts', now_ts))).strftime('%H:%M:%S'),
+            'route': row.get('endpoint') or row.get('path') or 'unknown',
+            'status': st,
+            'ms': round(float(row.get('ms') or 0), 1),
+        })
+        if len(recent_errors) >= 8:
+            break
+
+    overall_times = sorted([float(r.get('ms') or 0) for r in recent if float(r.get('ms') or 0) > 0])
+    req_count = len(overall_times)
+    avg_ms = round(sum(overall_times) / req_count, 1) if req_count else None
+    p95_ms = round(overall_times[max(0, int(req_count * 0.95) - 1)], 1) if req_count else None
+    err_count = sum(1 for r in recent if int(r.get('status') or 0) >= 500)
+
+    analysis = []
+    if err_count > 0:
+        analysis.append({
+            'level': 'danger',
+            'text': f'Found {err_count} server error response(s) in the last {window_minutes} minutes.',
+        })
+    if p95_ms is not None and p95_ms >= 1800:
+        analysis.append({
+            'level': 'danger',
+            'text': f'High backend response time detected (p95 {p95_ms} ms). Software/database slowdown likely.',
+        })
+    elif p95_ms is not None and p95_ms >= 900:
+        analysis.append({
+            'level': 'warning',
+            'text': f'Moderate slowdown detected (p95 {p95_ms} ms). Check heavy routes below.',
+        })
+    if req_count < 20:
+        analysis.append({
+            'level': 'info',
+            'text': f'Low sample volume in the last {window_minutes} minutes. Trigger normal user actions for stronger diagnosis.',
+        })
+    if not analysis:
+        analysis.append({
+            'level': 'success',
+            'text': 'No major software bottleneck detected in recent server timings.',
+        })
+
+    return {
+        'window_minutes': int(window_minutes),
+        'request_count': req_count,
+        'avg_ms': avg_ms,
+        'p95_ms': p95_ms,
+        'error_count': err_count,
+        'top_slow_routes': top_slow,
+        'recent_errors': recent_errors,
+        'analysis': analysis,
+    }
+
+
 def _build_health_data():
     """Fetch live infrastructure metrics from Render API, PostgreSQL, R2, and internal sources."""
     import json
@@ -21895,6 +22003,7 @@ def _build_health_data():
         'backup_schedule_enabled': app.config.get('BACKUP_SCHEDULE_ENABLED', False),
         'backup_schedule_time':    app.config.get('BACKUP_SCHEDULE_TIME', '02:00'),
         'backup_email_to':         app.config.get('BACKUP_EMAIL_TO', ''),
+        'diagnostics':             {},
     }
 
     render_key = os.environ.get('RENDER_API_KEY', '').strip()
@@ -22119,6 +22228,21 @@ def _build_health_data():
     result['r2_critical']  = bool(result['r2_pct'] is not None and result['r2_pct'] >= 80)
     result['any_critical'] = result['db_critical'] or result['r2_critical']
 
+    # 13. Software diagnostics from route-level timings
+    try:
+        result['diagnostics'] = _build_route_diagnostics(window_minutes=15)
+    except Exception as e:
+        result['diagnostics'] = {
+            'window_minutes': 15,
+            'request_count': 0,
+            'avg_ms': None,
+            'p95_ms': None,
+            'error_count': 0,
+            'top_slow_routes': [],
+            'recent_errors': [],
+            'analysis': [{'level': 'danger', 'text': f'Diagnostics engine error: {str(e)[:120]}'}],
+        }
+
     _maybe_send_health_alert(result)
     return result
 
@@ -22156,6 +22280,26 @@ def system_health_api():
         return jsonify({'error': 'Forbidden'}), 403
     data = _fetch_system_health(force=False)
     return jsonify(data)
+
+
+@app.route('/admin/system-health/diagnostics/api')
+def system_health_diagnostics_api():
+    """Diagnostics-only JSON payload for live tab refresh."""
+    if not session.get('is_master'):
+        return jsonify({'error': 'Forbidden'}), 403
+    return jsonify(_build_route_diagnostics(window_minutes=15))
+
+
+@app.route('/network-probe')
+def network_probe():
+    """Small payload endpoint used by frontend to estimate network speed."""
+    kb = request.args.get('kb', type=int) or 32
+    kb = max(8, min(kb, 256))
+    payload = ('x' * 1024) * kb
+    resp = make_response(payload)
+    resp.headers['Content-Type'] = 'text/plain; charset=utf-8'
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return resp
 
 
 @app.route('/health')

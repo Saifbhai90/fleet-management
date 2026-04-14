@@ -1480,6 +1480,10 @@
 
     <div class="ms-auto d-flex align-items-center text-white flex-shrink-0">
         <div class="me-2 me-md-4 d-none d-md-block" id="liveDateTime" style="font-size: 0.9rem; color: #cbd5e1;"></div>
+        <div class="me-2 d-none d-md-flex align-items-center" id="liveNetworkHealth" style="font-size:0.8rem;color:#cbd5e1;gap:6px;min-width:142px;">
+            <i id="liveNetworkSignalIcon" class="bi bi-reception-3 text-success" style="font-size:0.95rem;"></i>
+            <span id="liveNetworkSpeedText">-- Mbps</span>
+        </div>
 
         <!-- Command palette trigger (Ctrl+K) -->
         <button id="cmdPaletteBtn" class="btn btn-link text-light p-2 me-1"
@@ -3966,6 +3970,55 @@
     }
     setInterval(updateDateTime, 1000);
     updateDateTime();
+
+    // Live network quality (speed + signal bars)
+    (function() {
+        var _netTimer = null;
+        function _signalLevel(mbps, rttMs) {
+            if (mbps >= 6 && rttMs <= 120) return 4;
+            if (mbps >= 3 && rttMs <= 220) return 3;
+            if (mbps >= 1 && rttMs <= 450) return 2;
+            if (mbps > 0) return 1;
+            return 0;
+        }
+        function _updateNetUI(mbps, rttMs) {
+            var icon = document.getElementById('liveNetworkSignalIcon');
+            var speedEl = document.getElementById('liveNetworkSpeedText');
+            var level = _signalLevel(mbps, rttMs);
+            if (icon) {
+                icon.className = 'bi bi-reception-' + level;
+                icon.classList.add(level >= 3 ? 'text-success' : (level === 2 ? 'text-warning' : 'text-danger'));
+            }
+            if (speedEl) {
+                var rttLabel = isFinite(rttMs) ? (' · ' + Math.round(rttMs) + 'ms') : '';
+                speedEl.textContent = (isFinite(mbps) ? mbps.toFixed(2) : '--') + ' Mbps' + rttLabel;
+            }
+        }
+        function _sampleNetwork() {
+            var start = performance.now();
+            fetch('/network-probe?kb=24&t=' + Date.now(), { cache: 'no-store' })
+                .then(function(r) { return r.text(); })
+                .then(function(txt) {
+                    var elapsedSec = Math.max((performance.now() - start) / 1000, 0.001);
+                    var bytes = (txt || '').length;
+                    var mbps = (bytes * 8) / (elapsedSec * 1000 * 1000);
+                    var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                    var rtt = (conn && conn.rtt) ? conn.rtt : (performance.now() - start);
+                    _updateNetUI(mbps, rtt);
+                })
+                .catch(function() {
+                    _updateNetUI(0, 999);
+                });
+        }
+        function _startNetworkTicker() {
+            if (!document.getElementById('liveNetworkHealth')) return;
+            _sampleNetwork();
+            if (_netTimer) clearInterval(_netTimer);
+            _netTimer = setInterval(_sampleNetwork, 12000);
+        }
+        document.addEventListener('DOMContentLoaded', _startNetworkTicker);
+        if (document.readyState !== 'loading') _startNetworkTicker();
+    })();
 
     // Auto-close Alerts (sirf flash-message ke andar wale alerts)
     setTimeout(function() {
