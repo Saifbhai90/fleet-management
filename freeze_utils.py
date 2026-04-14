@@ -124,12 +124,13 @@ FREEZE_FORM_CATALOG = [
     ('Payroll - Payroll Finalize', 'payroll_finalize'),
     ('Payroll - Payroll Pay', 'payroll_pay'),
     ('Payroll - Driver Bulk Salary', 'payroll_driver_bulk_salary'),
-    ('Expenses - Fuel Add', 'fuel_expense_new'),
+    ('Expenses - Fuel Add', 'fuel_expense_add'),
     ('Expenses - Fuel Edit', 'fuel_expense_edit'),
-    ('Expenses - Oil Add', 'oil_expense_new'),
-    ('Expenses - Oil Edit', 'oil_expense_edit'),
-    ('Expenses - Maintenance Add', 'maintenance_expense_new'),
-    ('Expenses - Maintenance Edit', 'maintenance_expense_edit'),
+    ('Expenses - Fuel Delete', 'fuel_expense_delete'),
+    ('Expenses - Oil Add/Edit', 'oil_expense_form'),
+    ('Expenses - Oil Delete', 'oil_expense_delete'),
+    ('Expenses - Maintenance Add/Edit', 'maintenance_expense_form'),
+    ('Expenses - Maintenance Delete', 'maintenance_expense_delete'),
     ('Books - Stock Entry', 'book_stock_entry'),
     ('Books - Stock Edit', 'book_stock_edit'),
     ('Books - Book Issue', 'book_issue'),
@@ -147,6 +148,16 @@ FREEZE_FORM_CATALOG = [
     ('Workspace - Transfer Edit', 'workspace_fund_transfer_edit'),
     ('Workspace - Month Close', 'workspace_month_close'),
 ]
+
+# Legacy endpoint codes used in older freeze settings. Keep a compatibility map
+# so previously saved checkbox selections continue to work after endpoint cleanup.
+FREEZE_ENDPOINT_ALIASES = {
+    'fuel_expense_new': 'fuel_expense_add',
+    'oil_expense_new': 'oil_expense_form',
+    'oil_expense_edit': 'oil_expense_form',
+    'maintenance_expense_new': 'maintenance_expense_form',
+    'maintenance_expense_edit': 'maintenance_expense_form',
+}
 
 
 def _to_bool(v) -> bool:
@@ -180,7 +191,8 @@ def get_freeze_config() -> dict:
     reason = (SystemSetting.get('freeze_data_reason', '') or '').strip()
     updated_by = (SystemSetting.get('freeze_data_updated_by', '') or '').strip()
     updated_at = (SystemSetting.get('freeze_data_updated_at', '') or '').strip()
-    allowed_endpoints = _parse_csv_set(SystemSetting.get('freeze_data_allowed_endpoints', ''))
+    raw_allowed = _parse_csv_set(SystemSetting.get('freeze_data_allowed_endpoints', ''))
+    allowed_endpoints = {FREEZE_ENDPOINT_ALIASES.get(ep, ep) for ep in raw_allowed}
     catalog_endpoints = {ep for _, ep in FREEZE_FORM_CATALOG}
     effective_allowed = {ep for ep in allowed_endpoints if ep in catalog_endpoints}
     return {
@@ -208,7 +220,8 @@ def save_freeze_config(*, enabled: bool, before_date: date, after_date: date, al
     SystemSetting.set('freeze_data_before_date', before_date.isoformat() if before_date else '')
     SystemSetting.set('freeze_data_after_date', after_date.isoformat() if after_date else '')
     SystemSetting.set('freeze_data_reason', (reason or '').strip())
-    SystemSetting.set('freeze_data_allowed_endpoints', _set_to_csv(set(allowed_endpoints or set())))
+    normalized_allowed = {FREEZE_ENDPOINT_ALIASES.get(ep, ep) for ep in set(allowed_endpoints or set())}
+    SystemSetting.set('freeze_data_allowed_endpoints', _set_to_csv(normalized_allowed))
     SystemSetting.set('freeze_data_updated_by', (updated_by or '').strip())
     SystemSetting.set('freeze_data_updated_at', (updated_at or '').strip())
 
