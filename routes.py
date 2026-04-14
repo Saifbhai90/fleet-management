@@ -18857,6 +18857,7 @@ def oil_expense_form(pk=None):
     elif request.method == 'GET':
         if default_district_id:
             form.district_id.data = default_district_id
+        form.payment_type.data = ''
         if not form.expense_date.data:
             form.expense_date.data = pk_date()
 
@@ -19550,7 +19551,7 @@ def maintenance_expense_form(pk=None):
         else (f"{float(rec.total_bill_amount):.2f}" if rec and rec.total_bill_amount is not None else '')
     )
     party_error = ''
-    selected_payment_type = (request.form.get('payment_type') or (getattr(rec, 'payment_type', None) if rec else '') or 'Cash').strip()
+    selected_payment_type = (request.form.get('payment_type') or (getattr(rec, 'payment_type', None) if rec else '') or '').strip()
     selected_party_id = (request.form.get('workspace_party_id') or (str(getattr(rec, 'workspace_party_id', '') or '') if rec else '')).strip()
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
     products_for_maintenance = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
@@ -19579,6 +19580,7 @@ def maintenance_expense_form(pk=None):
     elif request.method == 'GET':
         if default_district_id:
             form.district_id.data = default_district_id
+        selected_payment_type = ''
         if not form.expense_date.data:
             form.expense_date.data = pk_date()
 
@@ -19630,9 +19632,24 @@ def maintenance_expense_form(pk=None):
         km_reading = None
         if prev_reading is not None and curr_reading is not None:
             km_reading = float(curr_reading) - float(prev_reading)
-        payment_type = (request.form.get('payment_type') or 'Cash').strip()
+        payment_type = (request.form.get('payment_type') or '').strip()
         if payment_type not in ('Cash', 'Credit'):
-            payment_type = 'Cash'
+            flash('Payment Type select karna zaroori hai.', 'danger')
+            return render_template(
+                'maintenance_expense_form.html',
+                form=form,
+                rec=rec,
+                title='Edit Maintenance' if rec else 'Add Maintenance',
+                products_for_maintenance=products_for_maintenance,
+                job_categories=job_categories,
+                total_bill_error=total_bill_error,
+                entered_total_bill=entered_total_bill,
+                party_error=party_error,
+                selected_payment_type=selected_payment_type,
+                selected_party_id=selected_party_id,
+                workspace_parties=workspace_parties,
+                maintenance_direct_r2=maintenance_direct_r2,
+            )
         selected_payment_type = payment_type
         workspace_party_id_raw = (request.form.get('workspace_party_id') or '').strip()
         workspace_party_id = int(workspace_party_id_raw) if workspace_party_id_raw.isdigit() else None

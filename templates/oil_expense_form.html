@@ -814,8 +814,9 @@ document.addEventListener('DOMContentLoaded', function() {
   if (partySelect) {
     partySelect.addEventListener('change', function() {
       handleOilExpenseByBehavior(false);
-      if (partyEnterPendingFocus && _tsVal(partySelect)) {
-        _focusCurrentReading();
+      if (_tsVal(partySelect)) {
+        // Keep behavior consistent across Cash/Credit: always continue to Current Reading.
+        window.setTimeout(_focusCurrentReading, 0);
       }
       partyEnterPendingFocus = false;
     });

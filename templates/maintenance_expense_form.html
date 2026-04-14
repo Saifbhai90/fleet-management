@@ -118,6 +118,7 @@
           <div class="col-md-4 field-group">
             <label class="form-label">Payment Type</label>
             <select name="payment_type" id="paymentTypeSelect" class="form-select search-select">
+              <option value="" {% if not selected_payment_type %}selected{% endif %}>-- Select --</option>
               <option value="Cash" {% if selected_payment_type == 'Cash' %}selected{% endif %}>Cash</option>
               <option value="Credit" {% if selected_payment_type == 'Credit' %}selected{% endif %}>Credit</option>
             </select>
@@ -470,13 +471,18 @@ document.addEventListener('DOMContentLoaded', function() {
   function handlePaymentTypeBehavior(forceReset) {
     if (!paymentTypeSelect) return;
     var shouldForce = !!forceReset;
-    var pType = paymentTypeSelect.value || 'Cash';
+    var pType = paymentTypeSelect.value || '';
     var isCash = pType === 'Cash';
+    var isCredit = pType === 'Credit';
     if (partySelect) {
       partySelect.disabled = isCash;
       if (isCash) {
         partySelect.value = '';
         if (partySelect.tomselect) partySelect.tomselect.setValue('', true);
+      } else if (!isCredit && partySelect.tomselect) {
+        partySelect.tomselect.setValue('', true);
+      } else if (!isCredit) {
+        partySelect.value = '';
       }
     }
     if (!expenseBySelect) return;
@@ -486,7 +492,7 @@ document.addEventListener('DOMContentLoaded', function() {
         expenseBySelect.value = cashExpenseByValue;
         if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
       }
-    } else {
+    } else if (isCredit || !pType) {
       if (shouldForce) {
         expenseBySelect.value = '';
         if (expenseBySelect.tomselect) expenseBySelect.tomselect.setValue('', true);
