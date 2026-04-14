@@ -1135,10 +1135,36 @@
             });
     }
 
-    _refreshDiagnostics();
-    _refreshNetworkSample();
-    setInterval(_refreshDiagnostics, 60000);
-    setInterval(_refreshNetworkSample, 12000);
+    var _diagTimer = null;
+    var _netTimer = null;
+    var _diagTabBtn = document.getElementById('sh-diagnostics-tab');
+    var _overviewTabBtn = document.getElementById('sh-overview-tab');
+    var _diagPanel = document.getElementById('sh-diagnostics-panel');
+
+    function _isDiagnosticsActive() {
+        return !!(_diagPanel && _diagPanel.classList.contains('active') && _diagPanel.classList.contains('show'));
+    }
+
+    function _stopDiagPolling() {
+        if (_diagTimer) { clearInterval(_diagTimer); _diagTimer = null; }
+        if (_netTimer) { clearInterval(_netTimer); _netTimer = null; }
+    }
+
+    function _startDiagPolling() {
+        _refreshDiagnostics();
+        _refreshNetworkSample();
+        if (!_diagTimer) _diagTimer = setInterval(_refreshDiagnostics, 60000);
+        if (!_netTimer) _netTimer = setInterval(_refreshNetworkSample, 12000);
+    }
+
+    function _syncDiagPolling() {
+        if (_isDiagnosticsActive()) _startDiagPolling();
+        else _stopDiagPolling();
+    }
+
+    if (_diagTabBtn) _diagTabBtn.addEventListener('shown.bs.tab', _syncDiagPolling);
+    if (_overviewTabBtn) _overviewTabBtn.addEventListener('shown.bs.tab', _syncDiagPolling);
+    _syncDiagPolling();
 })();
 </script>
 {% endblock %}

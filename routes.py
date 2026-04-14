@@ -21880,7 +21880,13 @@ def _sh_after_request(response):
         if request.path.startswith('/api/'):
             _api_latency_ms.append(ms)
         try:
-            if not (request.path.startswith('/static/') or request.path.startswith('/assets/')):
+            skip_perf_path = (
+                request.path.startswith('/static/')
+                or request.path.startswith('/assets/')
+                or request.path.startswith('/admin/system-health')
+                or request.path.startswith('/network-probe')
+            )
+            if not skip_perf_path:
                 _route_perf_log.append({
                     'ts': int(_sh_time.time()),
                     'method': request.method,
@@ -21956,7 +21962,9 @@ def _build_route_diagnostics(window_minutes=15):
     recent = [x for x in list(_route_perf_log) if int(x.get('ts', 0)) >= cutoff]
     route_buckets = {}
     for row in recent:
-        key = row.get('endpoint') or row.get('path') or 'unknown'
+        method = str(row.get('method') or 'GET').upper()
+        endpoint_or_path = row.get('endpoint') or row.get('path') or 'unknown'
+        key = f'{method} {endpoint_or_path}'
         b = route_buckets.setdefault(key, {'times': [], 'errors': 0, 'path': row.get('path') or ''})
         t = float(row.get('ms') or 0)
         if t > 0:
@@ -22027,6 +22035,14 @@ def _build_route_diagnostics(window_minutes=15):
             'level': 'info',
             'text': f'Low sample volume in the last {window_minutes} minutes. Trigger normal user actions for stronger diagnosis.',
         })
+    if top_slow:
+        top_max = max(top_slow, key=lambda x: float(x.get('max_ms') or 0))
+        top_max_ms = float(top_max.get('max_ms') or 0)
+        if top_max_ms >= 2500:
+            analysis.append({
+                'level': 'warning',
+                'text': f'Outlier spike detected on {top_max.get("route")} (max {round(top_max_ms, 1)} ms, hits {top_max.get("hits")}).',
+            })
     if not analysis:
         analysis.append({
             'level': 'success',
