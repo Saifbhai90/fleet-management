@@ -18586,13 +18586,18 @@ def _workspace_products_for_expense_form(employee_id, form_token):
     """
     token = (form_token or '').strip()
     if not employee_id:
-        return Product.query.filter(
+        rows = Product.query.filter(
             db.or_(
                 Product.used_in_forms.is_(None),
                 Product.used_in_forms == '',
                 Product.used_in_forms.like(f'%{token}%'),
             )
         ).order_by(Product.name).all()
+        for p in rows:
+            # Product table may not have default_price; keep template/API access safe.
+            if not hasattr(p, 'default_price'):
+                setattr(p, 'default_price', None)
+        return rows
 
     ws_query = WorkspaceProduct.query.filter(
         WorkspaceProduct.employee_id == employee_id,
@@ -18607,6 +18612,14 @@ def _workspace_products_for_expense_form(employee_id, form_token):
             )
         )
     ws_rows = ws_query.order_by(WorkspaceProduct.name.asc()).all()
+    ws_default_price_by_name = {}
+    for ws in ws_rows:
+        key = (ws.name or '').strip().lower()
+        if not key:
+            continue
+        # Prefer latest non-null configured default price per workspace product name.
+        if key not in ws_default_price_by_name or ws.default_price is not None:
+            ws_default_price_by_name[key] = ws.default_price
 
     mapped = []
     changed = False
@@ -18632,6 +18645,11 @@ def _workspace_products_for_expense_form(employee_id, form_token):
                 existing_tokens.append(token)
                 prod.used_in_forms = ','.join(existing_tokens)
                 changed = True
+        default_price = ws_default_price_by_name.get(name.lower())
+        if not hasattr(prod, 'default_price'):
+            setattr(prod, 'default_price', default_price)
+        else:
+            prod.default_price = default_price
         mapped.append(prod)
 
     if changed:
@@ -18639,6 +18657,9 @@ def _workspace_products_for_expense_form(employee_id, form_token):
     # Keep deterministic ordering and avoid duplicates if names collide by case.
     uniq = {}
     for p in mapped:
+        key = (p.name or '').strip().lower()
+        if not hasattr(p, 'default_price'):
+            setattr(p, 'default_price', ws_default_price_by_name.get(key))
         uniq[p.id] = p
     return sorted(uniq.values(), key=lambda x: (x.name or '').lower())
 
