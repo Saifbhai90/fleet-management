@@ -769,6 +769,7 @@
                 <div class="sub">Window: last <strong>{{ diag.window_minutes or 15 }}</strong> min</div>
                 <div class="sub">Samples: <strong id="diagReqCount">{{ diag.request_count or 0 }}</strong></div>
                 <div class="sub">Avg response: <strong id="diagAvgMs">{{ diag.avg_ms if diag.avg_ms is not none else '-' }}</strong> ms</div>
+                <div class="sub">Slow (>=1000ms): <strong id="diagSlowCount">{{ diag.slow_count or 0 }}</strong> (<strong id="diagSlowRate">{{ diag.slow_rate_pct if diag.slow_rate_pct is not none else 0 }}</strong>%)</div>
             </div>
         </div>
         <div class="col-lg-4">
@@ -799,6 +800,7 @@
                                 <th>Avg ms</th>
                                 <th>P95 ms</th>
                                 <th>Max ms</th>
+                                <th>Avg Payload Size</th>
                                 <th>Errors</th>
                             </tr>
                         </thead>
@@ -810,6 +812,7 @@
                                 <td class="{% if r.avg_ms >= 1200 %}diag-text-danger{% elif r.avg_ms >= 700 %}diag-text-warning{% endif %}">{{ r.avg_ms }}</td>
                                 <td class="{% if r.p95_ms >= 1800 %}diag-text-danger{% elif r.p95_ms >= 900 %}diag-text-warning{% endif %}">{{ r.p95_ms }}</td>
                                 <td>{{ r.max_ms }}</td>
+                                <td class="{% if (r.avg_payload_bytes or 0) >= (1024 * 1024) %}diag-text-warning{% endif %}">{{ r.avg_payload_size or '-' }}</td>
                                 <td class="{% if r.error_count > 0 %}diag-text-danger{% endif %}">{{ r.error_count }}</td>
                             </tr>
                             {% endfor %}
@@ -1035,17 +1038,22 @@
         var avgMs = document.getElementById('diagAvgMs');
         var p95 = document.getElementById('diagP95');
         var errCount = document.getElementById('diagErrCount');
+        var slowCount = document.getElementById('diagSlowCount');
+        var slowRate = document.getElementById('diagSlowRate');
         if (!diag) return;
         if (reqCount) reqCount.textContent = diag.request_count != null ? diag.request_count : 0;
         if (avgMs) avgMs.textContent = diag.avg_ms != null ? diag.avg_ms : '-';
         if (p95) p95.textContent = diag.p95_ms != null ? diag.p95_ms : '-';
         if (errCount) errCount.textContent = diag.error_count != null ? diag.error_count : 0;
+        if (slowCount) slowCount.textContent = diag.slow_count != null ? diag.slow_count : 0;
+        if (slowRate) slowRate.textContent = diag.slow_rate_pct != null ? diag.slow_rate_pct : 0;
 
         if (slowBody) {
             var slow = diag.top_slow_routes || [];
             slowBody.innerHTML = slow.map(function(r) {
                 var avgCls = r.avg_ms >= 1200 ? 'diag-text-danger' : (r.avg_ms >= 700 ? 'diag-text-warning' : '');
                 var p95Cls = r.p95_ms >= 1800 ? 'diag-text-danger' : (r.p95_ms >= 900 ? 'diag-text-warning' : '');
+                var payloadCls = (r.avg_payload_bytes || 0) >= (1024 * 1024) ? 'diag-text-warning' : '';
                 var errCls = r.error_count > 0 ? 'diag-text-danger' : '';
                 return '<tr>' +
                     '<td title="' + _escHtml(r.path || r.route) + '">' + _escHtml(r.route) + '</td>' +
@@ -1053,9 +1061,10 @@
                     '<td class="' + avgCls + '">' + _escHtml(r.avg_ms) + '</td>' +
                     '<td class="' + p95Cls + '">' + _escHtml(r.p95_ms) + '</td>' +
                     '<td>' + _escHtml(r.max_ms) + '</td>' +
+                    '<td class="' + payloadCls + '">' + _escHtml(r.avg_payload_size || '-') + '</td>' +
                     '<td class="' + errCls + '">' + _escHtml(r.error_count) + '</td>' +
                 '</tr>';
-            }).join('') || '<tr><td colspan="6" class="text-muted">No route timing sample yet.</td></tr>';
+            }).join('') || '<tr><td colspan="7" class="text-muted">No route timing sample yet.</td></tr>';
         }
 
         if (errBody) {

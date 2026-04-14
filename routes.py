@@ -21887,6 +21887,14 @@ def _sh_after_request(response):
                 or request.path.startswith('/network-probe')
             )
             if not skip_perf_path:
+                payload_bytes = 0
+                try:
+                    payload_bytes = int(response.calculate_content_length() or 0)
+                except Exception:
+                    try:
+                        payload_bytes = int(response.headers.get('Content-Length') or 0)
+                    except Exception:
+                        payload_bytes = 0
                 _route_perf_log.append({
                     'ts': int(_sh_time.time()),
                     'method': request.method,
@@ -21894,6 +21902,7 @@ def _sh_after_request(response):
                     'endpoint': request.endpoint or '',
                     'ms': ms,
                     'status': int(getattr(response, 'status_code', 0) or 0),
+                    'payload_bytes': payload_bytes,
                 })
         except Exception:
             pass
@@ -21959,16 +21968,41 @@ def _maybe_send_health_alert(data):
 def _build_route_diagnostics(window_minutes=15):
     now_ts = int(_sh_time.time())
     cutoff = now_ts - (int(window_minutes) * 60)
-    recent = [x for x in list(_route_perf_log) if int(x.get('ts', 0)) >= cutoff]
+    all_perf = list(_route_perf_log)
+    recent = [x for x in all_perf if int(x.get('ts', 0)) >= cutoff]
+    history_route_times = {}
+    for row in all_perf:
+        method = str(row.get('method') or 'GET').upper()
+        endpoint_or_path = row.get('endpoint') or row.get('path') or 'unknown'
+        hist_key = f'{method} {endpoint_or_path}'
+        t = float(row.get('ms') or 0)
+        if t <= 0:
+            continue
+        history_route_times.setdefault(hist_key, []).append(t)
+
+    def _fmt_size(bytes_val):
+        try:
+            n = float(bytes_val or 0)
+        except Exception:
+            n = 0.0
+        if n >= (1024 * 1024):
+            return f'{round(n / (1024 * 1024), 2)} MB'
+        if n >= 1024:
+            return f'{round(n / 1024, 1)} KB'
+        return f'{int(n)} B'
+
     route_buckets = {}
     for row in recent:
         method = str(row.get('method') or 'GET').upper()
         endpoint_or_path = row.get('endpoint') or row.get('path') or 'unknown'
         key = f'{method} {endpoint_or_path}'
-        b = route_buckets.setdefault(key, {'times': [], 'errors': 0, 'path': row.get('path') or ''})
+        b = route_buckets.setdefault(key, {'times': [], 'errors': 0, 'path': row.get('path') or '', 'payloads': []})
         t = float(row.get('ms') or 0)
         if t > 0:
             b['times'].append(t)
+        payload_bytes = int(row.get('payload_bytes') or 0)
+        if payload_bytes > 0:
+            b['payloads'].append(payload_bytes)
         st = int(row.get('status') or 0)
         if st >= 500:
             b['errors'] += 1
@@ -21982,6 +22016,8 @@ def _build_route_diagnostics(window_minutes=15):
         avg = round(sum(times) / hits, 1)
         p95 = round(times[max(0, int(hits * 0.95) - 1)], 1)
         mx = round(times[-1], 1)
+        payloads = b.get('payloads') or []
+        avg_payload_bytes = int(round(sum(payloads) / len(payloads))) if payloads else 0
         top_slow.append({
             'route': route_key,
             'path': b['path'],
@@ -21990,6 +22026,8 @@ def _build_route_diagnostics(window_minutes=15):
             'p95_ms': p95,
             'max_ms': mx,
             'error_count': int(b['errors']),
+            'avg_payload_bytes': avg_payload_bytes,
+            'avg_payload_size': _fmt_size(avg_payload_bytes),
         })
     top_slow.sort(key=lambda x: (x['p95_ms'], x['avg_ms']), reverse=True)
     top_slow = top_slow[:8]
@@ -22013,6 +22051,8 @@ def _build_route_diagnostics(window_minutes=15):
     avg_ms = round(sum(overall_times) / req_count, 1) if req_count else None
     p95_ms = round(overall_times[max(0, int(req_count * 0.95) - 1)], 1) if req_count else None
     err_count = sum(1 for r in recent if int(r.get('status') or 0) >= 500)
+    slow_count = sum(1 for t in overall_times if t >= 1000)
+    slow_rate_pct = round((slow_count * 100.0) / req_count, 1) if req_count else 0.0
 
     analysis = []
     if err_count > 0:
@@ -22035,6 +22075,25 @@ def _build_route_diagnostics(window_minutes=15):
             'level': 'info',
             'text': f'Low sample volume in the last {window_minutes} minutes. Trigger normal user actions for stronger diagnosis.',
         })
+    smart_candidates = []
+    for r in top_slow:
+        hist = history_route_times.get(r['route']) or []
+        if len(hist) < 40 or int(r.get('hits') or 0) < 5:
+            continue
+        baseline_avg = sum(hist) / len(hist)
+        curr_avg = float(r.get('avg_ms') or 0)
+        if baseline_avg <= 0 or curr_avg < 300:
+            continue
+        slow_pct = ((curr_avg - baseline_avg) / baseline_avg) * 100.0
+        if slow_pct >= 20:
+            smart_candidates.append((slow_pct, r['route']))
+    if smart_candidates:
+        smart_candidates.sort(reverse=True, key=lambda x: x[0])
+        slow_pct, route_name = smart_candidates[0]
+        analysis.append({
+            'level': 'warning',
+            'text': f"Warning: '{route_name}' is performing {round(slow_pct, 1)}% slower than usual.",
+        })
     if top_slow:
         top_max = max(top_slow, key=lambda x: float(x.get('max_ms') or 0))
         top_max_ms = float(top_max.get('max_ms') or 0)
@@ -22043,6 +22102,11 @@ def _build_route_diagnostics(window_minutes=15):
                 'level': 'warning',
                 'text': f'Outlier spike detected on {top_max.get("route")} (max {round(top_max_ms, 1)} ms, hits {top_max.get("hits")}).',
             })
+    if slow_rate_pct >= 15:
+        analysis.append({
+            'level': 'warning',
+            'text': f'High slow-request ratio detected: {slow_rate_pct}% requests are >= 1000 ms.',
+        })
     if not analysis:
         analysis.append({
             'level': 'success',
@@ -22055,6 +22119,8 @@ def _build_route_diagnostics(window_minutes=15):
         'avg_ms': avg_ms,
         'p95_ms': p95_ms,
         'error_count': err_count,
+        'slow_count': slow_count,
+        'slow_rate_pct': slow_rate_pct,
         'top_slow_routes': top_slow,
         'recent_errors': recent_errors,
         'analysis': analysis,
