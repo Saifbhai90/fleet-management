@@ -35,7 +35,7 @@
   <div class="card fuel-list-card mb-3">
     <div class="card-header"><i class="bi bi-funnel me-1 text-primary"></i>Filters</div>
     <div class="card-body">
-      <form method="POST" action="{{ url_for('fuel_expense_list') }}" class="row g-3 align-items-end">
+      <form method="POST" action="{{ url_for('fuel_expense_list') }}" class="row g-3 align-items-end" id="fuelListFilterForm">
         {{ form.hidden_tag() }}
         <div class="col-md-2">
           <label class="form-label small">From Date</label>
@@ -70,10 +70,23 @@
           </select>
         </div>
         <div class="col-md-2">
-          <button type="submit" class="btn btn-primary btn-sm w-100">
-            <i class="bi bi-funnel me-1"></i>Apply Filter
-          </button>
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary btn-sm w-100">
+              <i class="bi bi-funnel me-1"></i>Apply Filter
+            </button>
+            <button type="button" class="btn btn-outline-warning btn-sm w-100" id="fuelBackfillBtn">
+              <i class="bi bi-arrow-repeat me-1"></i>Backfill Task KM
+            </button>
+          </div>
         </div>
+      </form>
+      <form method="POST" action="{{ url_for('fuel_expense_backfill_task_readings') }}" id="fuelBackfillForm" class="d-none">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="from_date" id="bfFromDate">
+        <input type="hidden" name="to_date" id="bfToDate">
+        <input type="hidden" name="district_id" id="bfDistrictId">
+        <input type="hidden" name="project_id" id="bfProjectId">
+        <input type="hidden" name="vehicle_id" id="bfVehicleId">
       </form>
     </div>
   </div>
@@ -253,6 +266,10 @@
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
+  var backfillBtn = document.getElementById('fuelBackfillBtn');
+  var backfillForm = document.getElementById('fuelBackfillForm');
+  var fromDateInput = document.querySelector('#fuelListFilterForm [name="from_date"]');
+  var toDateInput = document.querySelector('#fuelListFilterForm [name="to_date"]');
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
@@ -299,6 +316,25 @@
       } else {
         initSearchableDropdowns(vehicleSelect.parentNode);
       }
+    });
+  }
+
+  if (backfillBtn && backfillForm) {
+    backfillBtn.addEventListener('click', function() {
+      var msg = 'Backfill sirf un records par chalega jahan KM Out aur KM In missing hain.\n' +
+        'Existing filled records ko touch nahi kiya jayega.\n\nContinue?';
+      if (!window.confirm(msg)) return;
+      var bfFrom = document.getElementById('bfFromDate');
+      var bfTo = document.getElementById('bfToDate');
+      var bfDistrict = document.getElementById('bfDistrictId');
+      var bfProject = document.getElementById('bfProjectId');
+      var bfVehicle = document.getElementById('bfVehicleId');
+      if (bfFrom) bfFrom.value = fromDateInput ? (fromDateInput.value || '') : '';
+      if (bfTo) bfTo.value = toDateInput ? (toDateInput.value || '') : '';
+      if (bfDistrict) bfDistrict.value = districtSelect ? (districtSelect.value || '0') : '0';
+      if (bfProject) bfProject.value = projectSelect ? (projectSelect.value || '0') : '0';
+      if (bfVehicle) bfVehicle.value = vehicleSelect ? (vehicleSelect.value || '0') : '0';
+      backfillForm.submit();
     });
   }
 })();

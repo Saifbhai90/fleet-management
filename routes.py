@@ -17578,6 +17578,116 @@ def fuel_expense_list():
                            cleanup_status=cleanup_status)
 
 
+@app.route('/expenses/fuel/backfill-task-readings', methods=['POST'])
+def fuel_expense_backfill_task_readings():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date_raw = (request.form.get('from_date') or '').strip()
+    to_date_raw = (request.form.get('to_date') or '').strip()
+    district_id = request.form.get('district_id', type=int) or 0
+    project_id = request.form.get('project_id', type=int) or 0
+    vehicle_id = request.form.get('vehicle_id', type=int) or 0
+
+    today = pk_date()
+    from_d = parse_date(from_date_raw) if from_date_raw else today
+    to_d = parse_date(to_date_raw) if to_date_raw else today
+    if from_d and to_d and from_d > to_d:
+        from_d, to_d = to_d, from_d
+
+    q = FuelExpense.query.filter(
+        FuelExpense.fueling_date >= from_d,
+        FuelExpense.fueling_date <= to_d,
+        FuelExpense.km_out_task.is_(None),
+        FuelExpense.km_in_task.is_(None),
+    )
+    if workspace_employee_id:
+        q = q.filter(
+            db.or_(
+                FuelExpense.employee_id == workspace_employee_id,
+                FuelExpense.employee_id.is_(None),
+            )
+        )
+    if not is_master_or_admin:
+        if allowed_projects:
+            q = q.filter(FuelExpense.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            q = q.filter(FuelExpense.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            q = q.filter(FuelExpense.vehicle_id.in_(list(allowed_vehicles)))
+    if district_id:
+        q = q.filter(FuelExpense.district_id == district_id)
+    if project_id:
+        q = q.filter(FuelExpense.project_id == project_id)
+    if vehicle_id:
+        q = q.filter(FuelExpense.vehicle_id == vehicle_id)
+
+    rows = q.order_by(FuelExpense.fueling_date.asc(), FuelExpense.id.asc()).all()
+    if not rows:
+        flash('No fuel expense records found with missing KM Out/KM In in selected filters.', 'info')
+        return redirect(url_for(
+            'fuel_expense_list',
+            from_date=from_d.strftime('%d-%m-%Y') if from_d else '',
+            to_date=to_d.strftime('%d-%m-%Y') if to_d else '',
+            district_id=district_id,
+            project_id=project_id,
+            vehicle_id=vehicle_id,
+        ))
+
+    updated = 0
+    skipped_no_task = 0
+    skipped_no_curr = 0
+    for rec in rows:
+        km_out_task, km_in_task = _fuel_expense_task_readings(rec.vehicle_id, rec.fueling_date)
+        if km_out_task is None or km_in_task is None:
+            skipped_no_task += 1
+            continue
+        rec.km_out_task = km_out_task
+        rec.km_in_task = km_in_task
+        if rec.current_reading is None:
+            rec.meter_reading_matched = 'No'
+            skipped_no_curr += 1
+            updated += 1
+            continue
+        try:
+            curr = float(rec.current_reading)
+            lo = min(float(km_out_task), float(km_in_task))
+            hi = max(float(km_out_task), float(km_in_task))
+            rec.meter_reading_matched = 'Yes' if lo <= curr <= hi else 'No'
+        except Exception:
+            rec.meter_reading_matched = 'No'
+        updated += 1
+
+    if updated > 0:
+        db.session.commit()
+    else:
+        db.session.rollback()
+
+    flash(
+        f'Backfill complete. Updated: {updated}, skipped (task missing): {skipped_no_task}, '
+        f'skipped (current reading missing): {skipped_no_curr}.',
+        'success' if updated > 0 else 'warning'
+    )
+    return redirect(url_for(
+        'fuel_expense_list',
+        from_date=from_d.strftime('%d-%m-%Y') if from_d else '',
+        to_date=to_d.strftime('%d-%m-%Y') if to_d else '',
+        district_id=district_id,
+        project_id=project_id,
+        vehicle_id=vehicle_id,
+    ))
+
+
 def _workspace_expense_by_choices(employee_id):
     ensure_workspace_base_accounts(employee_id)
     rows = WorkspaceAccount.query.filter_by(employee_id=employee_id, is_active=True).order_by(WorkspaceAccount.code.asc()).all()
