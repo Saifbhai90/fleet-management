@@ -330,7 +330,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var serverProjectId  = {{ (form.project_id.data  or 0) | tojson }};
   var serverVehicleId  = {{ (form.vehicle_id.data  or 0) | tojson }};
 
-  var productsForOil = [];
+  var productsForOil = [{% for p in products_for_oil %}{id:{{ p.id }},name:{{ p.name | tojson }},default_price:{% if p.default_price is not none %}{{ p.default_price }}{% else %}null{% endif %}}{% if not loop.last %},{% endif %}{% endfor %}];
 
   function _populateOilProducts(arr) {
     productsForOil = arr;
@@ -361,7 +361,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   fetch('/api/oil-expense/products-for-oil')
     .then(function(r) { return r.json(); })
-    .then(function(arr) { if (arr && arr.length) _populateOilProducts(arr); })
+    .then(function(arr) {
+      if (arr && arr.length) _populateOilProducts(arr);
+    })
     .catch(function() {});
 
   function _tsVal(sel) {
@@ -702,9 +704,9 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function updateKm() {
-    var prev = parseFloat(previousReading.value) || null;
-    var curr = parseFloat(currentReading.value) || null;
-    if (prev != null && curr != null && curr >= prev) {
+    var prev = parseFloat(previousReading.value);
+    var curr = parseFloat(currentReading.value);
+    if (isFinite(prev) && isFinite(curr)) {
       kmDisplay.value = (curr - prev).toFixed(2);
     } else {
       kmDisplay.value = '';
