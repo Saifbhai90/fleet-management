@@ -373,6 +373,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
   var currentReading = document.getElementById('currentReading');
   var expenseDate = document.getElementById('expenseDate');
@@ -407,6 +408,9 @@ document.addEventListener('DOMContentLoaded', function() {
   var maintAttachmentPasteHint = document.getElementById('maintAttachmentPasteHint');
   var maintSaveBtn = document.getElementById('maintSaveBtn');
   var maintPriceHistoryPanel = document.getElementById('maintPriceHistoryPanel');
+  var serverDistrictId = {{ (form.district_id.data or 0) | tojson }};
+  var serverProjectId = {{ (form.project_id.data or 0) | tojson }};
+  var serverVehicleId = {{ (form.vehicle_id.data or 0) | tojson }};
   function focusEntryProduct() {
     if (!entryProductSelect) return;
     if (entryProductSelect.tomselect) {
@@ -427,6 +431,85 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof initSearchableDropdowns === 'function') {
       initSearchableDropdowns(scopeEl);
     }
+  }
+
+  function _selVal(sel) {
+    if (!sel) return '';
+    if (sel.tomselect) return sel.tomselect.getValue() || '';
+    return sel.value || '';
+  }
+
+  function _selSet(sel, val) {
+    if (!sel) return;
+    sel.value = val;
+    if (sel.tomselect) sel.tomselect.setValue(String(val), true);
+  }
+
+  function _loadProjectsForDistrict(did, thenSelectProjectId, thenCallback) {
+    if (!projectSelect || !vehicleSelect) {
+      if (thenCallback) thenCallback();
+      return;
+    }
+    if (projectSelect.tomselect) projectSelect.tomselect.destroy();
+    if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
+    projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+    vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+    _reinitSearchableDropdown(vehicleSelect.parentNode);
+    if (!did || did === '0' || did === 0) {
+      _reinitSearchableDropdown(projectSelect.parentNode);
+      if (thenCallback) thenCallback();
+      return;
+    }
+    fetch('/get_projects_by_district/' + did)
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        arr.forEach(function(p) {
+          var o = document.createElement('option');
+          o.value = p.id;
+          o.textContent = p.name;
+          projectSelect.appendChild(o);
+        });
+        _reinitSearchableDropdown(projectSelect.parentNode);
+        if (thenSelectProjectId) _selSet(projectSelect, thenSelectProjectId);
+        if (thenCallback) thenCallback();
+      })
+      .catch(function() {
+        _reinitSearchableDropdown(projectSelect.parentNode);
+        if (thenCallback) thenCallback();
+      });
+  }
+
+  function _loadVehiclesForProject(pid, did, thenSelectVehicleId, thenCallback) {
+    if (!vehicleSelect) {
+      if (thenCallback) thenCallback();
+      return;
+    }
+    if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
+    vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+    if (!pid || pid === '0' || pid === 0) {
+      _reinitSearchableDropdown(vehicleSelect.parentNode);
+      if (thenCallback) thenCallback();
+      return;
+    }
+    var url = '/get_vehicles_by_project_district?project_id=' + pid;
+    if (did && did !== '0' && did !== 0) url += '&district_id=' + did;
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        arr.forEach(function(v) {
+          var o = document.createElement('option');
+          o.value = v.id;
+          o.textContent = v.vehicle_no;
+          vehicleSelect.appendChild(o);
+        });
+        _reinitSearchableDropdown(vehicleSelect.parentNode);
+        if (thenSelectVehicleId) _selSet(vehicleSelect, thenSelectVehicleId);
+        if (thenCallback) thenCallback();
+      })
+      .catch(function() {
+        _reinitSearchableDropdown(vehicleSelect.parentNode);
+        if (thenCallback) thenCallback();
+      });
   }
 
   function _populateMaintenanceProducts(arr) {
@@ -919,6 +1002,19 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   if (vehicleSelect) vehicleSelect.addEventListener('change', fetchTaskReadingsForMaintenance);
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = _selVal(districtSelect);
+      _loadProjectsForDistrict(did, null, null);
+    });
+  }
+  if (projectSelect && vehicleSelect) {
+    projectSelect.addEventListener('change', function() {
+      var pid = _selVal(projectSelect);
+      var did = _selVal(districtSelect);
+      _loadVehiclesForProject(pid, did, null, null);
+    });
+  }
   if (expenseDate) expenseDate.addEventListener('change', function() {
     if (vehicleSelect) {
       vehicleSelect.dispatchEvent(new Event('change'));
@@ -967,11 +1063,42 @@ document.addEventListener('DOMContentLoaded', function() {
 
   updateEntryAmount();
   updateDefaultPriceHint();
-  if (vehicleSelect) {
-    vehicleSelect.dispatchEvent(new Event('change'));
-  } else {
-    fetchTaskReadingsForMaintenance();
+  function _runInitialLocationLoadChain() {
+    var did = serverDistrictId;
+    var pid = serverProjectId;
+    var vid = serverVehicleId;
+    if (did && did !== 0) _selSet(districtSelect, did);
+    if (pid && pid !== 0) _selSet(projectSelect, pid);
+    if (vid && vid !== 0) _selSet(vehicleSelect, vid);
+
+    var serverProjectCount = projectSelect ? projectSelect.querySelectorAll('option').length : 0;
+    var serverVehicleCount = vehicleSelect ? vehicleSelect.querySelectorAll('option').length : 0;
+
+    if (serverProjectCount > 1) {
+      if (pid && pid !== 0) _selSet(projectSelect, pid);
+      if (serverVehicleCount > 1) {
+        if (vid && vid !== 0) _selSet(vehicleSelect, vid);
+        fetchTaskReadingsForMaintenance();
+      } else if (pid && pid !== 0) {
+        _loadVehiclesForProject(pid, did, vid || null, fetchTaskReadingsForMaintenance);
+      } else {
+        fetchTaskReadingsForMaintenance();
+      }
+    } else if (did && did !== 0 && projectSelect) {
+      _loadProjectsForDistrict(did, pid || null, function() {
+        var selectedPid = _selVal(projectSelect);
+        if (selectedPid && selectedPid !== '0' && vehicleSelect) {
+          _loadVehiclesForProject(selectedPid, did, vid || null, fetchTaskReadingsForMaintenance);
+        } else {
+          fetchTaskReadingsForMaintenance();
+        }
+      });
+    } else {
+      fetchTaskReadingsForMaintenance();
+    }
   }
+
+  _runInitialLocationLoadChain();
   window.setTimeout(fetchTaskReadingsForMaintenance, 250);
   handlePaymentTypeBehavior(false);
   updateExpenseByBalanceHint();
