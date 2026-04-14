@@ -320,6 +320,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var cashExpenseByValue = '';
   var oilTaskStartReading = null;
   var oilTaskCloseReading = null;
+  var partyEnterPendingFocus = false;
 
   var serverDistrictId = {{ (form.district_id.data or 0) | tojson }};
   var serverProjectId  = {{ (form.project_id.data  or 0) | tojson }};
@@ -406,10 +407,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function _handlePartyEnter(e) {
     if (!_isEnterKey(e)) return;
-    if (!_tsVal(partySelect)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    _focusCurrentReading();
+    if (_tsVal(partySelect)) {
+      e.preventDefault();
+      e.stopPropagation();
+      _focusCurrentReading();
+      return;
+    }
+    // If Enter is used to select a dropdown option, shift focus right after value updates.
+    partyEnterPendingFocus = true;
+    window.setTimeout(function() {
+      if (partyEnterPendingFocus && _tsVal(partySelect)) {
+        _focusCurrentReading();
+      }
+      partyEnterPendingFocus = false;
+    }, 0);
   }
 
   if (expenseBySelect && expenseBySelect.options) {
@@ -800,7 +811,15 @@ document.addEventListener('DOMContentLoaded', function() {
     fetchOilLastReading();
     fetchOilTaskReadings();
   });
-  if (partySelect) partySelect.addEventListener('change', function() { handleOilExpenseByBehavior(false); });
+  if (partySelect) {
+    partySelect.addEventListener('change', function() {
+      handleOilExpenseByBehavior(false);
+      if (partyEnterPendingFocus && _tsVal(partySelect)) {
+        _focusCurrentReading();
+      }
+      partyEnterPendingFocus = false;
+    });
+  }
   if (paymentTypeSelect) {
     paymentTypeSelect.addEventListener('change', function() {
       handleOilExpenseByBehavior(true);
