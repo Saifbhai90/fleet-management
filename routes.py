@@ -17379,13 +17379,14 @@ def api_fuel_expense_price_hint():
 
 @app.route('/api/fuel-expense/price-history')
 def api_fuel_expense_price_history():
-    """Return last 3 prices for selected pump + last 3 prices for fuel type across any pump."""
+    """Return price insights for fuel form side panel."""
     fuel_type = request.args.get('fuel_type', '').strip()
     normalized = 'Super' if fuel_type == 'Petrol' else fuel_type
     fuel_pump_id = request.args.get('fuel_pump_id', type=int)
+    fueling_date = parse_date(request.args.get('fueling_date', ''))
     employee_id = _workspace_employee_id_for_expenses()
     if normalized not in ('Diesel', 'Super'):
-        return jsonify({'selected_pump': [], 'all_pumps': []})
+        return jsonify({'selected_pump': [], 'all_pumps': [], 'date_snapshot': []})
 
     if normalized == 'Super':
         fuel_filter = FuelExpense.fuel_type.in_(('Super', 'Petrol'))
@@ -17421,9 +17422,24 @@ def api_fuel_expense_price_history():
         selected_pump_rows = [_fmt_row(r) for r in selected_q]
 
     all_rows = base_q.order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).limit(3).all()
+    date_snapshot_rows = []
+    if fueling_date:
+        same_date_rows = base_q.filter(
+            FuelExpense.fueling_date == fueling_date
+        ).order_by(FuelExpense.id.desc()).all()
+        seen_pumps = set()
+        for r in same_date_rows:
+            pump_key = ('workspace', int(r.workspace_pump_id or 0), int(r.fuel_pump_id or 0))
+            if pump_key in seen_pumps:
+                continue
+            seen_pumps.add(pump_key)
+            date_snapshot_rows.append(_fmt_row(r))
+            if len(date_snapshot_rows) >= 5:
+                break
     return jsonify({
         'selected_pump': selected_pump_rows,
         'all_pumps': [_fmt_row(r) for r in all_rows],
+        'date_snapshot': date_snapshot_rows,
     })
 
 
