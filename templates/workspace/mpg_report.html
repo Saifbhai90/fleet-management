@@ -78,6 +78,7 @@
   </div>
 
   <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="from_date" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}">
     <input type="hidden" name="to_date" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}">
     <input type="hidden" name="district_id" value="{{ district_id or '' }}">
