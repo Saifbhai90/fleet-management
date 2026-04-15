@@ -67,7 +67,7 @@ import io
 import xlsxwriter
 from sqlalchemy import func, text, inspect, or_, cast, and_
 from sqlalchemy import String as SAString
-from sqlalchemy.exc import OperationalError, IntegrityError
+from sqlalchemy.exc import OperationalError, IntegrityError, DataError
 from sqlalchemy.orm import joinedload
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, pk_now, pk_date, pk_time
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
@@ -15211,7 +15211,8 @@ def task_report_upload_emergency():
             return redirect(url_for('task_report_list', date=task_date.strftime('%d-%m-%Y')))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error parsing Excel: {str(e)}', 'danger')
+            app.logger.exception("EmergencyTaskReport upload failed for date=%s", task_date)
+            flash(_build_upload_error_message('EmergencyTaskReport', e), 'danger')
     return render_template('task_report_upload_emergency.html', form=form)
 
 
@@ -15231,7 +15232,8 @@ def task_report_upload_mileage():
             return redirect(url_for('task_report_list', date=task_date.strftime('%d-%m-%Y')))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error parsing Excel: {str(e)}', 'danger')
+            app.logger.exception("Vehicle Mileage upload failed for date=%s", task_date)
+            flash(_build_upload_error_message('Vehicle Mileage report', e), 'danger')
     return render_template('task_report_upload_mileage.html', form=form)
 
 
@@ -15304,6 +15306,90 @@ _VEHICLE_SUFFIX_RE = _re.compile(
     _re.IGNORECASE,
 )
 
+
+_STRING_LIMIT_CACHE = {}
+
+
+def _get_table_string_limits(table_name, model_cls=None):
+    """Return {column_name: max_length} for VARCHAR-like columns."""
+    if table_name in _STRING_LIMIT_CACHE:
+        return _STRING_LIMIT_CACHE[table_name]
+
+    limits = {}
+    try:
+        for col in inspect(db.engine).get_columns(table_name):
+            col_name = col.get('name')
+            col_type = col.get('type')
+            max_len = getattr(col_type, 'length', None)
+            if col_name and isinstance(max_len, int) and max_len > 0:
+                limits[col_name] = max_len
+    except Exception:
+        # Fallback to ORM metadata if DB inspection is unavailable.
+        if model_cls is not None:
+            for col in model_cls.__table__.columns:
+                max_len = getattr(col.type, 'length', None)
+                if isinstance(max_len, int) and max_len > 0:
+                    limits[col.name] = max_len
+
+    _STRING_LIMIT_CACHE[table_name] = limits
+    return limits
+
+
+def _validate_string_lengths(table_name, model_cls, values, row_no, report_label):
+    """Fail fast with clear row/column details before DB flush."""
+    limits = _get_table_string_limits(table_name, model_cls=model_cls)
+    if not limits:
+        return
+
+    violations = []
+    for field, raw_val in values.items():
+        if raw_val is None:
+            continue
+        max_len = limits.get(field)
+        if not max_len:
+            continue
+        text_val = str(raw_val)
+        actual_len = len(text_val)
+        if actual_len > max_len:
+            violations.append((field, max_len, actual_len, text_val[:140]))
+
+    if not violations:
+        return
+
+    log_bits = '; '.join(
+        f"{field}={actual}/{max_len} sample='{sample}'"
+        for field, max_len, actual, sample in violations[:5]
+    )
+    app.logger.warning(
+        "%s validation failed at row %s: %s",
+        report_label,
+        row_no,
+        log_bits,
+    )
+
+    user_bits = ', '.join(
+        f"{field} ({actual}/{max_len})"
+        for field, max_len, actual, _ in violations[:3]
+    )
+    raise ValueError(
+        f"{report_label} row {row_no}: value too long for {user_bits}. "
+        "Please correct this row in Excel and upload again."
+    )
+
+
+def _build_upload_error_message(label, exc):
+    raw = (str(exc) or exc.__class__.__name__).strip()
+    low = raw.lower()
+    if isinstance(exc, ValueError):
+        return raw
+    if isinstance(exc, (DataError, IntegrityError)) or 'value too long for type character varying' in low:
+        return (
+            f"{label} upload failed: one or more Excel values exceed database limits. "
+            "Please verify row values and retry."
+        )
+    return f"{label} upload failed ({exc.__class__.__name__}). Please verify file format and retry."
+
+
 def _normalize_vehicle_no(raw):
     """Strip known project suffixes from vehicle numbers in uploaded reports.
     e.g. 'LEG-17-2191 COW' -> 'LEG-17-2191', 'GBD-24-395-COW' -> 'GBD-24-395'
@@ -15352,7 +15438,7 @@ def _parse_emergency_excel(f, task_date):
 
     count = 0
     today = pk_date()
-    for row in rows[1:]:
+    for row_no, row in enumerate(rows[1:], start=2):
         vals = {}
         for idx, field in col_map.items():
             raw_val = row[idx] if idx < len(row) else None
@@ -15361,6 +15447,7 @@ def _parse_emergency_excel(f, task_date):
             continue
         if vals.get('amb_reg_no'):
             vals['amb_reg_no'] = _normalize_vehicle_no(vals['amb_reg_no'])
+        _validate_string_lengths('emergency_task_record', EmergencyTaskRecord, vals, row_no, 'EmergencyTaskReport')
         rec = EmergencyTaskRecord(task_date=task_date, upload_date=today, **vals)
         db.session.add(rec)
         count += 1
@@ -15416,7 +15503,7 @@ def _parse_mileage_excel(f, task_date):
 
     count = 0
     today = pk_date()
-    for row in all_rows[header_row_idx + 1:]:
+    for excel_row_no, row in enumerate(all_rows[header_row_idx + 1:], start=header_row_idx + 2):
         if not row or (reg_col < len(row) and row[reg_col] is None):
             continue
         v_no = _normalize_vehicle_no(str(row[reg_col]).strip()) if reg_col < len(row) and row[reg_col] else ''
@@ -15439,14 +15526,19 @@ def _parse_mileage_excel(f, task_date):
         dt_e = _safe_str(row[dt_cols[2]]) if len(dt_cols) > 2 and dt_cols[2] < len(row) else None
         dt_f = _safe_str(row[dt_cols[3]]) if len(dt_cols) > 3 and dt_cols[3] < len(row) else None
 
+        vals = {
+            'reg_no': v_no,
+            'date_time_c': dt_c,
+            'date_time_d': dt_d,
+            'date_time_e': dt_e,
+            'date_time_f': dt_f,
+        }
+        _validate_string_lengths('vehicle_mileage_record', VehicleMileageRecord, vals, excel_row_no, 'Vehicle Mileage report')
+
         rec = VehicleMileageRecord(
             task_date=task_date,
             upload_date=today,
-            reg_no=v_no,
-            date_time_c=dt_c,
-            date_time_d=dt_d,
-            date_time_e=dt_e,
-            date_time_f=dt_f,
+            **vals,
             mileage=_safe_float(row[mil_col]) if mil_col < len(row) else 0,
             ptop=_safe_float(row[ptop_col]) if ptop_col < len(row) else 0,
         )
@@ -15469,9 +15561,19 @@ def task_report_upload():
         try:
             c1 = c2 = 0
             if fe:
-                c1 = _parse_emergency_excel(fe, task_date)
+                try:
+                    c1 = _parse_emergency_excel(fe, task_date)
+                except Exception as ex:
+                    if isinstance(ex, ValueError):
+                        raise
+                    raise ValueError(f"EmergencyTaskReport processing failed: {ex.__class__.__name__}") from ex
             if fm:
-                c2 = _parse_mileage_excel(fm, task_date)
+                try:
+                    c2 = _parse_mileage_excel(fm, task_date)
+                except Exception as ex:
+                    if isinstance(ex, ValueError):
+                        raise
+                    raise ValueError(f"Vehicle Mileage report processing failed: {ex.__class__.__name__}") from ex
             db.session.commit()
             msg = []
             if c1:
@@ -15482,7 +15584,13 @@ def task_report_upload():
             return redirect(url_for('task_report_list', date=task_date.strftime('%d-%m-%Y')))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'danger')
+            app.logger.exception(
+                "Upload Workbooks failed for date=%s (has_emergency=%s, has_mileage=%s)",
+                task_date,
+                bool(fe),
+                bool(fm),
+            )
+            flash(_build_upload_error_message('Upload Workbooks', e), 'danger')
     return render_template('task_report_upload.html', form=form)
 
 
