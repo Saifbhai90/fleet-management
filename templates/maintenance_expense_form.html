@@ -401,8 +401,10 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};
+  var _suppressCascadeEvents = false;
   function _smoothFillSelect(sel, arr, buildOptionFn) {
     if (!sel) return;
+    _suppressCascadeEvents = true;
     if (sel.tomselect) { try { sel.tomselect.destroy(); } catch(e) {} }
     sel.innerHTML = '<option value="0">-- Select --</option>';
     if (arr) arr.forEach(function(item) {
@@ -410,12 +412,15 @@ document.addEventListener('DOMContentLoaded', function() {
       o.value = opt.value; o.textContent = opt.text; sel.appendChild(o);
     });
     _reinitSearchableDropdown(sel.parentNode);
+    _suppressCascadeEvents = false;
   }
   function _smoothLoadingSelect(sel) {
     if (!sel) return;
+    _suppressCascadeEvents = true;
     if (sel.tomselect) { try { sel.tomselect.destroy(); } catch(e) {} }
     sel.innerHTML = '<option value="0">-- Loading... --</option>';
     _reinitSearchableDropdown(sel.parentNode);
+    _suppressCascadeEvents = false;
   }
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
@@ -1148,15 +1153,20 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
 
-  if (vehicleSelect) vehicleSelect.addEventListener('change', fetchTaskReadingsForMaintenance);
+  if (vehicleSelect) vehicleSelect.addEventListener('change', function() {
+    if (_suppressCascadeEvents) return;
+    fetchTaskReadingsForMaintenance();
+  });
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
+      if (_suppressCascadeEvents) return;
       var did = _selVal(districtSelect);
       _loadProjectsForDistrict(did, null, null);
     });
   }
   if (projectSelect && vehicleSelect) {
     projectSelect.addEventListener('change', function() {
+      if (_suppressCascadeEvents) return;
       var pid = _selVal(projectSelect);
       var did = _selVal(districtSelect);
       _loadVehiclesForProject(pid, did, null, null);
