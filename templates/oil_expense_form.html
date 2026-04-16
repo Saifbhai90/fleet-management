@@ -285,6 +285,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  window._cascadeCache = window._cascadeCache || {};
 
   var formEl = document.getElementById('oilExpenseForm');
   var districtSelect = document.getElementById('districtSelect');
@@ -870,13 +871,27 @@ document.addEventListener('DOMContentLoaded', function() {
       if (thenCallback) thenCallback();
       return;
     }
+    var _cKey = 'proj_d' + did;
+    if (window._cascadeCache[_cKey]) {
+      window._cascadeCache[_cKey].forEach(function(p) {
+        var o = document.createElement('option');
+        o.value = p.id; o.textContent = p.name;
+        projectSelect.appendChild(o);
+      });
+      initSearchableDropdowns(projectSelect.parentNode);
+      if (thenSelectProjectId) _tsSet(projectSelect, thenSelectProjectId);
+      if (thenCallback) thenCallback();
+      return;
+    }
+    projectSelect.innerHTML = '<option value="0">-- Loading... --</option>';
     fetch('/get_projects_by_district/' + did)
       .then(function(r) { return r.json(); })
       .then(function(arr) {
+        window._cascadeCache[_cKey] = arr;
+        projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
         arr.forEach(function(p) {
           var o = document.createElement('option');
-          o.value = p.id;
-          o.textContent = p.name;
+          o.value = p.id; o.textContent = p.name;
           projectSelect.appendChild(o);
         });
         initSearchableDropdowns(projectSelect.parentNode);
@@ -884,6 +899,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (thenCallback) thenCallback();
       })
       .catch(function() {
+        projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
         initSearchableDropdowns(projectSelect.parentNode);
         if (thenCallback) thenCallback();
       });
@@ -897,15 +913,29 @@ document.addEventListener('DOMContentLoaded', function() {
       if (thenCallback) thenCallback();
       return;
     }
+    var _vKey = 'veh_p' + pid + '_d' + (did || '0');
+    if (window._cascadeCache[_vKey]) {
+      window._cascadeCache[_vKey].forEach(function(v) {
+        var o = document.createElement('option');
+        o.value = v.id; o.textContent = v.vehicle_no;
+        vehicleSelect.appendChild(o);
+      });
+      initSearchableDropdowns(vehicleSelect.parentNode);
+      if (thenSelectVehicleId) _tsSet(vehicleSelect, thenSelectVehicleId);
+      if (thenCallback) thenCallback();
+      return;
+    }
+    vehicleSelect.innerHTML = '<option value="0">-- Loading... --</option>';
     var url = '/get_vehicles_by_project_district?project_id=' + pid;
     if (did && did !== '0' && did !== 0) url += '&district_id=' + did;
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(arr) {
+        window._cascadeCache[_vKey] = arr;
+        vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
         arr.forEach(function(v) {
           var o = document.createElement('option');
-          o.value = v.id;
-          o.textContent = v.vehicle_no;
+          o.value = v.id; o.textContent = v.vehicle_no;
           vehicleSelect.appendChild(o);
         });
         initSearchableDropdowns(vehicleSelect.parentNode);
@@ -913,6 +943,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (thenCallback) thenCallback();
       })
       .catch(function() {
+        vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
         initSearchableDropdowns(vehicleSelect.parentNode);
         if (thenCallback) thenCallback();
       });

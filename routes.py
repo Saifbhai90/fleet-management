@@ -14536,7 +14536,9 @@ def get_projects_by_district(district_id):
     if not district_id:
         return jsonify([])
     projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
-    return jsonify([{'id': p.id, 'name': p.name} for p in projects])
+    resp = make_response(jsonify([{'id': p.id, 'name': p.name} for p in projects]))
+    resp.headers['Cache-Control'] = 'private, max-age=120'
+    return resp
 
 
 @app.route('/get_vehicles_by_project_district')
@@ -14559,7 +14561,9 @@ def get_vehicles_by_project_district():
     if scope_vehicles:
         q = q.filter(Vehicle.id.in_(scope_vehicles))
     vehicles = q.order_by(Vehicle.vehicle_no).all()
-    return jsonify([{'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or '', 'fuel_type': v.fuel_type or 'Petrol'} for v in vehicles])
+    resp = make_response(jsonify([{'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or '', 'fuel_type': v.fuel_type or 'Petrol'} for v in vehicles]))
+    resp.headers['Cache-Control'] = 'private, max-age=60'
+    return resp
 
 
 @app.route('/task-report', methods=['GET', 'POST'])

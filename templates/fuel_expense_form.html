@@ -296,6 +296,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  window._cascadeCache = window._cascadeCache || {};
 
   var fuelExpenseForm = document.getElementById('fuelExpenseForm');
   var districtSelect = document.getElementById('districtSelect');
@@ -618,17 +619,33 @@ document.addEventListener('DOMContentLoaded', function() {
       if (fuelTypeDisplay) fuelTypeDisplay.value = '';
       initSearchableDropdowns(vehicleSelect.parentNode);
       if (did && did !== '0') {
-        fetch('/get_projects_by_district/' + did)
-          .then(function(r) { return r.json(); })
-          .then(function(arr) {
-            arr.forEach(function(p) {
-              var o = document.createElement('option');
-              o.value = p.id;
-              o.textContent = p.name;
-              projectSelect.appendChild(o);
-            });
-            initSearchableDropdowns(projectSelect.parentNode);
+        var _cKey = 'proj_d' + did;
+        if (window._cascadeCache[_cKey]) {
+          window._cascadeCache[_cKey].forEach(function(p) {
+            var o = document.createElement('option');
+            o.value = p.id; o.textContent = p.name;
+            projectSelect.appendChild(o);
           });
+          initSearchableDropdowns(projectSelect.parentNode);
+        } else {
+          projectSelect.innerHTML = '<option value="0">-- Loading... --</option>';
+          fetch('/get_projects_by_district/' + did)
+            .then(function(r) { return r.json(); })
+            .then(function(arr) {
+              window._cascadeCache[_cKey] = arr;
+              projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+              arr.forEach(function(p) {
+                var o = document.createElement('option');
+                o.value = p.id; o.textContent = p.name;
+                projectSelect.appendChild(o);
+              });
+              initSearchableDropdowns(projectSelect.parentNode);
+            })
+            .catch(function() {
+              projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+              initSearchableDropdowns(projectSelect.parentNode);
+            });
+        }
       } else {
         initSearchableDropdowns(projectSelect.parentNode);
       }
@@ -644,10 +661,9 @@ document.addEventListener('DOMContentLoaded', function() {
       if (fuelTypeSelect) fuelTypeSelect.value = '';
       if (fuelTypeDisplay) fuelTypeDisplay.value = '';
       if (pid && pid !== '0') {
-        var url = '/get_vehicles_by_project_district?project_id=' + pid;
-        if (did && did !== '0') url += '&district_id=' + did;
-        fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
-          arr.forEach(function(v) {
+        var _vKey = 'veh_p' + pid + '_d' + (did || '0');
+        if (window._cascadeCache[_vKey]) {
+          window._cascadeCache[_vKey].forEach(function(v) {
             var o = document.createElement('option');
             o.value = v.id;
             o.textContent = v.vehicle_no;
@@ -655,7 +671,26 @@ document.addEventListener('DOMContentLoaded', function() {
             vehicleSelect.appendChild(o);
           });
           initSearchableDropdowns(vehicleSelect.parentNode);
-        });
+        } else {
+          vehicleSelect.innerHTML = '<option value="0">-- Loading... --</option>';
+          var url = '/get_vehicles_by_project_district?project_id=' + pid;
+          if (did && did !== '0') url += '&district_id=' + did;
+          fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
+            window._cascadeCache[_vKey] = arr;
+            vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+            arr.forEach(function(v) {
+              var o = document.createElement('option');
+              o.value = v.id;
+              o.textContent = v.vehicle_no;
+              o.setAttribute('data-fuel-type', v.fuel_type || 'Petrol');
+              vehicleSelect.appendChild(o);
+            });
+            initSearchableDropdowns(vehicleSelect.parentNode);
+          }).catch(function() {
+            vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+            initSearchableDropdowns(vehicleSelect.parentNode);
+          });
+        }
       } else {
         initSearchableDropdowns(vehicleSelect.parentNode);
       }
