@@ -56,19 +56,12 @@
       <div class="form-section-body">
         <div class="row g-2">
 
-          <!-- Row 1: Date | Vehicle | District | Project -->
+          <!-- Row 1: Date | District | Project | Vehicle -->
           <div class="col-md-3 field-group">
             <label class="form-label">Date <span class="text-danger">*</span></label>
             {{ form.expense_date(class="form-control datepicker", id="expenseDate") }}
             {% if form.expense_date.errors %}
               <div class="text-danger small mt-1">{{ form.expense_date.errors[0] }}</div>
-            {% endif %}
-          </div>
-          <div class="col-md-3 field-group">
-            <label class="form-label">Vehicle <span class="text-danger">*</span></label>
-            {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
-            {% if form.vehicle_id.errors %}
-              <div class="text-danger small mt-1">{{ form.vehicle_id.errors[0] }}</div>
             {% endif %}
           </div>
           <div class="col-md-3 field-group">
@@ -83,6 +76,13 @@
             {{ form.project_id(class="form-select search-select", id="projectSelect") }}
             {% if form.project_id.errors %}
               <div class="text-danger small mt-1">{{ form.project_id.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-3 field-group">
+            <label class="form-label">Vehicle <span class="text-danger">*</span></label>
+            {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
+            {% if form.vehicle_id.errors %}
+              <div class="text-danger small mt-1">{{ form.vehicle_id.errors[0] }}</div>
             {% endif %}
           </div>
 
@@ -407,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var ts = sel.tomselect;
       ts.clear(true); ts.clearOptions();
       if (arr) arr.forEach(function(item) { ts.addOption(buildOptionFn(item)); });
-      ts.enable(); return;
+      ts.enable(); ts.close(); return;
     }
     sel.innerHTML = '<option value="0">-- Select --</option>';
     if (arr) arr.forEach(function(item) {
@@ -1203,12 +1203,13 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Put cursor in first field when form opens.
+  // Put cursor in first field when form opens — only if nothing is pre-filled.
   window.setTimeout(function() {
+    if (serverDistrictId && serverDistrictId !== 0) return;
     if (districtSelect && districtSelect.tomselect) {
-      districtSelect.tomselect.focus();
+      districtSelect.tomselect.control_input.focus({ preventScroll: true });
     } else if (districtSelect) {
-      districtSelect.focus();
+      districtSelect.focus({ preventScroll: true });
     }
   }, 120);
 
