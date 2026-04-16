@@ -20117,6 +20117,7 @@ def maintenance_expense_list():
     district_id = request.args.get('district_id', type=int) or 0
     project_id = request.args.get('project_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    work_order_no = (request.args.get('work_order_no') or '').strip()
     from_d = parse_date(from_date) if from_date else today
     to_d = parse_date(to_date) if to_date else today
     if not from_d:
