@@ -76,6 +76,20 @@
               <div class="text-danger small mt-1">{{ form.vehicle_id.errors[0] }}</div>
             {% endif %}
           </div>
+          <div class="col-md-8 field-group">
+            <label class="form-label d-flex justify-content-between align-items-center">
+              <span>Work Order</span>
+              <span class="d-flex gap-2">
+                <a href="{{ url_for('maintenance_work_order_list') }}" class="small text-decoration-none">View Work Orders</a>
+                <a href="{{ url_for('maintenance_work_order_form') }}" class="small text-decoration-none">Create New</a>
+              </span>
+            </label>
+            {{ form.work_order_id(class="form-select search-select", id="workOrderSelect") }}
+            {% if form.work_order_id.errors %}
+              <div class="text-danger small mt-1">{{ form.work_order_id.errors[0] }}</div>
+            {% endif %}
+            <small class="text-muted">Aik maintenance kaam ke multiple bills ko same work order ke sath link karein.</small>
+          </div>
           <div class="col-md-3 field-group">
             <label class="form-label">Date <span class="text-danger">*</span></label>
             {{ form.expense_date(class="form-control datepicker", id="expenseDate") }}

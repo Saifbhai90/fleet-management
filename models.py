@@ -925,6 +925,35 @@ class OilExpenseAttachment(db.Model):
 
 
 # ────────────────────────────────────────────────
+# Maintenance Work Order (master maintenance job card)
+# ────────────────────────────────────────────────
+class MaintenanceWorkOrder(db.Model):
+    __tablename__ = 'maintenance_work_order'
+    id = db.Column(db.Integer, primary_key=True)
+    work_order_no = db.Column(db.String(40), nullable=False, unique=True, index=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=True, index=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False, index=True)
+    opened_on = db.Column(db.Date, nullable=False)
+    closed_on = db.Column(db.Date, nullable=True)
+    work_type = db.Column(db.String(120), nullable=True, index=True)  # Engine, wheel bearing, brake, etc.
+    title = db.Column(db.String(180), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='open', index=True)  # open | in_progress | closed
+    remarks = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    district = db.relationship('District', backref='maintenance_work_orders', lazy='select')
+    project = db.relationship('Project', backref='maintenance_work_orders', lazy='select')
+    employee = db.relationship('Employee', backref='maintenance_work_orders', lazy='select')
+    vehicle = db.relationship('Vehicle', backref='maintenance_work_orders', lazy='select')
+    expenses = db.relationship('MaintenanceExpense', backref='work_order', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<MaintenanceWorkOrder {self.work_order_no}>'
+
+
+# ────────────────────────────────────────────────
 # Maintenance Expense (header: vehicle, date, meter readings)
 # ────────────────────────────────────────────────
 class MaintenanceExpense(db.Model):
@@ -942,6 +971,7 @@ class MaintenanceExpense(db.Model):
     job_interval_mode = db.Column(db.String(20), nullable=True)  # interval_km | interval_day
     payment_type = db.Column(db.String(20), nullable=True)  # Cash | Credit
     workspace_party_id = db.Column(db.Integer, db.ForeignKey('workspace_party.id'), nullable=True, index=True)
+    work_order_id = db.Column(db.Integer, db.ForeignKey('maintenance_work_order.id'), nullable=True, index=True)
     total_bill_amount = db.Column(db.Numeric(15, 2), nullable=True)
     upload_status = db.Column(db.String(20), nullable=True, default='success', index=True)  # processing|success|error|partial
     upload_total = db.Column(db.Integer, nullable=False, default=0)

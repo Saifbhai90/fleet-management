@@ -185,8 +185,15 @@
             <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('maintenance_expense_list') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-warning-subtle text-warning mb-2"><i class="bi bi-wrench"></i></div>
-                <div class="fw-semibold">Maintenance</div>
-                <small class="text-muted">Repair and maintenance records.</small>
+                <div class="fw-semibold">Maintenance Bills</div>
+                <small class="text-muted">Repair and maintenance bill entries.</small>
+              </a>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+              <a href="{{ url_for('maintenance_work_order_list') }}" class="ws-module-card p-3">
+                <div class="ws-module-icon bg-warning-subtle text-warning mb-2"><i class="bi bi-clipboard2-check"></i></div>
+                <div class="fw-semibold">Work Orders</div>
+                <small class="text-muted">One job with multiple bills and total cost tracking.</small>
               </a>
             </div>
             {% endif %}

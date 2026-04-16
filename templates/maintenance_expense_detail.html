@@ -27,7 +27,8 @@
         <div class="col-md-3"><small class="text-muted d-block">Job Category</small><span class="fw-semibold">{{ rec.job_category or '-' }}</span></div>
 
         <div class="col-md-3"><small class="text-muted d-block">Interval Mode</small><span class="fw-semibold">{{ rec.job_interval_mode or '-' }}</span></div>
-        <div class="col-md-9"><small class="text-muted d-block">Remarks</small><span class="fw-semibold">{{ rec.remarks or '-' }}</span></div>
+        <div class="col-md-3"><small class="text-muted d-block">Work Order</small><span class="fw-semibold">{% if rec.work_order %}<a href="{{ url_for('maintenance_work_order_detail', pk=rec.work_order.id) }}" class="text-decoration-none">{{ rec.work_order.work_order_no }}</a>{% else %}-{% endif %}</span></div>
+        <div class="col-md-6"><small class="text-muted d-block">Remarks</small><span class="fw-semibold">{{ rec.remarks or '-' }}</span></div>
       </div>
     </div>
   </div>

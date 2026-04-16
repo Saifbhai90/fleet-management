@@ -8,7 +8,7 @@ from models import (
     LeaveRequest,
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
     Party, Product, FuelExpense, FuelExpenseAttachment, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
-    MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
+    MaintenanceWorkOrder, MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
     WorkspaceProduct,
     WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceVehicleReadingSetup, WorkspaceExpense, ExpenseDeleteCleanupJob,
     Notification, NotificationRead,
@@ -19817,6 +19817,209 @@ def maintenance_expense_upload_resume(pk):
     return jsonify({'ok': True, 'started': bool(started)})
 
 
+def _next_maintenance_work_order_no(opened_on=None):
+    dt = opened_on or pk_date()
+    yymm = dt.strftime('%y%m')
+    prefix = f"MWO-{yymm}-"
+    latest = MaintenanceWorkOrder.query.filter(
+        MaintenanceWorkOrder.work_order_no.like(f"{prefix}%")
+    ).order_by(MaintenanceWorkOrder.id.desc()).first()
+    serial = 1
+    if latest and latest.work_order_no:
+        try:
+            serial = int(str(latest.work_order_no).split('-')[-1]) + 1
+        except Exception:
+            serial = 1
+    return f"{prefix}{serial:04d}"
+
+
+@app.route('/maintenance-work-orders')
+def maintenance_work_order_list():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    today = pk_date()
+    from_d = parse_date(request.args.get('from_date', '').strip()) or today
+    to_d = parse_date(request.args.get('to_date', '').strip()) or today
+    if from_d > to_d:
+        from_d, to_d = to_d, from_d
+    status = (request.args.get('status') or '').strip().lower()
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    q_txt = (request.args.get('q') or '').strip()
+
+    query = MaintenanceWorkOrder.query.filter(
+        MaintenanceWorkOrder.opened_on >= from_d,
+        MaintenanceWorkOrder.opened_on <= to_d,
+    )
+    if workspace_employee_id:
+        query = query.filter(
+            db.or_(
+                MaintenanceWorkOrder.employee_id == workspace_employee_id,
+                MaintenanceWorkOrder.employee_id.is_(None),
+            )
+        )
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(MaintenanceWorkOrder.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(MaintenanceWorkOrder.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(MaintenanceWorkOrder.vehicle_id.in_(list(allowed_vehicles)))
+    if status in ('open', 'in_progress', 'closed'):
+        query = query.filter(MaintenanceWorkOrder.status == status)
+    if vehicle_id:
+        query = query.filter(MaintenanceWorkOrder.vehicle_id == vehicle_id)
+    if q_txt:
+        q_like = f"%{q_txt}%"
+        query = query.filter(
+            db.or_(
+                MaintenanceWorkOrder.work_order_no.ilike(q_like),
+                MaintenanceWorkOrder.title.ilike(q_like),
+                MaintenanceWorkOrder.work_type.ilike(q_like),
+            )
+        )
+
+    work_orders = query.order_by(MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()).all()
+    rows = []
+    for wo in work_orders:
+        expenses = wo.expenses.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
+        total_amount = sum(float(e.total_bill_amount or 0) for e in expenses)
+        media_count = sum(e.attachments.count() for e in expenses)
+        rows.append({
+            'rec': wo,
+            'bill_count': len(expenses),
+            'total_amount': total_amount,
+            'media_count': media_count,
+        })
+
+    vehicle_q = Vehicle.query
+    if not is_master_or_admin and allowed_vehicles:
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    vehicles = vehicle_q.order_by(Vehicle.vehicle_no.asc()).all()
+    return render_template(
+        'maintenance_work_order_list.html',
+        rows=rows,
+        vehicles=vehicles,
+        from_date=from_d,
+        to_date=to_d,
+        selected_status=status,
+        selected_vehicle_id=vehicle_id,
+        q_txt=q_txt,
+    )
+
+
+@app.route('/maintenance-work-order/add', methods=['GET', 'POST'])
+@app.route('/maintenance-work-order/edit/<int:pk>', methods=['GET', 'POST'])
+def maintenance_work_order_form(pk=None):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceWorkOrder.query.get_or_404(pk) if pk else None
+    if rec and workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_work_order_list'))
+
+    districts = District.query.order_by(District.name.asc()).all()
+    district_id = request.form.get('district_id', type=int) if request.method == 'POST' else (rec.district_id if rec else None)
+    project_id = request.form.get('project_id', type=int) if request.method == 'POST' else (rec.project_id if rec else None)
+    vehicle_id = request.form.get('vehicle_id', type=int) if request.method == 'POST' else (rec.vehicle_id if rec else None)
+
+    project_q = Project.query
+    if district_id:
+        project_q = project_q.join(project_district).filter(project_district.c.district_id == district_id)
+    projects = project_q.order_by(Project.name.asc()).all()
+    vehicle_q = Vehicle.query
+    if project_id:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
+    if district_id:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    vehicles = vehicle_q.order_by(Vehicle.vehicle_no.asc()).all()
+
+    if request.method == 'POST':
+        opened_on = parse_date((request.form.get('opened_on') or '').strip()) or pk_date()
+        closed_on = parse_date((request.form.get('closed_on') or '').strip())
+        status = (request.form.get('status') or 'open').strip().lower()
+        if status not in ('open', 'in_progress', 'closed'):
+            status = 'open'
+        title = (request.form.get('title') or '').strip()
+        work_type = (request.form.get('work_type') or '').strip() or None
+        remarks = (request.form.get('remarks') or '').strip() or None
+        if not vehicle_id:
+            flash('Vehicle select karna zaroori hai.', 'danger')
+        elif not title:
+            flash('Work title required hai.', 'danger')
+        else:
+            if rec:
+                rec.district_id = district_id or None
+                rec.project_id = project_id or None
+                rec.vehicle_id = vehicle_id
+                rec.opened_on = opened_on
+                rec.closed_on = closed_on
+                rec.status = status
+                rec.title = title
+                rec.work_type = work_type
+                rec.remarks = remarks
+            else:
+                rec = MaintenanceWorkOrder(
+                    work_order_no=_next_maintenance_work_order_no(opened_on),
+                    district_id=district_id or None,
+                    project_id=project_id or None,
+                    employee_id=workspace_employee_id,
+                    vehicle_id=vehicle_id,
+                    opened_on=opened_on,
+                    closed_on=closed_on,
+                    status=status,
+                    title=title,
+                    work_type=work_type,
+                    remarks=remarks,
+                )
+                db.session.add(rec)
+            db.session.commit()
+            flash('Maintenance work order saved.', 'success')
+            return redirect(url_for('maintenance_work_order_detail', pk=rec.id))
+
+    return render_template(
+        'maintenance_work_order_form.html',
+        rec=rec,
+        districts=districts,
+        projects=projects,
+        vehicles=vehicles,
+    )
+
+
+@app.route('/maintenance-work-order/<int:pk>')
+def maintenance_work_order_detail(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_work_order_list'))
+    expenses = rec.expenses.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
+    total_bill = sum(float(x.total_bill_amount or 0) for x in expenses)
+    total_media = sum(x.attachments.count() for x in expenses)
+    return render_template(
+        'maintenance_work_order_detail.html',
+        rec=rec,
+        expenses=expenses,
+        total_bill=total_bill,
+        total_media=total_media,
+    )
+
+
 @app.route('/maintenance-expenses')
 def maintenance_expense_list():
     _guard = _require_workspace_employee_for_expense_management()
@@ -19896,6 +20099,11 @@ def maintenance_expense_list():
         query = query.filter(MaintenanceExpense.project_id == project_id)
     if vehicle_id:
         query = query.filter(MaintenanceExpense.vehicle_id == vehicle_id)
+    if work_order_no:
+        query = query.join(
+            MaintenanceWorkOrder,
+            MaintenanceWorkOrder.id == MaintenanceExpense.work_order_id,
+        ).filter(MaintenanceWorkOrder.work_order_no.ilike(f"%{work_order_no}%"))
     rows = query.order_by(
         MaintenanceExpense.expense_date.asc(),
         db.case((MaintenanceExpense.current_reading.is_(None), 1), else_=0).asc(),
@@ -19919,6 +20127,7 @@ def maintenance_expense_list():
         rows=rows_with_totals,
         from_date=from_d,
         to_date=to_d,
+        work_order_no=work_order_no,
         totals=totals,
         pagination=pagination,
         per_page=per_page,
@@ -19940,6 +20149,15 @@ def maintenance_expense_form(pk=None):
     if rec and workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('maintenance_expense_list'))
+    requested_work_order_id = request.args.get('work_order_id', type=int) or 0
+    requested_work_order = None
+    if requested_work_order_id and not rec and request.method == 'GET':
+        requested_work_order = MaintenanceWorkOrder.query.filter_by(id=requested_work_order_id).first()
+        if not requested_work_order:
+            requested_work_order_id = 0
+        elif workspace_employee_id and requested_work_order.employee_id and requested_work_order.employee_id != workspace_employee_id:
+            requested_work_order_id = 0
+            requested_work_order = None
     form = MaintenanceExpenseForm(obj=rec)
     total_bill_error = ''
     entered_total_bill = (
@@ -19966,6 +20184,9 @@ def maintenance_expense_form(pk=None):
     elif rec:
         selected_district_id = rec.district_id or None
         selected_project_id = rec.project_id or None
+    elif requested_work_order:
+        selected_district_id = requested_work_order.district_id or None
+        selected_project_id = requested_work_order.project_id or None
     else:
         selected_district_id = default_district_id or None
     if selected_district_id == 0:
@@ -19985,6 +20206,28 @@ def maintenance_expense_form(pk=None):
         form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
     else:
         form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
+    selected_vehicle_id = None
+    if request.method == 'POST':
+        selected_vehicle_id = form.vehicle_id.data or None
+    elif rec:
+        selected_vehicle_id = rec.vehicle_id or None
+    elif requested_work_order:
+        selected_vehicle_id = requested_work_order.vehicle_id or None
+    work_order_q = MaintenanceWorkOrder.query
+    if workspace_employee_id:
+        work_order_q = work_order_q.filter(
+            db.or_(
+                MaintenanceWorkOrder.employee_id == workspace_employee_id,
+                MaintenanceWorkOrder.employee_id.is_(None),
+            )
+        )
+    if selected_vehicle_id:
+        work_order_q = work_order_q.filter(MaintenanceWorkOrder.vehicle_id == selected_vehicle_id)
+    work_orders = work_order_q.order_by(MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()).limit(250).all()
+    form.work_order_id.choices = [(0, '-- No Work Order --')] + [
+        (w.id, f'{w.work_order_no} | {w.title}')
+        for w in work_orders
+    ]
     if request.method == 'GET' and rec:
         if rec.district_id:
             form.district_id.data = rec.district_id
@@ -19992,12 +20235,19 @@ def maintenance_expense_form(pk=None):
             form.project_id.data = rec.project_id
         if rec.vehicle_id:
             form.vehicle_id.data = rec.vehicle_id
+        if rec.work_order_id:
+            form.work_order_id.data = rec.work_order_id
         form.expense_by.data = _workspace_expense_by_for_reference(workspace_employee_id, 'MaintenanceExpense', rec.id)
         if rec.total_bill_amount is not None:
             entered_total_bill = f"{float(rec.total_bill_amount):.2f}"
     elif request.method == 'GET':
         if default_district_id:
             form.district_id.data = default_district_id
+        if requested_work_order:
+            form.district_id.data = requested_work_order.district_id or 0
+            form.project_id.data = requested_work_order.project_id or 0
+            form.vehicle_id.data = requested_work_order.vehicle_id
+            form.work_order_id.data = requested_work_order.id
         selected_payment_type = ''
         if not form.expense_date.data:
             form.expense_date.data = pk_date()
@@ -20088,6 +20338,63 @@ def maintenance_expense_form(pk=None):
             project_id = vehicle_obj.project_id
         if not district_id:
             district_id = vehicle_obj.district_id
+        work_order_id = form.work_order_id.data or None
+        if work_order_id == 0:
+            work_order_id = None
+        work_order_obj = None
+        if work_order_id:
+            work_order_obj = MaintenanceWorkOrder.query.filter_by(id=work_order_id).first()
+            if not work_order_obj:
+                flash('Selected work order not found.', 'danger')
+                return render_template(
+                    'maintenance_expense_form.html',
+                    form=form,
+                    rec=rec,
+                    title='Edit Maintenance' if rec else 'Add Maintenance',
+                    products_for_maintenance=products_for_maintenance,
+                    job_categories=job_categories,
+                    total_bill_error=total_bill_error,
+                    entered_total_bill=entered_total_bill,
+                    party_error=party_error,
+                    selected_payment_type=selected_payment_type,
+                    selected_party_id=selected_party_id,
+                    workspace_parties=workspace_parties,
+                    maintenance_direct_r2=maintenance_direct_r2,
+                )
+            if workspace_employee_id and work_order_obj.employee_id and work_order_obj.employee_id != workspace_employee_id:
+                flash('Selected work order is not allowed for current workspace employee.', 'danger')
+                return render_template(
+                    'maintenance_expense_form.html',
+                    form=form,
+                    rec=rec,
+                    title='Edit Maintenance' if rec else 'Add Maintenance',
+                    products_for_maintenance=products_for_maintenance,
+                    job_categories=job_categories,
+                    total_bill_error=total_bill_error,
+                    entered_total_bill=entered_total_bill,
+                    party_error=party_error,
+                    selected_payment_type=selected_payment_type,
+                    selected_party_id=selected_party_id,
+                    workspace_parties=workspace_parties,
+                    maintenance_direct_r2=maintenance_direct_r2,
+                )
+            if int(work_order_obj.vehicle_id or 0) != int(vehicle_id):
+                flash('Selected work order vehicle does not match expense vehicle.', 'danger')
+                return render_template(
+                    'maintenance_expense_form.html',
+                    form=form,
+                    rec=rec,
+                    title='Edit Maintenance' if rec else 'Add Maintenance',
+                    products_for_maintenance=products_for_maintenance,
+                    job_categories=job_categories,
+                    total_bill_error=total_bill_error,
+                    entered_total_bill=entered_total_bill,
+                    party_error=party_error,
+                    selected_payment_type=selected_payment_type,
+                    selected_party_id=selected_party_id,
+                    workspace_parties=workspace_parties,
+                    maintenance_direct_r2=maintenance_direct_r2,
+                )
         expense_date = form.expense_date.data
         curr_reading = form.current_reading.data
         remarks = form.remarks.data
@@ -20243,6 +20550,7 @@ def maintenance_expense_form(pk=None):
                     job_interval_mode=job_interval_mode,
                     payment_type=payment_type,
                     workspace_party_id=(workspace_party_id if payment_type == 'Credit' else None),
+                    work_order_id=work_order_id,
                     total_bill_amount=entered_total_bill_num,
                     remarks=remarks
                 )
@@ -20261,6 +20569,7 @@ def maintenance_expense_form(pk=None):
                 rec.job_interval_mode = job_interval_mode
                 rec.payment_type = payment_type
                 rec.workspace_party_id = workspace_party_id if payment_type == 'Credit' else None
+                rec.work_order_id = work_order_id
                 rec.total_bill_amount = entered_total_bill_num
                 rec.remarks = remarks
             _resequence_vehicle_maintenance_expenses(vehicle_id, workspace_employee_id)

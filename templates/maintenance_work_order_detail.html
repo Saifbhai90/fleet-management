@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Maintenance Work Order Detail{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <div>
+      <h5 class="mb-0"><i class="bi bi-clipboard2-data me-2"></i>{{ rec.work_order_no }}</h5>
+      <small class="text-muted">{{ rec.title }}</small>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('maintenance_work_order_list') }}" class="btn btn-outline-secondary btn-sm">Back</a>
+      <a href="{{ url_for('maintenance_work_order_form', pk=rec.id) }}" class="btn btn-outline-primary btn-sm">Edit</a>
+      <a href="{{ url_for('maintenance_expense_form', work_order_id=rec.id) }}" class="btn btn-success btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>Add Bill
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-8">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="row g-2 small">
+            <div class="col-md-4"><span class="text-muted">Vehicle:</span><br><span class="fw-semibold">{{ rec.vehicle.vehicle_no if rec.vehicle else '-' }}</span></div>
+            <div class="col-md-4"><span class="text-muted">Opened:</span><br><span class="fw-semibold">{{ rec.opened_on|ddmmyyyy if rec.opened_on else '-' }}</span></div>
+            <div class="col-md-4"><span class="text-muted">Closed:</span><br><span class="fw-semibold">{{ rec.closed_on|ddmmyyyy if rec.closed_on else '-' }}</span></div>
+            <div class="col-md-4"><span class="text-muted">District:</span><br><span class="fw-semibold">{{ rec.district.name if rec.district else '-' }}</span></div>
+            <div class="col-md-4"><span class="text-muted">Project:</span><br><span class="fw-semibold">{{ rec.project.name if rec.project else '-' }}</span></div>
+            <div class="col-md-4"><span class="text-muted">Type:</span><br><span class="fw-semibold">{{ rec.work_type or '-' }}</span></div>
+            <div class="col-md-12"><span class="text-muted">Remarks:</span><br><span class="fw-semibold">{{ rec.remarks or '-' }}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <h6 class="mb-3">Cost Summary</h6>
+          <div class="d-flex justify-content-between mb-2"><span>Total Bills</span><strong>{{ expenses|length }}</strong></div>
+          <div class="d-flex justify-content-between mb-2"><span>Total Media Files</span><strong>{{ total_media }}</strong></div>
+          <div class="d-flex justify-content-between border-top pt-2"><span>Grand Total</span><strong>{{ "%.2f"|format(total_bill or 0) }}</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header fw-semibold">Linked Bills</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>Bill No</th>
+            <th>Date</th>
+            <th>Party</th>
+            <th>Payment</th>
+            <th>Job Category</th>
+            <th>Amount</th>
+            <th>Media</th>
+            <th class="text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in expenses %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td class="fw-semibold">MAINT-{{ r.id }}</td>
+            <td>{{ r.expense_date|ddmmyyyy if r.expense_date else '-' }}</td>
+            <td>{{ r.workspace_party.name if r.workspace_party else '-' }}</td>
+            <td>{{ r.payment_type or '-' }}</td>
+            <td>{{ r.job_category or '-' }}</td>
+            <td>{{ "%.2f"|format((r.total_bill_amount or 0)|float) }}</td>
+            <td>{{ r.attachments.count() }}</td>
+            <td class="text-center">
+              <a href="{{ url_for('maintenance_expense_media', pk=r.id) }}" class="btn btn-outline-success btn-sm"><i class="bi bi-images"></i></a>
+              <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i></a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="9" class="text-center text-muted py-4">No bills linked yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

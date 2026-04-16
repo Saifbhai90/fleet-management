@@ -1136,6 +1136,7 @@ class MaintenanceExpenseForm(FlaskForm):
     district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- Select District --')], render_kw={'class': 'form-select search-select'})
     project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- Select Project --')], render_kw={'class': 'form-select search-select'})
     vehicle_id = SelectField('Vehicle No', coerce=int, validators=[DataRequired()], choices=[], render_kw={'class': 'form-select search-select'})
+    work_order_id = SelectField('Work Order', coerce=int, validators=[Optional()], choices=[(0, '-- No Work Order --')], render_kw={'class': 'form-select search-select'})
     expense_date = DateField('Date', format='%d-%m-%Y', validators=[DataRequired()],
                              render_kw={"class": "form-control datepicker"})
     current_reading = DecimalField('Current Reading', validators=[Optional()],

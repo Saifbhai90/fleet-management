@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Maintenance Work Orders{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="bi bi-clipboard2-check me-2"></i>Maintenance Work Orders</h5>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-secondary btn-sm">Bills List</a>
+      <a href="{{ url_for('maintenance_work_order_form') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>New Work Order
+      </a>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="GET" action="{{ url_for('maintenance_work_order_list') }}" class="row g-2 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label small">From</label>
+          <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date|ddmmyyyy if from_date else '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">To</label>
+          <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date|ddmmyyyy if to_date else '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Status</label>
+          <select name="status" class="form-select form-select-sm search-select">
+            <option value="">All</option>
+            <option value="open" {% if selected_status == 'open' %}selected{% endif %}>Open</option>
+            <option value="in_progress" {% if selected_status == 'in_progress' %}selected{% endif %}>In Progress</option>
+            <option value="closed" {% if selected_status == 'closed' %}selected{% endif %}>Closed</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Vehicle</label>
+          <select name="vehicle_id" class="form-select form-select-sm search-select">
+            <option value="0">All Vehicles</option>
+            {% for v in vehicles %}
+            <option value="{{ v.id }}" {% if selected_vehicle_id and selected_vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">Search</label>
+          <input type="text" name="q" value="{{ q_txt or '' }}" class="form-control form-control-sm" placeholder="Work no / title / type">
+        </div>
+        <div class="col-md-1">
+          <button class="btn btn-primary btn-sm w-100" type="submit">Apply</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>Work Order</th>
+            <th>Vehicle</th>
+            <th>Opened</th>
+            <th>Type</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Bills</th>
+            <th>Total Cost</th>
+            <th>Media</th>
+            <th class="text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td class="fw-semibold">{{ row.rec.work_order_no }}</td>
+            <td>{{ row.rec.vehicle.vehicle_no if row.rec.vehicle else '-' }}</td>
+            <td>{{ row.rec.opened_on|ddmmyyyy if row.rec.opened_on else '-' }}</td>
+            <td>{{ row.rec.work_type or '-' }}</td>
+            <td>{{ row.rec.title }}</td>
+            <td>
+              {% if row.rec.status == 'closed' %}
+              <span class="badge bg-success">Closed</span>
+              {% elif row.rec.status == 'in_progress' %}
+              <span class="badge bg-warning text-dark">In Progress</span>
+              {% else %}
+              <span class="badge bg-primary">Open</span>
+              {% endif %}
+            </td>
+            <td>{{ row.bill_count }}</td>
+            <td>{{ "%.2f"|format(row.total_amount or 0) }}</td>
+            <td>{{ row.media_count }}</td>
+            <td class="text-center">
+              <a href="{{ url_for('maintenance_work_order_detail', pk=row.rec.id) }}" class="btn btn-outline-success btn-sm" title="View"><i class="bi bi-eye"></i></a>
+              <a href="{{ url_for('maintenance_work_order_form', pk=row.rec.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+              <a href="{{ url_for('maintenance_expense_form', work_order_id=row.rec.id) }}" class="btn btn-outline-warning btn-sm" title="Add bill"><i class="bi bi-receipt"></i></a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="11" class="text-center text-muted py-4">No work orders found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
