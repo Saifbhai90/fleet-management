@@ -86,26 +86,6 @@
             {% endif %}
           </div>
 
-          {% if requested_work_order %}
-          <!-- Work order pre-fill hint -->
-          <div class="col-12">
-            <div class="alert alert-info py-2 px-3 mb-0 small" id="woPreFillHint">
-              <i class="bi bi-info-circle me-1"></i>
-              <strong>Work Order:</strong> {{ requested_work_order.work_order_no }}
-              {% if requested_work_order.district %}
-                &nbsp;|&nbsp;<strong>District:</strong> {{ requested_work_order.district.name }}
-              {% endif %}
-              {% if requested_work_order.project %}
-                &nbsp;|&nbsp;<strong>Project:</strong> {{ requested_work_order.project.name }}
-              {% endif %}
-              {% if requested_work_order.vehicle %}
-                &nbsp;|&nbsp;<strong>Vehicle:</strong> {{ requested_work_order.vehicle.vehicle_no }}
-              {% endif %}
-              &nbsp;&mdash; <span class="text-muted">Upar se in fields ko manually select karein agar auto-select na ho.</span>
-            </div>
-          </div>
-          {% endif %}
-
           <!-- Row 2: Work Order (+ Close Job btn) | Job Category -->
           <div class="col-md-6 field-group">
             <label class="form-label d-flex justify-content-between align-items-center">
