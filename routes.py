@@ -20863,6 +20863,7 @@ def maintenance_expense_form(pk=None):
         selected_party_id=selected_party_id,
         workspace_parties=workspace_parties,
         maintenance_direct_r2=maintenance_direct_r2,
+        requested_work_order=requested_work_order,
     )
 
 
