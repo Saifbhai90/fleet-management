@@ -45,6 +45,36 @@
     </div>
   </div>
 
+  {% if rec.upload_status == 'processing' %}
+  <div id="woDetailUploadBar" class="alert alert-info d-flex align-items-center gap-3 mb-3 py-2">
+    <span class="spinner-border spinner-border-sm flex-shrink-0"></span>
+    <span class="small">Job photos/videos upload ho rahi hain — <strong id="woDetailUploadPct">{{ ((rec.upload_done or 0) / (rec.upload_total or 1) * 100)|int }}%</strong> (<span id="woDetailUploadCount">{{ rec.upload_done or 0 }}/{{ rec.upload_total or 0 }}</span>)</span>
+  </div>
+  <script>
+  (function() {
+    var pk = {{ rec.id }};
+    function poll() {
+      fetch('/api/work-order/upload-status/' + pk)
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if (!d.ok) return;
+          var pctEl = document.getElementById('woDetailUploadPct');
+          var cntEl = document.getElementById('woDetailUploadCount');
+          var barEl = document.getElementById('woDetailUploadBar');
+          if (pctEl) pctEl.textContent = d.pct + '%';
+          if (cntEl) cntEl.textContent = d.done + '/' + d.total;
+          if (d.status === 'processing') { setTimeout(poll, 2500); }
+          else if (barEl) { barEl.innerHTML = '<span class="small text-success fw-semibold"><i class="bi bi-check-circle me-1"></i>Upload complete! Page reload karein media dekhne ke liye.</span>'; }
+        })
+        .catch(function(){setTimeout(poll,5000);});
+    }
+    setTimeout(poll, 2500);
+  })();
+  </script>
+  {% elif rec.upload_status in ('error', 'partial') %}
+  <div class="alert alert-warning small mb-3 py-2"><i class="bi bi-exclamation-triangle me-1"></i>Kuch files upload nahi ho sakein. Work order edit karein aur dobara try karein.</div>
+  {% endif %}
+
   {% if rec.attachments.count() %}
   <div class="card mb-3">
     <div class="card-header fw-semibold d-flex justify-content-between align-items-center">

@@ -1305,6 +1305,13 @@ def _expense_upload_kind_config(kind):
             'folder': 'oil_expense',
             'log_prefix': 'Oil',
         },
+        'work_order': {
+            'record_model': MaintenanceWorkOrder,
+            'attachment_model': MaintenanceWorkOrderAttachment,
+            'fk_field': 'work_order_id',
+            'folder': 'maintenance_work_order',
+            'log_prefix': 'WorkOrder',
+        },
     }
     return mapping.get(kind)
 
@@ -1421,6 +1428,14 @@ def _prepare_maintenance_upload_manifest(files, expense_id):
 
 def _start_maintenance_upload_worker(expense_id: int):
     return _start_expense_upload_worker('maintenance', expense_id)
+
+
+def _prepare_work_order_upload_manifest(files, work_order_id):
+    return _prepare_expense_upload_manifest(files, 'work_order', work_order_id)
+
+
+def _start_work_order_upload_worker(work_order_id: int):
+    return _start_expense_upload_worker('work_order', work_order_id)
 
 
 def _prepare_fuel_upload_manifest(files, expense_id):
@@ -19888,6 +19903,14 @@ def _ensure_maintenance_work_order_schema():
         )
         """,
         "CREATE INDEX IF NOT EXISTS ix_mwo_attachment_work_order_id ON maintenance_work_order_attachment (work_order_id)",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_status VARCHAR(20)",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_total INTEGER DEFAULT 0",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_done INTEGER DEFAULT 0",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_failed INTEGER DEFAULT 0",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_error TEXT",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_manifest_json TEXT",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_started_at TIMESTAMP",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_finished_at TIMESTAMP",
     ]
     try:
         for stmt in stmts:
@@ -20055,17 +20078,37 @@ def maintenance_work_order_form(pk=None):
                 db.session.add(rec)
             db.session.commit()
             files = request.files.getlist('attachments')
-            if files and any(f and getattr(f, 'filename', None) for f in files):
-                skipped = _add_expense_attachments_from_request(
-                    files,
-                    r2_folder='maintenance_work_order',
-                    attachment_model=MaintenanceWorkOrderAttachment,
-                    fk_kwargs={'work_order_id': rec.id},
-                )
-                db.session.commit()
-                if skipped:
-                    flash('Kuch files skip ho gayin: ' + '; '.join(skipped), 'warning')
-            flash('Maintenance work order saved.', 'success')
+            has_new_files = bool(files and any(f and getattr(f, 'filename', None) for f in files))
+            if has_new_files:
+                try:
+                    manifest, skipped_att = _prepare_work_order_upload_manifest(files, rec.id)
+                    rec.upload_total = len(manifest)
+                    rec.upload_done = 0
+                    rec.upload_failed = 0
+                    rec.upload_error = None
+                    rec.upload_finished_at = None
+                    if manifest:
+                        rec.upload_status = 'processing'
+                        rec.upload_started_at = pk_now()
+                        rec.upload_manifest_json = json.dumps(manifest)
+                    else:
+                        rec.upload_status = 'success'
+                        rec.upload_started_at = None
+                        rec.upload_manifest_json = None
+                        rec.upload_finished_at = pk_now()
+                    db.session.commit()
+                    if manifest:
+                        _start_work_order_upload_worker(rec.id)
+                        flash(f'Work order saved. Upload background me start ho gaya ({len(manifest)} file).', 'success')
+                    else:
+                        flash('Maintenance work order saved.', 'success')
+                    if skipped_att:
+                        flash('Kuch files queue me nahi gayin: ' + '; '.join(skipped_att), 'warning')
+                except Exception as ex:
+                    app.logger.exception('WO upload prep failed: %s', ex)
+                    flash('Work order saved lekin files upload nahi ho sakein. Try again.', 'warning')
+            else:
+                flash('Maintenance work order saved.', 'success')
             return redirect(url_for('maintenance_work_order_detail', pk=rec.id))
 
     return render_template(
@@ -20093,6 +20136,31 @@ def maintenance_work_order_close(pk):
     rec.closed_on = close_date
     db.session.commit()
     return jsonify({'ok': True, 'work_order_no': rec.work_order_no, 'closed_on': format_date_ddmmyyyy(close_date)})
+
+
+@app.route('/api/work-order/upload-status/<int:pk>')
+def api_work_order_upload_status(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    total = int(rec.upload_total or 0)
+    done = int(rec.upload_done or 0)
+    failed = int(rec.upload_failed or 0)
+    status = (rec.upload_status or ('success' if total == 0 else 'processing')).strip().lower()
+    pct = int(round((done / total) * 100)) if total > 0 else 100
+    return jsonify({
+        'ok': True,
+        'status': status,
+        'total': total,
+        'done': done,
+        'failed': failed,
+        'pct': pct,
+        'error': rec.upload_error or None,
+    })
 
 
 @app.route('/maintenance-work-order/<int:pk>')

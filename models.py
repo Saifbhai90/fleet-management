@@ -942,6 +942,14 @@ class MaintenanceWorkOrder(db.Model):
     status = db.Column(db.String(20), nullable=False, default='open', index=True)  # open | in_progress | closed
     remarks = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
+    upload_status = db.Column(db.String(20), nullable=True)
+    upload_total = db.Column(db.Integer, nullable=True, default=0)
+    upload_done = db.Column(db.Integer, nullable=True, default=0)
+    upload_failed = db.Column(db.Integer, nullable=True, default=0)
+    upload_error = db.Column(db.Text, nullable=True)
+    upload_manifest_json = db.Column(db.Text, nullable=True)
+    upload_started_at = db.Column(db.DateTime, nullable=True)
+    upload_finished_at = db.Column(db.DateTime, nullable=True)
 
     district = db.relationship('District', backref='maintenance_work_orders', lazy='select')
     project = db.relationship('Project', backref='maintenance_work_orders', lazy='select')

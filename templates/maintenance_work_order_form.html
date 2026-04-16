@@ -78,8 +78,22 @@
         <div class="mt-3">
           <label class="form-label fw-semibold">Job Photos / Videos <small class="text-muted fw-normal">(mixed work photos, before/after, etc.)</small></label>
           <input type="file" name="attachments" id="woAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
-          <small class="text-muted">Multiple files allowed. You can also paste with <kbd>Ctrl+V</kbd>. Har bill ki photos us bill ki entry ke sath attach karein, aur job-level (mixed) photos yahan add karein.</small>
+          <small class="text-muted">Multiple files allowed. You can also paste with <kbd>Ctrl+V</kbd>. Upload background me hogi — form save hone ke baad redirect ho jaayega, files apne aap upload hoti rahein gi.</small>
           <div class="small text-success mt-1" id="woAttachmentPasteHint"></div>
+          {% if rec and rec.upload_status and rec.upload_status not in ('success', None) %}
+          <div id="woUploadStatusBar" class="mt-2 p-2 rounded border bg-light">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="small fw-semibold">Upload Status</span>
+              <span id="woUploadStatusBadge" class="badge bg-secondary">{{ rec.upload_status }}</span>
+            </div>
+            <div class="progress" style="height:1.2rem">
+              <div id="woUploadProgBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:{{ ((rec.upload_done or 0) / (rec.upload_total or 1) * 100)|int }}%">
+                <span class="small">{{ rec.upload_done or 0 }}/{{ rec.upload_total or 0 }}</span>
+              </div>
+            </div>
+            {% if rec.upload_error %}<div class="small text-danger mt-1">{{ rec.upload_error[-200:] }}</div>{% endif %}
+          </div>
+          {% endif %}
         </div>
         {% if rec and rec.attachments.count() %}
         <div class="mt-3">
@@ -103,7 +117,7 @@
         {% endif %}
         <div class="mt-3 d-flex justify-content-end gap-2">
           <a href="{{ url_for('maintenance_work_order_list') }}" class="btn btn-outline-secondary">Cancel</a>
-          <button type="submit" class="btn btn-primary">Save Work Order</button>
+          <button type="submit" class="btn btn-primary" id="woSaveBtn">Save Work Order</button>
         </div>
       </form>
     </div>
@@ -113,34 +127,66 @@
 .existing-attachments-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
 .existing-attachment-card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; background: #fff; }
 </style>
+{% if rec and rec.upload_status == 'processing' %}
+<script>
+(function() {
+  var pk = {{ rec.id }};
+  var bar = document.getElementById('woUploadProgBar');
+  var badge = document.getElementById('woUploadStatusBadge');
+  function poll() {
+    fetch('/api/work-order/upload-status/' + pk)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        if (bar) { bar.style.width = d.pct + '%'; bar.textContent = d.done + '/' + d.total; }
+        if (badge) { badge.textContent = d.status; badge.className = 'badge ' + (d.status === 'success' ? 'bg-success' : d.status === 'error' ? 'bg-danger' : 'bg-warning text-dark'); }
+        if (d.status === 'processing') { setTimeout(poll, 2500); }
+      })
+      .catch(function() { setTimeout(poll, 5000); });
+  }
+  setTimeout(poll, 2500);
+})();
+</script>
+{% endif %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   var woFiles = document.getElementById('woAttachmentFiles');
   var woPasteHint = document.getElementById('woAttachmentPasteHint');
-  var dtItems = [];
+  var woSaveBtn = document.getElementById('woSaveBtn');
+  function updateWoFileHint() {
+    if (!woPasteHint || !woFiles) return;
+    var n = woFiles.files ? woFiles.files.length : 0;
+    woPasteHint.textContent = n ? n + ' file(s) ready — upload background me hogi.' : '';
+  }
   if (woFiles) {
+    woFiles.addEventListener('change', updateWoFileHint);
     document.addEventListener('paste', function(e) {
-      var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      var clipItems = (e.clipboardData || (e.originalEvent && e.originalEvent.clipboardData) || {items:[]}).items;
       var added = 0;
-      for (var i = 0; i < items.length; i++) {
-        if (items[i].kind === 'file' && (items[i].type.startsWith('image/') || items[i].type.startsWith('video/'))) {
-          dtItems.push(items[i].getAsFile());
+      var dt = new DataTransfer();
+      if (woFiles.files) Array.from(woFiles.files).forEach(function(f) { dt.items.add(f); });
+      for (var i = 0; i < clipItems.length; i++) {
+        if (clipItems[i].kind === 'file' && (clipItems[i].type.startsWith('image/') || clipItems[i].type.startsWith('video/'))) {
+          dt.items.add(clipItems[i].getAsFile());
           added++;
         }
       }
       if (added > 0) {
-        var dt = new DataTransfer();
-        (Array.from(woFiles.files || [])).forEach(function(f) { dt.items.add(f); });
-        dtItems.forEach(function(f) { dt.items.add(f); });
         woFiles.files = dt.files;
-        if (woPasteHint) woPasteHint.textContent = woFiles.files.length + ' file(s) selected (including pasted).';
+        updateWoFileHint();
       }
     });
   }
-});
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
+  var woForm = document.querySelector('form');
+  var woSubmitLocked = false;
+  if (woForm && woSaveBtn) {
+    woForm.addEventListener('submit', function(e) {
+      if (woSubmitLocked) { e.preventDefault(); return; }
+      woSubmitLocked = true;
+      woSaveBtn.disabled = true;
+      woSaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+    });
+  }
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');

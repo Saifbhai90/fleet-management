@@ -590,7 +590,10 @@ document.addEventListener('DOMContentLoaded', function() {
   function _selSet(sel, val) {
     if (!sel) return;
     sel.value = val;
-    if (sel.tomselect) sel.tomselect.setValue(String(val), true);
+    if (sel.tomselect) {
+      sel.tomselect.setValue(String(val), true);
+      sel.tomselect.close();
+    }
   }
 
   function _loadProjectsForDistrict(did, thenSelectProjectId, thenCallback) {
