@@ -20368,13 +20368,15 @@ def maintenance_expense_form(pk=None):
         project_q = project_q.join(project_district).filter(project_district.c.district_id == selected_district_id)
     form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
 
+    vehicle_q = Vehicle.query
     if selected_project_id:
-        vehicle_q = Vehicle.query.filter(Vehicle.project_id == selected_project_id)
-        if selected_district_id:
-            vehicle_q = vehicle_q.filter(Vehicle.district_id == selected_district_id)
-        form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
-    else:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == selected_project_id)
+    if selected_district_id:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == selected_district_id)
+    if not selected_project_id and not selected_district_id:
         form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
+    else:
+        form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
     selected_vehicle_id = None
     if request.method == 'POST':
         selected_vehicle_id = form.vehicle_id.data or None
@@ -20418,6 +20420,7 @@ def maintenance_expense_form(pk=None):
             form.project_id.data = requested_work_order.project_id or 0
             form.vehicle_id.data = requested_work_order.vehicle_id
             form.work_order_id.data = requested_work_order.id
+            form.expense_date.data = requested_work_order.opened_on
         selected_payment_type = ''
         if not form.expense_date.data:
             form.expense_date.data = pk_date()
