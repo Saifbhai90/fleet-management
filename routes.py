@@ -19834,8 +19834,63 @@ def _next_maintenance_work_order_no(opened_on=None):
     return f"{prefix}{serial:04d}"
 
 
+_maintenance_work_order_schema_ready = {'ok': False}
+
+
+def _ensure_maintenance_work_order_schema():
+    """Safety net for environments where migration is delayed/missed.
+
+    Keeps maintenance pages functional by creating required table/columns if absent.
+    """
+    if _maintenance_work_order_schema_ready.get('ok'):
+        return
+    stmts = [
+        """
+        CREATE TABLE IF NOT EXISTS maintenance_work_order (
+            id SERIAL PRIMARY KEY,
+            work_order_no VARCHAR(40),
+            district_id INTEGER NULL,
+            project_id INTEGER NULL,
+            employee_id INTEGER NULL,
+            vehicle_id INTEGER NULL,
+            opened_on DATE NULL,
+            closed_on DATE NULL,
+            work_type VARCHAR(120) NULL,
+            title VARCHAR(180) NULL,
+            status VARCHAR(20) NULL DEFAULT 'open',
+            remarks TEXT NULL,
+            created_at TIMESTAMP NULL
+        )
+        """,
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS work_order_no VARCHAR(40)",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS district_id INTEGER",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS project_id INTEGER",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS employee_id INTEGER",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS vehicle_id INTEGER",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS opened_on DATE",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS closed_on DATE",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS work_type VARCHAR(120)",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS title VARCHAR(180)",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS status VARCHAR(20)",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS remarks TEXT",
+        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
+        "ALTER TABLE maintenance_expense ADD COLUMN IF NOT EXISTS work_order_id INTEGER",
+        "CREATE INDEX IF NOT EXISTS ix_maintenance_expense_work_order_id ON maintenance_expense (work_order_id)",
+        "CREATE INDEX IF NOT EXISTS ix_maintenance_work_order_work_order_no ON maintenance_work_order (work_order_no)",
+    ]
+    try:
+        for stmt in stmts:
+            db.session.execute(text(stmt))
+        db.session.commit()
+        _maintenance_work_order_schema_ready['ok'] = True
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('Maintenance work-order schema safety sync failed')
+
+
 @app.route('/maintenance-work-orders')
 def maintenance_work_order_list():
+    _ensure_maintenance_work_order_schema()
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
@@ -19922,6 +19977,7 @@ def maintenance_work_order_list():
 @app.route('/maintenance-work-order/add', methods=['GET', 'POST'])
 @app.route('/maintenance-work-order/edit/<int:pk>', methods=['GET', 'POST'])
 def maintenance_work_order_form(pk=None):
+    _ensure_maintenance_work_order_schema()
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
@@ -20001,6 +20057,7 @@ def maintenance_work_order_form(pk=None):
 
 @app.route('/maintenance-work-order/<int:pk>')
 def maintenance_work_order_detail(pk):
+    _ensure_maintenance_work_order_schema()
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
@@ -20023,6 +20080,7 @@ def maintenance_work_order_detail(pk):
 
 @app.route('/maintenance-expenses')
 def maintenance_expense_list():
+    _ensure_maintenance_work_order_schema()
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
@@ -20139,6 +20197,7 @@ def maintenance_expense_list():
 @app.route('/maintenance-expense/add', methods=['GET', 'POST'])
 @app.route('/maintenance-expense/edit/<int:pk>', methods=['GET', 'POST'])
 def maintenance_expense_form(pk=None):
+    _ensure_maintenance_work_order_schema()
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
