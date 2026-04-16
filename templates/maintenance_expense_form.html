@@ -52,44 +52,11 @@
     <textarea name="attachments_direct_json" id="attachmentsDirectJson" class="d-none" rows="1" autocomplete="off"></textarea>
 
     <div class="form-section">
-      <div class="form-section-header">Location & Date</div>
+      <div class="form-section-header">Bill Details</div>
       <div class="form-section-body">
         <div class="row g-2">
-          <div class="col-md-4 field-group">
-            <label class="form-label">District</label>
-            {{ form.district_id(class="form-select search-select", id="districtSelect") }}
-            {% if form.district_id.errors %}
-              <div class="text-danger small mt-1">{{ form.district_id.errors[0] }}</div>
-            {% endif %}
-          </div>
-          <div class="col-md-4 field-group">
-            <label class="form-label">Project</label>
-            {{ form.project_id(class="form-select search-select", id="projectSelect") }}
-            {% if form.project_id.errors %}
-              <div class="text-danger small mt-1">{{ form.project_id.errors[0] }}</div>
-            {% endif %}
-          </div>
-          <div class="col-md-4 field-group">
-            <label class="form-label">Vehicle <span class="text-danger">*</span></label>
-            {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
-            {% if form.vehicle_id.errors %}
-              <div class="text-danger small mt-1">{{ form.vehicle_id.errors[0] }}</div>
-            {% endif %}
-          </div>
-          <div class="col-md-8 field-group">
-            <label class="form-label d-flex justify-content-between align-items-center">
-              <span>Work Order</span>
-              <span class="d-flex gap-2">
-                <a href="{{ url_for('maintenance_work_order_list') }}" class="small text-decoration-none">View Work Orders</a>
-                <a href="{{ url_for('maintenance_work_order_form') }}" class="small text-decoration-none">Create New</a>
-              </span>
-            </label>
-            {{ form.work_order_id(class="form-select search-select", id="workOrderSelect") }}
-            {% if form.work_order_id.errors %}
-              <div class="text-danger small mt-1">{{ form.work_order_id.errors[0] }}</div>
-            {% endif %}
-            <small class="text-muted">Aik maintenance kaam ke multiple bills ko same work order ke sath link karein.</small>
-          </div>
+
+          <!-- Row 1: Date | Vehicle | District | Project -->
           <div class="col-md-3 field-group">
             <label class="form-label">Date <span class="text-danger">*</span></label>
             {{ form.expense_date(class="form-control datepicker", id="expenseDate") }}
@@ -97,15 +64,51 @@
               <div class="text-danger small mt-1">{{ form.expense_date.errors[0] }}</div>
             {% endif %}
           </div>
-          <div class="col-md-5 field-group">
-            <label class="form-label">Current Reading <small class="text-muted" id="taskReadingsMeta">(Start: - | Close: -)</small></label>
-            {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
-            {% if form.current_reading.errors %}
-              <div class="text-danger small mt-1">{{ form.current_reading.errors[0] }}</div>
+          <div class="col-md-3 field-group">
+            <label class="form-label">Vehicle <span class="text-danger">*</span></label>
+            {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
+            {% if form.vehicle_id.errors %}
+              <div class="text-danger small mt-1">{{ form.vehicle_id.errors[0] }}</div>
             {% endif %}
-            <small class="reading-match-note text-muted" id="currentReadingMatchNote">Enter reading to check match with task start/close.</small>
           </div>
-          <div class="col-md-4 field-group job-category-group">
+          <div class="col-md-3 field-group">
+            <label class="form-label">District</label>
+            {{ form.district_id(class="form-select search-select", id="districtSelect") }}
+            {% if form.district_id.errors %}
+              <div class="text-danger small mt-1">{{ form.district_id.errors[0] }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-3 field-group">
+            <label class="form-label">Project</label>
+            {{ form.project_id(class="form-select search-select", id="projectSelect") }}
+            {% if form.project_id.errors %}
+              <div class="text-danger small mt-1">{{ form.project_id.errors[0] }}</div>
+            {% endif %}
+          </div>
+
+          <!-- Row 2: Work Order (+ Close Job btn) | Job Category -->
+          <div class="col-md-6 field-group">
+            <label class="form-label d-flex justify-content-between align-items-center">
+              <span>Work Order <small class="text-muted fw-normal">(optional — multi-bill job)</small></span>
+              <span class="d-flex gap-2">
+                <a href="{{ url_for('maintenance_work_order_list') }}" class="small text-decoration-none">View All</a>
+                <a href="{{ url_for('maintenance_work_order_form') }}" class="small text-decoration-none text-success">+ New</a>
+              </span>
+            </label>
+            <div class="d-flex gap-2 align-items-start">
+              <div class="flex-grow-1">
+                {{ form.work_order_id(class="form-select search-select", id="workOrderSelect") }}
+                {% if form.work_order_id.errors %}
+                  <div class="text-danger small mt-1">{{ form.work_order_id.errors[0] }}</div>
+                {% endif %}
+              </div>
+              <button type="button" class="btn btn-outline-danger btn-sm text-nowrap d-none" id="closeJobBtn" style="min-height:40px">
+                <i class="bi bi-lock-fill me-1"></i>Close Job
+              </button>
+            </div>
+            <div id="workOrderStatusHint" class="small mt-1"></div>
+          </div>
+          <div class="col-md-6 field-group job-category-group">
             <label class="form-label">Job Category</label>
             <div class="input-group">
               <select name="job_category" id="jobCategorySelect" class="form-select search-select">
@@ -127,11 +130,21 @@
               </button>
             </div>
             <input type="hidden" name="job_interval_mode" id="jobIntervalMode" value="{{ rec.job_interval_mode if rec and rec.job_interval_mode else '' }}">
-            <small class="text-muted">Select category with interval mode to support next maintenance tracking.</small>
+            <small class="text-muted">Category with interval → next maintenance tracking support.</small>
           </div>
-          <div class="col-md-4 field-group">
-            <label class="form-label">Payment Type</label>
-            <select name="payment_type" id="paymentTypeSelect" class="form-select search-select">
+
+          <!-- Row 3: Current Reading | Payment Type | Party Name | Total Bill -->
+          <div class="col-md-3 field-group">
+            <label class="form-label">Current Reading <small class="text-muted" id="taskReadingsMeta">(Start: - | Close: -)</small></label>
+            {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
+            {% if form.current_reading.errors %}
+              <div class="text-danger small mt-1">{{ form.current_reading.errors[0] }}</div>
+            {% endif %}
+            <small class="reading-match-note text-muted" id="currentReadingMatchNote">Enter reading to match with task.</small>
+          </div>
+          <div class="col-md-2 field-group">
+            <label class="form-label">Payment</label>
+            <select name="payment_type" id="paymentTypeSelect" class="form-select form-select-sm search-select" style="min-height:40px">
               <option value="" {% if not selected_payment_type %}selected{% endif %}>-- Select --</option>
               <option value="Cash" {% if selected_payment_type == 'Cash' %}selected{% endif %}>Cash</option>
               <option value="Credit" {% if selected_payment_type == 'Credit' %}selected{% endif %}>Credit</option>
@@ -149,22 +162,23 @@
               <div class="text-danger small mt-1">{{ party_error }}</div>
             {% endif %}
           </div>
-          <div class="col-md-4 field-group">
-            <label class="form-label">Total Bill Amount (User Entry)</label>
+          <div class="col-md-3 field-group">
+            <label class="form-label">Total Bill Amount</label>
             <input
-              type="number"
-              step="0.01"
-              min="0"
+              type="text"
               class="form-control"
               id="totalBillInput"
               name="total_bill_amount"
               value="{{ entered_total_bill if entered_total_bill is not none else '' }}"
-              placeholder="Enter final bill total"
+              placeholder="e.g. 500+800+200"
+              autocomplete="off"
             >
+            <small id="totalBillEvalHint" class="text-success fw-semibold"></small>
             {% if total_bill_error %}
               <div class="text-danger small mt-1">{{ total_bill_error }}</div>
             {% endif %}
           </div>
+
         </div>
       </div>
     </div>
@@ -438,6 +452,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var taskStartReading = null;
   var taskCloseReading = null;
   var totalBillInput = document.getElementById('totalBillInput');
+  var totalBillEvalHint = document.getElementById('totalBillEvalHint');
+  var workOrderSelect = document.getElementById('workOrderSelect');
+  var closeJobBtn = document.getElementById('closeJobBtn');
+  var workOrderStatusHint = document.getElementById('workOrderStatusHint');
   var cashExpenseByValue = '';
   var maintAttachmentFiles = document.getElementById('maintAttachmentFiles');
   var maintAttachmentPasteHint = document.getElementById('maintAttachmentPasteHint');
@@ -466,6 +484,101 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof initSearchableDropdowns === 'function') {
       initSearchableDropdowns(scopeEl);
     }
+  }
+
+  /* ── Total Bill Expression Evaluator ── */
+  function _evalBillExpr(expr) {
+    if (!expr) return null;
+    var safe = expr.replace(/[^0-9+\-*\/.()\s]/g, '').trim();
+    if (!safe) return null;
+    try {
+      var result = Function('"use strict"; return (' + safe + ')')();
+      if (typeof result === 'number' && isFinite(result) && result >= 0) return result;
+    } catch(e) {}
+    return null;
+  }
+  if (totalBillInput) {
+    function _updateTotalBillHint() {
+      var val = totalBillInput.value.trim();
+      if (!val) { if (totalBillEvalHint) totalBillEvalHint.textContent = ''; return; }
+      if (/^[0-9]*\.?[0-9]*$/.test(val)) { if (totalBillEvalHint) totalBillEvalHint.textContent = ''; return; }
+      var result = _evalBillExpr(val);
+      if (totalBillEvalHint) {
+        totalBillEvalHint.textContent = result !== null ? ('= ' + result.toFixed(2)) : '';
+      }
+    }
+    totalBillInput.addEventListener('input', _updateTotalBillHint);
+    _updateTotalBillHint();
+    var maintForm = document.getElementById('maintenanceExpenseForm');
+    if (maintForm) {
+      maintForm.addEventListener('submit', function() {
+        var val = totalBillInput.value.trim();
+        var result = _evalBillExpr(val);
+        if (result !== null && val.match(/[+\-*\/]/)) {
+          totalBillInput.value = result.toFixed(2);
+        }
+      }, true);
+    }
+  }
+
+  /* ── Work Order: Close Job Button ── */
+  function _updateCloseJobBtnVisibility() {
+    if (!workOrderSelect || !closeJobBtn) return;
+    var woId = _selVal(workOrderSelect);
+    if (woId && woId !== '0' && woId !== '') {
+      closeJobBtn.classList.remove('d-none');
+    } else {
+      closeJobBtn.classList.add('d-none');
+      if (workOrderStatusHint) workOrderStatusHint.textContent = '';
+    }
+  }
+  if (workOrderSelect) {
+    workOrderSelect.addEventListener('change', _updateCloseJobBtnVisibility);
+    if (workOrderSelect.tomselect) {
+      workOrderSelect.tomselect.on('change', _updateCloseJobBtnVisibility);
+    }
+    _updateCloseJobBtnVisibility();
+  }
+  if (closeJobBtn) {
+    closeJobBtn.addEventListener('click', function() {
+      var woId = _selVal(workOrderSelect);
+      if (!woId || woId === '0') return;
+      var dateVal = expenseDate ? expenseDate.value : '';
+      if (!confirm('Is Work Order ko Close mark kar dein? Close karne ke baad ye form mein nazar nahi aayega.')) return;
+      closeJobBtn.disabled = true;
+      closeJobBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Closing...';
+      fetch('/maintenance-work-order/' + woId + '/close', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': (document.querySelector('[name=csrf_token]') || {}).value || ''},
+        body: JSON.stringify({close_date: dateVal}),
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          if (workOrderStatusHint) {
+            workOrderStatusHint.innerHTML = '<span class="badge bg-success"><i class="bi bi-lock-fill me-1"></i>Job Closed: ' + (data.work_order_no || '') + ' on ' + (data.closed_on || '') + '</span>';
+          }
+          if (workOrderSelect && workOrderSelect.tomselect) {
+            workOrderSelect.tomselect.clear();
+            workOrderSelect.tomselect.removeOption(String(woId));
+          } else if (workOrderSelect) {
+            var opt = workOrderSelect.querySelector('option[value="' + woId + '"]');
+            if (opt) opt.remove();
+            workOrderSelect.value = '0';
+          }
+          closeJobBtn.classList.add('d-none');
+        } else {
+          alert('Error: ' + (data.error || 'Close nahi ho saka'));
+          closeJobBtn.disabled = false;
+          closeJobBtn.innerHTML = '<i class="bi bi-lock-fill me-1"></i>Close Job';
+        }
+      })
+      .catch(function() {
+        alert('Network error — try again');
+        closeJobBtn.disabled = false;
+        closeJobBtn.innerHTML = '<i class="bi bi-lock-fill me-1"></i>Close Job';
+      });
+    });
   }
 
   function _selVal(sel) {

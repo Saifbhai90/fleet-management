@@ -8,7 +8,7 @@ from models import (
     LeaveRequest,
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
     Party, Product, FuelExpense, FuelExpenseAttachment, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
-    MaintenanceWorkOrder, MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
+    MaintenanceWorkOrder, MaintenanceWorkOrderAttachment, MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
     WorkspaceProduct,
     WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceVehicleReadingSetup, WorkspaceExpense, ExpenseDeleteCleanupJob,
     Notification, NotificationRead,
@@ -19877,6 +19877,17 @@ def _ensure_maintenance_work_order_schema():
         "ALTER TABLE maintenance_expense ADD COLUMN IF NOT EXISTS work_order_id INTEGER",
         "CREATE INDEX IF NOT EXISTS ix_maintenance_expense_work_order_id ON maintenance_expense (work_order_id)",
         "CREATE INDEX IF NOT EXISTS ix_maintenance_work_order_work_order_no ON maintenance_work_order (work_order_no)",
+        """
+        CREATE TABLE IF NOT EXISTS maintenance_work_order_attachment (
+            id SERIAL PRIMARY KEY,
+            work_order_id INTEGER NOT NULL,
+            file_path VARCHAR(2048) NOT NULL,
+            file_type VARCHAR(20),
+            original_name VARCHAR(255),
+            created_at TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_mwo_attachment_work_order_id ON maintenance_work_order_attachment (work_order_id)",
     ]
     try:
         for stmt in stmts:
@@ -20043,6 +20054,17 @@ def maintenance_work_order_form(pk=None):
                 )
                 db.session.add(rec)
             db.session.commit()
+            files = request.files.getlist('attachments')
+            if files and any(f and getattr(f, 'filename', None) for f in files):
+                skipped = _add_expense_attachments_from_request(
+                    files,
+                    r2_folder='maintenance_work_order',
+                    attachment_model=MaintenanceWorkOrderAttachment,
+                    fk_kwargs={'work_order_id': rec.id},
+                )
+                db.session.commit()
+                if skipped:
+                    flash('Kuch files skip ho gayin: ' + '; '.join(skipped), 'warning')
             flash('Maintenance work order saved.', 'success')
             return redirect(url_for('maintenance_work_order_detail', pk=rec.id))
 
@@ -20053,6 +20075,24 @@ def maintenance_work_order_form(pk=None):
         projects=projects,
         vehicles=vehicles,
     )
+
+
+@app.route('/maintenance-work-order/<int:pk>/close', methods=['POST'])
+def maintenance_work_order_close(pk):
+    _ensure_maintenance_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'Not authorized'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'Not allowed'}), 403
+    close_date_str = (request.json or {}).get('close_date') or ''
+    close_date = parse_date(close_date_str) if close_date_str else pk_date()
+    rec.status = 'closed'
+    rec.closed_on = close_date
+    db.session.commit()
+    return jsonify({'ok': True, 'work_order_no': rec.work_order_no, 'closed_on': format_date_ddmmyyyy(close_date)})
 
 
 @app.route('/maintenance-work-order/<int:pk>')
@@ -20284,6 +20324,7 @@ def maintenance_expense_form(pk=None):
         )
     if selected_vehicle_id:
         work_order_q = work_order_q.filter(MaintenanceWorkOrder.vehicle_id == selected_vehicle_id)
+    work_order_q = work_order_q.filter(MaintenanceWorkOrder.status != 'closed')
     work_orders = work_order_q.order_by(MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()).limit(250).all()
     form.work_order_id.choices = [(0, '-- No Work Order --')] + [
         (w.id, f'{w.work_order_no} | {w.title}')

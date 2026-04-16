@@ -37,12 +37,39 @@
         <div class="card-body">
           <h6 class="mb-3">Cost Summary</h6>
           <div class="d-flex justify-content-between mb-2"><span>Total Bills</span><strong>{{ expenses|length }}</strong></div>
-          <div class="d-flex justify-content-between mb-2"><span>Total Media Files</span><strong>{{ total_media }}</strong></div>
+          <div class="d-flex justify-content-between mb-2"><span>Bill Media Files</span><strong>{{ total_media }}</strong></div>
+          <div class="d-flex justify-content-between mb-2"><span>Job Photos/Videos</span><strong>{{ rec.attachments.count() }}</strong></div>
           <div class="d-flex justify-content-between border-top pt-2"><span>Grand Total</span><strong>{{ "%.2f"|format(total_bill or 0) }}</strong></div>
         </div>
       </div>
     </div>
   </div>
+
+  {% if rec.attachments.count() %}
+  <div class="card mb-3">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-images me-2"></i>Job Photos / Videos</span>
+      <span class="badge bg-secondary">{{ rec.attachments.count() }} file(s)</span>
+    </div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">
+        {% for att in rec.attachments %}
+          {% set att_url = att.file_path|media_url %}
+          <a href="{{ att_url }}" target="_blank" style="border:1px solid #e2e8f0;border-radius:10px;padding:8px;background:#fff;display:block;text-decoration:none;color:inherit;">
+            {% if att.file_type == 'image' %}
+              <img src="{{ att_url }}" alt="{{ att.original_name or 'Photo' }}" loading="lazy" style="width:100%;height:110px;object-fit:cover;border-radius:7px;background:#f1f5f9">
+            {% elif att.file_type == 'video' %}
+              <video src="{{ att_url }}" controls preload="metadata" style="width:100%;height:110px;object-fit:cover;border-radius:7px;background:#f1f5f9"></video>
+            {% else %}
+              <div style="height:110px;background:#f1f5f9;border-radius:7px;display:flex;align-items:center;justify-content:center;"><i class="bi bi-paperclip"></i></div>
+            {% endif %}
+            <div class="mt-1 small text-muted" style="word-break:break-word;font-size:0.78rem">{{ att.original_name or att.file_path }}</div>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <div class="card">
     <div class="card-header fw-semibold">Linked Bills</div>

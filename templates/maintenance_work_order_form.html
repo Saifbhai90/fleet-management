@@ -9,7 +9,7 @@
 
   <div class="card">
     <div class="card-body">
-      <form method="POST" action="">
+      <form method="POST" action="" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row g-3">
           <div class="col-md-3">
@@ -75,6 +75,32 @@
             <textarea name="remarks" class="form-control" rows="2">{{ request.form.get('remarks') or (rec.remarks if rec else '') }}</textarea>
           </div>
         </div>
+        <div class="mt-3">
+          <label class="form-label fw-semibold">Job Photos / Videos <small class="text-muted fw-normal">(mixed work photos, before/after, etc.)</small></label>
+          <input type="file" name="attachments" id="woAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
+          <small class="text-muted">Multiple files allowed. You can also paste with <kbd>Ctrl+V</kbd>. Har bill ki photos us bill ki entry ke sath attach karein, aur job-level (mixed) photos yahan add karein.</small>
+          <div class="small text-success mt-1" id="woAttachmentPasteHint"></div>
+        </div>
+        {% if rec and rec.attachments.count() %}
+        <div class="mt-3">
+          <strong class="small">Existing Job Photos/Videos:</strong>
+          <div class="existing-attachments-grid mt-2">
+            {% for att in rec.attachments %}
+              {% set att_url = att.file_path|media_url %}
+              <a href="{{ att_url }}" target="_blank" class="existing-attachment-card text-decoration-none text-body">
+                {% if att.file_type == 'image' %}
+                  <img src="{{ att_url }}" alt="{{ att.original_name or 'Attachment' }}" loading="lazy" style="width:100%;height:120px;object-fit:cover;border-radius:8px;background:#f1f5f9">
+                {% elif att.file_type == 'video' %}
+                  <video src="{{ att_url }}" controls preload="metadata" style="width:100%;height:120px;object-fit:cover;border-radius:8px;background:#f1f5f9"></video>
+                {% else %}
+                  <div class="d-flex align-items-center justify-content-center" style="height:120px;background:#f1f5f9;border-radius:8px;"><i class="bi bi-paperclip me-2"></i>Open</div>
+                {% endif %}
+                <div class="mt-1 small text-muted" style="word-break:break-word">{{ att.original_name or att.file_path }}</div>
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
         <div class="mt-3 d-flex justify-content-end gap-2">
           <a href="{{ url_for('maintenance_work_order_list') }}" class="btn btn-outline-secondary">Cancel</a>
           <button type="submit" class="btn btn-primary">Save Work Order</button>
@@ -83,6 +109,36 @@
     </div>
   </div>
 </div>
+<style>
+.existing-attachments-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.existing-attachment-card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; background: #fff; }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var woFiles = document.getElementById('woAttachmentFiles');
+  var woPasteHint = document.getElementById('woAttachmentPasteHint');
+  var dtItems = [];
+  if (woFiles) {
+    document.addEventListener('paste', function(e) {
+      var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      var added = 0;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file' && (items[i].type.startsWith('image/') || items[i].type.startsWith('video/'))) {
+          dtItems.push(items[i].getAsFile());
+          added++;
+        }
+      }
+      if (added > 0) {
+        var dt = new DataTransfer();
+        (Array.from(woFiles.files || [])).forEach(function(f) { dt.items.add(f); });
+        dtItems.forEach(function(f) { dt.items.add(f); });
+        woFiles.files = dt.files;
+        if (woPasteHint) woPasteHint.textContent = woFiles.files.length + ' file(s) selected (including pasted).';
+      }
+    });
+  }
+});
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   var districtSelect = document.getElementById('districtSelect');

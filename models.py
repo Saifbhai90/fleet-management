@@ -948,6 +948,7 @@ class MaintenanceWorkOrder(db.Model):
     employee = db.relationship('Employee', backref='maintenance_work_orders', lazy='select')
     vehicle = db.relationship('Vehicle', backref='maintenance_work_orders', lazy='select')
     expenses = db.relationship('MaintenanceExpense', backref='work_order', lazy='dynamic')
+    attachments = db.relationship('MaintenanceWorkOrderAttachment', backref='work_order_rec', lazy='dynamic', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<MaintenanceWorkOrder {self.work_order_no}>'
@@ -1013,6 +1014,22 @@ class MaintenanceExpenseItem(db.Model):
 
     def __repr__(self):
         return f'<MaintenanceExpenseItem {self.product_id} qty={self.qty}>'
+
+
+# ────────────────────────────────────────────────
+# Maintenance Work Order Attachment (job-level photos / videos)
+# ────────────────────────────────────────────────
+class MaintenanceWorkOrderAttachment(db.Model):
+    __tablename__ = 'maintenance_work_order_attachment'
+    id = db.Column(db.Integer, primary_key=True)
+    work_order_id = db.Column(db.Integer, db.ForeignKey('maintenance_work_order.id'), nullable=False, index=True)
+    file_path = db.Column(db.String(2048), nullable=False)
+    file_type = db.Column(db.String(20), nullable=True)
+    original_name = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    def __repr__(self):
+        return f'<MaintenanceWorkOrderAttachment {self.file_path}>'
 
 
 # ────────────────────────────────────────────────
