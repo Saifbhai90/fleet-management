@@ -7432,5 +7432,32 @@ window._dtPrintCustomize = function(title, color, icon) {
 </script>
 {% block extra_js %}{% endblock %}
 
+<script>
+/* ── Global navigation shortcuts ────────────────────────────────────────
+   Alt+F  → Add Fuel Expense
+   Alt+T  → Add Workspace Transfer
+   Alt+L  → Workspace Ledger
+   (Only when command palette is NOT open and no modal/dialog is active) */
+(function() {
+    var SHORTCUTS = {
+        'f': '/expenses/fuel/add',
+        't': '/workspace/transfer/new',
+        'l': '/workspace/ledger',
+    };
+    document.addEventListener('keydown', function(e) {
+        if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        var k = e.key.toLowerCase();
+        if (!SHORTCUTS[k]) return;
+        var palette = document.getElementById('cmdPalette');
+        if (palette && palette.classList.contains('open')) return;
+        var activeTag = document.activeElement ? document.activeElement.tagName : '';
+        if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
+        if (document.querySelector('.modal.show')) return;
+        e.preventDefault();
+        window.location.href = SHORTCUTS[k];
+    });
+})();
+</script>
+
 </body>
 </html>

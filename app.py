@@ -498,6 +498,7 @@ from routes_workspace import (
     workspace_fund_transfers_list, workspace_fund_transfer_form, workspace_fund_transfer_delete,
     workspace_ledger, workspace_ledger_transfer_detail, workspace_ledger_journal_detail, workspace_balance_sheet, workspace_month_close, workspace_month_close_list, workspace_month_close_reverse, workspace_reports, workspace_mpg_report, workspace_dashboard_financial_report,
     workspace_transfer_description_suggestions_api,
+    workspace_account_balance_api,
 )  # noqa: E402
 
 from routes_payroll import (
@@ -612,6 +613,7 @@ app.add_url_rule('/workspace/transfer/new', 'workspace_fund_transfer_new', works
 app.add_url_rule('/workspace/transfer/<int:pk>/edit', 'workspace_fund_transfer_edit', workspace_fund_transfer_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/transfer/<int:pk>/delete', 'workspace_fund_transfer_delete', workspace_fund_transfer_delete, methods=['POST'])
 app.add_url_rule('/api/workspace-transfer-descriptions', 'workspace_transfer_description_suggestions', workspace_transfer_description_suggestions_api, methods=['GET'])
+app.add_url_rule('/api/workspace-account-balance', 'workspace_account_balance_api', workspace_account_balance_api, methods=['GET'])
 app.add_url_rule('/workspace/ledger', 'workspace_ledger', workspace_ledger)
 app.add_url_rule('/workspace/ledger/fund-transfer/<int:transfer_id>', 'workspace_ledger_transfer_detail', workspace_ledger_transfer_detail)
 app.add_url_rule('/workspace/ledger/journal/<int:journal_entry_id>', 'workspace_ledger_journal_detail', workspace_ledger_journal_detail)

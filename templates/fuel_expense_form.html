@@ -162,6 +162,7 @@
                       {{ form.fuel_pump_id(class="form-select search-select", id="fuelPumpSelect") }}
                       <a href="{{ url_for('workspace_party_new', type='Pump', next=request.url) }}" class="btn btn-outline-primary btn-sm text-nowrap" title="Create new pump">Create Pump</a>
                     </div>
+                    <div id="pumpBalanceHint" class="small mt-1 d-none"></div>
                   </div>
                   <div class="col-6 col-md-4 field-group">
                     <label class="form-label">Fuel Type (Auto)</label>
@@ -275,7 +276,7 @@
               <label class="form-label fw-bold">Expense By (Workspace COA)</label>
               {{ form.expense_by(class="form-select search-select", id="expenseBySelect") }}
               <small class="text-muted">Select workspace account to credit for this expense (optional).</small>
-              <div id="expenseByBalanceHint" class="small mt-1 text-muted"></div>
+              <div id="expenseByBalanceHint" class="small mt-1 text-muted" style="cursor:default" title=""></div>
             </div>
           </div>
           <div class="action-bar">
@@ -636,8 +637,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     var bal = m[1].trim();
     var isCr = /\bCr\b/i.test(bal);
+    var hasAcct = /^acct-\d+$/.test(opt.value || '');
     expenseByBalanceHint.className = 'small mt-1 ' + (isCr ? 'text-danger' : 'text-success');
     expenseByBalanceHint.textContent = 'Current Balance: ' + bal;
+    expenseByBalanceHint.style.cursor = hasAcct ? 'pointer' : 'default';
+    expenseByBalanceHint.title = hasAcct ? 'Click to open ledger' : '';
   }
 
   function computeMpgAndLiters() {
@@ -733,7 +737,22 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', function() { handlePaymentTypeBehavior(true); });
-  if (expenseBySelect) expenseBySelect.addEventListener('change', updateExpenseByBalanceHint);
+  if (expenseBySelect) {
+    expenseBySelect.addEventListener('change', function() {
+      updateExpenseByBalanceHint();
+      var val = expenseBySelect.value || '';
+      var hasAcct = /^acct-\d+$/.test(val);
+      if (expenseByBalanceHint) {
+        expenseByBalanceHint.style.cursor = hasAcct ? 'pointer' : 'default';
+        expenseByBalanceHint.title = hasAcct ? 'Click to open ledger' : '';
+      }
+    });
+    expenseByBalanceHint && expenseByBalanceHint.addEventListener('click', function() {
+      var val = expenseBySelect ? (expenseBySelect.value || '') : '';
+      var m = val.match(/^acct-(\d+)$/);
+      if (m) window.open('/workspace/ledger?account_id=' + m[1], '_blank');
+    });
+  }
   if (amountInput) amountInput.addEventListener('input', computeMpgAndLiters);
   if (fuelPriceInput) fuelPriceInput.addEventListener('input', function() { fuelPriceInput.dataset.autoSuggested = '0'; computeMpgAndLiters(); });
 
@@ -878,6 +897,46 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  // ── Fuel Pump balance hint ────────────────────────────────────────────────
+  var pumpBalanceHint = document.getElementById('pumpBalanceHint');
+  function _fetchPumpBalance(partyId) {
+    if (!pumpBalanceHint) return;
+    if (!partyId || partyId === '0') {
+      pumpBalanceHint.className = 'small mt-1 d-none';
+      pumpBalanceHint.textContent = ''; pumpBalanceHint.removeAttribute('data-ledger-url');
+      return;
+    }
+    fetch('/api/workspace-account-balance?party_id=' + encodeURIComponent(partyId))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d || d.balance_str === null || d.balance_str === undefined) {
+          pumpBalanceHint.className = 'small mt-1 text-muted'; pumpBalanceHint.classList.remove('d-none');
+          pumpBalanceHint.textContent = 'Fuel Pump Name Balance: No account';
+          pumpBalanceHint.removeAttribute('data-ledger-url');
+          return;
+        }
+        var isCr = /\bCr\b/i.test(d.balance_str);
+        pumpBalanceHint.className = 'small mt-1 ' + (isCr ? 'text-danger' : 'text-success');
+        pumpBalanceHint.classList.remove('d-none');
+        pumpBalanceHint.textContent = 'Fuel Pump Name Balance: ' + d.balance_str;
+        pumpBalanceHint.style.cursor = d.ledger_url ? 'pointer' : 'default';
+        pumpBalanceHint.title = d.ledger_url ? 'Click to open ledger' : '';
+        if (d.ledger_url) pumpBalanceHint.setAttribute('data-ledger-url', d.ledger_url);
+        else pumpBalanceHint.removeAttribute('data-ledger-url');
+      })
+      .catch(function() { pumpBalanceHint.className = 'small mt-1 d-none'; });
+  }
+  if (pumpBalanceHint) {
+    pumpBalanceHint.addEventListener('click', function() {
+      var url = this.getAttribute('data-ledger-url');
+      if (url) window.open(url, '_blank');
+    });
+  }
+  if (fuelPumpSelect) {
+    fuelPumpSelect.addEventListener('change', function() { _fetchPumpBalance(this.value); });
+    if (fuelPumpSelect.value && fuelPumpSelect.value !== '0') _fetchPumpBalance(fuelPumpSelect.value);
+  }
+
   // ── Amount focus: alert if meter reading mismatch ──────────────────────
   var _matchedAlertShown = false;
   function _resetMatchedAlert() { _matchedAlertShown = false; }
@@ -910,7 +969,8 @@ document.addEventListener('DOMContentLoaded', function() {
   var _isFromSave = {{ 'true' if last_rec else 'false' }};
   window.setTimeout(function() {
     if (_isFromSave) {
-      if (currentReadingInput) currentReadingInput.focus();
+      if (fuelPumpSelect && fuelPumpSelect.tomselect) { fuelPumpSelect.tomselect.focus(); }
+      else if (fuelPumpSelect) { fuelPumpSelect.focus(); }
     } else {
       if (districtSelect && districtSelect.tomselect) {
         districtSelect.tomselect.focus();

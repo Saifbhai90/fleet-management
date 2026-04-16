@@ -69,21 +69,23 @@
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">From Account</label>
-                  <select name="from_account_id" class="form-select search-select" required>
+                  <select name="from_account_id" id="wsFromAccountSelect" class="form-select search-select" required>
                     <option value="">-- Select --</option>
                     {% for a in accounts %}
                     <option value="{{ a.id }}" {% if row and row.from_account_id == a.id %}selected{% endif %}>{{ account_display_map.get(a.id, (a.code ~ ' - ' ~ a.name)) }}</option>
                     {% endfor %}
                   </select>
+                  <div id="fromAccountBalanceHint" class="small mt-1 d-none" style="cursor:default" title=""></div>
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">To Account</label>
-                  <select name="to_account_id" class="form-select search-select" required>
+                  <select name="to_account_id" id="wsToAccountSelect" class="form-select search-select" required>
                     <option value="">-- Select --</option>
                     {% for a in accounts %}
                     <option value="{{ a.id }}" {% if row and row.to_account_id == a.id %}selected{% endif %}>{{ account_display_map.get(a.id, (a.code ~ ' - ' ~ a.name)) }} ({{ a.account_type }})</option>
                     {% endfor %}
                   </select>
+                  <div id="toAccountBalanceHint" class="small mt-1 d-none" style="cursor:default" title=""></div>
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Reference No</label>
@@ -131,13 +133,17 @@
       </div>
 
       <div class="d-flex gap-2 justify-content-end mt-3">
-        <button type="submit" class="btn btn-success px-4" id="wsTransferSaveBtn"><i class="bi bi-check2-circle me-1"></i>Save Transfer</button>
         <a href="{{ url_for('workspace_fund_transfers_list') }}" class="btn btn-outline-secondary">Cancel</a>
+        {% if not row %}
+        <button type="submit" name="_save_action" value="save_add" class="btn btn-outline-success px-4"><i class="bi bi-plus-circle me-1"></i>Save &amp; Add Next</button>
+        {% endif %}
+        <button type="submit" name="_save_action" value="save_list" class="btn btn-success px-4" id="wsTransferSaveBtn"><i class="bi bi-check2-circle me-1"></i>Save Transfer</button>
       </div>
     </form>
   </div>
 </div>
 <script>
+var _wsAcctBalanceMap = {{ account_balance_json | tojson }};
 document.addEventListener('DOMContentLoaded', function() {
   var descBox = document.getElementById('wsTransferDesc');
   var sugBox = document.getElementById('wsDescSuggest');
@@ -149,6 +155,47 @@ document.addEventListener('DOMContentLoaded', function() {
   var attachPreviewImg = document.getElementById('wsAttachPreviewImg');
   var saveBtn = document.getElementById('wsTransferSaveBtn');
   var transferDateInput = document.getElementById('wsTransferDateInput');
+
+  var fromSelect = document.getElementById('wsFromAccountSelect');
+  var toSelect = document.getElementById('wsToAccountSelect');
+  var fromHint = document.getElementById('fromAccountBalanceHint');
+  var toHint = document.getElementById('toAccountBalanceHint');
+
+  function _applyWsAcctHint(hint, accountId) {
+    if (!hint) return;
+    var d = accountId ? (_wsAcctBalanceMap[String(accountId)] || null) : null;
+    if (!d) { hint.className = 'small mt-1 d-none'; hint.textContent = ''; hint.removeAttribute('data-url'); return; }
+    var isCr = /\bCr\b/i.test(d.balance_str || '');
+    hint.className = 'small mt-1 ' + (isCr ? 'text-danger' : 'text-success');
+    hint.classList.remove('d-none');
+    hint.textContent = hint.id === 'fromAccountBalanceHint' ? 'From Account Balance: ' + d.balance_str : 'To Account Balance: ' + d.balance_str;
+    hint.style.cursor = d.ledger_url ? 'pointer' : 'default';
+    hint.title = d.ledger_url ? 'Click to open ledger' : '';
+    if (d.ledger_url) hint.setAttribute('data-url', d.ledger_url); else hint.removeAttribute('data-url');
+  }
+
+  function _hintClick(hint) {
+    var url = hint ? hint.getAttribute('data-url') : null;
+    if (url) window.open(url, '_blank');
+  }
+
+  if (fromSelect) {
+    fromSelect.addEventListener('change', function() { _applyWsAcctHint(fromHint, this.value || ''); });
+    if (fromHint) fromHint.addEventListener('click', function() { _hintClick(this); });
+    _applyWsAcctHint(fromHint, fromSelect.value || '');
+  }
+  if (toSelect) {
+    toSelect.addEventListener('change', function() { _applyWsAcctHint(toHint, this.value || ''); });
+    if (toHint) toHint.addEventListener('click', function() { _hintClick(this); });
+    _applyWsAcctHint(toHint, toSelect.value || '');
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      if (saveBtn && !saveBtn.disabled) saveBtn.click();
+    }
+  });
 
   if (transferDateInput) {
     window.setTimeout(function() {

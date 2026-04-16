@@ -15,6 +15,9 @@
     <div class="d-flex gap-2">
       <button class="btn btn-outline-light btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
       <button class="btn btn-outline-light btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      <a href="{{ url_for('workspace_mpg_report') }}" class="btn btn-outline-warning btn-sm" title="Open MPG Report">
+        <i class="bi bi-speedometer2 me-1"></i>MPG Report
+      </a>
       <a href="{{ url_for('fuel_expense_add', district_id=form.district_id.data or 0, project_id=form.project_id.data or 0) }}" class="btn btn-light btn-sm text-primary">
         <i class="bi bi-plus-circle me-1"></i>Add Fuel Expense
       </a>

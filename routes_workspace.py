@@ -2667,8 +2667,22 @@ def workspace_fund_transfer_form(pk=None):
         row.journal_entry_id = je.id
         db.session.commit()
         flash("Workspace transfer saved.", "success")
+        if request.form.get("_save_action") == "save_add":
+            return redirect(url_for("workspace_fund_transfer_new"))
         return redirect(url_for("workspace_fund_transfers_list"))
-    return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, account_display_map=account_display_map, categories=categories, existing_attachment=(row.attachment if row else None))
+    account_balance_json = {}
+    for a in accounts:
+        bal = Decimal(str(a.current_balance or 0))
+        if a.account_type in ('Asset', 'Expense'):
+            side = 'Dr' if bal >= 0 else 'Cr'
+        else:
+            side = 'Cr' if bal >= 0 else 'Dr'
+        account_balance_json[str(a.id)] = {
+            'balance': float(bal),
+            'balance_str': f"{abs(bal):,.2f} {side}",
+            'ledger_url': f'/workspace/ledger?account_id={a.id}',
+        }
+    return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, account_display_map=account_display_map, categories=categories, existing_attachment=(row.attachment if row else None), account_balance_json=account_balance_json)
 
 
 def workspace_fund_transfer_delete(pk):
@@ -3513,3 +3527,32 @@ def workspace_transfer_description_suggestions_api():
         if len(out) >= 20:
             break
     return jsonify(out)
+
+
+def workspace_account_balance_api():
+    guard, emp = _workspace_guard("workspace_ledger")
+    if guard:
+        return jsonify({'error': 'Unauthorized'}), 403
+    account_id = request.args.get('account_id', type=int)
+    party_id = request.args.get('party_id', type=int)
+    if account_id:
+        acct = WorkspaceAccount.query.filter_by(id=account_id, employee_id=emp.id, is_active=True).first()
+        if not acct:
+            return jsonify({'error': 'Not found'}), 404
+    elif party_id:
+        acct = WorkspaceAccount.query.filter_by(employee_id=emp.id, entity_type='party', entity_id=party_id, is_active=True).first()
+        if not acct:
+            return jsonify({'balance': None, 'balance_str': None, 'ledger_url': None}), 200
+    else:
+        return jsonify({'error': 'account_id or party_id required'}), 400
+    bal = Decimal(str(acct.current_balance or 0))
+    if acct.account_type in ('Asset', 'Expense'):
+        side = 'Dr' if bal >= 0 else 'Cr'
+    else:
+        side = 'Cr' if bal >= 0 else 'Dr'
+    return jsonify({
+        'account_id': acct.id,
+        'balance': float(bal),
+        'balance_str': f'{abs(bal):,.2f} {side}',
+        'ledger_url': f'/workspace/ledger?account_id={acct.id}',
+    })
