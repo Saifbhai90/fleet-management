@@ -403,12 +403,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};
   function _smoothFillSelect(sel, arr, buildOptionFn) {
     if (!sel) return;
-    if (sel.tomselect) {
-      var ts = sel.tomselect;
-      ts.clear(true); ts.clearOptions();
-      if (arr) arr.forEach(function(item) { ts.addOption(buildOptionFn(item)); });
-      ts.enable(); ts.close(); return;
-    }
+    if (sel.tomselect) { try { sel.tomselect.destroy(); } catch(e) {} }
     sel.innerHTML = '<option value="0">-- Select --</option>';
     if (arr) arr.forEach(function(item) {
       var opt = buildOptionFn(item); var o = document.createElement('option');
@@ -418,8 +413,9 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function _smoothLoadingSelect(sel) {
     if (!sel) return;
-    if (sel.tomselect) { sel.tomselect.clear(true); sel.tomselect.clearOptions(); sel.tomselect.disable(); return; }
+    if (sel.tomselect) { try { sel.tomselect.destroy(); } catch(e) {} }
     sel.innerHTML = '<option value="0">-- Loading... --</option>';
+    _reinitSearchableDropdown(sel.parentNode);
   }
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
