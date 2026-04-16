@@ -402,7 +402,7 @@
 document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};
   var _suppressCascadeEvents = false;
-  function _smoothFillSelect(sel, arr, buildOptionFn) {
+  function _smoothFillSelect(sel, arr, buildOptionFn, thenSelectVal) {
     if (!sel) return;
     _suppressCascadeEvents = true;
     if (sel.tomselect) { try { sel.tomselect.destroy(); } catch(e) {} }
@@ -413,6 +413,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     _reinitSearchableDropdown(sel.parentNode);
     _suppressCascadeEvents = false;
+    if (thenSelectVal) {
+      setTimeout(function() { _selSet(sel, thenSelectVal); }, 0);
+    }
   }
   function _smoothLoadingSelect(sel) {
     if (!sel) return;
@@ -602,17 +605,16 @@ document.addEventListener('DOMContentLoaded', function() {
       if (thenCallback) thenCallback();
       return;
     }
-    _smoothFillSelect(projectSelect, [], function(p) { return {value: String(p.id), text: p.name}; });
-    _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+    _smoothFillSelect(projectSelect, []);
+    _smoothFillSelect(vehicleSelect, []);
     if (!did || did === '0' || did === 0) {
       if (thenCallback) thenCallback();
       return;
     }
     var _cKey = 'proj_d' + did;
     if (window._cascadeCache[_cKey]) {
-      _smoothFillSelect(projectSelect, window._cascadeCache[_cKey], function(p) { return {value: String(p.id), text: p.name}; });
-      if (thenSelectProjectId) _selSet(projectSelect, thenSelectProjectId);
-      if (thenCallback) thenCallback();
+      _smoothFillSelect(projectSelect, window._cascadeCache[_cKey], function(p) { return {value: String(p.id), text: p.name}; }, thenSelectProjectId || null);
+      if (thenCallback) setTimeout(thenCallback, 20);
       return;
     }
     _smoothLoadingSelect(projectSelect);
@@ -620,12 +622,11 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(function(r) { return r.json(); })
       .then(function(arr) {
         window._cascadeCache[_cKey] = arr;
-        _smoothFillSelect(projectSelect, arr, function(p) { return {value: String(p.id), text: p.name}; });
-        if (thenSelectProjectId) _selSet(projectSelect, thenSelectProjectId);
-        if (thenCallback) thenCallback();
+        _smoothFillSelect(projectSelect, arr, function(p) { return {value: String(p.id), text: p.name}; }, thenSelectProjectId || null);
+        if (thenCallback) setTimeout(thenCallback, 20);
       })
       .catch(function() {
-        _smoothFillSelect(projectSelect, [], function(p) { return p; });
+        _smoothFillSelect(projectSelect, []);
         if (thenCallback) thenCallback();
       });
   }
@@ -635,16 +636,15 @@ document.addEventListener('DOMContentLoaded', function() {
       if (thenCallback) thenCallback();
       return;
     }
-    _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+    _smoothFillSelect(vehicleSelect, []);
     if (!pid || pid === '0' || pid === 0) {
       if (thenCallback) thenCallback();
       return;
     }
     var _vKey = 'veh_p' + pid + '_d' + (did || '0');
     if (window._cascadeCache[_vKey]) {
-      _smoothFillSelect(vehicleSelect, window._cascadeCache[_vKey], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
-      if (thenSelectVehicleId) _selSet(vehicleSelect, thenSelectVehicleId);
-      if (thenCallback) thenCallback();
+      _smoothFillSelect(vehicleSelect, window._cascadeCache[_vKey], function(v) { return {value: String(v.id), text: v.vehicle_no}; }, thenSelectVehicleId || null);
+      if (thenCallback) setTimeout(thenCallback, 20);
       return;
     }
     _smoothLoadingSelect(vehicleSelect);
@@ -654,12 +654,11 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(function(r) { return r.json(); })
       .then(function(arr) {
         window._cascadeCache[_vKey] = arr;
-        _smoothFillSelect(vehicleSelect, arr, function(v) { return {value: String(v.id), text: v.vehicle_no}; });
-        if (thenSelectVehicleId) _selSet(vehicleSelect, thenSelectVehicleId);
-        if (thenCallback) thenCallback();
+        _smoothFillSelect(vehicleSelect, arr, function(v) { return {value: String(v.id), text: v.vehicle_no}; }, thenSelectVehicleId || null);
+        if (thenCallback) setTimeout(thenCallback, 20);
       })
       .catch(function() {
-        _smoothFillSelect(vehicleSelect, [], function(v) { return v; });
+        _smoothFillSelect(vehicleSelect, []);
         if (thenCallback) thenCallback();
       });
   }
@@ -1226,31 +1225,19 @@ document.addEventListener('DOMContentLoaded', function() {
     var pid = serverProjectId;
     var vid = serverVehicleId;
     if (did && did !== 0) _selSet(districtSelect, did);
-    if (pid && pid !== 0) _selSet(projectSelect, pid);
-    if (vid && vid !== 0) _selSet(vehicleSelect, vid);
-
-    var serverProjectCount = projectSelect ? projectSelect.querySelectorAll('option').length : 0;
-    var serverVehicleCount = vehicleSelect ? vehicleSelect.querySelectorAll('option').length : 0;
-
-    if (serverProjectCount > 1) {
-      if (pid && pid !== 0) _selSet(projectSelect, pid);
-      if (serverVehicleCount > 1) {
-        if (vid && vid !== 0) _selSet(vehicleSelect, vid);
-        fetchTaskReadingsForMaintenance();
-      } else if (pid && pid !== 0) {
-        _loadVehiclesForProject(pid, did, vid || null, fetchTaskReadingsForMaintenance);
-      } else {
-        fetchTaskReadingsForMaintenance();
-      }
-    } else if (did && did !== 0 && projectSelect) {
+    // Always run full fetch chain — never rely on server-rendered project/vehicle options
+    // because _smoothFillSelect destroys TomSelect on each call and options may be stale.
+    if (did && did !== 0) {
       _loadProjectsForDistrict(did, pid || null, function() {
-        var selectedPid = _selVal(projectSelect);
-        if (selectedPid && selectedPid !== '0' && vehicleSelect) {
-          _loadVehiclesForProject(selectedPid, did, vid || null, fetchTaskReadingsForMaintenance);
+        var activePid = pid || _selVal(projectSelect);
+        if (activePid && activePid !== '0' && activePid !== 0) {
+          _loadVehiclesForProject(activePid, did, vid || null, fetchTaskReadingsForMaintenance);
         } else {
           fetchTaskReadingsForMaintenance();
         }
       });
+    } else if (pid && pid !== 0) {
+      _loadVehiclesForProject(pid, did, vid || null, fetchTaskReadingsForMaintenance);
     } else {
       fetchTaskReadingsForMaintenance();
     }
