@@ -297,6 +297,27 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};
+  var _vehicleFuelTypeMap = {};
+  function _smoothFillSelect(sel, arr, buildOptionFn) {
+    if (!sel) return;
+    if (sel.tomselect) {
+      var ts = sel.tomselect;
+      ts.clear(true); ts.clearOptions();
+      if (arr) arr.forEach(function(item) { ts.addOption(buildOptionFn(item)); });
+      ts.enable(); return;
+    }
+    sel.innerHTML = '<option value="0">-- Select --</option>';
+    if (arr) arr.forEach(function(item) {
+      var opt = buildOptionFn(item); var o = document.createElement('option');
+      o.value = opt.value; o.textContent = opt.text; sel.appendChild(o);
+    });
+    initSearchableDropdowns(sel.parentNode);
+  }
+  function _smoothLoadingSelect(sel) {
+    if (!sel) return;
+    if (sel.tomselect) { sel.tomselect.clear(true); sel.tomselect.clearOptions(); sel.tomselect.disable(); return; }
+    sel.innerHTML = '<option value="0">-- Loading... --</option>';
+  }
 
   var fuelExpenseForm = document.getElementById('fuelExpenseForm');
   var districtSelect = document.getElementById('districtSelect');
@@ -611,43 +632,24 @@ document.addEventListener('DOMContentLoaded', function() {
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
-      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
-      if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
-      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
-      vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+      _smoothFillSelect(projectSelect, [], function(p) { return {value: String(p.id), text: p.name}; });
+      _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
       if (fuelTypeSelect) fuelTypeSelect.value = '';
       if (fuelTypeDisplay) fuelTypeDisplay.value = '';
-      initSearchableDropdowns(vehicleSelect.parentNode);
       if (did && did !== '0') {
         var _cKey = 'proj_d' + did;
         if (window._cascadeCache[_cKey]) {
-          window._cascadeCache[_cKey].forEach(function(p) {
-            var o = document.createElement('option');
-            o.value = p.id; o.textContent = p.name;
-            projectSelect.appendChild(o);
-          });
-          initSearchableDropdowns(projectSelect.parentNode);
+          _smoothFillSelect(projectSelect, window._cascadeCache[_cKey], function(p) { return {value: String(p.id), text: p.name}; });
         } else {
-          projectSelect.innerHTML = '<option value="0">-- Loading... --</option>';
+          _smoothLoadingSelect(projectSelect);
           fetch('/get_projects_by_district/' + did)
             .then(function(r) { return r.json(); })
             .then(function(arr) {
               window._cascadeCache[_cKey] = arr;
-              projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
-              arr.forEach(function(p) {
-                var o = document.createElement('option');
-                o.value = p.id; o.textContent = p.name;
-                projectSelect.appendChild(o);
-              });
-              initSearchableDropdowns(projectSelect.parentNode);
+              _smoothFillSelect(projectSelect, arr, function(p) { return {value: String(p.id), text: p.name}; });
             })
-            .catch(function() {
-              projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
-              initSearchableDropdowns(projectSelect.parentNode);
-            });
+            .catch(function() { _smoothFillSelect(projectSelect, [], function(p) { return p; }); });
         }
-      } else {
-        initSearchableDropdowns(projectSelect.parentNode);
       }
     });
   }
@@ -656,51 +658,31 @@ document.addEventListener('DOMContentLoaded', function() {
     projectSelect.addEventListener('change', function() {
       var pid = projectSelect.value;
       var did = districtSelect ? districtSelect.value : '';
-      if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
-      vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+      _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
       if (fuelTypeSelect) fuelTypeSelect.value = '';
       if (fuelTypeDisplay) fuelTypeDisplay.value = '';
       if (pid && pid !== '0') {
         var _vKey = 'veh_p' + pid + '_d' + (did || '0');
         if (window._cascadeCache[_vKey]) {
-          window._cascadeCache[_vKey].forEach(function(v) {
-            var o = document.createElement('option');
-            o.value = v.id;
-            o.textContent = v.vehicle_no;
-            o.setAttribute('data-fuel-type', v.fuel_type || 'Petrol');
-            vehicleSelect.appendChild(o);
-          });
-          initSearchableDropdowns(vehicleSelect.parentNode);
+          window._cascadeCache[_vKey].forEach(function(v) { _vehicleFuelTypeMap[String(v.id)] = v.fuel_type || 'Petrol'; });
+          _smoothFillSelect(vehicleSelect, window._cascadeCache[_vKey], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
         } else {
-          vehicleSelect.innerHTML = '<option value="0">-- Loading... --</option>';
+          _smoothLoadingSelect(vehicleSelect);
           var url = '/get_vehicles_by_project_district?project_id=' + pid;
           if (did && did !== '0') url += '&district_id=' + did;
           fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
             window._cascadeCache[_vKey] = arr;
-            vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
-            arr.forEach(function(v) {
-              var o = document.createElement('option');
-              o.value = v.id;
-              o.textContent = v.vehicle_no;
-              o.setAttribute('data-fuel-type', v.fuel_type || 'Petrol');
-              vehicleSelect.appendChild(o);
-            });
-            initSearchableDropdowns(vehicleSelect.parentNode);
-          }).catch(function() {
-            vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
-            initSearchableDropdowns(vehicleSelect.parentNode);
-          });
+            arr.forEach(function(v) { _vehicleFuelTypeMap[String(v.id)] = v.fuel_type || 'Petrol'; });
+            _smoothFillSelect(vehicleSelect, arr, function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+          }).catch(function() { _smoothFillSelect(vehicleSelect, [], function(v) { return v; }); });
         }
-      } else {
-        initSearchableDropdowns(vehicleSelect.parentNode);
       }
     });
   }
 
   if (vehicleSelect) {
     vehicleSelect.addEventListener('change', function() {
-      var selected = vehicleSelect.options[vehicleSelect.selectedIndex];
-      var selectedFuel = selected ? (selected.getAttribute('data-fuel-type') || '') : '';
+      var selectedFuel = _vehicleFuelTypeMap[vehicleSelect.value] || '';
       if (!selectedFuel && fuelTypeSelect && fuelTypeSelect.value) {
         selectedFuel = fuelTypeSelect.value;
       }

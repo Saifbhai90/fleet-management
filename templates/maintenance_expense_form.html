@@ -373,6 +373,26 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};
+  function _smoothFillSelect(sel, arr, buildOptionFn) {
+    if (!sel) return;
+    if (sel.tomselect) {
+      var ts = sel.tomselect;
+      ts.clear(true); ts.clearOptions();
+      if (arr) arr.forEach(function(item) { ts.addOption(buildOptionFn(item)); });
+      ts.enable(); return;
+    }
+    sel.innerHTML = '<option value="0">-- Select --</option>';
+    if (arr) arr.forEach(function(item) {
+      var opt = buildOptionFn(item); var o = document.createElement('option');
+      o.value = opt.value; o.textContent = opt.text; sel.appendChild(o);
+    });
+    _reinitSearchableDropdown(sel.parentNode);
+  }
+  function _smoothLoadingSelect(sel) {
+    if (!sel) return;
+    if (sel.tomselect) { sel.tomselect.clear(true); sel.tomselect.clearOptions(); sel.tomselect.disable(); return; }
+    sel.innerHTML = '<option value="0">-- Loading... --</option>';
+  }
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
@@ -451,46 +471,30 @@ document.addEventListener('DOMContentLoaded', function() {
       if (thenCallback) thenCallback();
       return;
     }
-    if (projectSelect.tomselect) projectSelect.tomselect.destroy();
-    if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
-    projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
-    vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
-    _reinitSearchableDropdown(vehicleSelect.parentNode);
+    _smoothFillSelect(projectSelect, [], function(p) { return {value: String(p.id), text: p.name}; });
+    _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
     if (!did || did === '0' || did === 0) {
-      _reinitSearchableDropdown(projectSelect.parentNode);
       if (thenCallback) thenCallback();
       return;
     }
     var _cKey = 'proj_d' + did;
     if (window._cascadeCache[_cKey]) {
-      window._cascadeCache[_cKey].forEach(function(p) {
-        var o = document.createElement('option');
-        o.value = p.id; o.textContent = p.name;
-        projectSelect.appendChild(o);
-      });
-      _reinitSearchableDropdown(projectSelect.parentNode);
+      _smoothFillSelect(projectSelect, window._cascadeCache[_cKey], function(p) { return {value: String(p.id), text: p.name}; });
       if (thenSelectProjectId) _selSet(projectSelect, thenSelectProjectId);
       if (thenCallback) thenCallback();
       return;
     }
-    projectSelect.innerHTML = '<option value="0">-- Loading... --</option>';
+    _smoothLoadingSelect(projectSelect);
     fetch('/get_projects_by_district/' + did)
       .then(function(r) { return r.json(); })
       .then(function(arr) {
         window._cascadeCache[_cKey] = arr;
-        projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
-        arr.forEach(function(p) {
-          var o = document.createElement('option');
-          o.value = p.id; o.textContent = p.name;
-          projectSelect.appendChild(o);
-        });
-        _reinitSearchableDropdown(projectSelect.parentNode);
+        _smoothFillSelect(projectSelect, arr, function(p) { return {value: String(p.id), text: p.name}; });
         if (thenSelectProjectId) _selSet(projectSelect, thenSelectProjectId);
         if (thenCallback) thenCallback();
       })
       .catch(function() {
-        projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
-        _reinitSearchableDropdown(projectSelect.parentNode);
+        _smoothFillSelect(projectSelect, [], function(p) { return p; });
         if (thenCallback) thenCallback();
       });
   }
@@ -500,45 +504,31 @@ document.addEventListener('DOMContentLoaded', function() {
       if (thenCallback) thenCallback();
       return;
     }
-    if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
-    vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+    _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
     if (!pid || pid === '0' || pid === 0) {
-      _reinitSearchableDropdown(vehicleSelect.parentNode);
       if (thenCallback) thenCallback();
       return;
     }
     var _vKey = 'veh_p' + pid + '_d' + (did || '0');
     if (window._cascadeCache[_vKey]) {
-      window._cascadeCache[_vKey].forEach(function(v) {
-        var o = document.createElement('option');
-        o.value = v.id; o.textContent = v.vehicle_no;
-        vehicleSelect.appendChild(o);
-      });
-      _reinitSearchableDropdown(vehicleSelect.parentNode);
+      _smoothFillSelect(vehicleSelect, window._cascadeCache[_vKey], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
       if (thenSelectVehicleId) _selSet(vehicleSelect, thenSelectVehicleId);
       if (thenCallback) thenCallback();
       return;
     }
-    vehicleSelect.innerHTML = '<option value="0">-- Loading... --</option>';
+    _smoothLoadingSelect(vehicleSelect);
     var url = '/get_vehicles_by_project_district?project_id=' + pid;
     if (did && did !== '0' && did !== 0) url += '&district_id=' + did;
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(arr) {
         window._cascadeCache[_vKey] = arr;
-        vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
-        arr.forEach(function(v) {
-          var o = document.createElement('option');
-          o.value = v.id; o.textContent = v.vehicle_no;
-          vehicleSelect.appendChild(o);
-        });
-        _reinitSearchableDropdown(vehicleSelect.parentNode);
+        _smoothFillSelect(vehicleSelect, arr, function(v) { return {value: String(v.id), text: v.vehicle_no}; });
         if (thenSelectVehicleId) _selSet(vehicleSelect, thenSelectVehicleId);
         if (thenCallback) thenCallback();
       })
       .catch(function() {
-        vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
-        _reinitSearchableDropdown(vehicleSelect.parentNode);
+        _smoothFillSelect(vehicleSelect, [], function(v) { return v; });
         if (thenCallback) thenCallback();
       });
   }
