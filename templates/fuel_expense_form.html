@@ -106,6 +106,25 @@
   <div id="fuelMarketScanStatusBar" class="alert alert-secondary py-2 px-3 mb-2 small">
     <i class="bi bi-broadcast me-1"></i>PSO scan status loading...
   </div>
+  {% if last_rec %}
+  <div class="alert alert-success border-0 py-2 px-3 mb-2 d-flex flex-wrap align-items-center gap-2 small shadow-sm">
+    <i class="bi bi-check-circle-fill text-success"></i>
+    <strong>Last Saved:</strong>
+    <span class="badge bg-secondary">{{ last_rec.district.name if last_rec.district else '—' }}</span>
+    <span class="text-muted">›</span>
+    <span class="badge bg-secondary">{{ last_rec.project.name if last_rec.project else '—' }}</span>
+    <span class="text-muted">›</span>
+    <span class="badge bg-primary">{{ last_rec.vehicle.vehicle_no if last_rec.vehicle else '—' }}</span>
+    <span class="text-muted mx-1">|</span>
+    <span>{{ last_rec.fueling_date.strftime('%d %b %Y') if last_rec.fueling_date else '—' }}</span>
+    <span class="text-muted mx-1">|</span>
+    <strong>Rs {{ '{:,.0f}'.format(last_rec.amount|float) if last_rec.amount else '—' }}</strong>
+    <span class="text-muted mx-1">|</span>
+    {% set us = last_rec.upload_status or '' %}
+    <span class="badge {% if us == 'success' %}bg-success{% elif us == 'processing' %}bg-warning text-dark{% elif us == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">{{ us or 'No Files' }}</span>
+    <a href="{{ url_for('fuel_expense_edit', pk=last_rec.id) }}" class="ms-auto btn btn-outline-success btn-sm py-0 px-2"><i class="bi bi-pencil-square me-1"></i>Edit Last</a>
+  </div>
+  {% endif %}
 
   <form method="POST" action="" id="fuelExpenseForm" data-record-id="{{ rec.id if rec else '' }}" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
@@ -261,7 +280,16 @@
           </div>
           <div class="action-bar">
             <a href="{{ url_for('fuel_expense_list') }}" class="btn btn-outline-secondary btn-cancel">Cancel</a>
+            {% if not rec %}
+            <button type="submit" name="_save_action" value="save_list" class="btn btn-outline-primary btn-save">
+              <i class="bi bi-list-ul me-1"></i>Save to List
+            </button>
+            <button type="submit" name="_save_action" value="save_add" class="btn btn-primary btn-save">
+              <i class="bi bi-plus-circle me-1"></i>Save &amp; Add Next
+            </button>
+            {% else %}
             {{ form.submit(class="btn btn-primary btn-save") }}
+            {% endif %}
           </div>
         </div>
       </div>
@@ -850,13 +878,47 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  window.setTimeout(function() {
-    if (districtSelect && districtSelect.tomselect) {
-      districtSelect.tomselect.focus();
-    } else if (districtSelect) {
-      districtSelect.focus();
+  // ── Amount focus: alert if meter reading mismatch ──────────────────────
+  var _matchedAlertShown = false;
+  function _resetMatchedAlert() { _matchedAlertShown = false; }
+  if (amountInput) {
+    amountInput.addEventListener('focus', function() {
+      var matched = meterMatched ? (meterMatched.value || '').trim() : '';
+      if (matched === 'No' && !_matchedAlertShown) {
+        _matchedAlertShown = true;
+        setTimeout(function() {
+          alert('⚠️ Meter reading task report se match nahi karti (Matched = No).\nAmount enter karnay say pehle readings zaroor verify karein.');
+        }, 0);
+      }
+    });
+  }
+  [vehicleSelect, currentReadingInput, fuelingDateInput].forEach(function(el) {
+    if (el) el.addEventListener('change', _resetMatchedAlert);
+  });
+  if (currentReadingInput) currentReadingInput.addEventListener('input', _resetMatchedAlert);
+
+  // ── Ctrl+S / Cmd+S to save ─────────────────────────────────────────────
+  document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      var btn = fuelExpenseForm ? (fuelExpenseForm.querySelector('button[name="_save_action"][value="save_add"]') || fuelExpenseForm.querySelector('[type="submit"]')) : null;
+      if (btn && !btn.disabled) btn.click();
     }
-  }, 100);
+  });
+
+  // ── Auto-focus ─────────────────────────────────────────────────────────
+  var _isFromSave = {{ 'true' if last_rec else 'false' }};
+  window.setTimeout(function() {
+    if (_isFromSave) {
+      if (currentReadingInput) currentReadingInput.focus();
+    } else {
+      if (districtSelect && districtSelect.tomselect) {
+        districtSelect.tomselect.focus();
+      } else if (districtSelect) {
+        districtSelect.focus();
+      }
+    }
+  }, 150);
 });
 </script>
 {% endblock %}

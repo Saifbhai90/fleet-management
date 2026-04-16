@@ -18166,6 +18166,10 @@ def fuel_expense_add():
     default_district_id = _workspace_employee_default_district_id(workspace_employee_id)
     selected_district_id = request.args.get('district_id', type=int) if request.method == 'GET' else request.form.get('district_id', type=int)
     selected_project_id = request.args.get('project_id', type=int) if request.method == 'GET' else request.form.get('project_id', type=int)
+    selected_vehicle_id = request.args.get('vehicle_id', type=int) if request.method == 'GET' else None
+    selected_payment_type = request.args.get('payment_type', '') if request.method == 'GET' else ''
+    last_id = request.args.get('last_id', type=int) if request.method == 'GET' else None
+    last_rec = FuelExpense.query.get(last_id) if last_id else None
     if request.method == 'GET' and not selected_district_id and default_district_id:
         selected_district_id = default_district_id
     if selected_district_id:
@@ -18180,6 +18184,13 @@ def fuel_expense_add():
     if request.method == 'GET':
         form.district_id.data = selected_district_id or 0
         form.project_id.data = selected_project_id or 0
+        if selected_vehicle_id:
+            form.vehicle_id.data = selected_vehicle_id
+            _prev_veh = Vehicle.query.get(selected_vehicle_id)
+            if _prev_veh and _prev_veh.fuel_type:
+                form.fuel_type.data = _prev_veh.fuel_type
+        if selected_payment_type:
+            form.payment_type.data = selected_payment_type
         if not form.fueling_date.data:
             form.fueling_date.data = pk_date()
     if request.method == 'POST' and form.validate_on_submit():
@@ -18331,10 +18342,17 @@ def fuel_expense_add():
                 app.logger.exception('Fuel async attachment queue save')
                 flash('Fuel save ho gaya lekin files queue me add nahi ho sakin.', 'warning')
         flash('Fuel expense saved.', 'success')
-        return redirect(url_for('fuel_expense_list'))
+        if request.form.get('_save_action') == 'save_list':
+            return redirect(url_for('fuel_expense_list'))
+        return redirect(url_for('fuel_expense_add',
+            district_id=rec.district_id or 0,
+            project_id=rec.project_id or 0,
+            vehicle_id=rec.vehicle_id,
+            payment_type=payment_type,
+            last_id=rec.id))
     elif request.method == 'POST' and form.errors:
         flash('Fuel form save nahi hua. Required fields aur selected options check karein.', 'danger')
-    return render_template('fuel_expense_form.html', form=form, rec=None, title='Add Fuel Expense')
+    return render_template('fuel_expense_form.html', form=form, rec=None, title='Add Fuel Expense', last_rec=last_rec)
 
 
 @app.route('/expenses/fuel/<int:pk>/edit', methods=['GET', 'POST'])
