@@ -12,7 +12,7 @@
 .bento-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: minmax(130px, auto);
+    grid-auto-rows: minmax(140px, auto);
     gap: 16px;
 }
 
@@ -214,13 +214,13 @@
 
 /* ── Quick Action bar ── */
 .quick-actions {
-    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px;
+    display: flex; gap: 10px; flex-wrap: wrap;
 }
 .qa-btn {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 10px 18px;
-    border-radius: 14px;
-    font-size: 0.83rem; font-weight: 600;
+    padding: 9px 16px;
+    border-radius: 12px;
+    font-size: 0.82rem; font-weight: 600;
     text-decoration: none;
     border: 1.5px solid transparent;
     transition: all 0.18s ease !important;
@@ -230,6 +230,40 @@
 .qa-primary:hover { background: #1e40af; color: #fff; }
 .qa-secondary { background: #fff; color: #334155; border-color: #e2e8f0; }
 .qa-secondary:hover { border-color: #3b82f6; color: #1d4ed8; background: #eff6ff; }
+.qa-green  { background: #059669; color: #fff; border-color: #059669; }
+.qa-green:hover  { background: #047857; color: #fff; }
+.qa-amber  { background: #d97706; color: #fff; border-color: #d97706; }
+.qa-amber:hover  { background: #b45309; color: #fff; }
+
+/* ── Notification badge row ── */
+.notif-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+.notif-dot-warning { background:#f59e0b; }
+.notif-dot-danger  { background:#ef4444; }
+.notif-dot-info    { background:#3b82f6; }
+.notif-dot-success { background:#10b981; }
+
+/* ── KPI stat rows inside light cards ── */
+.bc-stat-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f1f5f9; }
+.bc-stat-row:last-child { border-bottom:none; padding-bottom:0; }
+.bc-stat-label { font-size:0.75rem; color:#64748b; font-weight:500; }
+.bc-stat-val   { font-size:0.82rem; font-weight:700; color:#0f172a; }
+
+/* ── Teal/cyan card ── */
+.bc-teal {
+    background: linear-gradient(145deg, #0891b2 0%, #0e7490 60%, #155e75 100%);
+    color: #fff;
+}
+.bc-teal::before {
+    content:'';
+    position:absolute; top:-30px; right:-30px;
+    width:130px; height:130px;
+    background:rgba(255,255,255,0.07);
+    border-radius:50%;
+}
+.bc-red {
+    background: linear-gradient(145deg, #dc2626 0%, #b91c1c 100%);
+    color: #fff;
+}
 </style>
 {% endblock %}
 
@@ -248,6 +282,18 @@ document.addEventListener('DOMContentLoaded', function() {
             card.classList.add('entered');
         }, 60 + i * 55);
     });
+    /* Live clock */
+    function updateClock() {
+        var el = document.getElementById('dashClock');
+        if (!el) return;
+        var now = new Date();
+        var h = now.getHours().toString().padStart(2,'0');
+        var m = now.getMinutes().toString().padStart(2,'0');
+        var s = now.getSeconds().toString().padStart(2,'0');
+        el.textContent = h + ':' + m + ':' + s;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
 });
 </script>
 
@@ -272,25 +318,52 @@ document.addEventListener('DOMContentLoaded', function() {
 {% endif %}
 
 <!-- ── Page Header ── -->
-<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-4">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
     <div>
-        <h2 class="fw-bold mb-0" style="font-size:1.6rem;letter-spacing:-0.02em;color:#0f172a;">Dashboard</h2>
-        <span class="text-muted" style="font-size:0.85rem;">Real-time fleet snapshot</span>
+        <h2 class="fw-bold mb-0" style="font-size:1.55rem;letter-spacing:-0.02em;color:#0f172a;">Dashboard</h2>
+        <div class="d-flex align-items-center gap-2 mt-1" style="font-size:0.82rem;color:#64748b;">
+            <i class="bi bi-calendar3" style="font-size:0.8rem;"></i>
+            <span>{{ now_dt.strftime('%A, %d %B %Y') if now_dt is defined else '' }}</span>
+            <span class="mx-1" style="color:#cbd5e1;">|</span>
+            <i class="bi bi-clock" style="font-size:0.8rem;"></i>
+            <span id="dashClock" style="font-variant-numeric:tabular-nums;font-weight:600;"></span>
+        </div>
     </div>
-    <div class="d-flex flex-wrap gap-2">
-        <a href="{{ url_for('dashboard') }}" class="qa-btn qa-primary">
-            <i data-lucide="refresh-cw" style="width:16px;height:16px;"></i> Refresh
-        </a>
+    <!-- Quick Actions in header -->
+    <div class="quick-actions">
         {% if can_see_page('drivers_add') %}
         <a href="{{ url_for('driver_form') }}" class="qa-btn qa-primary">
-            <i data-lucide="user-plus" style="width:15px;height:15px;"></i> Add Driver
+            <i data-lucide="user-plus" style="width:14px;height:14px;"></i> Add Driver
+        </a>
+        {% endif %}
+        {% if can_see_page('vehicles_add') %}
+        <a href="{{ url_for('vehicle_form') }}" class="qa-btn qa-secondary">
+            <i data-lucide="truck" style="width:14px;height:14px;"></i> Add Vehicle
+        </a>
+        {% endif %}
+        {% if can_see_page('fuel_expense_add') %}
+        <a href="{{ url_for('fuel_expense_add') }}" class="qa-btn qa-green">
+            <i data-lucide="fuel" style="width:14px;height:14px;"></i> Add Fuel
+        </a>
+        {% endif %}
+        {% if can_see_page('maintenance_expense_add') %}
+        <a href="{{ url_for('maintenance_expense_form') }}" class="qa-btn qa-amber">
+            <i data-lucide="wrench" style="width:14px;height:14px;"></i> Maintenance
+        </a>
+        {% endif %}
+        {% if can_see_page('driver_attendance_checkin') %}
+        <a href="{{ url_for('driver_attendance_checkin') }}" class="qa-btn qa-secondary">
+            <i data-lucide="calendar-check" style="width:14px;height:14px;"></i> Attendance
         </a>
         {% endif %}
         {% if can_see_page('reports_index') %}
         <a href="{{ url_for('reports_index') }}" class="qa-btn qa-secondary">
-            <i data-lucide="bar-chart-2" style="width:15px;height:15px;"></i> Reports
+            <i data-lucide="bar-chart-2" style="width:14px;height:14px;"></i> Reports
         </a>
         {% endif %}
+        <a href="{{ url_for('dashboard') }}" class="qa-btn qa-secondary" title="Refresh">
+            <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i>
+        </a>
     </div>
 </div>
 
@@ -429,72 +502,79 @@ function showAccessDenied(msg) {
     {% if can_see_page('dashboard_card_projects') %}
     <a {% if can_see_page('report_project_summary') %}href="{{ url_for('report_project_summary') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Project Summary Report permission required.')"{% endif %}
        class="bc bc-light bc-sm" style="cursor:pointer;">
-        <div class="d-flex align-items-start gap-3">
-            <div class="bc-card-icon" style="background:#dbeafe;color:#1d4ed8;"><i class="bi bi-folder-fill"></i></div>
-            <div>
-                <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_projects }}</div>
-                <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Projects</div>
+        <div style="position:relative;z-index:1;">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <div class="bc-card-icon" style="background:#dbeafe;color:#1d4ed8;width:36px;height:36px;border-radius:10px;font-size:1rem;"><i class="bi bi-folder-fill"></i></div>
+                <span style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Projects</span>
             </div>
+            <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_projects }}</div>
+            <div style="font-size:0.72rem;color:#94a3b8;margin-top:2px;">active areas</div>
         </div>
-        {% if not can_see_page('report_project_summary') %}
-        <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.12);border-radius:8px;padding:3px 8px;">
-            <i class="bi bi-eye-fill" style="font-size:0.7rem;color:#94a3b8;"></i>
-        </div>
-        {% endif %}
     </a>
     {% endif %}
 
     {% if can_see_page('dashboard_card_districts') %}
     <a {% if can_see_page('report_district_summary') %}href="{{ url_for('report_district_summary') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - District Summary Report permission required.')"{% endif %}
        class="bc bc-light bc-sm" style="cursor:pointer;">
-        <div class="d-flex align-items-start gap-3">
-            <div class="bc-card-icon" style="background:#dcfce7;color:#15803d;"><i class="bi bi-geo-alt-fill"></i></div>
-            <div>
-                <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_districts }}</div>
-                <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Districts</div>
+        <div style="position:relative;z-index:1;">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <div class="bc-card-icon" style="background:#dcfce7;color:#15803d;width:36px;height:36px;border-radius:10px;font-size:1rem;"><i class="bi bi-geo-alt-fill"></i></div>
+                <span style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Districts</span>
             </div>
+            <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_districts }}</div>
+            <div style="font-size:0.72rem;color:#94a3b8;margin-top:2px;">covered regions</div>
         </div>
-        {% if not can_see_page('report_district_summary') %}
-        <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.12);border-radius:8px;padding:3px 8px;">
-            <i class="bi bi-eye-fill" style="font-size:0.7rem;color:#94a3b8;"></i>
-        </div>
-        {% endif %}
     </a>
     {% endif %}
 
     {% if can_see_page('dashboard_card_parking') %}
     <a {% if can_see_page('report_parking_utilization') %}href="{{ url_for('report_parking_utilization') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Parking Report permission required.')"{% endif %}
        class="bc bc-light bc-sm" style="cursor:pointer;">
-        <div class="d-flex align-items-start gap-3">
-            <div class="bc-card-icon" style="background:#fce7f3;color:#be185d;"><i class="bi bi-p-circle-fill"></i></div>
-            <div>
-                <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_parking }}</div>
-                <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Parking</div>
+        <div style="position:relative;z-index:1;">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <div class="bc-card-icon" style="background:#fce7f3;color:#be185d;width:36px;height:36px;border-radius:10px;font-size:1rem;"><i class="bi bi-p-circle-fill"></i></div>
+                <span style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Parking</span>
             </div>
+            <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_parking }}</div>
+            <div style="font-size:0.72rem;color:#94a3b8;margin-top:2px;">stations</div>
         </div>
-        {% if not can_see_page('report_parking_utilization') %}
-        <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.12);border-radius:8px;padding:3px 8px;">
-            <i class="bi bi-eye-fill" style="font-size:0.7rem;color:#94a3b8;"></i>
-        </div>
-        {% endif %}
     </a>
     {% endif %}
 
     {% if can_see_page('dashboard_card_companies') %}
     <a {% if can_see_page('companies') %}href="{{ url_for('companies') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Companies permission required.')"{% endif %}
        class="bc bc-light bc-sm" style="cursor:pointer;">
-        <div class="d-flex align-items-start gap-3">
-            <div class="bc-card-icon" style="background:#f3e8ff;color:#7c3aed;"><i class="bi bi-building"></i></div>
-            <div>
-                <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_companies }}</div>
-                <div style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Companies</div>
+        <div style="position:relative;z-index:1;">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <div class="bc-card-icon" style="background:#f3e8ff;color:#7c3aed;width:36px;height:36px;border-radius:10px;font-size:1rem;"><i class="bi bi-building"></i></div>
+                <span style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Companies</span>
             </div>
+            <div class="bc-num bc-num-md" style="color:#0f172a;">{{ total_companies }}</div>
+            <div style="font-size:0.72rem;color:#94a3b8;margin-top:2px;">registered</div>
         </div>
-        {% if not can_see_page('companies') %}
-        <div style="position:absolute;top:10px;right:12px;z-index:2;background:rgba(0,0,0,0.12);border-radius:8px;padding:3px 8px;">
-            <i class="bi bi-eye-fill" style="font-size:0.7rem;color:#94a3b8;"></i>
+    </a>
+    {% endif %}
+
+    {% if can_see_page('dashboard_card_maintenance') %}
+    <a href="{{ url_for('maintenance_expense_list') }}" class="bc bc-teal bc-sm" style="cursor:pointer;">
+        <div style="position:relative;z-index:1;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="bc-card-icon" style="background:rgba(255,255,255,0.2);width:36px;height:36px;border-radius:10px;font-size:1rem;"><i class="bi bi-tools"></i></div>
+                <span class="bc-tag mb-0">Maintenance</span>
+            </div>
+            <div class="bc-num bc-num-md">Rs&nbsp;{{ '{:,.0f}'.format(monthly_maintenance) }}</div>
+            <div class="bc-sub">cost this month</div>
         </div>
-        {% endif %}
+    </a>
+    <a href="{{ url_for('maintenance_work_order_list') }}" class="bc bc-sm" style="cursor:pointer;background:linear-gradient(145deg,#f59e0b,#d97706);color:#fff;">
+        <div style="position:relative;z-index:1;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="bc-card-icon" style="background:rgba(255,255,255,0.22);width:36px;height:36px;border-radius:10px;font-size:1rem;"><i class="bi bi-clipboard2-check-fill"></i></div>
+                <span class="bc-tag mb-0">Work Orders</span>
+            </div>
+            <div class="bc-num bc-num-md">{{ open_work_orders }}</div>
+            <div class="bc-sub">open / in-progress</div>
+        </div>
     </a>
     {% endif %}
 
@@ -810,33 +890,66 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<!-- ── Quick Actions ── -->
-<div class="quick-actions mt-4">
-    {% if can_see_page('drivers_add') %}
-    <a href="{{ url_for('driver_form') }}" class="qa-btn qa-primary">
-        <i data-lucide="user-plus" style="width:15px;height:15px;"></i> Add Driver
-    </a>
+<!-- ── Bottom Row: Notifications + Doc Health ── -->
+{% if notifications or (can_see_page('dashboard_card_doc_health') and (expiry_already > 0 or expiry_soon > 0)) %}
+<div class="row g-3 mt-3">
+
+    {% if notifications %}
+    <div class="col-12 col-lg-7">
+        <div class="card border-0 shadow-sm h-100" style="border-radius:20px;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Inbox</div>
+                        <div style="font-size:1rem;font-weight:700;color:#0f172a;">Notifications</div>
+                    </div>
+                    <a href="{{ url_for('notification_list') }}" style="font-size:0.78rem;color:#3b82f6;text-decoration:none;font-weight:600;">View all &rarr;</a>
+                </div>
+                <div class="d-flex flex-column">
+                {% for n in notifications[:6] %}
+                <div class="d-flex align-items-start gap-3 py-2" style="border-bottom:1px solid #f1f5f9;">
+                    <span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;
+                        background:{%- if n.notification_type == 'danger' %}#ef4444{%- elif n.notification_type == 'warning' %}#f59e0b{%- elif n.notification_type == 'success' %}#10b981{%- else %}#3b82f6{%- endif %};"></span>
+                    <div class="flex-grow-1">
+                        <div style="font-size:0.82rem;font-weight:600;color:#0f172a;line-height:1.3;">{{ n.title }}</div>
+                        <div style="font-size:0.74rem;color:#64748b;margin-top:1px;">{{ n.message | truncate(90) }}</div>
+                    </div>
+                    {% if n.link %}
+                    <a href="{{ url_for('notification_read', pk=n.id) }}?next={{ n.link }}" style="font-size:0.72rem;color:#3b82f6;white-space:nowrap;text-decoration:none;font-weight:600;">View</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
     {% endif %}
-    {% if can_see_page('vehicles_add') %}
-    <a href="{{ url_for('vehicle_form') }}" class="qa-btn qa-secondary">
-        <i data-lucide="truck" style="width:15px;height:15px;"></i> Add Vehicle
-    </a>
+
+    {% if can_see_page('dashboard_card_doc_health') and (expiry_already > 0 or expiry_soon > 0) %}
+    <div class="col-12 {% if notifications %}col-lg-5{% endif %}">
+        <div class="d-flex flex-column gap-3 px-4 py-4 h-100"
+             style="background:linear-gradient(135deg,{% if expiry_already > 0 %}#fef2f2,#fee2e2{% else %}#fffbeb,#fef3c7{% endif %});border:2px solid {% if expiry_already > 0 %}#fca5a5{% else %}#fcd34d{% endif %};border-radius:20px;">
+            <div class="d-flex align-items-start gap-3">
+                <div style="width:48px;height:48px;border-radius:14px;background:{% if expiry_already > 0 %}#fee2e2{% else %}#fef3c7{% endif %};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i data-lucide="calendar-x" style="width:24px;height:24px;color:{% if expiry_already > 0 %}#dc2626{% else %}#d97706{% endif %};"></i>
+                </div>
+                <div>
+                    <strong style="font-size:0.9rem;color:{% if expiry_already > 0 %}#991b1b{% else %}#92400e{% endif %};">Document Health Alert</strong>
+                    <div style="font-size:0.82rem;color:{% if expiry_already > 0 %}#b91c1c{% else %}#a16207{% endif %};margin-top:4px;">
+                        {% if expiry_already > 0 %}<div><i class="bi bi-x-circle-fill me-1"></i><strong>{{ expiry_already }}</strong> driver(s) with expired documents.</div>{% endif %}
+                        {% if expiry_soon > 0 %}<div class="mt-1"><i class="bi bi-exclamation-circle-fill me-1"></i><strong>{{ expiry_soon }}</strong> expiring within 15 days.</div>{% endif %}
+                    </div>
+                </div>
+            </div>
+            <a href="{{ url_for('report_expiry', days=15) }}" class="btn btn-sm align-self-start"
+               style="background:{% if expiry_already > 0 %}#dc2626{% else %}#d97706{% endif %};color:#fff;border-radius:10px;font-size:0.78rem;font-weight:600;border:none;">
+                <i class="bi bi-file-earmark-text me-1"></i>View Expiry Report
+            </a>
+        </div>
+    </div>
     {% endif %}
-    {% if can_see_page('driver_attendance_checkin') %}
-    <a href="{{ url_for('driver_attendance_checkin') }}" class="qa-btn qa-secondary">
-        <i data-lucide="calendar-check" style="width:15px;height:15px;"></i> Mark Attendance
-    </a>
-    {% endif %}
-    {% if can_see_page('assign_driver_to_vehicle_add') %}
-    <a href="{{ url_for('assign_driver_to_vehicle_new') }}" class="qa-btn qa-secondary">
-        <i data-lucide="link" style="width:15px;height:15px;"></i> Assign Driver
-    </a>
-    {% endif %}
-    {% if can_see_page('fuel_expense_add') %}
-    <a href="{{ url_for('fuel_expense_add') }}" class="qa-btn qa-secondary">
-        <i data-lucide="fuel" style="width:15px;height:15px;"></i> Add Fuel
-    </a>
-    {% endif %}
+
 </div>
+{% endif %}
 
 {% endblock %}

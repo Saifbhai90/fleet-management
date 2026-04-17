@@ -2175,6 +2175,32 @@ def dashboard():
     project_chart_labels = fin_chart_labels
     project_chart_values = fin_chart_expenses
 
+    # ── Maintenance KPIs ──────────────────────────────────────────────────
+    monthly_maintenance = 0.0
+    open_work_orders = 0
+    if _can('dashboard_card_maintenance'):
+        try:
+            from sqlalchemy import extract as _mext
+            _maint_q = db.session.query(func.sum(MaintenanceExpense.total_bill_amount)).filter(
+                _mext('month', MaintenanceExpense.expense_date) == today_dt.month,
+                _mext('year',  MaintenanceExpense.expense_date) == today_dt.year
+            )
+            if not is_master_or_admin:
+                if allowed_projects:
+                    _maint_q = _maint_q.filter(MaintenanceExpense.project_id.in_(list(allowed_projects)))
+                if allowed_districts:
+                    _maint_q = _maint_q.filter(MaintenanceExpense.district_id.in_(list(allowed_districts)))
+            monthly_maintenance = float(_maint_q.scalar() or 0)
+            _wo_q = MaintenanceWorkOrder.query.filter(MaintenanceWorkOrder.status != 'closed')
+            if not is_master_or_admin:
+                if allowed_projects:
+                    _wo_q = _wo_q.filter(MaintenanceWorkOrder.project_id.in_(list(allowed_projects)))
+                if allowed_districts:
+                    _wo_q = _wo_q.filter(MaintenanceWorkOrder.district_id.in_(list(allowed_districts)))
+            open_work_orders = _wo_q.count()
+        except Exception:
+            monthly_maintenance, open_work_orders = 0.0, 0
+
     # ── Document Health: expiry in next 15 days / already expired ────────
     expiry_soon, expiry_already = 0, 0
     if _can('dashboard_card_doc_health'):
@@ -2300,6 +2326,9 @@ def dashboard():
                            expiry_already=expiry_already,
                            notifications=notifications,
                            health_alert=health_alert,
+                           monthly_maintenance=monthly_maintenance,
+                           open_work_orders=open_work_orders,
+                           now_dt=today_dt,
                            from_login=request.args.get('from_login') == '1')
 
 
