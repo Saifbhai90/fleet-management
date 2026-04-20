@@ -19013,7 +19013,8 @@ def _apply_oil_expense_items_balance(items, reverse=False):
         used_qty = float(item.used_qty or 0)
         delta = (purchase_qty - used_qty) if not reverse else (used_qty - purchase_qty)
         if delta:
-            bal.balance_qty = (bal.balance_qty or 0) + delta
+            from decimal import Decimal
+            bal.balance_qty = Decimal(str(bal.balance_qty or 0)) + Decimal(str(delta))
     db.session.flush()
 
 
@@ -19597,10 +19598,8 @@ def oil_expense_form(pk=None):
 
             flash('Oil expense saved.', 'success')
             return redirect(url_for('oil_expense_list'))
-        except Exception as e:
+        except Exception:
             db.session.rollback()
-            app.logger.exception('Oil expense save failed: %s', str(e))
-            flash(f'Save failed: {str(e)}', 'danger')
             raise
     return render_template(
         'oil_expense_form.html',
