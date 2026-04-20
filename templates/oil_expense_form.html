@@ -1013,42 +1013,27 @@ document.addEventListener('DOMContentLoaded', function() {
     var pid = serverProjectId;
     var vid = serverVehicleId;
 
-    if (did && did !== 0) {
+    // Always set district first (TomSelect should be initialized by now via initSearchableDropdowns in base.html)
+    if (did && did !== 0 && districtSelect) {
       _tsSet(districtSelect, did);
     }
-    if (pid && pid !== 0) {
-      _tsSet(projectSelect, pid);
-    }
-    if (vid && vid !== 0) {
-      _tsSet(vehicleSelect, vid);
-    }
 
-    var serverProjectCount = projectSelect ? projectSelect.querySelectorAll('option').length : 0;
-    var serverVehicleCount = vehicleSelect ? vehicleSelect.querySelectorAll('option').length : 0;
-
-    if (serverProjectCount > 1) {
-      if (pid && pid !== 0) _tsSet(projectSelect, pid);
-      if (serverVehicleCount > 1) {
-        if (vid && vid !== 0) _tsSet(vehicleSelect, vid);
-        fetchOilLastReading();
-      } else if (pid && pid !== 0) {
-        _loadVehiclesForProject(pid, did, vid || null, function() {
-          fetchOilLastReading();
-        });
-      } else {
-        fetchOilLastReading();
-      }
-    } else if (did && did !== 0 && projectSelect) {
+    // Always run full fetch chain — never rely on server-rendered project/vehicle options
+    // because _smoothFillSelect destroys TomSelect on each call and options may be stale.
+    if (did && did !== 0 && projectSelect) {
       _loadProjectsForDistrict(did, pid || null, function() {
-        var selectedPid = _tsVal(projectSelect);
-        if (selectedPid && selectedPid !== '0' && vehicleSelect) {
-          _loadVehiclesForProject(selectedPid, did, vid || null, function() {
+        var activePid = pid || _tsVal(projectSelect);
+        if (activePid && activePid !== '0' && activePid !== 0 && vehicleSelect) {
+          _loadVehiclesForProject(activePid, did, vid || null, function() {
             fetchOilLastReading();
           });
         } else {
           fetchOilLastReading();
         }
       });
+    } else if (pid && pid !== 0 && vehicleSelect) {
+      // No district but have project - try loading vehicles directly
+      _loadVehiclesForProject(pid, did, vid || null, fetchOilLastReading);
     } else {
       fetchOilLastReading();
     }
