@@ -216,6 +216,24 @@
             </tr>
             {% endfor %}
           </tbody>
+          <tfoot>
+            <tr class="table-warning fw-semibold">
+              <td colspan="9" class="text-end">Subtotal (Current Page)</td>
+              <td class="text-end">{{ "%.2f"|format(page_subtotal_qty or 0) }}</td>
+              <td class="text-end">{{ "%.2f"|format(page_subtotal_amount or 0) }}</td>
+              <td colspan="2"></td>
+              <td class="text-end">{{ "%.2f"|format(page_subtotal_bill or 0) }}</td>
+              <td colspan="3"></td>
+            </tr>
+            <tr class="table-info fw-bold">
+              <td colspan="9" class="text-end">Total (All Filtered Records)</td>
+              <td class="text-end">{{ "%.2f"|format(totals.total_qty or 0) }}</td>
+              <td class="text-end">{{ "%.2f"|format(totals.total_amount or 0) }}</td>
+              <td colspan="2"></td>
+              <td class="text-end">{{ "%.2f"|format(totals.total_bill or 0) }}</td>
+              <td colspan="3"></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     <div class="card-footer bg-white border-top pt-2 pb-3 px-3">

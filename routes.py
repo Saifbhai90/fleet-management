@@ -19191,6 +19191,10 @@ def oil_expense_list():
     ).all()
     # Attach item totals per row for list display
     rows_with_totals = []
+    overall_purchase_qty = 0
+    overall_used_qty = 0
+    overall_balance_qty = 0
+    overall_amount = 0
     for r in rows:
         total_purchase = sum(float(it.purchase_qty or 0) for it in r.items)
         total_used = sum(float(it.used_qty or 0) for it in r.items)
@@ -19203,11 +19207,26 @@ def oil_expense_list():
             'total_balance_qty': total_balance,
             'total_amount': total_amount
         })
-    totals = {'count': len(rows)}
+        overall_purchase_qty += total_purchase
+        overall_used_qty += total_used
+        overall_balance_qty += total_balance
+        overall_amount += total_amount
+    totals = {
+        'count': len(rows),
+        'purchase_qty': overall_purchase_qty,
+        'used_qty': overall_used_qty,
+        'balance_qty': overall_balance_qty,
+        'amount': overall_amount
+    }
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows_with_totals, page, per_page)
     rows_with_totals = pagination.items
+    # Page subtotals
+    page_subtotal_purchase = sum(item['total_purchase_qty'] for item in rows_with_totals)
+    page_subtotal_used = sum(item['total_used_qty'] for item in rows_with_totals)
+    page_subtotal_balance = sum(item['total_balance_qty'] for item in rows_with_totals)
+    page_subtotal_amount = sum(item['total_amount'] for item in rows_with_totals)
     cleanup_status = _latest_expense_cleanup_status('oil', workspace_employee_id)
     return render_template(
         'oil_expense_list.html',
@@ -19219,6 +19238,10 @@ def oil_expense_list():
         pagination=pagination,
         per_page=per_page,
         cleanup_status=cleanup_status,
+        page_subtotal_purchase=page_subtotal_purchase,
+        page_subtotal_used=page_subtotal_used,
+        page_subtotal_balance=page_subtotal_balance,
+        page_subtotal_amount=page_subtotal_amount,
     )
 
 
@@ -20308,15 +20331,31 @@ def maintenance_expense_list():
         MaintenanceExpense.id.asc(),
     ).all()
     rows_with_totals = []
+    overall_total_qty = 0
+    overall_total_amount = 0
+    overall_total_bill = 0
     for r in rows:
         total_qty = sum(float(it.qty or 0) for it in r.items)
         total_amount = sum(float(it.amount or 0) for it in r.items)
+        total_bill = float(r.total_bill_amount or 0)
         rows_with_totals.append({'rec': r, 'total_qty': total_qty, 'total_amount': total_amount})
-    totals = {'count': len(rows)}
+        overall_total_qty += total_qty
+        overall_total_amount += total_amount
+        overall_total_bill += total_bill
+    totals = {
+        'count': len(rows),
+        'total_qty': overall_total_qty,
+        'total_amount': overall_total_amount,
+        'total_bill': overall_total_bill
+    }
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows_with_totals, page, per_page)
     rows_with_totals = pagination.items
+    # Page subtotals
+    page_subtotal_qty = sum(item['total_qty'] for item in rows_with_totals)
+    page_subtotal_amount = sum(item['total_amount'] for item in rows_with_totals)
+    page_subtotal_bill = sum(float(item['rec'].total_bill_amount or 0) for item in rows_with_totals)
     cleanup_status = _latest_expense_cleanup_status('maintenance', workspace_employee_id)
     return render_template(
         'maintenance_expense_list.html',

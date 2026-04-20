@@ -187,6 +187,24 @@
             </tr>
             {% endfor %}
           </tbody>
+          <tfoot>
+            <tr class="table-warning fw-semibold">
+              <td colspan="7" class="text-end">Subtotal (Current Page)</td>
+              <td class="text-end">{{ "%.2f"|format(page_subtotal_purchase or 0) }}</td>
+              <td class="text-end">{{ "%.2f"|format(page_subtotal_used or 0) }}</td>
+              <td class="text-end">{{ "%.2f"|format(page_subtotal_balance or 0) }}</td>
+              <td class="text-end">{{ "%.2f"|format(page_subtotal_amount or 0) }}</td>
+              <td colspan="3"></td>
+            </tr>
+            <tr class="table-info fw-bold">
+              <td colspan="7" class="text-end">Total (All Filtered Records)</td>
+              <td class="text-end">{{ "%.2f"|format(totals.purchase_qty or 0) }}</td>
+              <td class="text-end">{{ "%.2f"|format(totals.used_qty or 0) }}</td>
+              <td class="text-end">{{ "%.2f"|format(totals.balance_qty or 0) }}</td>
+              <td class="text-end">{{ "%.2f"|format(totals.amount or 0) }}</td>
+              <td colspan="3"></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
