@@ -19597,8 +19597,10 @@ def oil_expense_form(pk=None):
 
             flash('Oil expense saved.', 'success')
             return redirect(url_for('oil_expense_list'))
-        except Exception:
+        except Exception as e:
             db.session.rollback()
+            app.logger.exception('Oil expense save failed: %s', str(e))
+            flash(f'Save failed: {str(e)}', 'danger')
             raise
     return render_template(
         'oil_expense_form.html',
