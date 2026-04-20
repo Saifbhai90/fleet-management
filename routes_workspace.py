@@ -14,7 +14,7 @@ from models import (
     WorkspaceParty, WorkspaceProduct, WorkspaceAccount,
     WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFuelOilOpeningExpense, WorkspaceFundTransfer, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceMonthClose, WorkspaceFuelOilMonthClose,
     WorkspaceMpgReportInput,
-    FuelExpense, OilExpense, MaintenanceExpense,
+    FuelExpense, OilExpense, MaintenanceExpense, EmployeeExpense,
 )
 from routes_finance import check_auth
 from auth_utils import get_user_context
@@ -175,35 +175,117 @@ def _pending_month_close_spells(employee_id):
             return y, m, 1, 15
         return y, m, 16, last
 
+    def _add_bucket(exp_date, district_id, project_id, amount):
+        if not exp_date or not district_id or not project_id:
+            return False
+        amt = Decimal(str(amount or 0))
+        if amt <= 0:
+            return False
+        y, m, sday, eday = _spell_key(exp_date)
+        k = (district_id, project_id, y, m, sday, eday)
+        bucket[k] = bucket.get(k, Decimal("0")) + amt
+        return True
+
     # Opening expenses (always scoped by district/project).
     for row in WorkspaceOpeningExpense.query.filter(
         WorkspaceOpeningExpense.employee_id == employee_id,
         WorkspaceOpeningExpense.month_close_id.is_(None),
         WorkspaceOpeningExpense.total_expense > 0,
     ).all():
-        if not row.opening_date or not row.district_id or not row.project_id:
-            continue
-        y, m, sday, eday = _spell_key(row.opening_date)
-        k = (row.district_id, row.project_id, y, m, sday, eday)
-        bucket[k] = bucket.get(k, Decimal("0")) + Decimal(str(row.total_expense or 0))
+        _add_bucket(row.opening_date, row.district_id, row.project_id, row.total_expense)
 
-    # Regular workspace expenses (if scoped columns exist in model).
+    # Regular workspace expenses.
+    # Backward compatibility: some setups don't have district/project columns in workspace_expense.
+    # In that case, resolve scope from source form row via expense_number (FuelExpense-123, etc.).
     has_dist = hasattr(WorkspaceExpense, "district_id")
     has_proj = hasattr(WorkspaceExpense, "project_id")
-    if has_dist and has_proj:
-        for row in WorkspaceExpense.query.filter(
+    covered_expense_numbers = set()
+    closed_expense_numbers = {
+        (r[0] or "").strip()
+        for r in db.session.query(WorkspaceExpense.expense_number).filter(
             WorkspaceExpense.employee_id == employee_id,
-            WorkspaceExpense.month_close_id.is_(None),
-            WorkspaceExpense.amount > 0,
-        ).all():
-            district_id = getattr(row, "district_id", None)
-            project_id = getattr(row, "project_id", None)
-            exp_date = getattr(row, "expense_date", None)
-            if not exp_date or not district_id or not project_id:
-                continue
-            y, m, sday, eday = _spell_key(exp_date)
-            k = (district_id, project_id, y, m, sday, eday)
-            bucket[k] = bucket.get(k, Decimal("0")) + Decimal(str(row.amount or 0))
+            WorkspaceExpense.month_close_id.isnot(None),
+        ).all()
+        if r and r[0]
+    }
+    for row in WorkspaceExpense.query.filter(
+        WorkspaceExpense.employee_id == employee_id,
+        WorkspaceExpense.month_close_id.is_(None),
+        WorkspaceExpense.amount > 0,
+    ).all():
+        district_id = getattr(row, "district_id", None) if has_dist else None
+        project_id = getattr(row, "project_id", None) if has_proj else None
+        exp_date = getattr(row, "expense_date", None)
+        exp_no = (getattr(row, "expense_number", None) or "").strip()
+
+        if (not district_id or not project_id) and exp_no and "-" in exp_no:
+            ref_type, ref_id = exp_no.split("-", 1)
+            ref_obj = None
+            try:
+                ref_id_int = int(ref_id)
+            except (TypeError, ValueError):
+                ref_id_int = None
+            if ref_id_int:
+                if ref_type == "FuelExpense":
+                    ref_obj = FuelExpense.query.get(ref_id_int)
+                    if ref_obj:
+                        exp_date = exp_date or ref_obj.fueling_date
+                elif ref_type == "OilExpense":
+                    ref_obj = OilExpense.query.get(ref_id_int)
+                    if ref_obj:
+                        exp_date = exp_date or ref_obj.expense_date
+                elif ref_type == "MaintenanceExpense":
+                    ref_obj = MaintenanceExpense.query.get(ref_id_int)
+                    if ref_obj:
+                        exp_date = exp_date or ref_obj.expense_date
+                elif ref_type == "EmployeeExpense":
+                    ref_obj = EmployeeExpense.query.get(ref_id_int)
+                    if ref_obj:
+                        exp_date = exp_date or ref_obj.expense_date
+                if ref_obj:
+                    district_id = district_id or getattr(ref_obj, "district_id", None)
+                    project_id = project_id or getattr(ref_obj, "project_id", None)
+
+        if _add_bucket(exp_date, district_id, project_id, row.amount) and exp_no:
+            covered_expense_numbers.add(exp_no)
+
+    # Fallback source scan: if regular sync is missing for any form row,
+    # still show it in pending spell summary.
+    for row in FuelExpense.query.filter(
+        FuelExpense.employee_id == employee_id,
+        FuelExpense.amount > 0,
+    ).all():
+        exp_no = f"FuelExpense-{row.id}"
+        if exp_no in covered_expense_numbers or exp_no in closed_expense_numbers:
+            continue
+        _add_bucket(row.fueling_date, row.district_id, row.project_id, row.amount)
+
+    for row in OilExpense.query.filter(
+        OilExpense.employee_id == employee_id,
+        OilExpense.total_bill_amount > 0,
+    ).all():
+        exp_no = f"OilExpense-{row.id}"
+        if exp_no in covered_expense_numbers or exp_no in closed_expense_numbers:
+            continue
+        _add_bucket(row.expense_date, row.district_id, row.project_id, row.total_bill_amount)
+
+    for row in MaintenanceExpense.query.filter(
+        MaintenanceExpense.employee_id == employee_id,
+        MaintenanceExpense.total_bill_amount > 0,
+    ).all():
+        exp_no = f"MaintenanceExpense-{row.id}"
+        if exp_no in covered_expense_numbers or exp_no in closed_expense_numbers:
+            continue
+        _add_bucket(row.expense_date, row.district_id, row.project_id, row.total_bill_amount)
+
+    for row in EmployeeExpense.query.filter(
+        EmployeeExpense.employee_id == employee_id,
+        EmployeeExpense.amount > 0,
+    ).all():
+        exp_no = f"EmployeeExpense-{row.id}"
+        if exp_no in covered_expense_numbers or exp_no in closed_expense_numbers:
+            continue
+        _add_bucket(row.expense_date, row.district_id, row.project_id, row.amount)
 
     if not bucket:
         return []
