@@ -32,7 +32,7 @@
                     <label class="form-label form-label-sm mb-1">Category</label>
                     <select name="category" class="form-select form-select-sm">
                         <option value="">-- All --</option>
-                        {% for cat in ['Travel','Office','Communication','Other'] %}
+                        {% for cat in categories %}
                         <option value="{{ cat }}" {% if category == cat %}selected{% endif %}>{{ cat }}</option>
                         {% endfor %}
                     </select>
@@ -123,6 +123,10 @@
                             </td>
                             <td class="text-end fw-semibold">{{ "{:,.2f}".format(exp.amount) }}</td>
                             <td class="text-center">
+                                <a href="{{ url_for('employee_expense_media', pk=exp.id) }}"
+                                   class="btn btn-sm btn-outline-success" title="View Media">
+                                    <i class="bi bi-eye"></i>
+                                </a>
                                 <a href="{{ url_for('employee_expense_form_edit', pk=exp.id) }}"
                                    class="btn btn-sm btn-edit-compact" title="Edit">
                                     <i class="bi bi-pencil"></i>

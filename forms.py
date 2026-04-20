@@ -1265,7 +1265,7 @@ class EmployeeExpenseForm(FlaskForm):
         ('Advance', 'Advance')
     ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     receipt = FileField('Receipt/Bill (Optional)', validators=[Optional(),
-        FileAllowed(['pdf', 'jpg', 'jpeg', 'png'], 'PDF or images only')])
+        FileAllowed(['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'webm', 'mov'], 'PDF, image, or video only')])
     submit = SubmitField('Save Employee Expense')
 
 

@@ -758,13 +758,38 @@ def employee_expense_form(pk=None):
     projects = Project.query.order_by(Project.name).all()
     form.district_id.choices = [(0, '-- Select District (Optional) --')] + [(d.id, d.name) for d in districts]
     form.project_id.choices = [(0, '-- Select Project (Optional) --')] + [(p.id, p.name) for p in projects]
+    default_categories = ['Travel', 'Office', 'Communication', 'Other']
+    category_rows = db.session.query(EmployeeExpense.expense_category).filter(
+        EmployeeExpense.employee_id == workspace_employee_id,
+        EmployeeExpense.expense_category.isnot(None),
+        EmployeeExpense.expense_category != '',
+    ).order_by(EmployeeExpense.id.desc()).limit(200).all()
+    category_seen = set()
+    category_values = []
+    for cat in default_categories + [(r[0] or '').strip() for r in category_rows]:
+        if not cat:
+            continue
+        key = cat.lower()
+        if key in category_seen:
+            continue
+        category_seen.add(key)
+        category_values.append(cat)
+    incoming_category = (request.form.get('expense_category') or '').strip() if request.method == 'POST' else ''
+    if incoming_category and incoming_category.lower() not in category_seen:
+        category_values.append(incoming_category)
+    form.expense_category.choices = [(c, c) for c in category_values]
     
     if form.validate_on_submit():
         try:
             if _workspace_date_is_closed(workspace_employee_id, form.expense_date.data):
                 flash('Selected date belongs to a closed month. Reopen month-close batch first.', 'danger')
-                return render_template('finance/employee_expense_form.html', form=form, expense=expense,
-                                     title='Add Employee Expense' if not pk else 'Edit Employee Expense')
+                return render_template(
+                    'finance/employee_expense_form.html',
+                    form=form,
+                    expense=expense,
+                    all_categories=category_values,
+                    title='Add Employee Expense' if not pk else 'Edit Employee Expense'
+                )
             if not expense:
                 expense = EmployeeExpense()
             
@@ -813,8 +838,13 @@ def employee_expense_form(pk=None):
             db.session.rollback()
             flash(f'Error saving employee expense: {str(e)}', 'danger')
     
-    return render_template('finance/employee_expense_form.html', form=form, expense=expense,
-                         title='Add Employee Expense' if not pk else 'Edit Employee Expense')
+    return render_template(
+        'finance/employee_expense_form.html',
+        form=form,
+        expense=expense,
+        all_categories=category_values,
+        title='Add Employee Expense' if not pk else 'Edit Employee Expense'
+    )
 
 
 def employee_expense_list():
@@ -883,6 +913,21 @@ def employee_expense_list():
 
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
+    category_rows = db.session.query(EmployeeExpense.expense_category).filter(
+        EmployeeExpense.employee_id == workspace_employee_id,
+        EmployeeExpense.expense_category.isnot(None),
+        EmployeeExpense.expense_category != '',
+    ).order_by(EmployeeExpense.id.desc()).limit(200).all()
+    categories = []
+    seen_cats = set()
+    for cat in ['Travel', 'Office', 'Communication', 'Other'] + [(r[0] or '').strip() for r in category_rows]:
+        if not cat:
+            continue
+        key = cat.lower()
+        if key in seen_cats:
+            continue
+        seen_cats.add(key)
+        categories.append(cat)
 
     total_amount = sum(e.amount for e in expenses)
 
@@ -891,7 +936,7 @@ def employee_expense_list():
                          districts=districts, projects=projects,
                          from_date=from_date, to_date=to_date,
                          district_id=district_id, project_id=project_id,
-                         category=category, total_amount=total_amount,
+                         category=category, categories=categories, total_amount=total_amount,
                          page=page, per_page=per_page, search=search)
 
 
@@ -934,6 +979,82 @@ def employee_expense_delete(pk):
         flash(f'Error deleting expense: {str(e)}', 'danger')
     
     return redirect(url_for('employee_expense_list'))
+
+
+def employee_expense_description_suggestions_api():
+    _guard = _require_workspace_employee_for_expenses()
+    if _guard:
+        return jsonify([])
+    workspace_employee_id = _workspace_employee_id()
+    q = (request.args.get('q') or '').strip()
+    query = EmployeeExpense.query.filter(
+        EmployeeExpense.employee_id == workspace_employee_id,
+        EmployeeExpense.description.isnot(None),
+        EmployeeExpense.description != '',
+    )
+    if q:
+        words = [w.strip() for w in q.split() if w.strip()]
+        for w in words:
+            query = query.filter(EmployeeExpense.description.ilike(f'%{w}%'))
+    rows = query.order_by(EmployeeExpense.id.desc()).limit(200).all()
+    out = []
+    seen = set()
+    for row in rows:
+        desc = (row.description or '').strip()
+        if not desc:
+            continue
+        key = desc.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(desc)
+        if len(out) >= 20:
+            break
+    return jsonify(out)
+
+
+def employee_expense_media(pk):
+    _guard = _require_workspace_employee_for_expenses()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id()
+    expense = EmployeeExpense.query.get_or_404(pk)
+    if workspace_employee_id and expense.employee_id and expense.employee_id != workspace_employee_id:
+        flash('This employee expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('employee_expense_list'))
+    if not expense.receipt_path:
+        flash('No receipt/bill media found for this expense.', 'warning')
+        return redirect(url_for('employee_expense_list'))
+
+    receipt_name = os.path.basename(expense.receipt_path or '') or 'Receipt/Bill'
+    receipt_url = url_for('static', filename=expense.receipt_path)
+    lower_name = receipt_name.lower()
+    media_type = 'image'
+    if lower_name.endswith(('.mp4', '.webm', '.mov')):
+        media_type = 'video'
+
+    media_items = [{
+        'url': receipt_url,
+        'type': media_type,
+        'name': receipt_name,
+        'created_at': expense.created_at.strftime('%d-%m-%Y %I:%M %p') if expense.created_at else '',
+        'created_at_iso': expense.created_at.isoformat() if expense.created_at else '',
+        'size_bytes': None,
+        'size_label': '',
+        'download_url': receipt_url,
+        'is_local_file': True,
+    }]
+
+    date_label = expense.expense_date.strftime('%d-%m-%Y') if expense.expense_date else '-'
+    return render_template(
+        'maintenance_expense_media.html',
+        rec=expense,
+        media_items=media_items,
+        media_title='Employee Expense Media Gallery',
+        media_date_label=date_label,
+        back_url=url_for('employee_expense_list'),
+        download_all_url=receipt_url,
+    )
 
 
 # ════════════════════════════════════════════════════════════════════════════════
