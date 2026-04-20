@@ -17671,7 +17671,7 @@ def fuel_expense_list():
         form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicles]
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
-    per_page = per_page if per_page in (25, 50, 100, 200) else 50
+    per_page = per_page if per_page in (25, 50, 100, 200, 99999) else 50
 
     query = FuelExpense.query.filter(
         FuelExpense.fueling_date >= from_d,
