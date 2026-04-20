@@ -7,7 +7,7 @@ from sqlalchemy import and_, or_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
                     FundTransfer, BankAccountDirectory, FundTransferCategory, WorkspaceAccount, WorkspaceJournalEntry,
-                    WorkspaceMonthClose)
+                    WorkspaceMonthClose, WorkspaceExpense)
 from forms import (PaymentVoucherForm, ReceiptVoucherForm, BankEntryForm, JournalVoucherForm,
                    EmployeeExpenseForm, AccountLedgerFilterForm, BalanceSheetFilterForm,
                    AccountForm, FundTransferForm, FundTransferFilterForm, WalletDashboardFilterForm)
@@ -97,6 +97,48 @@ def _post_workspace_employee_expense_journal(expense, workspace_employee_id):
         created_by_user_id=expense.created_by_user_id,
         category=expense.expense_category,
     )
+
+
+def _workspace_sync_employee_regular_expense(expense, workspace_employee_id):
+    if not workspace_employee_id or not expense:
+        return None
+    exp_no = f'EmployeeExpense-{expense.id}'
+    amount_val = Decimal(str(expense.amount or 0))
+    existing = WorkspaceExpense.query.filter_by(
+        employee_id=workspace_employee_id,
+        expense_number=exp_no,
+    ).first()
+    if amount_val <= Decimal('0'):
+        if existing:
+            db.session.delete(existing)
+        return None
+    if not existing:
+        existing = WorkspaceExpense(
+            employee_id=workspace_employee_id,
+            expense_number=exp_no,
+            created_by_user_id=session.get('user_id'),
+        )
+        db.session.add(existing)
+    existing.expense_date = expense.expense_date
+    existing.expense_type = 'Employee Expense'
+    existing.workspace_party_id = None
+    existing.workspace_product_id = None
+    existing.to_driver_id = None
+    existing.description = expense.description or f'Employee Expense - {expense.expense_category or "Other"}'
+    existing.amount = amount_val
+    existing.payment_mode = expense.payment_mode or 'Cash'
+    existing.category = 'Employee'
+    existing.journal_entry_id = expense.journal_entry_id
+    return existing
+
+
+def _workspace_delete_employee_regular_expense(expense_id, workspace_employee_id):
+    if not workspace_employee_id or not expense_id:
+        return
+    exp_no = f'EmployeeExpense-{expense_id}'
+    row = WorkspaceExpense.query.filter_by(employee_id=workspace_employee_id, expense_number=exp_no).first()
+    if row:
+        db.session.delete(row)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -829,6 +871,7 @@ def employee_expense_form(pk=None):
                 expense.journal_entry_id = None
             _reverse_workspace_employee_expense_journals(expense.id, workspace_employee_id)
             _post_workspace_employee_expense_journal(expense, workspace_employee_id)
+            _workspace_sync_employee_regular_expense(expense, workspace_employee_id)
             
             db.session.commit()
             flash(f'Employee Expense saved successfully!', 'success')
@@ -964,6 +1007,7 @@ def employee_expense_delete(pk):
             if je:
                 db.session.delete(je)
         _reverse_workspace_employee_expense_journals(expense.id, workspace_employee_id)
+        _workspace_delete_employee_regular_expense(expense.id, workspace_employee_id)
         
         # Delete receipt file if exists
         if expense.receipt_path:

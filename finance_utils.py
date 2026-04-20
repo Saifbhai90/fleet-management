@@ -6,7 +6,7 @@ from models import (
     db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher, BankEntry, VoucherSequence,
     Employee, Driver, Party, Company,
     WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFuelOilOpeningExpense, WorkspaceMonthClose, WorkspaceFuelOilMonthClose,
-    WorkspaceFundTransfer,
+    WorkspaceFundTransfer, FuelExpense, OilExpense, MaintenanceExpense, EmployeeExpense,
 )
 from utils import pk_now, pk_date
 from datetime import datetime, date, timedelta
@@ -1344,9 +1344,127 @@ def reconcile_workspace_opening_expense_postings(employee_id):
     return created + migrated
 
 
+def _workspace_regular_ref_from_expense_number(expense_number):
+    raw = (expense_number or '').strip()
+    if not raw or '-' not in raw:
+        return None, None
+    ref_type, ref_id = raw.split('-', 1)
+    try:
+        return (ref_type or '').strip(), int(ref_id)
+    except (TypeError, ValueError):
+        return (ref_type or '').strip(), None
+
+
+def _workspace_regular_source_scope(ref_type, ref_id):
+    if not ref_type or not ref_id:
+        return None, None
+    model_map = {
+        'FuelExpense': FuelExpense,
+        'OilExpense': OilExpense,
+        'MaintenanceExpense': MaintenanceExpense,
+        'EmployeeExpense': EmployeeExpense,
+    }
+    model = model_map.get(ref_type)
+    if not model:
+        return None, None
+    row = model.query.get(ref_id)
+    if not row:
+        return None, None
+    return getattr(row, 'district_id', None), getattr(row, 'project_id', None)
+
+
+def _workspace_backfill_regular_expense_rows(employee_id, period_start, period_end):
+    if not employee_id or not period_start or not period_end:
+        return 0
+
+    def _upsert(reference_type, reference_id, expense_date, amount, description, expense_type, payment_mode, category):
+        amount_val = Decimal(str(amount or 0))
+        exp_no = f'{reference_type}-{reference_id}'
+        existing = WorkspaceExpense.query.filter_by(employee_id=employee_id, expense_number=exp_no).first()
+        if amount_val <= Decimal('0'):
+            if existing:
+                db.session.delete(existing)
+                return 1
+            return 0
+        journal_row = WorkspaceJournalEntry.query.filter_by(
+            employee_id=employee_id,
+            reference_type=reference_type,
+            reference_id=reference_id,
+        ).order_by(WorkspaceJournalEntry.id.desc()).first()
+        if not existing:
+            existing = WorkspaceExpense(
+                employee_id=employee_id,
+                expense_number=exp_no,
+                created_by_user_id=None,
+            )
+            db.session.add(existing)
+        existing.expense_date = expense_date
+        existing.expense_type = expense_type
+        existing.workspace_party_id = None
+        existing.workspace_product_id = None
+        existing.to_driver_id = None
+        existing.description = description
+        existing.amount = amount_val
+        existing.payment_mode = payment_mode
+        existing.category = category
+        existing.journal_entry_id = journal_row.id if journal_row else None
+        return 1
+
+    touched = 0
+    fuel_rows = FuelExpense.query.filter(
+        FuelExpense.employee_id == employee_id,
+        FuelExpense.fueling_date >= period_start,
+        FuelExpense.fueling_date <= period_end,
+    ).all()
+    for row in fuel_rows:
+        touched += _upsert(
+            'FuelExpense', row.id, row.fueling_date, row.amount,
+            f'Fueling expense / {(row.vehicle.vehicle_no if row.vehicle else row.vehicle_id)}',
+            'Fuel Expense', row.payment_type or 'Cash', 'Fuel'
+        )
+
+    oil_rows = OilExpense.query.filter(
+        OilExpense.employee_id == employee_id,
+        OilExpense.expense_date >= period_start,
+        OilExpense.expense_date <= period_end,
+    ).all()
+    for row in oil_rows:
+        touched += _upsert(
+            'OilExpense', row.id, row.expense_date, row.total_bill_amount,
+            f'Oil expense vehicle {(row.vehicle.vehicle_no if row.vehicle else row.vehicle_id)}',
+            'Oil Expense', row.payment_type or 'Cash', 'Oil'
+        )
+
+    maintenance_rows = MaintenanceExpense.query.filter(
+        MaintenanceExpense.employee_id == employee_id,
+        MaintenanceExpense.expense_date >= period_start,
+        MaintenanceExpense.expense_date <= period_end,
+    ).all()
+    for row in maintenance_rows:
+        touched += _upsert(
+            'MaintenanceExpense', row.id, row.expense_date, row.total_bill_amount,
+            f'Maintenance expense vehicle {(row.vehicle.vehicle_no if row.vehicle else row.vehicle_id)}',
+            'Maintenance Expense', row.payment_type or 'Cash', 'Maintenance'
+        )
+
+    employee_rows = EmployeeExpense.query.filter(
+        EmployeeExpense.employee_id == employee_id,
+        EmployeeExpense.expense_date >= period_start,
+        EmployeeExpense.expense_date <= period_end,
+    ).all()
+    for row in employee_rows:
+        touched += _upsert(
+            'EmployeeExpense', row.id, row.expense_date, row.amount,
+            row.description or f'Employee Expense - {row.expense_category or "Other"}',
+            'Employee Expense', row.payment_mode or 'Cash', 'Employee'
+        )
+    return touched
+
+
 def workspace_close_month(employee_id, period_start, period_end, company_account_id, user_id, notes='',
                          district_id=None, project_id=None, district_name=None, project_name=None):
     ensure_workspace_base_accounts(employee_id)
+    _workspace_backfill_regular_expense_rows(employee_id, period_start, period_end)
     expenses_q = WorkspaceExpense.query.filter(
         WorkspaceExpense.employee_id == employee_id,
         WorkspaceExpense.month_close_id.is_(None),
@@ -1361,11 +1479,25 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
         expenses_q = expenses_q.filter(getattr(WorkspaceExpense, "district_id") == district_id)
     if project_id and has_exp_proj:
         expenses_q = expenses_q.filter(getattr(WorkspaceExpense, "project_id") == project_id)
-    # If scope is selected but legacy rows are not scopeable, exclude them from scoped close.
-    if (district_id or project_id) and not (has_exp_dist and has_exp_proj):
-        expenses = []
-    else:
-        expenses = expenses_q.all()
+    expenses = expenses_q.all()
+    if district_id or project_id:
+        scoped = []
+        for exp in expenses:
+            exp_dist = getattr(exp, "district_id", None) if has_exp_dist else None
+            exp_proj = getattr(exp, "project_id", None) if has_exp_proj else None
+            if exp_dist is None and exp_proj is None:
+                ref_type, ref_id = _workspace_regular_ref_from_expense_number(getattr(exp, "expense_number", None))
+                ref_dist, ref_proj = _workspace_regular_source_scope(ref_type, ref_id)
+                if ref_dist is not None:
+                    exp_dist = ref_dist
+                if ref_proj is not None:
+                    exp_proj = ref_proj
+            if district_id and exp_dist != district_id:
+                continue
+            if project_id and exp_proj != project_id:
+                continue
+            scoped.append(exp)
+        expenses = scoped
 
     opening_q = WorkspaceOpeningExpense.query.filter(
         WorkspaceOpeningExpense.employee_id == employee_id,
