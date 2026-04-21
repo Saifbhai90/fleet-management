@@ -76,9 +76,20 @@
   }
   .maint-price-history-title { font-size: .82rem; font-weight: 700; color: #1d4ed8; margin-bottom: 4px; font-style: italic; }
   .maint-price-history-table-wrap { max-height: 96px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
-  .maint-price-history-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
-  .maint-price-history-table th, .maint-price-history-table td { border: 1px solid #e2e8f0; padding: 2px 6px; white-space: nowrap; }
+  .maint-price-history-table { width: 100%; border-collapse: collapse; font-size: .75rem; table-layout: fixed; }
+  .maint-price-history-table th, .maint-price-history-table td { border: 1px solid #e2e8f0; padding: 2px 4px; white-space: normal; word-break: break-word; }
   .maint-price-history-table thead th { background: #f1f5f9; position: sticky; top: 0; z-index: 1; }
+  .maint-price-history-table th:nth-child(1), .maint-price-history-table td:nth-child(1) { width: 25%; }
+  .maint-price-history-table th:nth-child(2), .maint-price-history-table td:nth-child(2) { width: 27%; }
+  .maint-price-history-table th:nth-child(3), .maint-price-history-table td:nth-child(3) { width: 16%; }
+  .maint-price-history-table th:nth-child(4), .maint-price-history-table td:nth-child(4) { width: 16%; }
+  .maint-price-history-table th:nth-child(5), .maint-price-history-table td:nth-child(5) { width: 16%; }
+  .maint-price-history-table.other-party th:nth-child(1), .maint-price-history-table.other-party td:nth-child(1) { width: 18%; }
+  .maint-price-history-table.other-party th:nth-child(2), .maint-price-history-table.other-party td:nth-child(2) { width: 22%; }
+  .maint-price-history-table.other-party th:nth-child(3), .maint-price-history-table.other-party td:nth-child(3) { width: 20%; }
+  .maint-price-history-table.other-party th:nth-child(4), .maint-price-history-table.other-party td:nth-child(4) { width: 13%; }
+  .maint-price-history-table.other-party th:nth-child(5), .maint-price-history-table.other-party td:nth-child(5) { width: 13%; }
+  .maint-price-history-table.other-party th:nth-child(6), .maint-price-history-table.other-party td:nth-child(6) { width: 14%; }
   .maint-price-history-empty { font-size: .78rem; color: #64748b; padding: 6px; }
   .maint-form-wrap #itemsTable thead th { font-size: 0.86rem; }
   .maint-form-wrap #itemsTable td { font-size: 0.9rem; }
@@ -89,7 +100,7 @@
   #taskReadingsMeta { white-space: nowrap; display: inline-block; }
   #currentReading { min-height: 44px; font-size: 1.02rem; font-weight: 600; }
   .reading-match-note { font-weight: 600; }
-  .maint-main-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+  .maint-main-grid { display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: 14px; align-items: start; }
   @media (max-width: 1399.98px) { .maint-main-grid { grid-template-columns: 1fr; } }
   .maint-primary-col { min-width: 0; }
   .maint-sidebar-col { min-width: 0; position: sticky; top: 82px; }
@@ -408,7 +419,7 @@
             <div class="maint-price-history-panel" id="maintPriceHistoryPanel">
               <div class="maint-price-history-title">Item previously purchase to this party</div>
               <div class="maint-price-history-table-wrap mb-2">
-                <table class="maint-price-history-table">
+                <table class="maint-price-history-table other-party">
                   <thead>
                     <tr>
                       <th>Date</th>
