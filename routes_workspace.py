@@ -3176,36 +3176,74 @@ def workspace_reports():
     guard, emp = _workspace_guard("workspace_reports")
     if guard:
         return guard
+    from_date = parse_date(request.args.get("from_date")) if request.args.get("from_date") else None
+    to_date = parse_date(request.args.get("to_date")) if request.args.get("to_date") else None
+    district_id = request.args.get("district_id", type=int) or 0
+    project_id = request.args.get("project_id", type=int) or 0
+    active_tab = (request.args.get("tab") or "w-expense").strip() or "w-expense"
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    def _apply_common_filters(query, date_col, district_col, project_col):
+        if from_date:
+            query = query.filter(date_col >= from_date)
+        if to_date:
+            query = query.filter(date_col <= to_date)
+        if district_id:
+            query = query.filter(district_col == district_id)
+        if project_id:
+            query = query.filter(project_col == project_id)
+        return query
+
+    fuel_q = _apply_common_filters(
+        FuelExpense.query.filter(FuelExpense.employee_id == emp.id),
+        FuelExpense.fueling_date,
+        FuelExpense.district_id,
+        FuelExpense.project_id,
+    )
+    oil_q = _apply_common_filters(
+        OilExpense.query.filter(OilExpense.employee_id == emp.id),
+        OilExpense.expense_date,
+        OilExpense.district_id,
+        OilExpense.project_id,
+    )
+    maintenance_q = _apply_common_filters(
+        MaintenanceExpense.query.filter(MaintenanceExpense.employee_id == emp.id),
+        MaintenanceExpense.expense_date,
+        MaintenanceExpense.district_id,
+        MaintenanceExpense.project_id,
+    )
+    employee_q = _apply_common_filters(
+        EmployeeExpense.query.filter(EmployeeExpense.employee_id == emp.id),
+        EmployeeExpense.expense_date,
+        EmployeeExpense.district_id,
+        EmployeeExpense.project_id,
+    )
+    opening_q = _apply_common_filters(
+        WorkspaceOpeningExpense.query.filter(WorkspaceOpeningExpense.employee_id == emp.id),
+        WorkspaceOpeningExpense.opening_date,
+        WorkspaceOpeningExpense.district_id,
+        WorkspaceOpeningExpense.project_id,
+    )
+    fuel_oil_opening_q = _apply_common_filters(
+        WorkspaceFuelOilOpeningExpense.query.filter(WorkspaceFuelOilOpeningExpense.employee_id == emp.id),
+        WorkspaceFuelOilOpeningExpense.opening_date,
+        WorkspaceFuelOilOpeningExpense.district_id,
+        WorkspaceFuelOilOpeningExpense.project_id,
+    )
+
     # Source of truth: read each amount directly from its own form table.
-    fuel_total = Decimal(str(
-        db.session.query(db.func.coalesce(db.func.sum(FuelExpense.amount), 0))
-        .filter(FuelExpense.employee_id == emp.id)
-        .scalar() or 0
-    ))
-    oil_total = Decimal(str(
-        db.session.query(db.func.coalesce(db.func.sum(OilExpense.total_bill_amount), 0))
-        .filter(OilExpense.employee_id == emp.id)
-        .scalar() or 0
-    ))
+    fuel_total = Decimal(str(fuel_q.with_entities(db.func.coalesce(db.func.sum(FuelExpense.amount), 0)).scalar() or 0))
+    oil_total = Decimal(str(oil_q.with_entities(db.func.coalesce(db.func.sum(OilExpense.total_bill_amount), 0)).scalar() or 0))
     maintenance_total = Decimal(str(
-        db.session.query(db.func.coalesce(db.func.sum(MaintenanceExpense.total_bill_amount), 0))
-        .filter(MaintenanceExpense.employee_id == emp.id)
-        .scalar() or 0
+        maintenance_q.with_entities(db.func.coalesce(db.func.sum(MaintenanceExpense.total_bill_amount), 0)).scalar() or 0
     ))
-    employee_total = Decimal(str(
-        db.session.query(db.func.coalesce(db.func.sum(EmployeeExpense.amount), 0))
-        .filter(EmployeeExpense.employee_id == emp.id)
-        .scalar() or 0
-    ))
+    employee_total = Decimal(str(employee_q.with_entities(db.func.coalesce(db.func.sum(EmployeeExpense.amount), 0)).scalar() or 0))
     opening_total = Decimal(str(
-        db.session.query(db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.total_expense), 0))
-        .filter(WorkspaceOpeningExpense.employee_id == emp.id)
-        .scalar() or 0
+        opening_q.with_entities(db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.total_expense), 0)).scalar() or 0
     ))
     fuel_oil_opening_total = Decimal(str(
-        db.session.query(db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.total_amount), 0))
-        .filter(WorkspaceFuelOilOpeningExpense.employee_id == emp.id)
-        .scalar() or 0
+        fuel_oil_opening_q.with_entities(db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.total_amount), 0)).scalar() or 0
     ))
 
     source_totals = {
@@ -3217,21 +3255,47 @@ def workspace_reports():
         "fuel_oil_opening": fuel_oil_opening_total,
     }
     source_counts = {
-        "fuel_expense": FuelExpense.query.filter(FuelExpense.employee_id == emp.id).count(),
-        "oil_expense": OilExpense.query.filter(OilExpense.employee_id == emp.id).count(),
-        "maintenance_expense": MaintenanceExpense.query.filter(MaintenanceExpense.employee_id == emp.id).count(),
-        "employee_expense": EmployeeExpense.query.filter(EmployeeExpense.employee_id == emp.id).count(),
-        "opening_expense": WorkspaceOpeningExpense.query.filter(WorkspaceOpeningExpense.employee_id == emp.id).count(),
-        "fuel_oil_opening": WorkspaceFuelOilOpeningExpense.query.filter(WorkspaceFuelOilOpeningExpense.employee_id == emp.id).count(),
+        "fuel_expense": fuel_q.count(),
+        "oil_expense": oil_q.count(),
+        "maintenance_expense": maintenance_q.count(),
+        "employee_expense": employee_q.count(),
+        "opening_expense": opening_q.count(),
+        "fuel_oil_opening": fuel_oil_opening_q.count(),
     }
 
     tracked_total = sum(source_totals.values(), Decimal("0"))
-    transfer_total = sum((Decimal(str(r.amount or 0)) for r in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all()), Decimal("0"))
-    month_closes = WorkspaceMonthClose.query.filter_by(employee_id=emp.id).order_by(WorkspaceMonthClose.id.desc()).limit(12).all()
+    transfer_q = WorkspaceFundTransfer.query.filter(WorkspaceFundTransfer.employee_id == emp.id)
+    if from_date:
+        transfer_q = transfer_q.filter(WorkspaceFundTransfer.transfer_date >= from_date)
+    if to_date:
+        transfer_q = transfer_q.filter(WorkspaceFundTransfer.transfer_date <= to_date)
+    transfer_total = Decimal(str(
+        transfer_q.with_entities(db.func.coalesce(db.func.sum(WorkspaceFundTransfer.amount), 0)).scalar() or 0
+    ))
+
+    month_close_q = WorkspaceMonthClose.query.filter(WorkspaceMonthClose.employee_id == emp.id)
+    if from_date:
+        month_close_q = month_close_q.filter(WorkspaceMonthClose.period_start >= from_date)
+    if to_date:
+        month_close_q = month_close_q.filter(WorkspaceMonthClose.period_end <= to_date)
+    if district_id:
+        month_close_q = month_close_q.filter(WorkspaceMonthClose.district_id == district_id)
+    if project_id:
+        month_close_q = month_close_q.filter(WorkspaceMonthClose.project_id == project_id)
+    month_closes = month_close_q.order_by(WorkspaceMonthClose.id.desc()).limit(12).all()
+    districts = District.query.order_by(District.name.asc()).all()
+    projects = Project.query.order_by(Project.name.asc()).all()
 
     return render_template(
         "workspace/reports.html",
         employee=emp,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        active_tab=active_tab,
+        districts=districts,
+        projects=projects,
         source_totals=source_totals,
         source_counts=source_counts,
         tracked_total=tracked_total,

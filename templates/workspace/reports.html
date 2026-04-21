@@ -1,72 +1,144 @@
 {% extends "base.html" %}
 {% block title %}Workspace Report Centre{% endblock %}
 {% block content %}
-<div class="container-fluid py-3">
+<div class="container-fluid py-3 ws-report-page">
   {% include "workspace/_nav.html" %}
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h4 class="mb-0"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Workspace Report Centre</h4>
-    <div class="position-relative" style="width:260px;">
-      <i class="bi bi-search position-absolute" style="left:10px;top:50%;transform:translateY(-50%);color:#999;"></i>
-      <input type="text" id="workspaceReportSearchBox" class="form-control form-control-sm ps-4" placeholder="Search reports..." autocomplete="off">
+  <div class="ws-report-shell p-3 p-md-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+      <h4 class="mb-0"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Workspace Report Centre</h4>
+      <div class="position-relative ws-search-box">
+        <i class="bi bi-search position-absolute ws-search-icon"></i>
+        <input type="text" id="workspaceReportSearchBox" class="form-control form-control-sm ps-4" placeholder="Search reports..." autocomplete="off">
+      </div>
     </div>
-  </div>
+    <ul class="nav nav-tabs mb-0" id="workspaceReportTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {{ 'active' if active_tab == 'w-expense' else '' }} fw-semibold" id="w-expense-tab" data-bs-toggle="tab" data-bs-target="#w-expense" type="button" role="tab"><i class="bi bi-fuel-pump me-1"></i>Expense Reports</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {{ 'active' if active_tab == 'w-finance' else '' }} fw-semibold" id="w-finance-tab" data-bs-toggle="tab" data-bs-target="#w-finance" type="button" role="tab"><i class="bi bi-wallet2 me-1"></i>Finance & Closing</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {{ 'active' if active_tab == 'w-ops' else '' }} fw-semibold" id="w-ops-tab" data-bs-toggle="tab" data-bs-target="#w-ops" type="button" role="tab"><i class="bi bi-grid me-1"></i>Operational Reports</button>
+      </li>
+    </ul>
 
-  <div class="row g-3 mb-3">
-    <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Tracked Expense Total</small><h5 class="mb-0">{{ '%.2f'|format((tracked_total or 0)|float) }}</h5></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Transfers</small><h5 class="mb-0">{{ '%.2f'|format((transfer_total or 0)|float) }}</h5></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Month Close Records</small><h5 class="mb-0">{{ month_closes|length }}</h5></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Tracked Source Heads</small><h5 class="mb-0">6</h5></div></div></div>
-  </div>
+    <div class="tab-content ws-tab-content" id="workspaceReportTabContent">
+      <div class="tab-pane fade {{ 'show active' if active_tab == 'w-expense' else '' }}" id="w-expense" role="tabpanel">
+        <div class="ws-panel">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <h6 class="mb-0">Total Expenses Card Sources</h6>
+            <span class="text-muted small">Same sources as dashboard Total Expenses card</span>
+          </div>
 
-  <ul class="nav nav-tabs mb-0" id="workspaceReportTabs" role="tablist" style="border-bottom:2px solid #dee2e6;">
-    <li class="nav-item" role="presentation">
-      <button class="nav-link active fw-semibold" id="w-expense-tab" data-bs-toggle="tab" data-bs-target="#w-expense" type="button" role="tab"><i class="bi bi-fuel-pump me-1"></i>Expense Reports</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link fw-semibold" id="w-finance-tab" data-bs-toggle="tab" data-bs-target="#w-finance" type="button" role="tab"><i class="bi bi-wallet2 me-1"></i>Finance & Closing</button>
-    </li>
-  </ul>
+          <form method="get" class="row g-2 align-items-end mb-3">
+            <input type="hidden" name="tab" value="w-expense">
+            <div class="col-lg-2 col-md-3">
+              <label class="form-label form-label-sm mb-1">From Date</label>
+              <input type="date" class="form-control form-control-sm" name="from_date" value="{{ from_date.isoformat() if from_date else '' }}">
+            </div>
+            <div class="col-lg-2 col-md-3">
+              <label class="form-label form-label-sm mb-1">To Date</label>
+              <input type="date" class="form-control form-control-sm" name="to_date" value="{{ to_date.isoformat() if to_date else '' }}">
+            </div>
+            <div class="col-lg-3 col-md-3">
+              <label class="form-label form-label-sm mb-1">District</label>
+              <select class="form-select form-select-sm" name="district_id">
+                <option value="0">All Districts</option>
+                {% for d in districts %}
+                <option value="{{ d.id }}" {{ 'selected' if district_id == d.id else '' }}>{{ d.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-lg-3 col-md-3">
+              <label class="form-label form-label-sm mb-1">Project</label>
+              <select class="form-select form-select-sm" name="project_id">
+                <option value="0">All Projects</option>
+                {% for p in projects %}
+                <option value="{{ p.id }}" {{ 'selected' if project_id == p.id else '' }}>{{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-lg-2 col-md-12 d-flex gap-2">
+              <button class="btn btn-primary btn-sm w-100" type="submit">Apply</button>
+              <a href="{{ url_for('workspace_reports', tab='w-expense') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
+            </div>
+          </form>
 
-  <div class="tab-content border border-top-0 rounded-bottom bg-white p-4" id="workspaceReportTabContent">
-    <div class="tab-pane fade show active" id="w-expense" role="tabpanel">
-      <div class="row">
-        <div class="col-lg-6 mb-4">
-          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">Total Expenses Card Sources</h6>
-          <div class="list-group list-group-flush workspace-report-link-group">
-            <a href="{{ url_for('fuel_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
-              <i class="bi bi-star text-warning me-2"></i>Fuel Expense
-              <span class="badge bg-light text-dark ms-2">{{ source_counts.fuel_expense }}</span>
-              <small class="text-muted d-block ms-4">{{ '%.2f'|format((source_totals.fuel_expense or 0)|float) }}</small>
-            </a>
-            <a href="{{ url_for('oil_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
-              <i class="bi bi-star text-warning me-2"></i>Oil Expense
-              <span class="badge bg-light text-dark ms-2">{{ source_counts.oil_expense }}</span>
-              <small class="text-muted d-block ms-4">{{ '%.2f'|format((source_totals.oil_expense or 0)|float) }}</small>
-            </a>
-            <a href="{{ url_for('maintenance_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
-              <i class="bi bi-star text-warning me-2"></i>Maintenance Expense
-              <span class="badge bg-light text-dark ms-2">{{ source_counts.maintenance_expense }}</span>
-              <small class="text-muted d-block ms-4">{{ '%.2f'|format((source_totals.maintenance_expense or 0)|float) }}</small>
-            </a>
-            <a href="{{ url_for('employee_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
-              <i class="bi bi-star text-warning me-2"></i>Employee Expense
-              <span class="badge bg-light text-dark ms-2">{{ source_counts.employee_expense }}</span>
-              <small class="text-muted d-block ms-4">{{ '%.2f'|format((source_totals.employee_expense or 0)|float) }}</small>
-            </a>
-            <a href="{{ url_for('workspace_opening_expenses_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
-              <i class="bi bi-star text-warning me-2"></i>Opening Expenses
-              <span class="badge bg-light text-dark ms-2">{{ source_counts.opening_expense }}</span>
-              <small class="text-muted d-block ms-4">{{ '%.2f'|format((source_totals.opening_expense or 0)|float) }}</small>
-            </a>
-            <a href="{{ url_for('workspace_fuel_oil_openings_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
-              <i class="bi bi-star text-warning me-2"></i>Fuel/Oil Opening (Pump Card & Credit)
-              <span class="badge bg-light text-dark ms-2">{{ source_counts.fuel_oil_opening }}</span>
-              <small class="text-muted d-block ms-4">{{ '%.2f'|format((source_totals.fuel_oil_opening or 0)|float) }}</small>
-            </a>
+          <div class="row g-3 mb-3">
+            <div class="col-xl-3 col-md-6"><div class="ws-kpi-card"><small>Tracked Expense Total</small><h5>{{ '%.2f'|format((tracked_total or 0)|float) }}</h5></div></div>
+            <div class="col-xl-3 col-md-6"><div class="ws-kpi-card"><small>Total Transfers</small><h5>{{ '%.2f'|format((transfer_total or 0)|float) }}</h5></div></div>
+            <div class="col-xl-3 col-md-6"><div class="ws-kpi-card"><small>Month Close Records</small><h5>{{ month_closes|length }}</h5></div></div>
+            <div class="col-xl-3 col-md-6"><div class="ws-kpi-card"><small>Tracked Source Heads</small><h5>6</h5></div></div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-md-6 col-xl-4">
+              <a href="{{ url_for('fuel_expense_list') }}" class="ws-source-card workspace-report-link">
+                <div class="d-flex justify-content-between"><strong>Fuel Expense</strong><span class="badge text-bg-light">{{ source_counts.fuel_expense }}</span></div>
+                <div class="text-primary fw-semibold">{{ '%.2f'|format((source_totals.fuel_expense or 0)|float) }}</div>
+              </a>
+            </div>
+            <div class="col-md-6 col-xl-4">
+              <a href="{{ url_for('oil_expense_list') }}" class="ws-source-card workspace-report-link">
+                <div class="d-flex justify-content-between"><strong>Oil Expense</strong><span class="badge text-bg-light">{{ source_counts.oil_expense }}</span></div>
+                <div class="text-primary fw-semibold">{{ '%.2f'|format((source_totals.oil_expense or 0)|float) }}</div>
+              </a>
+            </div>
+            <div class="col-md-6 col-xl-4">
+              <a href="{{ url_for('maintenance_expense_list') }}" class="ws-source-card workspace-report-link">
+                <div class="d-flex justify-content-between"><strong>Maintenance Expense</strong><span class="badge text-bg-light">{{ source_counts.maintenance_expense }}</span></div>
+                <div class="text-primary fw-semibold">{{ '%.2f'|format((source_totals.maintenance_expense or 0)|float) }}</div>
+              </a>
+            </div>
+            <div class="col-md-6 col-xl-4">
+              <a href="{{ url_for('employee_expense_list') }}" class="ws-source-card workspace-report-link">
+                <div class="d-flex justify-content-between"><strong>Employee Expense</strong><span class="badge text-bg-light">{{ source_counts.employee_expense }}</span></div>
+                <div class="text-primary fw-semibold">{{ '%.2f'|format((source_totals.employee_expense or 0)|float) }}</div>
+              </a>
+            </div>
+            <div class="col-md-6 col-xl-4">
+              <a href="{{ url_for('workspace_opening_expenses_list') }}" class="ws-source-card workspace-report-link">
+                <div class="d-flex justify-content-between"><strong>Opening Expenses</strong><span class="badge text-bg-light">{{ source_counts.opening_expense }}</span></div>
+                <div class="text-primary fw-semibold">{{ '%.2f'|format((source_totals.opening_expense or 0)|float) }}</div>
+              </a>
+            </div>
+            <div class="col-md-6 col-xl-4">
+              <a href="{{ url_for('workspace_fuel_oil_openings_list') }}" class="ws-source-card workspace-report-link">
+                <div class="d-flex justify-content-between"><strong>Fuel/Oil Opening (Pump Card & Credit)</strong><span class="badge text-bg-light">{{ source_counts.fuel_oil_opening }}</span></div>
+                <div class="text-primary fw-semibold">{{ '%.2f'|format((source_totals.fuel_oil_opening or 0)|float) }}</div>
+              </a>
+            </div>
           </div>
         </div>
-        <div class="col-lg-6 mb-4">
-          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">Specialized Reports</h6>
+      </div>
+
+      <div class="tab-pane fade {{ 'show active' if active_tab == 'w-finance' else '' }}" id="w-finance" role="tabpanel">
+        <div class="ws-panel">
+          <div class="row g-3">
+            <div class="col-lg-6">
+              <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">Books & Ledger</h6>
+              <div class="list-group list-group-flush workspace-report-link-group">
+                <a href="{{ url_for('workspace_ledger') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Workspace Ledger</a>
+                <a href="{{ url_for('workspace_fund_transfers_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Fund Transfers</a>
+                <a href="{{ url_for('workspace_balance_sheet') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Balance Sheet</a>
+              </div>
+            </div>
+            <div class="col-lg-6">
+              <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">Month Close</h6>
+              <div class="list-group list-group-flush workspace-report-link-group">
+                <a href="{{ url_for('workspace_month_close_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Workspace Month Close</a>
+                <a href="{{ url_for('workspace_fuel_oil_month_close_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Fuel/Oil Month Close</a>
+                <div class="small text-muted mt-2">Filtered close records: {{ month_closes|length }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade {{ 'show active' if active_tab == 'w-ops' else '' }}" id="w-ops" role="tabpanel">
+        <div class="ws-panel">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">Operational Reports</h6>
           <div class="list-group list-group-flush workspace-report-link-group">
             <a href="{{ url_for('workspace_mpg_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
               <i class="bi bi-star text-warning me-2"></i>MPG / Fuel Efficiency Report
@@ -79,36 +151,27 @@
         </div>
       </div>
     </div>
-
-    <div class="tab-pane fade" id="w-finance" role="tabpanel">
-      <div class="row">
-        <div class="col-lg-6 mb-4">
-          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">Books & Ledger</h6>
-          <div class="list-group list-group-flush workspace-report-link-group">
-            <a href="{{ url_for('workspace_ledger') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Workspace Ledger</a>
-            <a href="{{ url_for('workspace_fund_transfers_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Fund Transfers</a>
-            <a href="{{ url_for('workspace_balance_sheet') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Balance Sheet</a>
-          </div>
-        </div>
-        <div class="col-lg-6 mb-4">
-          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">Month Close</h6>
-          <div class="list-group list-group-flush workspace-report-link-group">
-            <a href="{{ url_for('workspace_month_close_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Workspace Month Close</a>
-            <a href="{{ url_for('workspace_fuel_oil_month_close_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Fuel/Oil Month Close</a>
-            <div class="small text-muted mt-2">Recent close records: {{ month_closes|length }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 
 <style>
-#workspaceReportTabs .nav-link{ color:#555; border:none; padding:.6rem 1.2rem; font-size:.88rem; border-bottom:3px solid transparent; transition:all .2s; }
-#workspaceReportTabs .nav-link:hover{ color:#0d6efd; background:#f0f6ff; }
-#workspaceReportTabs .nav-link.active{ color:#0d6efd; background:transparent; border-bottom:3px solid #0d6efd; }
-.workspace-report-link-group .workspace-report-link{ font-size:.875rem; color:#333; transition:all .15s; }
-.workspace-report-link-group .workspace-report-link:hover{ color:#0d6efd; background:#f8f9ff; padding-left:6px !important; }
+.ws-report-page{ background: #f6f8fc; }
+.ws-report-shell{ background: #fff; border: 1px solid #e7ebf3; border-radius: 16px; box-shadow: 0 10px 30px rgba(17,24,39,.05); }
+.ws-search-box{ width: 260px; }
+.ws-search-icon{ left: 10px; top: 50%; transform: translateY(-50%); color: #9aa3b2; }
+#workspaceReportTabs{ border-bottom: 1px solid #e8edf5; }
+#workspaceReportTabs .nav-link{ color:#637083; border:none; padding:.6rem 1rem; font-size:.88rem; border-bottom:2px solid transparent; transition:all .2s; }
+#workspaceReportTabs .nav-link:hover{ color:#2f6df6; background:#f5f8ff; }
+#workspaceReportTabs .nav-link.active{ color:#2f6df6; background:transparent; border-bottom:2px solid #2f6df6; }
+.ws-tab-content{ border:1px solid #e8edf5; border-top:0; border-radius: 0 0 14px 14px; padding: 1rem; background: #fbfcff; }
+.ws-panel{ background: #fff; border: 1px solid #edf1f7; border-radius: 12px; padding: 1rem; }
+.ws-kpi-card{ border:1px solid #e9eef8; border-radius:10px; background:#fcfdff; padding:.75rem .9rem; }
+.ws-kpi-card small{ color:#667085; display:block; margin-bottom:2px; }
+.ws-kpi-card h5{ margin:0; color:#111827; }
+.ws-source-card{ display:block; border:1px solid #e9eef8; border-radius:10px; background:#fff; padding:.8rem .9rem; text-decoration:none; color:inherit; transition:all .18s; }
+.ws-source-card:hover{ border-color:#bfd0ff; box-shadow:0 6px 16px rgba(47,109,246,.08); transform:translateY(-1px); color:inherit; }
+.workspace-report-link-group .workspace-report-link{ font-size:.875rem; color:#374151; transition:all .15s; }
+.workspace-report-link-group .workspace-report-link:hover{ color:#2f6df6; background:#f8faff; padding-left:6px !important; }
 .workspace-report-link.d-none{ display:none !important; }
 </style>
 
@@ -125,6 +188,16 @@ document.addEventListener('DOMContentLoaded', function(){
         var txt = el.textContent.toLowerCase();
         el.classList.toggle('d-none', txt.indexOf(q) === -1);
       }
+    });
+  });
+
+  var tabs = document.querySelectorAll('#workspaceReportTabs button[data-bs-toggle="tab"]');
+  tabs.forEach(function(btn){
+    btn.addEventListener('shown.bs.tab', function(e){
+      var target = (e.target.getAttribute('data-bs-target') || '').replace('#','');
+      var url = new URL(window.location.href);
+      url.searchParams.set('tab', target);
+      window.history.replaceState({}, '', url);
     });
   });
 });
