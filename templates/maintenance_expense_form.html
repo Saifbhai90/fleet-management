@@ -75,21 +75,33 @@
     pointer-events: none;
   }
   .maint-price-history-title { font-size: .82rem; font-weight: 700; color: #1d4ed8; margin-bottom: 4px; font-style: italic; }
-  .maint-price-history-table-wrap { max-height: 170px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
-  .maint-price-history-table { width: 100%; border-collapse: collapse; font-size: .75rem; table-layout: fixed; }
-  .maint-price-history-table th, .maint-price-history-table td { border: 1px solid #e2e8f0; padding: 2px 4px; white-space: normal; word-break: break-word; }
-  .maint-price-history-table thead th { background: #f1f5f9; position: sticky; top: 0; z-index: 1; }
-  .maint-price-history-table th:nth-child(1), .maint-price-history-table td:nth-child(1) { width: 25%; }
-  .maint-price-history-table th:nth-child(2), .maint-price-history-table td:nth-child(2) { width: 27%; }
-  .maint-price-history-table th:nth-child(3), .maint-price-history-table td:nth-child(3) { width: 16%; }
-  .maint-price-history-table th:nth-child(4), .maint-price-history-table td:nth-child(4) { width: 16%; }
-  .maint-price-history-table th:nth-child(5), .maint-price-history-table td:nth-child(5) { width: 16%; }
-  .maint-price-history-table.other-party th:nth-child(1), .maint-price-history-table.other-party td:nth-child(1) { width: 18%; }
-  .maint-price-history-table.other-party th:nth-child(2), .maint-price-history-table.other-party td:nth-child(2) { width: 22%; }
-  .maint-price-history-table.other-party th:nth-child(3), .maint-price-history-table.other-party td:nth-child(3) { width: 20%; }
-  .maint-price-history-table.other-party th:nth-child(4), .maint-price-history-table.other-party td:nth-child(4) { width: 13%; }
-  .maint-price-history-table.other-party th:nth-child(5), .maint-price-history-table.other-party td:nth-child(5) { width: 13%; }
-  .maint-price-history-table.other-party th:nth-child(6), .maint-price-history-table.other-party td:nth-child(6) { width: 14%; }
+  .maint-price-history-list { display: grid; gap: 8px; max-height: 260px; overflow: auto; padding-right: 2px; }
+  .maint-price-history-item {
+    border: 1px solid #dbe4ef;
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 8px;
+    box-shadow: 0 1px 6px rgba(15, 23, 42, 0.04);
+  }
+  .maint-price-history-item .top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+    font-size: .76rem;
+    color: #475569;
+    font-weight: 700;
+  }
+  .maint-price-history-item .meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    font-size: .75rem;
+    color: #334155;
+  }
+  .maint-price-history-item .meta .k { color: #64748b; font-weight: 600; }
+  .maint-price-history-item .meta .v { color: #0f172a; font-weight: 700; }
   .maint-price-history-empty { font-size: .78rem; color: #64748b; padding: 6px; }
   .maint-form-wrap #itemsTable thead th { font-size: 0.86rem; }
   .maint-form-wrap #itemsTable td { font-size: 0.9rem; }
@@ -110,7 +122,7 @@
   .maint-side-card-body { padding: 10px 12px; }
   @media (max-width: 1399.98px) {
     .maint-side-card { margin-top: 2px; }
-    .maint-price-history-table-wrap { max-height: 220px; }
+    .maint-price-history-list { max-height: 300px; }
   }
   .maint-side-kpi { display: flex; justify-content: space-between; align-items: center; font-size: .86rem; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; }
   .maint-side-kpi:last-child { border-bottom: 0; }
@@ -422,38 +434,11 @@
           <div class="maint-side-card-body p-2">
             <div class="maint-price-history-panel" id="maintPriceHistoryPanel">
               <div class="maint-price-history-title">Item previously purchase to this party</div>
-              <div class="maint-price-history-table-wrap mb-2">
-                <table class="maint-price-history-table other-party">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Invoice No</th>
-                      <th>Qty</th>
-                      <th>Price</th>
-                      <th>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody id="maintSamePartyRows"></tbody>
-                </table>
-                <div class="maint-price-history-empty d-none" id="maintSamePartyEmpty">No history for selected party.</div>
-              </div>
+              <div class="maint-price-history-list mb-2" id="maintSamePartyRows"></div>
+              <div class="maint-price-history-empty d-none" id="maintSamePartyEmpty">No history for selected party.</div>
               <div class="maint-price-history-title">Same item purchase to other parties</div>
-              <div class="maint-price-history-table-wrap">
-                <table class="maint-price-history-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Invoice No</th>
-                      <th>Party</th>
-                      <th>Qty</th>
-                      <th>Price</th>
-                      <th>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody id="maintOtherPartyRows"></tbody>
-                </table>
-                <div class="maint-price-history-empty d-none" id="maintOtherPartyEmpty">No history from other parties.</div>
-              </div>
+              <div class="maint-price-history-list" id="maintOtherPartyRows"></div>
+              <div class="maint-price-history-empty d-none" id="maintOtherPartyEmpty">No history from other parties.</div>
             </div>
           </div>
         </div>
@@ -982,19 +967,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     targetEmpty.classList.add('d-none');
     rows.forEach(function(r) {
-      var tr = document.createElement('tr');
-      var cols = [
-        escHtml(r.date_label || '-'),
-        escHtml(r.invoice_no || '-'),
-      ];
-      if (includeParty) cols.push(escHtml(r.party_name || '-'));
-      cols.push(
-        escHtml(r.qty_label || '-'),
-        escHtml(r.price_label || '-'),
-        escHtml(r.total_label || '-')
-      );
-      tr.innerHTML = cols.map(function(c) { return '<td>' + c + '</td>'; }).join('');
-      targetBody.appendChild(tr);
+      var card = document.createElement('div');
+      card.className = 'maint-price-history-item';
+      var topRight = includeParty ? escHtml(r.party_name || '-') : escHtml(r.invoice_no || '-');
+      card.innerHTML =
+        '<div class="top">' +
+          '<span>' + escHtml(r.date_label || '-') + '</span>' +
+          '<span>' + topRight + '</span>' +
+        '</div>' +
+        '<div class="meta">' +
+          '<div><div class="k">Invoice</div><div class="v">' + escHtml(r.invoice_no || '-') + '</div></div>' +
+          '<div><div class="k">Qty</div><div class="v">' + escHtml(r.qty_label || '-') + '</div></div>' +
+          '<div><div class="k">Price</div><div class="v">' + escHtml(r.price_label || '-') + '</div></div>' +
+        '</div>' +
+        '<div class="meta mt-1">' +
+          '<div><div class="k">Total</div><div class="v">' + escHtml(r.total_label || '-') + '</div></div>' +
+          (includeParty ? ('<div><div class="k">Party</div><div class="v">' + escHtml(r.party_name || '-') + '</div></div>') : '<div></div>') +
+          '<div></div>' +
+        '</div>';
+      targetBody.appendChild(card);
     });
   }
 
