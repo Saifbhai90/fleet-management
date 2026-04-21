@@ -42,6 +42,18 @@
   #taskReadingsMeta { white-space: nowrap; display: inline-block; }
   #currentReading { min-height: 44px; font-size: 1.02rem; font-weight: 600; }
   .reading-match-note { font-weight: 600; }
+  .maint-main-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+  @media (max-width: 1399.98px) { .maint-main-grid { grid-template-columns: 1fr; } }
+  .maint-primary-col { min-width: 0; }
+  .maint-sidebar-col { min-width: 0; position: sticky; top: 82px; }
+  @media (max-width: 1399.98px) { .maint-sidebar-col { position: static; } }
+  .maint-side-card { background: #fff; border: 1px solid #e5eaf3; border-radius: 12px; box-shadow: 0 8px 22px rgba(15,23,42,.06); margin-bottom: 10px; overflow: hidden; }
+  .maint-side-card-head { padding: 10px 12px; border-bottom: 1px solid #eef2f8; font-weight: 700; color: #334155; background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%); }
+  .maint-side-card-body { padding: 10px 12px; }
+  .maint-side-kpi { display: flex; justify-content: space-between; align-items: center; font-size: .86rem; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; }
+  .maint-side-kpi:last-child { border-bottom: 0; }
+  .maint-side-kpi .label { color: #64748b; }
+  .maint-side-kpi .value { font-weight: 700; color: #0f172a; }
   .existing-attachments-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 8px; max-height: 380px; overflow: auto; padding-right: 4px; }
   .existing-attachment-card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; background: #fff; }
   .existing-attachment-card img, .existing-attachment-card video { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; background: #f1f5f9; }
@@ -60,7 +72,8 @@
   <form method="POST" action="" id="maintenanceExpenseForm" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
     <textarea name="attachments_direct_json" id="attachmentsDirectJson" class="d-none" rows="1" autocomplete="off"></textarea>
-
+    <div class="maint-main-grid">
+      <div class="maint-primary-col">
     <div class="form-section">
       <div class="form-section-header">Bill Details</div>
       <div class="form-section-body">
@@ -224,44 +237,6 @@
               </div>
             </div>
           </div>
-          <div class="maint-entry-side">
-          <div class="maint-price-history-panel" id="maintPriceHistoryPanel">
-            <div class="maint-insights-title"><i class="bi bi-graph-up-arrow"></i>Price Insights</div>
-            <div class="maint-price-history-title">Item previously purchase to this party</div>
-            <div class="maint-price-history-table-wrap mb-2">
-              <table class="maint-price-history-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Invoice No</th>
-                    <th>Qty</th>
-                    <th>Price</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody id="maintSamePartyRows"></tbody>
-              </table>
-              <div class="maint-price-history-empty d-none" id="maintSamePartyEmpty">No history for selected party.</div>
-            </div>
-            <div class="maint-price-history-title">Same item purchase to other parties</div>
-            <div class="maint-price-history-table-wrap">
-              <table class="maint-price-history-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Invoice No</th>
-                    <th>Party</th>
-                    <th>Qty</th>
-                    <th>Price</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody id="maintOtherPartyRows"></tbody>
-              </table>
-              <div class="maint-price-history-empty d-none" id="maintOtherPartyEmpty">No history from other parties.</div>
-            </div>
-          </div>
-          </div>
         </div>
         <table class="table table-bordered table-sm mb-0" id="itemsTable">
           <thead class="table-light">
@@ -358,6 +333,59 @@
       <div class="action-bar">
         <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-secondary">Cancel</a>
         {{ form.submit(class="btn btn-primary", id="maintSaveBtn") }}
+      </div>
+    </div>
+      </div>
+      <div class="maint-sidebar-col">
+        <div class="maint-side-card">
+          <div class="maint-side-card-head"><i class="bi bi-speedometer2 me-1"></i> Live Summary</div>
+          <div class="maint-side-card-body">
+            <div class="maint-side-kpi"><span class="label">Lines</span><span class="value" id="sideLineCount">0</span></div>
+            <div class="maint-side-kpi"><span class="label">Total Qty</span><span class="value" id="sideTotalQty">0.00</span></div>
+            <div class="maint-side-kpi"><span class="label">List Amount</span><span class="value" id="sideListAmount">0.00</span></div>
+            <div class="maint-side-kpi"><span class="label">Entered Bill</span><span class="value" id="sideEnteredBill">0.00</span></div>
+          </div>
+        </div>
+        <div class="maint-side-card">
+          <div class="maint-side-card-head"><i class="bi bi-graph-up-arrow me-1"></i> Price Insights</div>
+          <div class="maint-side-card-body p-2">
+            <div class="maint-price-history-panel" id="maintPriceHistoryPanel">
+              <div class="maint-price-history-title">Item previously purchase to this party</div>
+              <div class="maint-price-history-table-wrap mb-2">
+                <table class="maint-price-history-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Invoice No</th>
+                      <th>Qty</th>
+                      <th>Price</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody id="maintSamePartyRows"></tbody>
+                </table>
+                <div class="maint-price-history-empty d-none" id="maintSamePartyEmpty">No history for selected party.</div>
+              </div>
+              <div class="maint-price-history-title">Same item purchase to other parties</div>
+              <div class="maint-price-history-table-wrap">
+                <table class="maint-price-history-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Invoice No</th>
+                      <th>Party</th>
+                      <th>Qty</th>
+                      <th>Price</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody id="maintOtherPartyRows"></tbody>
+                </table>
+                <div class="maint-price-history-empty d-none" id="maintOtherPartyEmpty">No history from other parties.</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </form>
@@ -536,6 +564,10 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
     totalBillInput.addEventListener('input', _updateTotalBillHint);
+    totalBillInput.addEventListener('input', function() {
+      var sideEnteredBill = document.getElementById('sideEnteredBill');
+      if (sideEnteredBill) sideEnteredBill.textContent = fmt2(parseNum(totalBillInput.value));
+    });
     _updateTotalBillHint();
     var maintForm = document.getElementById('maintenanceExpenseForm');
     if (maintForm) {
@@ -1035,13 +1067,22 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function updateTotals() {
-    var totalQty = 0, totalAmount = 0;
+    var totalQty = 0, totalAmount = 0, lineCount = 0;
     itemsBody.querySelectorAll('.item-row').forEach(function(tr) {
+      lineCount += 1;
       totalQty += parseNum(tr.querySelector('.item-qty').value);
       totalAmount += parseNum(tr.querySelector('.item-amount').value);
     });
     document.getElementById('totalQty').textContent = totalQty.toFixed(2);
     document.getElementById('totalBillAmount').textContent = totalAmount.toFixed(2);
+    var sideLineCount = document.getElementById('sideLineCount');
+    var sideTotalQty = document.getElementById('sideTotalQty');
+    var sideListAmount = document.getElementById('sideListAmount');
+    var sideEnteredBill = document.getElementById('sideEnteredBill');
+    if (sideLineCount) sideLineCount.textContent = String(lineCount);
+    if (sideTotalQty) sideTotalQty.textContent = totalQty.toFixed(2);
+    if (sideListAmount) sideListAmount.textContent = totalAmount.toFixed(2);
+    if (sideEnteredBill && totalBillInput) sideEnteredBill.textContent = fmt2(parseNum(totalBillInput.value));
   }
 
   function validateBeforeSubmit() {
