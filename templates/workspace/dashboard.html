@@ -77,7 +77,13 @@
             </div>
           </div>
         </div>
-        <div class="col-lg-2 col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Expenses</small><h4 class="mb-0">{{ '%.2f'|format(stats.expenses|float) }}</h4></div></div></div>
+        <div class="col-lg-2 col-md-4">
+          <a href="{{ url_for('workspace_reports') }}" class="ws-module-card h-100 p-3">
+            <small class="text-muted">Total Expenses</small>
+            <h4 class="mb-0">{{ '%.2f'|format(stats.expenses|float) }}</h4>
+            <small class="text-muted">Expense breakdown report</small>
+          </a>
+        </div>
         <div class="col-lg-2 col-md-4">
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body">

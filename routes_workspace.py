@@ -3158,16 +3158,52 @@ def workspace_reports():
     guard, emp = _workspace_guard("workspace_reports")
     if guard:
         return guard
-    expenses_by_type = {}
-    for r in WorkspaceExpense.query.filter_by(employee_id=emp.id).all():
-        key = r.expense_type or "Other"
-        expenses_by_type[key] = expenses_by_type.get(key, Decimal("0")) + Decimal(str(r.amount or 0))
+    regular_rows = WorkspaceExpense.query.filter_by(employee_id=emp.id).all()
+    opening_rows = WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id).all()
+    fuel_oil_opening_rows = WorkspaceFuelOilOpeningExpense.query.filter_by(employee_id=emp.id).all()
+
+    source_totals = {
+        "fuel_expense": Decimal("0"),
+        "oil_expense": Decimal("0"),
+        "maintenance_expense": Decimal("0"),
+        "employee_expense": Decimal("0"),
+        "opening_expense": sum((Decimal(str(r.total_expense or 0)) for r in opening_rows), Decimal("0")),
+        "fuel_oil_opening": sum((Decimal(str(r.total_amount or 0)) for r in fuel_oil_opening_rows), Decimal("0")),
+    }
+    source_counts = {
+        "fuel_expense": 0,
+        "oil_expense": 0,
+        "maintenance_expense": 0,
+        "employee_expense": 0,
+        "opening_expense": len(opening_rows),
+        "fuel_oil_opening": len(fuel_oil_opening_rows),
+    }
+    for row in regular_rows:
+        exp_no = (row.expense_number or "").strip()
+        amt = Decimal(str(row.amount or 0))
+        if exp_no.startswith("FUEL-") or exp_no.startswith("FuelExpense-"):
+            source_totals["fuel_expense"] += amt
+            source_counts["fuel_expense"] += 1
+        elif exp_no.startswith("OIL-") or exp_no.startswith("OilExpense-"):
+            source_totals["oil_expense"] += amt
+            source_counts["oil_expense"] += 1
+        elif exp_no.startswith("MAINT-") or exp_no.startswith("MaintenanceExpense-"):
+            source_totals["maintenance_expense"] += amt
+            source_counts["maintenance_expense"] += 1
+        elif exp_no.startswith("EmployeeExpense-"):
+            source_totals["employee_expense"] += amt
+            source_counts["employee_expense"] += 1
+
+    tracked_total = sum(source_totals.values(), Decimal("0"))
     transfer_total = sum((Decimal(str(r.amount or 0)) for r in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all()), Decimal("0"))
     month_closes = WorkspaceMonthClose.query.filter_by(employee_id=emp.id).order_by(WorkspaceMonthClose.id.desc()).limit(12).all()
+
     return render_template(
         "workspace/reports.html",
         employee=emp,
-        expenses_by_type=expenses_by_type,
+        source_totals=source_totals,
+        source_counts=source_counts,
+        tracked_total=tracked_total,
         transfer_total=transfer_total,
         month_closes=month_closes,
     )

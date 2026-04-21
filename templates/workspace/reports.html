@@ -1,92 +1,132 @@
 {% extends "base.html" %}
+{% block title %}Workspace Report Centre{% endblock %}
 {% block content %}
 <div class="container-fluid py-3">
   {% include "workspace/_nav.html" %}
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
-    <h2 class="mb-0"><i class="bi bi-bar-chart me-2 text-success"></i>Workspace Reports</h2>
-    <div class="d-flex gap-2">
-      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
-      <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Workspace Report Centre</h4>
+    <div class="position-relative" style="width:260px;">
+      <i class="bi bi-search position-absolute" style="left:10px;top:50%;transform:translateY(-50%);color:#999;"></i>
+      <input type="text" id="workspaceReportSearchBox" class="form-control form-control-sm ps-4" placeholder="Search reports..." autocomplete="off">
     </div>
   </div>
 
   <div class="row g-3 mb-3">
-    <div class="col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Expense Heads</small><h5 class="mb-0">{{ expenses_by_type|length }}</h5></div></div></div>
-    <div class="col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Transfers</small><h5 class="mb-0">{{ '%.2f'|format((transfer_total or 0)|float) }}</h5></div></div></div>
-    <div class="col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Month Close Records</small><h5 class="mb-0">{{ month_closes|length }}</h5></div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Tracked Expense Total</small><h5 class="mb-0">{{ '%.2f'|format((tracked_total or 0)|float) }}</h5></div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Transfers</small><h5 class="mb-0">{{ '%.2f'|format((transfer_total or 0)|float) }}</h5></div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Month Close Records</small><h5 class="mb-0">{{ month_closes|length }}</h5></div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Tracked Source Heads</small><h5 class="mb-0">6</h5></div></div></div>
   </div>
 
-  <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
-      <div>
-        <div class="fw-semibold">Mileage & Fuel Efficiency</div>
-        <div class="small text-muted">Vehicle wise MPG, deduction, tank forecast aur editable Today Fuel inputs.</div>
-      </div>
-      <a href="{{ url_for('workspace_mpg_report') }}" class="btn btn-primary btn-sm">
-        <i class="bi bi-speedometer2 me-1"></i>Open MPG Report
-      </a>
-    </div>
-  </div>
+  <ul class="nav nav-tabs mb-0" id="workspaceReportTabs" role="tablist" style="border-bottom:2px solid #dee2e6;">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active fw-semibold" id="w-expense-tab" data-bs-toggle="tab" data-bs-target="#w-expense" type="button" role="tab"><i class="bi bi-fuel-pump me-1"></i>Expense Reports</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link fw-semibold" id="w-finance-tab" data-bs-toggle="tab" data-bs-target="#w-finance" type="button" role="tab"><i class="bi bi-wallet2 me-1"></i>Finance & Closing</button>
+    </li>
+  </ul>
 
-  <div class="row g-3">
-    <div class="col-md-6">
-      <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-success text-white"><strong>Expense Summary by Type</strong></div>
-        <div class="card-body">
-          <table class="table table-sm table-hover mb-0" id="workspaceExpenseSummaryTable">
-            <thead class="table-light"><tr><th>Type</th><th class="text-end">Amount</th></tr></thead>
-            <tbody>
-              {% for k, v in expenses_by_type.items() %}
-              <tr><td>{{ k }}</td><td class="text-end fw-semibold">{{ '%.2f'|format((v or 0)|float) }}</td></tr>
-              {% else %}
-              <tr><td colspan="2" class="text-muted text-center py-3">No data</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
+  <div class="tab-content border border-top-0 rounded-bottom bg-white p-4" id="workspaceReportTabContent">
+    <div class="tab-pane fade show active" id="w-expense" role="tabpanel">
+      <div class="row">
+        <div class="col-lg-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">Total Expenses Card Sources</h6>
+          <div class="list-group list-group-flush workspace-report-link-group">
+            <a href="{{ url_for('fuel_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
+              <i class="bi bi-star text-warning me-2"></i>Fuel Expense
+              <span class="badge bg-light text-dark ms-2">{{ source_counts.fuel_expense }}</span>
+              <small class="text-muted d-block ms-4">{{ '%.2f'|format((source_totals.fuel_expense or 0)|float) }}</small>
+            </a>
+            <a href="{{ url_for('oil_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
+              <i class="bi bi-star text-warning me-2"></i>Oil Expense
+              <span class="badge bg-light text-dark ms-2">{{ source_counts.oil_expense }}</span>
+              <small class="text-muted d-block ms-4">{{ '%.2f'|format((source_totals.oil_expense or 0)|float) }}</small>
+            </a>
+            <a href="{{ url_for('maintenance_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
+              <i class="bi bi-star text-warning me-2"></i>Maintenance Expense
+              <span class="badge bg-light text-dark ms-2">{{ source_counts.maintenance_expense }}</span>
+              <small class="text-muted d-block ms-4">{{ '%.2f'|format((source_totals.maintenance_expense or 0)|float) }}</small>
+            </a>
+            <a href="{{ url_for('employee_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
+              <i class="bi bi-star text-warning me-2"></i>Employee Expense
+              <span class="badge bg-light text-dark ms-2">{{ source_counts.employee_expense }}</span>
+              <small class="text-muted d-block ms-4">{{ '%.2f'|format((source_totals.employee_expense or 0)|float) }}</small>
+            </a>
+            <a href="{{ url_for('workspace_opening_expenses_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
+              <i class="bi bi-star text-warning me-2"></i>Opening Expenses
+              <span class="badge bg-light text-dark ms-2">{{ source_counts.opening_expense }}</span>
+              <small class="text-muted d-block ms-4">{{ '%.2f'|format((source_totals.opening_expense or 0)|float) }}</small>
+            </a>
+            <a href="{{ url_for('workspace_fuel_oil_openings_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
+              <i class="bi bi-star text-warning me-2"></i>Fuel/Oil Opening (Pump Card & Credit)
+              <span class="badge bg-light text-dark ms-2">{{ source_counts.fuel_oil_opening }}</span>
+              <small class="text-muted d-block ms-4">{{ '%.2f'|format((source_totals.fuel_oil_opening or 0)|float) }}</small>
+            </a>
+          </div>
+        </div>
+        <div class="col-lg-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">Specialized Reports</h6>
+          <div class="list-group list-group-flush workspace-report-link-group">
+            <a href="{{ url_for('workspace_mpg_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
+              <i class="bi bi-star text-warning me-2"></i>MPG / Fuel Efficiency Report
+              <small class="text-muted d-block ms-4">Vehicle wise MPG, deduction aur tank forecast.</small>
+            </a>
+            <a href="{{ url_for('maintenance_work_order_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
+              <i class="bi bi-star text-warning me-2"></i>Maintenance Work Order Report
+            </a>
+          </div>
         </div>
       </div>
     </div>
-    <div class="col-md-6">
-      <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-primary text-white"><strong>Transfers + Month Close Overview</strong></div>
-        <div class="card-body">
-          <div class="alert alert-light border py-2 mb-3">
-            <strong>Total Transfers:</strong> {{ '%.2f'|format((transfer_total or 0)|float) }}
+
+    <div class="tab-pane fade" id="w-finance" role="tabpanel">
+      <div class="row">
+        <div class="col-lg-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">Books & Ledger</h6>
+          <div class="list-group list-group-flush workspace-report-link-group">
+            <a href="{{ url_for('workspace_ledger') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Workspace Ledger</a>
+            <a href="{{ url_for('workspace_fund_transfers_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Fund Transfers</a>
+            <a href="{{ url_for('workspace_balance_sheet') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Balance Sheet</a>
           </div>
-          <table class="table table-sm table-hover mb-0" id="workspaceMonthCloseOverviewTable">
-            <thead class="table-light"><tr><th>Period</th><th>Status</th><th class="text-end">Total</th></tr></thead>
-            <tbody>
-              {% for r in month_closes %}
-              <tr>
-                <td>{{ r.period_start|ddmmyyyy }} - {{ r.period_end|ddmmyyyy }}</td>
-                <td>
-                  {% if r.status == 'Closed' %}
-                  <span class="badge bg-success">Closed</span>
-                  {% else %}
-                  <span class="badge bg-secondary">{{ r.status }}</span>
-                  {% endif %}
-                </td>
-                <td class="text-end fw-semibold">{{ '%.2f'|format((r.total_expense or 0)|float) }}</td>
-              </tr>
-              {% else %}
-              <tr><td colspan="3" class="text-muted text-center py-3">No close data</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
+        </div>
+        <div class="col-lg-6 mb-4">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">Month Close</h6>
+          <div class="list-group list-group-flush workspace-report-link-group">
+            <a href="{{ url_for('workspace_month_close_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Workspace Month Close</a>
+            <a href="{{ url_for('workspace_fuel_oil_month_close_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link"><i class="bi bi-star text-warning me-2"></i>Fuel/Oil Month Close</a>
+            <div class="small text-muted mt-2">Recent close records: {{ month_closes|length }}</div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<style>
+#workspaceReportTabs .nav-link{ color:#555; border:none; padding:.6rem 1.2rem; font-size:.88rem; border-bottom:3px solid transparent; transition:all .2s; }
+#workspaceReportTabs .nav-link:hover{ color:#0d6efd; background:#f0f6ff; }
+#workspaceReportTabs .nav-link.active{ color:#0d6efd; background:transparent; border-bottom:3px solid #0d6efd; }
+.workspace-report-link-group .workspace-report-link{ font-size:.875rem; color:#333; transition:all .15s; }
+.workspace-report-link-group .workspace-report-link:hover{ color:#0d6efd; background:#f8f9ff; padding-left:6px !important; }
+.workspace-report-link.d-none{ display:none !important; }
+</style>
+
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  if(window.fleetTableEnhance){
-    window.fleetTableEnhance('workspaceExpenseSummaryTable');
-    window.fleetTableEnhance('workspaceMonthCloseOverviewTable');
-  }
-  if(window.fleetPrintExport){
-    window.fleetPrintExport('workspaceExpenseSummaryTable','Workspace Expense Summary','Workspace_Expense_Summary.csv');
-  }
+  var searchBox = document.getElementById('workspaceReportSearchBox');
+  if(!searchBox) return;
+  searchBox.addEventListener('input', function(){
+    var q = this.value.toLowerCase().trim();
+    document.querySelectorAll('.workspace-report-link').forEach(function(el){
+      if(!q){
+        el.classList.remove('d-none');
+      } else {
+        var txt = el.textContent.toLowerCase();
+        el.classList.toggle('d-none', txt.indexOf(q) === -1);
+      }
+    });
+  });
 });
 </script>
 {% endblock %}
