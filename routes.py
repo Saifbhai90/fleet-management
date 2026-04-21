@@ -20489,10 +20489,10 @@ def maintenance_expense_form(pk=None):
             form.project_id.data = requested_work_order.project_id or 0
             form.vehicle_id.data = requested_work_order.vehicle_id
             form.work_order_id.data = requested_work_order.id
-            form.expense_date.data = requested_work_order.opened_on
+            form.expense_date.data = None
         selected_payment_type = ''
-        if not form.expense_date.data:
-            form.expense_date.data = pk_date()
+        if not rec:
+            form.expense_date.data = None
 
     if form.validate_on_submit():
         vehicle_id = form.vehicle_id.data

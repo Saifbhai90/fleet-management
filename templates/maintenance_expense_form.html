@@ -16,7 +16,12 @@
   .maint-form-wrap .form-control.bg-light { background-color: #f1f3f5 !important; cursor: default; }
   .maint-form-wrap .field-group { margin-bottom: 0.55rem; }
   .maint-form-wrap .entry-hint { font-size: 0.86rem; }
-  .maint-price-history-panel { border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 8px; margin-top: 8px; display: none; }
+  .maint-price-history-panel { border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 8px; display: none; }
+  .maint-entry-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 10px; align-items: start; }
+  @media (max-width: 1199.98px) {
+    .maint-entry-grid { grid-template-columns: 1fr; }
+  }
+  .maint-last-price-badge { color: #dc2626; font-weight: 700; }
   .maint-price-history-title { font-size: .82rem; font-weight: 700; color: #1d4ed8; margin-bottom: 4px; font-style: italic; }
   .maint-price-history-table-wrap { max-height: 140px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
   .maint-price-history-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
@@ -187,62 +192,66 @@
       <div class="form-section-header">Product Lines</div>
       <div class="form-section-body">
         <p class="entry-hint text-muted mb-2">Search product -> Qty -> Price (Amount auto). Press <kbd>Enter</kbd> to add line to list.</p>
-        <div class="row g-2 align-items-end mb-3 border rounded p-2 bg-light" id="entryRow">
-          <div class="col-md-3">
-            <label class="form-label mb-0">Product</label>
-            <select id="entryProductSelect" class="form-select form-select-sm search-select">
-              <option value="">-- Search / Select --</option>
-            </select>
+        <div class="maint-entry-grid mb-3">
+          <div class="border rounded p-2 bg-light" id="entryRow">
+            <div class="row g-2 align-items-end">
+              <div class="col-md-4">
+                <label class="form-label mb-0">Product</label>
+                <select id="entryProductSelect" class="form-select form-select-sm search-select">
+                  <option value="">-- Search / Select --</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label mb-0">Qty</label>
+                <input type="text" id="entryQty" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label mb-0">Price <span id="entryDefaultPriceHint" class="small ms-1"></span></label>
+                <input type="text" id="entryPrice" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label mb-0">Amount</label>
+                <input type="text" id="entryAmount" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00">
+              </div>
+              <div class="col-md-2">
+                <button type="button" class="btn btn-sm btn-primary w-100" id="addToListBtn"><i class="bi bi-plus-lg"></i> Add to list</button>
+              </div>
+            </div>
           </div>
-          <div class="col-md-2">
-            <label class="form-label mb-0">Qty</label>
-            <input type="number" id="entryQty" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label mb-0">Price <span id="entryDefaultPriceHint" class="text-muted small ms-1"></span></label>
-            <input type="number" id="entryPrice" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label mb-0">Amount</label>
-            <input type="text" id="entryAmount" class="form-control form-control-sm bg-light" readonly placeholder="0">
-          </div>
-          <div class="col-md-2">
-            <button type="button" class="btn btn-sm btn-primary w-100" id="addToListBtn"><i class="bi bi-plus-lg"></i> Add to list</button>
-          </div>
-        </div>
-        <div class="maint-price-history-panel" id="maintPriceHistoryPanel">
-          <div class="maint-price-history-title">Item previously purchase to this party</div>
-          <div class="maint-price-history-table-wrap mb-2">
-            <table class="maint-price-history-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Invoice No</th>
-                  <th>Qty</th>
-                  <th>Price</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody id="maintSamePartyRows"></tbody>
-            </table>
-            <div class="maint-price-history-empty d-none" id="maintSamePartyEmpty">No history for selected party.</div>
-          </div>
-          <div class="maint-price-history-title">Same item purchase to other parties</div>
-          <div class="maint-price-history-table-wrap">
-            <table class="maint-price-history-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Invoice No</th>
-                  <th>Party</th>
-                  <th>Qty</th>
-                  <th>Price</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody id="maintOtherPartyRows"></tbody>
-            </table>
-            <div class="maint-price-history-empty d-none" id="maintOtherPartyEmpty">No history from other parties.</div>
+          <div class="maint-price-history-panel" id="maintPriceHistoryPanel">
+            <div class="maint-price-history-title">Item previously purchase to this party</div>
+            <div class="maint-price-history-table-wrap mb-2">
+              <table class="maint-price-history-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Invoice No</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody id="maintSamePartyRows"></tbody>
+              </table>
+              <div class="maint-price-history-empty d-none" id="maintSamePartyEmpty">No history for selected party.</div>
+            </div>
+            <div class="maint-price-history-title">Same item purchase to other parties</div>
+            <div class="maint-price-history-table-wrap">
+              <table class="maint-price-history-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Invoice No</th>
+                    <th>Party</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody id="maintOtherPartyRows"></tbody>
+              </table>
+              <div class="maint-price-history-empty d-none" id="maintOtherPartyEmpty">No history from other parties.</div>
+            </div>
           </div>
         </div>
         <table class="table table-bordered table-sm mb-0" id="itemsTable">
@@ -260,9 +269,9 @@
               {% for it in rec.items %}
               <tr class="item-row" data-product-id="{{ it.product_id }}">
                 <td><input type="hidden" name="product_id" value="{{ it.product_id }}"><span class="product-name">{{ it.product.name if it.product else ('Product #' ~ it.product_id) }}</span></td>
-                <td><input type="number" name="qty" class="form-control form-control-sm item-qty" step="0.01" min="0" value="{{ it.qty }}" placeholder="0"></td>
-                <td><input type="number" name="price" class="form-control form-control-sm item-price" step="0.01" min="0" value="{{ it.price }}" placeholder="0"></td>
-                <td><input type="text" class="form-control form-control-sm bg-light item-amount" readonly placeholder="0"></td>
+                <td><input type="text" name="qty" class="form-control form-control-sm item-qty" inputmode="decimal" value="{{ '%.2f'|format((it.qty or 0)|float) }}" placeholder="0.00"></td>
+                <td><input type="text" name="price" class="form-control form-control-sm item-price" inputmode="decimal" value="{{ '%.2f'|format((it.price or 0)|float) }}" placeholder="0.00"></td>
+                <td><input type="text" class="form-control form-control-sm item-amount" inputmode="decimal" placeholder="0.00"></td>
                 <td><button type="button" class="btn btn-outline-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>
               </tr>
               {% endfor %}
@@ -765,10 +774,30 @@ document.addEventListener('DOMContentLoaded', function() {
     expenseByBalanceHint.textContent = 'Current Balance: ' + bal;
   }
 
-  function updateEntryAmount() {
-    var qty = parseFloat(entryQty.value) || 0;
-    var price = parseFloat(entryPrice.value) || 0;
-    entryAmount.value = (qty * price).toFixed(2);
+  function parseNum(v) {
+    if (v == null) return 0;
+    var s = String(v).replace(/,/g, '').trim();
+    if (!s) return 0;
+    var n = Number(s);
+    return isFinite(n) ? n : 0;
+  }
+  function fmt2(v) {
+    var n = Number(v);
+    if (!isFinite(n)) n = 0;
+    return n.toFixed(2);
+  }
+
+  function updateEntryAmountFromQtyPrice() {
+    var qty = parseNum(entryQty.value);
+    var price = parseNum(entryPrice.value);
+    entryAmount.value = fmt2(qty * price);
+  }
+  function updateEntryPriceFromAmountQty() {
+    var qty = parseNum(entryQty.value);
+    var amountVal = parseNum(entryAmount.value);
+    if (qty > 0) {
+      entryPrice.value = fmt2(amountVal / qty);
+    }
   }
 
   function updateDefaultPriceHint() {
@@ -776,22 +805,24 @@ document.addEventListener('DOMContentLoaded', function() {
     var pid = entryProductSelect.value;
     var p = productsForMaintenance.find(function(x) { return String(x.id) === String(pid); });
     var dp = p && p.default_price != null ? parseFloat(p.default_price) : null;
-    if (dp != null && isFinite(dp)) {
-      entryDefaultPriceHint.textContent = '(Default: ' + dp.toFixed(2) + ')';
-    } else {
-      entryDefaultPriceHint.textContent = '';
-    }
+    var defaultHtml = (dp != null && isFinite(dp)) ? ('<span class="maint-last-price-badge">(Default: ' + dp.toFixed(2) + ')</span>') : '';
+    var lastHtml = entryDefaultPriceHint.dataset.lastPriceLabel || '';
+    entryDefaultPriceHint.innerHTML = [defaultHtml, lastHtml].filter(Boolean).join(' ');
   }
   function applyMaintenanceSuggestedPrice(data) {
     if (!entryPrice) return;
-    entryPrice.setAttribute('placeholder', '0');
+    entryPrice.setAttribute('placeholder', '0.00');
     var suggested = (data && data.suggested_price != null) ? parseFloat(data.suggested_price) : null;
+    var lastFromHistory = null;
+    if (data && data.same_party && data.same_party.length && data.same_party[0].price_label) {
+      lastFromHistory = data.same_party[0].price_label;
+    } else if (data && data.other_parties && data.other_parties.length && data.other_parties[0].price_label) {
+      lastFromHistory = data.other_parties[0].price_label;
+    }
+    entryDefaultPriceHint.dataset.lastPriceLabel = lastFromHistory ? ('<span class="maint-last-price-badge">(Last: ' + lastFromHistory + ')</span>') : '';
+    updateDefaultPriceHint();
     if (suggested == null || !isFinite(suggested) || suggested <= 0) {
-      if (entryPrice.dataset.autoSuggested === '1') {
-        entryPrice.value = '';
-        entryPrice.dataset.autoSuggested = '0';
-      }
-      updateEntryAmount();
+      updateEntryAmountFromQtyPrice();
       return;
     }
     entryPrice.setAttribute('placeholder', 'Suggested: ' + suggested.toFixed(2));
@@ -800,7 +831,7 @@ document.addEventListener('DOMContentLoaded', function() {
       entryPrice.value = suggested.toFixed(2);
       entryPrice.dataset.autoSuggested = '1';
     }
-    updateEntryAmount();
+    updateEntryAmountFromQtyPrice();
   }
 
   function escHtml(txt) {
@@ -887,11 +918,18 @@ document.addEventListener('DOMContentLoaded', function() {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   }
-  entryQty.addEventListener('input', updateEntryAmount);
-  entryPrice.addEventListener('input', function() { entryPrice.dataset.autoSuggested = '0'; updateEntryAmount(); });
-  if (entryProductSelect) entryProductSelect.addEventListener('change', function() { updateDefaultPriceHint(); fetchMaintenancePriceHistory(false); });
-  entryPrice.addEventListener('focus', fetchMaintenancePriceHistory);
-  entryPrice.addEventListener('blur', function() { window.setTimeout(hidePriceHistoryPanel, 120); });
+  entryQty.addEventListener('input', updateEntryAmountFromQtyPrice);
+  entryPrice.addEventListener('input', function() { entryPrice.dataset.autoSuggested = '0'; updateEntryAmountFromQtyPrice(); });
+  entryAmount.addEventListener('input', function() { updateEntryPriceFromAmountQty(); });
+  [entryQty, entryPrice, entryAmount].forEach(function(el){
+    el.addEventListener('blur', function(){
+      el.value = fmt2(parseNum(el.value));
+      if (el === entryAmount) updateEntryPriceFromAmountQty();
+      else updateEntryAmountFromQtyPrice();
+    });
+  });
+  if (entryProductSelect) entryProductSelect.addEventListener('change', function() { updateDefaultPriceHint(); fetchMaintenancePriceHistory(true); });
+  entryPrice.addEventListener('focus', function(){ fetchMaintenancePriceHistory(true); });
   if (entryQty) {
     entryQty.addEventListener('keydown', function(e) {
       if (e.key === 'Tab' && !e.shiftKey) {
@@ -906,11 +944,12 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
       entryProductSelect.value = '';
     }
-    entryQty.value = '0';
-    entryPrice.value = '';
+    entryQty.value = '0.00';
+    entryPrice.value = '0.00';
     entryPrice.dataset.autoSuggested = '0';
-    entryAmount.value = '';
-    updateEntryAmount();
+    entryAmount.value = '0.00';
+    entryDefaultPriceHint.dataset.lastPriceLabel = '';
+    updateEntryAmountFromQtyPrice();
     updateDefaultPriceHint();
     focusEntryProduct();
   }
@@ -920,20 +959,20 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!pid) { alert('Please select a product.'); entryProductSelect.focus(); return; }
     var p = productsForMaintenance.find(function(x) { return String(x.id) === String(pid); });
     var productName = escapeHtml(p ? (p.name || '') : '');
-    var qty = parseFloat(entryQty.value) || 0;
-    var price = parseFloat(entryPrice.value) || 0;
+    var qty = parseNum(entryQty.value);
+    var price = parseNum(entryPrice.value);
     if (qty <= 0) { alert('Qty enter karein (0 se bari).'); entryQty.focus(); return; }
     if (price <= 0) { alert('Price enter karein (0 se bari).'); entryPrice.focus(); return; }
-    var amount = (qty * price).toFixed(2);
+    var amount = fmt2(qty * price);
 
     var tr = document.createElement('tr');
     tr.className = 'item-row';
     tr.dataset.productId = pid;
     tr.innerHTML =
       '<td><input type="hidden" name="product_id" value="' + pid + '"><span class="product-name">' + productName + '</span></td>' +
-      '<td><input type="number" name="qty" class="form-control form-control-sm item-qty" step="0.01" min="0" value="' + qty + '"></td>' +
-      '<td><input type="number" name="price" class="form-control form-control-sm item-price" step="0.01" min="0" value="' + price + '"></td>' +
-      '<td><input type="text" class="form-control form-control-sm bg-light item-amount" readonly value="' + amount + '"></td>' +
+      '<td><input type="text" name="qty" class="form-control form-control-sm item-qty" inputmode="decimal" value="' + fmt2(qty) + '"></td>' +
+      '<td><input type="text" name="price" class="form-control form-control-sm item-price" inputmode="decimal" value="' + fmt2(price) + '"></td>' +
+      '<td><input type="text" class="form-control form-control-sm item-amount" inputmode="decimal" value="' + amount + '"></td>' +
       '<td><button type="button" class="btn btn-outline-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>';
     itemsBody.appendChild(tr);
     bindListRow(tr);
@@ -953,23 +992,39 @@ document.addEventListener('DOMContentLoaded', function() {
     var qty = tr.querySelector('.item-qty');
     var price = tr.querySelector('.item-price');
     var amount = tr.querySelector('.item-amount');
-    function updateRow() {
-      var q = parseFloat(qty.value) || 0;
-      var p = parseFloat(price.value) || 0;
-      amount.value = (q * p).toFixed(2);
+    function updateRowFromQtyPrice() {
+      var q = parseNum(qty.value);
+      var p = parseNum(price.value);
+      amount.value = fmt2(q * p);
       updateTotals();
     }
-    qty.addEventListener('input', updateRow);
-    price.addEventListener('input', updateRow);
+    function updateRowFromAmountQty() {
+      var q = parseNum(qty.value);
+      var a = parseNum(amount.value);
+      if (q > 0) {
+        price.value = fmt2(a / q);
+      }
+      updateTotals();
+    }
+    qty.addEventListener('input', updateRowFromQtyPrice);
+    price.addEventListener('input', updateRowFromQtyPrice);
+    amount.addEventListener('input', updateRowFromAmountQty);
+    [qty, price, amount].forEach(function(el){
+      el.addEventListener('blur', function(){
+        el.value = fmt2(parseNum(el.value));
+        if (el === amount) updateRowFromAmountQty();
+        else updateRowFromQtyPrice();
+      });
+    });
     tr.querySelector('.remove-row').addEventListener('click', function() { tr.remove(); updateTotals(); });
-    updateRow();
+    updateRowFromQtyPrice();
   }
 
   function updateTotals() {
     var totalQty = 0, totalAmount = 0;
     itemsBody.querySelectorAll('.item-row').forEach(function(tr) {
-      totalQty += parseFloat(tr.querySelector('.item-qty').value) || 0;
-      totalAmount += parseFloat(tr.querySelector('.item-amount').value) || 0;
+      totalQty += parseNum(tr.querySelector('.item-qty').value);
+      totalAmount += parseNum(tr.querySelector('.item-amount').value);
     });
     document.getElementById('totalQty').textContent = totalQty.toFixed(2);
     document.getElementById('totalBillAmount').textContent = totalAmount.toFixed(2);
@@ -1224,7 +1279,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }, 120);
 
-  updateEntryAmount();
+  updateEntryAmountFromQtyPrice();
   updateDefaultPriceHint();
   function _runInitialLocationLoadChain() {
     var did = serverDistrictId;
