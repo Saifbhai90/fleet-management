@@ -18,12 +18,9 @@
   .maint-form-wrap .field-group { margin-bottom: 0.55rem; }
   .maint-form-wrap .entry-hint { font-size: 0.86rem; }
   .maint-price-history-panel { border: 1px solid #dbe4ef; border-radius: 10px; background: linear-gradient(180deg, #f8fbff 0%, #fff 100%); padding: 10px; display: none; box-shadow: 0 2px 10px rgba(30, 58, 138, 0.07); margin-top: 0; }
-  .maint-entry-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); gap: 10px; align-items: start; }
-  @media (max-width: 1199.98px) {
-    .maint-entry-grid { grid-template-columns: 1fr; }
-  }
+  .maint-entry-grid { display: block; }
   .maint-entry-main { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; }
-  .maint-entry-grid-row { display: grid; grid-template-columns: 40% 11% 23% 14% 12%; gap: 8px; align-items: end; }
+  .maint-entry-grid-row { display: grid; grid-template-columns: 40% 10% 25% 13% 12%; gap: 8px; align-items: end; }
   .maint-entry-cell { min-width: 0; }
   .maint-entry-cell .form-label { min-height: 20px; display: inline-flex; align-items: center; }
   .maint-entry-cell.cell-price { position: relative; }
@@ -31,7 +28,7 @@
   .maint-add-btn { min-height: 42px; min-width: 112px; font-weight: 700; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
   .maint-add-btn .text-compact { display: none; }
   @media (max-width: 1399.98px) {
-    .maint-entry-grid-row { grid-template-columns: 38% 11% 24% 13% 14%; }
+    .maint-entry-grid-row { grid-template-columns: 38% 10% 26% 12% 14%; }
     .maint-add-btn .text-full { display: none; }
     .maint-add-btn .text-compact { display: inline; }
   }
@@ -263,9 +260,9 @@
         <table class="table table-bordered table-sm mb-0" id="itemsTable">
           <colgroup>
             <col style="width:40%">
-            <col style="width:11%">
-            <col style="width:23%">
-            <col style="width:14%">
+            <col style="width:10%">
+            <col style="width:25%">
+            <col style="width:13%">
             <col style="width:12%">
           </colgroup>
           <thead class="table-light">
