@@ -426,7 +426,23 @@ def workspace_home():
     _ensure_workspace_driver_accounts(emp)
     db.session.commit()
     scope = _get_employee_scope_summary(emp)
-    regular_expenses = sum((x.amount or 0) for x in WorkspaceExpense.query.filter_by(employee_id=emp.id).all())
+    regular_allowed_filters = or_(
+        WorkspaceExpense.expense_number.like('FUEL-%'),
+        WorkspaceExpense.expense_number.like('OIL-%'),
+        WorkspaceExpense.expense_number.like('MAINT-%'),
+        WorkspaceExpense.expense_number.like('EmployeeExpense-%'),
+        # Legacy mirrors from older backfill runs
+        WorkspaceExpense.expense_number.like('FuelExpense-%'),
+        WorkspaceExpense.expense_number.like('OilExpense-%'),
+        WorkspaceExpense.expense_number.like('MaintenanceExpense-%'),
+    )
+    regular_expenses = sum(
+        (x.amount or 0)
+        for x in WorkspaceExpense.query.filter(
+            WorkspaceExpense.employee_id == emp.id,
+            regular_allowed_filters,
+        ).all()
+    )
     opening_expenses = sum((x.total_expense or 0) for x in WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id).all())
     fuel_oil_openings = sum((x.total_amount or 0) for x in WorkspaceFuelOilOpeningExpense.query.filter_by(employee_id=emp.id).all())
     total_expenses = Decimal(str(regular_expenses or 0)) + Decimal(str(opening_expenses or 0)) + Decimal(str(fuel_oil_openings or 0))
