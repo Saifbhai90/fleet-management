@@ -23,6 +23,23 @@
     .maint-entry-grid { grid-template-columns: 1fr; }
   }
   .maint-entry-main { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; }
+  .maint-entry-grid-row { display: grid; grid-template-columns: 42% 14% 24% 14% 6%; gap: 8px; align-items: end; }
+  .maint-entry-cell .form-label { min-height: 20px; display: inline-flex; align-items: center; }
+  .maint-add-btn { min-height: 42px; font-weight: 700; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+  .maint-add-btn .text-compact { display: none; }
+  @media (max-width: 1399.98px) {
+    .maint-entry-grid-row { grid-template-columns: 40% 14% 22% 14% 10%; }
+    .maint-add-btn .text-full { display: none; }
+    .maint-add-btn .text-compact { display: inline; }
+  }
+  @media (max-width: 991.98px) {
+    .maint-entry-grid-row { grid-template-columns: 1fr 1fr; }
+    .maint-entry-grid-row .cell-product { grid-column: 1 / -1; }
+    .maint-entry-grid-row .cell-button { grid-column: 2 / 3; }
+    .maint-add-btn { width: 100%; }
+    .maint-add-btn .text-full { display: inline; }
+    .maint-add-btn .text-compact { display: none; }
+  }
   .maint-entry-side { align-self: start; }
   .maint-insights-title { font-size: 0.86rem; font-weight: 700; color: #1d4ed8; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
   .maint-last-price-badge { color: #dc2626; font-weight: 700; }
@@ -212,27 +229,27 @@
         <p class="entry-hint text-muted mb-2">Search product -> Qty -> Price (Amount auto). Press <kbd>Enter</kbd> to add line to list.</p>
         <div class="maint-entry-grid mb-2">
           <div class="maint-entry-main" id="entryRow">
-            <div class="row g-2 align-items-end">
-              <div class="col-md-4">
+            <div class="maint-entry-grid-row">
+              <div class="maint-entry-cell cell-product">
                 <label class="form-label mb-0">Product</label>
                 <select id="entryProductSelect" class="form-select form-select-sm search-select">
                   <option value="">-- Search / Select --</option>
                 </select>
               </div>
-              <div class="col-md-2">
+              <div class="maint-entry-cell cell-qty">
                 <label class="form-label mb-0">Qty</label>
                 <input type="text" id="entryQty" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00">
               </div>
-              <div class="col-md-3">
+              <div class="maint-entry-cell cell-price">
                 <label class="form-label mb-0">Price <span id="entryDefaultPriceHint" class="maint-price-inline-note"></span></label>
                 <input type="text" id="entryPrice" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00">
               </div>
-              <div class="col-md-2">
+              <div class="maint-entry-cell cell-amount">
                 <label class="form-label mb-0">Amount</label>
                 <input type="text" id="entryAmount" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00">
               </div>
-              <div class="col-md-1">
-                <button type="button" class="btn btn-sm btn-primary w-100" id="addToListBtn"><i class="bi bi-plus-lg"></i> Add to list</button>
+              <div class="maint-entry-cell cell-button">
+                <button type="button" class="btn btn-sm btn-primary w-100 maint-add-btn" id="addToListBtn"><i class="bi bi-plus-lg"></i><span class="text-full">Add to list</span><span class="text-compact">Add</span></button>
               </div>
             </div>
           </div>
