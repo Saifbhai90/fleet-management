@@ -3158,41 +3158,54 @@ def workspace_reports():
     guard, emp = _workspace_guard("workspace_reports")
     if guard:
         return guard
-    regular_rows = WorkspaceExpense.query.filter_by(employee_id=emp.id).all()
-    opening_rows = WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id).all()
-    fuel_oil_opening_rows = WorkspaceFuelOilOpeningExpense.query.filter_by(employee_id=emp.id).all()
+    # Source of truth: read each amount directly from its own form table.
+    fuel_total = Decimal(str(
+        db.session.query(db.func.coalesce(db.func.sum(FuelExpense.amount), 0))
+        .filter(FuelExpense.employee_id == emp.id)
+        .scalar() or 0
+    ))
+    oil_total = Decimal(str(
+        db.session.query(db.func.coalesce(db.func.sum(OilExpense.total_bill_amount), 0))
+        .filter(OilExpense.employee_id == emp.id)
+        .scalar() or 0
+    ))
+    maintenance_total = Decimal(str(
+        db.session.query(db.func.coalesce(db.func.sum(MaintenanceExpense.total_bill_amount), 0))
+        .filter(MaintenanceExpense.employee_id == emp.id)
+        .scalar() or 0
+    ))
+    employee_total = Decimal(str(
+        db.session.query(db.func.coalesce(db.func.sum(EmployeeExpense.amount), 0))
+        .filter(EmployeeExpense.employee_id == emp.id)
+        .scalar() or 0
+    ))
+    opening_total = Decimal(str(
+        db.session.query(db.func.coalesce(db.func.sum(WorkspaceOpeningExpense.total_expense), 0))
+        .filter(WorkspaceOpeningExpense.employee_id == emp.id)
+        .scalar() or 0
+    ))
+    fuel_oil_opening_total = Decimal(str(
+        db.session.query(db.func.coalesce(db.func.sum(WorkspaceFuelOilOpeningExpense.total_amount), 0))
+        .filter(WorkspaceFuelOilOpeningExpense.employee_id == emp.id)
+        .scalar() or 0
+    ))
 
     source_totals = {
-        "fuel_expense": Decimal("0"),
-        "oil_expense": Decimal("0"),
-        "maintenance_expense": Decimal("0"),
-        "employee_expense": Decimal("0"),
-        "opening_expense": sum((Decimal(str(r.total_expense or 0)) for r in opening_rows), Decimal("0")),
-        "fuel_oil_opening": sum((Decimal(str(r.total_amount or 0)) for r in fuel_oil_opening_rows), Decimal("0")),
+        "fuel_expense": fuel_total,
+        "oil_expense": oil_total,
+        "maintenance_expense": maintenance_total,
+        "employee_expense": employee_total,
+        "opening_expense": opening_total,
+        "fuel_oil_opening": fuel_oil_opening_total,
     }
     source_counts = {
-        "fuel_expense": 0,
-        "oil_expense": 0,
-        "maintenance_expense": 0,
-        "employee_expense": 0,
-        "opening_expense": len(opening_rows),
-        "fuel_oil_opening": len(fuel_oil_opening_rows),
+        "fuel_expense": FuelExpense.query.filter(FuelExpense.employee_id == emp.id).count(),
+        "oil_expense": OilExpense.query.filter(OilExpense.employee_id == emp.id).count(),
+        "maintenance_expense": MaintenanceExpense.query.filter(MaintenanceExpense.employee_id == emp.id).count(),
+        "employee_expense": EmployeeExpense.query.filter(EmployeeExpense.employee_id == emp.id).count(),
+        "opening_expense": WorkspaceOpeningExpense.query.filter(WorkspaceOpeningExpense.employee_id == emp.id).count(),
+        "fuel_oil_opening": WorkspaceFuelOilOpeningExpense.query.filter(WorkspaceFuelOilOpeningExpense.employee_id == emp.id).count(),
     }
-    for row in regular_rows:
-        exp_no = (row.expense_number or "").strip()
-        amt = Decimal(str(row.amount or 0))
-        if exp_no.startswith("FUEL-") or exp_no.startswith("FuelExpense-"):
-            source_totals["fuel_expense"] += amt
-            source_counts["fuel_expense"] += 1
-        elif exp_no.startswith("OIL-") or exp_no.startswith("OilExpense-"):
-            source_totals["oil_expense"] += amt
-            source_counts["oil_expense"] += 1
-        elif exp_no.startswith("MAINT-") or exp_no.startswith("MaintenanceExpense-"):
-            source_totals["maintenance_expense"] += amt
-            source_counts["maintenance_expense"] += 1
-        elif exp_no.startswith("EmployeeExpense-"):
-            source_totals["employee_expense"] += amt
-            source_counts["employee_expense"] += 1
 
     tracked_total = sum(source_totals.values(), Decimal("0"))
     transfer_total = sum((Decimal(str(r.amount or 0)) for r in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all()), Decimal("0"))
