@@ -75,7 +75,7 @@
     pointer-events: none;
   }
   .maint-price-history-title { font-size: .82rem; font-weight: 700; color: #1d4ed8; margin-bottom: 4px; font-style: italic; }
-  .maint-price-history-table-wrap { max-height: 96px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
+  .maint-price-history-table-wrap { max-height: 170px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
   .maint-price-history-table { width: 100%; border-collapse: collapse; font-size: .75rem; table-layout: fixed; }
   .maint-price-history-table th, .maint-price-history-table td { border: 1px solid #e2e8f0; padding: 2px 4px; white-space: normal; word-break: break-word; }
   .maint-price-history-table thead th { background: #f1f5f9; position: sticky; top: 0; z-index: 1; }
@@ -100,7 +100,7 @@
   #taskReadingsMeta { white-space: nowrap; display: inline-block; }
   #currentReading { min-height: 44px; font-size: 1.02rem; font-weight: 600; }
   .reading-match-note { font-weight: 600; }
-  .maint-main-grid { display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: 14px; align-items: start; }
+  .maint-main-grid { display: grid; grid-template-columns: minmax(0, 1fr) 500px; gap: 14px; align-items: start; }
   @media (max-width: 1399.98px) { .maint-main-grid { grid-template-columns: 1fr; } }
   .maint-primary-col { min-width: 0; }
   .maint-sidebar-col { min-width: 0; position: sticky; top: 82px; }
@@ -108,6 +108,10 @@
   .maint-side-card { background: #fff; border: 1px solid #e5eaf3; border-radius: 12px; box-shadow: 0 8px 22px rgba(15,23,42,.06); margin-bottom: 10px; overflow: hidden; }
   .maint-side-card-head { padding: 10px 12px; border-bottom: 1px solid #eef2f8; font-weight: 700; color: #334155; background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%); }
   .maint-side-card-body { padding: 10px 12px; }
+  @media (max-width: 1399.98px) {
+    .maint-side-card { margin-top: 2px; }
+    .maint-price-history-table-wrap { max-height: 220px; }
+  }
   .maint-side-kpi { display: flex; justify-content: space-between; align-items: center; font-size: .86rem; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; }
   .maint-side-kpi:last-child { border-bottom: 0; }
   .maint-side-kpi .label { color: #64748b; }
@@ -1511,6 +1515,19 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
     });
   }
+
+  // Auto-scroll with focus movement (down/up) so active field stays visible.
+  var focusScrollSelectors = 'input, select, textarea, .ts-control input';
+  maintenanceExpenseForm && maintenanceExpenseForm.addEventListener('focusin', function(e) {
+    var t = e.target;
+    if (!t || !t.matches) return;
+    if (!t.matches(focusScrollSelectors)) return;
+    window.setTimeout(function() {
+      try {
+        t.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      } catch (_) {}
+    }, 20);
+  });
 });
 </script>
 <script>
