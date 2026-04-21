@@ -6,26 +6,29 @@
   @media (max-width: 991.98px) {
     .maint-form-wrap { max-width: 100%; }
   }
-  .maint-form-wrap .page-header { background: linear-gradient(135deg, #fd7e14 0%, #e8590c 100%); color: #fff; padding: 0.85rem 1.1rem; border-radius: 14px; margin-bottom: 1rem; box-shadow: 0 8px 20px rgba(232, 89, 12, 0.25); }
+  .maint-form-wrap { background: #f4f7fb; padding: 10px; border-radius: 16px; }
+  .maint-form-wrap .page-header { background: linear-gradient(135deg, #fd7e14 0%, #e8590c 100%); color: #fff; padding: 0.95rem 1.15rem; border-radius: 14px; margin-bottom: 1rem; box-shadow: 0 10px 24px rgba(232, 89, 12, 0.28); }
   .maint-form-wrap .page-header h4 { margin: 0; font-size: 1.35rem; font-weight: 700; letter-spacing: 0.2px; }
-  .maint-form-wrap .form-section { background: #fff; border-radius: 12px; border: 1px solid #e9ecef; margin-bottom: 0.95rem; overflow: hidden; box-shadow: 0 2px 10px rgba(16, 24, 40, 0.06); }
-  .maint-form-wrap .form-section-header { background: linear-gradient(to right, #fff7ed 0%, #fff 100%); border-bottom: 1px solid #eceff1; padding: 0.62rem 0.95rem; font-weight: 700; font-size: 1rem; color: #374151; }
+  .maint-form-wrap .form-section { background: #fff; border-radius: 12px; border: 1px solid #e7edf5; margin-bottom: 0.95rem; overflow: hidden; box-shadow: 0 6px 16px rgba(16, 24, 40, 0.05); }
+  .maint-form-wrap .form-section-header { background: linear-gradient(to right, #fff7ed 0%, #fff 100%); border-bottom: 1px solid #eceff1; padding: 0.7rem 0.95rem; font-weight: 700; font-size: 1rem; color: #334155; }
   .maint-form-wrap .form-section-body { padding: 0.95rem 1rem; }
   .maint-form-wrap .form-label { font-size: 0.92rem; font-weight: 600; color: #334155; margin-bottom: 0.35rem; }
   .maint-form-wrap .form-control, .maint-form-wrap .form-select { border-radius: 8px; font-size: 0.95rem; padding: 0.52rem 0.7rem; min-height: 40px; }
   .maint-form-wrap .form-control.bg-light { background-color: #f1f3f5 !important; cursor: default; }
   .maint-form-wrap .field-group { margin-bottom: 0.55rem; }
   .maint-form-wrap .entry-hint { font-size: 0.86rem; }
-  .maint-price-history-panel { border: 1px solid #dbe4ef; border-radius: 10px; background: linear-gradient(180deg, #f8fbff 0%, #fff 100%); padding: 10px; display: none; box-shadow: 0 2px 10px rgba(30, 58, 138, 0.07); }
-  .maint-entry-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); gap: 12px; align-items: start; }
+  .maint-price-history-panel { border: 1px solid #dbe4ef; border-radius: 10px; background: linear-gradient(180deg, #f8fbff 0%, #fff 100%); padding: 10px; display: none; box-shadow: 0 2px 10px rgba(30, 58, 138, 0.07); margin-top: 0; }
+  .maint-entry-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); gap: 10px; align-items: start; }
   @media (max-width: 1199.98px) {
     .maint-entry-grid { grid-template-columns: 1fr; }
   }
+  .maint-entry-main { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; }
+  .maint-entry-side { align-self: start; }
   .maint-insights-title { font-size: 0.86rem; font-weight: 700; color: #1d4ed8; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
   .maint-last-price-badge { color: #dc2626; font-weight: 700; }
-  .maint-price-inline-note { font-size: .8rem; margin-top: 2px; min-height: 18px; }
+  .maint-price-inline-note { font-size: .8rem; margin-top: 2px; min-height: 18px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .maint-price-history-title { font-size: .82rem; font-weight: 700; color: #1d4ed8; margin-bottom: 4px; font-style: italic; }
-  .maint-price-history-table-wrap { max-height: 140px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
+  .maint-price-history-table-wrap { max-height: 96px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
   .maint-price-history-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
   .maint-price-history-table th, .maint-price-history-table td { border: 1px solid #e2e8f0; padding: 2px 6px; white-space: nowrap; }
   .maint-price-history-table thead th { background: #f1f5f9; position: sticky; top: 0; z-index: 1; }
@@ -194,8 +197,8 @@
       <div class="form-section-header">Product Lines</div>
       <div class="form-section-body">
         <p class="entry-hint text-muted mb-2">Search product -> Qty -> Price (Amount auto). Press <kbd>Enter</kbd> to add line to list.</p>
-        <div class="maint-entry-grid mb-3">
-          <div class="border rounded p-2 bg-light" id="entryRow">
+        <div class="maint-entry-grid mb-2">
+          <div class="maint-entry-main" id="entryRow">
             <div class="row g-2 align-items-end">
               <div class="col-md-4">
                 <label class="form-label mb-0">Product</label>
@@ -221,6 +224,7 @@
               </div>
             </div>
           </div>
+          <div class="maint-entry-side">
           <div class="maint-price-history-panel" id="maintPriceHistoryPanel">
             <div class="maint-insights-title"><i class="bi bi-graph-up-arrow"></i>Price Insights</div>
             <div class="maint-price-history-title">Item previously purchase to this party</div>
@@ -256,6 +260,7 @@
               </table>
               <div class="maint-price-history-empty d-none" id="maintOtherPartyEmpty">No history from other parties.</div>
             </div>
+          </div>
           </div>
         </div>
         <table class="table table-bordered table-sm mb-0" id="itemsTable">
@@ -809,9 +814,9 @@ document.addEventListener('DOMContentLoaded', function() {
     var pid = entryProductSelect.value;
     var p = productsForMaintenance.find(function(x) { return String(x.id) === String(pid); });
     var dp = p && p.default_price != null ? parseFloat(p.default_price) : null;
-    var defaultHtml = (dp != null && isFinite(dp)) ? ('<span class="maint-last-price-badge">(Default: ' + dp.toFixed(2) + ')</span>') : '';
-    var lastHtml = entryDefaultPriceHint.dataset.lastPriceLabel || '<span class="maint-last-price-badge">(Last: 0.00)</span>';
-    entryDefaultPriceHint.innerHTML = [defaultHtml, lastHtml].filter(Boolean).join(' ');
+    var defaultHtml = (dp != null && isFinite(dp)) ? ('<span class="maint-last-price-badge">Default: ' + dp.toFixed(2) + '</span>') : '<span class="maint-last-price-badge">Default: 0.00</span>';
+    var lastHtml = entryDefaultPriceHint.dataset.lastPriceLabel || '<span class="maint-last-price-badge">Last: 0.00</span>';
+    entryDefaultPriceHint.innerHTML = [defaultHtml, '<span class="text-muted">|</span>', lastHtml].join(' ');
   }
   function applyMaintenanceSuggestedPrice(data) {
     if (!entryPrice) return;
@@ -824,7 +829,7 @@ document.addEventListener('DOMContentLoaded', function() {
       lastFromHistory = data.other_parties[0].price_label;
     }
     if (!lastFromHistory || lastFromHistory === '-') lastFromHistory = '0.00';
-    entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="maint-last-price-badge">(Last: ' + lastFromHistory + ')</span>';
+    entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="maint-last-price-badge">Last: ' + lastFromHistory + '</span>';
     updateDefaultPriceHint();
     if (suggested == null || !isFinite(suggested) || suggested <= 0) {
       updateEntryAmountFromQtyPrice();
@@ -957,7 +962,7 @@ document.addEventListener('DOMContentLoaded', function() {
     entryPrice.value = '0.00';
     entryPrice.dataset.autoSuggested = '0';
     entryAmount.value = '0.00';
-    entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="maint-last-price-badge">(Last: 0.00)</span>';
+    entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="maint-last-price-badge">Last: 0.00</span>';
     updateEntryAmountFromQtyPrice();
     updateDefaultPriceHint();
     focusEntryProduct();
