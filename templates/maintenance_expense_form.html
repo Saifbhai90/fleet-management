@@ -16,12 +16,14 @@
   .maint-form-wrap .form-control.bg-light { background-color: #f1f3f5 !important; cursor: default; }
   .maint-form-wrap .field-group { margin-bottom: 0.55rem; }
   .maint-form-wrap .entry-hint { font-size: 0.86rem; }
-  .maint-price-history-panel { border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 8px; display: none; }
-  .maint-entry-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 10px; align-items: start; }
+  .maint-price-history-panel { border: 1px solid #dbe4ef; border-radius: 10px; background: linear-gradient(180deg, #f8fbff 0%, #fff 100%); padding: 10px; display: none; box-shadow: 0 2px 10px rgba(30, 58, 138, 0.07); }
+  .maint-entry-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); gap: 12px; align-items: start; }
   @media (max-width: 1199.98px) {
     .maint-entry-grid { grid-template-columns: 1fr; }
   }
+  .maint-insights-title { font-size: 0.86rem; font-weight: 700; color: #1d4ed8; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
   .maint-last-price-badge { color: #dc2626; font-weight: 700; }
+  .maint-price-inline-note { font-size: .8rem; margin-top: 2px; min-height: 18px; }
   .maint-price-history-title { font-size: .82rem; font-weight: 700; color: #1d4ed8; margin-bottom: 4px; font-style: italic; }
   .maint-price-history-table-wrap { max-height: 140px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
   .maint-price-history-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
@@ -206,8 +208,9 @@
                 <input type="text" id="entryQty" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00">
               </div>
               <div class="col-md-2">
-                <label class="form-label mb-0">Price <span id="entryDefaultPriceHint" class="small ms-1"></span></label>
+                <label class="form-label mb-0">Price</label>
                 <input type="text" id="entryPrice" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00">
+                <div id="entryDefaultPriceHint" class="maint-price-inline-note"></div>
               </div>
               <div class="col-md-2">
                 <label class="form-label mb-0">Amount</label>
@@ -219,6 +222,7 @@
             </div>
           </div>
           <div class="maint-price-history-panel" id="maintPriceHistoryPanel">
+            <div class="maint-insights-title"><i class="bi bi-graph-up-arrow"></i>Price Insights</div>
             <div class="maint-price-history-title">Item previously purchase to this party</div>
             <div class="maint-price-history-table-wrap mb-2">
               <table class="maint-price-history-table">
@@ -806,7 +810,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var p = productsForMaintenance.find(function(x) { return String(x.id) === String(pid); });
     var dp = p && p.default_price != null ? parseFloat(p.default_price) : null;
     var defaultHtml = (dp != null && isFinite(dp)) ? ('<span class="maint-last-price-badge">(Default: ' + dp.toFixed(2) + ')</span>') : '';
-    var lastHtml = entryDefaultPriceHint.dataset.lastPriceLabel || '';
+    var lastHtml = entryDefaultPriceHint.dataset.lastPriceLabel || '<span class="maint-last-price-badge">(Last: 0.00)</span>';
     entryDefaultPriceHint.innerHTML = [defaultHtml, lastHtml].filter(Boolean).join(' ');
   }
   function applyMaintenanceSuggestedPrice(data) {
@@ -819,7 +823,8 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if (data && data.other_parties && data.other_parties.length && data.other_parties[0].price_label) {
       lastFromHistory = data.other_parties[0].price_label;
     }
-    entryDefaultPriceHint.dataset.lastPriceLabel = lastFromHistory ? ('<span class="maint-last-price-badge">(Last: ' + lastFromHistory + ')</span>') : '';
+    if (!lastFromHistory || lastFromHistory === '-') lastFromHistory = '0.00';
+    entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="maint-last-price-badge">(Last: ' + lastFromHistory + ')</span>';
     updateDefaultPriceHint();
     if (suggested == null || !isFinite(suggested) || suggested <= 0) {
       updateEntryAmountFromQtyPrice();
@@ -928,7 +933,11 @@ document.addEventListener('DOMContentLoaded', function() {
       else updateEntryAmountFromQtyPrice();
     });
   });
-  if (entryProductSelect) entryProductSelect.addEventListener('change', function() { updateDefaultPriceHint(); fetchMaintenancePriceHistory(true); });
+  if (entryProductSelect) entryProductSelect.addEventListener('change', function() {
+    updateDefaultPriceHint();
+    fetchMaintenancePriceHistory(true);
+    if (entryQty) window.setTimeout(function(){ entryQty.focus(); entryQty.select(); }, 20);
+  });
   entryPrice.addEventListener('focus', function(){ fetchMaintenancePriceHistory(true); });
   if (entryQty) {
     entryQty.addEventListener('keydown', function(e) {
@@ -948,7 +957,7 @@ document.addEventListener('DOMContentLoaded', function() {
     entryPrice.value = '0.00';
     entryPrice.dataset.autoSuggested = '0';
     entryAmount.value = '0.00';
-    entryDefaultPriceHint.dataset.lastPriceLabel = '';
+    entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="maint-last-price-badge">(Last: 0.00)</span>';
     updateEntryAmountFromQtyPrice();
     updateDefaultPriceHint();
     focusEntryProduct();
@@ -1269,13 +1278,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Put cursor in first field when form opens — only if nothing is pre-filled.
+  // Put cursor in Date field when form opens.
   window.setTimeout(function() {
-    if (serverDistrictId && serverDistrictId !== 0) return;
-    if (districtSelect && districtSelect.tomselect) {
-      districtSelect.tomselect.control_input.focus({ preventScroll: true });
-    } else if (districtSelect) {
-      districtSelect.focus({ preventScroll: true });
+    if (expenseDate) {
+      expenseDate.focus({ preventScroll: true });
     }
   }, 120);
 
