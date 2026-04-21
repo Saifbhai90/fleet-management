@@ -24,7 +24,10 @@
   }
   .maint-entry-main { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; }
   .maint-entry-grid-row { display: grid; grid-template-columns: 40% 11% 23% 14% 12%; gap: 8px; align-items: end; }
+  .maint-entry-cell { min-width: 0; }
   .maint-entry-cell .form-label { min-height: 20px; display: inline-flex; align-items: center; }
+  .maint-entry-cell.cell-price { position: relative; }
+  .maint-entry-cell.cell-price .form-label { padding-right: 170px; }
   .maint-add-btn { min-height: 42px; min-width: 112px; font-weight: 700; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
   .maint-add-btn .text-compact { display: none; }
   @media (max-width: 1399.98px) {
@@ -35,6 +38,9 @@
   @media (max-width: 991.98px) {
     .maint-entry-grid-row { grid-template-columns: 1fr 1fr; }
     .maint-entry-grid-row .cell-product { grid-column: 1 / -1; }
+    .maint-entry-grid-row .cell-price { grid-column: 1 / -1; }
+    .maint-entry-grid-row .cell-price .form-label { padding-right: 0; }
+    .maint-entry-grid-row .cell-price .maint-price-inline-note { position: static; display: block; text-align: left; margin-top: 2px; max-width: 100%; }
     .maint-entry-grid-row .cell-button { grid-column: 2 / 3; }
     .maint-add-btn { width: 100%; }
     .maint-add-btn .text-full { display: inline; }
@@ -43,7 +49,7 @@
   .maint-entry-side { align-self: start; }
   .maint-insights-title { font-size: 0.86rem; font-weight: 700; color: #1d4ed8; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
   .maint-last-price-badge { color: #dc2626; font-weight: 700; }
-  .maint-price-inline-note { font-size: .76rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 190px; vertical-align: middle; margin-left: 6px; }
+  .maint-price-inline-note { font-size: .74rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: absolute; right: 0; top: 2px; max-width: 164px; text-align: right; margin-left: 0; pointer-events: none; }
   .maint-price-history-title { font-size: .82rem; font-weight: 700; color: #1d4ed8; margin-bottom: 4px; font-style: italic; }
   .maint-price-history-table-wrap { max-height: 96px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
   .maint-price-history-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
