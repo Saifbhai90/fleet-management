@@ -34,6 +34,8 @@ from finance_utils import (
     workspace_get_account_ledger,
     workspace_close_month,
     workspace_close_fuel_oil_month,
+    dedupe_workspace_legacy_expense_numbers,
+    parse_workspace_expense_source,
 )
 from utils import pk_date, parse_date, generate_excel_template
 
@@ -218,33 +220,28 @@ def _pending_month_close_spells(employee_id):
         exp_date = getattr(row, "expense_date", None)
         exp_no = (getattr(row, "expense_number", None) or "").strip()
 
-        if (not district_id or not project_id) and exp_no and "-" in exp_no:
-            ref_type, ref_id = exp_no.split("-", 1)
+        if (not district_id or not project_id) and exp_no:
+            src_type, ref_id_int = parse_workspace_expense_source(exp_no)
             ref_obj = None
-            try:
-                ref_id_int = int(ref_id)
-            except (TypeError, ValueError):
-                ref_id_int = None
-            if ref_id_int:
-                if ref_type == "FuelExpense":
-                    ref_obj = FuelExpense.query.get(ref_id_int)
-                    if ref_obj:
-                        exp_date = exp_date or ref_obj.fueling_date
-                elif ref_type == "OilExpense":
-                    ref_obj = OilExpense.query.get(ref_id_int)
-                    if ref_obj:
-                        exp_date = exp_date or ref_obj.expense_date
-                elif ref_type == "MaintenanceExpense":
-                    ref_obj = MaintenanceExpense.query.get(ref_id_int)
-                    if ref_obj:
-                        exp_date = exp_date or ref_obj.expense_date
-                elif ref_type == "EmployeeExpense":
-                    ref_obj = EmployeeExpense.query.get(ref_id_int)
-                    if ref_obj:
-                        exp_date = exp_date or ref_obj.expense_date
+            if ref_id_int and src_type == "FuelExpense":
+                ref_obj = FuelExpense.query.get(ref_id_int)
                 if ref_obj:
-                    district_id = district_id or getattr(ref_obj, "district_id", None)
-                    project_id = project_id or getattr(ref_obj, "project_id", None)
+                    exp_date = exp_date or ref_obj.fueling_date
+            elif ref_id_int and src_type == "OilExpense":
+                ref_obj = OilExpense.query.get(ref_id_int)
+                if ref_obj:
+                    exp_date = exp_date or ref_obj.expense_date
+            elif ref_id_int and src_type == "MaintenanceExpense":
+                ref_obj = MaintenanceExpense.query.get(ref_id_int)
+                if ref_obj:
+                    exp_date = exp_date or ref_obj.expense_date
+            elif ref_id_int and src_type == "EmployeeExpense":
+                ref_obj = EmployeeExpense.query.get(ref_id_int)
+                if ref_obj:
+                    exp_date = exp_date or ref_obj.expense_date
+            if ref_obj:
+                district_id = district_id or getattr(ref_obj, "district_id", None)
+                project_id = project_id or getattr(ref_obj, "project_id", None)
 
         if _add_bucket(exp_date, district_id, project_id, row.amount) and exp_no:
             covered_expense_numbers.add(exp_no)
@@ -255,8 +252,14 @@ def _pending_month_close_spells(employee_id):
         FuelExpense.employee_id == employee_id,
         FuelExpense.amount > 0,
     ).all():
-        exp_no = f"FuelExpense-{row.id}"
-        if exp_no in covered_expense_numbers or exp_no in closed_expense_numbers:
+        exp_no = f"FUEL-{row.id}"
+        legacy_no = f"FuelExpense-{row.id}"
+        if (
+            exp_no in covered_expense_numbers
+            or legacy_no in covered_expense_numbers
+            or exp_no in closed_expense_numbers
+            or legacy_no in closed_expense_numbers
+        ):
             continue
         _add_bucket(row.fueling_date, row.district_id, row.project_id, row.amount)
 
@@ -264,8 +267,14 @@ def _pending_month_close_spells(employee_id):
         OilExpense.employee_id == employee_id,
         OilExpense.total_bill_amount > 0,
     ).all():
-        exp_no = f"OilExpense-{row.id}"
-        if exp_no in covered_expense_numbers or exp_no in closed_expense_numbers:
+        exp_no = f"OIL-{row.id}"
+        legacy_no = f"OilExpense-{row.id}"
+        if (
+            exp_no in covered_expense_numbers
+            or legacy_no in covered_expense_numbers
+            or exp_no in closed_expense_numbers
+            or legacy_no in closed_expense_numbers
+        ):
             continue
         _add_bucket(row.expense_date, row.district_id, row.project_id, row.total_bill_amount)
 
@@ -273,8 +282,14 @@ def _pending_month_close_spells(employee_id):
         MaintenanceExpense.employee_id == employee_id,
         MaintenanceExpense.total_bill_amount > 0,
     ).all():
-        exp_no = f"MaintenanceExpense-{row.id}"
-        if exp_no in covered_expense_numbers or exp_no in closed_expense_numbers:
+        exp_no = f"MAINT-{row.id}"
+        legacy_no = f"MaintenanceExpense-{row.id}"
+        if (
+            exp_no in covered_expense_numbers
+            or legacy_no in covered_expense_numbers
+            or exp_no in closed_expense_numbers
+            or legacy_no in closed_expense_numbers
+        ):
             continue
         _add_bucket(row.expense_date, row.district_id, row.project_id, row.total_bill_amount)
 
@@ -424,11 +439,27 @@ def workspace_home():
     if guard:
         return guard
     _ensure_workspace_driver_accounts(emp)
+    dedupe_workspace_legacy_expense_numbers(emp.id)
     db.session.commit()
     scope = _get_employee_scope_summary(emp)
-    regular_expenses = sum((x.amount or 0) for x in WorkspaceExpense.query.filter_by(employee_id=emp.id).all())
-    opening_expenses = sum((x.total_expense or 0) for x in WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id).all())
-    fuel_oil_openings = sum((x.total_amount or 0) for x in WorkspaceFuelOilOpeningExpense.query.filter_by(employee_id=emp.id).all())
+    regular_expenses = sum(
+        (x.amount or 0)
+        for x in WorkspaceExpense.query.filter_by(employee_id=emp.id).filter(
+            WorkspaceExpense.month_close_id.is_(None)
+        ).all()
+    )
+    opening_expenses = sum(
+        (x.total_expense or 0)
+        for x in WorkspaceOpeningExpense.query.filter_by(employee_id=emp.id).filter(
+            WorkspaceOpeningExpense.month_close_id.is_(None)
+        ).all()
+    )
+    fuel_oil_openings = sum(
+        (x.total_amount or 0)
+        for x in WorkspaceFuelOilOpeningExpense.query.filter_by(employee_id=emp.id).filter(
+            WorkspaceFuelOilOpeningExpense.fuel_oil_month_close_id.is_(None)
+        ).all()
+    )
     total_expenses = Decimal(str(regular_expenses or 0)) + Decimal(str(opening_expenses or 0)) + Decimal(str(fuel_oil_openings or 0))
     total_transfers = sum((x.amount or 0) for x in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all())
 

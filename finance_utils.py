@@ -1344,15 +1344,76 @@ def reconcile_workspace_opening_expense_postings(employee_id):
     return created + migrated
 
 
-def _workspace_regular_ref_from_expense_number(expense_number):
+def workspace_regular_expense_number(reference_type, reference_id):
+    """Canonical workspace_expense.expense_number — must match routes.py fuel/oil/maintenance sync."""
+    if not reference_type or reference_id is None:
+        return ''
+    key = str(reference_type).strip()
+    try:
+        rid = int(reference_id)
+    except (TypeError, ValueError):
+        return ''
+    if key == 'EmployeeExpense':
+        return f'EmployeeExpense-{rid}'
+    mapping = {
+        'FuelExpense': 'FUEL',
+        'OilExpense': 'OIL',
+        'MaintenanceExpense': 'MAINT',
+    }
+    prefix = mapping.get(key, key.upper()[:12])
+    return f'{prefix}-{rid}'
+
+
+def parse_workspace_expense_source(expense_number):
+    """Resolve expense_number to (reference_type, reference_id) for Fuel/Oil/Maintenance/Employee sources."""
     raw = (expense_number or '').strip()
     if not raw or '-' not in raw:
         return None, None
-    ref_type, ref_id = raw.split('-', 1)
+    prefix, rid_s = raw.split('-', 1)
+    prefix = prefix.strip()
     try:
-        return (ref_type or '').strip(), int(ref_id)
+        rid = int(rid_s)
     except (TypeError, ValueError):
-        return (ref_type or '').strip(), None
+        return None, None
+    short = {
+        'FUEL': 'FuelExpense',
+        'OIL': 'OilExpense',
+        'MAINT': 'MaintenanceExpense',
+    }
+    if prefix in short:
+        return short[prefix], rid
+    if prefix in ('FuelExpense', 'OilExpense', 'MaintenanceExpense', 'EmployeeExpense'):
+        return prefix, rid
+    return None, None
+
+
+def dedupe_workspace_legacy_expense_numbers(employee_id):
+    """Delete legacy FuelExpense- / OilExpense- / MaintenanceExpense- rows when canonical FUEL- / OIL- / MAINT- exists."""
+    if not employee_id:
+        return 0
+    pairs = (
+        ('FuelExpense', 'FUEL'),
+        ('OilExpense', 'OIL'),
+        ('MaintenanceExpense', 'MAINT'),
+    )
+    removed = 0
+    for legacy_prefix, canon_prefix in pairs:
+        legacy_rows = WorkspaceExpense.query.filter(
+            WorkspaceExpense.employee_id == employee_id,
+            WorkspaceExpense.expense_number.like(f'{legacy_prefix}-%'),
+        ).all()
+        for row in legacy_rows:
+            en = row.expense_number or ''
+            if not en.startswith(f'{legacy_prefix}-'):
+                continue
+            suffix = en[len(legacy_prefix) + 1:]
+            if not suffix.isdigit():
+                continue
+            canon = f'{canon_prefix}-{suffix}'
+            if WorkspaceExpense.query.filter_by(employee_id=employee_id, expense_number=canon).first():
+                db.session.delete(row)
+                removed += 1
+    return removed
 
 
 def _workspace_regular_source_scope(ref_type, ref_id):
@@ -1379,7 +1440,9 @@ def _workspace_backfill_regular_expense_rows(employee_id, period_start, period_e
 
     def _upsert(reference_type, reference_id, expense_date, amount, description, expense_type, payment_mode, category):
         amount_val = Decimal(str(amount or 0))
-        exp_no = f'{reference_type}-{reference_id}'
+        exp_no = workspace_regular_expense_number(reference_type, reference_id)
+        if not exp_no:
+            return 0
         existing = WorkspaceExpense.query.filter_by(employee_id=employee_id, expense_number=exp_no).first()
         if amount_val <= Decimal('0'):
             if existing:
@@ -1486,7 +1549,7 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
             exp_dist = getattr(exp, "district_id", None) if has_exp_dist else None
             exp_proj = getattr(exp, "project_id", None) if has_exp_proj else None
             if exp_dist is None and exp_proj is None:
-                ref_type, ref_id = _workspace_regular_ref_from_expense_number(getattr(exp, "expense_number", None))
+                ref_type, ref_id = parse_workspace_expense_source(getattr(exp, "expense_number", None))
                 ref_dist, ref_proj = _workspace_regular_source_scope(ref_type, ref_id)
                 if ref_dist is not None:
                     exp_dist = ref_dist

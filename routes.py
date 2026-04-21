@@ -98,6 +98,7 @@ from finance_utils import (
     ensure_workspace_counterparty_account,
     workspace_create_journal_entry,
     workspace_reverse_journal_entry,
+    workspace_regular_expense_number,
 )
 
 
@@ -18039,23 +18040,6 @@ def _workspace_regular_expense_sync_available():
     return _WORKSPACE_REGULAR_EXPENSE_SYNC_AVAILABLE
 
 
-def _workspace_regular_expense_number(reference_type, reference_id):
-    if not reference_type or not reference_id:
-        return ''
-    key = str(reference_type).strip()
-    try:
-        rid = int(reference_id)
-    except (TypeError, ValueError):
-        return ''
-    mapping = {
-        'FuelExpense': 'FUEL',
-        'OilExpense': 'OIL',
-        'MaintenanceExpense': 'MAINT',
-    }
-    prefix = mapping.get(key, key.upper()[:12])
-    return f'{prefix}-{rid}'
-
-
 def _workspace_sync_regular_expense(employee_id, reference_type, reference_id, expense_date, amount,
                                     description, expense_type, payment_mode, category,
                                     workspace_party_id=None, journal_entry_id=None):
@@ -18063,7 +18047,7 @@ def _workspace_sync_regular_expense(employee_id, reference_type, reference_id, e
         return None
     if not employee_id:
         return None
-    exp_no = _workspace_regular_expense_number(reference_type, reference_id)
+    exp_no = workspace_regular_expense_number(reference_type, reference_id)
     if not exp_no:
         return None
     amount_val = Decimal(str(amount or 0))
@@ -18100,7 +18084,7 @@ def _workspace_delete_regular_expense(employee_id, reference_type, reference_id)
         return
     if not employee_id:
         return
-    exp_no = _workspace_regular_expense_number(reference_type, reference_id)
+    exp_no = workspace_regular_expense_number(reference_type, reference_id)
     if not exp_no:
         return
     row = WorkspaceExpense.query.filter_by(employee_id=employee_id, expense_number=exp_no).first()
