@@ -28,22 +28,26 @@
         <div class="ws-panel">
           <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
             <h6 class="mb-0">Total Expenses Card Sources</h6>
-            <span class="text-muted small">Same sources as dashboard Total Expenses card</span>
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted small">Same sources as dashboard Total Expenses card</span>
+              <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+              <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+            </div>
           </div>
 
           <form method="get" class="row g-2 align-items-end mb-3">
             <input type="hidden" name="tab" value="w-expense">
             <div class="col-lg-2 col-md-3">
               <label class="form-label form-label-sm mb-1">From Date</label>
-              <input type="date" class="form-control form-control-sm" name="from_date" value="{{ from_date.isoformat() if from_date else '' }}">
+              <input type="text" class="form-control form-control-sm datepicker" name="from_date" value="{{ from_date|ddmmyyyy if from_date else '' }}" placeholder="dd-mm-yyyy" autocomplete="off">
             </div>
             <div class="col-lg-2 col-md-3">
               <label class="form-label form-label-sm mb-1">To Date</label>
-              <input type="date" class="form-control form-control-sm" name="to_date" value="{{ to_date.isoformat() if to_date else '' }}">
+              <input type="text" class="form-control form-control-sm datepicker" name="to_date" value="{{ to_date|ddmmyyyy if to_date else '' }}" placeholder="dd-mm-yyyy" autocomplete="off">
             </div>
             <div class="col-lg-3 col-md-3">
               <label class="form-label form-label-sm mb-1">District</label>
-              <select class="form-select form-select-sm" name="district_id">
+              <select class="form-select form-select-sm search-select" name="district_id" data-placeholder="Search district...">
                 <option value="0">All Districts</option>
                 {% for d in districts %}
                 <option value="{{ d.id }}" {{ 'selected' if district_id == d.id else '' }}>{{ d.name }}</option>
@@ -52,7 +56,7 @@
             </div>
             <div class="col-lg-3 col-md-3">
               <label class="form-label form-label-sm mb-1">Project</label>
-              <select class="form-select form-select-sm" name="project_id">
+              <select class="form-select form-select-sm search-select" name="project_id" data-placeholder="Search project...">
                 <option value="0">All Projects</option>
                 {% for p in projects %}
                 <option value="{{ p.id }}" {{ 'selected' if project_id == p.id else '' }}>{{ p.name }}</option>
@@ -66,49 +70,69 @@
           </form>
 
           <div class="row g-3 mb-3">
-            <div class="col-xl-3 col-md-6"><div class="ws-kpi-card"><small>Tracked Expense Total</small><h5>{{ '%.2f'|format((tracked_total or 0)|float) }}</h5></div></div>
-            <div class="col-xl-3 col-md-6"><div class="ws-kpi-card"><small>Total Transfers</small><h5>{{ '%.2f'|format((transfer_total or 0)|float) }}</h5></div></div>
-            <div class="col-xl-3 col-md-6"><div class="ws-kpi-card"><small>Month Close Records</small><h5>{{ month_closes|length }}</h5></div></div>
-            <div class="col-xl-3 col-md-6"><div class="ws-kpi-card"><small>Tracked Source Heads</small><h5>6</h5></div></div>
+            <div class="col-xl-3 col-md-6"><div class="ws-kpi-card"><div class="ws-kpi-icon bg-primary-subtle text-primary"><i class="bi bi-currency-dollar"></i></div><small>Tracked Expense Total</small><h5>{{ '%.2f'|format((tracked_total or 0)|float) }}</h5></div></div>
+            <div class="col-xl-3 col-md-6"><div class="ws-kpi-card"><div class="ws-kpi-icon bg-success-subtle text-success"><i class="bi bi-arrow-left-right"></i></div><small>Total Transfers</small><h5>{{ '%.2f'|format((transfer_total or 0)|float) }}</h5></div></div>
+            <div class="col-xl-3 col-md-6"><div class="ws-kpi-card"><div class="ws-kpi-icon bg-warning-subtle text-warning"><i class="bi bi-calendar2-check"></i></div><small>Month Close Records</small><h5>{{ month_closes|length }}</h5></div></div>
+            <div class="col-xl-3 col-md-6"><div class="ws-kpi-card"><div class="ws-kpi-icon bg-info-subtle text-info"><i class="bi bi-diagram-3"></i></div><small>Tracked Source Heads</small><h5>6</h5></div></div>
           </div>
 
           <div class="row g-3">
             <div class="col-md-6 col-xl-4">
               <a href="{{ url_for('fuel_expense_list') }}" class="ws-source-card workspace-report-link">
-                <div class="d-flex justify-content-between"><strong>Fuel Expense</strong><span class="badge text-bg-light">{{ source_counts.fuel_expense }}</span></div>
+                <div class="d-flex justify-content-between align-items-start"><strong><i class="bi bi-fuel-pump me-2 text-primary"></i>Fuel Expense</strong><span class="badge text-bg-light">{{ source_counts.fuel_expense }}</span></div>
                 <div class="text-primary fw-semibold">{{ '%.2f'|format((source_totals.fuel_expense or 0)|float) }}</div>
               </a>
             </div>
             <div class="col-md-6 col-xl-4">
               <a href="{{ url_for('oil_expense_list') }}" class="ws-source-card workspace-report-link">
-                <div class="d-flex justify-content-between"><strong>Oil Expense</strong><span class="badge text-bg-light">{{ source_counts.oil_expense }}</span></div>
+                <div class="d-flex justify-content-between align-items-start"><strong><i class="bi bi-droplet-half me-2 text-primary"></i>Oil Expense</strong><span class="badge text-bg-light">{{ source_counts.oil_expense }}</span></div>
                 <div class="text-primary fw-semibold">{{ '%.2f'|format((source_totals.oil_expense or 0)|float) }}</div>
               </a>
             </div>
             <div class="col-md-6 col-xl-4">
               <a href="{{ url_for('maintenance_expense_list') }}" class="ws-source-card workspace-report-link">
-                <div class="d-flex justify-content-between"><strong>Maintenance Expense</strong><span class="badge text-bg-light">{{ source_counts.maintenance_expense }}</span></div>
+                <div class="d-flex justify-content-between align-items-start"><strong><i class="bi bi-wrench-adjustable-circle me-2 text-primary"></i>Maintenance Expense</strong><span class="badge text-bg-light">{{ source_counts.maintenance_expense }}</span></div>
                 <div class="text-primary fw-semibold">{{ '%.2f'|format((source_totals.maintenance_expense or 0)|float) }}</div>
               </a>
             </div>
             <div class="col-md-6 col-xl-4">
               <a href="{{ url_for('employee_expense_list') }}" class="ws-source-card workspace-report-link">
-                <div class="d-flex justify-content-between"><strong>Employee Expense</strong><span class="badge text-bg-light">{{ source_counts.employee_expense }}</span></div>
+                <div class="d-flex justify-content-between align-items-start"><strong><i class="bi bi-person-badge me-2 text-primary"></i>Employee Expense</strong><span class="badge text-bg-light">{{ source_counts.employee_expense }}</span></div>
                 <div class="text-primary fw-semibold">{{ '%.2f'|format((source_totals.employee_expense or 0)|float) }}</div>
               </a>
             </div>
             <div class="col-md-6 col-xl-4">
               <a href="{{ url_for('workspace_opening_expenses_list') }}" class="ws-source-card workspace-report-link">
-                <div class="d-flex justify-content-between"><strong>Opening Expenses</strong><span class="badge text-bg-light">{{ source_counts.opening_expense }}</span></div>
+                <div class="d-flex justify-content-between align-items-start"><strong><i class="bi bi-cash-stack me-2 text-primary"></i>Opening Expenses</strong><span class="badge text-bg-light">{{ source_counts.opening_expense }}</span></div>
                 <div class="text-primary fw-semibold">{{ '%.2f'|format((source_totals.opening_expense or 0)|float) }}</div>
               </a>
             </div>
             <div class="col-md-6 col-xl-4">
               <a href="{{ url_for('workspace_fuel_oil_openings_list') }}" class="ws-source-card workspace-report-link">
-                <div class="d-flex justify-content-between"><strong>Fuel/Oil Opening (Pump Card & Credit)</strong><span class="badge text-bg-light">{{ source_counts.fuel_oil_opening }}</span></div>
+                <div class="d-flex justify-content-between align-items-start"><strong><i class="bi bi-fuel-pump-diesel me-2 text-primary"></i>Fuel/Oil Opening (Pump Card & Credit)</strong><span class="badge text-bg-light">{{ source_counts.fuel_oil_opening }}</span></div>
                 <div class="text-primary fw-semibold">{{ '%.2f'|format((source_totals.fuel_oil_opening or 0)|float) }}</div>
               </a>
             </div>
+          </div>
+
+          <div class="table-responsive mt-4">
+            <table class="table table-sm align-middle" id="workspaceTotalExpenseSourcesTable">
+              <thead class="table-light">
+                <tr>
+                  <th>Source</th>
+                  <th class="text-end">Records</th>
+                  <th class="text-end">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Fuel Expense</td><td class="text-end">{{ source_counts.fuel_expense }}</td><td class="text-end">{{ '%.2f'|format((source_totals.fuel_expense or 0)|float) }}</td></tr>
+                <tr><td>Oil Expense</td><td class="text-end">{{ source_counts.oil_expense }}</td><td class="text-end">{{ '%.2f'|format((source_totals.oil_expense or 0)|float) }}</td></tr>
+                <tr><td>Maintenance Expense</td><td class="text-end">{{ source_counts.maintenance_expense }}</td><td class="text-end">{{ '%.2f'|format((source_totals.maintenance_expense or 0)|float) }}</td></tr>
+                <tr><td>Employee Expense</td><td class="text-end">{{ source_counts.employee_expense }}</td><td class="text-end">{{ '%.2f'|format((source_totals.employee_expense or 0)|float) }}</td></tr>
+                <tr><td>Opening Expenses</td><td class="text-end">{{ source_counts.opening_expense }}</td><td class="text-end">{{ '%.2f'|format((source_totals.opening_expense or 0)|float) }}</td></tr>
+                <tr><td>Fuel/Oil Opening (Pump Card & Credit)</td><td class="text-end">{{ source_counts.fuel_oil_opening }}</td><td class="text-end">{{ '%.2f'|format((source_totals.fuel_oil_opening or 0)|float) }}</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -168,6 +192,7 @@
 .ws-kpi-card{ border:1px solid #e9eef8; border-radius:10px; background:#fcfdff; padding:.75rem .9rem; }
 .ws-kpi-card small{ color:#667085; display:block; margin-bottom:2px; }
 .ws-kpi-card h5{ margin:0; color:#111827; }
+.ws-kpi-icon{ width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:6px; }
 .ws-source-card{ display:block; border:1px solid #e9eef8; border-radius:10px; background:#fff; padding:.8rem .9rem; text-decoration:none; color:inherit; transition:all .18s; }
 .ws-source-card:hover{ border-color:#bfd0ff; box-shadow:0 6px 16px rgba(47,109,246,.08); transform:translateY(-1px); color:inherit; }
 .workspace-report-link-group .workspace-report-link{ font-size:.875rem; color:#374151; transition:all .15s; }
@@ -200,6 +225,10 @@ document.addEventListener('DOMContentLoaded', function(){
       window.history.replaceState({}, '', url);
     });
   });
+
+  if(window.fleetPrintExport){
+    window.fleetPrintExport('workspaceTotalExpenseSourcesTable','Workspace Total Expenses Card Sources','Workspace_Total_Expenses_Card_Sources.csv');
+  }
 });
 </script>
 {% endblock %}
