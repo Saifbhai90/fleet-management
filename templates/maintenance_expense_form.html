@@ -26,7 +26,7 @@
   .maint-entry-side { align-self: start; }
   .maint-insights-title { font-size: 0.86rem; font-weight: 700; color: #1d4ed8; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
   .maint-last-price-badge { color: #dc2626; font-weight: 700; }
-  .maint-price-inline-note { font-size: .8rem; margin-top: 2px; min-height: 18px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .maint-price-inline-note { font-size: .78rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 100%; vertical-align: middle; margin-left: 6px; }
   .maint-price-history-title { font-size: .82rem; font-weight: 700; color: #1d4ed8; margin-bottom: 4px; font-style: italic; }
   .maint-price-history-table-wrap { max-height: 96px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
   .maint-price-history-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
@@ -223,16 +223,15 @@
                 <label class="form-label mb-0">Qty</label>
                 <input type="text" id="entryQty" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00">
               </div>
-              <div class="col-md-2">
-                <label class="form-label mb-0">Price</label>
+              <div class="col-md-3">
+                <label class="form-label mb-0">Price <span id="entryDefaultPriceHint" class="maint-price-inline-note"></span></label>
                 <input type="text" id="entryPrice" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00">
-                <div id="entryDefaultPriceHint" class="maint-price-inline-note"></div>
               </div>
               <div class="col-md-2">
                 <label class="form-label mb-0">Amount</label>
                 <input type="text" id="entryAmount" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00">
               </div>
-              <div class="col-md-2">
+              <div class="col-md-1">
                 <button type="button" class="btn btn-sm btn-primary w-100" id="addToListBtn"><i class="bi bi-plus-lg"></i> Add to list</button>
               </div>
             </div>
