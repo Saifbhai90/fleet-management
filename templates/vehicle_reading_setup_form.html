@@ -37,8 +37,16 @@
   #baselineLinesTable thead th {
     border-bottom: 2px solid #cbd5e1;
   }
+  /* Last done date + Last reading + Notes: same width (colgroup); date & reading generous vs old Notes-stealing all space */
+  #baselineLinesTable .vrs-baseline-date,
+  #baselineLinesTable .vrs-baseline-read,
+  #baselineLinesTable .vrs-baseline-notes {
+    min-width: 0;
+  }
+  #baselineLinesTable .vrs-baseline-date {
+    white-space: nowrap;
+  }
   #baselineLinesTable .vrs-baseline-read {
-    min-width: 5.5rem;
     text-align: right;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -152,20 +160,21 @@
       <div class="vrs-table-wrap">
         <table class="table table-sm table-hover align-middle mb-0" id="baselineLinesTable">
           <colgroup>
-            <col style="width:2.5rem" />
-            <col style="width:22%" />
-            <col style="width:7.5rem" />
-            <col style="width:8.5rem" />
-            <col />
-            <col style="width:3.5rem" />
+            <col class="vrs-col-idx" style="width:2.75rem" />
+            <col class="vrs-col-job" style="width:28%" />
+            <!-- Equal share: Last done date | Last reading | Notes -->
+            <col class="vrs-baseline-triple" style="width:18%" />
+            <col class="vrs-baseline-triple" style="width:18%" />
+            <col class="vrs-baseline-triple" style="width:18%" />
+            <col class="vrs-col-act" style="width:3.5rem" />
           </colgroup>
           <thead>
             <tr>
               <th class="text-center">#</th>
               <th>Job category</th>
-              <th>Last done date</th>
+              <th class="vrs-baseline-date">Last done date</th>
               <th class="vrs-baseline-read">Last reading</th>
-              <th>Notes</th>
+              <th class="vrs-baseline-notes">Notes</th>
               <th class="text-center" aria-label="Delete row"></th>
             </tr>
           </thead>
@@ -381,7 +390,7 @@
       html += '<tr data-idx="' + i + '">' +
         '<td class="text-center text-muted small">' + (i + 1) + '</td>' +
         '<td class="fw-semibold">' + esc(it.job_category) + '</td>' +
-        '<td>' + esc(it.last_done_date) + '</td>' +
+        '<td class="vrs-baseline-date">' + esc(it.last_done_date) + '</td>' +
         '<td class="vrs-baseline-read">' + esc(it.last_done_reading) + '</td>' +
         '<td class="text-muted small vrs-baseline-notes">' + esc(it.remarks) + '</td>' +
         '<td class="text-end"><button type="button" class="btn btn-outline-danger btn-sm bl-remove" data-idx="' + i + '"><i class="bi bi-trash"></i></button></td>' +
