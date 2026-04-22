@@ -1423,6 +1423,13 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function maintJobCategoryCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    if (m && m.getAttribute('content')) return m.getAttribute('content');
+    var h = document.querySelector('[name="csrf_token"]');
+    return h && h.value ? h.value : '';
+  }
+
   if (saveJobCategoryBtn) {
     saveJobCategoryBtn.addEventListener('click', function() {
       var name = (newJobCategoryName && newJobCategoryName.value ? newJobCategoryName.value : '').trim();
@@ -1443,42 +1450,67 @@ document.addEventListener('DOMContentLoaded', function() {
         alert('Enter interval in KM or Day.');
         return;
       }
+      var tok = maintJobCategoryCsrf();
+      if (!tok) {
+        alert('Security token missing. Page refresh karein aur dubara koshish karein.');
+        return;
+      }
       fetch('/api/maintenance-job-categories/add', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name, interval_km_value: kmVal, interval_day_value: dayVal })
-      }).then(function(r) { return r.json(); }).then(function(res) {
-        if (!res || !res.ok) {
-          alert((res && res.message) || 'Unable to add category.');
-          return;
-        }
-        var existing = Array.prototype.find.call(jobCategorySelect.options, function(opt) {
-          return (opt.value || '').trim().toLowerCase() === res.item.name.toLowerCase();
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': tok },
+        credentials: 'same-origin',
+        body: JSON.stringify({ name: name, interval_km_value: hasKm ? kmVal : '', interval_day_value: hasDay ? dayVal : '' })
+      })
+        .then(function(r) {
+          return r.text().then(function(text) {
+            var data = null;
+            try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+            if (!r.ok) {
+              var msg = (data && (data.message || data.msg)) || text || ('Error ' + r.status);
+              throw new Error(msg);
+            }
+            return data;
+          });
+        })
+        .then(function(res) {
+          if (!res || !res.ok) {
+            alert((res && res.message) || 'Unable to add category.');
+            return;
+          }
+          if (!jobCategorySelect) {
+            alert('Category save ho gaya; Job Category list reload karein.');
+            return;
+          }
+          var existing = Array.prototype.find.call(jobCategorySelect.options, function(opt) {
+            return (opt.value || '').trim().toLowerCase() === res.item.name.toLowerCase();
+          });
+          if (!existing) {
+            var o = document.createElement('option');
+            o.value = res.item.name;
+            o.setAttribute('data-interval-mode', res.item.interval_mode);
+            o.setAttribute('data-interval-value', res.item.interval_value || '');
+            o.textContent = res.item.name + ' (' + (res.item.interval_mode === 'interval_km' ? (res.item.interval_value + ' KM') : (res.item.interval_value + ' Days')) + ')';
+            jobCategorySelect.appendChild(o);
+          }
+          jobCategorySelect.value = res.item.name;
+          if (jobCategorySelect.tomselect) {
+            jobCategorySelect.tomselect.sync();
+            jobCategorySelect.tomselect.setValue(res.item.name, true);
+          }
+          syncJobIntervalMode();
+          if (jobModal) {
+            jobModal.hide();
+          } else if (modalEl) {
+            fallbackShown = false;
+            modalEl.classList.remove('show');
+            modalEl.style.display = 'none';
+            modalEl.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('modal-open');
+          }
+        })
+        .catch(function(err) {
+          alert((err && err.message) ? err.message : 'Save nahi ho saka. Network ya session check karein.');
         });
-        if (!existing) {
-          var o = document.createElement('option');
-          o.value = res.item.name;
-          o.setAttribute('data-interval-mode', res.item.interval_mode);
-          o.setAttribute('data-interval-value', res.item.interval_value || '');
-          o.textContent = res.item.name + ' (' + (res.item.interval_mode === 'interval_km' ? (res.item.interval_value + ' KM') : (res.item.interval_value + ' Days')) + ')';
-          jobCategorySelect.appendChild(o);
-        }
-        jobCategorySelect.value = res.item.name;
-        if (jobCategorySelect.tomselect) {
-          jobCategorySelect.tomselect.sync();
-          jobCategorySelect.tomselect.setValue(res.item.name, true);
-        }
-        syncJobIntervalMode();
-        if (jobModal) {
-          jobModal.hide();
-        } else if (modalEl) {
-          fallbackShown = false;
-          modalEl.classList.remove('show');
-          modalEl.style.display = 'none';
-          modalEl.setAttribute('aria-hidden', 'true');
-          document.body.classList.remove('modal-open');
-        }
-      });
     });
   }
 
