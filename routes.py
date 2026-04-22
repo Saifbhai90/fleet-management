@@ -10,7 +10,7 @@ from models import (
     Party, Product, FuelExpense, FuelExpenseAttachment, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceWorkOrder, MaintenanceWorkOrderAttachment, MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
     WorkspaceProduct,
-    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceVehicleReadingSetup, WorkspaceExpense, ExpenseDeleteCleanupJob,
+    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceVehicleReadingSetup, WorkspaceVehicleMaintenanceBaseline, WorkspaceExpense, ExpenseDeleteCleanupJob,
     Notification, NotificationRead,
     User, Role, Permission,
     LoginLog, ActivityLog, ClientActivityLog,
