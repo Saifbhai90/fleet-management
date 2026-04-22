@@ -17065,6 +17065,21 @@ def _merged_interval_for_baseline(baseline):
     return None, None
 
 
+def _format_baseline_reading_display(val):
+    """Odometer / km: no trailing .00 (e.g. 2.00 -> 2; 19493.5 stays 19493.5)."""
+    if val is None:
+        return '-'
+    try:
+        x = float(val)
+    except (TypeError, ValueError):
+        return '-'
+    r = round(x, 8)
+    if abs(r - round(r)) < 1e-7:
+        return str(int(round(r)))
+    s = f'{r:.8f}'.rstrip('0').rstrip('.')
+    return s
+
+
 def _baseline_status(baseline, latest_reading=None):
     today = pk_date()
     status = 'No Interval'
@@ -17099,11 +17114,13 @@ def _baseline_status(baseline, latest_reading=None):
         'next_due_date': next_due_date,
         'next_due_date_label': next_due_date.strftime('%d-%m-%Y') if next_due_date else '-',
         'next_due_reading': next_due_reading,
-        'next_due_reading_label': f'{next_due_reading:.2f}' if next_due_reading is not None else '-',
+        'next_due_reading_label': _format_baseline_reading_display(next_due_reading)
+        if next_due_reading is not None
+        else '-',
         'remaining_days': remaining_days,
         'remaining_days_label': str(remaining_days) if remaining_days is not None else '-',
         'remaining_km': remaining_km,
-        'remaining_km_label': f'{remaining_km:.2f}' if remaining_km is not None else '-',
+        'remaining_km_label': _format_baseline_reading_display(remaining_km) if remaining_km is not None else '-',
     }
 
 
@@ -21261,7 +21278,8 @@ def maintenance_baseline_alert_report():
         tmp.interval_value = m_val
         tmp.last_done_date = effective_date
         tmp.last_done_reading = effective_reading
-        stat = _baseline_status(tmp, latest_reading=_latest_reading_for_vehicle(b.vehicle_id))
+        latest_v_read = _latest_reading_for_vehicle(b.vehicle_id)
+        stat = _baseline_status(tmp, latest_reading=latest_v_read)
 
         if status in ('overdue', 'due_soon', 'on_track', 'reading_needed', 'no_interval'):
             mapped = {
@@ -21284,8 +21302,10 @@ def maintenance_baseline_alert_report():
             'remaining_days_label': stat['remaining_days_label'],
             'remaining_km_label': stat['remaining_km_label'],
             'effective_last_date_label': effective_date.strftime('%d-%m-%Y') if effective_date else '-',
-            'effective_last_reading_label': f'{float(effective_reading):.2f}' if effective_reading is not None else '-',
-            'latest_vehicle_reading_label': f'{float(_latest_reading_for_vehicle(b.vehicle_id)):.2f}' if _latest_reading_for_vehicle(b.vehicle_id) is not None else '-',
+            'effective_last_reading_label': _format_baseline_reading_display(effective_reading)
+            if effective_reading is not None
+            else '-',
+            'latest_vehicle_reading_label': _format_baseline_reading_display(latest_v_read) if latest_v_read is not None else '-',
             'source_label': source_label,
             'last_invoice_no': last_invoice_no,
             'last_invoice_id': (last_invoice.id if last_invoice else None),
