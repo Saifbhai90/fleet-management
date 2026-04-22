@@ -125,9 +125,9 @@
 
     <div class="vrs-section-h border-top"><i class="bi bi-wrench-adjustable-circle me-1 text-primary"></i>Job category baselines <span class="fw-normal text-muted small">(optional)</span></div>
     <div class="vrs-section-b">
-      <p class="small text-muted mb-2 mb-md-3">Neeche category chunen, last done date / reading likhen, <strong>Add to list</strong> dabayen — lines neeche table mein jayengi. Sab set ho to upar <strong>Save setup</strong> se ek dafa save karen.</p>
+      <p class="small text-muted mb-2 mb-md-3">Neeche category chunen, last done date / reading likhen, <strong>Add to list</strong> dabayen — lines neeche table mein jayengi. <strong>Table se Edit</strong> (pencil) dabakar upar se bhi line badal sakte hain. Sab set ho to upar <strong>Save setup</strong> se ek dafa save karen.</p>
 
-      <div class="vrs-entry-box">
+      <div class="vrs-entry-box" id="vrsBaselineEntryBox">
         <div class="vrs-entry-grid">
           <div>
             <label class="form-label small mb-1">Job category</label>
@@ -152,7 +152,10 @@
           </div>
           <div class="vrs-add-cell">
             <label class="form-label small mb-1 d-none d-md-block">&nbsp;</label>
-            <button type="button" class="btn btn-primary btn-sm w-100" id="blAddBtn"><i class="bi bi-plus-lg me-1"></i>Add to list</button>
+            <div class="d-flex flex-wrap gap-1 align-items-stretch">
+              <button type="button" class="btn btn-primary btn-sm flex-grow-1" id="blAddBtn"><i class="bi bi-plus-lg me-1"></i>Add to list</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="blEditCancelBtn" style="display:none" title="Cancel edit">Cancel</button>
+            </div>
           </div>
         </div>
       </div>
@@ -166,7 +169,7 @@
             <col class="vrs-baseline-triple" style="width:18%" />
             <col class="vrs-baseline-triple" style="width:18%" />
             <col class="vrs-baseline-triple" style="width:18%" />
-            <col class="vrs-col-act" style="width:3.5rem" />
+            <col class="vrs-col-act" style="width:5.5rem" />
           </colgroup>
           <thead>
             <tr>
@@ -175,7 +178,7 @@
               <th class="vrs-baseline-date">Last done date</th>
               <th class="vrs-baseline-read">Last reading</th>
               <th class="vrs-baseline-notes">Notes</th>
-              <th class="text-center" aria-label="Delete row"></th>
+              <th class="text-center">Actions</th>
             </tr>
           </thead>
           <tbody id="baselineLinesBody">
@@ -236,7 +239,12 @@
   var blEntryReading = document.getElementById('blEntryReading');
   var blEntryRemarks = document.getElementById('blEntryRemarks');
   var blAddBtn = document.getElementById('blAddBtn');
+  var blEditCancelBtn = document.getElementById('blEditCancelBtn');
+  var vrsBaselineEntryBox = document.getElementById('vrsBaselineEntryBox');
   var baselineBody = document.getElementById('baselineLinesBody');
+  var blEditIndex = null;
+  var blAddBtnAddHtml = '<i class="bi bi-plus-lg me-1"></i>Add to list';
+  var blAddBtnUpdateHtml = '<i class="bi bi-check2 me-1"></i>Update list';
   var baselineEmpty = document.getElementById('baselineEmptyRow');
   var baselinesDataField = document.getElementById('baselinesDataField');
   var vrsForm = document.getElementById('vrsMainForm');
@@ -378,6 +386,54 @@
     else { blEntryCategory.value = ''; }
   }
 
+  function setBlCategoryName(name) {
+    if (!blEntryCategory) return;
+    var v = (name == null) ? '' : String(name).trim();
+    if (!v) { setCatVal(''); return; }
+    if (blEntryCategory.tomselect) {
+      try { blEntryCategory.tomselect.setValue(v, true); } catch (e) { blEntryCategory.value = v; }
+    } else {
+      blEntryCategory.value = v;
+    }
+  }
+
+  function blExitEditMode() {
+    blEditIndex = null;
+    if (blEntryDate) { blEntryDate.value = ''; if (blEntryDate._flatpickr) blEntryDate._flatpickr.clear(); }
+    if (blEntryReading) blEntryReading.value = '';
+    if (blEntryRemarks) blEntryRemarks.value = '';
+    setCatVal('');
+    if (blEntryCategory && blEntryCategory.tomselect) { try { blEntryCategory.tomselect.clear(true); } catch (e) {} }
+    if (blAddBtn) blAddBtn.innerHTML = blAddBtnAddHtml;
+    if (blEditCancelBtn) blEditCancelBtn.style.display = 'none';
+  }
+
+  function blEnterEditMode(i) {
+    if (i < 0 || i >= BASELINES.length) return;
+    var it = BASELINES[i];
+    blEditIndex = i;
+    setBlCategoryName(it.job_category);
+    if (blEntryDate) {
+      if (it.last_done_date) {
+        applySetupDateToPicker(blEntryDate, String(it.last_done_date).trim());
+      } else {
+        blEntryDate.value = '';
+        if (blEntryDate._flatpickr) blEntryDate._flatpickr.clear();
+      }
+    }
+    if (blEntryReading) {
+      blEntryReading.value = (it.last_done_reading != null && String(it.last_done_reading).trim() !== '') ? String(it.last_done_reading).trim() : '';
+    }
+    if (blEntryRemarks) {
+      blEntryRemarks.value = (it.remarks != null) ? String(it.remarks) : '';
+    }
+    if (blAddBtn) blAddBtn.innerHTML = blAddBtnUpdateHtml;
+    if (blEditCancelBtn) blEditCancelBtn.style.display = '';
+    if (vrsBaselineEntryBox) {
+      vrsBaselineEntryBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
   function renderBaselineTable() {
     if (!baselineBody) return;
     var html = '';
@@ -387,23 +443,43 @@
         s = s == null ? '' : String(s);
         return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
       };
-      html += '<tr data-idx="' + i + '">' +
+      var rowClass = (blEditIndex !== null && blEditIndex === i) ? ' class="table-warning"' : '';
+      html += '<tr data-idx="' + i + '"' + rowClass + '>' +
         '<td class="text-center text-muted small">' + (i + 1) + '</td>' +
         '<td class="fw-semibold">' + esc(it.job_category) + '</td>' +
         '<td class="vrs-baseline-date">' + esc(it.last_done_date) + '</td>' +
         '<td class="vrs-baseline-read">' + esc(it.last_done_reading) + '</td>' +
         '<td class="text-muted small vrs-baseline-notes">' + esc(it.remarks) + '</td>' +
-        '<td class="text-end"><button type="button" class="btn btn-outline-danger btn-sm bl-remove" data-idx="' + i + '"><i class="bi bi-trash"></i></button></td>' +
+        '<td class="text-end text-nowrap">' +
+        '<button type="button" class="btn btn-outline-primary btn-sm me-1 bl-edit" data-idx="' + i + '" title="Edit row"><i class="bi bi-pencil"></i></button>' +
+        '<button type="button" class="btn btn-outline-danger btn-sm bl-remove" data-idx="' + i + '" title="Remove"><i class="bi bi-trash"></i></button>' +
+        '</td>' +
         '</tr>';
     }
     if (!html) {
       html = '<tr id="baselineEmptyRow" class="text-muted"><td colspan="6" class="text-center py-4">Koi line add nahi — zaroorat ho to upar se add karen.</td></tr>';
     }
     baselineBody.innerHTML = html;
+    if (blEditIndex !== null && blEditIndex >= BASELINES.length) {
+      blExitEditMode();
+    }
+    baselineBody.querySelectorAll('.bl-edit').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var ix = parseInt(btn.getAttribute('data-idx'), 10);
+        if (isNaN(ix)) return;
+        blEnterEditMode(ix);
+        renderBaselineTable();
+      });
+    });
     baselineBody.querySelectorAll('.bl-remove').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var ix = parseInt(btn.getAttribute('data-idx'), 10);
         if (isNaN(ix)) return;
+        if (blEditIndex !== null && blEditIndex === ix) {
+          blExitEditMode();
+        } else if (blEditIndex !== null && blEditIndex > ix) {
+          blEditIndex -= 1;
+        }
         BASELINES.splice(ix, 1);
         renderBaselineTable();
         syncBaselinesToField();
@@ -421,6 +497,7 @@
         return;
       }
       for (var j = 0; j < BASELINES.length; j++) {
+        if (blEditIndex !== null && j === blEditIndex) continue;
         if ((BASELINES[j].job_category || '').toLowerCase() === cat.toLowerCase()) {
           alert('Yeh category pehle se list mein hai. Duplicate nahi ho sakta.');
           return;
@@ -432,12 +509,24 @@
         last_done_reading: (blEntryReading && blEntryReading.value) ? blEntryReading.value.trim() : '',
         remarks: (blEntryRemarks && blEntryRemarks.value) ? blEntryRemarks.value.trim() : ''
       };
-      BASELINES.push(row);
-      if (blEntryDate) { blEntryDate.value = ''; if (blEntryDate._flatpickr) blEntryDate._flatpickr.clear(); }
-      if (blEntryReading) blEntryReading.value = '';
-      if (blEntryRemarks) blEntryRemarks.value = '';
-      setCatVal('');
-      if (blEntryCategory && blEntryCategory.tomselect) blEntryCategory.tomselect.clear(true);
+      if (blEditIndex !== null && blEditIndex >= 0 && blEditIndex < BASELINES.length) {
+        BASELINES[blEditIndex] = row;
+        blExitEditMode();
+      } else {
+        BASELINES.push(row);
+        if (blEntryDate) { blEntryDate.value = ''; if (blEntryDate._flatpickr) blEntryDate._flatpickr.clear(); }
+        if (blEntryReading) blEntryReading.value = '';
+        if (blEntryRemarks) blEntryRemarks.value = '';
+        setCatVal('');
+        if (blEntryCategory && blEntryCategory.tomselect) blEntryCategory.tomselect.clear(true);
+      }
+      renderBaselineTable();
+    });
+  }
+
+  if (blEditCancelBtn) {
+    blEditCancelBtn.addEventListener('click', function() {
+      blExitEditMode();
       renderBaselineTable();
     });
   }
