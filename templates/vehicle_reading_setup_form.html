@@ -193,6 +193,12 @@ document.addEventListener('DOMContentLoaded', function(){
   var prefill = null;
   try { prefill = prefillEl && prefillEl.textContent ? JSON.parse(prefillEl.textContent) : null; } catch(e) { prefill = null; }
 
+  /**
+   * While true, district/project change handlers must not run: they clear & async-rebuild
+   * project/vehicle options and were wiping Edit-form values (setValue also triggered change).
+   */
+  var vrsBlockCascade = false;
+
   function setSelectValue(selectEl, value){
     if(!selectEl) return;
     var v = (value === undefined || value === null || value === '') ? '' : String(value);
@@ -203,11 +209,9 @@ document.addEventListener('DOMContentLoaded', function(){
       } catch(e) {
         selectEl.value = v;
       }
-      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
       return;
     }
     selectEl.value = v;
-    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   function setInputNumber(el, val) {
@@ -227,9 +231,14 @@ document.addEventListener('DOMContentLoaded', function(){
   /** Re-apply values after TomSelect + flatpickr init (edit screen often left selects blank). */
   function applyVrsPrefillFromPage() {
     if (!prefill) return;
-    if (prefill.district_id) setSelectValue(district, prefill.district_id);
-    if (prefill.project_id) setSelectValue(project, prefill.project_id);
-    if (prefill.vehicle_id) setSelectValue(vehicle, prefill.vehicle_id);
+    vrsBlockCascade = true;
+    try {
+      if (prefill.district_id) setSelectValue(district, prefill.district_id);
+      if (prefill.project_id) setSelectValue(project, prefill.project_id);
+      if (prefill.vehicle_id) setSelectValue(vehicle, prefill.vehicle_id);
+    } finally {
+      setTimeout(function() { vrsBlockCascade = false; }, 200);
+    }
     if (prefill.setup_date) applySetupDateToPicker(prefill.setup_date);
     if (prefill.fuel_previous_reading != null) setInputNumber(fuelPrev, prefill.fuel_previous_reading);
     if (prefill.oil_previous_reading != null) setInputNumber(oilPrev, prefill.oil_previous_reading);
@@ -243,8 +252,13 @@ document.addEventListener('DOMContentLoaded', function(){
       .then(function(r){ return r.json(); })
       .then(function(data){
         if(!data) return;
-        if (data.district_id) setSelectValue(district, data.district_id);
-        if (data.project_id) setSelectValue(project, data.project_id);
+        vrsBlockCascade = true;
+        try {
+          if (data.district_id) setSelectValue(district, data.district_id);
+          if (data.project_id) setSelectValue(project, data.project_id);
+        } finally {
+          setTimeout(function() { vrsBlockCascade = false; }, 200);
+        }
         if (data.setup_date) applySetupDateToPicker(data.setup_date);
         if (data.fuel_previous_reading != null) setInputNumber(fuelPrev, data.fuel_previous_reading);
         if (data.oil_previous_reading != null) setInputNumber(oilPrev, data.oil_previous_reading);
@@ -254,7 +268,8 @@ document.addEventListener('DOMContentLoaded', function(){
 
   if(district && project){
     district.addEventListener('change', function(){
-      var did = district.value;
+      if (vrsBlockCascade) return;
+      var did = district.tomselect ? district.tomselect.getValue() : district.value;
       if (project.tomselect) { project.tomselect.destroy(); }
       if (vehicle.tomselect) { vehicle.tomselect.destroy(); }
       project.innerHTML = '<option value="">-- Select Project --</option>';
@@ -280,8 +295,9 @@ document.addEventListener('DOMContentLoaded', function(){
 
   if(project && vehicle){
     project.addEventListener('change', function(){
-      var pid = project.value;
-      var did = district ? district.value : '';
+      if (vrsBlockCascade) return;
+      var pid = project.tomselect ? project.tomselect.getValue() : project.value;
+      var did = district ? (district.tomselect ? district.tomselect.getValue() : district.value) : '';
       if (vehicle.tomselect) { vehicle.tomselect.destroy(); }
       vehicle.innerHTML = '<option value="">-- Select Vehicle --</option>';
       if(pid){
@@ -302,7 +318,12 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
-  if(vehicle){ vehicle.addEventListener('change', loadSetupForVehicle); }
+  if(vehicle){
+    vehicle.addEventListener('change', function() {
+      if (vrsBlockCascade) return;
+      loadSetupForVehicle();
+    });
+  }
 
   // After TomSelect/flatpickr init, re-apply server values; fetch fills gaps when vehicle has no row yet.
   setTimeout(function() {
