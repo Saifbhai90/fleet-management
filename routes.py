@@ -17066,11 +17066,6 @@ def _merged_interval_for_baseline(baseline):
 
 
 def _baseline_status(baseline, latest_reading=None):
-    """Compute next due from job-category interval. If last done (date/reading) is missing,
-    we still track when an interval is configured:
-    - Days: treat anchor as *today* (first cycle starts from report date).
-    - KM: treat anchor as *current odometer* so next service is due after `interval` km
-      (remaining = full interval until real last-done data exists)."""
     today = pk_date()
     status = 'No Interval'
     next_due_date = None
@@ -17078,12 +17073,8 @@ def _baseline_status(baseline, latest_reading=None):
     remaining_days = None
     remaining_km = None
     mode, ival = _merged_interval_for_baseline(baseline)
-    if not mode or not ival:
-        pass
-    elif mode == 'interval_day' and ival:
-        # Last done missing → still count: due (interval) days from today
-        anchor = baseline.last_done_date if baseline.last_done_date is not None else today
-        next_due_date = anchor + timedelta(days=int(ival))
+    if mode == 'interval_day' and ival and baseline.last_done_date:
+        next_due_date = baseline.last_done_date + timedelta(days=int(ival))
         remaining_days = (next_due_date - today).days
         if remaining_days < 0:
             status = 'Overdue'
@@ -17091,31 +17082,18 @@ def _baseline_status(baseline, latest_reading=None):
             status = 'Due Soon'
         else:
             status = 'On Track'
-    elif mode == 'interval_km' and ival:
-        if baseline.last_done_reading is not None:
-            next_due_reading = float(baseline.last_done_reading) + float(ival)
-            if latest_reading is None:
-                status = 'Reading Needed'
-            else:
-                remaining_km = next_due_reading - float(latest_reading)
-                if remaining_km < 0:
-                    status = 'Overdue'
-                elif remaining_km <= 500:
-                    status = 'Due Soon'
-                else:
-                    status = 'On Track'
+    elif mode == 'interval_km' and ival and baseline.last_done_reading is not None:
+        next_due_reading = float(baseline.last_done_reading) + float(ival)
+        if latest_reading is None:
+            status = 'Reading Needed'
         else:
-            # No last-done reading: next service after full interval from current odometer (1st-time / empty)
-            if latest_reading is None:
-                status = 'Reading Needed'
+            remaining_km = next_due_reading - float(latest_reading)
+            if remaining_km < 0:
+                status = 'Overdue'
+            elif remaining_km <= 500:
+                status = 'Due Soon'
             else:
-                lr = float(latest_reading)
-                next_due_reading = lr + float(ival)
-                remaining_km = float(ival)
-                if remaining_km <= 500:
-                    status = 'Due Soon'
-                else:
-                    status = 'On Track'
+                status = 'On Track'
     return {
         'status': status,
         'next_due_date': next_due_date,
