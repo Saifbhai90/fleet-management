@@ -52,19 +52,19 @@
         </div>
         <div class="col-md-3">
           <label class="form-label fw-semibold">Setup Date</label>
-          <input type="text" name="setup_date" id="vrsSetupDate" class="form-control datepicker" placeholder="dd-mm-yyyy" required value="{{ row.setup_date.strftime('%d-%m-%Y') if row and row.setup_date else '' }}">
+          <input type="text" name="setup_date" id="vrsSetupDate" class="form-control datepicker" placeholder="dd-mm-yyyy" required value="{% if row and row.setup_date %}{{ row.setup_date.strftime('%d-%m-%Y') }}{% endif %}">
         </div>
         <div class="col-md-3">
           <label class="form-label fw-semibold">Fuel Previous Reading</label>
-          <input type="number" step="0.01" min="0" name="fuel_previous_reading" id="vrsFuelPrev" class="form-control" value="{{ row.fuel_previous_reading if row else '' }}" placeholder="0.00">
+          <input type="number" step="0.01" min="0" name="fuel_previous_reading" id="vrsFuelPrev" class="form-control" placeholder="0.00" value="{% if row and row.fuel_previous_reading is not none %}{{ row.fuel_previous_reading|float }}{% endif %}">
         </div>
         <div class="col-md-3">
           <label class="form-label fw-semibold">Oil Previous Reading</label>
-          <input type="number" step="0.01" min="0" name="oil_previous_reading" id="vrsOilPrev" class="form-control" value="{{ row.oil_previous_reading if row else '' }}" placeholder="0.00">
+          <input type="number" step="0.01" min="0" name="oil_previous_reading" id="vrsOilPrev" class="form-control" placeholder="0.00" value="{% if row and row.oil_previous_reading is not none %}{{ row.oil_previous_reading|float }}{% endif %}">
         </div>
         <div class="col-md-6">
           <label class="form-label fw-semibold">Remarks</label>
-          <input type="text" name="remarks" id="vrsRemarks" class="form-control" value="{{ row.remarks if row else '' }}" placeholder="Optional">
+          <input type="text" name="remarks" id="vrsRemarks" class="form-control" value="{% if row and row.remarks is not none %}{{ row.remarks }}{% endif %}" placeholder="Optional">
         </div>
 
         <div class="col-12">
@@ -85,7 +85,7 @@
                 <select name="maintenance_job_category" id="vrsMaintJobCategory" class="form-select form-select-sm search-select">
                   <option value="">-- Select Category --</option>
                   {% for jc in job_categories or [] %}
-                  <option value="{{ jc.name }}">{{ jc.name }}</option>
+                  <option value="{{ jc['name'] if jc is mapping else jc }}">{{ jc['name'] if jc is mapping else jc }}</option>
                   {% endfor %}
                 </select>
               </div>
@@ -121,7 +121,7 @@
           </div>
         </div>
         <div class="col-12 d-flex justify-content-end gap-2">
-          <a href="{{ url_for('vehicle_reading_setup_form') }}" class="btn btn-outline-secondary">Reset</a>
+          <a href="{{ url_for('vehicle_reading_setup_list') }}" class="btn btn-outline-secondary">Cancel</a>
           <button class="btn btn-success"><i class="bi bi-save me-1"></i>Save Setup</button>
         </div>
       </form>
@@ -174,6 +174,12 @@
   </div>
 </div>
 
+{% if vrs_prefill is defined and vrs_prefill %}
+<script type="application/json" id="vrs-prefill-data">{{ vrs_prefill|tojson }}</script>
+{% else %}
+<script type="application/json" id="vrs-prefill-data">null</script>
+{% endif %}
+
 <script>
 document.addEventListener('DOMContentLoaded', function(){
   var district = document.getElementById('vrsDistrict');
@@ -183,12 +189,20 @@ document.addEventListener('DOMContentLoaded', function(){
   var fuelPrev = document.getElementById('vrsFuelPrev');
   var oilPrev = document.getElementById('vrsOilPrev');
   var remarks = document.getElementById('vrsRemarks');
+  var prefillEl = document.getElementById('vrs-prefill-data');
+  var prefill = null;
+  try { prefill = prefillEl && prefillEl.textContent ? JSON.parse(prefillEl.textContent) : null; } catch(e) { prefill = null; }
 
   function setSelectValue(selectEl, value){
     if(!selectEl) return;
-    var v = value ? String(value) : '';
+    var v = (value === undefined || value === null || value === '') ? '' : String(value);
     if(selectEl.tomselect){
-      try { selectEl.tomselect.setValue(v, true); } catch(e) { selectEl.value = v; }
+      try {
+        if (v === '') { selectEl.tomselect.clear(true); }
+        else { selectEl.tomselect.setValue(v, true); }
+      } catch(e) {
+        selectEl.value = v;
+      }
       selectEl.dispatchEvent(new Event('change', { bubbles: true }));
       return;
     }
@@ -196,19 +210,45 @@ document.addEventListener('DOMContentLoaded', function(){
     selectEl.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
+  function setInputNumber(el, val) {
+    if (!el) return;
+    if (val === null || val === undefined) { el.value = ''; return; }
+    el.value = String(val);
+  }
+
+  function applySetupDateToPicker(dateStr) {
+    if (!setupDate || !dateStr) return;
+    setupDate.value = dateStr;
+    if (setupDate._flatpickr) {
+      try { setupDate._flatpickr.setDate(dateStr, false); } catch (e) {}
+    }
+  }
+
+  /** Re-apply values after TomSelect + flatpickr init (edit screen often left selects blank). */
+  function applyVrsPrefillFromPage() {
+    if (!prefill) return;
+    if (prefill.district_id) setSelectValue(district, prefill.district_id);
+    if (prefill.project_id) setSelectValue(project, prefill.project_id);
+    if (prefill.vehicle_id) setSelectValue(vehicle, prefill.vehicle_id);
+    if (prefill.setup_date) applySetupDateToPicker(prefill.setup_date);
+    if (prefill.fuel_previous_reading != null) setInputNumber(fuelPrev, prefill.fuel_previous_reading);
+    if (prefill.oil_previous_reading != null) setInputNumber(oilPrev, prefill.oil_previous_reading);
+    if (typeof prefill.remarks === 'string') remarks.value = prefill.remarks;
+  }
+
   function loadSetupForVehicle(){
-    var vid = vehicle && vehicle.value;
+    var vid = vehicle && (vehicle.tomselect ? vehicle.tomselect.getValue() : vehicle.value);
     if(!vid || vid === '0') return;
     fetch('/api/vehicle-reading-setup?vehicle_id=' + encodeURIComponent(vid))
       .then(function(r){ return r.json(); })
       .then(function(data){
         if(!data) return;
-        if(data.district_id){ setSelectValue(district, data.district_id); }
-        if(data.project_id){ setSelectValue(project, data.project_id); }
-        if(data.setup_date && setupDate && !setupDate.value){ setupDate.value = data.setup_date; }
-        if(data.fuel_previous_reading != null){ fuelPrev.value = data.fuel_previous_reading; }
-        if(data.oil_previous_reading != null){ oilPrev.value = data.oil_previous_reading; }
-        if(data.remarks && !remarks.value){ remarks.value = data.remarks; }
+        if (data.district_id) setSelectValue(district, data.district_id);
+        if (data.project_id) setSelectValue(project, data.project_id);
+        if (data.setup_date) applySetupDateToPicker(data.setup_date);
+        if (data.fuel_previous_reading != null) setInputNumber(fuelPrev, data.fuel_previous_reading);
+        if (data.oil_previous_reading != null) setInputNumber(oilPrev, data.oil_previous_reading);
+        if (data.remarks != null) remarks.value = data.remarks;
       });
   }
 
@@ -263,7 +303,13 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   if(vehicle){ vehicle.addEventListener('change', loadSetupForVehicle); }
-  loadSetupForVehicle();
+
+  // After TomSelect/flatpickr init, re-apply server values; fetch fills gaps when vehicle has no row yet.
+  setTimeout(function() {
+    applyVrsPrefillFromPage();
+    loadSetupForVehicle();
+  }, 100);
+  setTimeout(applyVrsPrefillFromPage, 300);
 });
 </script>
 {% endblock %}

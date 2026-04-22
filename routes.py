@@ -17008,6 +17008,23 @@ def vehicle_reading_setup_form():
         ).order_by(WorkspaceVehicleMaintenanceBaseline.updated_at.desc(), WorkspaceVehicleMaintenanceBaseline.id.desc()).all()
         latest_vehicle_reading = _vehicle_latest_recorded_reading(selected_vehicle_id)
 
+    def vrs_prefill_payload():
+        if row:
+            return {
+                'district_id': row.district_id,
+                'project_id': row.project_id,
+                'vehicle_id': row.vehicle_id,
+                'setup_date': row.setup_date.strftime('%d-%m-%Y') if row.setup_date else None,
+                'fuel_previous_reading': float(row.fuel_previous_reading) if row.fuel_previous_reading is not None else None,
+                'oil_previous_reading': float(row.oil_previous_reading) if row.oil_previous_reading is not None else None,
+                'remarks': row.remarks or '',
+            }
+        if selected_vehicle_id:
+            return {'vehicle_id': selected_vehicle_id}
+        return None
+
+    vrs_prefill = vrs_prefill_payload()
+
     if request.method == 'POST':
         district_id = request.form.get('district_id', type=int) or None
         project_id = request.form.get('project_id', type=int) or None
@@ -17034,6 +17051,7 @@ def vehicle_reading_setup_form():
                 job_categories=job_categories,
                 baseline_rows=[],
                 latest_vehicle_reading=latest_vehicle_reading,
+                vrs_prefill=vrs_prefill,
             )
         if not setup_date:
             flash('Please select setup date.', 'danger')
@@ -17045,6 +17063,7 @@ def vehicle_reading_setup_form():
                 job_categories=job_categories,
                 baseline_rows=[],
                 latest_vehicle_reading=latest_vehicle_reading,
+                vrs_prefill=vrs_prefill,
             )
 
         def _to_dec(raw):
@@ -17066,6 +17085,7 @@ def vehicle_reading_setup_form():
                 job_categories=job_categories,
                 baseline_rows=[],
                 latest_vehicle_reading=latest_vehicle_reading,
+                vrs_prefill=vrs_prefill,
             )
 
         rec = WorkspaceVehicleReadingSetup.query.filter_by(
@@ -17098,6 +17118,7 @@ def vehicle_reading_setup_form():
                     job_categories=job_categories,
                     baseline_rows=[],
                     latest_vehicle_reading=latest_vehicle_reading,
+                    vrs_prefill=vrs_prefill,
                 )
             if not maintenance_interval_value or maintenance_interval_value <= 0:
                 flash('Maintenance interval value 0 se badi honi chahiye.', 'danger')
@@ -17109,6 +17130,7 @@ def vehicle_reading_setup_form():
                     job_categories=job_categories,
                     baseline_rows=[],
                     latest_vehicle_reading=latest_vehicle_reading,
+                    vrs_prefill=vrs_prefill,
                 )
             base = WorkspaceVehicleMaintenanceBaseline.query.filter_by(
                 employee_id=workspace_employee_id,
@@ -17167,6 +17189,7 @@ def vehicle_reading_setup_form():
         job_categories=job_categories,
         baseline_rows=baseline_view,
         latest_vehicle_reading=latest_vehicle_reading,
+        vrs_prefill=vrs_prefill,
     )
 
 
