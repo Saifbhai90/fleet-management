@@ -21319,8 +21319,14 @@ def maintenance_baseline_alert_report():
     }
 
     page = request.args.get('page', 1, type=int) or 1
-    per_page = request.args.get('per_page', 25, type=int) or 25
-    if per_page not in (10, 20, 25, 50, 100):
+    # fleetPrintExport fetches with per_page=99999 to get full table for print/CSV; must not clamp to 25
+    _std_pp = (10, 20, 25, 50, 100)
+    raw_per_page = request.args.get('per_page', 25, type=int) or 25
+    if raw_per_page in _std_pp:
+        per_page = raw_per_page
+    elif raw_per_page >= 1000:
+        per_page = max(len(rows), 1)
+    else:
         per_page = 25
     pagination = SimplePagination(rows, page, per_page)
 
