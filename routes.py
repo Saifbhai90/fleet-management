@@ -19729,6 +19729,146 @@ def api_maintenance_expense_last_reading():
     return jsonify({'previous_reading': previous_reading})
 
 
+@app.route('/api/maintenance-expense/live-summary')
+def api_maintenance_expense_live_summary():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    district_id = request.args.get('district_id', type=int)
+    project_id = request.args.get('project_id', type=int)
+    vehicle_id = request.args.get('vehicle_id', type=int)
+    product_id = request.args.get('product_id', type=int)
+    expense_date = parse_date(request.args.get('expense_date', ''))
+    current_id = request.args.get('current_id', type=int)
+
+    q = MaintenanceExpense.query.options(
+        joinedload(MaintenanceExpense.district),
+        joinedload(MaintenanceExpense.project),
+        joinedload(MaintenanceExpense.vehicle),
+        joinedload(MaintenanceExpense.workspace_party),
+    )
+    if workspace_employee_id:
+        q = q.filter(
+            db.or_(
+                MaintenanceExpense.employee_id == workspace_employee_id,
+                MaintenanceExpense.employee_id.is_(None),
+            )
+        )
+    if district_id:
+        q = q.filter(MaintenanceExpense.district_id == district_id)
+    if project_id:
+        q = q.filter(MaintenanceExpense.project_id == project_id)
+    if vehicle_id:
+        q = q.filter(MaintenanceExpense.vehicle_id == vehicle_id)
+    if expense_date:
+        q = q.filter(MaintenanceExpense.expense_date <= expense_date)
+    if current_id:
+        q = q.filter(MaintenanceExpense.id != current_id)
+    if product_id:
+        q = q.join(MaintenanceExpenseItem, MaintenanceExpenseItem.maintenance_expense_id == MaintenanceExpense.id)
+        q = q.filter(MaintenanceExpenseItem.product_id == product_id)
+
+    rec = q.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).first()
+    if not rec:
+        return jsonify({'ok': True, 'found': False})
+
+    line_rows = []
+    line_total = 0.0
+    for it in rec.items.order_by(MaintenanceExpenseItem.sort_order.asc(), MaintenanceExpenseItem.id.asc()).all():
+        qty = float(it.qty or 0)
+        price = float(it.price or 0)
+        amount = float(it.amount or (qty * price))
+        line_total += amount
+        line_rows.append({
+            'product_name': (it.product.name if it.product else f'Product #{it.product_id}'),
+            'qty': qty,
+            'price': price,
+            'amount': amount,
+            'qty_label': f'{qty:.2f}',
+            'price_label': f'{price:.2f}',
+            'amount_label': f'{amount:.2f}',
+        })
+
+    return jsonify({
+        'ok': True,
+        'found': True,
+        'expense_id': rec.id,
+        'invoice_no': f'MAINT-{rec.id}',
+        'expense_date': rec.expense_date.isoformat() if rec.expense_date else None,
+        'expense_date_label': rec.expense_date.strftime('%d-%m-%Y') if rec.expense_date else '-',
+        'current_reading': float(rec.current_reading) if rec.current_reading is not None else None,
+        'current_reading_label': f'{float(rec.current_reading):.2f}' if rec.current_reading is not None else '-',
+        'previous_reading': float(rec.previous_reading) if rec.previous_reading is not None else None,
+        'previous_reading_label': f'{float(rec.previous_reading):.2f}' if rec.previous_reading is not None else '-',
+        'district_name': rec.district.name if rec.district else '-',
+        'project_name': rec.project.name if rec.project else '-',
+        'vehicle_no': rec.vehicle.vehicle_no if rec.vehicle else '-',
+        'party_name': rec.workspace_party.name if rec.workspace_party else '-',
+        'payment_type': rec.payment_type or '-',
+        'total_bill_amount': float(rec.total_bill_amount or 0),
+        'total_bill_label': f'{float(rec.total_bill_amount or 0):.2f}',
+        'lines_total_label': f'{line_total:.2f}',
+        'items_count': len(line_rows),
+        'items': line_rows,
+    })
+
+
+@app.route('/api/maintenance-expense/invoice-detail/<int:pk>')
+def api_maintenance_expense_invoice_detail(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceExpense.query.options(
+        joinedload(MaintenanceExpense.district),
+        joinedload(MaintenanceExpense.project),
+        joinedload(MaintenanceExpense.vehicle),
+        joinedload(MaintenanceExpense.workspace_party),
+    ).get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
+    rows = []
+    grand_total = 0.0
+    total_qty = 0.0
+    for it in rec.items.order_by(MaintenanceExpenseItem.sort_order.asc(), MaintenanceExpenseItem.id.asc()).all():
+        qty = float(it.qty or 0)
+        price = float(it.price or 0)
+        amount = float(it.amount or (qty * price))
+        total_qty += qty
+        grand_total += amount
+        rows.append({
+            'product_name': (it.product.name if it.product else f'Product #{it.product_id}'),
+            'qty': qty,
+            'price': price,
+            'amount': amount,
+            'qty_label': f'{qty:.2f}',
+            'price_label': f'{price:.2f}',
+            'amount_label': f'{amount:.2f}',
+        })
+
+    return jsonify({
+        'ok': True,
+        'invoice_no': f'MAINT-{rec.id}',
+        'expense_id': rec.id,
+        'expense_date_label': rec.expense_date.strftime('%d-%m-%Y') if rec.expense_date else '-',
+        'district_name': rec.district.name if rec.district else '-',
+        'project_name': rec.project.name if rec.project else '-',
+        'vehicle_no': rec.vehicle.vehicle_no if rec.vehicle else '-',
+        'party_name': rec.workspace_party.name if rec.workspace_party else '-',
+        'payment_type': rec.payment_type or '-',
+        'previous_reading_label': f'{float(rec.previous_reading):.2f}' if rec.previous_reading is not None else '-',
+        'current_reading_label': f'{float(rec.current_reading):.2f}' if rec.current_reading is not None else '-',
+        'total_qty_label': f'{total_qty:.2f}',
+        'line_total_label': f'{grand_total:.2f}',
+        'bill_total_label': f'{float(rec.total_bill_amount or 0):.2f}',
+        'remarks': rec.remarks or '',
+        'items': rows,
+    })
+
+
 def _maintenance_expense_previous_reading(vehicle_id, expense_date=None, exclude_id=None, workspace_employee_id=None, current_reading=None):
     if not vehicle_id:
         return None

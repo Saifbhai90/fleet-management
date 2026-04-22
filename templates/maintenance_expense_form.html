@@ -128,6 +128,12 @@
   .maint-side-kpi:last-child { border-bottom: 0; }
   .maint-side-kpi .label { color: #64748b; }
   .maint-side-kpi .value { font-weight: 700; color: #0f172a; }
+  .maint-last-summary-box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; background: #f8fafc; margin-top: 10px; }
+  .maint-last-summary-box .rowline { display: flex; justify-content: space-between; gap: 8px; font-size: .82rem; padding: 3px 0; border-bottom: 1px dashed #dbe4ef; }
+  .maint-last-summary-box .rowline:last-child { border-bottom: 0; }
+  .maint-last-summary-box .k { color: #64748b; }
+  .maint-last-summary-box .v { font-weight: 700; color: #0f172a; text-align: right; }
+  #lastInvoiceLinkWrap .btn { font-size: .78rem; }
   .existing-attachments-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 8px; max-height: 380px; overflow: auto; padding-right: 4px; }
   .existing-attachment-card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; background: #fff; }
   .existing-attachment-card img, .existing-attachment-card video { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; background: #f1f5f9; }
@@ -427,6 +433,19 @@
             <div class="maint-side-kpi"><span class="label">Total Qty</span><span class="value" id="sideTotalQty">0.00</span></div>
             <div class="maint-side-kpi"><span class="label">List Amount</span><span class="value" id="sideListAmount">0.00</span></div>
             <div class="maint-side-kpi"><span class="label">Entered Bill</span><span class="value" id="sideEnteredBill">0.00</span></div>
+            <div class="maint-last-summary-box" id="maintLastSummaryBox">
+              <div class="rowline"><span class="k">Last Date</span><span class="v" id="lastMaintDate">-</span></div>
+              <div class="rowline"><span class="k">Last Reading</span><span class="v" id="lastMaintReading">-</span></div>
+              <div class="rowline"><span class="k">Last Party</span><span class="v" id="lastMaintParty">-</span></div>
+              <div class="rowline"><span class="k">Location</span><span class="v" id="lastMaintLocation">-</span></div>
+              <div class="rowline"><span class="k">Invoice No</span><span class="v" id="lastMaintInvoiceNo">-</span></div>
+              <div class="rowline"><span class="k">Bill Amount</span><span class="v" id="lastMaintBill">0.00</span></div>
+              <div class="mt-2 d-none" id="lastInvoiceLinkWrap">
+                <button type="button" class="btn btn-outline-primary btn-sm w-100" id="lastInvoiceDetailBtn">
+                  <i class="bi bi-file-earmark-text me-1"></i>View Invoice Report
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="maint-side-card">
@@ -445,6 +464,61 @@
       </div>
     </div>
   </form>
+</div>
+
+<div class="modal fade" id="maintenanceInvoiceDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-receipt me-1"></i>Maintenance Invoice Detail Report</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2 mb-2 small">
+          <div class="col-md-3"><span class="text-muted">Invoice:</span> <span class="fw-semibold" id="invoiceMetaNo">-</span></div>
+          <div class="col-md-3"><span class="text-muted">Date:</span> <span class="fw-semibold" id="invoiceMetaDate">-</span></div>
+          <div class="col-md-3"><span class="text-muted">Vehicle:</span> <span class="fw-semibold" id="invoiceMetaVehicle">-</span></div>
+          <div class="col-md-3"><span class="text-muted">Party:</span> <span class="fw-semibold" id="invoiceMetaParty">-</span></div>
+          <div class="col-md-3"><span class="text-muted">District:</span> <span class="fw-semibold" id="invoiceMetaDistrict">-</span></div>
+          <div class="col-md-3"><span class="text-muted">Project:</span> <span class="fw-semibold" id="invoiceMetaProject">-</span></div>
+          <div class="col-md-3"><span class="text-muted">Reading:</span> <span class="fw-semibold" id="invoiceMetaReading">-</span></div>
+          <div class="col-md-3"><span class="text-muted">Payment:</span> <span class="fw-semibold" id="invoiceMetaPayment">-</span></div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered align-middle mb-2">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Product</th>
+                <th class="text-end">Qty</th>
+                <th class="text-end">Price</th>
+                <th class="text-end">Amount</th>
+              </tr>
+            </thead>
+            <tbody id="invoiceItemsBody">
+              <tr><td colspan="5" class="text-center text-muted py-3">No data</td></tr>
+            </tbody>
+            <tfoot class="table-light fw-semibold">
+              <tr>
+                <td colspan="2" class="text-end">Totals</td>
+                <td class="text-end" id="invoiceTotalQty">0.00</td>
+                <td class="text-end">Line Total</td>
+                <td class="text-end" id="invoiceLineTotal">0.00</td>
+              </tr>
+              <tr>
+                <td colspan="4" class="text-end">Bill Total</td>
+                <td class="text-end" id="invoiceBillTotal">0.00</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="small"><span class="text-muted">Remarks:</span> <span id="invoiceMetaRemarks">-</span></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="modal fade" id="jobCategoryModal" tabindex="-1" aria-hidden="true">
@@ -573,6 +647,30 @@ document.addEventListener('DOMContentLoaded', function() {
   var maintAttachmentPasteHint = document.getElementById('maintAttachmentPasteHint');
   var maintSaveBtn = document.getElementById('maintSaveBtn');
   var maintPriceHistoryPanel = document.getElementById('maintPriceHistoryPanel');
+  var lastMaintDate = document.getElementById('lastMaintDate');
+  var lastMaintReading = document.getElementById('lastMaintReading');
+  var lastMaintParty = document.getElementById('lastMaintParty');
+  var lastMaintLocation = document.getElementById('lastMaintLocation');
+  var lastMaintInvoiceNo = document.getElementById('lastMaintInvoiceNo');
+  var lastMaintBill = document.getElementById('lastMaintBill');
+  var lastInvoiceLinkWrap = document.getElementById('lastInvoiceLinkWrap');
+  var lastInvoiceDetailBtn = document.getElementById('lastInvoiceDetailBtn');
+  var maintenanceInvoiceDetailModalEl = document.getElementById('maintenanceInvoiceDetailModal');
+  var maintenanceInvoiceDetailModal = (window.bootstrap && maintenanceInvoiceDetailModalEl) ? new window.bootstrap.Modal(maintenanceInvoiceDetailModalEl) : null;
+  var invoiceItemsBody = document.getElementById('invoiceItemsBody');
+  var invoiceMetaNo = document.getElementById('invoiceMetaNo');
+  var invoiceMetaDate = document.getElementById('invoiceMetaDate');
+  var invoiceMetaVehicle = document.getElementById('invoiceMetaVehicle');
+  var invoiceMetaParty = document.getElementById('invoiceMetaParty');
+  var invoiceMetaDistrict = document.getElementById('invoiceMetaDistrict');
+  var invoiceMetaProject = document.getElementById('invoiceMetaProject');
+  var invoiceMetaReading = document.getElementById('invoiceMetaReading');
+  var invoiceMetaPayment = document.getElementById('invoiceMetaPayment');
+  var invoiceMetaRemarks = document.getElementById('invoiceMetaRemarks');
+  var invoiceTotalQty = document.getElementById('invoiceTotalQty');
+  var invoiceLineTotal = document.getElementById('invoiceLineTotal');
+  var invoiceBillTotal = document.getElementById('invoiceBillTotal');
+  var activeSummaryExpenseId = null;
   var serverDistrictId = {{ (form.district_id.data or 0) | tojson }};
   var serverProjectId = {{ (form.project_id.data or 0) | tojson }};
   var serverVehicleId = {{ (form.vehicle_id.data or 0) | tojson }};
@@ -1038,6 +1136,93 @@ document.addEventListener('DOMContentLoaded', function() {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   }
+  function setLastSummaryFallback() {
+    if (lastMaintDate) lastMaintDate.textContent = '-';
+    if (lastMaintReading) lastMaintReading.textContent = '-';
+    if (lastMaintParty) lastMaintParty.textContent = '-';
+    if (lastMaintLocation) lastMaintLocation.textContent = '-';
+    if (lastMaintInvoiceNo) lastMaintInvoiceNo.textContent = '-';
+    if (lastMaintBill) lastMaintBill.textContent = '0.00';
+    activeSummaryExpenseId = null;
+    if (lastInvoiceLinkWrap) lastInvoiceLinkWrap.classList.add('d-none');
+  }
+
+  function fetchMaintenanceLiveSummary() {
+    var districtId = _selVal(districtSelect);
+    var projectId = _selVal(projectSelect);
+    var vehicleId = _selVal(vehicleSelect);
+    var productId = (entryProductSelect && entryProductSelect.value) ? entryProductSelect.value : '';
+    var expDate = (expenseDate && expenseDate.value) ? expenseDate.value : '';
+    var recId = {{ rec.id if rec else 'null' }};
+    var params = new URLSearchParams();
+    if (districtId && districtId !== '0') params.set('district_id', districtId);
+    if (projectId && projectId !== '0') params.set('project_id', projectId);
+    if (vehicleId && vehicleId !== '0') params.set('vehicle_id', vehicleId);
+    if (productId) params.set('product_id', productId);
+    if (expDate) params.set('expense_date', expDate);
+    if (recId) params.set('current_id', String(recId));
+    fetch('/api/maintenance-expense/live-summary?' + params.toString())
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.ok || !data.found) {
+          setLastSummaryFallback();
+          return;
+        }
+        activeSummaryExpenseId = data.expense_id || null;
+        if (lastMaintDate) lastMaintDate.textContent = data.expense_date_label || '-';
+        if (lastMaintReading) lastMaintReading.textContent = data.current_reading_label || '-';
+        if (lastMaintParty) lastMaintParty.textContent = data.party_name || '-';
+        var loc = [data.district_name || '-', data.project_name || '-', data.vehicle_no || '-'].join(' / ');
+        if (lastMaintLocation) lastMaintLocation.textContent = loc;
+        if (lastMaintInvoiceNo) lastMaintInvoiceNo.textContent = data.invoice_no || '-';
+        if (lastMaintBill) lastMaintBill.textContent = data.total_bill_label || '0.00';
+        if (lastInvoiceLinkWrap) lastInvoiceLinkWrap.classList.toggle('d-none', !activeSummaryExpenseId);
+      })
+      .catch(function() { setLastSummaryFallback(); });
+  }
+
+  function renderInvoiceDetailRows(items) {
+    if (!invoiceItemsBody) return;
+    invoiceItemsBody.innerHTML = '';
+    if (!items || !items.length) {
+      invoiceItemsBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No items found.</td></tr>';
+      return;
+    }
+    items.forEach(function(it, idx) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + (idx + 1) + '</td>' +
+        '<td>' + escapeHtml(it.product_name || '-') + '</td>' +
+        '<td class="text-end">' + escapeHtml(it.qty_label || '0.00') + '</td>' +
+        '<td class="text-end">' + escapeHtml(it.price_label || '0.00') + '</td>' +
+        '<td class="text-end">' + escapeHtml(it.amount_label || '0.00') + '</td>';
+      invoiceItemsBody.appendChild(tr);
+    });
+  }
+
+  function openInvoiceDetailReport(expenseId) {
+    if (!expenseId) return;
+    fetch('/api/maintenance-expense/invoice-detail/' + encodeURIComponent(expenseId))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.ok) throw new Error('Unable to load invoice.');
+        renderInvoiceDetailRows(data.items || []);
+        if (invoiceMetaNo) invoiceMetaNo.textContent = data.invoice_no || '-';
+        if (invoiceMetaDate) invoiceMetaDate.textContent = data.expense_date_label || '-';
+        if (invoiceMetaVehicle) invoiceMetaVehicle.textContent = data.vehicle_no || '-';
+        if (invoiceMetaParty) invoiceMetaParty.textContent = data.party_name || '-';
+        if (invoiceMetaDistrict) invoiceMetaDistrict.textContent = data.district_name || '-';
+        if (invoiceMetaProject) invoiceMetaProject.textContent = data.project_name || '-';
+        if (invoiceMetaReading) invoiceMetaReading.textContent = (data.previous_reading_label || '-') + ' -> ' + (data.current_reading_label || '-');
+        if (invoiceMetaPayment) invoiceMetaPayment.textContent = data.payment_type || '-';
+        if (invoiceMetaRemarks) invoiceMetaRemarks.textContent = data.remarks || '-';
+        if (invoiceTotalQty) invoiceTotalQty.textContent = data.total_qty_label || '0.00';
+        if (invoiceLineTotal) invoiceLineTotal.textContent = data.line_total_label || '0.00';
+        if (invoiceBillTotal) invoiceBillTotal.textContent = data.bill_total_label || '0.00';
+        if (maintenanceInvoiceDetailModal) maintenanceInvoiceDetailModal.show();
+      })
+      .catch(function(err) { alert((err && err.message) ? err.message : 'Unable to load invoice detail'); });
+  }
   entryQty.addEventListener('input', updateEntryAmountFromQtyPrice);
   entryPrice.addEventListener('input', function() { entryPrice.dataset.autoSuggested = '0'; updateEntryAmountFromQtyPrice(); });
   entryAmount.addEventListener('input', function() { updateEntryPriceFromAmountQty(); });
@@ -1058,6 +1243,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (entryProductSelect) entryProductSelect.addEventListener('change', function() {
     updateDefaultPriceHint();
     fetchMaintenancePriceHistory(true);
+    fetchMaintenanceLiveSummary();
     if (entryQty) window.setTimeout(function(){ entryQty.focus(); entryQty.select(); }, 20);
   });
   entryPrice.addEventListener('focus', function(){ fetchMaintenancePriceHistory(true); });
@@ -1356,12 +1542,14 @@ document.addEventListener('DOMContentLoaded', function() {
   if (vehicleSelect) vehicleSelect.addEventListener('change', function() {
     if (_suppressCascadeEvents) return;
     fetchTaskReadingsForMaintenance();
+    fetchMaintenanceLiveSummary();
   });
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       if (_suppressCascadeEvents) return;
       var did = _selVal(districtSelect);
       _loadProjectsForDistrict(did, null, null);
+      fetchMaintenanceLiveSummary();
     });
   }
   if (projectSelect && vehicleSelect) {
@@ -1370,6 +1558,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var pid = _selVal(projectSelect);
       var did = _selVal(districtSelect);
       _loadVehiclesForProject(pid, did, null, null);
+      fetchMaintenanceLiveSummary();
     });
   }
   if (expenseDate) expenseDate.addEventListener('change', function() {
@@ -1379,6 +1568,7 @@ document.addEventListener('DOMContentLoaded', function() {
       fetchTaskReadingsForMaintenance();
     }
     if (entryProductSelect && entryProductSelect.value) fetchMaintenancePriceHistory(false);
+    fetchMaintenanceLiveSummary();
   });
   if (currentReading) currentReading.addEventListener('input', updateCurrentReadingMatch);
   if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', function() { handlePaymentTypeBehavior(true); });
@@ -1443,8 +1633,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   _runInitialLocationLoadChain();
   window.setTimeout(fetchTaskReadingsForMaintenance, 250);
+  window.setTimeout(fetchMaintenanceLiveSummary, 300);
   handlePaymentTypeBehavior(false);
   updateExpenseByBalanceHint();
+  if (lastInvoiceDetailBtn) {
+    lastInvoiceDetailBtn.addEventListener('click', function() {
+      if (!activeSummaryExpenseId) return;
+      openInvoiceDetailReport(activeSummaryExpenseId);
+    });
+  }
 
   function updateAttachmentHint(text) {
     if (!maintAttachmentPasteHint) return;
