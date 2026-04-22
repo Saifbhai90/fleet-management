@@ -20512,6 +20512,199 @@ def maintenance_expense_list():
     )
 
 
+@app.route('/maintenance-expenses/history')
+def maintenance_expense_history():
+    _ensure_maintenance_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    form = MaintenanceExpenseFilterForm()
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+
+    vehicle_q = Vehicle.query
+    if not is_master_or_admin and allowed_vehicles:
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
+
+    products_for_maintenance = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
+    product_choices = [(0, '-- All Products --')] + [(p.id, p.name) for p in products_for_maintenance]
+
+    today = pk_date()
+    from_date = request.args.get('from_date', '').strip()
+    to_date = request.args.get('to_date', '').strip()
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    product_id = request.args.get('product_id', type=int) or 0
+
+    from_d = parse_date(from_date) if from_date else (today - timedelta(days=90))
+    to_d = parse_date(to_date) if to_date else today
+    if not from_d:
+        from_d = today - timedelta(days=90)
+    if not to_d:
+        to_d = today
+    if from_d > to_d:
+        from_d, to_d = to_d, from_d
+
+    form.from_date.data = from_d
+    form.to_date.data = to_d
+    form.district_id.data = district_id
+    form.project_id.data = project_id
+    form.vehicle_id.data = vehicle_id
+
+    query = MaintenanceExpense.query.options(
+        joinedload(MaintenanceExpense.district),
+        joinedload(MaintenanceExpense.project),
+        joinedload(MaintenanceExpense.vehicle),
+        joinedload(MaintenanceExpense.workspace_party),
+    ).filter(
+        MaintenanceExpense.expense_date >= from_d,
+        MaintenanceExpense.expense_date <= to_d
+    )
+    if workspace_employee_id:
+        query = query.filter(
+            db.or_(
+                MaintenanceExpense.employee_id == workspace_employee_id,
+                MaintenanceExpense.employee_id.is_(None),
+            )
+        )
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(MaintenanceExpense.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(MaintenanceExpense.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(MaintenanceExpense.vehicle_id.in_(list(allowed_vehicles)))
+    if district_id:
+        query = query.filter(MaintenanceExpense.district_id == district_id)
+    if project_id:
+        query = query.filter(MaintenanceExpense.project_id == project_id)
+    if vehicle_id:
+        query = query.filter(MaintenanceExpense.vehicle_id == vehicle_id)
+    if product_id:
+        query = query.join(MaintenanceExpenseItem, MaintenanceExpenseItem.maintenance_expense_id == MaintenanceExpense.id)
+        query = query.filter(MaintenanceExpenseItem.product_id == product_id)
+
+    rows = query.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).all()
+    invoice_ids = [r.id for r in rows]
+    repeat_map = {}
+    if invoice_ids:
+        repeat_rows = db.session.query(
+            MaintenanceExpense.vehicle_id,
+            MaintenanceExpenseItem.product_id,
+            db.func.count(db.distinct(MaintenanceExpense.id)).label('changed_count')
+        ).join(
+            MaintenanceExpenseItem, MaintenanceExpenseItem.maintenance_expense_id == MaintenanceExpense.id
+        ).filter(
+            MaintenanceExpense.id.in_(invoice_ids)
+        ).group_by(
+            MaintenanceExpense.vehicle_id,
+            MaintenanceExpenseItem.product_id
+        ).all()
+        repeat_map = {
+            (int(x.vehicle_id or 0), int(x.product_id or 0)): int(x.changed_count or 0)
+            for x in repeat_rows
+        }
+
+    rows_with_meta = []
+    total_bill = 0.0
+    total_qty = 0.0
+    total_lines = 0
+    for r in rows:
+        item_rows = r.items.order_by(MaintenanceExpenseItem.sort_order.asc(), MaintenanceExpenseItem.id.asc()).all()
+        detail_items = []
+        invoice_qty = 0.0
+        invoice_amount = 0.0
+        max_repeat = 0
+        for it in item_rows:
+            qty = float(it.qty or 0)
+            price = float(it.price or 0)
+            amount = float(it.amount or (qty * price))
+            invoice_qty += qty
+            invoice_amount += amount
+            repeat_count = repeat_map.get((int(r.vehicle_id or 0), int(it.product_id or 0)), 0)
+            if repeat_count > max_repeat:
+                max_repeat = repeat_count
+            detail_items.append({
+                'product_name': it.product.name if it.product else f'Product #{it.product_id}',
+                'qty_label': f'{qty:.2f}',
+                'price_label': f'{price:.2f}',
+                'amount_label': f'{amount:.2f}',
+                'repeat_count': repeat_count,
+            })
+        row_bill = float(r.total_bill_amount or 0)
+        total_bill += row_bill
+        total_qty += invoice_qty
+        total_lines += len(detail_items)
+        rows_with_meta.append({
+            'rec': r,
+            'items': detail_items,
+            'invoice_qty': invoice_qty,
+            'invoice_amount': invoice_amount,
+            'max_repeat': max_repeat,
+        })
+
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 25, type=int)
+    pagination = SimplePagination(rows_with_meta, page, per_page)
+    rows_with_meta = pagination.items
+
+    repeat_summary = sorted(
+        [
+            {'vehicle_id': v_id, 'product_id': p_id, 'changed_count': changed_count}
+            for (v_id, p_id), changed_count in repeat_map.items()
+        ],
+        key=lambda x: x['changed_count'],
+        reverse=True,
+    )[:10]
+    product_name_map = {p.id: p.name for p in products_for_maintenance}
+    vehicle_name_map = {v.id: v.vehicle_no for v in Vehicle.query.filter(Vehicle.id.in_([x['vehicle_id'] for x in repeat_summary])).all()} if repeat_summary else {}
+    for item in repeat_summary:
+        item['vehicle_no'] = vehicle_name_map.get(item['vehicle_id'], f"Vehicle #{item['vehicle_id']}")
+        item['product_name'] = product_name_map.get(item['product_id'], f"Product #{item['product_id']}")
+
+    return render_template(
+        'maintenance_expense_history.html',
+        title='Maintenance History Report',
+        form=form,
+        rows=rows_with_meta,
+        from_date=from_d,
+        to_date=to_d,
+        district_id=district_id,
+        project_id=project_id,
+        vehicle_id=vehicle_id,
+        product_id=product_id,
+        product_choices=product_choices,
+        totals={
+            'invoice_count': len(rows),
+            'total_qty': total_qty,
+            'total_bill': total_bill,
+            'total_lines': total_lines,
+        },
+        repeat_summary=repeat_summary,
+        pagination=pagination,
+        per_page=per_page,
+    )
+
+
 @app.route('/maintenance-expense/add', methods=['GET', 'POST'])
 @app.route('/maintenance-expense/edit/<int:pk>', methods=['GET', 'POST'])
 def maintenance_expense_form(pk=None):

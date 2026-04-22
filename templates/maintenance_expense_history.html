@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<style>
+  .maint-history-wrap { max-width: min(1780px, calc(100vw - 88px)); margin: 0 auto; }
+  .maint-history-head { background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); color: #fff; border-radius: 12px; padding: .7rem 1rem; }
+  .maint-history-card { border: 1px solid #e9edf3; border-radius: 12px; box-shadow: 0 2px 12px rgba(15, 23, 42, .06); }
+  .maint-kpi { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; background: #f8fafc; }
+  .maint-kpi .k { color: #64748b; font-size: .76rem; text-transform: uppercase; }
+  .maint-kpi .v { color: #0f172a; font-size: 1.05rem; font-weight: 700; }
+  .maint-compact-list { max-height: 180px; overflow: auto; }
+  .maint-compact-list .item { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dashed #e2e8f0; padding: 4px 0; font-size: .82rem; }
+  .maint-compact-list .item:last-child { border-bottom: 0; }
+</style>
+
+<div class="container-fluid py-3">
+  <div class="maint-history-wrap">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 maint-history-head">
+      <h5 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Maintenance History (Power Report)</h5>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Bills</a>
+        <button class="btn btn-outline-light btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+        <button class="btn btn-outline-light btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      </div>
+    </div>
+
+    <div class="card maint-history-card mb-3">
+      <div class="card-header bg-light fw-semibold"><i class="bi bi-funnel me-1 text-primary"></i>Smart Filters</div>
+      <div class="card-body">
+        <form method="GET" action="{{ url_for('maintenance_expense_history') }}" class="row g-3 align-items-end">
+          <div class="col-md-2">
+            <label class="form-label small">From Date</label>
+            <input type="text" name="from_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ from_date|ddmmyyyy if from_date else '' }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">To Date</label>
+            <input type="text" name="to_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ to_date|ddmmyyyy if to_date else '' }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">District</label>
+            <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select">
+              {% for val, label in form.district_id.choices %}
+              <option value="{{ val }}" {% if district_id|int == val|int %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Project</label>
+            <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
+              {% for val, label in form.project_id.choices %}
+              <option value="{{ val }}" {% if project_id|int == val|int %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Vehicle</label>
+            <select name="vehicle_id" id="vehicleSelect" class="form-select form-select-sm search-select">
+              {% for val, label in form.vehicle_id.choices %}
+              <option value="{{ val }}" {% if vehicle_id|int == val|int %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Product</label>
+            <select name="product_id" id="productSelect" class="form-select form-select-sm search-select">
+              {% for val, label in product_choices %}
+              <option value="{{ val }}" {% if product_id|int == val|int %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-search me-1"></i>Apply</button>
+          </div>
+          <div class="col-md-2">
+            <a href="{{ url_for('maintenance_expense_history') }}" class="btn btn-outline-secondary btn-sm w-100">Reset</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+      <div class="col-lg-3 col-md-6"><div class="maint-kpi"><div class="k">Invoices</div><div class="v">{{ totals.invoice_count }}</div></div></div>
+      <div class="col-lg-3 col-md-6"><div class="maint-kpi"><div class="k">Total Lines</div><div class="v">{{ totals.total_lines }}</div></div></div>
+      <div class="col-lg-3 col-md-6"><div class="maint-kpi"><div class="k">Total Qty</div><div class="v">{{ "%.2f"|format(totals.total_qty or 0) }}</div></div></div>
+      <div class="col-lg-3 col-md-6"><div class="maint-kpi"><div class="k">Total Bill</div><div class="v">{{ "%.2f"|format(totals.total_bill or 0) }}</div></div></div>
+    </div>
+
+    <div class="card maint-history-card mb-3">
+      <div class="card-header bg-light fw-semibold"><i class="bi bi-arrow-repeat me-1 text-danger"></i>Most Repeated Part Changes</div>
+      <div class="card-body">
+        <div class="maint-compact-list">
+          {% for rs in repeat_summary %}
+          <div class="item">
+            <span>{{ rs.vehicle_no }} -> {{ rs.product_name }}</span>
+            <span class="fw-semibold text-danger">{{ rs.changed_count }} times</span>
+          </div>
+          {% else %}
+          <div class="text-muted small">No repeat pattern found for selected filters.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card maint-history-card overflow-hidden">
+      <div class="card-header bg-light fw-semibold">Detailed History (Click Invoice No for full report)</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover table-sm align-middle mb-0" id="maintenanceHistoryTable">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Invoice No</th>
+                <th>Date</th>
+                <th>District</th>
+                <th>Project</th>
+                <th>Vehicle</th>
+                <th>Current Reading</th>
+                <th>Party</th>
+                <th>Products / Repeat</th>
+                <th>Total Qty</th>
+                <th>Total Bill</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+              {% set r = row.rec %}
+              <tr>
+                <td>{{ loop.index + ((pagination.page - 1) * per_page) }}</td>
+                <td>
+                  <button type="button" class="btn btn-link p-0 fw-semibold text-decoration-none invoice-detail-btn" data-expense-id="{{ r.id }}">
+                    MAINT-{{ r.id }}
+                  </button>
+                </td>
+                <td>{{ r.expense_date|ddmmyyyy if r.expense_date else '-' }}</td>
+                <td>{{ r.district.name if r.district else '-' }}</td>
+                <td>{{ r.project.name if r.project else '-' }}</td>
+                <td class="fw-semibold">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
+                <td>{{ "%.2f"|format((r.current_reading or 0)|float) if r.current_reading is not none else '-' }}</td>
+                <td>{{ r.workspace_party.name if r.workspace_party else '-' }}</td>
+                <td>
+                  {% if row.items %}
+                    {% for it in row.items %}
+                      <div class="small">
+                        {{ it.product_name }} | Qty {{ it.qty_label }} | Rate {{ it.price_label }} |
+                        <span class="text-danger fw-semibold">Changed {{ it.repeat_count }}x</span>
+                      </div>
+                    {% endfor %}
+                  {% else %}
+                    <span class="text-muted small">-</span>
+                  {% endif %}
+                </td>
+                <td>{{ "%.2f"|format(row.invoice_qty or 0) }}</td>
+                <td>{{ "%.2f"|format((r.total_bill_amount or 0)|float) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="11" class="text-center text-muted py-4">No history found for selected filters.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
+        {% if pagination and pagination.pages > 1 %}
+        <nav>
+          <ul class="pagination pagination-sm mb-0 justify-content-end">
+            <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+              <a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a>
+            </li>
+            {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}
+              {% if p %}
+              <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                <a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a>
+              </li>
+              {% else %}
+              <li class="page-item disabled"><span class="page-link">…</span></li>
+              {% endif %}
+            {% endfor %}
+            <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+              <a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a>
+            </li>
+          </ul>
+        </nav>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="maintenanceInvoiceDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-receipt me-1"></i>Maintenance Invoice Detail Report</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2 mb-2 small">
+          <div class="col-md-3"><span class="text-muted">Invoice:</span> <span class="fw-semibold" id="invoiceMetaNo">-</span></div>
+          <div class="col-md-3"><span class="text-muted">Date:</span> <span class="fw-semibold" id="invoiceMetaDate">-</span></div>
+          <div class="col-md-3"><span class="text-muted">Vehicle:</span> <span class="fw-semibold" id="invoiceMetaVehicle">-</span></div>
+          <div class="col-md-3"><span class="text-muted">Party:</span> <span class="fw-semibold" id="invoiceMetaParty">-</span></div>
+          <div class="col-md-3"><span class="text-muted">District:</span> <span class="fw-semibold" id="invoiceMetaDistrict">-</span></div>
+          <div class="col-md-3"><span class="text-muted">Project:</span> <span class="fw-semibold" id="invoiceMetaProject">-</span></div>
+          <div class="col-md-3"><span class="text-muted">Reading:</span> <span class="fw-semibold" id="invoiceMetaReading">-</span></div>
+          <div class="col-md-3"><span class="text-muted">Payment:</span> <span class="fw-semibold" id="invoiceMetaPayment">-</span></div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered align-middle mb-2">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Product</th>
+                <th class="text-end">Qty</th>
+                <th class="text-end">Price</th>
+                <th class="text-end">Amount</th>
+              </tr>
+            </thead>
+            <tbody id="invoiceItemsBody">
+              <tr><td colspan="5" class="text-center text-muted py-3">No data</td></tr>
+            </tbody>
+            <tfoot class="table-light fw-semibold">
+              <tr>
+                <td colspan="2" class="text-end">Totals</td>
+                <td class="text-end" id="invoiceTotalQty">0.00</td>
+                <td class="text-end">Line Total</td>
+                <td class="text-end" id="invoiceLineTotal">0.00</td>
+              </tr>
+              <tr>
+                <td colspan="4" class="text-end">Bill Total</td>
+                <td class="text-end" id="invoiceBillTotal">0.00</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="small"><span class="text-muted">Remarks:</span> <span id="invoiceMetaRemarks">-</span></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function goPage(n) {
+  var u = new URLSearchParams(window.location.search);
+  u.set('page', n);
+  window.location.search = u.toString();
+}
+document.addEventListener('DOMContentLoaded', function() {
+  var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
+  var vehicleSelect = document.getElementById('vehicleSelect');
+
+  function refreshSelect(select, placeholder, rows, textField) {
+    if (!select) return;
+    if (select.tomselect) select.tomselect.destroy();
+    select.innerHTML = '<option value="0">' + placeholder + '</option>';
+    (rows || []).forEach(function(row) {
+      var o = document.createElement('option');
+      o.value = row.id;
+      o.textContent = row[textField];
+      select.appendChild(o);
+    });
+    if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(select.parentNode);
+  }
+
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = this.value;
+      refreshSelect(projectSelect, '-- All Projects --', [], 'name');
+      refreshSelect(vehicleSelect, '-- All Vehicles --', [], 'vehicle_no');
+      if (!did || did === '0') return;
+      fetch('/get_projects_by_district/' + did)
+        .then(function(r) { return r.json(); })
+        .then(function(rows) { refreshSelect(projectSelect, '-- All Projects --', rows, 'name'); })
+        .catch(function() {});
+    });
+  }
+  if (projectSelect && vehicleSelect) {
+    projectSelect.addEventListener('change', function() {
+      var pid = this.value;
+      var did = districtSelect ? districtSelect.value : '';
+      refreshSelect(vehicleSelect, '-- All Vehicles --', [], 'vehicle_no');
+      if (!pid || pid === '0') return;
+      var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid);
+      if (did && did !== '0') url += '&district_id=' + encodeURIComponent(did);
+      fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(rows) { refreshSelect(vehicleSelect, '-- All Vehicles --', rows, 'vehicle_no'); })
+        .catch(function() {});
+    });
+  }
+
+  var modalEl = document.getElementById('maintenanceInvoiceDetailModal');
+  var modal = (window.bootstrap && modalEl) ? new window.bootstrap.Modal(modalEl, { backdrop: false, focus: false, keyboard: true }) : null;
+  var invoiceItemsBody = document.getElementById('invoiceItemsBody');
+  var invoiceMetaNo = document.getElementById('invoiceMetaNo');
+  var invoiceMetaDate = document.getElementById('invoiceMetaDate');
+  var invoiceMetaVehicle = document.getElementById('invoiceMetaVehicle');
+  var invoiceMetaParty = document.getElementById('invoiceMetaParty');
+  var invoiceMetaDistrict = document.getElementById('invoiceMetaDistrict');
+  var invoiceMetaProject = document.getElementById('invoiceMetaProject');
+  var invoiceMetaReading = document.getElementById('invoiceMetaReading');
+  var invoiceMetaPayment = document.getElementById('invoiceMetaPayment');
+  var invoiceMetaRemarks = document.getElementById('invoiceMetaRemarks');
+  var invoiceTotalQty = document.getElementById('invoiceTotalQty');
+  var invoiceLineTotal = document.getElementById('invoiceLineTotal');
+  var invoiceBillTotal = document.getElementById('invoiceBillTotal');
+
+  function esc(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+  function renderRows(items) {
+    if (!invoiceItemsBody) return;
+    invoiceItemsBody.innerHTML = '';
+    if (!items || !items.length) {
+      invoiceItemsBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No items found.</td></tr>';
+      return;
+    }
+    items.forEach(function(it, idx) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + (idx + 1) + '</td>' +
+        '<td>' + esc(it.product_name || '-') + '</td>' +
+        '<td class="text-end">' + esc(it.qty_label || '0.00') + '</td>' +
+        '<td class="text-end">' + esc(it.price_label || '0.00') + '</td>' +
+        '<td class="text-end">' + esc(it.amount_label || '0.00') + '</td>';
+      invoiceItemsBody.appendChild(tr);
+    });
+  }
+
+  document.querySelectorAll('.invoice-detail-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var expenseId = this.getAttribute('data-expense-id');
+      if (!expenseId) return;
+      fetch('/api/maintenance-expense/invoice-detail/' + encodeURIComponent(expenseId))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data || !data.ok) throw new Error('Unable to load invoice.');
+          renderRows(data.items || []);
+          if (invoiceMetaNo) invoiceMetaNo.textContent = data.invoice_no || '-';
+          if (invoiceMetaDate) invoiceMetaDate.textContent = data.expense_date_label || '-';
+          if (invoiceMetaVehicle) invoiceMetaVehicle.textContent = data.vehicle_no || '-';
+          if (invoiceMetaParty) invoiceMetaParty.textContent = data.party_name || '-';
+          if (invoiceMetaDistrict) invoiceMetaDistrict.textContent = data.district_name || '-';
+          if (invoiceMetaProject) invoiceMetaProject.textContent = data.project_name || '-';
+          if (invoiceMetaReading) invoiceMetaReading.textContent = (data.previous_reading_label || '-') + ' -> ' + (data.current_reading_label || '-');
+          if (invoiceMetaPayment) invoiceMetaPayment.textContent = data.payment_type || '-';
+          if (invoiceMetaRemarks) invoiceMetaRemarks.textContent = data.remarks || '-';
+          if (invoiceTotalQty) invoiceTotalQty.textContent = data.total_qty_label || '0.00';
+          if (invoiceLineTotal) invoiceLineTotal.textContent = data.line_total_label || '0.00';
+          if (invoiceBillTotal) invoiceBillTotal.textContent = data.bill_total_label || '0.00';
+          if (modal) modal.show();
+        })
+        .catch(function(err) { alert((err && err.message) ? err.message : 'Unable to load invoice detail'); });
+    });
+  });
+
+  if (modalEl && window.bootstrap) {
+    modalEl.addEventListener('shown.bs.modal', function() {
+      var backdrops = document.querySelectorAll('.modal-backdrop');
+      backdrops.forEach(function(el) { el.remove(); });
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+    });
+  }
+});
+</script>
+<script>
+if (window.fleetTableEnhance) window.fleetTableEnhance('maintenanceHistoryTable');
+if (window.fleetPrintExport) window.fleetPrintExport('maintenanceHistoryTable', 'Maintenance History Report', 'Maintenance_History_Report.csv');
+</script>
+{% endblock %}
