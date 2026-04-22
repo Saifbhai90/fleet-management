@@ -16991,6 +16991,7 @@ def vehicle_reading_setup_form():
     projects = Project.query.order_by(Project.name).all()
     vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
     maintenance_products = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
+    job_categories = _get_maintenance_job_categories()
 
     selected_vehicle_id = request.args.get('vehicle_id', type=int) or 0
     row = None
@@ -17030,6 +17031,7 @@ def vehicle_reading_setup_form():
                 districts=districts, projects=projects, vehicles=vehicles,
                 row=row, selected_vehicle_id=selected_vehicle_id,
                 maintenance_products=maintenance_products,
+                job_categories=job_categories,
                 baseline_rows=[],
                 latest_vehicle_reading=latest_vehicle_reading,
             )
@@ -17040,6 +17042,7 @@ def vehicle_reading_setup_form():
                 districts=districts, projects=projects, vehicles=vehicles,
                 row=row, selected_vehicle_id=selected_vehicle_id,
                 maintenance_products=maintenance_products,
+                job_categories=job_categories,
                 baseline_rows=[],
                 latest_vehicle_reading=latest_vehicle_reading,
             )
@@ -17060,6 +17063,7 @@ def vehicle_reading_setup_form():
                 districts=districts, projects=projects, vehicles=vehicles,
                 row=row, selected_vehicle_id=selected_vehicle_id,
                 maintenance_products=maintenance_products,
+                job_categories=job_categories,
                 baseline_rows=[],
                 latest_vehicle_reading=latest_vehicle_reading,
             )
@@ -17091,6 +17095,7 @@ def vehicle_reading_setup_form():
                     districts=districts, projects=projects, vehicles=vehicles,
                     row=row, selected_vehicle_id=selected_vehicle_id,
                     maintenance_products=maintenance_products,
+                    job_categories=job_categories,
                     baseline_rows=[],
                     latest_vehicle_reading=latest_vehicle_reading,
                 )
@@ -17101,6 +17106,7 @@ def vehicle_reading_setup_form():
                     districts=districts, projects=projects, vehicles=vehicles,
                     row=row, selected_vehicle_id=selected_vehicle_id,
                     maintenance_products=maintenance_products,
+                    job_categories=job_categories,
                     baseline_rows=[],
                     latest_vehicle_reading=latest_vehicle_reading,
                 )
@@ -17158,6 +17164,7 @@ def vehicle_reading_setup_form():
         row=row,
         selected_vehicle_id=selected_vehicle_id,
         maintenance_products=maintenance_products,
+        job_categories=job_categories,
         baseline_rows=baseline_view,
         latest_vehicle_reading=latest_vehicle_reading,
     )
@@ -17165,6 +17172,7 @@ def vehicle_reading_setup_form():
 
 @app.route('/expenses/vehicle-reading-setups')
 def vehicle_reading_setup_list():
+    _ensure_vehicle_maintenance_baseline_schema()
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
@@ -17211,6 +17219,19 @@ def vehicle_reading_setup_list():
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
     vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
+    vehicle_ids = [r.vehicle_id for r in pagination.items if r.vehicle_id]
+    baseline_counts = {}
+    overdue_counts = {}
+    if vehicle_ids:
+        bl_rows = WorkspaceVehicleMaintenanceBaseline.query.filter(
+            WorkspaceVehicleMaintenanceBaseline.employee_id == workspace_employee_id,
+            WorkspaceVehicleMaintenanceBaseline.vehicle_id.in_(vehicle_ids),
+        ).all()
+        for b in bl_rows:
+            baseline_counts[b.vehicle_id] = baseline_counts.get(b.vehicle_id, 0) + 1
+            stat = _baseline_status(b, latest_reading=_vehicle_latest_recorded_reading(b.vehicle_id))
+            if stat['status'] == 'Overdue':
+                overdue_counts[b.vehicle_id] = overdue_counts.get(b.vehicle_id, 0) + 1
 
     return render_template(
         'vehicle_reading_setup_list.html',
@@ -17226,6 +17247,8 @@ def vehicle_reading_setup_list():
         districts=districts,
         projects=projects,
         vehicles=vehicles,
+        baseline_counts=baseline_counts,
+        overdue_counts=overdue_counts,
     )
 
 
@@ -20936,6 +20959,180 @@ def maintenance_expense_history():
         repeat_summary=repeat_summary,
         pagination=pagination,
         per_page=per_page,
+    )
+
+
+@app.route('/maintenance-baseline-alert-report')
+def maintenance_baseline_alert_report():
+    _ensure_vehicle_maintenance_baseline_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    form = MaintenanceExpenseFilterForm()
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+
+    vehicle_q = Vehicle.query
+    if not is_master_or_admin and allowed_vehicles:
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
+
+    products_for_maintenance = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
+    product_choices = [(0, '-- All Products --')] + [(p.id, p.name) for p in products_for_maintenance]
+    job_category_choices = sorted({(j.get('name') or '').strip() for j in (_get_maintenance_job_categories() or []) if (j.get('name') or '').strip()})
+
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    product_id = request.args.get('product_id', type=int) or 0
+    job_category = (request.args.get('job_category') or '').strip()
+    status = (request.args.get('status') or 'all').strip().lower()
+
+    q = WorkspaceVehicleMaintenanceBaseline.query.options(
+        joinedload(WorkspaceVehicleMaintenanceBaseline.district),
+        joinedload(WorkspaceVehicleMaintenanceBaseline.project),
+        joinedload(WorkspaceVehicleMaintenanceBaseline.vehicle),
+        joinedload(WorkspaceVehicleMaintenanceBaseline.product),
+    ).filter(WorkspaceVehicleMaintenanceBaseline.employee_id == workspace_employee_id)
+
+    if not is_master_or_admin:
+        if allowed_projects:
+            q = q.filter(WorkspaceVehicleMaintenanceBaseline.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            q = q.filter(WorkspaceVehicleMaintenanceBaseline.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            q = q.filter(WorkspaceVehicleMaintenanceBaseline.vehicle_id.in_(list(allowed_vehicles)))
+    if district_id:
+        q = q.filter(WorkspaceVehicleMaintenanceBaseline.district_id == district_id)
+    if project_id:
+        q = q.filter(WorkspaceVehicleMaintenanceBaseline.project_id == project_id)
+    if vehicle_id:
+        q = q.filter(WorkspaceVehicleMaintenanceBaseline.vehicle_id == vehicle_id)
+    if product_id:
+        q = q.filter(WorkspaceVehicleMaintenanceBaseline.product_id == product_id)
+    if job_category:
+        q = q.filter(WorkspaceVehicleMaintenanceBaseline.job_category.ilike(f"%{job_category}%"))
+
+    baselines = q.order_by(WorkspaceVehicleMaintenanceBaseline.updated_at.desc(), WorkspaceVehicleMaintenanceBaseline.id.desc()).all()
+    latest_reading_cache = {}
+
+    def _latest_reading_for_vehicle(v_id):
+        if v_id not in latest_reading_cache:
+            latest_reading_cache[v_id] = _vehicle_latest_recorded_reading(v_id)
+        return latest_reading_cache[v_id]
+
+    rows = []
+    for b in baselines:
+        invoice_pair = db.session.query(MaintenanceExpense, MaintenanceExpenseItem).join(
+            MaintenanceExpenseItem, MaintenanceExpenseItem.maintenance_expense_id == MaintenanceExpense.id
+        ).filter(
+            MaintenanceExpense.vehicle_id == b.vehicle_id,
+            MaintenanceExpenseItem.product_id == b.product_id,
+        )
+        if workspace_employee_id:
+            invoice_pair = invoice_pair.filter(
+                db.or_(
+                    MaintenanceExpense.employee_id == workspace_employee_id,
+                    MaintenanceExpense.employee_id.is_(None),
+                )
+            )
+        latest_pair = invoice_pair.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).first()
+        last_invoice = latest_pair[0] if latest_pair else None
+
+        effective_date = b.last_done_date
+        effective_reading = float(b.last_done_reading) if b.last_done_reading is not None else None
+        source_label = 'Baseline'
+        last_invoice_no = '-'
+        if last_invoice:
+            inv_date = last_invoice.expense_date
+            inv_read = float(last_invoice.current_reading) if last_invoice.current_reading is not None else None
+            if inv_date and (effective_date is None or inv_date >= effective_date):
+                effective_date = inv_date
+                effective_reading = inv_read
+                source_label = 'Invoice'
+            last_invoice_no = f"MAINT-{last_invoice.id}"
+
+        class _Tmp:
+            pass
+        tmp = _Tmp()
+        tmp.interval_mode = b.interval_mode
+        tmp.interval_value = b.interval_value
+        tmp.last_done_date = effective_date
+        tmp.last_done_reading = effective_reading
+        stat = _baseline_status(tmp, latest_reading=_latest_reading_for_vehicle(b.vehicle_id))
+
+        if status in ('overdue', 'due_soon', 'on_track', 'reading_needed', 'no_interval'):
+            mapped = {
+                'overdue': 'Overdue',
+                'due_soon': 'Due Soon',
+                'on_track': 'On Track',
+                'reading_needed': 'Reading Needed',
+                'no_interval': 'No Interval',
+            }[status]
+            if stat['status'] != mapped:
+                continue
+
+        rows.append({
+            'baseline': b,
+            'status': stat['status'],
+            'next_due_date_label': stat['next_due_date_label'],
+            'next_due_reading_label': stat['next_due_reading_label'],
+            'remaining_days_label': stat['remaining_days_label'],
+            'remaining_km_label': stat['remaining_km_label'],
+            'effective_last_date_label': effective_date.strftime('%d-%m-%Y') if effective_date else '-',
+            'effective_last_reading_label': f'{float(effective_reading):.2f}' if effective_reading is not None else '-',
+            'latest_vehicle_reading_label': f'{float(_latest_reading_for_vehicle(b.vehicle_id)):.2f}' if _latest_reading_for_vehicle(b.vehicle_id) is not None else '-',
+            'source_label': source_label,
+            'last_invoice_no': last_invoice_no,
+            'last_invoice_id': (last_invoice.id if last_invoice else None),
+        })
+
+    totals = {
+        'count': len(rows),
+        'overdue': sum(1 for r in rows if r['status'] == 'Overdue'),
+        'due_soon': sum(1 for r in rows if r['status'] == 'Due Soon'),
+        'on_track': sum(1 for r in rows if r['status'] == 'On Track'),
+    }
+
+    page = request.args.get('page', 1, type=int) or 1
+    per_page = request.args.get('per_page', 25, type=int) or 25
+    if per_page not in (10, 20, 25, 50, 100):
+        per_page = 25
+    pagination = SimplePagination(rows, page, per_page)
+
+    return render_template(
+        'maintenance_baseline_alert_report.html',
+        title='Maintenance Baseline Alert Report',
+        form=form,
+        rows=pagination.items,
+        pagination=pagination,
+        per_page=per_page,
+        totals=totals,
+        district_id=district_id,
+        project_id=project_id,
+        vehicle_id=vehicle_id,
+        product_id=product_id,
+        job_category=job_category,
+        status=status,
+        product_choices=product_choices,
+        job_category_choices=job_category_choices,
     )
 
 

@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<style>
+  .mbas-wrap { max-width: min(1780px, calc(100vw - 88px)); margin: 0 auto; }
+  .mbas-head { background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); color: #fff; border-radius: 12px; padding: .7rem 1rem; }
+  .mbas-card { border: 1px solid #e9edf3; border-radius: 12px; box-shadow: 0 2px 12px rgba(15,23,42,.06); }
+  .mbas-kpi { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; background: #f8fafc; }
+  .mbas-kpi .k { color: #64748b; font-size: .76rem; text-transform: uppercase; }
+  .mbas-kpi .v { color: #0f172a; font-size: 1.05rem; font-weight: 700; }
+</style>
+
+<div class="container-fluid py-3">
+  <div class="mbas-wrap">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 mbas-head">
+      <h5 class="mb-0"><i class="bi bi-bell-fill me-2"></i>Maintenance Baseline Alert Report</h5>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('vehicle_reading_setup_list') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-speedometer2 me-1"></i>Reading Setup List</a>
+        <a href="{{ url_for('maintenance_expense_history') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-graph-up-arrow me-1"></i>Maintenance History</a>
+        <button class="btn btn-outline-light btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+        <button class="btn btn-outline-light btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      </div>
+    </div>
+
+    <div class="card mbas-card mb-3">
+      <div class="card-header bg-light fw-semibold"><i class="bi bi-funnel me-1 text-primary"></i>Filters</div>
+      <div class="card-body">
+        <form method="GET" action="{{ url_for('maintenance_baseline_alert_report') }}" class="row g-3 align-items-end">
+          <div class="col-md-2">
+            <label class="form-label small">District</label>
+            <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select">
+              {% for val, label in form.district_id.choices %}
+              <option value="{{ val }}" {% if district_id|int == val|int %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Project</label>
+            <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
+              {% for val, label in form.project_id.choices %}
+              <option value="{{ val }}" {% if project_id|int == val|int %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Vehicle</label>
+            <select name="vehicle_id" id="vehicleSelect" class="form-select form-select-sm search-select">
+              {% for val, label in form.vehicle_id.choices %}
+              <option value="{{ val }}" {% if vehicle_id|int == val|int %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Product</label>
+            <select name="product_id" class="form-select form-select-sm search-select">
+              {% for val, label in product_choices %}
+              <option value="{{ val }}" {% if product_id|int == val|int %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Job Category</label>
+            <select name="job_category" class="form-select form-select-sm search-select">
+              <option value="">-- All --</option>
+              {% for jc in job_category_choices %}
+              <option value="{{ jc }}" {% if job_category == jc %}selected{% endif %}>{{ jc }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Status</label>
+            <select name="status" class="form-select form-select-sm">
+              <option value="all" {% if status == 'all' %}selected{% endif %}>All</option>
+              <option value="overdue" {% if status == 'overdue' %}selected{% endif %}>Overdue</option>
+              <option value="due_soon" {% if status == 'due_soon' %}selected{% endif %}>Due Soon</option>
+              <option value="on_track" {% if status == 'on_track' %}selected{% endif %}>On Track</option>
+              <option value="reading_needed" {% if status == 'reading_needed' %}selected{% endif %}>Reading Needed</option>
+              <option value="no_interval" {% if status == 'no_interval' %}selected{% endif %}>No Interval</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-search me-1"></i>Apply</button>
+          </div>
+          <div class="col-md-2">
+            <a href="{{ url_for('maintenance_baseline_alert_report') }}" class="btn btn-outline-secondary btn-sm w-100">Reset</a>
+          </div>
+          <input type="hidden" name="per_page" value="{{ per_page }}">
+        </form>
+      </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+      <div class="col-lg-3 col-md-6"><div class="mbas-kpi"><div class="k">Total</div><div class="v">{{ totals.count }}</div></div></div>
+      <div class="col-lg-3 col-md-6"><div class="mbas-kpi"><div class="k">Overdue</div><div class="v text-danger">{{ totals.overdue }}</div></div></div>
+      <div class="col-lg-3 col-md-6"><div class="mbas-kpi"><div class="k">Due Soon</div><div class="v text-warning">{{ totals.due_soon }}</div></div></div>
+      <div class="col-lg-3 col-md-6"><div class="mbas-kpi"><div class="k">On Track</div><div class="v text-success">{{ totals.on_track }}</div></div></div>
+    </div>
+
+    <div class="card mbas-card">
+      <div class="card-header bg-light fw-semibold">Tracking Rows (Product + Job Category based)</div>
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0" id="maintenanceBaselineAlertTable">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>District</th>
+              <th>Project</th>
+              <th>Vehicle</th>
+              <th>Product</th>
+              <th>Job Category</th>
+              <th>Status</th>
+              <th>Last Source</th>
+              <th>Last Date</th>
+              <th>Last Reading</th>
+              <th>Latest Vehicle Reading</th>
+              <th>Interval</th>
+              <th>Next Due Date</th>
+              <th>Next Due Reading</th>
+              <th>Remaining</th>
+              <th>Invoice</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            {% set b = row.baseline %}
+            <tr>
+              <td>{{ loop.index + ((pagination.page - 1) * per_page) }}</td>
+              <td>{{ b.district.name if b.district else '-' }}</td>
+              <td>{{ b.project.name if b.project else '-' }}</td>
+              <td class="fw-semibold">{{ b.vehicle.vehicle_no if b.vehicle else '-' }}</td>
+              <td>{{ b.product.name if b.product else ('Product #' ~ b.product_id) }}</td>
+              <td>{{ b.job_category or '-' }}</td>
+              <td>
+                <span class="badge {% if row.status == 'Overdue' %}bg-danger{% elif row.status == 'Due Soon' %}bg-warning text-dark{% elif row.status == 'On Track' %}bg-success{% else %}bg-secondary{% endif %}">
+                  {{ row.status }}
+                </span>
+              </td>
+              <td>{{ row.source_label }}</td>
+              <td>{{ row.effective_last_date_label }}</td>
+              <td>{{ row.effective_last_reading_label }}</td>
+              <td>{{ row.latest_vehicle_reading_label }}</td>
+              <td>{{ 'KM ' ~ b.interval_value if b.interval_mode == 'interval_km' else 'Days ' ~ b.interval_value if b.interval_mode == 'interval_day' else '-' }}</td>
+              <td>{{ row.next_due_date_label }}</td>
+              <td>{{ row.next_due_reading_label }}</td>
+              <td>{% if b.interval_mode == 'interval_day' %}{{ row.remaining_days_label }} days{% elif b.interval_mode == 'interval_km' %}{{ row.remaining_km_label }} km{% else %}-{% endif %}</td>
+              <td>
+                {% if row.last_invoice_id %}
+                <a href="{{ url_for('maintenance_expense_form', pk=row.last_invoice_id) }}" class="text-decoration-none fw-semibold">{{ row.last_invoice_no }}</a>
+                {% else %}
+                -
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="16" class="text-center text-muted py-4">No tracking rows found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
+        {% if pagination and pagination.pages > 1 %}
+        <nav>
+          <ul class="pagination pagination-sm mb-0 justify-content-end">
+            <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
+            {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}
+              {% if p %}
+              <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>
+              {% else %}
+              <li class="page-item disabled"><span class="page-link">…</span></li>
+              {% endif %}
+            {% endfor %}
+            <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
+          </ul>
+        </nav>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function goPage(n) {
+  var u = new URLSearchParams(window.location.search);
+  u.set('page', n);
+  window.location.search = u.toString();
+}
+document.addEventListener('DOMContentLoaded', function() {
+  var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
+  var vehicleSelect = document.getElementById('vehicleSelect');
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = this.value;
+      if (projectSelect.tomselect) projectSelect.tomselect.destroy();
+      if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
+      projectSelect.innerHTML = '<option value="0">-- All Projects --</option>';
+      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+      if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(vehicleSelect.parentNode);
+      if (!did || did === '0') { if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(projectSelect.parentNode); return; }
+      fetch('/get_projects_by_district/' + did).then(function(r){ return r.json(); }).then(function(arr){
+        arr.forEach(function(p){ var o = document.createElement('option'); o.value = p.id; o.textContent = p.name; projectSelect.appendChild(o); });
+        if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(projectSelect.parentNode);
+      });
+    });
+  }
+  if (projectSelect && vehicleSelect) {
+    projectSelect.addEventListener('change', function() {
+      var pid = this.value;
+      var did = districtSelect ? districtSelect.value : '';
+      if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
+      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+      if (!pid || pid === '0') { if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(vehicleSelect.parentNode); return; }
+      var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid);
+      if (did && did !== '0') url += '&district_id=' + encodeURIComponent(did);
+      fetch(url).then(function(r){ return r.json(); }).then(function(arr){
+        arr.forEach(function(v){ var o = document.createElement('option'); o.value = v.id; o.textContent = v.vehicle_no; vehicleSelect.appendChild(o); });
+        if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(vehicleSelect.parentNode);
+      });
+    });
+  }
+});
+</script>
+<script>
+if (window.fleetTableEnhance) window.fleetTableEnhance('maintenanceBaselineAlertTable');
+if (window.fleetPrintExport) window.fleetPrintExport('maintenanceBaselineAlertTable', 'Maintenance Baseline Alert Report', 'Maintenance_Baseline_Alert_Report.csv');
+</script>
+{% endblock %}

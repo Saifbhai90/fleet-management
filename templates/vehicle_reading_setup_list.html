@@ -13,6 +13,7 @@
     <div class="d-flex justify-content-between align-items-center vrs-list-header mb-3">
       <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Vehicle Fuel/Oil Previous Reading Setup</h5>
       <div class="d-flex gap-2">
+        <a href="{{ url_for('maintenance_baseline_alert_report') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-bell me-1"></i>Maintenance Tracking Report</a>
         <a href="{{ url_for('vehicle_reading_setup_print', from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, search=search) }}" class="btn btn-outline-light btn-sm" target="_blank"><i class="bi bi-eye me-1"></i>Print / Preview</a>
         <a href="{{ url_for('vehicle_reading_setup_export', from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, search=search) }}" class="btn btn-outline-light btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Export</a>
         <a href="{{ url_for('vehicle_reading_setup_import') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-upload me-1"></i>Import</a>
@@ -96,6 +97,8 @@
               <th>Vehicle</th>
               <th class="text-end">Fuel Prev</th>
               <th class="text-end">Oil Prev</th>
+              <th class="text-end">Maint Baselines</th>
+              <th class="text-end">Overdue</th>
               <th>Remarks</th>
               <th class="text-center">Action</th>
             </tr>
@@ -110,13 +113,15 @@
               <td class="fw-semibold">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
               <td class="text-end">{{ "%.2f"|format(r.fuel_previous_reading|float) if r.fuel_previous_reading is not none else '-' }}</td>
               <td class="text-end">{{ "%.2f"|format(r.oil_previous_reading|float) if r.oil_previous_reading is not none else '-' }}</td>
+              <td class="text-end">{{ baseline_counts.get(r.vehicle_id, 0) }}</td>
+              <td class="text-end {% if overdue_counts.get(r.vehicle_id, 0) > 0 %}text-danger fw-semibold{% endif %}">{{ overdue_counts.get(r.vehicle_id, 0) }}</td>
               <td>{{ r.remarks or '-' }}</td>
               <td class="text-center">
                 <a href="{{ url_for('vehicle_reading_setup_form', vehicle_id=r.vehicle_id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i></a>
               </td>
             </tr>
             {% else %}
-            <tr id="vrsNoDataRow"><td colspan="9" class="text-center py-4 text-muted">No setup entries found.</td></tr>
+            <tr id="vrsNoDataRow"><td colspan="11" class="text-center py-4 text-muted">No setup entries found.</td></tr>
             {% endfor %}
           </tbody>
         </table>
