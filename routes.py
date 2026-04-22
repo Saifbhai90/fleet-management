@@ -16910,6 +16910,16 @@ def _ensure_vehicle_maintenance_baseline_schema():
             db.session.commit()
         except Exception:
             db.session.rollback()
+    for stmt in [
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ALTER COLUMN product_id DROP NOT NULL",
+        "DROP INDEX IF EXISTS uq_ws_vehicle_maint_emp_vehicle_product",
+        "CREATE INDEX IF NOT EXISTS ix_ws_maint_baseline_emp_veh_jobcat ON workspace_vehicle_maintenance_baseline (employee_id, vehicle_id, job_category)",
+    ]:
+        try:
+            db.session.execute(text(stmt))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
     _vehicle_maintenance_baseline_schema_ready['ok'] = True
 
 
@@ -16938,6 +16948,53 @@ def _vehicle_latest_recorded_reading(vehicle_id):
     return max(latest_values) if latest_values else None
 
 
+def _job_category_config_by_name(name):
+    if not name or not str(name).strip():
+        return None
+    n = (name or '').strip().lower()
+    for j in _get_maintenance_job_categories() or []:
+        if (j.get('name') or '').strip().lower() == n:
+            return j
+    return None
+
+
+def _canonical_job_category_name(user_input):
+    u = (user_input or '').strip()
+    if not u:
+        return None
+    for j in _get_maintenance_job_categories() or []:
+        jn = (j.get('name') or '').strip()
+        if jn and jn.lower() == u.lower():
+            return jn
+    return None
+
+
+def _merged_interval_for_baseline(baseline):
+    """Row-stored interval (legacy) or from Add Maintenance job category settings."""
+    mode = getattr(baseline, 'interval_mode', None) or None
+    val = getattr(baseline, 'interval_value', None)
+    try:
+        val = int(val) if val is not None else None
+    except (TypeError, ValueError):
+        val = None
+    if mode in ('interval_km', 'interval_day') and val and val > 0:
+        return mode, val
+    jc = getattr(baseline, 'job_category', None)
+    cfg = _job_category_config_by_name(jc) if jc else None
+    if not cfg:
+        return None, None
+    m = (cfg.get('interval_mode') or '').strip()
+    if m not in ('interval_km', 'interval_day'):
+        m = None
+    try:
+        v = int(float(cfg.get('interval_value')))
+    except (TypeError, ValueError):
+        v = None
+    if m and v and v > 0:
+        return m, v
+    return None, None
+
+
 def _baseline_status(baseline, latest_reading=None):
     today = pk_date()
     status = 'No Interval'
@@ -16945,8 +17002,9 @@ def _baseline_status(baseline, latest_reading=None):
     next_due_reading = None
     remaining_days = None
     remaining_km = None
-    if baseline.interval_mode == 'interval_day' and baseline.interval_value and baseline.last_done_date:
-        next_due_date = baseline.last_done_date + timedelta(days=int(baseline.interval_value))
+    mode, ival = _merged_interval_for_baseline(baseline)
+    if mode == 'interval_day' and ival and baseline.last_done_date:
+        next_due_date = baseline.last_done_date + timedelta(days=int(ival))
         remaining_days = (next_due_date - today).days
         if remaining_days < 0:
             status = 'Overdue'
@@ -16954,8 +17012,8 @@ def _baseline_status(baseline, latest_reading=None):
             status = 'Due Soon'
         else:
             status = 'On Track'
-    elif baseline.interval_mode == 'interval_km' and baseline.interval_value and baseline.last_done_reading is not None:
-        next_due_reading = float(baseline.last_done_reading) + float(baseline.interval_value)
+    elif mode == 'interval_km' and ival and baseline.last_done_reading is not None:
+        next_due_reading = float(baseline.last_done_reading) + float(ival)
         if latest_reading is None:
             status = 'Reading Needed'
         else:
@@ -16990,7 +17048,6 @@ def vehicle_reading_setup_form():
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
     vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
-    maintenance_products = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
     job_categories = _get_maintenance_job_categories()
 
     selected_vehicle_id = request.args.get('vehicle_id', type=int) or 0
@@ -17033,10 +17090,7 @@ def vehicle_reading_setup_form():
         fuel_prev_raw = (request.form.get('fuel_previous_reading') or '').strip()
         oil_prev_raw = (request.form.get('oil_previous_reading') or '').strip()
         remarks = (request.form.get('remarks') or '').strip() or None
-        maintenance_product_id = request.form.get('maintenance_product_id', type=int) or None
         maintenance_job_category = (request.form.get('maintenance_job_category') or '').strip() or None
-        maintenance_interval_mode = (request.form.get('maintenance_interval_mode') or '').strip()
-        maintenance_interval_value = request.form.get('maintenance_interval_value', type=int) or None
         maintenance_last_date = parse_date(request.form.get('maintenance_last_date'))
         maintenance_last_reading_raw = (request.form.get('maintenance_last_reading') or '').strip()
         maintenance_remarks = (request.form.get('maintenance_remarks') or '').strip() or None
@@ -17047,7 +17101,6 @@ def vehicle_reading_setup_form():
                 'vehicle_reading_setup_form.html',
                 districts=districts, projects=projects, vehicles=vehicles,
                 row=row, selected_vehicle_id=selected_vehicle_id,
-                maintenance_products=maintenance_products,
                 job_categories=job_categories,
                 baseline_rows=[],
                 latest_vehicle_reading=latest_vehicle_reading,
@@ -17059,7 +17112,6 @@ def vehicle_reading_setup_form():
                 'vehicle_reading_setup_form.html',
                 districts=districts, projects=projects, vehicles=vehicles,
                 row=row, selected_vehicle_id=selected_vehicle_id,
-                maintenance_products=maintenance_products,
                 job_categories=job_categories,
                 baseline_rows=[],
                 latest_vehicle_reading=latest_vehicle_reading,
@@ -17081,7 +17133,6 @@ def vehicle_reading_setup_form():
                 'vehicle_reading_setup_form.html',
                 districts=districts, projects=projects, vehicles=vehicles,
                 row=row, selected_vehicle_id=selected_vehicle_id,
-                maintenance_products=maintenance_products,
                 job_categories=job_categories,
                 baseline_rows=[],
                 latest_vehicle_reading=latest_vehicle_reading,
@@ -17107,69 +17158,66 @@ def vehicle_reading_setup_form():
         rec.remarks = remarks
         rec.created_by_user_id = session.get('user_id')
 
-        if maintenance_product_id:
-            if maintenance_interval_mode not in ('interval_km', 'interval_day'):
-                flash('Maintenance interval mode select karein (KM/Days).', 'danger')
+        if maintenance_job_category:
+            cat_name = _canonical_job_category_name(maintenance_job_category)
+            if not cat_name:
+                flash('Job category Add Maintenance wali list se select karein (ya pehle Add Job Category se banayein).', 'danger')
                 return render_template(
                     'vehicle_reading_setup_form.html',
                     districts=districts, projects=projects, vehicles=vehicles,
                     row=row, selected_vehicle_id=selected_vehicle_id,
-                    maintenance_products=maintenance_products,
                     job_categories=job_categories,
                     baseline_rows=[],
                     latest_vehicle_reading=latest_vehicle_reading,
                     vrs_prefill=vrs_prefill,
                 )
-            if not maintenance_interval_value or maintenance_interval_value <= 0:
-                flash('Maintenance interval value 0 se badi honi chahiye.', 'danger')
-                return render_template(
-                    'vehicle_reading_setup_form.html',
-                    districts=districts, projects=projects, vehicles=vehicles,
-                    row=row, selected_vehicle_id=selected_vehicle_id,
-                    maintenance_products=maintenance_products,
-                    job_categories=job_categories,
-                    baseline_rows=[],
-                    latest_vehicle_reading=latest_vehicle_reading,
-                    vrs_prefill=vrs_prefill,
-                )
-            base = WorkspaceVehicleMaintenanceBaseline.query.filter_by(
-                employee_id=workspace_employee_id,
-                vehicle_id=vehicle_id,
-                product_id=maintenance_product_id,
+            cfg = _job_category_config_by_name(cat_name)
+            base = WorkspaceVehicleMaintenanceBaseline.query.filter(
+                WorkspaceVehicleMaintenanceBaseline.employee_id == workspace_employee_id,
+                WorkspaceVehicleMaintenanceBaseline.vehicle_id == vehicle_id,
+                func.lower(func.trim(WorkspaceVehicleMaintenanceBaseline.job_category)) == cat_name.lower(),
             ).first()
             if not base:
                 base = WorkspaceVehicleMaintenanceBaseline(
                     employee_id=workspace_employee_id,
                     vehicle_id=vehicle_id,
-                    product_id=maintenance_product_id,
+                    product_id=None,
+                    job_category=cat_name,
                 )
                 db.session.add(base)
             base.district_id = district_id
             base.project_id = project_id
-            base.job_category = maintenance_job_category
-            base.interval_mode = maintenance_interval_mode
-            base.interval_value = maintenance_interval_value
+            base.job_category = cat_name
+            base.product_id = None
+            if cfg:
+                base.interval_mode = cfg.get('interval_mode')
+                try:
+                    base.interval_value = int(float(cfg.get('interval_value', 0)))
+                except (TypeError, ValueError):
+                    base.interval_value = None
             base.last_done_date = maintenance_last_date
             base.last_done_reading = maintenance_last_reading
             base.remarks = maintenance_remarks
             base.created_by_user_id = session.get('user_id')
 
         db.session.commit()
-        flash('Vehicle setup saved. Maintenance baseline updated.' if maintenance_product_id else 'Vehicle previous reading setup saved.', 'success')
+        flash('Vehicle setup saved. Job category baseline updated.' if maintenance_job_category else 'Vehicle previous reading setup saved.', 'success')
         return redirect(url_for('vehicle_reading_setup_form', vehicle_id=vehicle_id))
 
     baseline_view = []
     if baseline_rows:
         for b in baseline_rows:
             stat = _baseline_status(b, latest_reading=latest_vehicle_reading)
+            m_mode, m_val = _merged_interval_for_baseline(b)
+            interval_mode_lbl = 'KM' if m_mode == 'interval_km' else ('Days' if m_mode == 'interval_day' else '-')
+            interval_val_lbl = m_val if m_val is not None else '-'
             baseline_view.append({
                 'id': b.id,
-                'product_name': b.product.name if b.product else f'Product #{b.product_id}',
                 'job_category': b.job_category or '-',
                 'last_done_date_label': b.last_done_date.strftime('%d-%m-%Y') if b.last_done_date else '-',
                 'last_done_reading_label': f'{float(b.last_done_reading):.2f}' if b.last_done_reading is not None else '-',
-                'interval_mode': 'KM' if b.interval_mode == 'interval_km' else ('Days' if b.interval_mode == 'interval_day' else '-'),
-                'interval_value': b.interval_value or '-',
+                'interval_mode': interval_mode_lbl,
+                'interval_value': interval_val_lbl,
                 'status': stat['status'],
                 'next_due_date_label': stat['next_due_date_label'],
                 'next_due_reading_label': stat['next_due_reading_label'],
@@ -17185,7 +17233,6 @@ def vehicle_reading_setup_form():
         vehicles=vehicles,
         row=row,
         selected_vehicle_id=selected_vehicle_id,
-        maintenance_products=maintenance_products,
         job_categories=job_categories,
         baseline_rows=baseline_view,
         latest_vehicle_reading=latest_vehicle_reading,
@@ -21017,14 +21064,11 @@ def maintenance_baseline_alert_report():
         vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
     form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.order_by(Vehicle.vehicle_no).all()]
 
-    products_for_maintenance = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
-    product_choices = [(0, '-- All Products --')] + [(p.id, p.name) for p in products_for_maintenance]
     job_category_choices = sorted({(j.get('name') or '').strip() for j in (_get_maintenance_job_categories() or []) if (j.get('name') or '').strip()})
 
     district_id = request.args.get('district_id', type=int) or 0
     project_id = request.args.get('project_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
-    product_id = request.args.get('product_id', type=int) or 0
     job_category = (request.args.get('job_category') or '').strip()
     status = (request.args.get('status') or 'all').strip().lower()
 
@@ -21032,7 +21076,6 @@ def maintenance_baseline_alert_report():
         joinedload(WorkspaceVehicleMaintenanceBaseline.district),
         joinedload(WorkspaceVehicleMaintenanceBaseline.project),
         joinedload(WorkspaceVehicleMaintenanceBaseline.vehicle),
-        joinedload(WorkspaceVehicleMaintenanceBaseline.product),
     ).filter(WorkspaceVehicleMaintenanceBaseline.employee_id == workspace_employee_id)
 
     if not is_master_or_admin:
@@ -21048,8 +21091,6 @@ def maintenance_baseline_alert_report():
         q = q.filter(WorkspaceVehicleMaintenanceBaseline.project_id == project_id)
     if vehicle_id:
         q = q.filter(WorkspaceVehicleMaintenanceBaseline.vehicle_id == vehicle_id)
-    if product_id:
-        q = q.filter(WorkspaceVehicleMaintenanceBaseline.product_id == product_id)
     if job_category:
         q = q.filter(WorkspaceVehicleMaintenanceBaseline.job_category.ilike(f"%{job_category}%"))
 
@@ -21063,21 +21104,37 @@ def maintenance_baseline_alert_report():
 
     rows = []
     for b in baselines:
-        invoice_pair = db.session.query(MaintenanceExpense, MaintenanceExpenseItem).join(
-            MaintenanceExpenseItem, MaintenanceExpenseItem.maintenance_expense_id == MaintenanceExpense.id
-        ).filter(
-            MaintenanceExpense.vehicle_id == b.vehicle_id,
-            MaintenanceExpenseItem.product_id == b.product_id,
-        )
-        if workspace_employee_id:
-            invoice_pair = invoice_pair.filter(
-                db.or_(
-                    MaintenanceExpense.employee_id == workspace_employee_id,
-                    MaintenanceExpense.employee_id.is_(None),
-                )
+        last_invoice = None
+        cat = (b.job_category or '').strip()
+        if cat:
+            inv_q = MaintenanceExpense.query.filter(
+                MaintenanceExpense.vehicle_id == b.vehicle_id,
+                func.lower(func.trim(MaintenanceExpense.job_category)) == cat.lower(),
             )
-        latest_pair = invoice_pair.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).first()
-        last_invoice = latest_pair[0] if latest_pair else None
+            if workspace_employee_id:
+                inv_q = inv_q.filter(
+                    db.or_(
+                        MaintenanceExpense.employee_id == workspace_employee_id,
+                        MaintenanceExpense.employee_id.is_(None),
+                    )
+                )
+            last_invoice = inv_q.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).first()
+        elif b.product_id:
+            invoice_pair = db.session.query(MaintenanceExpense, MaintenanceExpenseItem).join(
+                MaintenanceExpenseItem, MaintenanceExpenseItem.maintenance_expense_id == MaintenanceExpense.id
+            ).filter(
+                MaintenanceExpense.vehicle_id == b.vehicle_id,
+                MaintenanceExpenseItem.product_id == b.product_id,
+            )
+            if workspace_employee_id:
+                invoice_pair = invoice_pair.filter(
+                    db.or_(
+                        MaintenanceExpense.employee_id == workspace_employee_id,
+                        MaintenanceExpense.employee_id.is_(None),
+                    )
+                )
+            latest_pair = invoice_pair.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).first()
+            last_invoice = latest_pair[0] if latest_pair else None
 
         effective_date = b.last_done_date
         effective_reading = float(b.last_done_reading) if b.last_done_reading is not None else None
@@ -21094,9 +21151,10 @@ def maintenance_baseline_alert_report():
 
         class _Tmp:
             pass
+        m_mode, m_val = _merged_interval_for_baseline(b)
         tmp = _Tmp()
-        tmp.interval_mode = b.interval_mode
-        tmp.interval_value = b.interval_value
+        tmp.interval_mode = m_mode
+        tmp.interval_value = m_val
         tmp.last_done_date = effective_date
         tmp.last_done_reading = effective_reading
         stat = _baseline_status(tmp, latest_reading=_latest_reading_for_vehicle(b.vehicle_id))
@@ -21114,6 +21172,8 @@ def maintenance_baseline_alert_report():
 
         rows.append({
             'baseline': b,
+            'display_interval_mode': m_mode,
+            'display_interval_value': m_val,
             'status': stat['status'],
             'next_due_date_label': stat['next_due_date_label'],
             'next_due_reading_label': stat['next_due_reading_label'],
@@ -21151,10 +21211,8 @@ def maintenance_baseline_alert_report():
         district_id=district_id,
         project_id=project_id,
         vehicle_id=vehicle_id,
-        product_id=product_id,
         job_category=job_category,
         status=status,
-        product_choices=product_choices,
         job_category_choices=job_category_choices,
     )
 

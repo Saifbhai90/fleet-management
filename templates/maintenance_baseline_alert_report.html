@@ -51,14 +51,6 @@
             </select>
           </div>
           <div class="col-md-2">
-            <label class="form-label small">Product</label>
-            <select name="product_id" class="form-select form-select-sm search-select">
-              {% for val, label in product_choices %}
-              <option value="{{ val }}" {% if product_id|int == val|int %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-2">
             <label class="form-label small">Job Category</label>
             <select name="job_category" class="form-select form-select-sm search-select">
               <option value="">-- All --</option>
@@ -97,7 +89,7 @@
     </div>
 
     <div class="card mbas-card">
-      <div class="card-header bg-light fw-semibold">Tracking Rows (Product + Job Category based)</div>
+      <div class="card-header bg-light fw-semibold">Tracking rows (Job category)</div>
       <div class="table-responsive">
         <table class="table table-hover table-sm align-middle mb-0" id="maintenanceBaselineAlertTable">
           <thead class="table-light">
@@ -106,7 +98,6 @@
               <th>District</th>
               <th>Project</th>
               <th>Vehicle</th>
-              <th>Product</th>
               <th>Job Category</th>
               <th>Status</th>
               <th>Last Source</th>
@@ -128,7 +119,6 @@
               <td>{{ b.district.name if b.district else '-' }}</td>
               <td>{{ b.project.name if b.project else '-' }}</td>
               <td class="fw-semibold">{{ b.vehicle.vehicle_no if b.vehicle else '-' }}</td>
-              <td>{{ b.product.name if b.product else ('Product #' ~ b.product_id) }}</td>
               <td>{{ b.job_category or '-' }}</td>
               <td>
                 <span class="badge {% if row.status == 'Overdue' %}bg-danger{% elif row.status == 'Due Soon' %}bg-warning text-dark{% elif row.status == 'On Track' %}bg-success{% else %}bg-secondary{% endif %}">
@@ -139,10 +129,10 @@
               <td>{{ row.effective_last_date_label }}</td>
               <td>{{ row.effective_last_reading_label }}</td>
               <td>{{ row.latest_vehicle_reading_label }}</td>
-              <td>{{ 'KM ' ~ b.interval_value if b.interval_mode == 'interval_km' else 'Days ' ~ b.interval_value if b.interval_mode == 'interval_day' else '-' }}</td>
+              <td>{% if row.display_interval_mode == 'interval_km' %}KM {{ row.display_interval_value }}{% elif row.display_interval_mode == 'interval_day' %}Days {{ row.display_interval_value }}{% else %}-{% endif %}</td>
               <td>{{ row.next_due_date_label }}</td>
               <td>{{ row.next_due_reading_label }}</td>
-              <td>{% if b.interval_mode == 'interval_day' %}{{ row.remaining_days_label }} days{% elif b.interval_mode == 'interval_km' %}{{ row.remaining_km_label }} km{% else %}-{% endif %}</td>
+              <td>{% if row.display_interval_mode == 'interval_day' %}{{ row.remaining_days_label }} days{% elif row.display_interval_mode == 'interval_km' %}{{ row.remaining_km_label }} km{% else %}-{% endif %}</td>
               <td>
                 {% if row.last_invoice_id %}
                 <a href="{{ url_for('maintenance_expense_form', pk=row.last_invoice_id) }}" class="text-decoration-none fw-semibold">{{ row.last_invoice_no }}</a>
@@ -152,7 +142,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="16" class="text-center text-muted py-4">No tracking rows found.</td></tr>
+            <tr><td colspan="15" class="text-center text-muted py-4">No tracking rows found.</td></tr>
             {% endfor %}
           </tbody>
         </table>

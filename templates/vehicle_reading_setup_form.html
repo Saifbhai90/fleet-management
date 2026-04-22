@@ -5,7 +5,7 @@
   .vrs-wrap { max-width: min(1500px, calc(100vw - 96px)); margin: 0 auto; }
   .vrs-wrap .page-header { background: linear-gradient(135deg, #198754 0%, #157347 100%); color: #fff; padding: .6rem 1rem; border-radius: 10px; margin-bottom: .7rem; }
   .vrs-wrap .card { border: 1px solid #e9ecef; border-radius: 10px; }
-  .vrs-baseline-card { border: 1px dashed #adb5bd; border-radius: 10px; background: #f8fafc; padding: 10px; }
+  .vrs-sep { border-top: 1px solid #e9ecef; margin: .5rem 0 .75rem; padding-top: .75rem; }
   .vrs-baseline-table th, .vrs-baseline-table td { font-size: .82rem; white-space: nowrap; }
 </style>
 
@@ -64,62 +64,40 @@
         </div>
         <div class="col-md-6">
           <label class="form-label fw-semibold">Remarks</label>
-          <input type="text" name="remarks" id="vrsRemarks" class="form-control" value="{% if row and row.remarks is not none %}{{ row.remarks }}{% endif %}" placeholder="Optional">
+          <input type="text" name="remarks" id="vrsRemarks" class="form-control" value="{% if row and row.remarks is not none %}{{ row.remarks }}{% endif %}" placeholder="Optional (fuel/oil setup)">
         </div>
 
-        <div class="col-12">
-          <div class="vrs-baseline-card">
-            <div class="fw-semibold mb-2"><i class="bi bi-wrench-adjustable-circle me-1"></i>Maintenance Baseline (Optional, Product wise)</div>
-            <div class="row g-2">
-              <div class="col-md-3">
-                <label class="form-label small mb-1">Product</label>
-                <select name="maintenance_product_id" id="vrsMaintProduct" class="form-select form-select-sm search-select">
-                  <option value="">-- Select Product --</option>
-                  {% for p in maintenance_products or [] %}
-                  <option value="{{ p.id }}">{{ p.name }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label small mb-1">Job Category</label>
-                <select name="maintenance_job_category" id="vrsMaintJobCategory" class="form-select form-select-sm search-select">
-                  <option value="">-- Select Category --</option>
-                  {% for jc in job_categories or [] %}
-                  <option value="{{ jc['name'] if jc is mapping else jc }}">{{ jc['name'] if jc is mapping else jc }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="col-md-2">
-                <label class="form-label small mb-1">Last Done Date</label>
-                <input type="text" name="maintenance_last_date" id="vrsMaintLastDate" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy">
-              </div>
-              <div class="col-md-2">
-                <label class="form-label small mb-1">Last Done Reading</label>
-                <input type="number" step="0.01" min="0" name="maintenance_last_reading" id="vrsMaintLastReading" class="form-control form-control-sm" placeholder="0.00">
-              </div>
-              <div class="col-md-1">
-                <label class="form-label small mb-1">Mode</label>
-                <select name="maintenance_interval_mode" id="vrsMaintMode" class="form-select form-select-sm">
-                  <option value="">--</option>
-                  <option value="interval_km">KM</option>
-                  <option value="interval_day">Days</option>
-                </select>
-              </div>
-              <div class="col-md-1">
-                <label class="form-label small mb-1">Interval</label>
-                <input type="number" min="1" step="1" name="maintenance_interval_value" id="vrsMaintInterval" class="form-control form-control-sm" placeholder="0">
-              </div>
-              <div class="col-md-12">
-                <label class="form-label small mb-1">Maintenance Notes</label>
-                <input type="text" name="maintenance_remarks" id="vrsMaintRemarks" class="form-control form-control-sm" placeholder="Optional">
-              </div>
+        <div class="col-12 vrs-sep">
+          <div class="fw-semibold mb-2 text-secondary"><i class="bi bi-wrench-adjustable-circle me-1"></i>Maintenance baseline (Job category) — optional</div>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+              <label class="form-label small mb-1">Job category</label>
+              <select name="maintenance_job_category" id="vrsMaintJobCategory" class="form-select form-select-sm search-select">
+                <option value="">-- Select category (Add Maintenance list) --</option>
+                {% for jc in job_categories or [] %}
+                <option value="{{ jc['name'] if jc is mapping else jc }}">{{ jc['name'] if jc is mapping else jc }}</option>
+                {% endfor %}
+              </select>
             </div>
-            <div class="small text-muted mt-2">
-              Tip: Agar product select karke above values save karenge to invoice banaye baghair bhi due status track hoga.
-              {% if latest_vehicle_reading is not none %} Latest vehicle reading: <strong>{{ "%.2f"|format(latest_vehicle_reading|float) }}</strong>{% endif %}
+            <div class="col-md-2">
+              <label class="form-label small mb-1">Last done date</label>
+              <input type="text" name="maintenance_last_date" id="vrsMaintLastDate" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-1">Last done reading</label>
+              <input type="number" step="0.01" min="0" name="maintenance_last_reading" id="vrsMaintLastReading" class="form-control form-control-sm" placeholder="0.00">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small mb-1">Notes (this category)</label>
+              <input type="text" name="maintenance_remarks" id="vrsMaintRemarks" class="form-control form-control-sm" placeholder="Optional">
             </div>
           </div>
+          <div class="small text-muted mt-2">
+            KM / Days interval <strong>Add Maintenance → Job Category</strong> se aata hai; yahan sirf last done date/reading set karein. Product-wise detail <strong>Add Maintenance</strong> invoice par track hoti hai.
+            {% if latest_vehicle_reading is not none %} <span class="ms-1">Latest vehicle reading: <strong>{{ "%.2f"|format(latest_vehicle_reading|float) }}</strong></span>{% endif %}
+          </div>
         </div>
+
         <div class="col-12 d-flex justify-content-end gap-2">
           <a href="{{ url_for('vehicle_reading_setup_list') }}" class="btn btn-outline-secondary">Cancel</a>
           <button class="btn btn-success"><i class="bi bi-save me-1"></i>Save Setup</button>
@@ -130,32 +108,29 @@
       </div>
       {% if baseline_rows %}
       <hr>
-      <div class="fw-semibold mb-2">Saved Maintenance Baselines (Selected Vehicle)</div>
+      <div class="fw-semibold mb-2">Saved job-category baselines (selected vehicle)</div>
       <div class="table-responsive">
         <table class="table table-bordered table-sm align-middle vrs-baseline-table mb-0">
           <thead class="table-light">
             <tr>
-              <th>Product</th>
-              <th>Job Category</th>
-              <th>Last Date</th>
-              <th>Last Reading</th>
-              <th>Mode</th>
+              <th>Job category</th>
               <th>Interval</th>
+              <th>Last date</th>
+              <th>Last reading</th>
               <th>Status</th>
-              <th>Next Due Date</th>
-              <th>Next Due Reading</th>
+              <th>Next due date</th>
+              <th>Next due reading</th>
               <th>Remaining</th>
+              <th>Notes</th>
             </tr>
           </thead>
           <tbody>
             {% for b in baseline_rows %}
             <tr>
-              <td>{{ b.product_name }}</td>
-              <td>{{ b.job_category }}</td>
+              <td class="fw-semibold">{{ b.job_category }}</td>
+              <td>{% if b.interval_mode == 'KM' %}KM {{ b.interval_value }}{% elif b.interval_mode == 'Days' %}Days {{ b.interval_value }}{% else %}-{% endif %}</td>
               <td>{{ b.last_done_date_label }}</td>
               <td>{{ b.last_done_reading_label }}</td>
-              <td>{{ b.interval_mode }}</td>
-              <td>{{ b.interval_value }}</td>
               <td>
                 <span class="badge {% if b.status == 'Overdue' %}bg-danger{% elif b.status == 'Due Soon' %}bg-warning text-dark{% elif b.status == 'On Track' %}bg-success{% else %}bg-secondary{% endif %}">
                   {{ b.status }}
@@ -164,6 +139,7 @@
               <td>{{ b.next_due_date_label }}</td>
               <td>{{ b.next_due_reading_label }}</td>
               <td>{% if b.interval_mode == 'Days' %}{{ b.remaining_days_label }} days{% elif b.interval_mode == 'KM' %}{{ b.remaining_km_label }} km{% else %}-{% endif %}</td>
+              <td class="small text-muted">{{ b.remarks }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -193,10 +169,6 @@ document.addEventListener('DOMContentLoaded', function(){
   var prefill = null;
   try { prefill = prefillEl && prefillEl.textContent ? JSON.parse(prefillEl.textContent) : null; } catch(e) { prefill = null; }
 
-  /**
-   * While true, district/project change handlers must not run: they clear & async-rebuild
-   * project/vehicle options and were wiping Edit-form values (setValue also triggered change).
-   */
   var vrsBlockCascade = false;
 
   function setSelectValue(selectEl, value){
@@ -228,7 +200,6 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   }
 
-  /** Re-apply values after TomSelect + flatpickr init (edit screen often left selects blank). */
   function applyVrsPrefillFromPage() {
     if (!prefill) return;
     vrsBlockCascade = true;
@@ -325,7 +296,6 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
-  // After TomSelect/flatpickr init, re-apply server values; fetch fills gaps when vehicle has no row yet.
   setTimeout(function() {
     applyVrsPrefillFromPage();
     loadSetupForVehicle();

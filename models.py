@@ -832,7 +832,7 @@ class WorkspaceVehicleReadingSetup(db.Model):
 class WorkspaceVehicleMaintenanceBaseline(db.Model):
     __tablename__ = 'workspace_vehicle_maintenance_baseline'
     __table_args__ = (
-        db.UniqueConstraint('employee_id', 'vehicle_id', 'product_id', name='uq_ws_vehicle_maint_emp_vehicle_product'),
+        db.Index('ix_ws_maint_baseline_emp_veh_jobcat', 'employee_id', 'vehicle_id', 'job_category'),
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -840,7 +840,8 @@ class WorkspaceVehicleMaintenanceBaseline(db.Model):
     district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
     vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False, index=True)
-    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False, index=True)
+    # Legacy: optional; new rows are job-category–only (intervals come from Job Category settings).
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=True, index=True)
     job_category = db.Column(db.String(120), nullable=True, index=True)
     interval_mode = db.Column(db.String(20), nullable=True)  # interval_km | interval_day
     interval_value = db.Column(db.Integer, nullable=True)
