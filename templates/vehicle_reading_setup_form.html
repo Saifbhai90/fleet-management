@@ -17,6 +17,35 @@
   .vrs-table-wrap { border: 1px solid #e7edf3; border-radius: 10px; overflow: hidden; }
   .vrs-table-wrap table { margin: 0; font-size: .88rem; }
   .vrs-table-wrap th { background: #f8fafc; white-space: nowrap; }
+  /* Baselines list: clear columns + last reading stays under its header (no overflow into Notes) */
+  #baselineLinesTable {
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  #baselineLinesTable th,
+  #baselineLinesTable td {
+    border-left: 1px solid #e2e8f0;
+    vertical-align: middle;
+    padding: 0.5rem 0.65rem;
+  }
+  #baselineLinesTable thead th:first-child,
+  #baselineLinesTable tbody td:first-child {
+    border-left: none;
+  }
+  #baselineLinesTable thead th {
+    border-bottom: 2px solid #cbd5e1;
+  }
+  #baselineLinesTable .vrs-baseline-read {
+    min-width: 5.5rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  #baselineLinesTable .vrs-baseline-notes {
+    word-break: break-word;
+  }
   .vrs-foot { font-size: .8rem; color: #64748b; margin-top: .75rem; line-height: 1.45; }
 </style>
 
@@ -122,14 +151,22 @@
 
       <div class="vrs-table-wrap">
         <table class="table table-sm table-hover align-middle mb-0" id="baselineLinesTable">
+          <colgroup>
+            <col style="width:2.5rem" />
+            <col style="width:22%" />
+            <col style="width:7.5rem" />
+            <col style="width:8.5rem" />
+            <col />
+            <col style="width:3.5rem" />
+          </colgroup>
           <thead>
             <tr>
-              <th style="width:36px">#</th>
+              <th class="text-center">#</th>
               <th>Job category</th>
               <th>Last done date</th>
-              <th>Last reading</th>
+              <th class="vrs-baseline-read">Last reading</th>
               <th>Notes</th>
-              <th style="width:72px"></th>
+              <th class="text-center" aria-label="Delete row"></th>
             </tr>
           </thead>
           <tbody id="baselineLinesBody">
@@ -342,12 +379,12 @@
         return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
       };
       html += '<tr data-idx="' + i + '">' +
-        '<td>' + (i + 1) + '</td>' +
+        '<td class="text-center text-muted small">' + (i + 1) + '</td>' +
         '<td class="fw-semibold">' + esc(it.job_category) + '</td>' +
         '<td>' + esc(it.last_done_date) + '</td>' +
-        '<td class="text-end">' + esc(it.last_done_reading) + '</td>' +
-        '<td class="text-muted small">' + esc(it.remarks) + '</td>' +
-        '<td><button type="button" class="btn btn-outline-danger btn-sm bl-remove" data-idx="' + i + '"><i class="bi bi-trash"></i></button></td>' +
+        '<td class="vrs-baseline-read">' + esc(it.last_done_reading) + '</td>' +
+        '<td class="text-muted small vrs-baseline-notes">' + esc(it.remarks) + '</td>' +
+        '<td class="text-end"><button type="button" class="btn btn-outline-danger btn-sm bl-remove" data-idx="' + i + '"><i class="bi bi-trash"></i></button></td>' +
         '</tr>';
     }
     if (!html) {
