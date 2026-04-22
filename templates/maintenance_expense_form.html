@@ -234,6 +234,9 @@
               <button type="button" class="btn btn-outline-primary" id="addJobCategoryBtn" title="Add Job Category">
                 <i class="bi bi-plus-lg"></i>
               </button>
+              <button type="button" class="btn btn-outline-secondary" id="manageJobCategoryBtn" title="Edit / list categories">
+                <i class="bi bi-list-ul"></i>
+              </button>
             </div>
             <input type="hidden" name="job_interval_mode" id="jobIntervalMode" value="{{ rec.job_interval_mode if rec and rec.job_interval_mode else '' }}">
             <small class="text-muted">Category with interval → next maintenance tracking support.</small>
@@ -525,7 +528,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Add Job Category</h5>
+        <h5 class="modal-title" id="jobCategoryModalTitle">Add Job Category</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
@@ -548,6 +551,38 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-primary" id="saveJobCategoryBtn">Save Category</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="jobCategoryListModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Job categories (Manage)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-0">
+        <p class="small text-muted px-3 pt-2 mb-2">Purani invoices par job category string change nahi hoti; nayi entries yahan se updated list lein.</p>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Category</th>
+                <th>Interval</th>
+                <th class="text-end" style="width:7rem">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="jobCategoryListBody">
+              <tr><td colspan="3" class="text-muted small px-3 py-2">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary btn-sm" id="jcatListAddNewBtn">+ New category</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
@@ -628,12 +663,19 @@ document.addEventListener('DOMContentLoaded', function() {
   var expenseBySelect = document.getElementById('expenseBySelect');
   var expenseByBalanceHint = document.getElementById('expenseByBalanceHint');
   var addJobCategoryBtn = document.getElementById('addJobCategoryBtn');
+  var manageJobCategoryBtn = document.getElementById('manageJobCategoryBtn');
   var saveJobCategoryBtn = document.getElementById('saveJobCategoryBtn');
+  var jobCategoryModalTitle = document.getElementById('jobCategoryModalTitle');
   var newJobCategoryName = document.getElementById('newJobCategoryName');
   var newJobCategoryKm = document.getElementById('newJobCategoryKm');
   var newJobCategoryDay = document.getElementById('newJobCategoryDay');
   var modalEl = document.getElementById('jobCategoryModal');
+  var jcatListModalEl = document.getElementById('jobCategoryListModal');
+  var jobCategoryListBody = document.getElementById('jobCategoryListBody');
+  var jcatListAddNewBtn = document.getElementById('jcatListAddNewBtn');
   var jobModal = (window.bootstrap && modalEl) ? new window.bootstrap.Modal(modalEl, { backdrop: false, focus: false, keyboard: true }) : null;
+  var jcatListModal = (window.bootstrap && jcatListModalEl) ? new window.bootstrap.Modal(jcatListModalEl, { backdrop: false, focus: false, keyboard: true }) : null;
+  var jcatEditOldName = '';
   var fallbackShown = false;
   var taskStartReading = null;
   var taskCloseReading = null;
@@ -1384,11 +1426,91 @@ document.addEventListener('DOMContentLoaded', function() {
     syncJobIntervalMode();
   }
 
+  function openJcatAddMode() {
+    jcatEditOldName = '';
+    if (newJobCategoryName) newJobCategoryName.value = '';
+    if (newJobCategoryKm) newJobCategoryKm.value = '';
+    if (newJobCategoryDay) newJobCategoryDay.value = '';
+    if (jobCategoryModalTitle) jobCategoryModalTitle.textContent = 'Add Job Category';
+    if (saveJobCategoryBtn) saveJobCategoryBtn.textContent = 'Save Category';
+  }
+
+  function applyJobCategoryOptions(clean, preferVal) {
+    if (!jobCategorySelect) return;
+    var keepVal = (preferVal != null && preferVal !== '') ? preferVal : (jobCategorySelect.value || '');
+    if (jobCategorySelect.tomselect) { try { jobCategorySelect.tomselect.destroy(); } catch (e) {} }
+    while (jobCategorySelect.options.length > 2) {
+      jobCategorySelect.remove(2);
+    }
+    (clean || []).forEach(function(jc) {
+      var o = document.createElement('option');
+      o.value = jc.name;
+      o.setAttribute('data-interval-mode', jc.interval_mode || '');
+      o.setAttribute('data-interval-value', jc.interval_value != null ? String(jc.interval_value) : '');
+      o.textContent = jc.name + ' (' + (jc.interval_mode === 'interval_km' ? (jc.interval_value + ' KM') : (jc.interval_value + ' Days')) + ')';
+      jobCategorySelect.appendChild(o);
+    });
+    _reinitSearchableDropdown(jobCategorySelect.parentNode);
+    var want = keepVal;
+    var found = false;
+    for (var i = 0; i < jobCategorySelect.options.length; i++) {
+      if ((jobCategorySelect.options[i].value || '') === want) { found = true; break; }
+    }
+    if (!found && want) {
+      var wl = want.toLowerCase();
+      for (var j = 0; j < jobCategorySelect.options.length; j++) {
+        if ((jobCategorySelect.options[j].value || '').toLowerCase() === wl) {
+          want = jobCategorySelect.options[j].value;
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) {
+      var hasGM = false;
+      for (var k = 0; k < jobCategorySelect.options.length; k++) {
+        if (jobCategorySelect.options[k].value === 'General Maintenance') { hasGM = true; break; }
+      }
+      want = hasGM ? 'General Maintenance' : ((jobCategorySelect.options[0] && jobCategorySelect.options[0].value) || '');
+    }
+    jobCategorySelect.value = want;
+    if (jobCategorySelect.tomselect) {
+      jobCategorySelect.tomselect.sync();
+      jobCategorySelect.tomselect.setValue(want, true);
+    }
+    syncJobIntervalMode();
+  }
+
+  function loadJcatListIntoTable() {
+    if (!jobCategoryListBody) return;
+    jobCategoryListBody.innerHTML = '<tr><td colspan="3" class="text-muted small px-3 py-2">Loading…</td></tr>';
+    fetch('/api/maintenance-job-categories', { method: 'GET', credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!Array.isArray(data) || !data.length) {
+          jobCategoryListBody.innerHTML = '<tr><td colspan="3" class="text-muted small px-3 py-2">Koi custom category nahi. + se nayi banaen.</td></tr>';
+          return;
+        }
+        var html = '';
+        data.forEach(function(jc) {
+          var label = jc.interval_mode === 'interval_km' ? (jc.interval_value + ' KM') : (jc.interval_value + ' Days');
+          var nameRaw = jc.name || '';
+          var cellSafe = nameRaw.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+          var attrName = nameRaw.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+          html += '<tr><td class="px-3">' + cellSafe + '</td><td class="text-muted small">' + label + '</td><td class="text-end pe-3">';
+          html += '<button type="button" class="btn btn-link btn-sm py-0 jcat-list-edit" data-name="' + attrName + '" data-mode="' + (jc.interval_mode || '') + '" data-iv="' + (jc.interval_value != null ? jc.interval_value : '') + '">Edit</button> ';
+          html += '<button type="button" class="btn btn-link btn-sm text-danger py-0 jcat-list-del" data-name="' + attrName + '">Delete</button></td></tr>';
+        });
+        jobCategoryListBody.innerHTML = html;
+      })
+      .catch(function() {
+        jobCategoryListBody.innerHTML = '<tr><td colspan="3" class="text-danger small px-3 py-2">Load nahi ho saka. Dobara koshish karein.</td></tr>';
+      });
+  }
+
   if (addJobCategoryBtn) {
     addJobCategoryBtn.addEventListener('click', function() {
-      if (newJobCategoryName) newJobCategoryName.value = '';
-      if (newJobCategoryKm) newJobCategoryKm.value = '';
-      if (newJobCategoryDay) newJobCategoryDay.value = '';
+      openJcatAddMode();
       if (jobModal) {
         jobModal.show();
       } else if (modalEl) {
@@ -1396,6 +1518,77 @@ document.addEventListener('DOMContentLoaded', function() {
         modalEl.style.display = 'block';
         modalEl.classList.add('show');
         modalEl.removeAttribute('aria-hidden');
+      }
+    });
+  }
+
+  if (manageJobCategoryBtn) {
+    manageJobCategoryBtn.addEventListener('click', function() {
+      loadJcatListIntoTable();
+      if (jcatListModal) jcatListModal.show();
+    });
+  }
+
+  if (jcatListAddNewBtn) {
+    jcatListAddNewBtn.addEventListener('click', function() {
+      if (jcatListModal) jcatListModal.hide();
+      openJcatAddMode();
+      if (jobModal) jobModal.show();
+    });
+  }
+
+  if (jobCategoryListBody) {
+    jobCategoryListBody.addEventListener('click', function(e) {
+      var ed = e.target && e.target.closest && e.target.closest('.jcat-list-edit');
+      var del = e.target && e.target.closest && e.target.closest('.jcat-list-del');
+      if (ed) {
+        var n = ed.getAttribute('data-name') || '';
+        var mode = ed.getAttribute('data-mode') || '';
+        var iv = ed.getAttribute('data-iv') || '';
+        jcatEditOldName = n;
+        if (newJobCategoryName) newJobCategoryName.value = n;
+        if (newJobCategoryKm) newJobCategoryKm.value = (mode === 'interval_km' ? iv : '');
+        if (newJobCategoryDay) newJobCategoryDay.value = (mode === 'interval_day' ? iv : '');
+        if (jobCategoryModalTitle) jobCategoryModalTitle.textContent = 'Edit Job Category';
+        if (saveJobCategoryBtn) saveJobCategoryBtn.textContent = 'Update';
+        if (jcatListModal) jcatListModal.hide();
+        if (jobModal) jobModal.show();
+        return;
+      }
+      if (del) {
+        var dname = del.getAttribute('data-name') || '';
+        if (!dname) return;
+        if (!window.confirm('Delete “' + dname + '”? Purani maintenance rows par yeh text pehle jaisa rahega; nayi entries mein yeh list se hat jayegi.')) return;
+        var tok = maintJobCategoryCsrf();
+        if (!tok) { alert('Security token missing. Page refresh karein.'); return; }
+        fetch('/api/maintenance-job-categories/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': tok },
+          credentials: 'same-origin',
+          body: JSON.stringify({ name: dname })
+        })
+          .then(function(r) {
+            return r.text().then(function(text) {
+              var data = null;
+              try { data = text ? JSON.parse(text) : null; } catch (e2) { data = null; }
+              if (!r.ok) {
+                var msg = (data && (data.message || data.msg)) || text || ('Error ' + r.status);
+                throw new Error(msg);
+              }
+              return data;
+            });
+          })
+          .then(function(res) {
+            if (!res || !res.ok) {
+              alert((res && res.message) || 'Delete nahi ho saka.');
+              return;
+            }
+            applyJobCategoryOptions(res.options, null);
+            loadJcatListIntoTable();
+          })
+          .catch(function(err) {
+            alert((err && err.message) ? err.message : 'Delete nahi ho saka.');
+          });
       }
     });
   }
@@ -1415,6 +1608,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (modalEl && window.bootstrap) {
     modalEl.addEventListener('shown.bs.modal', function() {
+      var backdrops = document.querySelectorAll('.modal-backdrop');
+      backdrops.forEach(function(el) { el.remove(); });
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+    });
+  }
+  if (jcatListModalEl && window.bootstrap) {
+    jcatListModalEl.addEventListener('shown.bs.modal', function() {
       var backdrops = document.querySelectorAll('.modal-backdrop');
       backdrops.forEach(function(el) { el.remove(); });
       document.body.classList.remove('modal-open');
@@ -1455,11 +1657,15 @@ document.addEventListener('DOMContentLoaded', function() {
         alert('Security token missing. Page refresh karein aur dubara koshish karein.');
         return;
       }
-      fetch('/api/maintenance-job-categories/add', {
+      var isEdit = !!(jcatEditOldName && jcatEditOldName.length);
+      var url = isEdit ? '/api/maintenance-job-categories/update' : '/api/maintenance-job-categories/add';
+      var body = { name: name, interval_km_value: hasKm ? kmVal : '', interval_day_value: hasDay ? dayVal : '' };
+      if (isEdit) body.old_name = jcatEditOldName;
+      fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': tok },
         credentials: 'same-origin',
-        body: JSON.stringify({ name: name, interval_km_value: hasKm ? kmVal : '', interval_day_value: hasDay ? dayVal : '' })
+        body: JSON.stringify(body)
       })
         .then(function(r) {
           return r.text().then(function(text) {
@@ -1474,30 +1680,16 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(function(res) {
           if (!res || !res.ok) {
-            alert((res && res.message) || 'Unable to add category.');
+            alert((res && res.message) || (isEdit ? 'Update nahi ho saka.' : 'Unable to add category.'));
             return;
           }
           if (!jobCategorySelect) {
             alert('Category save ho gaya; Job Category list reload karein.');
             return;
           }
-          var existing = Array.prototype.find.call(jobCategorySelect.options, function(opt) {
-            return (opt.value || '').trim().toLowerCase() === res.item.name.toLowerCase();
-          });
-          if (!existing) {
-            var o = document.createElement('option');
-            o.value = res.item.name;
-            o.setAttribute('data-interval-mode', res.item.interval_mode);
-            o.setAttribute('data-interval-value', res.item.interval_value || '');
-            o.textContent = res.item.name + ' (' + (res.item.interval_mode === 'interval_km' ? (res.item.interval_value + ' KM') : (res.item.interval_value + ' Days')) + ')';
-            jobCategorySelect.appendChild(o);
-          }
-          jobCategorySelect.value = res.item.name;
-          if (jobCategorySelect.tomselect) {
-            jobCategorySelect.tomselect.sync();
-            jobCategorySelect.tomselect.setValue(res.item.name, true);
-          }
-          syncJobIntervalMode();
+          applyJobCategoryOptions(res.options, res.item && res.item.name ? res.item.name : name);
+          openJcatAddMode();
+          loadJcatListIntoTable();
           if (jobModal) {
             jobModal.hide();
           } else if (modalEl) {

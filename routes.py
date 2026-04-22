@@ -3645,6 +3645,9 @@ def maintenance_job_category_add_api():
     interval_mode = 'interval_km' if km_ok else 'interval_day'
     interval_value = km_val if km_ok else day_val
     options = _get_maintenance_job_categories()
+    for e in options:
+        if (e.get('name') or '').strip().lower() == name.lower():
+            return jsonify({'ok': False, 'message': 'Yeh category pehle se maujood hai. Manage se edit karein.'}), 400
     options.append({'name': name, 'interval_mode': interval_mode, 'interval_value': interval_value})
     clean = _save_maintenance_job_categories(options)
     return jsonify({
@@ -3652,6 +3655,73 @@ def maintenance_job_category_add_api():
         'item': {'name': name, 'interval_mode': interval_mode, 'interval_value': interval_value},
         'options': clean
     })
+
+
+@app.route('/api/maintenance-job-categories/update', methods=['POST'])
+def maintenance_job_category_update_api():
+    payload = request.get_json(silent=True) or {}
+    old_name = (payload.get('old_name') or '').strip()
+    name = (payload.get('name') or '').strip()
+    interval_km_value = payload.get('interval_km_value')
+    interval_day_value = payload.get('interval_day_value')
+    if not old_name:
+        return jsonify({'ok': False, 'message': 'old_name required'}), 400
+    if not name:
+        return jsonify({'ok': False, 'message': 'Category name is required'}), 400
+    km_val = None
+    day_val = None
+    try:
+        if interval_km_value not in (None, ''):
+            km_val = int(float(interval_km_value))
+    except Exception:
+        km_val = None
+    try:
+        if interval_day_value not in (None, ''):
+            day_val = int(float(interval_day_value))
+    except Exception:
+        day_val = None
+    km_ok = km_val is not None and km_val > 0
+    day_ok = day_val is not None and day_val > 0
+    if km_ok and day_ok:
+        return jsonify({'ok': False, 'message': 'Only one interval is allowed (KM or Day).'}), 400
+    if not km_ok and not day_ok:
+        return jsonify({'ok': False, 'message': 'Enter interval in KM or Day.'}), 400
+    interval_mode = 'interval_km' if km_ok else 'interval_day'
+    interval_value = km_val if km_ok else day_val
+    opts = list(_get_maintenance_job_categories())
+    idx = None
+    for i, e in enumerate(opts):
+        if (e.get('name') or '').strip().lower() == old_name.lower():
+            idx = i
+            break
+    if idx is None:
+        return jsonify({'ok': False, 'message': 'Category not found.'}), 404
+    for i, e in enumerate(opts):
+        if i == idx:
+            continue
+        if (e.get('name') or '').strip().lower() == name.lower():
+            return jsonify({'ok': False, 'message': 'Dusri category yeh naam pehle se use kar rahi hai.'}), 400
+    opts[idx] = {'name': name, 'interval_mode': interval_mode, 'interval_value': interval_value}
+    clean = _save_maintenance_job_categories(opts)
+    return jsonify({
+        'ok': True,
+        'item': {'name': name, 'interval_mode': interval_mode, 'interval_value': interval_value},
+        'options': clean,
+    })
+
+
+@app.route('/api/maintenance-job-categories/delete', methods=['POST'])
+def maintenance_job_category_delete_api():
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get('name') or '').strip()
+    if not name:
+        return jsonify({'ok': False, 'message': 'Category name is required'}), 400
+    original = _get_maintenance_job_categories()
+    opts = [e for e in original if (e.get('name') or '').strip().lower() != name.lower()]
+    if len(opts) == len(original):
+        return jsonify({'ok': False, 'message': 'Category not found.'}), 404
+    clean = _save_maintenance_job_categories(opts)
+    return jsonify({'ok': True, 'options': clean})
 
 
 @app.route('/vehicle/add', methods=['GET', 'POST'])
