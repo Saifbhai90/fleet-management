@@ -20650,7 +20650,10 @@ def maintenance_expense_history():
                 'amount_label': f'{amount:.2f}',
                 'repeat_count': repeat_count,
             })
-        row_bill = float(r.total_bill_amount or 0)
+        if r.total_bill_amount is None:
+            row_bill = invoice_amount
+        else:
+            row_bill = float(r.total_bill_amount or 0)
         total_bill += row_bill
         total_qty += invoice_qty
         total_lines += len(detail_items)
@@ -20659,6 +20662,7 @@ def maintenance_expense_history():
             'items': detail_items,
             'invoice_qty': invoice_qty,
             'invoice_amount': invoice_amount,
+            'bill_amount': row_bill,
             'max_repeat': max_repeat,
         })
 

@@ -150,7 +150,7 @@
                   {% endif %}
                 </td>
                 <td>{{ "%.2f"|format(row.invoice_qty or 0) }}</td>
-                <td>{{ "%.2f"|format((r.total_bill_amount or 0)|float) }}</td>
+                <td>{{ "%.2f"|format((row.bill_amount or 0)|float) }}</td>
               </tr>
               {% else %}
               <tr><td colspan="11" class="text-center text-muted py-4">No history found for selected filters.</td></tr>
