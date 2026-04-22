@@ -138,8 +138,8 @@
                 <td>{{ "%.2f"|format((r.current_reading or 0)|float) if r.current_reading is not none else '-' }}</td>
                 <td>{{ r.workspace_party.name if r.workspace_party else '-' }}</td>
                 <td>
-                  {% if row.items %}
-                    {% for it in row.items %}
+                  {% if row['items'] %}
+                    {% for it in row['items'] %}
                       <div class="small">
                         {{ it.product_name }} | Qty {{ it.qty_label }} | Rate {{ it.price_label }} |
                         <span class="text-danger fw-semibold">Changed {{ it.repeat_count }}x</span>
