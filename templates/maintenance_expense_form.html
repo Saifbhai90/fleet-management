@@ -656,7 +656,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var lastInvoiceLinkWrap = document.getElementById('lastInvoiceLinkWrap');
   var lastInvoiceDetailBtn = document.getElementById('lastInvoiceDetailBtn');
   var maintenanceInvoiceDetailModalEl = document.getElementById('maintenanceInvoiceDetailModal');
-  var maintenanceInvoiceDetailModal = (window.bootstrap && maintenanceInvoiceDetailModalEl) ? new window.bootstrap.Modal(maintenanceInvoiceDetailModalEl) : null;
+  var maintenanceInvoiceDetailModal = (window.bootstrap && maintenanceInvoiceDetailModalEl) ? new window.bootstrap.Modal(maintenanceInvoiceDetailModalEl, { backdrop: false, focus: false, keyboard: true }) : null;
   var invoiceItemsBody = document.getElementById('invoiceItemsBody');
   var invoiceMetaNo = document.getElementById('invoiceMetaNo');
   var invoiceMetaDate = document.getElementById('invoiceMetaDate');
@@ -1640,6 +1640,15 @@ document.addEventListener('DOMContentLoaded', function() {
     lastInvoiceDetailBtn.addEventListener('click', function() {
       if (!activeSummaryExpenseId) return;
       openInvoiceDetailReport(activeSummaryExpenseId);
+    });
+  }
+  if (maintenanceInvoiceDetailModalEl && window.bootstrap) {
+    maintenanceInvoiceDetailModalEl.addEventListener('shown.bs.modal', function() {
+      var backdrops = document.querySelectorAll('.modal-backdrop');
+      backdrops.forEach(function(el) { el.remove(); });
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
     });
   }
 
