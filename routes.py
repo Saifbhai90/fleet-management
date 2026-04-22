@@ -17317,7 +17317,7 @@ def vehicle_reading_setup_form():
             )
         else:
             flash('Vehicle previous reading setup save ho gaya.', 'success')
-        return redirect(url_for('vehicle_reading_setup_form', vehicle_id=vehicle_id))
+        return redirect(url_for('vehicle_reading_setup_list'))
 
     initial_baseline_list = []
     if baseline_rows:
