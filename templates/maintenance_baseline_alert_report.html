@@ -8,6 +8,7 @@
   .mbas-kpi { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; background: #f8fafc; }
   .mbas-kpi .k { color: #64748b; font-size: .76rem; text-transform: uppercase; }
   .mbas-kpi .v { color: #0f172a; font-size: 1.05rem; font-weight: 700; }
+  .mbas-filt-row .mbas-filt-actions .btn { padding: .25rem .5rem; font-size: .8125rem; }
 </style>
 
 <div class="container-fluid py-3">
@@ -24,34 +25,34 @@
 
     <div class="card mbas-card mb-3">
       <div class="card-header bg-light fw-semibold"><i class="bi bi-funnel me-1 text-primary"></i>Filters</div>
-      <div class="card-body">
-        <form method="GET" action="{{ url_for('maintenance_baseline_alert_report') }}" class="row g-3 align-items-end">
-          <div class="col-md-2">
-            <label class="form-label small">District</label>
+      <div class="card-body py-2 px-3 overflow-x-auto">
+        <form method="GET" action="{{ url_for('maintenance_baseline_alert_report') }}" class="row g-2 align-items-end flex-nowrap mbas-filt-row" style="min-width: min(100%, 1080px);">
+          <div class="col" style="min-width: 7.5rem;">
+            <label class="form-label small mb-1">District</label>
             <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select">
               {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if district_id|int == val|int %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-2">
-            <label class="form-label small">Project</label>
+          <div class="col" style="min-width: 7.5rem;">
+            <label class="form-label small mb-1">Project</label>
             <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
               {% for val, label in form.project_id.choices %}
               <option value="{{ val }}" {% if project_id|int == val|int %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-2">
-            <label class="form-label small">Vehicle</label>
+          <div class="col" style="min-width: 7.5rem;">
+            <label class="form-label small mb-1">Vehicle</label>
             <select name="vehicle_id" id="vehicleSelect" class="form-select form-select-sm search-select">
               {% for val, label in form.vehicle_id.choices %}
               <option value="{{ val }}" {% if vehicle_id|int == val|int %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-2">
-            <label class="form-label small">Job Category</label>
+          <div class="col" style="min-width: 8.5rem;">
+            <label class="form-label small mb-1">Job Category</label>
             <select name="job_category" class="form-select form-select-sm search-select">
               <option value="">-- All --</option>
               {% for jc in job_category_choices %}
@@ -59,8 +60,8 @@
               {% endfor %}
             </select>
           </div>
-          <div class="col-md-2">
-            <label class="form-label small">Status</label>
+          <div class="col" style="min-width: 7.5rem;">
+            <label class="form-label small mb-1">Status</label>
             <select name="status" class="form-select form-select-sm">
               <option value="all" {% if status == 'all' %}selected{% endif %}>All</option>
               <option value="overdue" {% if status == 'overdue' %}selected{% endif %}>Overdue</option>
@@ -70,11 +71,12 @@
               <option value="no_interval" {% if status == 'no_interval' %}selected{% endif %}>No Interval</option>
             </select>
           </div>
-          <div class="col-md-2">
-            <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-search me-1"></i>Apply</button>
-          </div>
-          <div class="col-md-2">
-            <a href="{{ url_for('maintenance_baseline_alert_report') }}" class="btn btn-outline-secondary btn-sm w-100">Reset</a>
+          <div class="col-auto mbas-filt-actions">
+            <label class="form-label small mb-1 d-none d-lg-block">&nbsp;</label>
+            <div class="d-flex gap-1 flex-nowrap">
+              <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Apply</button>
+              <a href="{{ url_for('maintenance_baseline_alert_report') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
+            </div>
           </div>
           <input type="hidden" name="per_page" value="{{ per_page }}">
         </form>
@@ -98,13 +100,12 @@
               <th>District</th>
               <th>Project</th>
               <th>Vehicle</th>
-              <th>Job Category</th>
+              <th>Job category &amp; interval</th>
               <th>Status</th>
               <th>Last Source</th>
               <th>Last Date</th>
               <th>Last Reading</th>
               <th>Latest Vehicle Reading</th>
-              <th>Interval</th>
               <th>Next Due Date</th>
               <th>Next Due Reading</th>
               <th>Remaining</th>
@@ -119,7 +120,16 @@
               <td>{{ b.district.name if b.district else '-' }}</td>
               <td>{{ b.project.name if b.project else '-' }}</td>
               <td class="fw-semibold">{{ b.vehicle.vehicle_no if b.vehicle else '-' }}</td>
-              <td>{{ b.job_category or '-' }}</td>
+              <td class="small">
+                {% set jn = (b.job_category or '')|trim %}
+                {% if row.display_interval_mode == 'interval_km' and row.display_interval_value is not none %}
+                  {{ jn }} - KM {{ row.display_interval_value }}
+                {% elif row.display_interval_mode == 'interval_day' and row.display_interval_value is not none %}
+                  {{ jn }} - Days {{ row.display_interval_value }}
+                {% else %}
+                  {{ jn if jn else '-' }}
+                {% endif %}
+              </td>
               <td>
                 <span class="badge {% if row.status == 'Overdue' %}bg-danger{% elif row.status == 'Due Soon' %}bg-warning text-dark{% elif row.status == 'On Track' %}bg-success{% else %}bg-secondary{% endif %}">
                   {{ row.status }}
@@ -129,7 +139,6 @@
               <td>{{ row.effective_last_date_label }}</td>
               <td>{{ row.effective_last_reading_label }}</td>
               <td>{{ row.latest_vehicle_reading_label }}</td>
-              <td>{% if row.display_interval_mode == 'interval_km' %}KM {{ row.display_interval_value }}{% elif row.display_interval_mode == 'interval_day' %}Days {{ row.display_interval_value }}{% else %}-{% endif %}</td>
               <td>{{ row.next_due_date_label }}</td>
               <td>{{ row.next_due_reading_label }}</td>
               <td>{% if row.display_interval_mode == 'interval_day' %}{{ row.remaining_days_label }} days{% elif row.display_interval_mode == 'interval_km' %}{{ row.remaining_km_label }} km{% else %}-{% endif %}</td>
@@ -142,7 +151,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="15" class="text-center text-muted py-4">No tracking rows found.</td></tr>
+            <tr><td colspan="14" class="text-center text-muted py-4">No tracking rows found.</td></tr>
             {% endfor %}
           </tbody>
         </table>
