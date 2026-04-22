@@ -829,6 +829,36 @@ class WorkspaceVehicleReadingSetup(db.Model):
     created_by = db.relationship('User', backref='workspace_vehicle_reading_setups_created', lazy='select')
 
 
+class WorkspaceVehicleMaintenanceBaseline(db.Model):
+    __tablename__ = 'workspace_vehicle_maintenance_baseline'
+    __table_args__ = (
+        db.UniqueConstraint('employee_id', 'vehicle_id', 'product_id', name='uq_ws_vehicle_maint_emp_vehicle_product'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False, index=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False, index=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False, index=True)
+    job_category = db.Column(db.String(120), nullable=True, index=True)
+    interval_mode = db.Column(db.String(20), nullable=True)  # interval_km | interval_day
+    interval_value = db.Column(db.Integer, nullable=True)
+    last_done_date = db.Column(db.Date, nullable=True, index=True)
+    last_done_reading = db.Column(db.Numeric(12, 2), nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('vehicle_maintenance_baselines', lazy='dynamic'))
+    district = db.relationship('District', backref='vehicle_maintenance_baselines', lazy='select')
+    project = db.relationship('Project', backref='vehicle_maintenance_baselines', lazy='select')
+    vehicle = db.relationship('Vehicle', backref='workspace_maintenance_baselines', lazy='select')
+    product = db.relationship('Product', backref='workspace_vehicle_maintenance_baselines', lazy='select')
+    created_by = db.relationship('User', backref='workspace_vehicle_maintenance_baselines_created', lazy='select')
+
+
 # ────────────────────────────────────────────────
 # Product Balance (in-hand stock for Oil/Maintenance)
 # ────────────────────────────────────────────────

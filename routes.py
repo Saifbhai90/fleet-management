@@ -16859,8 +16859,129 @@ def api_parties():
 # ────────────────────────────────────────────────
 # Fuel Expense
 # ────────────────────────────────────────────────
+_vehicle_maintenance_baseline_schema_ready = {'ok': False}
+
+
+def _ensure_vehicle_maintenance_baseline_schema():
+    if _vehicle_maintenance_baseline_schema_ready.get('ok'):
+        return
+    stmts = [
+        """
+        CREATE TABLE IF NOT EXISTS workspace_vehicle_maintenance_baseline (
+            id SERIAL PRIMARY KEY,
+            employee_id INTEGER NOT NULL,
+            district_id INTEGER NULL,
+            project_id INTEGER NULL,
+            vehicle_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            job_category VARCHAR(120) NULL,
+            interval_mode VARCHAR(20) NULL,
+            interval_value INTEGER NULL,
+            last_done_date DATE NULL,
+            last_done_reading NUMERIC(12, 2) NULL,
+            remarks TEXT NULL,
+            created_by_user_id INTEGER NULL,
+            created_at TIMESTAMP NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NULL DEFAULT NOW()
+        )
+        """,
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS employee_id INTEGER",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS district_id INTEGER",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS project_id INTEGER",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS vehicle_id INTEGER",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS product_id INTEGER",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS job_category VARCHAR(120)",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS interval_mode VARCHAR(20)",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS interval_value INTEGER",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS last_done_date DATE",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS last_done_reading NUMERIC(12, 2)",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS remarks TEXT",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
+        "ALTER TABLE workspace_vehicle_maintenance_baseline ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "CREATE INDEX IF NOT EXISTS ix_ws_maint_baseline_employee_id ON workspace_vehicle_maintenance_baseline (employee_id)",
+        "CREATE INDEX IF NOT EXISTS ix_ws_maint_baseline_vehicle_id ON workspace_vehicle_maintenance_baseline (vehicle_id)",
+        "CREATE INDEX IF NOT EXISTS ix_ws_maint_baseline_product_id ON workspace_vehicle_maintenance_baseline (product_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_ws_vehicle_maint_emp_vehicle_product ON workspace_vehicle_maintenance_baseline (employee_id, vehicle_id, product_id)",
+    ]
+    for stmt in stmts:
+        try:
+            db.session.execute(text(stmt))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+    _vehicle_maintenance_baseline_schema_ready['ok'] = True
+
+
+def _vehicle_latest_recorded_reading(vehicle_id):
+    if not vehicle_id:
+        return None
+    latest_values = []
+    last_fuel = FuelExpense.query.filter(
+        FuelExpense.vehicle_id == vehicle_id,
+        FuelExpense.current_reading.isnot(None)
+    ).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
+    if last_fuel and last_fuel.current_reading is not None:
+        latest_values.append(float(last_fuel.current_reading))
+    last_oil = OilExpense.query.filter(
+        OilExpense.vehicle_id == vehicle_id,
+        OilExpense.current_reading.isnot(None)
+    ).order_by(OilExpense.expense_date.desc(), OilExpense.id.desc()).first()
+    if last_oil and last_oil.current_reading is not None:
+        latest_values.append(float(last_oil.current_reading))
+    last_maint = MaintenanceExpense.query.filter(
+        MaintenanceExpense.vehicle_id == vehicle_id,
+        MaintenanceExpense.current_reading.isnot(None)
+    ).order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).first()
+    if last_maint and last_maint.current_reading is not None:
+        latest_values.append(float(last_maint.current_reading))
+    return max(latest_values) if latest_values else None
+
+
+def _baseline_status(baseline, latest_reading=None):
+    today = pk_date()
+    status = 'No Interval'
+    next_due_date = None
+    next_due_reading = None
+    remaining_days = None
+    remaining_km = None
+    if baseline.interval_mode == 'interval_day' and baseline.interval_value and baseline.last_done_date:
+        next_due_date = baseline.last_done_date + timedelta(days=int(baseline.interval_value))
+        remaining_days = (next_due_date - today).days
+        if remaining_days < 0:
+            status = 'Overdue'
+        elif remaining_days <= 7:
+            status = 'Due Soon'
+        else:
+            status = 'On Track'
+    elif baseline.interval_mode == 'interval_km' and baseline.interval_value and baseline.last_done_reading is not None:
+        next_due_reading = float(baseline.last_done_reading) + float(baseline.interval_value)
+        if latest_reading is None:
+            status = 'Reading Needed'
+        else:
+            remaining_km = next_due_reading - float(latest_reading)
+            if remaining_km < 0:
+                status = 'Overdue'
+            elif remaining_km <= 500:
+                status = 'Due Soon'
+            else:
+                status = 'On Track'
+    return {
+        'status': status,
+        'next_due_date': next_due_date,
+        'next_due_date_label': next_due_date.strftime('%d-%m-%Y') if next_due_date else '-',
+        'next_due_reading': next_due_reading,
+        'next_due_reading_label': f'{next_due_reading:.2f}' if next_due_reading is not None else '-',
+        'remaining_days': remaining_days,
+        'remaining_days_label': str(remaining_days) if remaining_days is not None else '-',
+        'remaining_km': remaining_km,
+        'remaining_km_label': f'{remaining_km:.2f}' if remaining_km is not None else '-',
+    }
+
+
 @app.route('/expenses/vehicle-reading-setup', methods=['GET', 'POST'])
 def vehicle_reading_setup_form():
+    _ensure_vehicle_maintenance_baseline_schema()
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
@@ -16869,14 +16990,22 @@ def vehicle_reading_setup_form():
     districts = District.query.order_by(District.name).all()
     projects = Project.query.order_by(Project.name).all()
     vehicles = Vehicle.query.order_by(Vehicle.vehicle_no).all()
+    maintenance_products = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
 
     selected_vehicle_id = request.args.get('vehicle_id', type=int) or 0
     row = None
+    baseline_rows = []
+    latest_vehicle_reading = None
     if selected_vehicle_id:
         row = WorkspaceVehicleReadingSetup.query.filter_by(
             employee_id=workspace_employee_id,
             vehicle_id=selected_vehicle_id,
         ).first()
+        baseline_rows = WorkspaceVehicleMaintenanceBaseline.query.filter_by(
+            employee_id=workspace_employee_id,
+            vehicle_id=selected_vehicle_id,
+        ).order_by(WorkspaceVehicleMaintenanceBaseline.updated_at.desc(), WorkspaceVehicleMaintenanceBaseline.id.desc()).all()
+        latest_vehicle_reading = _vehicle_latest_recorded_reading(selected_vehicle_id)
 
     if request.method == 'POST':
         district_id = request.form.get('district_id', type=int) or None
@@ -16886,6 +17015,13 @@ def vehicle_reading_setup_form():
         fuel_prev_raw = (request.form.get('fuel_previous_reading') or '').strip()
         oil_prev_raw = (request.form.get('oil_previous_reading') or '').strip()
         remarks = (request.form.get('remarks') or '').strip() or None
+        maintenance_product_id = request.form.get('maintenance_product_id', type=int) or None
+        maintenance_job_category = (request.form.get('maintenance_job_category') or '').strip() or None
+        maintenance_interval_mode = (request.form.get('maintenance_interval_mode') or '').strip()
+        maintenance_interval_value = request.form.get('maintenance_interval_value', type=int) or None
+        maintenance_last_date = parse_date(request.form.get('maintenance_last_date'))
+        maintenance_last_reading_raw = (request.form.get('maintenance_last_reading') or '').strip()
+        maintenance_remarks = (request.form.get('maintenance_remarks') or '').strip() or None
 
         if not vehicle_id:
             flash('Please select vehicle.', 'danger')
@@ -16893,6 +17029,9 @@ def vehicle_reading_setup_form():
                 'vehicle_reading_setup_form.html',
                 districts=districts, projects=projects, vehicles=vehicles,
                 row=row, selected_vehicle_id=selected_vehicle_id,
+                maintenance_products=maintenance_products,
+                baseline_rows=[],
+                latest_vehicle_reading=latest_vehicle_reading,
             )
         if not setup_date:
             flash('Please select setup date.', 'danger')
@@ -16900,6 +17039,9 @@ def vehicle_reading_setup_form():
                 'vehicle_reading_setup_form.html',
                 districts=districts, projects=projects, vehicles=vehicles,
                 row=row, selected_vehicle_id=selected_vehicle_id,
+                maintenance_products=maintenance_products,
+                baseline_rows=[],
+                latest_vehicle_reading=latest_vehicle_reading,
             )
 
         def _to_dec(raw):
@@ -16910,12 +17052,16 @@ def vehicle_reading_setup_form():
         try:
             fuel_prev = _to_dec(fuel_prev_raw)
             oil_prev = _to_dec(oil_prev_raw)
+            maintenance_last_reading = _to_dec(maintenance_last_reading_raw)
         except Exception:
-            flash('Fuel/Oil previous reading must be numeric.', 'danger')
+            flash('Previous/last reading must be numeric.', 'danger')
             return render_template(
                 'vehicle_reading_setup_form.html',
                 districts=districts, projects=projects, vehicles=vehicles,
                 row=row, selected_vehicle_id=selected_vehicle_id,
+                maintenance_products=maintenance_products,
+                baseline_rows=[],
+                latest_vehicle_reading=latest_vehicle_reading,
             )
 
         rec = WorkspaceVehicleReadingSetup.query.filter_by(
@@ -16936,9 +17082,73 @@ def vehicle_reading_setup_form():
         rec.oil_previous_reading = oil_prev
         rec.remarks = remarks
         rec.created_by_user_id = session.get('user_id')
+
+        if maintenance_product_id:
+            if maintenance_interval_mode not in ('interval_km', 'interval_day'):
+                flash('Maintenance interval mode select karein (KM/Days).', 'danger')
+                return render_template(
+                    'vehicle_reading_setup_form.html',
+                    districts=districts, projects=projects, vehicles=vehicles,
+                    row=row, selected_vehicle_id=selected_vehicle_id,
+                    maintenance_products=maintenance_products,
+                    baseline_rows=[],
+                    latest_vehicle_reading=latest_vehicle_reading,
+                )
+            if not maintenance_interval_value or maintenance_interval_value <= 0:
+                flash('Maintenance interval value 0 se badi honi chahiye.', 'danger')
+                return render_template(
+                    'vehicle_reading_setup_form.html',
+                    districts=districts, projects=projects, vehicles=vehicles,
+                    row=row, selected_vehicle_id=selected_vehicle_id,
+                    maintenance_products=maintenance_products,
+                    baseline_rows=[],
+                    latest_vehicle_reading=latest_vehicle_reading,
+                )
+            base = WorkspaceVehicleMaintenanceBaseline.query.filter_by(
+                employee_id=workspace_employee_id,
+                vehicle_id=vehicle_id,
+                product_id=maintenance_product_id,
+            ).first()
+            if not base:
+                base = WorkspaceVehicleMaintenanceBaseline(
+                    employee_id=workspace_employee_id,
+                    vehicle_id=vehicle_id,
+                    product_id=maintenance_product_id,
+                )
+                db.session.add(base)
+            base.district_id = district_id
+            base.project_id = project_id
+            base.job_category = maintenance_job_category
+            base.interval_mode = maintenance_interval_mode
+            base.interval_value = maintenance_interval_value
+            base.last_done_date = maintenance_last_date
+            base.last_done_reading = maintenance_last_reading
+            base.remarks = maintenance_remarks
+            base.created_by_user_id = session.get('user_id')
+
         db.session.commit()
-        flash('Vehicle previous reading setup saved.', 'success')
+        flash('Vehicle setup saved. Maintenance baseline updated.' if maintenance_product_id else 'Vehicle previous reading setup saved.', 'success')
         return redirect(url_for('vehicle_reading_setup_form', vehicle_id=vehicle_id))
+
+    baseline_view = []
+    if baseline_rows:
+        for b in baseline_rows:
+            stat = _baseline_status(b, latest_reading=latest_vehicle_reading)
+            baseline_view.append({
+                'id': b.id,
+                'product_name': b.product.name if b.product else f'Product #{b.product_id}',
+                'job_category': b.job_category or '-',
+                'last_done_date_label': b.last_done_date.strftime('%d-%m-%Y') if b.last_done_date else '-',
+                'last_done_reading_label': f'{float(b.last_done_reading):.2f}' if b.last_done_reading is not None else '-',
+                'interval_mode': 'KM' if b.interval_mode == 'interval_km' else ('Days' if b.interval_mode == 'interval_day' else '-'),
+                'interval_value': b.interval_value or '-',
+                'status': stat['status'],
+                'next_due_date_label': stat['next_due_date_label'],
+                'next_due_reading_label': stat['next_due_reading_label'],
+                'remaining_days_label': stat['remaining_days_label'],
+                'remaining_km_label': stat['remaining_km_label'],
+                'remarks': b.remarks or '-',
+            })
 
     return render_template(
         'vehicle_reading_setup_form.html',
@@ -16947,6 +17157,9 @@ def vehicle_reading_setup_form():
         vehicles=vehicles,
         row=row,
         selected_vehicle_id=selected_vehicle_id,
+        maintenance_products=maintenance_products,
+        baseline_rows=baseline_view,
+        latest_vehicle_reading=latest_vehicle_reading,
     )
 
 
@@ -17998,6 +18211,23 @@ def _fallback_vehicle_previous_reading(employee_id, vehicle_id, mode):
         raw = setup.fuel_previous_reading
     elif mode == 'oil':
         raw = setup.oil_previous_reading
+    elif mode == 'maintenance':
+        _ensure_vehicle_maintenance_baseline_schema()
+        baseline_q = WorkspaceVehicleMaintenanceBaseline.query.filter(
+            WorkspaceVehicleMaintenanceBaseline.vehicle_id == vehicle_id
+        )
+        if employee_id:
+            baseline_q = baseline_q.filter(WorkspaceVehicleMaintenanceBaseline.employee_id == employee_id)
+        baseline = baseline_q.order_by(
+            db.case((WorkspaceVehicleMaintenanceBaseline.last_done_date.is_(None), 1), else_=0).asc(),
+            WorkspaceVehicleMaintenanceBaseline.last_done_date.desc(),
+            db.case((WorkspaceVehicleMaintenanceBaseline.last_done_reading.is_(None), 1), else_=0).asc(),
+            WorkspaceVehicleMaintenanceBaseline.last_done_reading.desc(),
+            WorkspaceVehicleMaintenanceBaseline.id.desc(),
+        ).first()
+        if baseline and baseline.last_done_reading is not None:
+            return float(baseline.last_done_reading)
+        raw = None
     else:
         raw = None
     return float(raw) if raw is not None else None
