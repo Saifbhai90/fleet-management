@@ -2,31 +2,48 @@
 {% block title %}Vehicle Fuel/Oil Previous Reading Setup{% endblock %}
 {% block content %}
 <style>
-  .vrs-wrap { max-width: min(1500px, calc(100vw - 96px)); margin: 0 auto; }
-  .vrs-wrap .page-header { background: linear-gradient(135deg, #198754 0%, #157347 100%); color: #fff; padding: .6rem 1rem; border-radius: 10px; margin-bottom: .7rem; }
-  .vrs-wrap .card { border: 1px solid #e9ecef; border-radius: 10px; }
-  .vrs-sep { border-top: 1px solid #e9ecef; margin: .5rem 0 .75rem; padding-top: .75rem; }
-  .vrs-baseline-table th, .vrs-baseline-table td { font-size: .82rem; white-space: nowrap; }
+  .vrs-page { max-width: min(1520px, calc(100vw - 88px)); margin: 0 auto; }
+  .vrs-hero { background: linear-gradient(135deg, #198754 0%, #146c43 100%); color: #fff; padding: .85rem 1.1rem; border-radius: 14px; margin-bottom: 1rem; box-shadow: 0 8px 24px rgba(25, 135, 84, .22); }
+  .vrs-hero h4 { margin: 0; font-size: 1.2rem; font-weight: 700; }
+  .vrs-section { background: #fff; border: 1px solid #e7edf3; border-radius: 12px; margin-bottom: 1rem; overflow: hidden; box-shadow: 0 2px 10px rgba(15, 23, 42, .04); }
+  .vrs-section-h { background: linear-gradient(to right, #f0fdf4 0%, #fff 100%); border-bottom: 1px solid #eef2f6; padding: .55rem .95rem; font-weight: 700; font-size: .95rem; color: #1e293b; }
+  .vrs-section-b { padding: .95rem 1rem; }
+  .vrs-entry-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  .vrs-entry-grid { display: grid; grid-template-columns: minmax(200px, 2fr) 130px 130px 1fr auto; gap: 8px; align-items: end; }
+  @media (max-width: 1199.98px) {
+    .vrs-entry-grid { grid-template-columns: 1fr 1fr; }
+    .vrs-entry-grid .vrs-add-cell { grid-column: 1 / -1; }
+  }
+  .vrs-table-wrap { border: 1px solid #e7edf3; border-radius: 10px; overflow: hidden; }
+  .vrs-table-wrap table { margin: 0; font-size: .88rem; }
+  .vrs-table-wrap th { background: #f8fafc; white-space: nowrap; }
+  .vrs-foot { font-size: .8rem; color: #64748b; margin-top: .75rem; line-height: 1.45; }
 </style>
 
-<div class="container-fluid vrs-wrap py-2">
-  <div class="page-header d-flex justify-content-between align-items-center">
-    <h4 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Vehicle Fuel/Oil Previous Reading Setup</h4>
-    <div class="d-flex gap-2">
+<div class="container-fluid py-3 vrs-page">
+  <div class="vrs-hero d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div>
+      <h4><i class="bi bi-speedometer2 me-2"></i>Vehicle Fuel/Oil Reading Setup</h4>
+      <div class="small opacity-90 mt-1">Fuel / oil previous readings + optional job-category baselines (Add Maintenance list).</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
       <a href="{{ url_for('vehicle_reading_setup_import') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-upload me-1"></i>Import</a>
-      <a href="{{ url_for('vehicle_reading_setup_list') }}" class="btn btn-outline-light btn-sm">View List</a>
-      <a href="{{ url_for('workspace_home') }}" class="btn btn-outline-light btn-sm">Back to Dashboard</a>
+      <a href="{{ url_for('vehicle_reading_setup_list') }}" class="btn btn-outline-light btn-sm">List</a>
+      <a href="{{ url_for('workspace_home') }}" class="btn btn-outline-light btn-sm">Dashboard</a>
     </div>
   </div>
 
-  <div class="card shadow-sm">
-    <div class="card-body">
-      <form method="post" class="row g-3">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <form method="post" id="vrsMainForm" class="vrs-section">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <textarea name="baselines_data" id="baselinesDataField" class="d-none" rows="1" aria-hidden="true"></textarea>
+
+    <div class="vrs-section-h"><i class="bi bi-geo-alt me-1 text-success"></i>Vehicle &amp; setup</div>
+    <div class="vrs-section-b">
+      <div class="row g-3">
         <div class="col-md-3">
           <label class="form-label fw-semibold">District</label>
           <select name="district_id" id="vrsDistrict" class="form-select search-select">
-            <option value="">-- Select District --</option>
+            <option value="">-- Select --</option>
             {% for d in districts %}
             <option value="{{ d.id }}" {% if row and row.district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
             {% endfor %}
@@ -35,119 +52,107 @@
         <div class="col-md-3">
           <label class="form-label fw-semibold">Project</label>
           <select name="project_id" id="vrsProject" class="form-select search-select">
-            <option value="">-- Select Project --</option>
+            <option value="">-- Select --</option>
             {% for p in projects %}
             <option value="{{ p.id }}" {% if row and row.project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label fw-semibold">Vehicle</label>
+          <label class="form-label fw-semibold">Vehicle <span class="text-danger">*</span></label>
           <select name="vehicle_id" id="vrsVehicle" class="form-select search-select" required>
-            <option value="">-- Select Vehicle --</option>
+            <option value="">-- Select --</option>
             {% for v in vehicles %}
             <option value="{{ v.id }}" {% if (row and row.vehicle_id == v.id) or selected_vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label fw-semibold">Setup Date</label>
+          <label class="form-label fw-semibold">Setup date <span class="text-danger">*</span></label>
           <input type="text" name="setup_date" id="vrsSetupDate" class="form-control datepicker" placeholder="dd-mm-yyyy" required value="{% if row and row.setup_date %}{{ row.setup_date.strftime('%d-%m-%Y') }}{% endif %}">
         </div>
         <div class="col-md-3">
-          <label class="form-label fw-semibold">Fuel Previous Reading</label>
-          <input type="number" step="0.01" min="0" name="fuel_previous_reading" id="vrsFuelPrev" class="form-control" placeholder="0.00" value="{% if row and row.fuel_previous_reading is not none %}{{ row.fuel_previous_reading|float }}{% endif %}">
+          <label class="form-label fw-semibold">Fuel previous reading</label>
+          <input type="number" step="0.01" min="0" name="fuel_previous_reading" id="vrsFuelPrev" class="form-control" placeholder="0" value="{% if row and row.fuel_previous_reading is not none %}{{ row.fuel_previous_reading|float }}{% endif %}">
         </div>
         <div class="col-md-3">
-          <label class="form-label fw-semibold">Oil Previous Reading</label>
-          <input type="number" step="0.01" min="0" name="oil_previous_reading" id="vrsOilPrev" class="form-control" placeholder="0.00" value="{% if row and row.oil_previous_reading is not none %}{{ row.oil_previous_reading|float }}{% endif %}">
+          <label class="form-label fw-semibold">Oil previous reading</label>
+          <input type="number" step="0.01" min="0" name="oil_previous_reading" id="vrsOilPrev" class="form-control" placeholder="0" value="{% if row and row.oil_previous_reading is not none %}{{ row.oil_previous_reading|float }}{% endif %}">
         </div>
         <div class="col-md-6">
-          <label class="form-label fw-semibold">Remarks</label>
-          <input type="text" name="remarks" id="vrsRemarks" class="form-control" value="{% if row and row.remarks is not none %}{{ row.remarks }}{% endif %}" placeholder="Optional (fuel/oil setup)">
+          <label class="form-label fw-semibold">Remarks (fuel/oil)</label>
+          <input type="text" name="remarks" id="vrsRemarks" class="form-control" value="{% if row and row.remarks is not none %}{{ row.remarks }}{% endif %}" placeholder="Optional">
         </div>
-
-        <div class="col-12 vrs-sep">
-          <div class="fw-semibold mb-2 text-secondary"><i class="bi bi-wrench-adjustable-circle me-1"></i>Maintenance baseline (Job category) — optional</div>
-          <div class="row g-2 align-items-end">
-            <div class="col-md-4">
-              <label class="form-label small mb-1">Job category</label>
-              <select name="maintenance_job_category" id="vrsMaintJobCategory" class="form-select form-select-sm search-select">
-                <option value="">-- Select category (Add Maintenance list) --</option>
-                {% for jc in job_categories or [] %}
-                <option value="{{ jc['name'] if jc is mapping else jc }}">{{ jc['name'] if jc is mapping else jc }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small mb-1">Last done date</label>
-              <input type="text" name="maintenance_last_date" id="vrsMaintLastDate" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy">
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small mb-1">Last done reading</label>
-              <input type="number" step="0.01" min="0" name="maintenance_last_reading" id="vrsMaintLastReading" class="form-control form-control-sm" placeholder="0.00">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label small mb-1">Notes (this category)</label>
-              <input type="text" name="maintenance_remarks" id="vrsMaintRemarks" class="form-control form-control-sm" placeholder="Optional">
-            </div>
-          </div>
-          <div class="small text-muted mt-2">
-            KM / Days interval <strong>Add Maintenance → Job Category</strong> se aata hai; yahan sirf last done date/reading set karein. Product-wise detail <strong>Add Maintenance</strong> invoice par track hoti hai.
-            {% if latest_vehicle_reading is not none %} <span class="ms-1">Latest vehicle reading: <strong>{{ "%.2f"|format(latest_vehicle_reading|float) }}</strong></span>{% endif %}
-          </div>
-        </div>
-
-        <div class="col-12 d-flex justify-content-end gap-2">
-          <a href="{{ url_for('vehicle_reading_setup_list') }}" class="btn btn-outline-secondary">Cancel</a>
-          <button class="btn btn-success"><i class="bi bi-save me-1"></i>Save Setup</button>
-        </div>
-      </form>
-      <div class="small text-muted mt-2">
-        Note: Fuel/Oil expense forms me Previous Reading pehle last current reading se aati hai; agar last entry na ho to yahan set value use hoti hai.
       </div>
-      {% if baseline_rows %}
-      <hr>
-      <div class="fw-semibold mb-2">Saved job-category baselines (selected vehicle)</div>
-      <div class="table-responsive">
-        <table class="table table-bordered table-sm align-middle vrs-baseline-table mb-0">
-          <thead class="table-light">
+    </div>
+
+    <div class="vrs-section-h border-top"><i class="bi bi-wrench-adjustable-circle me-1 text-primary"></i>Job category baselines <span class="fw-normal text-muted small">(optional)</span></div>
+    <div class="vrs-section-b">
+      <p class="small text-muted mb-2 mb-md-3">Neeche category chunen, last done date / reading likhen, <strong>Add to list</strong> dabayen — lines neeche table mein jayengi. Sab set ho to upar <strong>Save setup</strong> se ek dafa save karen.</p>
+
+      <div class="vrs-entry-box">
+        <div class="vrs-entry-grid">
+          <div>
+            <label class="form-label small mb-1">Job category</label>
+            <select id="blEntryCategory" class="form-select form-select-sm search-select">
+              <option value="">-- Category --</option>
+              {% for jc in job_categories or [] %}
+              <option value="{{ jc['name'] if jc is mapping else jc }}">{{ jc['name'] if jc is mapping else jc }}{% if jc is mapping and jc['interval_mode'] is defined and jc['interval_mode'] %} ({% if jc['interval_mode'] == 'interval_km' %}{{ jc['interval_value'] }} KM{% else %}{{ jc['interval_value'] }} Days{% endif %}){% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="form-label small mb-1">Last done date</label>
+            <input type="text" id="blEntryDate" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
+          </div>
+          <div>
+            <label class="form-label small mb-1">Last done reading</label>
+            <input type="number" step="0.01" min="0" id="blEntryReading" class="form-control form-control-sm" placeholder="0">
+          </div>
+          <div>
+            <label class="form-label small mb-1">Notes</label>
+            <input type="text" id="blEntryRemarks" class="form-control form-control-sm" placeholder="Optional">
+          </div>
+          <div class="vrs-add-cell">
+            <label class="form-label small mb-1 d-none d-md-block">&nbsp;</label>
+            <button type="button" class="btn btn-primary btn-sm w-100" id="blAddBtn"><i class="bi bi-plus-lg me-1"></i>Add to list</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="vrs-table-wrap">
+        <table class="table table-sm table-hover align-middle mb-0" id="baselineLinesTable">
+          <thead>
             <tr>
+              <th style="width:36px">#</th>
               <th>Job category</th>
-              <th>Interval</th>
-              <th>Last date</th>
+              <th>Last done date</th>
               <th>Last reading</th>
-              <th>Status</th>
-              <th>Next due date</th>
-              <th>Next due reading</th>
-              <th>Remaining</th>
               <th>Notes</th>
+              <th style="width:72px"></th>
             </tr>
           </thead>
-          <tbody>
-            {% for b in baseline_rows %}
-            <tr>
-              <td class="fw-semibold">{{ b.job_category }}</td>
-              <td>{% if b.interval_mode == 'KM' %}KM {{ b.interval_value }}{% elif b.interval_mode == 'Days' %}Days {{ b.interval_value }}{% else %}-{% endif %}</td>
-              <td>{{ b.last_done_date_label }}</td>
-              <td>{{ b.last_done_reading_label }}</td>
-              <td>
-                <span class="badge {% if b.status == 'Overdue' %}bg-danger{% elif b.status == 'Due Soon' %}bg-warning text-dark{% elif b.status == 'On Track' %}bg-success{% else %}bg-secondary{% endif %}">
-                  {{ b.status }}
-                </span>
-              </td>
-              <td>{{ b.next_due_date_label }}</td>
-              <td>{{ b.next_due_reading_label }}</td>
-              <td>{% if b.interval_mode == 'Days' %}{{ b.remaining_days_label }} days{% elif b.interval_mode == 'KM' %}{{ b.remaining_km_label }} km{% else %}-{% endif %}</td>
-              <td class="small text-muted">{{ b.remarks }}</td>
+          <tbody id="baselineLinesBody">
+            <tr id="baselineEmptyRow" class="text-muted">
+              <td colspan="6" class="text-center py-4">Koi line add nahi — zaroorat ho to upar se add karen.</td>
             </tr>
-            {% endfor %}
           </tbody>
         </table>
       </div>
+      {% if latest_vehicle_reading is not none %}
+      <div class="small text-secondary mt-2">Latest recorded odometer (system): <strong>{{ "%.2f"|format(latest_vehicle_reading|float) }}</strong></div>
       {% endif %}
     </div>
-  </div>
+
+    <div class="vrs-section-b border-top bg-light d-flex flex-wrap justify-content-end gap-2">
+      <a href="{{ url_for('vehicle_reading_setup_list') }}" class="btn btn-outline-secondary">Cancel</a>
+      <button type="submit" class="btn btn-success px-4" id="vrsSaveBtn"><i class="bi bi-check2-circle me-1"></i>Save setup</button>
+    </div>
+  </form>
+
+  <p class="vrs-foot mb-0">
+    Fuel / Oil forms mein previous reading pehle last entry se aati hai; agar koi entry na ho to yahan wala value use hota hai. Due / next service interval job category (Add Maintenance) ki settings se aata hai — detail report <a href="{{ url_for('maintenance_baseline_alert_report') }}">Maintenance Baseline Alert</a> mein.
+  </p>
 </div>
 
 {% if vrs_prefill is defined and vrs_prefill %}
@@ -155,9 +160,19 @@
 {% else %}
 <script type="application/json" id="vrs-prefill-data">null</script>
 {% endif %}
+<script type="application/json" id="vrs-initial-baselines">{{ initial_baselines_json|default('[]', true)|safe }}</script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function(){
+(function() {
+  var BASELINES = [];
+  try {
+    var raw = document.getElementById('vrs-initial-baselines');
+    if (raw && raw.textContent) {
+      var parsed = JSON.parse(raw.textContent);
+      if (Array.isArray(parsed)) BASELINES = parsed;
+    }
+  } catch (e) { BASELINES = []; }
+
   var district = document.getElementById('vrsDistrict');
   var project = document.getElementById('vrsProject');
   var vehicle = document.getElementById('vrsVehicle');
@@ -167,20 +182,27 @@ document.addEventListener('DOMContentLoaded', function(){
   var remarks = document.getElementById('vrsRemarks');
   var prefillEl = document.getElementById('vrs-prefill-data');
   var prefill = null;
-  try { prefill = prefillEl && prefillEl.textContent ? JSON.parse(prefillEl.textContent) : null; } catch(e) { prefill = null; }
+  try { prefill = prefillEl && prefillEl.textContent ? JSON.parse(prefillEl.textContent) : null; } catch (e) { prefill = null; }
 
   var vrsBlockCascade = false;
+  var blEntryCategory = document.getElementById('blEntryCategory');
+  var blEntryDate = document.getElementById('blEntryDate');
+  var blEntryReading = document.getElementById('blEntryReading');
+  var blEntryRemarks = document.getElementById('blEntryRemarks');
+  var blAddBtn = document.getElementById('blAddBtn');
+  var baselineBody = document.getElementById('baselineLinesBody');
+  var baselineEmpty = document.getElementById('baselineEmptyRow');
+  var baselinesDataField = document.getElementById('baselinesDataField');
+  var vrsForm = document.getElementById('vrsMainForm');
 
-  function setSelectValue(selectEl, value){
-    if(!selectEl) return;
+  function setSelectValue(selectEl, value) {
+    if (!selectEl) return;
     var v = (value === undefined || value === null || value === '') ? '' : String(value);
-    if(selectEl.tomselect){
+    if (selectEl.tomselect) {
       try {
-        if (v === '') { selectEl.tomselect.clear(true); }
-        else { selectEl.tomselect.setValue(v, true); }
-      } catch(e) {
-        selectEl.value = v;
-      }
+        if (v === '') selectEl.tomselect.clear(true);
+        else selectEl.tomselect.setValue(v, true);
+      } catch (e) { selectEl.value = v; }
       return;
     }
     selectEl.value = v;
@@ -192,11 +214,11 @@ document.addEventListener('DOMContentLoaded', function(){
     el.value = String(val);
   }
 
-  function applySetupDateToPicker(dateStr) {
-    if (!setupDate || !dateStr) return;
-    setupDate.value = dateStr;
-    if (setupDate._flatpickr) {
-      try { setupDate._flatpickr.setDate(dateStr, false); } catch (e) {}
+  function applySetupDateToPicker(el, dateStr) {
+    if (!el || !dateStr) return;
+    el.value = dateStr;
+    if (el._flatpickr) {
+      try { el._flatpickr.setDate(dateStr, false); } catch (e) {}
     }
   }
 
@@ -210,19 +232,19 @@ document.addEventListener('DOMContentLoaded', function(){
     } finally {
       setTimeout(function() { vrsBlockCascade = false; }, 200);
     }
-    if (prefill.setup_date) applySetupDateToPicker(prefill.setup_date);
+    if (prefill.setup_date) applySetupDateToPicker(setupDate, prefill.setup_date);
     if (prefill.fuel_previous_reading != null) setInputNumber(fuelPrev, prefill.fuel_previous_reading);
     if (prefill.oil_previous_reading != null) setInputNumber(oilPrev, prefill.oil_previous_reading);
     if (typeof prefill.remarks === 'string') remarks.value = prefill.remarks;
   }
 
-  function loadSetupForVehicle(){
+  function loadSetupForVehicle() {
     var vid = vehicle && (vehicle.tomselect ? vehicle.tomselect.getValue() : vehicle.value);
-    if(!vid || vid === '0') return;
+    if (!vid || vid === '0') return;
     fetch('/api/vehicle-reading-setup?vehicle_id=' + encodeURIComponent(vid))
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        if(!data) return;
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data) return;
         vrsBlockCascade = true;
         try {
           if (data.district_id) setSelectValue(district, data.district_id);
@@ -230,52 +252,50 @@ document.addEventListener('DOMContentLoaded', function(){
         } finally {
           setTimeout(function() { vrsBlockCascade = false; }, 200);
         }
-        if (data.setup_date) applySetupDateToPicker(data.setup_date);
+        if (data.setup_date) applySetupDateToPicker(setupDate, data.setup_date);
         if (data.fuel_previous_reading != null) setInputNumber(fuelPrev, data.fuel_previous_reading);
         if (data.oil_previous_reading != null) setInputNumber(oilPrev, data.oil_previous_reading);
         if (data.remarks != null) remarks.value = data.remarks;
       });
   }
 
-  if(district && project){
-    district.addEventListener('change', function(){
+  if (district && project) {
+    district.addEventListener('change', function() {
       if (vrsBlockCascade) return;
       var did = district.tomselect ? district.tomselect.getValue() : district.value;
       if (project.tomselect) { project.tomselect.destroy(); }
       if (vehicle.tomselect) { vehicle.tomselect.destroy(); }
-      project.innerHTML = '<option value="">-- Select Project --</option>';
-      vehicle.innerHTML = '<option value="">-- Select Vehicle --</option>';
+      project.innerHTML = '<option value="">-- Select --</option>';
+      vehicle.innerHTML = '<option value="">-- Select --</option>';
       initSearchableDropdowns(vehicle.parentNode);
-      if(did){
-        fetch('/get_projects_by_district/' + did)
-          .then(function(r){ return r.json(); })
-          .then(function(arr){
-            arr.forEach(function(p){
-              var o = document.createElement('option');
-              o.value = p.id;
-              o.textContent = p.name;
-              project.appendChild(o);
-            });
-            initSearchableDropdowns(project.parentNode);
+      if (did) {
+        fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
+          arr.forEach(function(p) {
+            var o = document.createElement('option');
+            o.value = p.id;
+            o.textContent = p.name;
+            project.appendChild(o);
           });
+          initSearchableDropdowns(project.parentNode);
+        });
       } else {
         initSearchableDropdowns(project.parentNode);
       }
     });
   }
 
-  if(project && vehicle){
-    project.addEventListener('change', function(){
+  if (project && vehicle) {
+    project.addEventListener('change', function() {
       if (vrsBlockCascade) return;
       var pid = project.tomselect ? project.tomselect.getValue() : project.value;
       var did = district ? (district.tomselect ? district.tomselect.getValue() : district.value) : '';
       if (vehicle.tomselect) { vehicle.tomselect.destroy(); }
-      vehicle.innerHTML = '<option value="">-- Select Vehicle --</option>';
-      if(pid){
+      vehicle.innerHTML = '<option value="">-- Select --</option>';
+      if (pid) {
         var url = '/get_vehicles_by_project_district?project_id=' + pid;
         if (did) url += '&district_id=' + did;
-        fetch(url).then(function(r){ return r.json(); }).then(function(arr){
-          arr.forEach(function(v){
+        fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
+          arr.forEach(function(v) {
             var o = document.createElement('option');
             o.value = v.id;
             o.textContent = v.vehicle_no;
@@ -289,18 +309,115 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
-  if(vehicle){
+  if (vehicle) {
     vehicle.addEventListener('change', function() {
       if (vrsBlockCascade) return;
       loadSetupForVehicle();
     });
   }
 
-  setTimeout(function() {
-    applyVrsPrefillFromPage();
-    loadSetupForVehicle();
-  }, 100);
-  setTimeout(applyVrsPrefillFromPage, 300);
-});
+  function syncBaselinesToField() {
+    if (baselinesDataField) baselinesDataField.value = JSON.stringify(BASELINES);
+  }
+
+  function getCatVal() {
+    if (!blEntryCategory) return '';
+    if (blEntryCategory.tomselect) return (blEntryCategory.tomselect.getValue() || '').trim();
+    return (blEntryCategory.value || '').trim();
+  }
+
+  function setCatVal(v) {
+    if (!blEntryCategory) return;
+    if (blEntryCategory.tomselect) { try { blEntryCategory.tomselect.clear(true); } catch (e) {} }
+    else { blEntryCategory.value = ''; }
+  }
+
+  function renderBaselineTable() {
+    if (!baselineBody) return;
+    var html = '';
+    for (var i = 0; i < BASELINES.length; i++) {
+      var it = BASELINES[i];
+      var esc = function(s) {
+        s = s == null ? '' : String(s);
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+      };
+      html += '<tr data-idx="' + i + '">' +
+        '<td>' + (i + 1) + '</td>' +
+        '<td class="fw-semibold">' + esc(it.job_category) + '</td>' +
+        '<td>' + esc(it.last_done_date) + '</td>' +
+        '<td class="text-end">' + esc(it.last_done_reading) + '</td>' +
+        '<td class="text-muted small">' + esc(it.remarks) + '</td>' +
+        '<td><button type="button" class="btn btn-outline-danger btn-sm bl-remove" data-idx="' + i + '"><i class="bi bi-trash"></i></button></td>' +
+        '</tr>';
+    }
+    if (!html) {
+      html = '<tr id="baselineEmptyRow" class="text-muted"><td colspan="6" class="text-center py-4">Koi line add nahi — zaroorat ho to upar se add karen.</td></tr>';
+    }
+    baselineBody.innerHTML = html;
+    baselineBody.querySelectorAll('.bl-remove').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var ix = parseInt(btn.getAttribute('data-idx'), 10);
+        if (isNaN(ix)) return;
+        BASELINES.splice(ix, 1);
+        renderBaselineTable();
+        syncBaselinesToField();
+      });
+    });
+    syncBaselinesToField();
+  }
+
+  if (blAddBtn) {
+    blAddBtn.addEventListener('click', function() {
+      var cat = getCatVal();
+      if (!cat) {
+        alert('Pehle job category select karen.');
+        if (blEntryCategory) blEntryCategory.focus();
+        return;
+      }
+      for (var j = 0; j < BASELINES.length; j++) {
+        if ((BASELINES[j].job_category || '').toLowerCase() === cat.toLowerCase()) {
+          alert('Yeh category pehle se list mein hai. Duplicate nahi ho sakta.');
+          return;
+        }
+      }
+      var row = {
+        job_category: cat,
+        last_done_date: (blEntryDate && blEntryDate.value) ? blEntryDate.value.trim() : '',
+        last_done_reading: (blEntryReading && blEntryReading.value) ? blEntryReading.value.trim() : '',
+        remarks: (blEntryRemarks && blEntryRemarks.value) ? blEntryRemarks.value.trim() : ''
+      };
+      BASELINES.push(row);
+      if (blEntryDate) { blEntryDate.value = ''; if (blEntryDate._flatpickr) blEntryDate._flatpickr.clear(); }
+      if (blEntryReading) blEntryReading.value = '';
+      if (blEntryRemarks) blEntryRemarks.value = '';
+      setCatVal('');
+      if (blEntryCategory && blEntryCategory.tomselect) blEntryCategory.tomselect.clear(true);
+      renderBaselineTable();
+    });
+  }
+
+  function onReadyVrs() {
+    setTimeout(function() {
+      applyVrsPrefillFromPage();
+      loadSetupForVehicle();
+    }, 100);
+    setTimeout(applyVrsPrefillFromPage, 300);
+    if (typeof window.initSmartDateFields === 'function') {
+      window.initSmartDateFields('.vrs-page .datepicker');
+    }
+    renderBaselineTable();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', onReadyVrs);
+  } else {
+    onReadyVrs();
+  }
+
+  if (vrsForm) {
+    vrsForm.addEventListener('submit', function() {
+      syncBaselinesToField();
+    });
+  }
+})();
 </script>
 {% endblock %}

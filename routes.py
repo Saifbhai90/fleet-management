@@ -17090,11 +17090,7 @@ def vehicle_reading_setup_form():
         fuel_prev_raw = (request.form.get('fuel_previous_reading') or '').strip()
         oil_prev_raw = (request.form.get('oil_previous_reading') or '').strip()
         remarks = (request.form.get('remarks') or '').strip() or None
-        maintenance_job_category = (request.form.get('maintenance_job_category') or '').strip() or None
-        maintenance_last_date = parse_date(request.form.get('maintenance_last_date'))
-        maintenance_last_reading_raw = (request.form.get('maintenance_last_reading') or '').strip()
-        maintenance_remarks = (request.form.get('maintenance_remarks') or '').strip() or None
-
+        baselines_json_raw = (request.form.get('baselines_data') or '').strip()
         if not vehicle_id:
             flash('Please select vehicle.', 'danger')
             return render_template(
@@ -17102,9 +17098,9 @@ def vehicle_reading_setup_form():
                 districts=districts, projects=projects, vehicles=vehicles,
                 row=row, selected_vehicle_id=selected_vehicle_id,
                 job_categories=job_categories,
-                baseline_rows=[],
                 latest_vehicle_reading=latest_vehicle_reading,
                 vrs_prefill=vrs_prefill,
+                initial_baselines_json=baselines_json_raw or '[]',
             )
         if not setup_date:
             flash('Please select setup date.', 'danger')
@@ -17113,9 +17109,9 @@ def vehicle_reading_setup_form():
                 districts=districts, projects=projects, vehicles=vehicles,
                 row=row, selected_vehicle_id=selected_vehicle_id,
                 job_categories=job_categories,
-                baseline_rows=[],
                 latest_vehicle_reading=latest_vehicle_reading,
                 vrs_prefill=vrs_prefill,
+                initial_baselines_json=baselines_json_raw or '[]',
             )
 
         def _to_dec(raw):
@@ -17126,9 +17122,8 @@ def vehicle_reading_setup_form():
         try:
             fuel_prev = _to_dec(fuel_prev_raw)
             oil_prev = _to_dec(oil_prev_raw)
-            maintenance_last_reading = _to_dec(maintenance_last_reading_raw)
         except Exception:
-            flash('Previous/last reading must be numeric.', 'danger')
+            flash('Fuel / Oil previous reading numeric honi chahiye.', 'danger')
             return render_template(
                 'vehicle_reading_setup_form.html',
                 districts=districts, projects=projects, vehicles=vehicles,
@@ -17137,6 +17132,64 @@ def vehicle_reading_setup_form():
                 baseline_rows=[],
                 latest_vehicle_reading=latest_vehicle_reading,
                 vrs_prefill=vrs_prefill,
+                initial_baselines_json='[]',
+            )
+
+        # Parse job-category baselines (same pattern as product lines on Add Maintenance)
+        bl_parsed = []
+        try:
+            bl_parsed = json.loads(baselines_json_raw) if baselines_json_raw else []
+        except (json.JSONDecodeError, TypeError, ValueError):
+            bl_parsed = []
+        if not isinstance(bl_parsed, list):
+            bl_parsed = []
+
+        bl_for_save = []
+        seen_cat = set()
+        baseline_error = None
+        for item in bl_parsed:
+            if not isinstance(item, dict):
+                continue
+            jn = (item.get('job_category') or '').strip()
+            if not jn:
+                continue
+            cat_name = _canonical_job_category_name(jn)
+            if not cat_name:
+                baseline_error = f'Job category manzoor shuda list se ho: {jn}'
+                break
+            ck = cat_name.lower()
+            if ck in seen_cat:
+                baseline_error = f'Duplicate job category: {cat_name}'
+                break
+            seen_cat.add(ck)
+            ds = (item.get('last_done_date') or '').strip()
+            ldd = parse_date(ds) if ds else None
+            lrraw = (item.get('last_done_reading') or '').strip()
+            lr = None
+            if lrraw:
+                try:
+                    lr = _to_dec(lrraw)
+                except Exception:
+                    baseline_error = f'Last done reading number honi chahiye ({cat_name})'
+                    break
+            brem = (item.get('remarks') or '').strip() or None
+            bl_for_save.append({
+                'cat_name': cat_name,
+                'last_done_date': ldd,
+                'last_reading': lr,
+                'remarks': brem,
+            })
+
+        if baseline_error:
+            flash(baseline_error, 'danger')
+            return render_template(
+                'vehicle_reading_setup_form.html',
+                districts=districts, projects=projects, vehicles=vehicles,
+                row=row, selected_vehicle_id=selected_vehicle_id,
+                job_categories=job_categories,
+                latest_vehicle_reading=latest_vehicle_reading,
+                vrs_prefill=vrs_prefill,
+                initial_baselines_json=baselines_json_raw or '[]',
             )
 
         rec = WorkspaceVehicleReadingSetup.query.filter_by(
@@ -17158,73 +17211,54 @@ def vehicle_reading_setup_form():
         rec.remarks = remarks
         rec.created_by_user_id = session.get('user_id')
 
-        if maintenance_job_category:
-            cat_name = _canonical_job_category_name(maintenance_job_category)
-            if not cat_name:
-                flash('Job category Add Maintenance wali list se select karein (ya pehle Add Job Category se banayein).', 'danger')
-                return render_template(
-                    'vehicle_reading_setup_form.html',
-                    districts=districts, projects=projects, vehicles=vehicles,
-                    row=row, selected_vehicle_id=selected_vehicle_id,
-                    job_categories=job_categories,
-                    baseline_rows=[],
-                    latest_vehicle_reading=latest_vehicle_reading,
-                    vrs_prefill=vrs_prefill,
-                )
-            cfg = _job_category_config_by_name(cat_name)
-            base = WorkspaceVehicleMaintenanceBaseline.query.filter(
-                WorkspaceVehicleMaintenanceBaseline.employee_id == workspace_employee_id,
-                WorkspaceVehicleMaintenanceBaseline.vehicle_id == vehicle_id,
-                func.lower(func.trim(WorkspaceVehicleMaintenanceBaseline.job_category)) == cat_name.lower(),
-            ).first()
-            if not base:
-                base = WorkspaceVehicleMaintenanceBaseline(
-                    employee_id=workspace_employee_id,
-                    vehicle_id=vehicle_id,
-                    product_id=None,
-                    job_category=cat_name,
-                )
-                db.session.add(base)
-            base.district_id = district_id
-            base.project_id = project_id
-            base.job_category = cat_name
-            base.product_id = None
+        # Replace baselines for this vehicle (table = full state)
+        WorkspaceVehicleMaintenanceBaseline.query.filter_by(
+            employee_id=workspace_employee_id,
+            vehicle_id=vehicle_id,
+        ).delete()
+        for bl in bl_for_save:
+            cfg = _job_category_config_by_name(bl['cat_name'])
+            base = WorkspaceVehicleMaintenanceBaseline(
+                employee_id=workspace_employee_id,
+                vehicle_id=vehicle_id,
+                product_id=None,
+                job_category=bl['cat_name'],
+                district_id=district_id,
+                project_id=project_id,
+            )
             if cfg:
                 base.interval_mode = cfg.get('interval_mode')
                 try:
                     base.interval_value = int(float(cfg.get('interval_value', 0)))
                 except (TypeError, ValueError):
                     base.interval_value = None
-            base.last_done_date = maintenance_last_date
-            base.last_done_reading = maintenance_last_reading
-            base.remarks = maintenance_remarks
+            base.last_done_date = bl['last_done_date']
+            base.last_done_reading = bl['last_reading']
+            base.remarks = bl['remarks']
             base.created_by_user_id = session.get('user_id')
+            db.session.add(base)
 
         db.session.commit()
-        flash('Vehicle setup saved. Job category baseline updated.' if maintenance_job_category else 'Vehicle previous reading setup saved.', 'success')
+        nbl = len(bl_for_save)
+        if nbl:
+            flash(
+                f'Vehicle setup save ho gaya. {nbl} job category baseline(s) update.',
+                'success',
+            )
+        else:
+            flash('Vehicle previous reading setup save ho gaya.', 'success')
         return redirect(url_for('vehicle_reading_setup_form', vehicle_id=vehicle_id))
 
-    baseline_view = []
+    initial_baseline_list = []
     if baseline_rows:
         for b in baseline_rows:
-            stat = _baseline_status(b, latest_reading=latest_vehicle_reading)
-            m_mode, m_val = _merged_interval_for_baseline(b)
-            interval_mode_lbl = 'KM' if m_mode == 'interval_km' else ('Days' if m_mode == 'interval_day' else '-')
-            interval_val_lbl = m_val if m_val is not None else '-'
-            baseline_view.append({
-                'id': b.id,
-                'job_category': b.job_category or '-',
-                'last_done_date_label': b.last_done_date.strftime('%d-%m-%Y') if b.last_done_date else '-',
-                'last_done_reading_label': f'{float(b.last_done_reading):.2f}' if b.last_done_reading is not None else '-',
-                'interval_mode': interval_mode_lbl,
-                'interval_value': interval_val_lbl,
-                'status': stat['status'],
-                'next_due_date_label': stat['next_due_date_label'],
-                'next_due_reading_label': stat['next_due_reading_label'],
-                'remaining_days_label': stat['remaining_days_label'],
-                'remaining_km_label': stat['remaining_km_label'],
-                'remarks': b.remarks or '-',
+            initial_baseline_list.append({
+                'job_category': (b.job_category or '').strip(),
+                'last_done_date': b.last_done_date.strftime('%d-%m-%Y') if b.last_done_date else '',
+                'last_done_reading': f'{float(b.last_done_reading):.2f}' if b.last_done_reading is not None else '',
+                'remarks': (b.remarks or '').strip(),
             })
+    initial_baselines_json = json.dumps(initial_baseline_list, ensure_ascii=True)
 
     return render_template(
         'vehicle_reading_setup_form.html',
@@ -17234,9 +17268,9 @@ def vehicle_reading_setup_form():
         row=row,
         selected_vehicle_id=selected_vehicle_id,
         job_categories=job_categories,
-        baseline_rows=baseline_view,
         latest_vehicle_reading=latest_vehicle_reading,
         vrs_prefill=vrs_prefill,
+        initial_baselines_json=initial_baselines_json,
     )
 
 
