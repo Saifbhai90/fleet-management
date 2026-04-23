@@ -73,10 +73,45 @@ Is tarah **web par bhi chalegi, mobile app par bhi** — dono same server + same
 
 ---
 
+## Pre-deploy: `flask db upgrade` fail (build OK, pre-deploy error)
+
+Agar build **Success** dikh raha hai lekin **Pre-Deploy** (`python -m flask db upgrade`) **fail** ho jata hai, Render kabhi "cause could not be determined" dikhata hai. Asli error **log** mein hota hai — **Dashboard → deploy → Pre-Deploy** expand karke dekhain.
+
+**Yeh variables zaroori hain (Web Service → Environment):**
+
+| Variable | Kya rakhna hai |
+|----------|----------------|
+| `SECRET_KEY` | Koi bhi long random string — bina iske `app` import hote waqt error (app.py `RuntimeError: SECRET_KEY must be set in production/Render`). |
+| `DATABASE_URL` | PostgreSQL **Internal** URL (web service jis DB se judegi). |
+| `FLASK_APP` (optional) | `app:app` — agar set na ho to `flask` command kabhi kabhi "Could not locate application" de sakta hai. |
+
+**Pre-Deploy command** Render par aise rakhain (reliable):
+
+```text
+sh scripts/render_migrate.sh
+```
+
+Repo mein `scripts/render_migrate.sh` maujood hai: pehle `SECRET_KEY` / `DATABASE_URL` check karta hai, phir `flask db upgrade` chalata hai — missing env par log mein **clear** message aata hai.
+
+**Shell se debug:** Web Service → **Shell** open karke chalain (same env as deploy):
+
+```bash
+sh scripts/render_migrate.sh
+# ya
+export FLASK_APP=app:app
+python -m flask db upgrade
+```
+
+Agar yahan par **full Python traceback** dikhe, wahi asli wajah hai (e.g. DB connection, Alembic duplicate head, etc.).
+
+---
+
 ## Short checklist
 
 - [ ] Render par **PostgreSQL** add kiya, **DATABASE_URL** Web Service Environment mein set kiya.
-- [ ] Redeploy ke baad **Shell** se `flask db upgrade` chala diya.
+- [ ] **`SECRET_KEY`** bhi set hai (migrations + app import ke liye).
+- [ ] (Optional) **`FLASK_APP=app:app`**
+- [ ] Redeploy ke baad pre-deploy chal gaya, ya **Shell** se `sh scripts/render_migrate.sh` / `flask db upgrade` chala diya.
 - [ ] Data ab clear nahi hota — check karo (entry add karo, sleep/wake karo, phir dekho).
 - [ ] 500+ users / no sleep ke liye **paid plan** consider kiya.
 - [ ] Future mobile ke liye backend ko API + same DB par hi rakhna hai.

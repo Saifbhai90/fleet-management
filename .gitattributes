@@ -1,2 +1,4 @@
 # Ensure requirements.txt is always stored with LF (no CRLF) so pip on Linux works
 requirements.txt text eol=lf
+# Shell scripts: Linux/Render
+scripts/render_migrate.sh text eol=lf
