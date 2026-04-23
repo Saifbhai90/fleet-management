@@ -10842,7 +10842,7 @@ def _parse_activity_datetime(raw):
 def _speed_monitoring_rows(from_date=None, to_date=None, project_id=0, district_id=0, vehicle_id=0,
                            check_type='', speed_limit=None,
                            allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
-                           is_master_or_admin=True, max_rows=4000):
+                           is_master_or_admin=True):
     query = db.session.query(
         VehicleActivityRecord, Vehicle, Project, District
     ).outerjoin(
@@ -10874,9 +10874,7 @@ def _speed_monitoring_rows(from_date=None, to_date=None, project_id=0, district_
         query = query.filter(Vehicle.id == vehicle_id)
 
     out = []
-    capped = query.order_by(VehicleActivityRecord.task_date.desc(), VehicleActivityRecord.id.desc()).limit(max_rows + 1).all()
-    truncated = len(capped) > max_rows
-    for rec, vehicle, project, district in capped[:max_rows]:
+    for rec, vehicle, project, district in query.order_by(VehicleActivityRecord.task_date.desc(), VehicleActivityRecord.id.desc()).all():
         speed_val = float(rec.speed or 0)
         if speed_limit is not None:
             if check_type == 'above' and not (speed_val > speed_limit):
@@ -10916,7 +10914,8 @@ def _speed_monitoring_rows(from_date=None, to_date=None, project_id=0, district_
             'check_result': check_result,
         })
 
-    return out, truncated
+    out.sort(key=lambda r: r['record_dt'] or datetime.min, reverse=True)
+    return out
 
 
 @app.route('/speed-monitoring-report')
@@ -10953,19 +10952,26 @@ def speed_monitoring_report():
             speed_limit = None
             speed_limit_raw = ''
 
-    rows, truncated = _speed_monitoring_rows(
-        from_date=from_date,
-        to_date=to_date,
-        project_id=project_id,
-        district_id=district_id,
-        vehicle_id=vehicle_id,
-        check_type=check_type,
-        speed_limit=speed_limit,
-        allowed_projects=allowed_projects,
-        allowed_districts=allowed_districts,
-        allowed_vehicles=allowed_vehicles,
-        is_master_or_admin=is_master_or_admin,
-    )
+    rows = []
+    must_filter_missing = False
+    if not district_id or not project_id or not check_type or speed_limit is None:
+        must_filter_missing = True
+        if request.args:
+            flash('Please select required filters: District, Project, Check Type, and Speed Limit.', 'warning')
+    else:
+        rows = _speed_monitoring_rows(
+            from_date=from_date,
+            to_date=to_date,
+            project_id=project_id,
+            district_id=district_id,
+            vehicle_id=vehicle_id,
+            check_type=check_type,
+            speed_limit=speed_limit,
+            allowed_projects=allowed_projects,
+            allowed_districts=allowed_districts,
+            allowed_vehicles=allowed_vehicles,
+            is_master_or_admin=is_master_or_admin,
+        )
 
     project_q = Project.query.order_by(Project.name)
     if not is_master_or_admin and allowed_projects:
@@ -10995,7 +11001,7 @@ def speed_monitoring_report():
         rows=rows,
         total=len(rows),
         unique_vehicle_count=unique_vehicle_count,
-        truncated=truncated,
+        must_filter_missing=must_filter_missing,
         from_date=from_date,
         to_date=to_date,
         project_id=project_id,
@@ -11041,7 +11047,7 @@ def speed_monitoring_report_export():
         except Exception:
             speed_limit = None
 
-    rows, _ = _speed_monitoring_rows(
+    rows = _speed_monitoring_rows(
         from_date=from_date,
         to_date=to_date,
         project_id=project_id,
@@ -11053,7 +11059,6 @@ def speed_monitoring_report_export():
         allowed_districts=allowed_districts,
         allowed_vehicles=allowed_vehicles,
         is_master_or_admin=is_master_or_admin,
-        max_rows=20000,
     )
 
     headers = ['Sr No', 'District', 'Project', 'Vehicle', 'Record Date Time', 'Speed', 'Reason', 'Location', 'Check Result']
@@ -11108,7 +11113,7 @@ def speed_monitoring_report_print():
         except Exception:
             speed_limit = None
 
-    rows, _ = _speed_monitoring_rows(
+    rows = _speed_monitoring_rows(
         from_date=from_date,
         to_date=to_date,
         project_id=project_id,
@@ -11120,7 +11125,6 @@ def speed_monitoring_report_print():
         allowed_districts=allowed_districts,
         allowed_vehicles=allowed_vehicles,
         is_master_or_admin=is_master_or_admin,
-        max_rows=20000,
     )
 
     return render_template(

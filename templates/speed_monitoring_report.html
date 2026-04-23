@@ -95,11 +95,6 @@
   </div>
 
   <div class="smr-table-wrap">
-    {% if truncated %}
-    <div class="alert alert-warning py-2 small mb-2">
-      Report ko fast rakhne ke liye first 4000 records show kiye gaye hain. Filter narrow kar ke specific data dekhein.
-    </div>
-    {% endif %}
     <div class="d-flex justify-content-between align-items-center mb-2">
       <span class="total-badge"><i class="bi bi-activity me-1"></i>Total Points: {{ total }}</span>
       <input type="text" id="dtSearchInput" class="form-control form-control-sm" placeholder="Search..." style="max-width:220px;">
@@ -146,7 +141,13 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="9" class="text-center text-muted py-4">No activity points found.</td>
+            <td colspan="9" class="text-center text-muted py-4">
+              {% if must_filter_missing %}
+              Required filters select karein: District, Project, Check Type, Speed Limit.
+              {% else %}
+              No activity points found.
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -178,7 +179,16 @@ $(function () {
   var overlay = document.getElementById('speedWaitOverlay');
   var closeBtn = document.getElementById('speedCloseBtn');
   if (f && overlay) {
-    f.addEventListener('submit', function() {
+    f.addEventListener('submit', function(e) {
+      var district = (f.querySelector('select[name=\"district_id\"]') || {}).value || '0';
+      var project = (f.querySelector('select[name=\"project_id\"]') || {}).value || '0';
+      var checkType = (f.querySelector('select[name=\"check_type\"]') || {}).value || '';
+      var speedLimit = ((f.querySelector('input[name=\"speed_limit\"]') || {}).value || '').trim();
+      if (district === '0' || project === '0' || !checkType || !speedLimit) {
+        e.preventDefault();
+        alert('District, Project, Check Type, aur Speed Limit select karna لازمی hai.');
+        return;
+      }
       overlay.classList.remove('d-none');
       overlay.style.display = 'flex';
     });
