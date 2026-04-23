@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Unexecuted Task Report{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-x-octagon me-2 text-danger"></i>Unexecuted Task Report</h2>
+    <span class="badge bg-danger-subtle text-danger-emphasis">Task Closed in Green/Yellow but not performed</span>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="GET" action="{{ url_for('unexecuted_task_report') }}" class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label">From Date</label>
+          <input type="text" name="from_date" class="form-control datepicker" value="{{ from_date|ddmmyyyy }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">To Date</label>
+          <input type="text" name="to_date" class="form-control datepicker" value="{{ to_date|ddmmyyyy }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">District</label>
+          <select name="district_id" id="districtSelect" class="form-select search-select">
+            <option value="0">-- All Districts --</option>
+            {% for d in districts %}
+            <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Project</label>
+          <select name="project_id" id="projectSelect" class="form-select search-select">
+            <option value="0">-- All Projects --</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Vehicle</label>
+          <select name="vehicle_id" class="form-select search-select">
+            <option value="0">-- All Vehicles --</option>
+            {% for v in vehicles %}
+            <option value="{{ v.id }}" {% if vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-1">
+          <label class="form-label">Category</label>
+          <select name="category" class="form-select">
+            <option value="" {% if not category %}selected{% endif %}>All</option>
+            <option value="Green" {% if category == 'Green' %}selected{% endif %}>Green</option>
+            <option value="Yellow" {% if category == 'Yellow' %}selected{% endif %}>Yellow</option>
+          </select>
+        </div>
+        <div class="col-md-1">
+          <label class="form-label">Shift</label>
+          <select name="shift" class="form-select">
+            <option value="" {% if not shift %}selected{% endif %}>All</option>
+            <option value="day" {% if shift == 'day' %}selected{% endif %}>Day</option>
+            <option value="night" {% if shift == 'night' %}selected{% endif %}>Night</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Filter</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="save_batch" value="1">
+    <input type="hidden" name="from_date" value="{{ from_date|ddmmyyyy }}">
+    <input type="hidden" name="to_date" value="{{ to_date|ddmmyyyy }}">
+    <input type="hidden" name="district_id" value="{{ district_id }}">
+    <input type="hidden" name="project_id" value="{{ project_id }}">
+    <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
+    <input type="hidden" name="category" value="{{ category }}">
+    <input type="hidden" name="shift" value="{{ shift }}">
+
+    <div class="card shadow border-0 rounded-3 overflow-hidden">
+      <div class="card-header bg-danger text-white py-3 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Unexecuted Tasks</span>
+        <span class="badge bg-dark">{{ rows|length }} rows</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" id="unexecutedTaskTable">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Sr</th>
+              <th>District</th>
+              <th>Project</th>
+              <th>Vehicle</th>
+              <th>Task ID</th>
+              <th>Task Assign DateTime</th>
+              <th>Task Close DateTime</th>
+              <th>Total Time</th>
+              <th>Category</th>
+              <th class="text-end">Running KM (Activity)</th>
+              <th>Shift</th>
+              <th style="min-width:180px;">Driver Name</th>
+              <th style="min-width:110px;">Fine</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr{% if row.saved %} class="table-info"{% endif %}>
+              <td class="ps-3">
+                {{ loop.index }}
+                <input type="hidden" name="row_{{ loop.index0 }}_emg_id" value="{{ row.emg.id }}">
+                <input type="hidden" name="row_{{ loop.index0 }}_district_id" value="{{ row.district.id if row.district else '' }}">
+                <input type="hidden" name="row_{{ loop.index0 }}_project_id" value="{{ row.project.id if row.project else '' }}">
+                <input type="hidden" name="row_{{ loop.index0 }}_vehicle_id" value="{{ row.vehicle.id if row.vehicle else '' }}">
+              </td>
+              <td>{{ row.district.name if row.district else (row.emg.district_name or '-') }}</td>
+              <td>{{ row.project.name if row.project else '-' }}</td>
+              <td>{{ row.vehicle.vehicle_no if row.vehicle else (row.emg.amb_reg_no or '-') }}</td>
+              <td>{{ row.emg.task_id_ext or '-' }}</td>
+              <td>{{ row.assign_dt.strftime('%d-%m-%Y %I:%M %p') if row.assign_dt else '-' }}</td>
+              <td>{{ row.close_dt.strftime('%d-%m-%Y %I:%M %p') if row.close_dt else '-' }}</td>
+              <td>{{ row.total_time }}</td>
+              <td><span class="badge {% if row.emg.category == 'Green' %}bg-success{% else %}bg-warning text-dark{% endif %}">{{ row.emg.category or '-' }}</span></td>
+              <td class="text-end">{{ '%.2f'|format(row.activity_km) }}</td>
+              <td>{{ row.shift }}</td>
+              <td>
+                <select name="row_{{ loop.index0 }}_driver_id" class="form-select form-select-sm search-select">
+                  <option value="">-- Select --</option>
+                  {% for drv in row.drivers %}
+                  <option value="{{ drv.id }}" {% if row.saved and row.saved.driver_id == drv.id %}selected{% endif %}>{{ drv.name }}{% if drv.status != 'Active' %} ({{ drv.status }}){% endif %}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td>
+                <input type="number" step="0.01" min="0" name="row_{{ loop.index0 }}_fine" class="form-control form-control-sm text-end"
+                       value="{{ row.saved.fine_amount|float if row.saved and row.saved.fine_amount else 0 }}">
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="13" class="text-center py-5 text-muted">No unexecuted task rows found for selected filters.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer bg-light d-flex justify-content-between align-items-center">
+        <small class="text-muted">Fine > 0 will create/update Penalty Record, similar to Move Without Task.</small>
+        <button type="submit" class="btn btn-danger px-4"><i class="bi bi-save me-1"></i>Save All</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+(function() {
+  var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = this.value;
+      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
+      projectSelect.innerHTML = '<option value="0">-- All Projects --</option>';
+      if (did && did !== '0') {
+        fetch('/get_projects_by_district/' + did)
+          .then(function(r) { return r.json(); })
+          .then(function(arr) {
+            arr.forEach(function(p) {
+              var o = document.createElement('option');
+              o.value = p.id;
+              o.textContent = p.name;
+              projectSelect.appendChild(o);
+            });
+            initSearchableDropdowns(projectSelect.parentNode);
+          });
+      } else {
+        initSearchableDropdowns(projectSelect.parentNode);
+      }
+    });
+  }
+})();
+document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('unexecutedTaskTable'); });
+</script>
+{% endblock %}

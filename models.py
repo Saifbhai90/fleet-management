@@ -724,6 +724,30 @@ class PenaltyRecord(db.Model):
         return f'<PenaltyRecord {self.id} {self.record_date}>'
 
 
+class UnexecutedTaskRecord(db.Model):
+    __tablename__ = 'unexecuted_task_record'
+    id = db.Column(db.Integer, primary_key=True)
+    task_date = db.Column(db.Date, nullable=False, index=True)
+    emergency_task_record_id = db.Column(db.Integer, db.ForeignKey('emergency_task_record.id'), nullable=False, unique=True, index=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=True)
+    fine = db.Column(db.String(50), nullable=True)            # "No" or amount e.g. "500"
+    fine_amount = db.Column(db.Numeric(12, 2), default=0)
+    remarks = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    emergency_task = db.relationship('EmergencyTaskRecord', backref='unexecuted_records', lazy='select')
+    district = db.relationship('District', backref='unexecuted_task_records', lazy='select')
+    project = db.relationship('Project', backref='unexecuted_task_records', lazy='select')
+    vehicle = db.relationship('Vehicle', backref='unexecuted_task_records', lazy='select')
+    driver = db.relationship('Driver', backref='unexecuted_task_records', lazy='select')
+
+    def __repr__(self):
+        return f'<UnexecutedTaskRecord emg={self.emergency_task_record_id} {self.task_date}>'
+
+
 # ────────────────────────────────────────────────
 # Party Name (Pump / Workshop / Spare parts shop)
 # ────────────────────────────────────────────────

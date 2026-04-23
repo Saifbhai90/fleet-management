@@ -6,7 +6,7 @@ from models import (
     project_district, employee_project, employee_district, vehicle_district, ProjectTransfer, VehicleTransfer, DriverTransfer, DriverStatusChange,
     DriverAttendance,
     LeaveRequest,
-    VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, VehicleActivityRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
+    VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, VehicleActivityRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord, UnexecutedTaskRecord,
     Party, Product, FuelExpense, FuelExpenseAttachment, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceWorkOrder, MaintenanceWorkOrderAttachment, MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
     WorkspaceProduct,
@@ -17189,6 +17189,255 @@ def without_task_list():
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
     return render_template('without_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search)
+
+
+def _ensure_unexecuted_task_table():
+    UnexecutedTaskRecord.__table__.create(bind=db.session.get_bind(), checkfirst=True)
+
+
+def _parse_emg_datetime(raw):
+    s = (raw or '').strip()
+    if not s:
+        return None
+    for fmt in (
+        '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M',
+        '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M',
+        '%d %b %Y %H:%M:%S', '%d %b %Y %H:%M',
+        '%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M',
+        '%Y-%m-%d %I:%M:%S %p', '%Y-%m-%d %I:%M %p',
+        '%d-%m-%Y %I:%M:%S %p', '%d-%m-%Y %I:%M %p',
+        '%d/%m/%Y %I:%M:%S %p', '%d/%m/%Y %I:%M %p',
+    ):
+        try:
+            return datetime.strptime(s, fmt)
+        except (ValueError, TypeError):
+            continue
+    return _parse_activity_datetime(s)
+
+
+def _shift_from_datetime(dt):
+    if not dt:
+        return '-'
+    t = dt.time()
+    return 'Day' if time(8, 0) <= t < time(20, 0) else 'Night'
+
+
+def _fmt_duration(delta):
+    if not delta:
+        return '-'
+    secs = int(delta.total_seconds())
+    if secs < 0:
+        secs = 0
+    h = secs // 3600
+    m = (secs % 3600) // 60
+    return f'{h:02d}:{m:02d}'
+
+
+@app.route('/unexecuted-task-report', methods=['GET', 'POST'])
+def unexecuted_task_report():
+    _ensure_unexecuted_task_table()
+
+    today = pk_date()
+    from_date = parse_date(request.values.get('from_date')) or today
+    to_date = parse_date(request.values.get('to_date')) or today
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
+    district_id = request.values.get('district_id', type=int) or 0
+    project_id = request.values.get('project_id', type=int) or 0
+    vehicle_id = request.values.get('vehicle_id', type=int) or 0
+    category = (request.values.get('category') or '').strip()
+    shift = (request.values.get('shift') or '').strip().lower()
+
+    if request.method == 'POST' and request.form.get('save_batch') == '1':
+        saved = 0
+        idx = 0
+        while True:
+            emg_id_raw = request.form.get(f'row_{idx}_emg_id')
+            if emg_id_raw is None:
+                break
+            try:
+                emg_id = int(emg_id_raw)
+            except (ValueError, TypeError):
+                idx += 1
+                continue
+            emg = EmergencyTaskRecord.query.get(emg_id)
+            if not emg:
+                idx += 1
+                continue
+
+            try:
+                did = int(request.form.get(f'row_{idx}_district_id') or 0) or None
+            except (ValueError, TypeError):
+                did = None
+            try:
+                pid = int(request.form.get(f'row_{idx}_project_id') or 0) or None
+            except (ValueError, TypeError):
+                pid = None
+            try:
+                vid = int(request.form.get(f'row_{idx}_vehicle_id') or 0) or None
+            except (ValueError, TypeError):
+                vid = None
+            try:
+                driver_id = int(request.form.get(f'row_{idx}_driver_id') or 0) or None
+            except (ValueError, TypeError):
+                driver_id = None
+            remarks = (request.form.get(f'row_{idx}_remarks') or '').strip() or None
+            try:
+                fine_amt = float(request.form.get(f'row_{idx}_fine') or 0)
+            except (ValueError, TypeError):
+                fine_amt = 0
+
+            rec = UnexecutedTaskRecord.query.filter_by(emergency_task_record_id=emg_id).first()
+            if rec:
+                rec.task_date = emg.task_date
+                rec.district_id = did
+                rec.project_id = pid
+                rec.vehicle_id = vid
+                rec.driver_id = driver_id
+                rec.remarks = remarks
+                rec.fine = str(fine_amt) if fine_amt > 0 else 'No'
+                rec.fine_amount = fine_amt
+            else:
+                rec = UnexecutedTaskRecord(
+                    task_date=emg.task_date,
+                    emergency_task_record_id=emg_id,
+                    district_id=did,
+                    project_id=pid,
+                    vehicle_id=vid,
+                    driver_id=driver_id,
+                    remarks=remarks,
+                    fine=str(fine_amt) if fine_amt > 0 else 'No',
+                    fine_amount=fine_amt,
+                )
+                db.session.add(rec)
+            db.session.flush()
+
+            PenaltyRecord.query.filter_by(source_type='unexecuted_task', source_id=rec.id).delete()
+            if fine_amt > 0 and driver_id:
+                db.session.add(PenaltyRecord(
+                    district_id=did, project_id=pid, vehicle_id=vid, driver_id=driver_id,
+                    record_date=emg.task_date,
+                    fine=str(fine_amt),
+                    remarks='Unexecuted Task Fine',
+                    source_type='unexecuted_task',
+                    source_id=rec.id,
+                ))
+            saved += 1
+            idx += 1
+
+        db.session.commit()
+        flash(f'{saved} unexecuted task record(s) saved.', 'success')
+        return redirect(url_for(
+            'unexecuted_task_report',
+            from_date=from_date.strftime('%d-%m-%Y'),
+            to_date=to_date.strftime('%d-%m-%Y'),
+            district_id=district_id,
+            project_id=project_id,
+            vehicle_id=vehicle_id,
+            category=category,
+            shift=shift,
+        ))
+
+    district_q = District.query.order_by(District.name)
+    project_q = Project.query.order_by(Project.name)
+    vehicle_q = Vehicle.query.order_by(Vehicle.vehicle_no)
+    if district_id:
+        project_q = project_q.join(project_district).filter(project_district.c.district_id == district_id)
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    if project_id:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
+
+    districts = district_q.all()
+    projects = project_q.all()
+    vehicles = vehicle_q.all()
+
+    emg_q = EmergencyTaskRecord.query.filter(
+        EmergencyTaskRecord.task_date >= from_date,
+        EmergencyTaskRecord.task_date <= to_date,
+        EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+        EmergencyTaskRecord.completed_date_time.isnot(None),
+        EmergencyTaskRecord.excel_created_date.isnot(None),
+    )
+    if category in ('Green', 'Yellow'):
+        emg_q = emg_q.filter(EmergencyTaskRecord.category == category)
+    if vehicle_id:
+        v = Vehicle.query.get(vehicle_id)
+        emg_q = emg_q.filter(EmergencyTaskRecord.amb_reg_no == (v.vehicle_no if v else ''))
+
+    emg_rows = emg_q.order_by(EmergencyTaskRecord.task_date.desc(), EmergencyTaskRecord.id.desc()).all()
+    vehicle_map = {v.vehicle_no: v for v in Vehicle.query.filter(Vehicle.vehicle_no.in_([r.amb_reg_no for r in emg_rows if r.amb_reg_no])).all()} if emg_rows else {}
+    saved_map = {r.emergency_task_record_id: r for r in UnexecutedTaskRecord.query.filter(
+        UnexecutedTaskRecord.emergency_task_record_id.in_([r.id for r in emg_rows])
+    ).all()} if emg_rows else {}
+
+    out_rows = []
+    for r in emg_rows:
+        assign_dt = _parse_emg_datetime(r.excel_created_date)
+        close_dt = _parse_emg_datetime(r.completed_date_time)
+        if not assign_dt or not close_dt:
+            continue
+        if close_dt < assign_dt:
+            continue
+
+        v = vehicle_map.get((r.amb_reg_no or '').strip())
+        if district_id and v and v.district_id != district_id:
+            continue
+        if project_id and v and v.project_id != project_id:
+            continue
+
+        activity_km = 0.0
+        if v:
+            acts = VehicleActivityRecord.query.filter(
+                VehicleActivityRecord.vehicle_no == v.vehicle_no,
+                VehicleActivityRecord.task_date >= assign_dt.date(),
+                VehicleActivityRecord.task_date <= close_dt.date(),
+            ).all()
+            for a in acts:
+                adt = _parse_activity_datetime(a.record_date_time)
+                if adt and assign_dt <= adt <= close_dt:
+                    activity_km += float(a.distance or 0)
+        activity_km = round(activity_km, 2)
+
+        total_time = close_dt - assign_dt
+        row_shift = _shift_from_datetime(assign_dt)
+        if shift in ('day', 'night') and row_shift.lower() != shift:
+            continue
+
+        saved = saved_map.get(r.id)
+        assigned_drivers = Driver.query.filter_by(vehicle_id=(v.id if v else None), status='Active').order_by(Driver.name).all() if v else []
+        if saved and saved.driver_id:
+            _saved_drv = Driver.query.get(saved.driver_id)
+            if _saved_drv and all(d.id != _saved_drv.id for d in assigned_drivers):
+                assigned_drivers.append(_saved_drv)
+
+        out_rows.append({
+            'emg': r,
+            'vehicle': v,
+            'district': v.district if v and v.district else None,
+            'project': v.project if v and v.project else None,
+            'assign_dt': assign_dt,
+            'close_dt': close_dt,
+            'total_time': _fmt_duration(total_time),
+            'activity_km': activity_km,
+            'shift': row_shift,
+            'drivers': assigned_drivers,
+            'saved': saved,
+        })
+
+    return render_template(
+        'unexecuted_task_report.html',
+        rows=out_rows,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        vehicle_id=vehicle_id,
+        category=category,
+        shift=shift,
+        districts=districts,
+        projects=projects,
+        vehicles=vehicles,
+    )
 
 
 @app.route('/vehicle-move-without-task/new', methods=['GET', 'POST'])

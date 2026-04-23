@@ -170,6 +170,11 @@
               <i class="bi bi-star text-warning me-2"></i>Tracker Difference Report
             </a>
             {% endif %}
+            {% if can_see_page('unexecuted_task_report') %}
+            <a href="{{ url_for('unexecuted_task_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Unexecuted Task Report
+            </a>
+            {% endif %}
           </div>
         </div>
         <!-- Logbook -->
