@@ -194,8 +194,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
   if (previewBtn) {
+    var _previewBusy = false;
     previewBtn.addEventListener('click', function(e) {
       e.preventDefault();
+      e.stopPropagation();
+      if (_previewBusy) return;
+      _previewBusy = true;
       var u = this.getAttribute('data-preview-url');
       var searchVal = (document.getElementById('dtSearchInput') || {}).value || '';
       if (searchVal && searchVal.trim()) {
@@ -208,6 +212,11 @@ document.addEventListener('DOMContentLoaded', function () {
       } catch (_) {
         window.location.href = u;
       }
+      previewBtn.disabled = true;
+      setTimeout(function () {
+        _previewBusy = false;
+        previewBtn.disabled = false;
+      }, 1200);
     });
   }
 
