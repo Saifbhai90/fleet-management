@@ -2,3 +2,4 @@
 requirements.txt text eol=lf
 # Shell scripts: Linux/Render
 scripts/render_migrate.sh text eol=lf
+.flaskenv text eol=lf
