@@ -17236,6 +17236,9 @@ def _fmt_duration(delta):
 def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehicle_id=0, category='', shift='',
                           allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
                           is_master_or_admin=True):
+    allowed_projects = set(allowed_projects or [])
+    allowed_districts = set(allowed_districts or [])
+    allowed_vehicles = set(allowed_vehicles or [])
     selected_district = District.query.get(district_id) if district_id else None
     selected_district_name = (selected_district.name or '').strip().lower() if selected_district else ''
 
@@ -17278,7 +17281,8 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
         if not is_master_or_admin:
             if not v:
                 continue
-            if allowed_vehicles and v.id not in allowed_vehicles:
+            # Vehicle scope is mandatory for non-admin users.
+            if not allowed_vehicles or v.id not in allowed_vehicles:
                 continue
             if allowed_districts and v.district_id not in allowed_districts:
                 continue
@@ -17483,12 +17487,14 @@ def unexecuted_task_report():
     vehicle_q = Vehicle.query.order_by(Vehicle.vehicle_no)
 
     if not is_master_or_admin:
-        if allowed_districts:
-            district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-        if allowed_projects:
-            project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
-        if allowed_vehicles:
-            vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+        allowed_vehicle_ids = list(set(allowed_vehicles or []))
+        if not allowed_vehicle_ids:
+            allowed_vehicle_ids = [-1]
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(allowed_vehicle_ids))
+        district_ids_from_vehicle = [d[0] for d in db.session.query(Vehicle.district_id).filter(Vehicle.id.in_(allowed_vehicle_ids), Vehicle.district_id.isnot(None)).distinct().all()]
+        project_ids_from_vehicle = [p[0] for p in db.session.query(Vehicle.project_id).filter(Vehicle.id.in_(allowed_vehicle_ids), Vehicle.project_id.isnot(None)).distinct().all()]
+        district_q = district_q.filter(District.id.in_(district_ids_from_vehicle or [-1]))
+        project_q = project_q.filter(Project.id.in_(project_ids_from_vehicle or [-1]))
 
     if district_id:
         project_q = project_q.join(project_district).filter(project_district.c.district_id == district_id)
