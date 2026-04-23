@@ -15,6 +15,14 @@
   .status-below { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
   .status-equal { background: #fff8e1; color: #ef6c00; border: 1px solid #ffe0b2; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
   .total-badge { background: #e3f2fd; color: #0d47a1; padding: .25rem .8rem; border-radius: 20px; font-size: .82rem; font-weight: 700; }
+  .speed-wait-inline {
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    border-radius: 8px;
+    padding: .65rem .8rem;
+    margin-bottom: .9rem;
+    display: none;
+  }
 </style>
 
 <div class="container-fluid py-3 px-3 px-md-4">
@@ -94,6 +102,19 @@
     </form>
   </div>
 
+  <div id="speedWaitInline" class="speed-wait-inline">
+    <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+      <div class="d-flex align-items-center gap-2">
+        <span class="spinner-border spinner-border-sm text-warning" role="status"></span>
+        <span class="small fw-semibold text-dark">Please wait... report load ho rahi hai.</span>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-warning btn-sm" id="speedWaitBtn">Wait</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="speedCloseBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="smr-table-wrap">
     <div class="d-flex justify-content-between align-items-center mb-2">
       <span class="total-badge"><i class="bi bi-activity me-1"></i>Total Points: {{ total }}</span>
@@ -156,20 +177,6 @@
   </div>
 </div>
 
-<div id="speedWaitOverlay" class="d-none" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;display:flex;align-items:center;justify-content:center;">
-  <div class="card shadow-lg border-0" style="width:410px;max-width:92%;">
-    <div class="card-body text-center py-5">
-      <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem;" role="status"></div>
-      <h5 class="mb-2">Please Wait...</h5>
-      <p class="text-muted small mb-3">Speed report load ho rahi hai. Heavy data par thora time lag sakta hai.</p>
-      <div class="d-flex justify-content-center gap-2">
-        <button type="button" class="btn btn-primary btn-sm" id="speedWaitBtn">Wait</button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" id="speedCloseBtn">Close</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   var previewBtn = document.getElementById('speedPreviewBtn');
@@ -205,7 +212,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   var f = document.getElementById('speedFilterForm');
-  var overlay = document.getElementById('speedWaitOverlay');
+  var overlay = document.getElementById('speedWaitInline');
   var closeBtn = document.getElementById('speedCloseBtn');
   if (f && overlay) {
     f.addEventListener('submit', function(e) {
@@ -218,13 +225,11 @@ document.addEventListener('DOMContentLoaded', function () {
         alert('District, Project, Check Type, aur Speed Limit select karna لازمی hai.');
         return;
       }
-      overlay.classList.remove('d-none');
-      overlay.style.display = 'flex';
+      overlay.style.display = 'block';
     });
   }
   if (closeBtn && overlay) {
     closeBtn.addEventListener('click', function() {
-      overlay.classList.add('d-none');
       overlay.style.display = 'none';
     });
   }
@@ -251,8 +256,8 @@ document.addEventListener('DOMContentLoaded', function () {
   var waitBtn = document.getElementById('speedWaitBtn');
   if (waitBtn && overlay) {
     waitBtn.addEventListener('click', function() {
-      // keep overlay visible intentionally
-      overlay.style.display = 'flex';
+      // keep inline popup visible intentionally
+      overlay.style.display = 'block';
     });
   }
 });
