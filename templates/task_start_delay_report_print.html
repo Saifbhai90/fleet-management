@@ -1,5 +1,5 @@
 {% extends "base_print.html" %}
-{% block title %}Print – Task Start Delay Report{% endblock %}
+{% block title %}Print – Driver Response Time Report{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -26,8 +26,8 @@
 {% block content %}
 <div class="print-container">
   <div class="rpt-header">
-    <h2><i class="bi bi-alarm me-2"></i>Task Start Delay Report</h2>
-    <div class="rpt-sub">Task assign se pehli vehicle activity tak delay</div>
+    <h2><i class="bi bi-alarm me-2"></i>Driver Response Time Report</h2>
+    <div class="rpt-sub">Task assign se pehli vehicle activity — response time</div>
   </div>
 
   <div class="rpt-meta d-flex flex-wrap gap-2">
@@ -67,7 +67,7 @@
         <td>{{ r.delay_display }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="11" class="text-center text-muted py-4">No task start delay records found.</td></tr>
+      <tr><td colspan="11" class="text-center text-muted py-4">No driver response time records found.</td></tr>
       {% endfor %}
     </tbody>
   </table>
