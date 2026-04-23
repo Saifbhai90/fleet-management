@@ -10827,6 +10827,188 @@ def oil_change_alert_report_print():
 
 
 # ── Driver Seat Available Report ───────────────────────────────────────────
+def _parse_activity_datetime(raw):
+    if not raw:
+        return None
+    s = str(raw).strip()
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M'):
+        try:
+            return datetime.strptime(s, fmt)
+        except Exception:
+            continue
+    return None
+
+
+def _speed_monitoring_rows(from_date=None, to_date=None, project_id=0, district_id=0, vehicle_id=0,
+                           check_type='', speed_limit=None,
+                           allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
+                           is_master_or_admin=True):
+    query = db.session.query(
+        VehicleActivityRecord, Vehicle, Project, District
+    ).outerjoin(
+        Vehicle, Vehicle.vehicle_no == VehicleActivityRecord.vehicle_no
+    ).outerjoin(
+        Project, Vehicle.project_id == Project.id
+    ).outerjoin(
+        District, Vehicle.district_id == District.id
+    )
+
+    if from_date:
+        query = query.filter(VehicleActivityRecord.task_date >= from_date)
+    if to_date:
+        query = query.filter(VehicleActivityRecord.task_date <= to_date)
+
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(Vehicle.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(Vehicle.id.in_(list(allowed_vehicles)))
+
+    if project_id:
+        query = query.filter(Vehicle.project_id == project_id)
+    if district_id:
+        query = query.filter(Vehicle.district_id == district_id)
+    if vehicle_id:
+        query = query.filter(Vehicle.id == vehicle_id)
+
+    out = []
+    for rec, vehicle, project, district in query.order_by(VehicleActivityRecord.task_date.desc(), VehicleActivityRecord.id.desc()).all():
+        speed_val = float(rec.speed or 0)
+        if speed_limit is not None:
+            if check_type == 'above' and not (speed_val > speed_limit):
+                continue
+            if check_type == 'below' and not (speed_val < speed_limit):
+                continue
+
+        dt = _parse_activity_datetime(rec.record_date_time)
+        if from_date and dt and dt.date() < from_date:
+            continue
+        if to_date and dt and dt.date() > to_date:
+            continue
+
+        check_result = None
+        if speed_limit is not None:
+            if speed_val > speed_limit:
+                check_result = f'Above (+{speed_val - speed_limit:.2f})'
+            elif speed_val < speed_limit:
+                check_result = f'Below (-{speed_limit - speed_val:.2f})'
+            else:
+                check_result = 'Equal (0.00)'
+
+        location_text = (rec.location or '').strip()
+        if '||' in location_text:
+            parts = location_text.split('||', 1)
+            if len(parts) == 2 and parts[1].strip():
+                location_text = parts[1].strip()
+
+        out.append({
+            'rec': rec,
+            'vehicle': vehicle,
+            'project': project,
+            'district': district,
+            'record_dt': dt,
+            'speed': speed_val,
+            'distance': float(rec.distance or 0),
+            'location_text': location_text,
+            'check_result': check_result,
+        })
+
+    out.sort(key=lambda r: r['record_dt'] or datetime.min, reverse=True)
+    return out
+
+
+@app.route('/speed-monitoring-report')
+def speed_monitoring_report():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+
+    speed_limit_raw = (request.args.get('speed_limit') or '').strip()
+    speed_limit = None
+    if speed_limit_raw:
+        try:
+            speed_limit = float(speed_limit_raw)
+            if speed_limit < 0:
+                speed_limit = None
+                speed_limit_raw = ''
+        except Exception:
+            speed_limit = None
+            speed_limit_raw = ''
+
+    rows = _speed_monitoring_rows(
+        from_date=from_date,
+        to_date=to_date,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        check_type=check_type,
+        speed_limit=speed_limit,
+        allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts,
+        allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+
+    project_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.all()]
+
+    district_q = District.query.order_by(District.name)
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    if project_id:
+        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
+
+    vehicle_q = Vehicle.query.order_by(Vehicle.vehicle_no)
+    if not is_master_or_admin and allowed_vehicles:
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    if project_id:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
+    if district_id:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.all()]
+
+    unique_vehicle_count = len({r['vehicle'].id for r in rows if r.get('vehicle')})
+
+    return render_template(
+        'speed_monitoring_report.html',
+        rows=rows,
+        total=len(rows),
+        unique_vehicle_count=unique_vehicle_count,
+        from_date=from_date,
+        to_date=to_date,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        check_type=check_type,
+        speed_limit=speed_limit_raw,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        vehicle_choices=vehicle_choices,
+    )
+
+
+# ── Driver Seat Available Report ───────────────────────────────────────────
 
 def _seat_available_data(project_id=0, district_id=0, vehicle_type='',
                          allowed_vehicles=None, allowed_projects=None,

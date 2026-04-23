@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Speed Monitoring Report{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<style>
+  .smr-header { background: linear-gradient(135deg, #1565c0 0%, #00838f 100%); color: #fff; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
+  .smr-header h2 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+  .smr-subtitle { font-size: 0.84rem; opacity: .9; margin-top: .2rem; }
+  .smr-filter { background: #fff; border-radius: 8px; box-shadow: 0 1px 5px rgba(0,0,0,.08); padding: .9rem 1rem; margin-bottom: 1rem; }
+  .smr-table-wrap { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); padding: .9rem; }
+  #speedTable thead th { background: #e1f5fe; color: #01579b; border-bottom: 2px solid #0288d1; font-size: .78rem; text-transform: uppercase; white-space: nowrap; }
+  #speedTable td { vertical-align: middle; font-size: .83rem; }
+  .status-above { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
+  .status-below { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
+  .status-equal { background: #fff8e1; color: #ef6c00; border: 1px solid #ffe0b2; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
+  .total-badge { background: #e3f2fd; color: #0d47a1; padding: .25rem .8rem; border-radius: 20px; font-size: .82rem; font-weight: 700; }
+</style>
+
+<div class="container-fluid py-3 px-3 px-md-4">
+  <div class="smr-header">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <div class="me-auto">
+        <h2><i class="bi bi-speedometer2 me-2"></i>Speed Monitoring Report</h2>
+        <div class="smr-subtitle">Tracker activity speed points by date range and filters</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="smr-filter">
+    <form method="get" action="{{ url_for('speed_monitoring_report') }}">
+      <div class="row g-2 align-items-end">
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">From Date</label>
+          <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date|ddmmyyyy }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">To Date</label>
+          <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date|ddmmyyyy }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">District</label>
+          <select name="district_id" class="form-select form-select-sm search-select">
+            {% for val, label in district_choices %}
+            <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Project</label>
+          <select name="project_id" class="form-select form-select-sm search-select">
+            {% for val, label in project_choices %}
+            <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Vehicle</label>
+          <select name="vehicle_id" class="form-select form-select-sm search-select">
+            {% for val, label in vehicle_choices %}
+            <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-1">
+          <label class="form-label mb-1 small fw-semibold">Check Type</label>
+          <select name="check_type" class="form-select form-select-sm">
+            <option value="" {% if not check_type %}selected{% endif %}>--</option>
+            <option value="above" {% if check_type == 'above' %}selected{% endif %}>Above</option>
+            <option value="below" {% if check_type == 'below' %}selected{% endif %}>Below</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-1">
+          <label class="form-label mb-1 small fw-semibold">Speed Limit</label>
+          <input type="number" step="0.01" min="0" name="speed_limit" class="form-control form-control-sm" placeholder="e.g. 80" value="{{ speed_limit or '' }}">
+        </div>
+        <div class="col-6 col-md-1">
+          <button class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel-fill"></i></button>
+        </div>
+      </div>
+      <div class="mt-2">
+        <a href="{{ url_for('speed_monitoring_report') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x-circle me-1"></i>Clear
+        </a>
+        <span class="total-badge ms-2">Points: {{ total }}</span>
+        <span class="total-badge ms-2">Vehicles: {{ unique_vehicle_count }}</span>
+      </div>
+    </form>
+  </div>
+
+  <div class="smr-table-wrap">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="total-badge"><i class="bi bi-activity me-1"></i>Total Points: {{ total }}</span>
+      <input type="text" id="dtSearchInput" class="form-control form-control-sm" placeholder="Search..." style="max-width:220px;">
+    </div>
+    <div class="table-responsive">
+      <table id="speedTable" class="table table-sm table-bordered table-hover align-middle w-100">
+        <thead>
+          <tr>
+            <th>Sr No</th>
+            <th>Record Date Time</th>
+            <th>Project</th>
+            <th>District</th>
+            <th>Vehicle</th>
+            <th>Group</th>
+            <th>Speed</th>
+            <th>Direction</th>
+            <th>Distance</th>
+            <th>Travel Time</th>
+            <th>Stop Time</th>
+            <th>Reason</th>
+            <th>Location</th>
+            <th>Check Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ r.record_dt.strftime('%d-%m-%Y %I:%M %p') if r.record_dt else (r.rec.record_date_time or '-') }}</td>
+            <td>{{ r.project.name if r.project else '-' }}</td>
+            <td>{{ r.district.name if r.district else '-' }}</td>
+            <td>{{ r.vehicle.vehicle_no if r.vehicle else (r.rec.vehicle_no or '-') }}</td>
+            <td>{{ r.rec.group_name or '-' }}</td>
+            <td class="fw-semibold">{{ '%.2f'|format(r.speed) }}</td>
+            <td>{{ r.rec.direction or '-' }}</td>
+            <td>{{ '%.2f'|format(r.distance) }}</td>
+            <td>{{ r.rec.travel_time or '-' }}</td>
+            <td>{{ r.rec.stop_time or '-' }}</td>
+            <td>{{ r.rec.reason or '-' }}</td>
+            <td>{{ r.location_text or '-' }}</td>
+            <td>
+              {% if r.check_result %}
+                {% if 'Above' in r.check_result %}
+                <span class="status-above">{{ r.check_result }}</span>
+                {% elif 'Below' in r.check_result %}
+                <span class="status-below">{{ r.check_result }}</span>
+                {% else %}
+                <span class="status-equal">{{ r.check_result }}</span>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="14" class="text-center text-muted py-4">No activity points found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script>
+$(function () {
+  var hasData = {{ 1 if rows else 0 }};
+  if (!hasData) return;
+  if (window.innerWidth < 768) return;
+  var table = $('#speedTable').DataTable({
+    dom: "<'row'<'col-12'tr>><'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>",
+    pageLength: 50,
+    lengthChange: false,
+    order: [],
+    language: {
+      info: 'Showing _START_ to _END_ of _TOTAL_ points',
+      emptyTable: 'No activity points found.',
+      paginate: { first: '«', last: '»', next: '›', previous: '‹' }
+    }
+  });
+  $('#dtSearchInput').on('keyup input', function () {
+    table.search(this.value).draw();
+  });
+});
+</script>
+{% endblock %}
