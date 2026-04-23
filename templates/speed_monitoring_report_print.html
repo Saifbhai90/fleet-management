@@ -19,6 +19,19 @@
   .check-below { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
   .check-equal { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
   .rpt-table th, .rpt-table td { white-space: nowrap; }
+  .print-container {
+    max-width: none !important;
+    width: calc(100vw - 16px) !important;
+    margin: 0 auto !important;
+    padding: 10px 8px 20px 8px !important;
+  }
+  .preview-search-wrap { display: flex; justify-content: flex-end; margin: 6px 0 10px 0; }
+  .preview-search {
+    width: 300px; max-width: 60vw;
+    border: 1px solid #cbd5e1; border-radius: 8px;
+    padding: 6px 10px; font-size: .85rem;
+  }
+  .preview-count { font-size: .78rem; color: #475569; margin-right: auto; display: flex; align-items: center; }
   @page { size: A4 landscape !important; margin: 8mm !important; }
 </style>
 {% endblock %}
@@ -42,6 +55,11 @@
     {% if check_type %}
     <span class="total-badge ms-2">Check Type: {{ check_type|capitalize }}</span>
     {% endif %}
+  </div>
+
+  <div class="preview-search-wrap no-print">
+    <div class="preview-count" id="previewVisibleCount">Showing {{ total }} of {{ total }}</div>
+    <input type="text" id="previewSearchInput" class="preview-search" placeholder="Search in preview...">
   </div>
 
   <table class="table table-sm table-bordered rpt-table w-100">
@@ -89,4 +107,33 @@
     </tbody>
   </table>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var inp = document.getElementById('previewSearchInput');
+  var tbody = document.querySelector('.rpt-table tbody');
+  var countEl = document.getElementById('previewVisibleCount');
+  if (!inp || !tbody) return;
+
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+  var total = rows.length;
+  function applyFilter() {
+    var q = (inp.value || '').toLowerCase().trim();
+    var visible = 0;
+    var sr = 1;
+    rows.forEach(function (tr) {
+      var txt = (tr.textContent || '').toLowerCase();
+      var show = !q || txt.indexOf(q) !== -1;
+      tr.style.display = show ? '' : 'none';
+      if (show) {
+        visible += 1;
+        var srCell = tr.querySelector('td');
+        if (srCell) srCell.textContent = sr++;
+      }
+    });
+    if (countEl) countEl.textContent = 'Showing ' + visible + ' of ' + total;
+  }
+  inp.addEventListener('input', applyFilter);
+  applyFilter();
+});
+</script>
 {% endblock %}
