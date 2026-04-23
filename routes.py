@@ -11516,6 +11516,7 @@ def mileage_report_print():
 
 # ── Unauthorized Movement Report ──────────────────────────────────────────
 def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, district_id=0, vehicle_id=0,
+                                check_type='', without_task_move_limit=None,
                                 allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
                                 is_master_or_admin=True):
     allowed_projects = set(allowed_projects or [])
@@ -11643,6 +11644,12 @@ def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, dist
         return_to_parking_km = round(task_running_km, 2)
         without_task_move = round(tracker_km - (task_running_km + return_to_parking_km), 2)
 
+        if without_task_move_limit is not None:
+            if check_type == 'above' and not (without_task_move > without_task_move_limit):
+                continue
+            if check_type == 'below' and not (without_task_move < without_task_move_limit):
+                continue
+
         # Practical view: only keep vehicles with any movement footprint.
         if km_driven == 0 and tracker_km == 0 and task_running_km == 0 and without_task_move == 0:
             continue
@@ -11707,6 +11714,20 @@ def unauthorized_movement_report():
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+    without_task_move_limit_raw = (request.args.get('without_task_move_limit') or '').strip()
+    without_task_move_limit = None
+    if without_task_move_limit_raw:
+        try:
+            without_task_move_limit = float(without_task_move_limit_raw)
+            if without_task_move_limit < 0:
+                without_task_move_limit = None
+                without_task_move_limit_raw = ''
+        except Exception:
+            without_task_move_limit = None
+            without_task_move_limit_raw = ''
 
     rows = _unauthorized_movement_rows(
         from_date=from_date,
@@ -11714,6 +11735,8 @@ def unauthorized_movement_report():
         project_id=project_id,
         district_id=district_id,
         vehicle_id=vehicle_id,
+        check_type=check_type,
+        without_task_move_limit=without_task_move_limit,
         allowed_projects=allowed_projects,
         allowed_districts=allowed_districts,
         allowed_vehicles=allowed_vehicles,
@@ -11753,6 +11776,8 @@ def unauthorized_movement_report():
         project_id=project_id,
         district_id=district_id,
         vehicle_id=vehicle_id,
+        check_type=check_type,
+        without_task_move_limit=without_task_move_limit_raw,
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
@@ -11776,6 +11801,18 @@ def unauthorized_movement_report_export():
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+    without_task_move_limit_raw = (request.args.get('without_task_move_limit') or '').strip()
+    without_task_move_limit = None
+    if without_task_move_limit_raw:
+        try:
+            without_task_move_limit = float(without_task_move_limit_raw)
+            if without_task_move_limit < 0:
+                without_task_move_limit = None
+        except Exception:
+            without_task_move_limit = None
 
     rows = _unauthorized_movement_rows(
         from_date=from_date,
@@ -11783,6 +11820,8 @@ def unauthorized_movement_report_export():
         project_id=project_id,
         district_id=district_id,
         vehicle_id=vehicle_id,
+        check_type=check_type,
+        without_task_move_limit=without_task_move_limit,
         allowed_projects=allowed_projects,
         allowed_districts=allowed_districts,
         allowed_vehicles=allowed_vehicles,
@@ -11829,6 +11868,18 @@ def _unauthorized_movement_preview_context():
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+    without_task_move_limit_raw = (request.args.get('without_task_move_limit') or '').strip()
+    without_task_move_limit = None
+    if without_task_move_limit_raw:
+        try:
+            without_task_move_limit = float(without_task_move_limit_raw)
+            if without_task_move_limit < 0:
+                without_task_move_limit = None
+        except Exception:
+            without_task_move_limit = None
 
     rows = _unauthorized_movement_rows(
         from_date=from_date,
@@ -11836,6 +11887,8 @@ def _unauthorized_movement_preview_context():
         project_id=project_id,
         district_id=district_id,
         vehicle_id=vehicle_id,
+        check_type=check_type,
+        without_task_move_limit=without_task_move_limit,
         allowed_projects=allowed_projects,
         allowed_districts=allowed_districts,
         allowed_vehicles=allowed_vehicles,
