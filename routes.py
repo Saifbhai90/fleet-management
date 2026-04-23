@@ -10842,7 +10842,7 @@ def _parse_activity_datetime(raw):
 def _speed_monitoring_rows(from_date=None, to_date=None, project_id=0, district_id=0, vehicle_id=0,
                            check_type='', speed_limit=None,
                            allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
-                           is_master_or_admin=True):
+                           is_master_or_admin=True, max_rows=4000):
     query = db.session.query(
         VehicleActivityRecord, Vehicle, Project, District
     ).outerjoin(
@@ -10874,7 +10874,9 @@ def _speed_monitoring_rows(from_date=None, to_date=None, project_id=0, district_
         query = query.filter(Vehicle.id == vehicle_id)
 
     out = []
-    for rec, vehicle, project, district in query.order_by(VehicleActivityRecord.task_date.desc(), VehicleActivityRecord.id.desc()).all():
+    capped = query.order_by(VehicleActivityRecord.task_date.desc(), VehicleActivityRecord.id.desc()).limit(max_rows + 1).all()
+    truncated = len(capped) > max_rows
+    for rec, vehicle, project, district in capped[:max_rows]:
         speed_val = float(rec.speed or 0)
         if speed_limit is not None:
             if check_type == 'above' and not (speed_val > speed_limit):
@@ -10910,13 +10912,11 @@ def _speed_monitoring_rows(from_date=None, to_date=None, project_id=0, district_
             'district': district,
             'record_dt': dt,
             'speed': speed_val,
-            'distance': float(rec.distance or 0),
             'location_text': location_text,
             'check_result': check_result,
         })
 
-    out.sort(key=lambda r: r['record_dt'] or datetime.min, reverse=True)
-    return out
+    return out, truncated
 
 
 @app.route('/speed-monitoring-report')
@@ -10953,7 +10953,7 @@ def speed_monitoring_report():
             speed_limit = None
             speed_limit_raw = ''
 
-    rows = _speed_monitoring_rows(
+    rows, truncated = _speed_monitoring_rows(
         from_date=from_date,
         to_date=to_date,
         project_id=project_id,
@@ -10995,6 +10995,7 @@ def speed_monitoring_report():
         rows=rows,
         total=len(rows),
         unique_vehicle_count=unique_vehicle_count,
+        truncated=truncated,
         from_date=from_date,
         to_date=to_date,
         project_id=project_id,
@@ -11005,6 +11006,132 @@ def speed_monitoring_report():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+    )
+
+
+@app.route('/speed-monitoring-report/export')
+def speed_monitoring_report_export():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+
+    speed_limit_raw = (request.args.get('speed_limit') or '').strip()
+    speed_limit = None
+    if speed_limit_raw:
+        try:
+            speed_limit = float(speed_limit_raw)
+            if speed_limit < 0:
+                speed_limit = None
+        except Exception:
+            speed_limit = None
+
+    rows, _ = _speed_monitoring_rows(
+        from_date=from_date,
+        to_date=to_date,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        check_type=check_type,
+        speed_limit=speed_limit,
+        allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts,
+        allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+        max_rows=20000,
+    )
+
+    headers = ['Sr No', 'District', 'Project', 'Vehicle', 'Record Date Time', 'Speed', 'Reason', 'Location', 'Check Result']
+    data_rows = []
+    for i, r in enumerate(rows, 1):
+        data_rows.append([
+            i,
+            r['district'].name if r['district'] else '-',
+            r['project'].name if r['project'] else '-',
+            r['vehicle'].vehicle_no if r['vehicle'] else (r['rec'].vehicle_no or '-'),
+            r['record_dt'].strftime('%d-%m-%Y %I:%M %p') if r['record_dt'] else (r['rec'].record_date_time or '-'),
+            r['speed'],
+            r['rec'].reason or '-',
+            r['location_text'] or '-',
+            r['check_result'] or '-',
+        ])
+    return generate_excel_template(
+        headers, data_rows, required_columns=[],
+        filename=f'speed_monitoring_report_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+
+@app.route('/speed-monitoring-report/print')
+def speed_monitoring_report_print():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+
+    speed_limit_raw = (request.args.get('speed_limit') or '').strip()
+    speed_limit = None
+    if speed_limit_raw:
+        try:
+            speed_limit = float(speed_limit_raw)
+            if speed_limit < 0:
+                speed_limit = None
+        except Exception:
+            speed_limit = None
+
+    rows, _ = _speed_monitoring_rows(
+        from_date=from_date,
+        to_date=to_date,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        check_type=check_type,
+        speed_limit=speed_limit,
+        allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts,
+        allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+        max_rows=20000,
+    )
+
+    return render_template(
+        'speed_monitoring_report_print.html',
+        rows=rows,
+        total=len(rows),
+        from_date=from_date,
+        to_date=to_date,
+        speed_limit=speed_limit_raw,
+        check_type=check_type,
+        now=datetime.now,
     )
 
 

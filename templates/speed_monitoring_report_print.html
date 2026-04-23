@@ -1,0 +1,70 @@
+{% extends "base_print.html" %}
+{% block title %}Print – Speed Monitoring Report{% endblock %}
+
+{% block extra_head %}
+<style>
+  .rpt-header { background: linear-gradient(135deg, #1565c0 0%, #00838f 100%); color: #fff; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
+  .rpt-header h2 { margin: 0; font-size: 1.22rem; font-weight: 700; }
+  .rpt-meta { font-size: 0.78rem; color: #546e7a; margin-bottom: 0.75rem; }
+  .total-badge { display: inline-block; background: #e3f2fd; color: #0d47a1; font-size: 0.82rem; font-weight: 700; padding: 0.2rem 0.75rem; border-radius: 20px; }
+  .rpt-table { font-size: 0.81rem; }
+  .rpt-table thead th { background: #e1f5fe; color: #01579b; font-weight: 700; font-size: 0.74rem; text-transform: uppercase; border-bottom: 2px solid #0288d1; white-space: nowrap; padding: 0.4rem 0.6rem; }
+  .rpt-table tbody td { vertical-align: middle; padding: 0.38rem 0.58rem; }
+  .rpt-table tbody tr:nth-child(even) { background: #f5fbff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="print-container">
+  <div class="rpt-header">
+    <h2><i class="bi bi-speedometer2 me-2"></i>Speed Monitoring Report</h2>
+  </div>
+
+  <div class="rpt-meta d-flex flex-wrap gap-3">
+    <span><i class="bi bi-calendar3 me-1"></i>Range: {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
+    <span><i class="bi bi-clock me-1"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
+  </div>
+  <div class="mb-2">
+    <span class="total-badge">Total Points: {{ total }}</span>
+    {% if speed_limit %}
+    <span class="total-badge ms-2">Speed Limit: {{ speed_limit }}</span>
+    {% endif %}
+    {% if check_type %}
+    <span class="total-badge ms-2">Check Type: {{ check_type|capitalize }}</span>
+    {% endif %}
+  </div>
+
+  <table class="table table-sm table-bordered rpt-table w-100">
+    <thead>
+      <tr>
+        <th>Sr No</th>
+        <th>District</th>
+        <th>Project</th>
+        <th>Vehicle</th>
+        <th>Record Date Time</th>
+        <th>Speed</th>
+        <th>Reason</th>
+        <th>Location</th>
+        <th>Check Result</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ r.district.name if r.district else '-' }}</td>
+        <td>{{ r.project.name if r.project else '-' }}</td>
+        <td>{{ r.vehicle.vehicle_no if r.vehicle else (r.rec.vehicle_no or '-') }}</td>
+        <td>{{ r.record_dt.strftime('%d-%m-%Y %I:%M %p') if r.record_dt else (r.rec.record_date_time or '-') }}</td>
+        <td>{{ '%.2f'|format(r.speed) }}</td>
+        <td>{{ r.rec.reason or '-' }}</td>
+        <td>{{ r.location_text or '-' }}</td>
+        <td>{{ r.check_result or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="text-center text-muted py-4">No activity points found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
