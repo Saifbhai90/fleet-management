@@ -11179,6 +11179,36 @@ def speed_monitoring_report_print():
 
 
 # ── Mileage Report ───────────────────────────────────────────
+def _resolve_task_readings(task_row, vehicle_id, prev_close_cache=None):
+    close_r = float(task_row.close_reading or 0)
+    start_r = float(task_row.start_reading) if task_row.start_reading is not None else None
+
+    # If start reading is missing/zero, fallback to previous day's close for the same vehicle.
+    if start_r is None or start_r == 0:
+        cache_key = (vehicle_id, task_row.task_date) if vehicle_id and task_row.task_date else None
+        prev_close = None
+        if prev_close_cache is not None and cache_key in prev_close_cache:
+            prev_close = prev_close_cache.get(cache_key)
+        else:
+            prev = VehicleDailyTask.query.filter(
+                VehicleDailyTask.vehicle_id == vehicle_id,
+                VehicleDailyTask.task_date < task_row.task_date,
+                VehicleDailyTask.close_reading.isnot(None),
+            ).order_by(
+                VehicleDailyTask.task_date.desc(),
+                VehicleDailyTask.id.desc()
+            ).first()
+            prev_close = float(prev.close_reading) if prev and prev.close_reading is not None else None
+            if prev_close_cache is not None and cache_key is not None:
+                prev_close_cache[cache_key] = prev_close
+        if prev_close is not None:
+            start_r = prev_close
+
+    if start_r is None:
+        start_r = 0.0
+    return round(start_r, 2), round(close_r, 2)
+
+
 def _mileage_report_rows(from_date=None, to_date=None, project_id=0, district_id=0, vehicle_id=0,
                          check_type='', km_limit=None,
                          allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
@@ -11214,9 +11244,9 @@ def _mileage_report_rows(from_date=None, to_date=None, project_id=0, district_id
         query = query.filter(Vehicle.id == vehicle_id)
 
     out = []
+    prev_close_cache = {}
     for rec, vehicle, project, district in query.order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id.desc()).all():
-        start_r = float(rec.start_reading or 0)
-        close_r = float(rec.close_reading or 0)
+        start_r, close_r = _resolve_task_readings(rec, vehicle.id if vehicle else None, prev_close_cache)
         total_km = round(close_r - start_r, 2)
 
         if km_limit is not None:
@@ -11520,9 +11550,9 @@ def _tracker_difference_rows(from_date=None, to_date=None, project_id=0, distric
         query = query.filter(Vehicle.id == vehicle_id)
 
     out = []
+    prev_close_cache = {}
     for rec, vehicle, project, district in query.order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id.desc()).all():
-        start_r = float(rec.start_reading or 0)
-        close_r = float(rec.close_reading or 0)
+        start_r, close_r = _resolve_task_readings(rec, vehicle.id if vehicle else None, prev_close_cache)
         total_km = round(close_r - start_r, 2)
 
         tracker_rec = VehicleMileageRecord.query.filter_by(
