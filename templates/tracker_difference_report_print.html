@@ -69,7 +69,7 @@
         <td>{{ '%.2f'|format(r.total_km) }}</td>
         <td>{{ '%.2f'|format(r.tracker_mileage) }}</td>
         <td>{{ '%.2f'|format(r.diff_km) }}</td>
-        <td>{{ '%.2f'|format(r.diff_pct) }}%</td>
+        <td>{% if r.diff_pct is not none %}{{ '%.2f'|format(r.diff_pct) }}%{% else %}Driven KM Zero{% endif %}</td>
         <td>
           {% if r.check_result %}
             {% if 'Above' in r.check_result %}<span class="check-pill check-above">{{ r.check_result }}</span>

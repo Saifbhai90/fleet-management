@@ -11560,20 +11560,22 @@ def _tracker_difference_rows(from_date=None, to_date=None, project_id=0, distric
         ).first()
         tracker_mileage = float(tracker_rec.effective_km()) if tracker_rec else 0.0
 
-        diff_km = round(abs(total_km - tracker_mileage), 2)
-        if tracker_mileage > 0:
-            diff_pct = round((diff_km / tracker_mileage) * 100.0, 2)
-        else:
-            diff_pct = 0.0 if diff_km == 0 else 100.0
+        # Match Vehicles Daily Task Report logic:
+        # Diff Km's = Driven (Total KMs) - Tracker Mileage
+        # % Diff = Diff Km's / Driven (Total KMs) * 100
+        diff_km = round(total_km - tracker_mileage, 2)
+        diff_pct = round((diff_km / total_km) * 100.0, 2) if total_km not in (0, 0.0) else None
 
         if diff_pct_limit is not None:
+            if diff_pct is None:
+                continue
             if check_type == 'above' and not (diff_pct > diff_pct_limit):
                 continue
             if check_type == 'below' and not (diff_pct < diff_pct_limit):
                 continue
 
         check_result = None
-        if diff_pct_limit is not None:
+        if diff_pct_limit is not None and diff_pct is not None:
             if diff_pct > diff_pct_limit:
                 check_result = f'Above (+{diff_pct - diff_pct_limit:.2f}%)'
             elif diff_pct < diff_pct_limit:
@@ -11729,7 +11731,7 @@ def tracker_difference_report_export():
                 f"{r['total_km']:.2f}",
                 f"{r['tracker_mileage']:.2f}",
                 f"{r['diff_km']:.2f}",
-                f"{r['diff_pct']:.2f}%",
+                f"{r['diff_pct']:.2f}%" if r['diff_pct'] is not None else '',
                 r.get('check_result') or '',
             ]).lower()
             return table_search in blob
@@ -11749,7 +11751,7 @@ def tracker_difference_report_export():
             r['total_km'],
             r['tracker_mileage'],
             r['diff_km'],
-            r['diff_pct'],
+            r['diff_pct'] if r['diff_pct'] is not None else '',
             r['check_result'] or '-',
         ])
     return generate_excel_template(
@@ -11806,7 +11808,7 @@ def _tracker_difference_report_preview_context():
                 f"{r['total_km']:.2f}",
                 f"{r['tracker_mileage']:.2f}",
                 f"{r['diff_km']:.2f}",
-                f"{r['diff_pct']:.2f}%",
+                f"{r['diff_pct']:.2f}%" if r['diff_pct'] is not None else '',
                 r.get('check_result') or '',
             ]).lower()
             return table_search in blob

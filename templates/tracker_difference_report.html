@@ -142,8 +142,10 @@
             <td>{{ '%.2f'|format(r.close_reading) }}</td>
             <td class="fw-semibold">{{ '%.2f'|format(r.total_km) }}</td>
             <td>{{ '%.2f'|format(r.tracker_mileage) }}</td>
-            <td>{{ '%.2f'|format(r.diff_km) }}</td>
-            <td>{{ '%.2f'|format(r.diff_pct) }}%</td>
+            <td class="{% if r.diff_km < 0 %}text-warning{% endif %}">{{ '%.2f'|format(r.diff_km) }}</td>
+            <td class="{% if r.diff_pct is not none and r.diff_pct < 0 %}text-warning{% endif %}">
+              {% if r.diff_pct is not none %}{{ '%.2f'|format(r.diff_pct) }}%{% else %}Driven KM Zero{% endif %}
+            </td>
             <td>
               {% if r.check_result %}
                 {% if 'Above' in r.check_result %}
