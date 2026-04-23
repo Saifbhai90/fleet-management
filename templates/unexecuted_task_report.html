@@ -4,7 +4,15 @@
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-x-octagon me-2 text-danger"></i>Unexecuted Task Report</h2>
-    <span class="badge bg-danger-subtle text-danger-emphasis">Task Closed in Green/Yellow but not performed</span>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnPreviewReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <a class="btn btn-outline-success btn-sm" id="btnExportReport"
+         data-export-url="{{ url_for('unexecuted_task_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, category=category, shift=shift) }}"
+         href="{{ url_for('unexecuted_task_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, category=category, shift=shift) }}">
+        <i class="bi bi-file-earmark-excel me-1"></i>Export
+      </a>
+      <span class="badge bg-danger-subtle text-danger-emphasis">Task Closed in Green/Yellow but not performed</span>
+    </div>
   </div>
 
   <div class="card shadow-sm border-0 rounded-3 mb-4">
@@ -82,7 +90,10 @@
     <div class="card shadow border-0 rounded-3 overflow-hidden">
       <div class="card-header bg-danger text-white py-3 d-flex justify-content-between align-items-center">
         <span class="fw-semibold">Unexecuted Tasks</span>
-        <span class="badge bg-dark">{{ rows|length }} rows</span>
+        <div class="d-flex align-items-center gap-2">
+          <input type="text" id="unexecutedSearchInput" class="form-control form-control-sm" placeholder="Search..." style="width:220px;">
+          <span class="badge bg-dark">{{ rows|length }} rows</span>
+        </div>
       </div>
       <div class="table-responsive">
         <table class="table table-sm table-hover align-middle mb-0" id="unexecutedTaskTable">
@@ -101,6 +112,7 @@
               <th>Shift</th>
               <th style="min-width:180px;">Driver Name</th>
               <th style="min-width:110px;">Fine</th>
+              <th style="min-width:180px;">Remarks</th>
             </tr>
           </thead>
           <tbody>
@@ -135,9 +147,13 @@
                 <input type="number" step="0.01" min="0" name="row_{{ loop.index0 }}_fine" class="form-control form-control-sm text-end"
                        value="{{ row.saved.fine_amount|float if row.saved and row.saved.fine_amount else 0 }}">
               </td>
+              <td>
+                <input type="text" name="row_{{ loop.index0 }}_remarks" class="form-control form-control-sm"
+                       value="{{ row.saved.remarks if row.saved and row.saved.remarks else '' }}" placeholder="Remarks">
+              </td>
             </tr>
             {% else %}
-            <tr><td colspan="13" class="text-center py-5 text-muted">No unexecuted task rows found for selected filters.</td></tr>
+            <tr><td colspan="14" class="text-center py-5 text-muted">No unexecuted task rows found for selected filters.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -178,5 +194,47 @@
   }
 })();
 document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('unexecutedTaskTable'); });
+
+document.addEventListener('DOMContentLoaded', function() {
+  var searchInput = document.getElementById('unexecutedSearchInput');
+  var tableBody = document.querySelector('#unexecutedTaskTable tbody');
+  if (searchInput && tableBody) {
+    var rows = Array.prototype.slice.call(tableBody.querySelectorAll('tr'));
+    searchInput.addEventListener('input', function() {
+      var q = (this.value || '').toLowerCase().trim();
+      var sr = 1;
+      rows.forEach(function(tr) {
+        var txt = (tr.textContent || '').toLowerCase();
+        var show = !q || txt.indexOf(q) !== -1;
+        tr.style.display = show ? '' : 'none';
+        if (show) {
+          var c = tr.querySelector('td');
+          if (c) c.textContent = sr++;
+        }
+      });
+    });
+    searchInput.dispatchEvent(new Event('input'));
+  }
+
+  var previewBtn = document.getElementById('btnPreviewReport');
+  var exportBtn = document.getElementById('btnExportReport');
+  if (previewBtn) {
+    previewBtn.addEventListener('click', function() {
+      var base = "{{ url_for('unexecuted_task_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, category=category, shift=shift) }}";
+      var s = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
+      if (s) base += '&table_search=' + encodeURIComponent(s);
+      window.open(base, 'unexecutedTaskPreviewWindow');
+    });
+  }
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var u = this.getAttribute('data-export-url');
+      var s = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
+      if (s) u += '&table_search=' + encodeURIComponent(s);
+      window.location.href = u;
+    });
+  }
+});
 </script>
 {% endblock %}

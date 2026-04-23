@@ -1,0 +1,89 @@
+{% extends "base_print.html" %}
+{% block title %}Print – Unexecuted Task Report{% endblock %}
+
+{% block extra_head %}
+<style>
+  .rpt-header { background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%); color: #fff; border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
+  .rpt-table { font-size: .78rem; table-layout: fixed; width: 100%; }
+  .rpt-table th, .rpt-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rpt-table thead th { background: #fee2e2; color: #7f1d1d; font-weight: 700; text-transform: uppercase; font-size: .7rem; }
+  .print-container { max-width: none !important; width: calc(100vw - 16px) !important; margin: 0 auto !important; padding: 8px; }
+  .preview-search-wrap { display: flex; justify-content: flex-end; margin: 6px 0 10px 0; }
+  .preview-search { width: 300px; max-width: 60vw; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; font-size: .85rem; }
+  .preview-count { font-size: .78rem; color: #475569; margin-right: auto; display: flex; align-items: center; }
+  @page { size: A4 landscape !important; margin: 8mm !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="print-container">
+  <div class="rpt-header">
+    <h2 class="mb-1"><i class="bi bi-x-octagon me-2"></i>Unexecuted Task Report</h2>
+    <div class="small">Range: {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }} | Generated: {{ now().strftime('%d %b %Y, %I:%M %p') }}</div>
+  </div>
+
+  <div class="preview-search-wrap no-print">
+    <div class="preview-count" id="previewVisibleCount">Showing {{ total }} of {{ total }}</div>
+    <input type="text" id="previewSearchInput" class="preview-search" placeholder="Search in preview...">
+  </div>
+
+  <table class="table table-sm table-bordered rpt-table">
+    <thead>
+      <tr>
+        <th>Sr</th><th>District</th><th>Project</th><th>Vehicle</th><th>Task ID</th>
+        <th>Assign DateTime</th><th>Close DateTime</th><th>Total Time</th><th>Category</th>
+        <th>Running KMs</th><th>Shift</th><th>Driver</th><th>Fine</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.district.name if row.district else (row.emg.district_name or '-') }}</td>
+        <td>{{ row.project.name if row.project else '-' }}</td>
+        <td>{{ row.vehicle.vehicle_no if row.vehicle else (row.emg.amb_reg_no or '-') }}</td>
+        <td>{{ row.emg.task_id_ext or '-' }}</td>
+        <td>{{ row.assign_dt.strftime('%d-%m-%Y %I:%M %p') if row.assign_dt else '-' }}</td>
+        <td>{{ row.close_dt.strftime('%d-%m-%Y %I:%M %p') if row.close_dt else '-' }}</td>
+        <td>{{ row.total_time }}</td>
+        <td>{{ row.emg.category or '-' }}</td>
+        <td>{{ '%.2f'|format(row.activity_km) }}</td>
+        <td>{{ row.shift }}</td>
+        <td>{{ row.saved.driver.name if row.saved and row.saved.driver else '-' }}</td>
+        <td>{{ row.saved.fine if row.saved and row.saved.fine else '-' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="13" class="text-center py-4 text-muted">No records found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var inp = document.getElementById('previewSearchInput');
+  var tbody = document.querySelector('.rpt-table tbody');
+  var countEl = document.getElementById('previewVisibleCount');
+  if (!inp || !tbody) return;
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+  var total = rows.length;
+  function applyFilter() {
+    var q = (inp.value || '').toLowerCase().trim();
+    var visible = 0;
+    var sr = 1;
+    rows.forEach(function (tr) {
+      var txt = (tr.textContent || '').toLowerCase();
+      var show = !q || txt.indexOf(q) !== -1;
+      tr.style.display = show ? '' : 'none';
+      if (show) {
+        visible += 1;
+        var srCell = tr.querySelector('td');
+        if (srCell) srCell.textContent = sr++;
+      }
+    });
+    if (countEl) countEl.textContent = 'Showing ' + visible + ' of ' + total;
+  }
+  inp.addEventListener('input', applyFilter);
+  applyFilter();
+});
+</script>
+{% endblock %}
