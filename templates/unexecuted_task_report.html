@@ -5,7 +5,8 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-x-octagon me-2 text-danger"></i>Unexecuted Task Report</h2>
     <div class="d-flex align-items-center gap-2">
-      <button class="btn btn-outline-secondary btn-sm" id="btnPreviewReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button class="btn btn-outline-secondary btn-sm" id="btnPreviewReport"
+              data-preview-url="{{ url_for('unexecuted_task_report_preview') }}"><i class="bi bi-eye me-1"></i>Print / Preview</button>
       <a class="btn btn-outline-success btn-sm" id="btnExportReport"
          data-export-url="{{ url_for('unexecuted_task_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, category=category, shift=shift) }}"
          href="{{ url_for('unexecuted_task_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, category=category, shift=shift) }}">
@@ -17,7 +18,7 @@
 
   <div class="card shadow-sm border-0 rounded-3 mb-4">
     <div class="card-body">
-      <form method="GET" action="{{ url_for('unexecuted_task_report') }}" class="row g-3 align-items-end">
+      <form method="GET" action="{{ url_for('unexecuted_task_report') }}" id="unexecutedFilterForm" class="row g-3 align-items-end">
         <div class="col-md-2">
           <label class="form-label">From Date</label>
           <input type="text" name="from_date" class="form-control datepicker" value="{{ from_date|ddmmyyyy }}">
@@ -193,9 +194,9 @@
     });
   }
 })();
-document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('unexecutedTaskTable'); });
 
 document.addEventListener('DOMContentLoaded', function() {
+  var filterForm = document.getElementById('unexecutedFilterForm');
   var searchInput = document.getElementById('unexecutedSearchInput');
   var tableBody = document.querySelector('#unexecutedTaskTable tbody');
   if (searchInput && tableBody) {
@@ -218,21 +219,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var previewBtn = document.getElementById('btnPreviewReport');
   var exportBtn = document.getElementById('btnExportReport');
+  function _buildActionUrl(baseUrl) {
+    var cleanBase = (baseUrl || '').replace(/&amp;/g, '&');
+    var url = new URL(cleanBase, window.location.origin);
+    if (filterForm) {
+      var fd = new FormData(filterForm);
+      ['from_date', 'to_date', 'district_id', 'project_id', 'vehicle_id', 'category', 'shift'].forEach(function(k) {
+        var v = (fd.get(k) || '').toString().trim();
+        if (v) {
+          url.searchParams.set(k, v);
+        }
+      });
+    }
+    var s = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
+    if (s) {
+      url.searchParams.set('table_search', s);
+    } else {
+      url.searchParams.delete('table_search');
+    }
+    return url.toString();
+  }
+
   if (previewBtn) {
     previewBtn.addEventListener('click', function() {
-      var base = "{{ url_for('unexecuted_task_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, category=category, shift=shift) }}";
-      var s = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
-      if (s) base += '&table_search=' + encodeURIComponent(s);
-      window.open(base, 'unexecutedTaskPreviewWindow');
+      var base = this.getAttribute('data-preview-url') || "{{ url_for('unexecuted_task_report_preview') }}";
+      window.open(_buildActionUrl(base), 'unexecutedTaskPreviewWindow');
     });
   }
   if (exportBtn) {
     exportBtn.addEventListener('click', function(e) {
       e.preventDefault();
-      var u = this.getAttribute('data-export-url');
-      var s = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
-      if (s) u += '&table_search=' + encodeURIComponent(s);
-      window.location.href = u;
+      var base = this.getAttribute('data-export-url') || "{{ url_for('unexecuted_task_report_export') }}";
+      window.location.href = _buildActionUrl(base);
     });
   }
 });
