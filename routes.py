@@ -11081,8 +11081,7 @@ def speed_monitoring_report_export():
     )
 
 
-@app.route('/speed-monitoring-report/print')
-def speed_monitoring_report_print():
+def _speed_monitoring_report_preview_context():
     from auth_utils import get_user_context
     user_id = session.get('user_id')
     user_context = get_user_context(user_id) if user_id else {}
@@ -11127,16 +11126,26 @@ def speed_monitoring_report_print():
         is_master_or_admin=is_master_or_admin,
     )
 
-    return render_template(
-        'speed_monitoring_report_print.html',
-        rows=rows,
-        total=len(rows),
-        from_date=from_date,
-        to_date=to_date,
-        speed_limit=speed_limit_raw,
-        check_type=check_type,
-        now=datetime.now,
-    )
+    return {
+        'rows': rows,
+        'total': len(rows),
+        'from_date': from_date,
+        'to_date': to_date,
+        'speed_limit': speed_limit_raw,
+        'check_type': check_type,
+        'now': datetime.now,
+    }
+
+
+@app.route('/speed-monitoring-report/preview')
+def speed_monitoring_report_preview():
+    return render_template('speed_monitoring_report_print.html', **_speed_monitoring_report_preview_context())
+
+
+@app.route('/speed-monitoring-report/print')
+def speed_monitoring_report_print():
+    # Backward compatibility: keep old print route but use same preview page.
+    return render_template('speed_monitoring_report_print.html', **_speed_monitoring_report_preview_context())
 
 
 # ── Driver Seat Available Report ───────────────────────────────────────────

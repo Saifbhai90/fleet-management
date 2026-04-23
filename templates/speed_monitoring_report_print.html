@@ -3,14 +3,21 @@
 
 {% block extra_head %}
 <style>
-  .rpt-header { background: linear-gradient(135deg, #1565c0 0%, #00838f 100%); color: #fff; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
-  .rpt-header h2 { margin: 0; font-size: 1.22rem; font-weight: 700; }
-  .rpt-meta { font-size: 0.78rem; color: #546e7a; margin-bottom: 0.75rem; }
-  .total-badge { display: inline-block; background: #e3f2fd; color: #0d47a1; font-size: 0.82rem; font-weight: 700; padding: 0.2rem 0.75rem; border-radius: 20px; }
-  .rpt-table { font-size: 0.81rem; }
-  .rpt-table thead th { background: #e1f5fe; color: #01579b; font-weight: 700; font-size: 0.74rem; text-transform: uppercase; border-bottom: 2px solid #0288d1; white-space: nowrap; padding: 0.4rem 0.6rem; }
-  .rpt-table tbody td { vertical-align: middle; padding: 0.38rem 0.58rem; }
-  .rpt-table tbody tr:nth-child(even) { background: #f5fbff; }
+  .rpt-header { background: linear-gradient(135deg, #0e7490 0%, #0b5ed7 100%); color: #fff; border-radius: 12px; padding: 1.1rem 1.3rem; margin-bottom: 1rem; box-shadow: 0 4px 18px rgba(14,116,144,.22); }
+  .rpt-header h2 { margin: 0; font-size: 1.26rem; font-weight: 800; letter-spacing: .2px; }
+  .rpt-sub { margin-top: .3rem; font-size: .82rem; opacity: .92; }
+  .rpt-meta { font-size: 0.8rem; color: #475569; margin-bottom: 0.9rem; }
+  .meta-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: .45rem .7rem; display: inline-flex; align-items: center; gap: .35rem; }
+  .total-badge { display: inline-block; background: #e0f2fe; color: #075985; font-size: 0.82rem; font-weight: 700; padding: 0.22rem 0.75rem; border-radius: 20px; border: 1px solid #bae6fd; }
+  .rpt-table { font-size: 0.82rem; border-radius: 10px; overflow: hidden; }
+  .rpt-table thead th { background: #e0f2fe; color: #0c4a6e; font-weight: 800; font-size: 0.72rem; text-transform: uppercase; border-bottom: 2px solid #38bdf8; white-space: nowrap; padding: 0.42rem 0.58rem; letter-spacing: .2px; }
+  .rpt-table tbody td { vertical-align: middle; padding: 0.38rem 0.56rem; color: #0f172a; }
+  .rpt-table tbody tr:nth-child(even) { background: #f8fdff; }
+  .rpt-table tbody tr:hover { background: #eef8ff; }
+  .check-pill { display: inline-block; padding: .13rem .5rem; border-radius: 10px; font-size: .72rem; font-weight: 700; }
+  .check-above { background: #ffebee; color: #b91c1c; border: 1px solid #fecaca; }
+  .check-below { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+  .check-equal { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
 </style>
 {% endblock %}
 
@@ -18,11 +25,12 @@
 <div class="print-container">
   <div class="rpt-header">
     <h2><i class="bi bi-speedometer2 me-2"></i>Speed Monitoring Report</h2>
+    <div class="rpt-sub">Preview mode: use toolbar button to print when ready.</div>
   </div>
 
-  <div class="rpt-meta d-flex flex-wrap gap-3">
-    <span><i class="bi bi-calendar3 me-1"></i>Range: {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
-    <span><i class="bi bi-clock me-1"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
+  <div class="rpt-meta d-flex flex-wrap gap-2">
+    <span class="meta-card"><i class="bi bi-calendar3"></i>Range: {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
+    <span class="meta-card"><i class="bi bi-clock"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
   </div>
   <div class="mb-2">
     <span class="total-badge">Total Points: {{ total }}</span>
@@ -59,7 +67,19 @@
         <td>{{ '%.2f'|format(r.speed) }}</td>
         <td>{{ r.rec.reason or '-' }}</td>
         <td>{{ r.location_text or '-' }}</td>
-        <td>{{ r.check_result or '-' }}</td>
+        <td>
+          {% if r.check_result %}
+            {% if 'Above' in r.check_result %}
+            <span class="check-pill check-above">{{ r.check_result }}</span>
+            {% elif 'Below' in r.check_result %}
+            <span class="check-pill check-below">{{ r.check_result }}</span>
+            {% else %}
+            <span class="check-pill check-equal">{{ r.check_result }}</span>
+            {% endif %}
+          {% else %}
+            -
+          {% endif %}
+        </td>
       </tr>
       {% else %}
       <tr><td colspan="9" class="text-center text-muted py-4">No activity points found.</td></tr>

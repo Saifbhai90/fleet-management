@@ -27,7 +27,7 @@
       <a href="{{ url_for('speed_monitoring_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}" class="btn btn-success btn-sm">
         <i class="bi bi-file-earmark-excel me-1"></i>Export
       </a>
-      <a href="{{ url_for('speed_monitoring_report_print', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}" class="btn btn-warning btn-sm" target="_blank">
+      <a href="{{ url_for('speed_monitoring_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}" class="btn btn-warning btn-sm" target="_blank" rel="noopener">
         <i class="bi bi-printer me-1"></i>Print / Preview
       </a>
     </div>
