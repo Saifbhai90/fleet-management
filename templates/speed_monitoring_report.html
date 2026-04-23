@@ -27,7 +27,7 @@
       <a href="{{ url_for('speed_monitoring_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}" class="btn btn-success btn-sm">
         <i class="bi bi-file-earmark-excel me-1"></i>Export
       </a>
-      <a href="{{ url_for('speed_monitoring_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}" class="btn btn-warning btn-sm" target="_blank" rel="noopener">
+      <a href="{{ url_for('speed_monitoring_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}" class="btn btn-warning btn-sm" id="speedPreviewBtn" data-preview-url="{{ url_for('speed_monitoring_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}">
         <i class="bi bi-printer me-1"></i>Print / Preview
       </a>
     </div>
@@ -170,11 +170,22 @@
   </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <script>
-$(function () {
+document.addEventListener('DOMContentLoaded', function () {
+  var previewBtn = document.getElementById('speedPreviewBtn');
+  if (previewBtn) {
+    previewBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var u = this.getAttribute('data-preview-url');
+      try {
+        var w = window.open(u, '_blank', 'noopener');
+        if (!w) { window.location.href = u; }
+      } catch (_) {
+        window.location.href = u;
+      }
+    });
+  }
+
   var f = document.getElementById('speedFilterForm');
   var overlay = document.getElementById('speedWaitOverlay');
   var closeBtn = document.getElementById('speedCloseBtn');
@@ -199,22 +210,38 @@ $(function () {
       overlay.style.display = 'none';
     });
   }
-  var hasData = {{ 1 if rows else 0 }};
-  if (!hasData) return;
-  if (window.innerWidth < 768) return;
-  var table = $('#speedTable').DataTable({
-    dom: "<'row'<'col-12'tr>><'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>",
-    pageLength: 50,
-    lengthChange: false,
-    order: [],
-    language: {
-      info: 'Showing _START_ to _END_ of _TOTAL_ points',
-      emptyTable: 'No activity points found.',
-      paginate: { first: '«', last: '»', next: '›', previous: '‹' }
-    }
-  });
-  $('#dtSearchInput').on('keyup input', function () {
-    table.search(this.value).draw();
+
+  var searchBox = document.getElementById('dtSearchInput');
+  var tbody = document.querySelector('#speedTable tbody');
+  if (searchBox && tbody) {
+    var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+    searchBox.addEventListener('input', function () {
+      var q = (this.value || '').toLowerCase().trim();
+      var sr = 1;
+      rows.forEach(function (tr) {
+        var txt = (tr.textContent || '').toLowerCase();
+        var show = !q || txt.indexOf(q) !== -1;
+        tr.style.display = show ? '' : 'none';
+        if (show) {
+          var srCell = tr.querySelector('td');
+          if (srCell) srCell.textContent = sr++;
+        }
+      });
+    });
+    searchBox.dispatchEvent(new Event('input'));
+  }
+  var waitBtn = document.getElementById('speedWaitBtn');
+  if (waitBtn && overlay) {
+    waitBtn.addEventListener('click', function() {
+      // keep overlay visible intentionally
+      overlay.style.display = 'flex';
+    });
+  }
+  if (closeBtn && overlay) {
+    closeBtn.addEventListener('click', function() {
+      overlay.classList.add('d-none');
+      overlay.style.display = 'none';
+    });
   });
 });
 </script>
