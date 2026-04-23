@@ -17262,6 +17262,18 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
     emg_vnos = [_norm_vno(r.amb_reg_no) for r in emg_rows if r.amb_reg_no]
     db_vehicles = Vehicle.query.filter(Vehicle.vehicle_no.in_(emg_vnos)).all() if emg_vnos else []
     vehicle_map = {_norm_vno(v.vehicle_no): v for v in db_vehicles}
+
+    # Global eligibility guard (applies to all users): only include records where
+    # district-project assignment exists AND vehicle-district deployment exists.
+    assigned_project_pairs = set(
+        (int(pid), int(did))
+        for pid, did in db.session.query(project_district.c.project_id, project_district.c.district_id).all()
+    )
+    deployed_vehicle_pairs = set(
+        (int(vid), int(did))
+        for vid, did in db.session.query(vehicle_district.c.vehicle_id, vehicle_district.c.district_id).all()
+    )
+
     saved_map = {r.emergency_task_record_id: r for r in UnexecutedTaskRecord.query.filter(
         UnexecutedTaskRecord.emergency_task_record_id.in_([r.id for r in emg_rows])
     ).all()} if emg_rows else {}
@@ -17276,6 +17288,12 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
             continue
 
         v = vehicle_map.get(_norm_vno(r.amb_reg_no))
+        if not v or not v.project_id or not v.district_id:
+            continue
+        if (int(v.project_id), int(v.district_id)) not in assigned_project_pairs:
+            continue
+        if (int(v.id), int(v.district_id)) not in deployed_vehicle_pairs:
+            continue
 
         # Apply user scope first (like Tracker Difference Report behavior).
         if not is_master_or_admin:
@@ -17485,6 +17503,27 @@ def unexecuted_task_report():
     district_q = District.query.order_by(District.name)
     project_q = Project.query.order_by(Project.name)
     vehicle_q = Vehicle.query.order_by(Vehicle.vehicle_no)
+
+    # Global dropdown scope based on valid assignment+deployment combinations.
+    valid_project_pairs = set(
+        (int(pid), int(did))
+        for pid, did in db.session.query(project_district.c.project_id, project_district.c.district_id).all()
+    )
+    valid_vehicle_pairs = set(
+        (int(vid), int(did))
+        for vid, did in db.session.query(vehicle_district.c.vehicle_id, vehicle_district.c.district_id).all()
+    )
+    valid_vehicles = [v for v in vehicle_q.all()
+                      if v and v.project_id and v.district_id
+                      and (int(v.project_id), int(v.district_id)) in valid_project_pairs
+                      and (int(v.id), int(v.district_id)) in valid_vehicle_pairs]
+    valid_vehicle_ids = [v.id for v in valid_vehicles]
+    valid_district_ids = sorted({int(v.district_id) for v in valid_vehicles if v.district_id})
+    valid_project_ids = sorted({int(v.project_id) for v in valid_vehicles if v.project_id})
+
+    district_q = district_q.filter(District.id.in_(valid_district_ids or [-1]))
+    project_q = project_q.filter(Project.id.in_(valid_project_ids or [-1]))
+    vehicle_q = Vehicle.query.filter(Vehicle.id.in_(valid_vehicle_ids or [-1])).order_by(Vehicle.vehicle_no)
 
     if not is_master_or_admin:
         allowed_vehicle_ids = list(set(allowed_vehicles or []))
