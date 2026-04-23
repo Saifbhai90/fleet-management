@@ -1,0 +1,103 @@
+{% extends "base_print.html" %}
+{% block title %}Print – Task Start Delay Report{% endblock %}
+
+{% block extra_head %}
+<style>
+  .rpt-header { background: linear-gradient(135deg, #312e81 0%, #4f46e5 100%); color: #fff; border-radius: 12px; padding: 1.1rem 1.3rem; margin-bottom: 1rem; box-shadow: 0 4px 18px rgba(49,46,129,.25); }
+  .rpt-header h2 { margin: 0; font-size: 1.26rem; font-weight: 800; letter-spacing: .2px; }
+  .rpt-sub { margin-top: .3rem; font-size: .82rem; opacity: .92; }
+  .rpt-meta { font-size: 0.8rem; color: #475569; margin-bottom: 0.9rem; }
+  .meta-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: .45rem .7rem; display: inline-flex; align-items: center; gap: .35rem; }
+  .total-badge { display: inline-block; background: #e0e7ff; color: #312e81; font-size: 0.82rem; font-weight: 700; padding: 0.22rem 0.75rem; border-radius: 20px; border: 1px solid #c7d2fe; }
+  .rpt-table { font-size: 0.76rem; border-radius: 10px; overflow: hidden; table-layout: fixed; width: 100%; }
+  .rpt-table thead th { background: #e0e7ff; color: #312e81; font-weight: 800; font-size: 0.7rem; text-transform: uppercase; border-bottom: 2px solid #6366f1; white-space: nowrap; padding: 0.4rem 0.45rem; letter-spacing: .2px; }
+  .rpt-table tbody td { vertical-align: middle; padding: 0.3rem 0.4rem; color: #0f172a; }
+  .rpt-table tbody tr:nth-child(even) { background: #f5f3ff; }
+  .rpt-table tbody tr:hover { background: #eef2ff; }
+  .rpt-table th, .rpt-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .print-container { max-width: none !important; width: calc(100vw - 16px) !important; margin: 0 auto !important; padding: 10px 8px 20px 8px !important; }
+  .preview-search-wrap { display: flex; justify-content: flex-end; margin: 6px 0 10px 0; }
+  .preview-search { width: 300px; max-width: 60vw; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; font-size: .85rem; }
+  .preview-count { font-size: .78rem; color: #475569; margin-right: auto; display: flex; align-items: center; }
+  @page { size: A4 landscape !important; margin: 6mm !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="print-container">
+  <div class="rpt-header">
+    <h2><i class="bi bi-alarm me-2"></i>Task Start Delay Report</h2>
+    <div class="rpt-sub">Task assign se pehli vehicle activity tak delay</div>
+  </div>
+
+  <div class="rpt-meta d-flex flex-wrap gap-2">
+    <span class="meta-card"><i class="bi bi-calendar3"></i>Range: {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
+    <span class="meta-card"><i class="bi bi-clock"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
+  </div>
+  <div class="mb-2">
+    <span class="total-badge">Total Rows: {{ total }}</span>
+    {% if check_type and delay_limit %}<span class="total-badge ms-2">Delay filter: {{ check_type|capitalize }} {{ delay_limit }} min</span>{% endif %}
+  </div>
+
+  <div class="preview-search-wrap no-print">
+    <div class="preview-count" id="previewVisibleCount">Showing {{ total }} of {{ total }}</div>
+    <input type="text" id="previewSearchInput" class="preview-search" placeholder="Search in preview...">
+  </div>
+
+  <table class="table table-sm table-bordered rpt-table w-100">
+    <thead>
+      <tr>
+        <th>Sr</th><th>Date</th><th>District</th><th>Project</th><th>Vehicle</th><th>Task ID</th><th>Category</th>
+        <th>Task Create</th><th>Task Close</th><th>Vehicle Start</th><th>Delay</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ r.emg.task_date|ddmmyyyy if r.emg and r.emg.task_date else '-' }}</td>
+        <td>{{ r.district.name if r.district else '-' }}</td>
+        <td>{{ r.project.name if r.project else '-' }}</td>
+        <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
+        <td>{{ r.task_id }}</td>
+        <td>{{ r.category }}</td>
+        <td>{% if r.assign_dt %}{{ r.assign_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
+        <td>{% if r.close_dt %}{{ r.close_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
+        <td>{% if r.vehicle_start_dt %}{{ r.vehicle_start_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
+        <td>{{ r.delay_display }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="text-center text-muted py-4">No task start delay records found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var inp = document.getElementById('previewSearchInput');
+  var tbody = document.querySelector('.rpt-table tbody');
+  var countEl = document.getElementById('previewVisibleCount');
+  if (!inp || !tbody) return;
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+  var total = rows.length;
+  function applyFilter() {
+    var q = (inp.value || '').toLowerCase().trim();
+    var visible = 0;
+    var sr = 1;
+    rows.forEach(function (tr) {
+      var txt = (tr.textContent || '').toLowerCase();
+      var show = !q || txt.indexOf(q) !== -1;
+      tr.style.display = show ? '' : 'none';
+      if (show) {
+        visible += 1;
+        var srCell = tr.querySelector('td');
+        if (srCell) srCell.textContent = sr++;
+      }
+    });
+    if (countEl) countEl.textContent = 'Showing ' + visible + ' of ' + total;
+  }
+  inp.addEventListener('input', applyFilter);
+  applyFilter();
+});
+</script>
+{% endblock %}

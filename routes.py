@@ -11915,6 +11915,377 @@ def unauthorized_movement_report_print():
     return render_template('unauthorized_movement_report_print.html', **_unauthorized_movement_preview_context())
 
 
+# ── Task Start Delay Report (task assign → first vehicle activity) ───────
+def _format_task_delay_display(delay_minutes):
+    if delay_minutes is None:
+        return '-'
+    try:
+        m = int(round(float(delay_minutes)))
+    except (TypeError, ValueError):
+        return '-'
+    if m < 0:
+        m = 0
+    h, r = divmod(m, 60)
+    if h:
+        return f'{h}h {r:02d}m'
+    return f'{m}m'
+
+
+def _build_vehicle_activity_index(from_date, to_date, vehicle_nos):
+    """vehicle_no (upper) -> list of (parsed_dt, VehicleActivityRecord), sorted by dt"""
+    if not vehicle_nos:
+        return {}
+    activity_rows = VehicleActivityRecord.query.filter(
+        VehicleActivityRecord.task_date >= from_date,
+        VehicleActivityRecord.task_date <= to_date,
+        VehicleActivityRecord.vehicle_no.in_(list(vehicle_nos)),
+    ).all()
+    d = {}
+    for act in activity_rows:
+        kn = (act.vehicle_no or '').strip().upper()
+        adt = _parse_activity_datetime(act.record_date_time)
+        if not adt:
+            continue
+        d.setdefault(kn, []).append((adt, act))
+    for kn, lst in d.items():
+        lst.sort(key=lambda x: x[0])
+    return d
+
+
+def _first_activity_after_task_assign(sorted_acts, assign_dt, close_dt):
+    """First tracker ping on or after task assign, still within [assign, close]."""
+    for adt, rec in sorted_acts:
+        if adt < assign_dt:
+            continue
+        if adt > close_dt:
+            break
+        return adt, rec
+    return None, None
+
+
+def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehicle_id=0,
+                           check_type='', delay_limit=None,
+                           allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
+                           is_master_or_admin=True):
+    allowed_projects = set(allowed_projects or [])
+    allowed_districts = set(allowed_districts or [])
+    allowed_vehicles = set(allowed_vehicles or [])
+
+    def _norm_vno(vno):
+        return (vno or '').strip().upper()
+
+    all_emg = EmergencyTaskRecord.query.filter(
+        EmergencyTaskRecord.task_date >= from_date,
+        EmergencyTaskRecord.task_date <= to_date,
+        EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+        EmergencyTaskRecord.completed_date_time.isnot(None),
+        EmergencyTaskRecord.excel_created_date.isnot(None),
+    ).order_by(EmergencyTaskRecord.task_date.desc(), EmergencyTaskRecord.id.desc()).all()
+    if not all_emg:
+        return []
+
+    vnos = list({_norm_vno(e.amb_reg_no) for e in all_emg if e.amb_reg_no})
+    db_vehicles = Vehicle.query.filter(Vehicle.vehicle_no.in_(vnos)).all() if vnos else []
+    vehicle_by_no = {_norm_vno(v.vehicle_no): v for v in db_vehicles}
+
+    if vehicle_id:
+        v = Vehicle.query.get(vehicle_id)
+        target_no = (v.vehicle_no if v else None) and _norm_vno(v.vehicle_no)
+    else:
+        target_no = None
+
+    filtered = []
+    for emg in all_emg:
+        vno = _norm_vno(emg.amb_reg_no)
+        if not vno:
+            continue
+        if target_no and vno != target_no:
+            continue
+        v = vehicle_by_no.get(vno)
+        if not v:
+            continue
+        if not is_master_or_admin:
+            if allowed_vehicles and v.id not in allowed_vehicles:
+                continue
+            if allowed_districts and v.district_id not in allowed_districts:
+                continue
+            if allowed_projects and v.project_id not in allowed_projects:
+                continue
+        if project_id and v.project_id != project_id:
+            continue
+        if district_id and v.district_id != district_id:
+            continue
+        filtered.append((emg, v))
+
+    if not filtered:
+        return []
+
+    need_nos = list({(emg.amb_reg_no or '').strip().upper() for emg, v in filtered})
+    act_index = _build_vehicle_activity_index(from_date, to_date, need_nos)
+
+    out = []
+    for emg, v in filtered:
+        kn = (emg.amb_reg_no or '').strip().upper()
+        assign_dt = _parse_emg_datetime(emg.excel_created_date)
+        close_dt = _parse_emg_datetime(emg.completed_date_time)
+        if not assign_dt or not close_dt or close_dt < assign_dt:
+            continue
+        sorted_acts = act_index.get(kn) or []
+        v_start_dt, _v_act = _first_activity_after_task_assign(sorted_acts, assign_dt, close_dt)
+        if v_start_dt is None:
+            delay_minutes = None
+        else:
+            delay_minutes = (v_start_dt - assign_dt).total_seconds() / 60.0
+            if delay_minutes < 0:
+                delay_minutes = 0.0
+
+        if delay_limit is not None:
+            if check_type == 'above' and (delay_minutes is None or not (delay_minutes > delay_limit)):
+                continue
+            if check_type == 'below' and (delay_minutes is None or not (delay_minutes < delay_limit)):
+                continue
+
+        p = v.project
+        d = v.district
+        out.append({
+            'emg': emg,
+            'vehicle': v,
+            'project': p,
+            'district': d,
+            'task_id': (emg.task_id_ext or '').strip() or '-',
+            'category': (emg.category or '').strip() or '-',
+            'assign_dt': assign_dt,
+            'close_dt': close_dt,
+            'vehicle_start_dt': v_start_dt,
+            'delay_minutes': None if delay_minutes is None else round(float(delay_minutes), 2),
+            'delay_display': _format_task_delay_display(delay_minutes),
+        })
+    return out
+
+
+def _filter_task_start_delay_rows(rows, table_search):
+    s = (table_search or '').strip().lower()
+    if not s:
+        return rows
+    out = []
+    for row in rows:
+        emg = row['emg']
+        blob = ' '.join([
+            row['district'].name if row.get('district') else '',
+            row['project'].name if row.get('project') else '',
+            row['vehicle'].vehicle_no if row.get('vehicle') else '',
+            str(row.get('task_id') or ''),
+            str(row.get('category') or ''),
+            emg.task_date.strftime('%d-%m-%Y') if emg.task_date else '',
+            row['assign_dt'].strftime('%d-%m-%Y %I:%M %p') if row.get('assign_dt') else '',
+            row['close_dt'].strftime('%d-%m-%Y %I:%M %p') if row.get('close_dt') else '',
+            row['vehicle_start_dt'].strftime('%d-%m-%Y %I:%M %p') if row.get('vehicle_start_dt') else '',
+            str(row.get('delay_display') or ''),
+            f"{row['delay_minutes']:.2f}" if row.get('delay_minutes') is not None else '',
+        ]).lower()
+        if s in blob:
+            out.append(row)
+    return out
+
+
+@app.route('/task-start-delay-report')
+def task_start_delay_report():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+    delay_limit_raw = (request.args.get('delay_limit') or '').strip()
+    delay_limit = None
+    if delay_limit_raw:
+        try:
+            delay_limit = float(delay_limit_raw)
+            if delay_limit < 0:
+                delay_limit = None
+                delay_limit_raw = ''
+        except Exception:
+            delay_limit = None
+            delay_limit_raw = ''
+
+    apply_limit = delay_limit if (check_type in ('above', 'below') and delay_limit is not None) else None
+
+    rows = _task_start_delay_rows(
+        from_date=from_date, to_date=to_date, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id,
+        check_type=check_type, delay_limit=apply_limit,
+        allowed_projects=allowed_projects, allowed_districts=allowed_districts, allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+
+    project_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.all()]
+
+    district_q = District.query.order_by(District.name)
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    if project_id:
+        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
+
+    vehicle_q = Vehicle.query.order_by(Vehicle.vehicle_no)
+    if not is_master_or_admin and allowed_vehicles:
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    if project_id:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
+    if district_id:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.all()]
+
+    unique_vehicle_count = len({r['vehicle'].id for r in rows if r.get('vehicle')})
+
+    return render_template(
+        'task_start_delay_report.html',
+        rows=rows,
+        total=len(rows),
+        unique_vehicle_count=unique_vehicle_count,
+        from_date=from_date, to_date=to_date, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id,
+        check_type=check_type, delay_limit=delay_limit_raw,
+        project_choices=project_choices, district_choices=district_choices, vehicle_choices=vehicle_choices,
+    )
+
+
+@app.route('/task-start-delay-report/export')
+def task_start_delay_report_export():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+    delay_limit_raw = (request.args.get('delay_limit') or '').strip()
+    delay_limit = None
+    if delay_limit_raw:
+        try:
+            delay_limit = float(delay_limit_raw)
+            if delay_limit < 0:
+                delay_limit = None
+        except Exception:
+            delay_limit = None
+    apply_limit = delay_limit if (check_type in ('above', 'below') and delay_limit is not None) else None
+
+    rows = _task_start_delay_rows(
+        from_date=from_date, to_date=to_date, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id,
+        check_type=check_type, delay_limit=apply_limit,
+        allowed_projects=allowed_projects, allowed_districts=allowed_districts, allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+    rows = _filter_task_start_delay_rows(rows, request.args.get('table_search'))
+    headers = [
+        'Sr', 'Date', 'District', 'Project', 'Vehicle', 'Task ID', 'Category',
+        'Task Create (Assign)', 'Task Close', 'Vehicle Start', 'Delay (min)', 'Delay',
+    ]
+    data_rows = []
+    for i, r in enumerate(rows, 1):
+        emg = r['emg']
+        data_rows.append([
+            i,
+            emg.task_date.strftime('%d-%m-%Y') if emg.task_date else '-',
+            r['district'].name if r.get('district') else '-',
+            r['project'].name if r.get('project') else '-',
+            r['vehicle'].vehicle_no if r.get('vehicle') else '-',
+            r['task_id'],
+            r['category'],
+            r['assign_dt'].strftime('%d-%m-%Y %I:%M %p') if r.get('assign_dt') else '-',
+            r['close_dt'].strftime('%d-%m-%Y %I:%M %p') if r.get('close_dt') else '-',
+            r['vehicle_start_dt'].strftime('%d-%m-%Y %I:%M %p') if r.get('vehicle_start_dt') else '-',
+            r['delay_minutes'] if r.get('delay_minutes') is not None else '',
+            r.get('delay_display') or '-',
+        ])
+    return generate_excel_template(
+        headers, data_rows, required_columns=[],
+        filename=f'task_start_delay_report_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+
+def _task_start_delay_report_preview_context():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+    delay_limit_raw = (request.args.get('delay_limit') or '').strip()
+    delay_limit = None
+    if delay_limit_raw:
+        try:
+            delay_limit = float(delay_limit_raw)
+            if delay_limit < 0:
+                delay_limit = None
+        except Exception:
+            delay_limit = None
+    apply_limit = delay_limit if (check_type in ('above', 'below') and delay_limit is not None) else None
+
+    rows = _task_start_delay_rows(
+        from_date=from_date, to_date=to_date, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id,
+        check_type=check_type, delay_limit=apply_limit,
+        allowed_projects=allowed_projects, allowed_districts=allowed_districts, allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+    rows = _filter_task_start_delay_rows(rows, request.args.get('table_search'))
+    return {
+        'rows': rows,
+        'total': len(rows),
+        'from_date': from_date,
+        'to_date': to_date,
+        'check_type': check_type,
+        'delay_limit': delay_limit_raw,
+        'now': datetime.now,
+    }
+
+
+@app.route('/task-start-delay-report/preview')
+def task_start_delay_report_preview():
+    return render_template('task_start_delay_report_print.html', **_task_start_delay_report_preview_context())
+
+
+@app.route('/task-start-delay-report/print')
+def task_start_delay_report_print():
+    return render_template('task_start_delay_report_print.html', **_task_start_delay_report_preview_context())
+
+
 # ── Tracker Difference Report ───────────────────────────────────────────
 def _tracker_difference_rows(from_date=None, to_date=None, project_id=0, district_id=0, vehicle_id=0,
                              check_type='', diff_pct_limit=None,
