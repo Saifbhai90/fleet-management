@@ -11514,6 +11514,354 @@ def mileage_report_print():
     return render_template('mileage_report_print.html', **_mileage_report_preview_context())
 
 
+# ── Unauthorized Movement Report ──────────────────────────────────────────
+def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, district_id=0, vehicle_id=0,
+                                allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
+                                is_master_or_admin=True):
+    allowed_projects = set(allowed_projects or [])
+    allowed_districts = set(allowed_districts or [])
+    allowed_vehicles = set(allowed_vehicles or [])
+
+    vehicle_q = db.session.query(Vehicle, Project, District).outerjoin(
+        Project, Vehicle.project_id == Project.id
+    ).outerjoin(
+        District, Vehicle.district_id == District.id
+    )
+
+    if not is_master_or_admin:
+        if allowed_projects:
+            vehicle_q = vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+
+    if project_id:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
+    if district_id:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    if vehicle_id:
+        vehicle_q = vehicle_q.filter(Vehicle.id == vehicle_id)
+
+    vehicles = vehicle_q.order_by(Vehicle.vehicle_no.asc()).all()
+    if not vehicles:
+        return []
+
+    by_vehicle_id = {}
+    by_vehicle_no = {}
+    for v, p, d in vehicles:
+        key_no = (v.vehicle_no or '').strip().upper()
+        by_vehicle_id[v.id] = {
+            'vehicle': v,
+            'project': p,
+            'district': d,
+            'km_driven': 0.0,
+            'tracker_km': 0.0,
+            'task_running_km': 0.0,
+            'task_count': 0,
+            'vehicle_no_key': key_no,
+        }
+        if key_no:
+            by_vehicle_no[key_no] = by_vehicle_id[v.id]
+
+    vehicle_ids = list(by_vehicle_id.keys())
+    vehicle_nos = [k for k in by_vehicle_no.keys() if k]
+
+    if from_date and to_date and vehicle_ids:
+        task_rows = VehicleDailyTask.query.filter(
+            VehicleDailyTask.task_date >= from_date,
+            VehicleDailyTask.task_date <= to_date,
+            VehicleDailyTask.vehicle_id.in_(vehicle_ids),
+        ).order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id.desc()).all()
+
+        prev_close_cache = {}
+        for rec in task_rows:
+            agg = by_vehicle_id.get(rec.vehicle_id)
+            if not agg:
+                continue
+            start_r, close_r = _resolve_task_readings(rec, rec.vehicle_id, prev_close_cache)
+            agg['km_driven'] += float(close_r - start_r)
+
+        tracker_rows = VehicleMileageRecord.query.filter(
+            VehicleMileageRecord.task_date >= from_date,
+            VehicleMileageRecord.task_date <= to_date,
+            VehicleMileageRecord.reg_no.in_(vehicle_nos),
+        ).all()
+        for rec in tracker_rows:
+            key_no = (rec.reg_no or '').strip().upper()
+            agg = by_vehicle_no.get(key_no)
+            if not agg:
+                continue
+            agg['tracker_km'] += float(rec.effective_km() or 0)
+
+        emg_rows = EmergencyTaskRecord.query.filter(
+            EmergencyTaskRecord.task_date >= from_date,
+            EmergencyTaskRecord.task_date <= to_date,
+            EmergencyTaskRecord.amb_reg_no.in_(vehicle_nos),
+            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+            EmergencyTaskRecord.completed_date_time.isnot(None),
+            EmergencyTaskRecord.excel_created_date.isnot(None),
+        ).all()
+
+        task_windows = {}
+        for emg in emg_rows:
+            key_no = (emg.amb_reg_no or '').strip().upper()
+            if key_no not in by_vehicle_no:
+                continue
+            assign_dt = _parse_emg_datetime(emg.excel_created_date)
+            close_dt = _parse_emg_datetime(emg.completed_date_time)
+            if not assign_dt or not close_dt or close_dt < assign_dt:
+                continue
+            task_windows.setdefault(key_no, []).append((assign_dt, close_dt))
+            by_vehicle_no[key_no]['task_count'] += 1
+
+        if task_windows:
+            activity_rows = VehicleActivityRecord.query.filter(
+                VehicleActivityRecord.task_date >= from_date,
+                VehicleActivityRecord.task_date <= to_date,
+                VehicleActivityRecord.vehicle_no.in_(list(task_windows.keys())),
+            ).all()
+
+            for act in activity_rows:
+                key_no = (act.vehicle_no or '').strip().upper()
+                windows = task_windows.get(key_no) or []
+                if not windows:
+                    continue
+                act_dt = _parse_activity_datetime(act.record_date_time)
+                if not act_dt:
+                    continue
+                for assign_dt, close_dt in windows:
+                    if assign_dt <= act_dt <= close_dt:
+                        by_vehicle_no[key_no]['task_running_km'] += float(act.distance or 0)
+                        break
+
+    rows = []
+    for agg in by_vehicle_id.values():
+        km_driven = round(float(agg['km_driven']), 2)
+        tracker_km = round(float(agg['tracker_km']), 2)
+        task_running_km = round(float(agg['task_running_km']), 2)
+        return_to_parking_km = round(task_running_km, 2)
+        without_task_move = round(tracker_km - (task_running_km + return_to_parking_km), 2)
+
+        # Practical view: only keep vehicles with any movement footprint.
+        if km_driven == 0 and tracker_km == 0 and task_running_km == 0 and without_task_move == 0:
+            continue
+
+        rows.append({
+            'vehicle': agg['vehicle'],
+            'project': agg['project'],
+            'district': agg['district'],
+            'km_driven': km_driven,
+            'tracker_km': tracker_km,
+            'task_running_km': task_running_km,
+            'task_count': int(agg['task_count'] or 0),
+            'return_to_parking_km': return_to_parking_km,
+            'without_task_move': without_task_move,
+        })
+
+    rows.sort(key=lambda r: (
+        (r['district'].name if r.get('district') else '').lower(),
+        (r['project'].name if r.get('project') else '').lower(),
+        (r['vehicle'].vehicle_no if r.get('vehicle') else '').lower(),
+    ))
+    return rows
+
+
+def _filter_unauthorized_movement_rows(rows, table_search):
+    s = (table_search or '').strip().lower()
+    if not s:
+        return rows
+    out = []
+    for row in rows:
+        blob = ' '.join([
+            row['district'].name if row.get('district') else '',
+            row['project'].name if row.get('project') else '',
+            row['vehicle'].vehicle_no if row.get('vehicle') else '',
+            f"{row['km_driven']:.2f}",
+            f"{row['tracker_km']:.2f}",
+            f"{row['task_running_km']:.2f}",
+            str(row.get('task_count') or 0),
+            f"{row['return_to_parking_km']:.2f}",
+            f"{row['without_task_move']:.2f}",
+        ]).lower()
+        if s in blob:
+            out.append(row)
+    return out
+
+
+@app.route('/unauthorized-movement-report')
+def unauthorized_movement_report():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+
+    rows = _unauthorized_movement_rows(
+        from_date=from_date,
+        to_date=to_date,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts,
+        allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+
+    project_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.all()]
+
+    district_q = District.query.order_by(District.name)
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    if project_id:
+        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
+
+    vehicle_q = Vehicle.query.order_by(Vehicle.vehicle_no)
+    if not is_master_or_admin and allowed_vehicles:
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    if project_id:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
+    if district_id:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.all()]
+
+    unique_vehicle_count = len({r['vehicle'].id for r in rows if r.get('vehicle')})
+
+    return render_template(
+        'unauthorized_movement_report.html',
+        rows=rows,
+        total=len(rows),
+        unique_vehicle_count=unique_vehicle_count,
+        from_date=from_date,
+        to_date=to_date,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        vehicle_choices=vehicle_choices,
+    )
+
+
+@app.route('/unauthorized-movement-report/export')
+def unauthorized_movement_report_export():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+
+    rows = _unauthorized_movement_rows(
+        from_date=from_date,
+        to_date=to_date,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts,
+        allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+    rows = _filter_unauthorized_movement_rows(rows, request.args.get('table_search'))
+
+    headers = [
+        'Sr', 'District', 'Project', 'Vehicle', "Km's Driven", "Tracker Km's",
+        "Task Running Km's", "Return To Parking Place Km's", 'Without Task Move',
+    ]
+    data_rows = []
+    for i, r in enumerate(rows, 1):
+        data_rows.append([
+            i,
+            r['district'].name if r['district'] else '-',
+            r['project'].name if r['project'] else '-',
+            r['vehicle'].vehicle_no if r['vehicle'] else '-',
+            r['km_driven'],
+            r['tracker_km'],
+            r['task_running_km'],
+            r['return_to_parking_km'],
+            r['without_task_move'],
+        ])
+    return generate_excel_template(
+        headers, data_rows, required_columns=[],
+        filename=f'unauthorized_movement_report_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+
+def _unauthorized_movement_preview_context():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+
+    rows = _unauthorized_movement_rows(
+        from_date=from_date,
+        to_date=to_date,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts,
+        allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+    rows = _filter_unauthorized_movement_rows(rows, request.args.get('table_search'))
+
+    return {
+        'rows': rows,
+        'total': len(rows),
+        'from_date': from_date,
+        'to_date': to_date,
+        'now': datetime.now,
+    }
+
+
+@app.route('/unauthorized-movement-report/preview')
+def unauthorized_movement_report_preview():
+    return render_template('unauthorized_movement_report_print.html', **_unauthorized_movement_preview_context())
+
+
+@app.route('/unauthorized-movement-report/print')
+def unauthorized_movement_report_print():
+    return render_template('unauthorized_movement_report_print.html', **_unauthorized_movement_preview_context())
+
+
 # ── Tracker Difference Report ───────────────────────────────────────────
 def _tracker_difference_rows(from_date=None, to_date=None, project_id=0, district_id=0, vehicle_id=0,
                              check_type='', diff_pct_limit=None,

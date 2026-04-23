@@ -1,0 +1,100 @@
+{% extends "base_print.html" %}
+{% block title %}Print – Unauthorized Movement Report{% endblock %}
+
+{% block extra_head %}
+<style>
+  .rpt-header { background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; border-radius: 12px; padding: 1.1rem 1.3rem; margin-bottom: 1rem; box-shadow: 0 4px 18px rgba(217,119,6,.22); }
+  .rpt-header h2 { margin: 0; font-size: 1.26rem; font-weight: 800; letter-spacing: .2px; }
+  .rpt-sub { margin-top: .3rem; font-size: .82rem; opacity: .92; }
+  .rpt-meta { font-size: 0.8rem; color: #475569; margin-bottom: 0.9rem; }
+  .meta-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: .45rem .7rem; display: inline-flex; align-items: center; gap: .35rem; }
+  .total-badge { display: inline-block; background: #fef3c7; color: #92400e; font-size: 0.82rem; font-weight: 700; padding: 0.22rem 0.75rem; border-radius: 20px; border: 1px solid #fde68a; }
+  .rpt-table { font-size: 0.79rem; border-radius: 10px; overflow: hidden; table-layout: fixed; width: 100%; }
+  .rpt-table thead th { background: #fef3c7; color: #92400e; font-weight: 800; font-size: 0.72rem; text-transform: uppercase; border-bottom: 2px solid #f59e0b; white-space: nowrap; padding: 0.42rem 0.58rem; letter-spacing: .2px; }
+  .rpt-table tbody td { vertical-align: middle; padding: 0.35rem 0.45rem; color: #0f172a; }
+  .rpt-table tbody tr:nth-child(even) { background: #fffbeb; }
+  .rpt-table tbody tr:hover { background: #fef3c7; }
+  .rpt-table th, .rpt-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .print-container { max-width: none !important; width: calc(100vw - 16px) !important; margin: 0 auto !important; padding: 10px 8px 20px 8px !important; }
+  .preview-search-wrap { display: flex; justify-content: flex-end; margin: 6px 0 10px 0; }
+  .preview-search { width: 300px; max-width: 60vw; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; font-size: .85rem; }
+  .preview-count { font-size: .78rem; color: #475569; margin-right: auto; display: flex; align-items: center; }
+  @page { size: A4 landscape !important; margin: 8mm !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="print-container">
+  <div class="rpt-header">
+    <h2><i class="bi bi-shield-exclamation me-2"></i>Unauthorized Movement Report</h2>
+    <div class="rpt-sub">Preview mode: use toolbar button to print when ready.</div>
+  </div>
+
+  <div class="rpt-meta d-flex flex-wrap gap-2">
+    <span class="meta-card"><i class="bi bi-calendar3"></i>Range: {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
+    <span class="meta-card"><i class="bi bi-clock"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
+  </div>
+  <div class="mb-2">
+    <span class="total-badge">Total Rows: {{ total }}</span>
+  </div>
+
+  <div class="preview-search-wrap no-print">
+    <div class="preview-count" id="previewVisibleCount">Showing {{ total }} of {{ total }}</div>
+    <input type="text" id="previewSearchInput" class="preview-search" placeholder="Search in preview...">
+  </div>
+
+  <table class="table table-sm table-bordered rpt-table w-100">
+    <thead>
+      <tr>
+        <th>Sr</th><th>District</th><th>Project</th><th>Vehicle</th><th>Km's Driven</th>
+        <th>Tracker Km's</th><th>Task Running Km's</th><th>Return To Parking Place Km's</th><th>Without Task Move</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ r.district.name if r.district else '-' }}</td>
+        <td>{{ r.project.name if r.project else '-' }}</td>
+        <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
+        <td>{{ '%.2f'|format(r.km_driven) }}</td>
+        <td>{{ '%.2f'|format(r.tracker_km) }}</td>
+        <td>{{ '%.2f'|format(r.task_running_km) }}</td>
+        <td>{{ '%.2f'|format(r.return_to_parking_km) }}</td>
+        <td>{{ '%.2f'|format(r.without_task_move) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="text-center text-muted py-4">No unauthorized movement records found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var inp = document.getElementById('previewSearchInput');
+  var tbody = document.querySelector('.rpt-table tbody');
+  var countEl = document.getElementById('previewVisibleCount');
+  if (!inp || !tbody) return;
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+  var total = rows.length;
+  function applyFilter() {
+    var q = (inp.value || '').toLowerCase().trim();
+    var visible = 0;
+    var sr = 1;
+    rows.forEach(function (tr) {
+      var txt = (tr.textContent || '').toLowerCase();
+      var show = !q || txt.indexOf(q) !== -1;
+      tr.style.display = show ? '' : 'none';
+      if (show) {
+        visible += 1;
+        var srCell = tr.querySelector('td');
+        if (srCell) srCell.textContent = sr++;
+      }
+    });
+    if (countEl) countEl.textContent = 'Showing ' + visible + ' of ' + total;
+  }
+  inp.addEventListener('input', applyFilter);
+  applyFilter();
+});
+</script>
+{% endblock %}
