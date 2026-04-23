@@ -17264,14 +17264,10 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
     vehicle_map = {_norm_vno(v.vehicle_no): v for v in db_vehicles}
 
     # Global eligibility guard (applies to all users): only include records where
-    # district-project assignment exists AND vehicle-district deployment exists.
+    # district-project assignment exists and vehicle has district deployment in master data.
     assigned_project_pairs = set(
         (int(pid), int(did))
         for pid, did in db.session.query(project_district.c.project_id, project_district.c.district_id).all()
-    )
-    deployed_vehicle_pairs = set(
-        (int(vid), int(did))
-        for vid, did in db.session.query(vehicle_district.c.vehicle_id, vehicle_district.c.district_id).all()
     )
 
     saved_map = {r.emergency_task_record_id: r for r in UnexecutedTaskRecord.query.filter(
@@ -17291,8 +17287,6 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
         if not v or not v.project_id or not v.district_id:
             continue
         if (int(v.project_id), int(v.district_id)) not in assigned_project_pairs:
-            continue
-        if (int(v.id), int(v.district_id)) not in deployed_vehicle_pairs:
             continue
 
         # Apply user scope first (like Tracker Difference Report behavior).
@@ -17509,14 +17503,9 @@ def unexecuted_task_report():
         (int(pid), int(did))
         for pid, did in db.session.query(project_district.c.project_id, project_district.c.district_id).all()
     )
-    valid_vehicle_pairs = set(
-        (int(vid), int(did))
-        for vid, did in db.session.query(vehicle_district.c.vehicle_id, vehicle_district.c.district_id).all()
-    )
     valid_vehicles = [v for v in vehicle_q.all()
                       if v and v.project_id and v.district_id
-                      and (int(v.project_id), int(v.district_id)) in valid_project_pairs
-                      and (int(v.id), int(v.district_id)) in valid_vehicle_pairs]
+                      and (int(v.project_id), int(v.district_id)) in valid_project_pairs]
     valid_vehicle_ids = [v.id for v in valid_vehicles]
     valid_district_ids = sorted({int(v.district_id) for v in valid_vehicles if v.district_id})
     valid_project_ids = sorted({int(v.project_id) for v in valid_vehicles if v.project_id})
