@@ -15180,6 +15180,7 @@ def api_emg_detail():
     return jsonify([{
         'task_id': r.task_id_ext or '',
         'phone': r.phone or '',
+        'cli': r.cli or '',
         'name': r.name or '',
         'address': r.address or '',
         'amb_reg_no': r.amb_reg_no or '',

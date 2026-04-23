@@ -171,7 +171,7 @@
     <table class="table table-sm table-hover align-middle mb-0" id="emgDetailTable">
       <thead class="table-light sticky-top">
         <tr>
-          <th class="ps-3">#</th><th>TaskId</th><th>Phone</th><th>Name</th><th>Address</th><th>Vehicle</th>
+          <th class="ps-3">#</th><th>TaskId</th><th>Phone</th><th>CLI</th><th>Name</th><th>Address</th><th>Vehicle</th>
           <th>ReceivedBy</th><th>Category</th><th>FacilityName</th><th>CreatedDate</th><th>CompletedDateTime</th>
         </tr>
       </thead>
@@ -269,6 +269,7 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
             tr.innerHTML = '<td class="ps-3">' + (i + 1) + '</td>' +
               '<td>' + _he(r.task_id) + '</td>' +
               '<td>' + _he(r.phone) + '</td>' +
+              '<td>' + _he(r.cli) + '</td>' +
               '<td>' + _he(r.name) + '</td>' +
               '<td>' + _he(r.address) + '</td>' +
               '<td>' + _he(r.amb_reg_no) + '</td>' +
@@ -286,8 +287,8 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 
   document.getElementById('emgExportBtn').addEventListener('click', function() {
     if (!_emgData.length) return;
-    var headers = ['TaskId','Phone','Name','Address','Vehicle','ReceivedBy','Category','FacilityName','CreatedDate','CompletedDateTime'];
-    var keys = ['task_id','phone','name','address','amb_reg_no','received_by','category','facility_name','created_date','completed_date_time'];
+    var headers = ['TaskId','Phone','CLI','Name','Address','Vehicle','ReceivedBy','Category','FacilityName','CreatedDate','CompletedDateTime'];
+    var keys = ['task_id','phone','cli','name','address','amb_reg_no','received_by','category','facility_name','created_date','completed_date_time'];
     var csv = '\uFEFF' + headers.join(',') + '\n';
     _emgData.forEach(function(r) {
       csv += keys.map(function(k) { return '"' + (r[k] || '').replace(/"/g, '""') + '"'; }).join(',') + '\n';
