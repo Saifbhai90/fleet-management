@@ -17234,6 +17234,12 @@ def _fmt_duration(delta):
 
 
 def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehicle_id=0, category='', shift=''):
+    selected_district = District.query.get(district_id) if district_id else None
+    selected_district_name = (selected_district.name or '').strip().lower() if selected_district else ''
+
+    def _norm_vno(vno):
+        return (vno or '').strip().upper()
+
     emg_q = EmergencyTaskRecord.query.filter(
         EmergencyTaskRecord.task_date >= from_date,
         EmergencyTaskRecord.task_date <= to_date,
@@ -17248,7 +17254,9 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
         emg_q = emg_q.filter(EmergencyTaskRecord.amb_reg_no == (v.vehicle_no if v else ''))
 
     emg_rows = emg_q.order_by(EmergencyTaskRecord.task_date.desc(), EmergencyTaskRecord.id.desc()).all()
-    vehicle_map = {v.vehicle_no: v for v in Vehicle.query.filter(Vehicle.vehicle_no.in_([r.amb_reg_no for r in emg_rows if r.amb_reg_no])).all()} if emg_rows else {}
+    emg_vnos = [_norm_vno(r.amb_reg_no) for r in emg_rows if r.amb_reg_no]
+    db_vehicles = Vehicle.query.filter(Vehicle.vehicle_no.in_(emg_vnos)).all() if emg_vnos else []
+    vehicle_map = {_norm_vno(v.vehicle_no): v for v in db_vehicles}
     saved_map = {r.emergency_task_record_id: r for r in UnexecutedTaskRecord.query.filter(
         UnexecutedTaskRecord.emergency_task_record_id.in_([r.id for r in emg_rows])
     ).all()} if emg_rows else {}
@@ -17262,10 +17270,21 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
         if close_dt < assign_dt:
             continue
 
-        v = vehicle_map.get((r.amb_reg_no or '').strip())
-        if district_id and v and v.district_id != district_id:
+        v = vehicle_map.get(_norm_vno(r.amb_reg_no))
+
+        # Apply filters strictly. If vehicle mapping is missing, fallback to EMG district text
+        # for district filter; for project/vehicle filters skip unmapped rows.
+        if district_id:
+            if v:
+                if v.district_id != district_id:
+                    continue
+            else:
+                emg_district_name = (r.district_name or '').strip().lower()
+                if not selected_district_name or emg_district_name != selected_district_name:
+                    continue
+        if project_id and (not v or v.project_id != project_id):
             continue
-        if project_id and v and v.project_id != project_id:
+        if vehicle_id and (not v or v.id != vehicle_id):
             continue
 
         activity_km = 0.0
