@@ -24,12 +24,12 @@
         <h2><i class="bi bi-speedometer2 me-2"></i>Speed Monitoring Report</h2>
         <div class="smr-subtitle">Tracker activity speed points by date range and filters</div>
       </div>
-      <a href="{{ url_for('speed_monitoring_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}" class="btn btn-success btn-sm">
+      <a href="{{ url_for('speed_monitoring_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}" class="btn btn-success btn-sm" id="speedExportBtn" data-export-url="{{ url_for('speed_monitoring_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}">
         <i class="bi bi-file-earmark-excel me-1"></i>Export
       </a>
-      <a href="{{ url_for('speed_monitoring_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}" class="btn btn-warning btn-sm" id="speedPreviewBtn" data-preview-url="{{ url_for('speed_monitoring_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}">
+      <button type="button" class="btn btn-warning btn-sm" id="speedPreviewBtn" data-preview-url="{{ url_for('speed_monitoring_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, speed_limit=speed_limit) }}">
         <i class="bi bi-printer me-1"></i>Print / Preview
-      </a>
+      </button>
     </div>
   </div>
 
@@ -173,10 +173,28 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   var previewBtn = document.getElementById('speedPreviewBtn');
+  var exportBtn = document.getElementById('speedExportBtn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var u = this.getAttribute('data-export-url');
+      var searchVal = (document.getElementById('dtSearchInput') || {}).value || '';
+      if (searchVal && searchVal.trim()) {
+        var sep = u.indexOf('?') >= 0 ? '&' : '?';
+        u = u + sep + 'table_search=' + encodeURIComponent(searchVal.trim());
+      }
+      window.location.href = u;
+    });
+  }
   if (previewBtn) {
     previewBtn.addEventListener('click', function(e) {
       e.preventDefault();
       var u = this.getAttribute('data-preview-url');
+      var searchVal = (document.getElementById('dtSearchInput') || {}).value || '';
+      if (searchVal && searchVal.trim()) {
+        var sep = u.indexOf('?') >= 0 ? '&' : '?';
+        u = u + sep + 'table_search=' + encodeURIComponent(searchVal.trim());
+      }
       try {
         var w = window.open(u, '_blank', 'noopener');
         if (!w) { window.location.href = u; }

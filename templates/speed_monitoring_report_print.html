@@ -9,16 +9,25 @@
   .rpt-meta { font-size: 0.8rem; color: #475569; margin-bottom: 0.9rem; }
   .meta-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: .45rem .7rem; display: inline-flex; align-items: center; gap: .35rem; }
   .total-badge { display: inline-block; background: #e0f2fe; color: #075985; font-size: 0.82rem; font-weight: 700; padding: 0.22rem 0.75rem; border-radius: 20px; border: 1px solid #bae6fd; }
-  .rpt-table { font-size: 0.82rem; border-radius: 10px; overflow: hidden; }
+  .rpt-table { font-size: 0.79rem; border-radius: 10px; overflow: hidden; table-layout: fixed; width: 100%; }
   .rpt-table thead th { background: #e0f2fe; color: #0c4a6e; font-weight: 800; font-size: 0.72rem; text-transform: uppercase; border-bottom: 2px solid #38bdf8; white-space: nowrap; padding: 0.42rem 0.58rem; letter-spacing: .2px; }
-  .rpt-table tbody td { vertical-align: middle; padding: 0.38rem 0.56rem; color: #0f172a; }
+  .rpt-table tbody td { vertical-align: middle; padding: 0.35rem 0.45rem; color: #0f172a; }
   .rpt-table tbody tr:nth-child(even) { background: #f8fdff; }
   .rpt-table tbody tr:hover { background: #eef8ff; }
   .check-pill { display: inline-block; padding: .13rem .5rem; border-radius: 10px; font-size: .72rem; font-weight: 700; }
   .check-above { background: #ffebee; color: #b91c1c; border: 1px solid #fecaca; }
   .check-below { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
   .check-equal { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
-  .rpt-table th, .rpt-table td { white-space: nowrap; }
+  .rpt-table th, .rpt-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .col-sr { width: 44px; }
+  .col-district { width: 96px; }
+  .col-project { width: 92px; }
+  .col-vehicle { width: 92px; }
+  .col-datetime { width: 124px; }
+  .col-speed { width: 56px; text-align: center; }
+  .col-reason { width: 64px; }
+  .col-location { width: 330px; }
+  .col-check { width: 106px; }
   .print-container {
     max-width: none !important;
     width: calc(100vw - 16px) !important;
@@ -63,6 +72,17 @@
   </div>
 
   <table class="table table-sm table-bordered rpt-table w-100">
+    <colgroup>
+      <col class="col-sr">
+      <col class="col-district">
+      <col class="col-project">
+      <col class="col-vehicle">
+      <col class="col-datetime">
+      <col class="col-speed">
+      <col class="col-reason">
+      <col class="col-location">
+      <col class="col-check">
+    </colgroup>
     <thead>
       <tr>
         <th>Sr No</th>

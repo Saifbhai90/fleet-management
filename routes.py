@@ -11060,6 +11060,21 @@ def speed_monitoring_report_export():
         allowed_vehicles=allowed_vehicles,
         is_master_or_admin=is_master_or_admin,
     )
+    table_search = (request.args.get('table_search') or '').strip().lower()
+    if table_search:
+        def _matches_search(r):
+            blob = ' '.join([
+                r['district'].name if r.get('district') else '',
+                r['project'].name if r.get('project') else '',
+                r['vehicle'].vehicle_no if r.get('vehicle') else (r['rec'].vehicle_no or ''),
+                r['record_dt'].strftime('%d-%m-%Y %I:%M %p') if r.get('record_dt') else (r['rec'].record_date_time or ''),
+                f"{r.get('speed', 0):.2f}",
+                r['rec'].reason or '',
+                r.get('location_text') or '',
+                r.get('check_result') or '',
+            ]).lower()
+            return table_search in blob
+        rows = [r for r in rows if _matches_search(r)]
 
     headers = ['Sr No', 'District', 'Project', 'Vehicle', 'Record Date Time', 'Speed', 'Reason', 'Location', 'Check Result']
     data_rows = []
@@ -11125,6 +11140,21 @@ def _speed_monitoring_report_preview_context():
         allowed_vehicles=allowed_vehicles,
         is_master_or_admin=is_master_or_admin,
     )
+    table_search = (request.args.get('table_search') or '').strip().lower()
+    if table_search:
+        def _matches_search(r):
+            blob = ' '.join([
+                r['district'].name if r.get('district') else '',
+                r['project'].name if r.get('project') else '',
+                r['vehicle'].vehicle_no if r.get('vehicle') else (r['rec'].vehicle_no or ''),
+                r['record_dt'].strftime('%d-%m-%Y %I:%M %p') if r.get('record_dt') else (r['rec'].record_date_time or ''),
+                f"{r.get('speed', 0):.2f}",
+                r['rec'].reason or '',
+                r.get('location_text') or '',
+                r.get('check_result') or '',
+            ]).lower()
+            return table_search in blob
+        rows = [r for r in rows if _matches_search(r)]
 
     return {
         'rows': rows,
