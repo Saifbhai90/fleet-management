@@ -17234,6 +17234,7 @@ def _fmt_duration(delta):
 
 
 def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehicle_id=0, category='', shift='',
+                          check_type='', running_km_limit=None,
                           allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
                           is_master_or_admin=True):
     allowed_projects = set(allowed_projects or [])
@@ -17329,6 +17330,12 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
                     activity_km += float(a.distance or 0)
         activity_km = round(activity_km, 2)
 
+        if running_km_limit is not None:
+            if check_type == 'above' and not (activity_km > running_km_limit):
+                continue
+            if check_type == 'below' and not (activity_km < running_km_limit):
+                continue
+
         total_time = close_dt - assign_dt
         row_shift = _shift_from_datetime(assign_dt)
         if shift in ('day', 'night') and row_shift.lower() != shift:
@@ -17403,6 +17410,20 @@ def unexecuted_task_report():
     vehicle_id = request.values.get('vehicle_id', type=int) or 0
     category = (request.values.get('category') or '').strip()
     shift = (request.values.get('shift') or '').strip().lower()
+    check_type = (request.values.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+    running_km_limit_raw = (request.values.get('running_km_limit') or '').strip()
+    running_km_limit = None
+    if running_km_limit_raw:
+        try:
+            running_km_limit = float(running_km_limit_raw)
+            if running_km_limit < 0:
+                running_km_limit = None
+                running_km_limit_raw = ''
+        except Exception:
+            running_km_limit = None
+            running_km_limit_raw = ''
 
     if request.method == 'POST' and request.form.get('save_batch') == '1':
         saved = 0
@@ -17492,6 +17513,8 @@ def unexecuted_task_report():
             vehicle_id=vehicle_id,
             category=category,
             shift=shift,
+            check_type=check_type,
+            running_km_limit=running_km_limit_raw,
         ))
 
     district_q = District.query.order_by(District.name)
@@ -17542,6 +17565,8 @@ def unexecuted_task_report():
         vehicle_id=vehicle_id,
         category=category,
         shift=shift,
+        check_type=check_type,
+        running_km_limit=running_km_limit,
         allowed_projects=allowed_projects,
         allowed_districts=allowed_districts,
         allowed_vehicles=allowed_vehicles,
@@ -17558,6 +17583,8 @@ def unexecuted_task_report():
         vehicle_id=vehicle_id,
         category=category,
         shift=shift,
+        check_type=check_type,
+        running_km_limit=running_km_limit_raw,
         districts=districts,
         projects=projects,
         vehicles=vehicles,
@@ -17583,10 +17610,23 @@ def unexecuted_task_report_export():
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
     category = (request.args.get('category') or '').strip()
     shift = (request.args.get('shift') or '').strip().lower()
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+    running_km_limit_raw = (request.args.get('running_km_limit') or '').strip()
+    running_km_limit = None
+    if running_km_limit_raw:
+        try:
+            running_km_limit = float(running_km_limit_raw)
+            if running_km_limit < 0:
+                running_km_limit = None
+        except Exception:
+            running_km_limit = None
     table_search = (request.args.get('table_search') or '').strip()
 
     rows = _unexecuted_task_rows(
         from_date, to_date, district_id, project_id, vehicle_id, category, shift,
+        check_type=check_type, running_km_limit=running_km_limit,
         allowed_projects=allowed_projects, allowed_districts=allowed_districts, allowed_vehicles=allowed_vehicles,
         is_master_or_admin=is_master_or_admin,
     )
@@ -17632,10 +17672,23 @@ def unexecuted_task_report_preview():
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
     category = (request.args.get('category') or '').strip()
     shift = (request.args.get('shift') or '').strip().lower()
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+    running_km_limit_raw = (request.args.get('running_km_limit') or '').strip()
+    running_km_limit = None
+    if running_km_limit_raw:
+        try:
+            running_km_limit = float(running_km_limit_raw)
+            if running_km_limit < 0:
+                running_km_limit = None
+        except Exception:
+            running_km_limit = None
     table_search = (request.args.get('table_search') or '').strip()
 
     rows = _unexecuted_task_rows(
         from_date, to_date, district_id, project_id, vehicle_id, category, shift,
+        check_type=check_type, running_km_limit=running_km_limit,
         allowed_projects=allowed_projects, allowed_districts=allowed_districts, allowed_vehicles=allowed_vehicles,
         is_master_or_admin=is_master_or_admin,
     )
