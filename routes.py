@@ -11178,6 +11178,312 @@ def speed_monitoring_report_print():
     return render_template('speed_monitoring_report_print.html', **_speed_monitoring_report_preview_context())
 
 
+# ── Mileage Report ───────────────────────────────────────────
+def _mileage_report_rows(from_date=None, to_date=None, project_id=0, district_id=0, vehicle_id=0,
+                         check_type='', km_limit=None,
+                         allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
+                         is_master_or_admin=True):
+    query = db.session.query(
+        VehicleDailyTask, Vehicle, Project, District
+    ).join(
+        Vehicle, Vehicle.id == VehicleDailyTask.vehicle_id
+    ).outerjoin(
+        Project, Vehicle.project_id == Project.id
+    ).outerjoin(
+        District, Vehicle.district_id == District.id
+    )
+
+    if from_date:
+        query = query.filter(VehicleDailyTask.task_date >= from_date)
+    if to_date:
+        query = query.filter(VehicleDailyTask.task_date <= to_date)
+
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(Vehicle.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(Vehicle.id.in_(list(allowed_vehicles)))
+
+    if project_id:
+        query = query.filter(Vehicle.project_id == project_id)
+    if district_id:
+        query = query.filter(Vehicle.district_id == district_id)
+    if vehicle_id:
+        query = query.filter(Vehicle.id == vehicle_id)
+
+    out = []
+    for rec, vehicle, project, district in query.order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id.desc()).all():
+        start_r = float(rec.start_reading or 0)
+        close_r = float(rec.close_reading or 0)
+        total_km = round(close_r - start_r, 2)
+
+        if km_limit is not None:
+            if check_type == 'above' and not (total_km > km_limit):
+                continue
+            if check_type == 'below' and not (total_km < km_limit):
+                continue
+
+        check_result = None
+        if km_limit is not None:
+            if total_km > km_limit:
+                check_result = f'Above (+{total_km - km_limit:.2f})'
+            elif total_km < km_limit:
+                check_result = f'Below (-{km_limit - total_km:.2f})'
+            else:
+                check_result = 'Equal (0.00)'
+
+        out.append({
+            'rec': rec,
+            'vehicle': vehicle,
+            'project': project,
+            'district': district,
+            'start_reading': start_r,
+            'close_reading': close_r,
+            'total_km': total_km,
+            'tasks_count': int(rec.tasks_count or 0),
+            'check_result': check_result,
+        })
+    return out
+
+
+@app.route('/mileage-report')
+def mileage_report():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+
+    km_limit_raw = (request.args.get('km_limit') or '').strip()
+    km_limit = None
+    if km_limit_raw:
+        try:
+            km_limit = float(km_limit_raw)
+            if km_limit < 0:
+                km_limit = None
+                km_limit_raw = ''
+        except Exception:
+            km_limit = None
+            km_limit_raw = ''
+
+    rows = _mileage_report_rows(
+        from_date=from_date,
+        to_date=to_date,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        check_type=check_type,
+        km_limit=km_limit,
+        allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts,
+        allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+
+    project_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.all()]
+
+    district_q = District.query.order_by(District.name)
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    if project_id:
+        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
+
+    vehicle_q = Vehicle.query.order_by(Vehicle.vehicle_no)
+    if not is_master_or_admin and allowed_vehicles:
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    if project_id:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
+    if district_id:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.all()]
+
+    unique_vehicle_count = len({r['vehicle'].id for r in rows if r.get('vehicle')})
+
+    return render_template(
+        'mileage_report.html',
+        rows=rows,
+        total=len(rows),
+        unique_vehicle_count=unique_vehicle_count,
+        from_date=from_date,
+        to_date=to_date,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        check_type=check_type,
+        km_limit=km_limit_raw,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        vehicle_choices=vehicle_choices,
+    )
+
+
+@app.route('/mileage-report/export')
+def mileage_report_export():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+    km_limit_raw = (request.args.get('km_limit') or '').strip()
+    km_limit = None
+    if km_limit_raw:
+        try:
+            km_limit = float(km_limit_raw)
+            if km_limit < 0:
+                km_limit = None
+        except Exception:
+            km_limit = None
+
+    rows = _mileage_report_rows(
+        from_date=from_date, to_date=to_date, project_id=project_id, district_id=district_id,
+        vehicle_id=vehicle_id, check_type=check_type, km_limit=km_limit,
+        allowed_projects=allowed_projects, allowed_districts=allowed_districts, allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+    table_search = (request.args.get('table_search') or '').strip().lower()
+    if table_search:
+        def _m(r):
+            blob = ' '.join([
+                r['rec'].task_date.strftime('%d-%m-%Y') if r['rec'].task_date else '',
+                r['district'].name if r.get('district') else '',
+                r['project'].name if r.get('project') else '',
+                r['vehicle'].vehicle_no if r.get('vehicle') else '',
+                f"{r['start_reading']:.2f}",
+                f"{r['close_reading']:.2f}",
+                f"{r['total_km']:.2f}",
+                str(r['tasks_count']),
+                r.get('check_result') or '',
+            ]).lower()
+            return table_search in blob
+        rows = [r for r in rows if _m(r)]
+
+    headers = ['Sr', 'Date', 'District', 'Project', 'Vehicle', 'Start Reading', 'Close Reading', 'Total KMs', 'Task', 'Check Result']
+    data_rows = []
+    for i, r in enumerate(rows, 1):
+        data_rows.append([
+            i,
+            r['rec'].task_date.strftime('%d-%m-%Y') if r['rec'].task_date else '-',
+            r['district'].name if r['district'] else '-',
+            r['project'].name if r['project'] else '-',
+            r['vehicle'].vehicle_no if r['vehicle'] else '-',
+            r['start_reading'],
+            r['close_reading'],
+            r['total_km'],
+            r['tasks_count'],
+            r['check_result'] or '-',
+        ])
+    return generate_excel_template(
+        headers, data_rows, required_columns=[],
+        filename=f'mileage_report_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+
+def _mileage_report_preview_context():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    check_type = (request.args.get('check_type') or '').strip().lower()
+    if check_type not in ('', 'above', 'below'):
+        check_type = ''
+    km_limit_raw = (request.args.get('km_limit') or '').strip()
+    km_limit = None
+    if km_limit_raw:
+        try:
+            km_limit = float(km_limit_raw)
+            if km_limit < 0:
+                km_limit = None
+        except Exception:
+            km_limit = None
+
+    rows = _mileage_report_rows(
+        from_date=from_date, to_date=to_date, project_id=project_id, district_id=district_id,
+        vehicle_id=vehicle_id, check_type=check_type, km_limit=km_limit,
+        allowed_projects=allowed_projects, allowed_districts=allowed_districts, allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
+    table_search = (request.args.get('table_search') or '').strip().lower()
+    if table_search:
+        def _m(r):
+            blob = ' '.join([
+                r['rec'].task_date.strftime('%d-%m-%Y') if r['rec'].task_date else '',
+                r['district'].name if r.get('district') else '',
+                r['project'].name if r.get('project') else '',
+                r['vehicle'].vehicle_no if r.get('vehicle') else '',
+                f"{r['start_reading']:.2f}",
+                f"{r['close_reading']:.2f}",
+                f"{r['total_km']:.2f}",
+                str(r['tasks_count']),
+                r.get('check_result') or '',
+            ]).lower()
+            return table_search in blob
+        rows = [r for r in rows if _m(r)]
+
+    return {
+        'rows': rows,
+        'total': len(rows),
+        'from_date': from_date,
+        'to_date': to_date,
+        'km_limit': km_limit_raw,
+        'check_type': check_type,
+        'now': datetime.now,
+    }
+
+
+@app.route('/mileage-report/preview')
+def mileage_report_preview():
+    return render_template('mileage_report_print.html', **_mileage_report_preview_context())
+
+
+@app.route('/mileage-report/print')
+def mileage_report_print():
+    return render_template('mileage_report_print.html', **_mileage_report_preview_context())
+
+
 # ── Driver Seat Available Report ───────────────────────────────────────────
 
 def _seat_available_data(project_id=0, district_id=0, vehicle_type='',

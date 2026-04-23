@@ -160,6 +160,11 @@
               <i class="bi bi-star text-warning me-2"></i>Speed Monitoring Report
             </a>
             {% endif %}
+            {% if can_see_page('mileage_report') %}
+            <a href="{{ url_for('mileage_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Mileage Report
+            </a>
+            {% endif %}
           </div>
         </div>
         <!-- Logbook -->

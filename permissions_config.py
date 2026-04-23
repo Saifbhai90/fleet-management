@@ -287,6 +287,7 @@ PERMISSION_TREE = {
         ('driver_seat_available_report', 'Driver Seat Available'),
         ('oil_change_alert_report', 'Oil Change Alert Report'),
         ('speed_monitoring_report', 'Speed Monitoring Report'),
+        ('mileage_report', 'Mileage Report'),
         ('missing_documents_report', 'Missing Documents Report'),
     ],
     PERMISSION_BACKUP: [
@@ -923,6 +924,7 @@ SECTION_PAGE_GROUPS = {
         ('Driver Seat Available', [('driver_seat_available_report', 'Driver Seat Available')]),
         ('Oil Change Alert Report', [('oil_change_alert_report', 'Oil Change Alert Report')]),
         ('Speed Monitoring Report', [('speed_monitoring_report', 'Speed Monitoring Report')]),
+        ('Mileage Report', [('mileage_report', 'Mileage Report')]),
         ('Missing Documents Report', [('missing_documents_report', 'Missing Documents Report')]),
         ('Activity Log', [('activity_log_report', 'Activity Log')]),
         ('Activity Logs Geo', [('activity_logs_geo_report', 'Activity Logs Geo')]),
@@ -1134,6 +1136,7 @@ PAGE_VISIBLE = {
     'driver_seat_available_report': ['reports', 'driver_seat_available_report'],
     'oil_change_alert_report': ['reports', 'oil_change_alert_report'],
     'speed_monitoring_report': ['reports', 'speed_monitoring_report'],
+    'mileage_report': ['reports', 'mileage_report'],
     'missing_documents_report': ['reports', 'missing_documents_report'],
     # Administration
     'user_list': ['users_manage', 'user_list', 'user_add', 'user_edit'],

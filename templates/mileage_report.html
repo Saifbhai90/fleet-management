@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Mileage Report{% endblock %}
+
+{% block content %}
+<style>
+  .mr-header { background: linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%); color: #fff; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
+  .mr-header h2 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+  .mr-subtitle { font-size: 0.84rem; opacity: .9; margin-top: .2rem; }
+  .mr-filter { background: #fff; border-radius: 8px; box-shadow: 0 1px 5px rgba(0,0,0,.08); padding: .9rem 1rem; margin-bottom: 1rem; }
+  .mr-table-wrap { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); padding: .9rem; }
+  #mileageTable thead th { background: #f3e8ff; color: #4c1d95; border-bottom: 2px solid #7c3aed; font-size: .78rem; text-transform: uppercase; white-space: nowrap; }
+  #mileageTable td { vertical-align: middle; font-size: .83rem; }
+  .status-above { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
+  .status-below { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
+  .status-equal { background: #fff8e1; color: #ef6c00; border: 1px solid #ffe0b2; padding: .15rem .55rem; border-radius: 12px; font-size: .73rem; font-weight: 700; }
+  .total-badge { background: #ede9fe; color: #5b21b6; padding: .25rem .8rem; border-radius: 20px; font-size: .82rem; font-weight: 700; }
+  .mileage-wait-inline { background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: .65rem .8rem; margin-bottom: .9rem; display: none; }
+</style>
+
+<div class="container-fluid py-3 px-3 px-md-4">
+  <div class="mr-header">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <div class="me-auto">
+        <h2><i class="bi bi-speedometer me-2"></i>Mileage Report</h2>
+        <div class="mr-subtitle">Daily task mileage by date range and filters</div>
+      </div>
+      <a href="{{ url_for('mileage_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, km_limit=km_limit) }}" class="btn btn-success btn-sm" id="mileageExportBtn" data-export-url="{{ url_for('mileage_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, km_limit=km_limit) }}">
+        <i class="bi bi-file-earmark-excel me-1"></i>Export
+      </a>
+      <button type="button" class="btn btn-warning btn-sm" id="mileagePreviewBtn" data-preview-url="{{ url_for('mileage_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, km_limit=km_limit) }}">
+        <i class="bi bi-printer me-1"></i>Print / Preview
+      </button>
+    </div>
+  </div>
+
+  <div class="mr-filter">
+    <form method="get" action="{{ url_for('mileage_report') }}" id="mileageFilterForm">
+      <div class="row g-2 align-items-end">
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">From Date</label>
+          <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date|ddmmyyyy }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">To Date</label>
+          <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date|ddmmyyyy }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">District</label>
+          <select name="district_id" class="form-select form-select-sm search-select">
+            {% for val, label in district_choices %}
+            <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Project</label>
+          <select name="project_id" class="form-select form-select-sm search-select">
+            {% for val, label in project_choices %}
+            <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Vehicle</label>
+          <select name="vehicle_id" class="form-select form-select-sm search-select">
+            {% for val, label in vehicle_choices %}
+            <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-1">
+          <label class="form-label mb-1 small fw-semibold">Check Type</label>
+          <select name="check_type" class="form-select form-select-sm">
+            <option value="" {% if not check_type %}selected{% endif %}>--</option>
+            <option value="above" {% if check_type == 'above' %}selected{% endif %}>Above</option>
+            <option value="below" {% if check_type == 'below' %}selected{% endif %}>Below</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-1">
+          <label class="form-label mb-1 small fw-semibold">KMs</label>
+          <input type="number" step="0.01" min="0" name="km_limit" class="form-control form-control-sm" placeholder="e.g. 80" value="{{ km_limit or '' }}">
+        </div>
+        <div class="col-6 col-md-1">
+          <button class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel-fill"></i></button>
+        </div>
+      </div>
+      <div class="mt-2">
+        <a href="{{ url_for('mileage_report') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x-circle me-1"></i>Clear
+        </a>
+        <span class="total-badge ms-2">Rows: {{ total }}</span>
+        <span class="total-badge ms-2">Vehicles: {{ unique_vehicle_count }}</span>
+      </div>
+    </form>
+  </div>
+
+  <div id="mileageWaitInline" class="mileage-wait-inline">
+    <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+      <div class="d-flex align-items-center gap-2">
+        <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+        <span class="small fw-semibold text-dark">Please wait... report load ho rahi hai.</span>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-primary btn-sm" id="mileageWaitBtn">Wait</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="mileageCloseBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mr-table-wrap">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="total-badge"><i class="bi bi-activity me-1"></i>Total Rows: {{ total }}</span>
+      <input type="text" id="mileageSearchInput" class="form-control form-control-sm" placeholder="Search..." style="max-width:220px;">
+    </div>
+    <div class="table-responsive">
+      <table id="mileageTable" class="table table-sm table-bordered table-hover align-middle w-100">
+        <thead>
+          <tr>
+            <th>Sr</th>
+            <th>Date</th>
+            <th>District</th>
+            <th>Project</th>
+            <th>Vehicle</th>
+            <th>Start Reading</th>
+            <th>Close Reading</th>
+            <th>Total KMs</th>
+            <th>Task</th>
+            <th>Check Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ r.rec.task_date|ddmmyyyy }}</td>
+            <td>{{ r.district.name if r.district else '-' }}</td>
+            <td>{{ r.project.name if r.project else '-' }}</td>
+            <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
+            <td>{{ '%.2f'|format(r.start_reading) }}</td>
+            <td>{{ '%.2f'|format(r.close_reading) }}</td>
+            <td class="fw-semibold">{{ '%.2f'|format(r.total_km) }}</td>
+            <td>{{ r.tasks_count }}</td>
+            <td>
+              {% if r.check_result %}
+                {% if 'Above' in r.check_result %}
+                <span class="status-above">{{ r.check_result }}</span>
+                {% elif 'Below' in r.check_result %}
+                <span class="status-below">{{ r.check_result }}</span>
+                {% else %}
+                <span class="status-equal">{{ r.check_result }}</span>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="text-center text-muted py-4">No mileage records found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var previewBtn = document.getElementById('mileagePreviewBtn');
+  var exportBtn = document.getElementById('mileageExportBtn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var u = this.getAttribute('data-export-url');
+      var sv = (document.getElementById('mileageSearchInput') || {}).value || '';
+      if (sv && sv.trim()) {
+        var sep = u.indexOf('?') >= 0 ? '&' : '?';
+        u = u + sep + 'table_search=' + encodeURIComponent(sv.trim());
+      }
+      window.location.href = u;
+    });
+  }
+  if (previewBtn) {
+    var _busy = false;
+    var _name = 'mileageReportPreviewWindow';
+    previewBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (_busy) return;
+      _busy = true;
+      var u = this.getAttribute('data-preview-url');
+      var sv = (document.getElementById('mileageSearchInput') || {}).value || '';
+      if (sv && sv.trim()) {
+        var sep = u.indexOf('?') >= 0 ? '&' : '?';
+        u = u + sep + 'table_search=' + encodeURIComponent(sv.trim());
+      }
+      try {
+        var w = window.open(u, _name);
+        if (!w) window.location.href = u;
+      } catch (_) { window.location.href = u; }
+      previewBtn.disabled = true;
+      setTimeout(function(){ _busy = false; previewBtn.disabled = false; }, 1200);
+    });
+  }
+
+  var f = document.getElementById('mileageFilterForm');
+  var popup = document.getElementById('mileageWaitInline');
+  var closeBtn = document.getElementById('mileageCloseBtn');
+  if (f && popup) {
+    f.addEventListener('submit', function() { popup.style.display = 'block'; });
+  }
+  if (closeBtn && popup) {
+    closeBtn.addEventListener('click', function(){ popup.style.display = 'none'; });
+  }
+  var waitBtn = document.getElementById('mileageWaitBtn');
+  if (waitBtn && popup) {
+    waitBtn.addEventListener('click', function(){ popup.style.display = 'block'; });
+  }
+
+  var searchBox = document.getElementById('mileageSearchInput');
+  var tbody = document.querySelector('#mileageTable tbody');
+  if (searchBox && tbody) {
+    var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+    searchBox.addEventListener('input', function () {
+      var q = (this.value || '').toLowerCase().trim();
+      var sr = 1;
+      rows.forEach(function (tr) {
+        var txt = (tr.textContent || '').toLowerCase();
+        var show = !q || txt.indexOf(q) !== -1;
+        tr.style.display = show ? '' : 'none';
+        if (show) {
+          var srCell = tr.querySelector('td');
+          if (srCell) srCell.textContent = sr++;
+        }
+      });
+    });
+    searchBox.dispatchEvent(new Event('input'));
+  }
+});
+</script>
+{% endblock %}
