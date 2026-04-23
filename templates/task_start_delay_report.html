@@ -21,7 +21,7 @@
     <div class="d-flex flex-wrap align-items-center gap-2">
       <div class="me-auto">
         <h2><i class="bi bi-alarm me-2"></i>Driver Response Time Report</h2>
-        <div class="tsd-subtitle">Task assign ke baad gari (Activity) kab start hui — response delay</div>
+        <div class="tsd-subtitle">Task assign ke baad pehli activity jahan distance &gt; 0 (movement) — response delay</div>
       </div>
       <a href="{{ url_for('task_start_delay_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, delay_limit=delay_limit) }}" class="btn btn-success btn-sm" id="taskStartDelayExportBtn" data-export-url="{{ url_for('task_start_delay_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, delay_limit=delay_limit) }}">
         <i class="bi bi-file-earmark-excel me-1"></i>Export

@@ -11953,12 +11953,21 @@ def _build_vehicle_activity_index(from_date, to_date, vehicle_nos):
 
 
 def _first_activity_after_task_assign(sorted_acts, assign_dt, close_dt):
-    """First tracker ping on or after task assign, still within [assign, close]."""
+    """
+    Pehli activity jahan assign/close ke darmiyan ho, assign ke baat ya usi time,
+    aur jis line ka distance > 0 ho (movement) — yahi 'Vehicle Start' time.
+    """
     for adt, rec in sorted_acts:
         if adt < assign_dt:
             continue
         if adt > close_dt:
             break
+        try:
+            d_km = float(rec.distance or 0)
+        except (TypeError, ValueError):
+            d_km = 0.0
+        if d_km <= 0:
+            continue
         return adt, rec
     return None, None
 
