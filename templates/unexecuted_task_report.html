@@ -1,95 +1,133 @@
 {% extends "base.html" %}
 {% block title %}Unexecuted Task Report{% endblock %}
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-x-octagon me-2 text-danger"></i>Unexecuted Task Report</h2>
-    <div class="d-flex align-items-center gap-2">
-      <button class="btn btn-outline-secondary btn-sm" id="btnPreviewReport"
-              data-preview-url="{{ url_for('unexecuted_task_report_preview') }}"><i class="bi bi-eye me-1"></i>Print / Preview</button>
-      <a class="btn btn-outline-success btn-sm" id="btnExportReport"
-         data-export-url="{{ url_for('unexecuted_task_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, category=category, shift=shift, check_type=check_type, running_km_limit=running_km_limit) }}"
-         href="{{ url_for('unexecuted_task_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, category=category, shift=shift, check_type=check_type, running_km_limit=running_km_limit) }}">
+<style>
+  .tsd-header { background: linear-gradient(135deg, #312e81 0%, #4f46e5 100%); color: #fff; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
+  .tsd-header h2 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+  .tsd-subtitle { font-size: 0.84rem; opacity: .9; margin-top: .2rem; }
+  .tsd-filter { background: #fff; border-radius: 8px; box-shadow: 0 1px 5px rgba(0,0,0,.08); padding: .9rem 1rem; margin-bottom: 1rem; }
+  .tsd-table-wrap { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); padding: .9rem; }
+  #unexecutedTaskTable thead th { background: #e0e7ff; color: #312e81; border-bottom: 2px solid #6366f1; font-size: .76rem; text-transform: uppercase; white-space: nowrap; }
+  #unexecutedTaskTable td { vertical-align: middle; font-size: .83rem; }
+  .total-badge { background: #e0e7ff; color: #312e81; padding: .25rem .8rem; border-radius: 20px; font-size: .82rem; font-weight: 700; }
+  .tsd-wait-inline { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; padding: .65rem .8rem; margin-bottom: .9rem; display: none; }
+  .utr-block-head { background: #f5f3ff; border: 1px solid #c7d2fe; border-radius: 8px; padding: .6rem .85rem; margin-bottom: .75rem; }
+  .utr-block-head .utr-h { font-size: .92rem; font-weight: 700; color: #312e81; }
+  .utr-block-head .utr-s { font-size: .8rem; color: #4f46e5; }
+</style>
+
+<div class="container-fluid py-3 px-3 px-md-4">
+  <div class="tsd-header">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <div class="me-auto">
+        <h2><i class="bi bi-x-octagon me-2"></i>Unexecuted Task Report</h2>
+        <div class="tsd-subtitle">Task Green/Yellow mein close ho chuka, lekin perform nahi hua — driver / fine entry</div>
+      </div>
+      <a href="{{ url_for('unexecuted_task_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, category=category, shift=shift, check_type=check_type, running_km_limit=running_km_limit) }}"
+         class="btn btn-success btn-sm" id="btnExportReport"
+         data-export-url="{{ url_for('unexecuted_task_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, category=category, shift=shift, check_type=check_type, running_km_limit=running_km_limit) }}">
         <i class="bi bi-file-earmark-excel me-1"></i>Export
       </a>
-      <span class="badge bg-danger-subtle text-danger-emphasis">Task Closed in Green/Yellow but not performed</span>
+      <button type="button" class="btn btn-warning btn-sm" id="btnPreviewReport" data-preview-url="{{ url_for('unexecuted_task_report_preview') }}">
+        <i class="bi bi-printer me-1"></i>Print / Preview
+      </button>
     </div>
   </div>
 
-  <div class="card shadow-sm border-0 rounded-3 mb-4">
-    <div class="card-body">
-      <form method="GET" action="{{ url_for('unexecuted_task_report') }}" id="unexecutedFilterForm" class="row g-3 align-items-end">
-        <div class="col-md-2">
-          <label class="form-label">From Date</label>
-          <input type="text" name="from_date" class="form-control datepicker" value="{{ from_date|ddmmyyyy }}">
+  <div class="tsd-filter">
+    <form method="GET" action="{{ url_for('unexecuted_task_report') }}" id="unexecutedFilterForm">
+      <div class="row g-2 align-items-end">
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">From Date</label>
+          <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date|ddmmyyyy }}">
         </div>
-        <div class="col-md-2">
-          <label class="form-label">To Date</label>
-          <input type="text" name="to_date" class="form-control datepicker" value="{{ to_date|ddmmyyyy }}">
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">To Date</label>
+          <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date|ddmmyyyy }}">
         </div>
-        <div class="col-md-2">
-          <label class="form-label">District</label>
-          <select name="district_id" id="districtSelect" class="form-select search-select">
-            <option value="0">-- All Districts --</option>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">District</label>
+          <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select">
+            <option value="0">-- All --</option>
             {% for d in districts %}
             <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2">
-          <label class="form-label">Project</label>
-          <select name="project_id" id="projectSelect" class="form-select search-select">
-            <option value="0">-- All Projects --</option>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Project</label>
+          <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
+            <option value="0">-- All --</option>
             {% for p in projects %}
             <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2">
-          <label class="form-label">Vehicle</label>
-          <select name="vehicle_id" class="form-select search-select">
-            <option value="0">-- All Vehicles --</option>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Vehicle</label>
+          <select name="vehicle_id" class="form-select form-select-sm search-select">
+            <option value="0">-- All --</option>
             {% for v in vehicles %}
             <option value="{{ v.id }}" {% if vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-1">
-          <label class="form-label">Category</label>
-          <select name="category" class="form-select">
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Category</label>
+          <select name="category" class="form-select form-select-sm">
             <option value="" {% if not category %}selected{% endif %}>All</option>
             <option value="Green" {% if category == 'Green' %}selected{% endif %}>Green</option>
             <option value="Yellow" {% if category == 'Yellow' %}selected{% endif %}>Yellow</option>
           </select>
         </div>
-        <div class="col-md-1">
-          <label class="form-label">Shift</label>
-          <select name="shift" class="form-select">
+        <div class="col-6 col-md-2 col-lg-1">
+          <label class="form-label mb-1 small fw-semibold">Shift</label>
+          <select name="shift" class="form-select form-select-sm">
             <option value="" {% if not shift %}selected{% endif %}>All</option>
             <option value="day" {% if shift == 'day' %}selected{% endif %}>Day</option>
             <option value="night" {% if shift == 'night' %}selected{% endif %}>Night</option>
           </select>
         </div>
-        <div class="col-md-1">
-          <label class="form-label">Check Type</label>
-          <select name="check_type" class="form-select">
+        <div class="col-6 col-md-2 col-lg-1">
+          <label class="form-label mb-1 small fw-semibold">Check Type</label>
+          <select name="check_type" class="form-select form-select-sm">
             <option value="" {% if not check_type %}selected{% endif %}>--</option>
             <option value="above" {% if check_type == 'above' %}selected{% endif %}>Above</option>
             <option value="below" {% if check_type == 'below' %}selected{% endif %}>Below</option>
           </select>
         </div>
-        <div class="col-md-1">
-          <label class="form-label">Running KM</label>
-          <input type="number" step="0.01" min="0" name="running_km_limit" class="form-control" value="{{ running_km_limit or '' }}" placeholder="e.g. 10">
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold" title="Running activity KM threshold">Running KM</label>
+          <input type="number" step="0.01" min="0" name="running_km_limit" class="form-control form-control-sm" value="{{ running_km_limit or '' }}" placeholder="e.g. 10">
         </div>
-        <div class="col-md-2">
-          <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Filter</button>
+        <div class="col-6 col-md-1">
+          <button type="submit" class="btn btn-primary btn-sm w-100" title="Filter"><i class="bi bi-funnel-fill"></i></button>
         </div>
-      </form>
+      </div>
+      <div class="mt-2">
+        <a href="{{ url_for('unexecuted_task_report') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x-circle me-1"></i>Clear
+        </a>
+        <span class="total-badge ms-2">Rows: {{ total }}</span>
+        <span class="total-badge ms-2">Vehicles: {{ unique_vehicle_count }}</span>
+      </div>
+    </form>
+  </div>
+
+  <div id="unexecutedWaitInline" class="tsd-wait-inline">
+    <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+      <div class="d-flex align-items-center gap-2">
+        <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+        <span class="small fw-semibold text-dark">Please wait... report load ho rahi hai.</span>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-primary btn-sm" id="unexecutedWaitBtn">Wait</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="unexecutedCloseWaitBtn">Close</button>
+      </div>
     </div>
   </div>
 
-  <form method="POST">
+  <form method="POST" id="unexecutedSaveForm">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="save_batch" value="1">
     <input type="hidden" name="from_date" value="{{ from_date|ddmmyyyy }}">
@@ -99,40 +137,45 @@
     <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
     <input type="hidden" name="category" value="{{ category }}">
     <input type="hidden" name="shift" value="{{ shift }}">
+    <input type="hidden" name="check_type" value="{{ check_type or '' }}">
+    <input type="hidden" name="running_km_limit" value="{{ running_km_limit or '' }}">
 
-    <div class="card shadow border-0 rounded-3 overflow-hidden">
-      <div class="card-header bg-danger text-white py-3 d-flex justify-content-between align-items-center">
-        <span class="fw-semibold">Unexecuted Tasks</span>
-        <div class="d-flex align-items-center gap-2">
-          <input type="text" id="unexecutedSearchInput" class="form-control form-control-sm" placeholder="Search..." style="width:220px;">
-          <span class="badge bg-dark">{{ rows|length }} rows</span>
+    <div class="tsd-table-wrap">
+      <div class="utr-block-head d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div>
+          <div class="utr-h"><i class="bi bi-list-check me-1"></i>Complete form — unexecuted tasks</div>
+          <div class="utr-s">Driver, fine, remarks save karein. Fine &gt; 0 par penalty (Move Without Task jaisa).</div>
         </div>
+        <input type="text" id="unexecutedSearchInput" class="form-control form-control-sm" placeholder="Search table..." style="max-width:220px;">
+      </div>
+      <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+        <span class="total-badge"><i class="bi bi-ui-checks me-1"></i>Total rows: {{ total }}</span>
       </div>
       <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0" id="unexecutedTaskTable">
-          <thead class="table-light">
+        <table class="table table-sm table-bordered table-hover align-middle w-100" id="unexecutedTaskTable">
+          <thead>
             <tr>
-              <th class="ps-3">Sr</th>
+              <th class="ps-2">Sr</th>
               <th>District</th>
               <th>Project</th>
               <th>Vehicle</th>
               <th>Task ID</th>
-              <th>Task Assign DateTime</th>
-              <th>Task Close DateTime</th>
+              <th>Task Assign</th>
+              <th>Task Close</th>
               <th>Total Time</th>
               <th>Category</th>
-              <th class="text-end">Running KM (Activity)</th>
+              <th class="text-end">Running KM</th>
               <th>Shift</th>
-              <th style="min-width:180px;">Driver Name</th>
-              <th style="min-width:110px;">Fine</th>
+              <th style="min-width:180px;">Driver</th>
+              <th style="min-width:100px;">Fine</th>
               <th style="min-width:180px;">Remarks</th>
             </tr>
           </thead>
           <tbody>
             {% for row in rows %}
             <tr{% if row.saved %} class="table-info"{% endif %}>
-              <td class="ps-3">
-                {{ loop.index }}
+              <td class="ps-2 text-nowrap">
+                <span class="utr-sr">{{ loop.index }}</span>
                 <input type="hidden" name="row_{{ loop.index0 }}_emg_id" value="{{ row.emg.id }}">
                 <input type="hidden" name="row_{{ loop.index0 }}_district_id" value="{{ row.district.id if row.district else '' }}">
                 <input type="hidden" name="row_{{ loop.index0 }}_project_id" value="{{ row.project.id if row.project else '' }}">
@@ -166,14 +209,14 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="14" class="text-center py-5 text-muted">No unexecuted task rows found for selected filters.</td></tr>
+            <tr><td colspan="14" class="text-center py-4 text-muted">No unexecuted task rows for selected filters.</td></tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
-      <div class="card-footer bg-light d-flex justify-content-between align-items-center">
-        <small class="text-muted">Fine > 0 will create/update Penalty Record, similar to Move Without Task.</small>
-        <button type="submit" class="btn btn-danger px-4"><i class="bi bi-save me-1"></i>Save All</button>
+      <div class="pt-2 mt-2 border-top d-flex flex-wrap justify-content-between align-items-center gap-2" style="border-color:#e2e8f0 !important;">
+        <small class="text-muted">Fine &gt; 0 with driver se Penalty record banega.</small>
+        <button type="submit" class="btn btn-primary btn-sm px-3"><i class="bi bi-save me-1"></i>Save all</button>
       </div>
     </div>
   </form>
@@ -187,7 +230,7 @@
     districtSelect.addEventListener('change', function() {
       var did = this.value;
       if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
-      projectSelect.innerHTML = '<option value="0">-- All Projects --</option>';
+      projectSelect.innerHTML = '<option value="0">-- All --</option>';
       if (did && did !== '0') {
         fetch('/get_projects_by_district/' + did)
           .then(function(r) { return r.json(); })
@@ -206,10 +249,11 @@
     });
   }
 })();
-document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('unexecutedTaskTable'); });
+document.addEventListener('DOMContentLoaded', function(){ if (window.fleetTableEnhance) window.fleetTableEnhance('unexecutedTaskTable'); });
 
 document.addEventListener('DOMContentLoaded', function() {
   var filterForm = document.getElementById('unexecutedFilterForm');
+  var saveForm = document.getElementById('unexecutedSaveForm');
   var searchInput = document.getElementById('unexecutedSearchInput');
   var tableBody = document.querySelector('#unexecutedTaskTable tbody');
   if (searchInput && tableBody) {
@@ -222,13 +266,21 @@ document.addEventListener('DOMContentLoaded', function() {
         var show = !q || txt.indexOf(q) !== -1;
         tr.style.display = show ? '' : 'none';
         if (show) {
-          var c = tr.querySelector('td');
+          var c = tr.querySelector('.utr-sr');
           if (c) c.textContent = sr++;
         }
       });
     });
     searchInput.dispatchEvent(new Event('input'));
   }
+
+  var popup = document.getElementById('unexecutedWaitInline');
+  var closeW = document.getElementById('unexecutedCloseWaitBtn');
+  var waitB = document.getElementById('unexecutedWaitBtn');
+  if (filterForm && popup) { filterForm.addEventListener('submit', function() { popup.style.display = 'block'; }); }
+  if (saveForm && popup) { saveForm.addEventListener('submit', function() { popup.style.display = 'block'; }); }
+  if (closeW && popup) { closeW.addEventListener('click', function() { popup.style.display = 'none'; }); }
+  if (waitB && popup) { waitB.addEventListener('click', function() { popup.style.display = 'block'; }); }
 
   var previewBtn = document.getElementById('btnPreviewReport');
   var exportBtn = document.getElementById('btnExportReport');
@@ -239,24 +291,23 @@ document.addEventListener('DOMContentLoaded', function() {
       var fd = new FormData(filterForm);
       ['from_date', 'to_date', 'district_id', 'project_id', 'vehicle_id', 'category', 'shift', 'check_type', 'running_km_limit'].forEach(function(k) {
         var v = (fd.get(k) || '').toString().trim();
-        if (v) {
-          url.searchParams.set(k, v);
-        }
+        if (v) { url.searchParams.set(k, v); }
       });
     }
     var s = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
-    if (s) {
-      url.searchParams.set('table_search', s);
-    } else {
-      url.searchParams.delete('table_search');
-    }
+    if (s) { url.searchParams.set('table_search', s); }
+    else { url.searchParams.delete('table_search'); }
     return url.toString();
   }
 
   if (previewBtn) {
-    previewBtn.addEventListener('click', function() {
+    previewBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
       var base = this.getAttribute('data-preview-url') || "{{ url_for('unexecuted_task_report_preview') }}";
-      window.open(_buildActionUrl(base), 'unexecutedTaskPreviewWindow');
+      var u = _buildActionUrl(base);
+      var w = window.open(u, 'unexecutedTaskPreviewWindow');
+      if (!w) window.location.href = u;
     });
   }
   if (exportBtn) {

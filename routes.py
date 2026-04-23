@@ -18353,10 +18353,19 @@ def unexecuted_task_report():
         allowed_vehicles=allowed_vehicles,
         is_master_or_admin=is_master_or_admin,
     )
+    total = len(out_rows)
+    _uv = set()
+    for _r in out_rows:
+        _v = _r.get('vehicle')
+        if _v and getattr(_v, 'id', None):
+            _uv.add(int(_v.id))
+    unique_vehicle_count = len(_uv)
 
     return render_template(
         'unexecuted_task_report.html',
         rows=out_rows,
+        total=total,
+        unique_vehicle_count=unique_vehicle_count,
         from_date=from_date,
         to_date=to_date,
         district_id=district_id,
@@ -18482,6 +18491,8 @@ def unexecuted_task_report_preview():
         to_date=to_date,
         category=category,
         shift=shift,
+        check_type=check_type,
+        running_km_limit_raw=running_km_limit_raw,
         now=datetime.now,
     )
 

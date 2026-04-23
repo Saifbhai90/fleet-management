@@ -3,23 +3,42 @@
 
 {% block extra_head %}
 <style>
-  .rpt-header { background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%); color: #fff; border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
-  .rpt-table { font-size: .78rem; table-layout: fixed; width: 100%; }
+  .rpt-header { background: linear-gradient(135deg, #312e81 0%, #4f46e5 100%); color: #fff; border-radius: 12px; padding: 1.1rem 1.3rem; margin-bottom: 1rem; box-shadow: 0 4px 18px rgba(49,46,129,.25); }
+  .rpt-header h2 { margin: 0; font-size: 1.26rem; font-weight: 800; letter-spacing: .2px; }
+  .rpt-sub { margin-top: .3rem; font-size: .82rem; opacity: .92; }
+  .rpt-meta { font-size: 0.8rem; color: #475569; margin-bottom: 0.9rem; }
+  .meta-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: .45rem .7rem; display: inline-flex; align-items: center; gap: .35rem; }
+  .total-badge { display: inline-block; background: #e0e7ff; color: #312e81; font-size: 0.82rem; font-weight: 700; padding: 0.22rem 0.75rem; border-radius: 20px; border: 1px solid #c7d2fe; }
+  .rpt-table { font-size: 0.76rem; border-radius: 10px; overflow: hidden; table-layout: fixed; width: 100%; }
+  .rpt-table thead th { background: #e0e7ff; color: #312e81; font-weight: 800; font-size: 0.7rem; text-transform: uppercase; border-bottom: 2px solid #6366f1; white-space: nowrap; padding: 0.4rem 0.45rem; letter-spacing: .2px; }
+  .rpt-table tbody td { vertical-align: middle; padding: 0.3rem 0.4rem; color: #0f172a; }
+  .rpt-table tbody tr:nth-child(even) { background: #f5f3ff; }
+  .rpt-table tbody tr:hover { background: #eef2ff; }
   .rpt-table th, .rpt-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .rpt-table thead th { background: #fee2e2; color: #7f1d1d; font-weight: 700; text-transform: uppercase; font-size: .7rem; }
-  .print-container { max-width: none !important; width: calc(100vw - 16px) !important; margin: 0 auto !important; padding: 8px; }
+  .print-container { max-width: none !important; width: calc(100vw - 16px) !important; margin: 0 auto !important; padding: 10px 8px 20px 8px !important; }
   .preview-search-wrap { display: flex; justify-content: flex-end; margin: 6px 0 10px 0; }
   .preview-search { width: 300px; max-width: 60vw; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; font-size: .85rem; }
   .preview-count { font-size: .78rem; color: #475569; margin-right: auto; display: flex; align-items: center; }
-  @page { size: A4 landscape !important; margin: 8mm !important; }
+  @page { size: A4 landscape !important; margin: 6mm !important; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="print-container">
   <div class="rpt-header">
-    <h2 class="mb-1"><i class="bi bi-x-octagon me-2"></i>Unexecuted Task Report</h2>
-    <div class="small">Range: {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }} | Generated: {{ now().strftime('%d %b %Y, %I:%M %p') }}</div>
+    <h2><i class="bi bi-x-octagon me-2"></i>Unexecuted Task Report</h2>
+    <div class="rpt-sub">Green/Yellow close, activity ke hisaab se unexecuted — driver / fine preview</div>
+  </div>
+
+  <div class="rpt-meta d-flex flex-wrap gap-2">
+    <span class="meta-card"><i class="bi bi-calendar3"></i>Range: {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
+    <span class="meta-card"><i class="bi bi-clock"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
+    {% if category %}<span class="meta-card">Category: {{ category }}</span>{% endif %}
+    {% if shift %}<span class="meta-card">Shift: {{ shift|capitalize }}</span>{% endif %}
+    {% if check_type and running_km_limit_raw %}<span class="meta-card">Running KM: {{ check_type|capitalize }} {{ running_km_limit_raw }}</span>{% endif %}
+  </div>
+  <div class="mb-2">
+    <span class="total-badge">Total rows: {{ total }}</span>
   </div>
 
   <div class="preview-search-wrap no-print">
@@ -27,12 +46,12 @@
     <input type="text" id="previewSearchInput" class="preview-search" placeholder="Search in preview...">
   </div>
 
-  <table class="table table-sm table-bordered rpt-table">
+  <table class="table table-sm table-bordered rpt-table w-100">
     <thead>
       <tr>
         <th>Sr</th><th>District</th><th>Project</th><th>Vehicle</th><th>Task ID</th>
-        <th>Assign DateTime</th><th>Close DateTime</th><th>Total Time</th><th>Category</th>
-        <th>Running KMs</th><th>Shift</th><th>Driver</th><th>Fine</th>
+        <th>Assign</th><th>Close</th><th>Total time</th><th>Category</th>
+        <th>Running KM</th><th>Shift</th><th>Driver</th><th>Fine</th>
       </tr>
     </thead>
     <tbody>
