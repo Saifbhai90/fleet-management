@@ -195,6 +195,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   if (previewBtn) {
     var _previewBusy = false;
+    var _previewWindowName = 'speedMonitoringPreviewWindow';
     previewBtn.addEventListener('click', function(e) {
       e.preventDefault();
       e.stopPropagation();
@@ -207,7 +208,8 @@ document.addEventListener('DOMContentLoaded', function () {
         u = u + sep + 'table_search=' + encodeURIComponent(searchVal.trim());
       }
       try {
-        var w = window.open(u, '_blank', 'noopener');
+        // Use a named window so repeated calls reuse same tab (prevents dual-open).
+        var w = window.open(u, _previewWindowName);
         if (!w) { window.location.href = u; }
       } catch (_) {
         window.location.href = u;
