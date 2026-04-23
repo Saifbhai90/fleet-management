@@ -17233,7 +17233,9 @@ def _fmt_duration(delta):
     return f'{h:02d}:{m:02d}'
 
 
-def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehicle_id=0, category='', shift=''):
+def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehicle_id=0, category='', shift='',
+                          allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
+                          is_master_or_admin=True):
     selected_district = District.query.get(district_id) if district_id else None
     selected_district_name = (selected_district.name or '').strip().lower() if selected_district else ''
 
@@ -17272,7 +17274,18 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
 
         v = vehicle_map.get(_norm_vno(r.amb_reg_no))
 
-        # Apply filters strictly. If vehicle mapping is missing, fallback to EMG district text
+        # Apply user scope first (like Tracker Difference Report behavior).
+        if not is_master_or_admin:
+            if not v:
+                continue
+            if allowed_vehicles and v.id not in allowed_vehicles:
+                continue
+            if allowed_districts and v.district_id not in allowed_districts:
+                continue
+            if allowed_projects and v.project_id not in allowed_projects:
+                continue
+
+        # Apply explicit filter values strictly. If vehicle mapping is missing, fallback to EMG district text
         # for district filter; for project/vehicle filters skip unmapped rows.
         if district_id:
             if v:
@@ -17356,6 +17369,13 @@ def _filter_unexecuted_rows_by_search(rows, table_search):
 @app.route('/unexecuted-task-report', methods=['GET', 'POST'])
 def unexecuted_task_report():
     _ensure_unexecuted_task_table()
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
 
     today = pk_date()
     from_date = parse_date(request.values.get('from_date')) or today
@@ -17461,6 +17481,15 @@ def unexecuted_task_report():
     district_q = District.query.order_by(District.name)
     project_q = Project.query.order_by(Project.name)
     vehicle_q = Vehicle.query.order_by(Vehicle.vehicle_no)
+
+    if not is_master_or_admin:
+        if allowed_districts:
+            district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+        if allowed_projects:
+            project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+        if allowed_vehicles:
+            vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+
     if district_id:
         project_q = project_q.join(project_district).filter(project_district.c.district_id == district_id)
         vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
@@ -17479,6 +17508,10 @@ def unexecuted_task_report():
         vehicle_id=vehicle_id,
         category=category,
         shift=shift,
+        allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts,
+        allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
     )
 
     return render_template(
@@ -17500,6 +17533,13 @@ def unexecuted_task_report():
 @app.route('/unexecuted-task-report/export')
 def unexecuted_task_report_export():
     _ensure_unexecuted_task_table()
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
     from_date = parse_date(request.args.get('from_date')) or pk_date()
     to_date = parse_date(request.args.get('to_date')) or pk_date()
     if from_date > to_date:
@@ -17511,7 +17551,11 @@ def unexecuted_task_report_export():
     shift = (request.args.get('shift') or '').strip().lower()
     table_search = (request.args.get('table_search') or '').strip()
 
-    rows = _unexecuted_task_rows(from_date, to_date, district_id, project_id, vehicle_id, category, shift)
+    rows = _unexecuted_task_rows(
+        from_date, to_date, district_id, project_id, vehicle_id, category, shift,
+        allowed_projects=allowed_projects, allowed_districts=allowed_districts, allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
     rows = _filter_unexecuted_rows_by_search(rows, table_search)
 
     headers = ['Sr', 'District', 'Project', 'Vehicle', 'Task ID', 'Task Assign DateTime', 'Task Close DateTime', 'Total Time', 'Category', 'Running KMs (Activity)', 'Shift', 'Driver Name', 'Fine']
@@ -17538,6 +17582,13 @@ def unexecuted_task_report_export():
 @app.route('/unexecuted-task-report/preview')
 def unexecuted_task_report_preview():
     _ensure_unexecuted_task_table()
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
     from_date = parse_date(request.args.get('from_date')) or pk_date()
     to_date = parse_date(request.args.get('to_date')) or pk_date()
     if from_date > to_date:
@@ -17549,7 +17600,11 @@ def unexecuted_task_report_preview():
     shift = (request.args.get('shift') or '').strip().lower()
     table_search = (request.args.get('table_search') or '').strip()
 
-    rows = _unexecuted_task_rows(from_date, to_date, district_id, project_id, vehicle_id, category, shift)
+    rows = _unexecuted_task_rows(
+        from_date, to_date, district_id, project_id, vehicle_id, category, shift,
+        allowed_projects=allowed_projects, allowed_districts=allowed_districts, allowed_vehicles=allowed_vehicles,
+        is_master_or_admin=is_master_or_admin,
+    )
     rows = _filter_unexecuted_rows_by_search(rows, table_search)
     return render_template(
         'unexecuted_task_report_print.html',
