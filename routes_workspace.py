@@ -1,9 +1,12 @@
+import difflib
+import re
 from datetime import datetime, date, timedelta
 from calendar import monthrange
 from decimal import Decimal, InvalidOperation
 
 from flask import flash, redirect, render_template, request, session, url_for, make_response, jsonify
 from sqlalchemy import and_, or_, cast, String
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
 from models import (
@@ -107,6 +110,49 @@ def _workspace_guard(permission_code="workspace_dashboard"):
         flash("You cannot access another employee workspace.", "danger")
         return redirect(url_for("workspace_dashboard")), None
     return None, emp
+
+
+# Workspace product: normalized name + fuzzy "same word different spelling" guard
+_WS_PROD_SIMILAR_MIN = 0.86
+
+
+def _normalize_ws_product_name(s):
+    if s is None:
+        return ""
+    s = str(s).strip()
+    s = re.sub(r"\s+", " ", s)
+    return s.lower()
+
+
+def _ws_product_name_similarity(norm_a, norm_b):
+    if not norm_a or not norm_b:
+        return 0.0
+    if norm_a == norm_b:
+        return 1.0
+    return difflib.SequenceMatcher(None, norm_a, norm_b).ratio()
+
+
+def _workspace_product_name_conflicts(employee_id, name, exclude_id=None):
+    """exact = duplicate normalized name; similar = best fuzzy match in [_WS_PROD_SIMILAR_MIN, 1)."""
+    norm = _normalize_ws_product_name(name)
+    out = {"exact": None, "similar": None, "similarity": 0.0}
+    if not norm:
+        return out
+    q = WorkspaceProduct.query.filter_by(employee_id=employee_id)
+    if exclude_id:
+        q = q.filter(WorkspaceProduct.id != exclude_id)
+    best_p, best_r = None, 0.0
+    for p in q.all():
+        pn = _normalize_ws_product_name(p.name)
+        if pn == norm:
+            out["exact"] = p
+            return out
+        r = _ws_product_name_similarity(norm, pn)
+        if r >= _WS_PROD_SIMILAR_MIN and r > best_r:
+            best_p, best_r = p, r
+    if best_p:
+        out["similar"], out["similarity"] = best_p, best_r
+    return out
 
 
 def _is_master_or_admin_user():
@@ -1125,6 +1171,65 @@ def workspace_product_import_template():
     return generate_excel_template(headers, rows, required_columns=["name"], filename="workspace_product_import_template.xlsx")
 
 
+def workspace_product_names_api():
+    """JSON: live filter of existing product names + exact/similar flags for the name field."""
+    guard, emp = _workspace_guard("workspace_product_list")
+    if guard:
+        return jsonify({"suggestions": [], "exact_match_id": None, "similar": []}), 403
+    qstr = (request.args.get("q") or "").strip()
+    exclude_id = request.args.get("exclude_id", type=int) or 0
+    base = WorkspaceProduct.query.filter_by(employee_id=emp.id)
+    if exclude_id:
+        base = base.filter(WorkspaceProduct.id != exclude_id)
+    all_p = base.order_by(WorkspaceProduct.name.asc()).all()
+    nq = _normalize_ws_product_name(qstr)
+    suggestions = []
+    for p in all_p:
+        pn = _normalize_ws_product_name(p.name)
+        if not nq:
+            suggestions.append({"id": p.id, "name": p.name, "unit": p.unit or ""})
+            if len(suggestions) >= 40:
+                break
+            continue
+        if nq in pn or (len(nq) >= 2 and pn.startswith(nq)):
+            suggestions.append({"id": p.id, "name": p.name, "unit": p.unit or ""})
+        else:
+            tokens = [t for t in nq.split() if len(t) >= 2]
+            if tokens and all(t in pn for t in tokens):
+                suggestions.append({"id": p.id, "name": p.name, "unit": p.unit or ""})
+    suggestions = suggestions[:30]
+    exact_id = None
+    similar_list = []
+    if nq and len(nq) >= 1:
+        for p in all_p:
+            pn = _normalize_ws_product_name(p.name)
+            if pn == nq:
+                exact_id = p.id
+            r = _ws_product_name_similarity(nq, pn)
+            if _WS_PROD_SIMILAR_MIN <= r < 1.0:
+                similar_list.append({"id": p.id, "name": p.name, "score": round(r, 3)})
+        similar_list.sort(key=lambda x: -x["score"])
+        similar_list = similar_list[:8]
+    return jsonify(
+        {
+            "suggestions": suggestions,
+            "exact_match_id": exact_id,
+            "similar": similar_list,
+        }
+    )
+
+
+def _workspace_product_form_prefill():
+    return {
+        "name": (request.form.get("name") or "").strip(),
+        "unit": (request.form.get("unit") or "").strip(),
+        "default_price": (request.form.get("default_price") or "").strip(),
+        "remarks": (request.form.get("remarks") or "").strip(),
+        "is_active": request.form.get("is_active", "1"),
+        "used_in_forms": request.form.getlist("used_in_forms"),
+    }
+
+
 def workspace_product_form(pk=None):
     guard, emp = _workspace_guard("workspace_product_edit" if pk else "workspace_product_add")
     if guard:
@@ -1163,7 +1268,46 @@ def workspace_product_form(pk=None):
         name = (request.form.get("name") or "").strip()
         if not name:
             flash("Product name is required.", "danger")
-            return render_template("workspace/product_form.html", row=row, employee=emp, unit_choices=unit_choices)
+            return render_template(
+                "workspace/product_form.html",
+                row=row,
+                employee=emp,
+                unit_choices=unit_choices,
+                product_form_values=_workspace_product_form_prefill(),
+            )
+        exid = row.id if row else None
+        conf = _workspace_product_name_conflicts(emp.id, name, exclude_id=exid)
+        if conf.get("exact"):
+            ep = conf["exact"]
+            flash(
+                f'Yeh product pehle se maujood hai: “{ep.name}”. (Same naam — spacing/case alag ho sakta hai). Duplicate nahi bana sakte.',
+                "danger",
+            )
+            return render_template(
+                "workspace/product_form.html",
+                row=row,
+                employee=emp,
+                unit_choices=unit_choices,
+                product_form_values=_workspace_product_form_prefill(),
+            )
+        if conf.get("similar") and request.form.get("ack_similar") != "1":
+            sp = conf["similar"]
+            scr = int(round(float(conf.get("similarity") or 0) * 100))
+            flash(
+                f'Yeh naam maujood product “{sp.name}” se bahut milta-julta hai (~{scr}% match). Agar wohi naya product nahi, pehle wala edit karein; warna neeche tick karke save karein.',
+                "warning",
+            )
+            return render_template(
+                "workspace/product_form.html",
+                row=row,
+                employee=emp,
+                unit_choices=unit_choices,
+                product_form_values=_workspace_product_form_prefill(),
+                show_similar_ack=True,
+                similar_product_name=sp.name,
+                similar_product_id=sp.id,
+                similar_score=conf.get("similarity") or 0.0,
+            )
         if not row:
             row = WorkspaceProduct(employee_id=emp.id)
             db.session.add(row)
@@ -1178,10 +1322,31 @@ def workspace_product_form(pk=None):
         row.remarks = (request.form.get("remarks") or "").strip() or None
         row.is_active = request.form.get("is_active") == "1"
         row.created_by_user_id = session.get("user_id")
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash("Duplicate product: is naam ka record database mein pehle se hai (employee ke liye).", "danger")
+            r_after = None
+            if pk:
+                r_after = WorkspaceProduct.query.filter_by(employee_id=emp.id, id=pk).first()
+            return render_template(
+                "workspace/product_form.html",
+                row=r_after,
+                employee=emp,
+                unit_choices=unit_choices,
+                product_form_values=_workspace_product_form_prefill(),
+            )
         flash("Workspace product saved.", "success")
         return redirect(url_for("workspace_products_list"))
-    return render_template("workspace/product_form.html", row=row, employee=emp, unit_choices=unit_choices)
+    return render_template(
+        "workspace/product_form.html",
+        row=row,
+        employee=emp,
+        unit_choices=unit_choices,
+        product_form_values=None,
+        show_similar_ack=False,
+    )
 
 
 def workspace_product_delete(pk):

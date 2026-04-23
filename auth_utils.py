@@ -225,6 +225,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('workspace_party_edit', 'workspace_party_edit'),
     ('workspace_party_delete', 'workspace_party_delete'),
     ('workspace_products_list', 'workspace_product_list'),
+    ('workspace_product_names_api', 'workspace_product_list'),
     ('workspace_product_new', 'workspace_product_add'),
     ('workspace_product_edit', 'workspace_product_edit'),
     ('workspace_product_delete', 'workspace_product_delete'),

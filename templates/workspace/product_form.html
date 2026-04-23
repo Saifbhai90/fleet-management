@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
+{% set pv = product_form_values %}
+{% set name_val = pv.name if pv else (row.name if row else '') %}
+{% set unit_val = (pv.unit if pv else None) or (row.unit if row else '') %}
+{% set price_val = pv.default_price if pv else (row.default_price if row else '') %}
+{% set remarks_val = pv.remarks if pv else (row.remarks if row else '') %}
+{% set _used = pv.used_in_forms if pv else (row.used_in_forms.split(',') if row and row.used_in_forms else []) %}
+{% set active_is_yes = (pv.is_active == '1') if pv else (not row or row.is_active) %}
 <div class="container-fluid py-3">
   {% include "workspace/_nav.html" %}
   <div class="d-flex justify-content-between align-items-center mb-3">
@@ -8,33 +15,55 @@
   <div class="card border-0 shadow-sm">
     <div class="card-body p-4">
       <div class="alert alert-light border mb-3">
-        <small class="text-muted">Master Product form ki tarah same core fields available hain. Ye product sirf selected employee workspace me use hoga.</small>
+        <small class="text-muted">Product naam likhte waqt <strong>maujood list filter</strong> hoti rahegi. Wohi naam (spacing/case) dubara nahi. Bahut milta-julta naam pe pehle <strong>confirm</strong> karein.</small>
       </div>
-      <form method="post">
+      {% if show_similar_ack|default(false) %}
+      <div class="alert alert-warning border-warning mb-3">
+        <strong><i class="bi bi-exclamation-triangle me-1"></i>Milta-julta product:</strong>
+        “<a href="{{ url_for('workspace_product_edit', pk=similar_product_id) }}" target="_blank">{{ similar_product_name }}</a>”
+        {% if similar_score %}<span class="badge bg-secondary ms-1">~{{ (similar_score * 100)|round(0, 'floor')|int }}% match</span>{% endif %}
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="checkbox" name="ack_similar" value="1" id="ackSimilarProd">
+          <label class="form-check-label" for="ackSimilarProd">Main confirm karta / karti hoon — yeh <strong>alag</strong> naya product hai (spelling / naam jaiz taur par different hai).</label>
+        </div>
+      </div>
+      {% endif %}
+      <form method="post" id="wsProductForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row g-3">
           <div class="col-md-8">
             <label class="form-label fw-semibold">Product Name <span class="text-danger">*</span></label>
-            <input type="text" name="name" class="form-control" value="{{ row.name if row else '' }}" required placeholder="e.g. Diesel, Engine Oil, Filter">
+            <div class="position-relative">
+              <input type="text" name="name" id="wsProductNameInput" class="form-control" required
+                     placeholder="Type karein — neeche maujood names filter honge"
+                     value="{{ name_val }}"
+                     autocomplete="off"
+                     data-api-url="{{ url_for('workspace_product_names_api') }}"
+                     data-exclude-id="{{ row.id if row else 0 }}">
+              <div id="wsProductSuggestPanel" class="list-group position-absolute w-100 shadow border rounded mt-1 bg-white" style="display:none; z-index:1050; max-height:240px; overflow-y:auto;">
+                <div class="list-group-item py-1 px-2 small text-muted border-0">Pehle se added products <span class="badge bg-light text-secondary">search</span></div>
+                <div id="wsProductSuggestList"></div>
+              </div>
+            </div>
+            <div id="wsProductNameHints" class="small mt-1"></div>
           </div>
           <div class="col-md-2">
             <label class="form-label fw-semibold">Unit</label>
             <select name="unit" class="form-select search-select" data-placeholder="Select unit">
               <option value="">-- Select Unit --</option>
               {% if row and row.unit and row.unit not in (unit_choices or []) %}
-              <option value="{{ row.unit }}" selected>{{ row.unit }}</option>
+              <option value="{{ row.unit }}" {% if unit_val == row.unit %}selected{% endif %}>{{ row.unit }}</option>
               {% endif %}
               {% for u in unit_choices or [] %}
-              <option value="{{ u }}" {% if row and row.unit == u %}selected{% endif %}>{{ u }}</option>
+              <option value="{{ u }}" {% if unit_val == u %}selected{% endif %}>{{ u }}</option>
               {% endfor %}
             </select>
           </div>
           <div class="col-md-2">
             <label class="form-label fw-semibold">Default Price</label>
-            <input type="number" step="0.01" name="default_price" class="form-control" value="{{ row.default_price if row else '' }}">
+            <input type="number" step="0.01" name="default_price" class="form-control" value="{{ price_val if price_val is not none and price_val != '' else '' }}">
           </div>
 
-          {% set _used = (row.used_in_forms.split(',') if row and row.used_in_forms else []) %}
           <div class="col-md-9">
             <label class="form-label fw-semibold">Used in Form</label>
             <div class="border rounded p-2 bg-light">
@@ -55,18 +84,18 @@
           <div class="col-md-3">
             <label class="form-label fw-semibold">Status</label>
             <select name="is_active" class="form-select">
-              <option value="1" {% if not row or row.is_active %}selected{% endif %}>Active</option>
-              <option value="0" {% if row and not row.is_active %}selected{% endif %}>Inactive</option>
+              <option value="1" {% if active_is_yes %}selected{% endif %}>Active</option>
+              <option value="0" {% if not active_is_yes %}selected{% endif %}>Inactive</option>
             </select>
           </div>
 
           <div class="col-12">
             <label class="form-label fw-semibold">Remarks</label>
-            <textarea name="remarks" class="form-control" rows="2" placeholder="Any notes">{{ row.remarks if row else '' }}</textarea>
+            <textarea name="remarks" class="form-control" rows="2" placeholder="Any notes">{{ remarks_val or '' }}</textarea>
           </div>
 
           <div class="col-12 d-flex gap-2">
-            <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i>Save Product</button>
+            <button type="submit" class="btn btn-primary" id="wsProductSaveBtn"><i class="bi bi-check2-circle me-1"></i>Save Product</button>
             <a href="{{ url_for('workspace_products_list') }}" class="btn btn-outline-secondary">Cancel</a>
           </div>
         </div>
@@ -74,4 +103,108 @@
     </div>
   </div>
 </div>
+<script>
+(function() {
+  var input = document.getElementById('wsProductNameInput');
+  var panel = document.getElementById('wsProductSuggestPanel');
+  var listEl = document.getElementById('wsProductSuggestList');
+  var hints = document.getElementById('wsProductNameHints');
+  var form = document.getElementById('wsProductForm');
+  if (!input || !panel) return;
+  var apiBase = input.getAttribute('data-api-url');
+  var excludeId = input.getAttribute('data-exclude-id') || '0';
+  var tmo = null;
+  var lastExact = null;
+
+  function esc(s) {
+    if (!s) return '';
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function renderRows(items) {
+    listEl.innerHTML = '';
+    if (!items || !items.length) {
+      listEl.innerHTML = '<div class="list-group-item small text-muted">Koi match nahi — naya naam likh sakte hain</div>';
+      return;
+    }
+    items.forEach(function(it) {
+      var a = document.createElement('button');
+      a.type = 'button';
+      a.className = 'list-group-item list-group-item-action list-group-item-light py-1 px-2 text-start';
+      a.innerHTML = '<span class="fw-semibold">' + esc(it.name) + '</span>' + (it.unit ? ' <span class="text-muted">(' + esc(it.unit) + ')</span>' : '');
+      a.addEventListener('click', function() {
+        input.value = it.name;
+        panel.style.display = 'none';
+        input.dispatchEvent(new Event('input'));
+      });
+      listEl.appendChild(a);
+    });
+  }
+
+  function renderHints(data) {
+    if (!hints) return;
+    hints.innerHTML = '';
+    if (data.exact_match_id) {
+      var d = document.createElement('div');
+      d.className = 'text-danger fw-semibold';
+      d.innerHTML = '<i class="bi bi-x-octagon me-1"></i>Same naam maujood — duplicate save nahi hoga. Neeche list se wahi select karein ya alag spelling use karein.';
+      hints.appendChild(d);
+      return;
+    }
+    if (data.similar && data.similar.length) {
+      var w = document.createElement('div');
+      w.className = 'text-warning';
+      w.innerHTML = '<i class="bi bi-shuffle me-1"></i><strong>Similar maujood:</strong> ' +
+        data.similar.slice(0, 3).map(function(s) { return '“' + esc(s.name) + '” (' + Math.round(s.score * 100) + '%)'; }).join(' · ');
+      hints.appendChild(w);
+    }
+  }
+
+  function fetchSuggest() {
+    if (!apiBase) return;
+    var q = (input.value || '').trim();
+    var u = apiBase + '?q=' + encodeURIComponent(q) + '&exclude_id=' + encodeURIComponent(excludeId);
+    fetch(u, { headers: { 'Accept': 'application/json' } })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) return;
+        renderRows(data.suggestions);
+        lastExact = data.exact_match_id;
+        renderHints(data);
+        panel.style.display = (document.activeElement === input && (q.length === 0 || (data.suggestions && data.suggestions.length))) ? 'block' : 'block';
+        if (q.length > 0) panel.style.display = 'block';
+        if (q.length === 0 && (!data.suggestions || !data.suggestions.length)) panel.style.display = 'none';
+      })
+      .catch(function() { listEl.innerHTML = ''; });
+  }
+
+  input.addEventListener('input', function() {
+    if (tmo) clearTimeout(tmo);
+    tmo = setTimeout(fetchSuggest, 200);
+  });
+  input.addEventListener('focus', function() {
+    fetchSuggest();
+    panel.style.display = 'block';
+  });
+  input.addEventListener('blur', function() {
+    setTimeout(function() { panel.style.display = 'none'; }, 200);
+  });
+  document.addEventListener('click', function(e) {
+    if (e.target === input || (panel && panel.contains(e.target))) return;
+  });
+
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      if (lastExact) {
+        e.preventDefault();
+        alert('Yeh naam pehle se maujood hai — naya duplicate save nahi hoga. List se wahi product use karein ya naam badlein.');
+        return;
+      }
+    });
+  }
+  fetchSuggest();
+})();
+</script>
 {% endblock %}
