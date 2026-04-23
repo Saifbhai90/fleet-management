@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from flask_wtf.file import FileField, FileAllowed
+from flask_wtf.file import FileField, MultipleFileField, FileAllowed
 from wtforms import (
     StringField, TextAreaField, DateField, IntegerField,
     SelectField, SelectMultipleField, SubmitField, HiddenField,
@@ -717,6 +717,8 @@ class TaskReportUploadBothForm(FlaskForm):
     file_emergency = FileField('EmergencyTaskReport Excel', validators=[Optional(),
         FileAllowed(['xlsx', 'xls'], 'Only Excel allowed')])
     file_mileage = FileField('Vehicle Mileage Report Excel', validators=[Optional(),
+        FileAllowed(['xlsx', 'xls'], 'Only Excel allowed')])
+    file_activity_reports = MultipleFileField('Tracker Activity Report Excel (Multiple)', validators=[Optional(),
         FileAllowed(['xlsx', 'xls'], 'Only Excel allowed')])
     submit = SubmitField('Upload Both')
 

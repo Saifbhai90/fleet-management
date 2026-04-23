@@ -615,6 +615,29 @@ class VehicleMileageRecord(db.Model):
         return f'<VehicleMileageRecord {self.reg_no} {self.task_date}>'
 
 
+class VehicleActivityRecord(db.Model):
+    __tablename__ = 'vehicle_activity_record'
+    id = db.Column(db.Integer, primary_key=True)
+    task_date = db.Column(db.Date, nullable=False, index=True)
+    upload_date = db.Column(db.Date, nullable=False)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    vehicle_no = db.Column(db.String(50), nullable=False, index=True)
+    group_name = db.Column(db.String(100), nullable=True)
+    record_date_time = db.Column(db.String(50), nullable=True)
+    location = db.Column(db.Text, nullable=True)
+    speed = db.Column(db.Numeric(12, 2), default=0)
+    direction = db.Column(db.String(20), nullable=True)
+    distance = db.Column(db.Numeric(12, 2), default=0)
+    travel_time = db.Column(db.String(30), nullable=True)
+    stop_time = db.Column(db.String(30), nullable=True)
+    reason = db.Column(db.String(100), nullable=True)
+    source_file = db.Column(db.String(255), nullable=True)
+
+    def __repr__(self):
+        return f'<VehicleActivityRecord {self.vehicle_no} {self.task_date}>'
+
+
 # ────────────────────────────────────────────────
 # Red Task Report (Red Task entries)
 # ────────────────────────────────────────────────

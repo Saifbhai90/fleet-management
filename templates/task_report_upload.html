@@ -9,7 +9,7 @@
 
   <div class="card shadow border-0 rounded-3">
     <div class="card-body">
-      <p class="text-muted small">Report date select karein, phir dono Excel files (ya jo bhi upload karni hon) choose karein. Dono optional hain lekin kam az kam ek file zaroor select karein.</p>
+      <p class="text-muted small">Report date select karein, phir required Excel files choose karein. Har field optional hai, lekin kam az kam ek file zaroor select karein. Same date par re-upload karne par purana data replace ho jata hai.</p>
       <form method="POST" enctype="multipart/form-data">
         {{ form.hidden_tag() }}
         <div class="row g-3">
@@ -27,6 +27,11 @@
             <label class="form-label">2. Vehicle Mileage Report Excel</label>
             {{ form.file_mileage(class="form-control") }}
             <small class="text-muted">Tracker Driven KMs (admin) ke liye</small>
+          </div>
+          <div class="col-md-12">
+            <label class="form-label">3. Tracker Activity Report Excel (Multiple Vehicle Files)</label>
+            {{ form.file_activity_reports(class="form-control", multiple=true) }}
+            <small class="text-muted">Ek dafa me multiple vehicle activity files select karein. Same date upload hone par purani activity replace ho jati hai.</small>
           </div>
           <div class="col-12">
             <button type="submit" class="btn btn-primary" id="uploadBtn">

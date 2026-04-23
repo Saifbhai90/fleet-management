@@ -6,7 +6,7 @@ from models import (
     project_district, employee_project, employee_district, vehicle_district, ProjectTransfer, VehicleTransfer, DriverTransfer, DriverStatusChange,
     DriverAttendance,
     LeaveRequest,
-    VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
+    VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, VehicleActivityRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord,
     Party, Product, FuelExpense, FuelExpenseAttachment, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceWorkOrder, MaintenanceWorkOrderAttachment, MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
     WorkspaceProduct,
@@ -15424,6 +15424,7 @@ _VEHICLE_SUFFIX_RE = _re.compile(
     r'[\s\-]+(COW|USG\+P|USG|RAS|MNHC|EMS|NHP)\s*$',
     _re.IGNORECASE,
 )
+_ACTIVITY_TITLE_RE = _re.compile(r'activity\s*report\s*\(([^)]+)\)', _re.IGNORECASE)
 
 
 _STRING_LIMIT_CACHE = {}
@@ -15666,6 +15667,133 @@ def _parse_mileage_excel(f, task_date):
     return count
 
 
+def _extract_activity_vehicle_no(ws):
+    """Extract vehicle number from title like: Activity Report (GBC-22-039)."""
+    title_candidates = []
+    for r in range(1, 5):
+        for c in range(1, 11):
+            v = ws.cell(r, c).value
+            if v is not None:
+                title_candidates.append(str(v).strip())
+    for text in title_candidates:
+        m = _ACTIVITY_TITLE_RE.search(text)
+        if m:
+            return _normalize_vehicle_no(m.group(1))
+    return ''
+
+
+def _parse_activity_report_excels(files, task_date):
+    """Parse multiple Tracker Activity Report files (one per vehicle)."""
+    import io
+    import openpyxl
+
+    valid_files = [f for f in (files or []) if f and getattr(f, 'filename', '').strip()]
+    if not valid_files:
+        return {'files': 0, 'rows': 0}
+
+    # Same-date reupload policy: keep only latest upload data.
+    VehicleActivityRecord.query.filter_by(task_date=task_date).delete()
+
+    count_rows = 0
+    count_files = 0
+    today = pk_date()
+    seen_rows = set()
+
+    def _safe_str(v):
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v.strftime('%Y-%m-%d %H:%M:%S')
+        s = str(v).strip()
+        return s if s else None
+
+    def _safe_float(v):
+        if v in (None, ''):
+            return 0.0
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return 0.0
+
+    for f in valid_files:
+        raw = f.read()
+        f.seek(0)
+        if not raw:
+            continue
+        if raw[:4] != b'PK\x03\x04':
+            raise ValueError(f"Tracker Activity Report '{f.filename}' must be .xlsx format.")
+
+        wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        ws = wb.active
+        vehicle_no = _extract_activity_vehicle_no(ws)
+        if not vehicle_no:
+            wb.close()
+            raise ValueError(f"Vehicle number not found in title for file '{f.filename}'. Expected: Activity Report (VEHICLE-NO).")
+
+        header_row_idx = 9  # Row 10 in Excel (0-based index)
+        all_rows = [list(r) for r in ws.iter_rows(min_row=1, values_only=True)]
+        wb.close()
+        if len(all_rows) <= header_row_idx:
+            continue
+
+        headers = all_rows[header_row_idx][:9]
+        norm_headers = [str(h).strip().lower().replace('\xa0', ' ') if h is not None else '' for h in headers]
+        expected = ['group name', 'record date time', 'location', 'speed', 'direction', 'distance', 'travel time', 'stop time', 'reason']
+        if not all(any(tok in (norm_headers[i] or '') for tok in expected[i].split()) for i in range(min(9, len(norm_headers)))):
+            # Header may vary slightly; keep row10 default parsing but guard empty structure.
+            if not any('record' in h and 'time' in h for h in norm_headers):
+                raise ValueError(f"Invalid heading row in file '{f.filename}'. Expected activity columns at row 10.")
+
+        for excel_row_no, row in enumerate(all_rows[header_row_idx + 1:], start=header_row_idx + 2):
+            cells = list(row[:9]) + [None] * max(0, 9 - len(row))
+            group_name = _safe_str(cells[0])
+            record_date_time = _safe_str(cells[1])
+            location = _safe_str(cells[2])
+            direction = _safe_str(cells[4])
+            travel_time = _safe_str(cells[6])
+            stop_time = _safe_str(cells[7])
+            reason = _safe_str(cells[8])
+            speed = _safe_float(cells[3])
+            distance = _safe_float(cells[5])
+
+            # Skip blank/detail-less rows and totals.
+            if group_name and group_name.strip().lower() == 'total':
+                continue
+            if not any([group_name, record_date_time, location, direction, travel_time, stop_time, reason, speed, distance]):
+                continue
+
+            dedup_key = (vehicle_no, group_name or '', record_date_time or '', location or '', speed, direction or '', distance, travel_time or '', stop_time or '', reason or '')
+            if dedup_key in seen_rows:
+                continue
+            seen_rows.add(dedup_key)
+
+            vals = {
+                'vehicle_no': vehicle_no,
+                'group_name': group_name,
+                'record_date_time': record_date_time,
+                'location': location,
+                'speed': speed,
+                'direction': direction,
+                'distance': distance,
+                'travel_time': travel_time,
+                'stop_time': stop_time,
+                'reason': reason,
+                'source_file': f.filename,
+            }
+            _validate_string_lengths('vehicle_activity_record', VehicleActivityRecord, vals, excel_row_no, 'Tracker Activity Report')
+
+            db.session.add(VehicleActivityRecord(
+                task_date=task_date,
+                upload_date=today,
+                **vals,
+            ))
+            count_rows += 1
+
+        count_files += 1
+
+    return {'files': count_files, 'rows': count_rows}
+
+
 @app.route('/task-report/upload', methods=['GET', 'POST'])
 def task_report_upload():
     """Single form: upload both EmergencyTaskReport and Vehicle Mileage Excel."""
@@ -15674,11 +15802,13 @@ def task_report_upload():
         task_date = form.task_date.data
         fe = form.file_emergency.data
         fm = form.file_mileage.data
-        if not fe and not fm:
+        fa = [f for f in request.files.getlist('file_activity_reports') if f and getattr(f, 'filename', '').strip()]
+        if not fe and not fm and not fa:
             flash('Please select at least one Excel file.', 'warning')
             return redirect(url_for('task_report_upload'))
         try:
             c1 = c2 = 0
+            c3_files = c3_rows = 0
             if fe:
                 try:
                     c1 = _parse_emergency_excel(fe, task_date)
@@ -15693,21 +15823,33 @@ def task_report_upload():
                     if isinstance(ex, ValueError):
                         raise
                     raise ValueError(f"Vehicle Mileage report processing failed: {ex.__class__.__name__}") from ex
+            if fa:
+                try:
+                    c3 = _parse_activity_report_excels(fa, task_date)
+                    c3_files = c3.get('files', 0)
+                    c3_rows = c3.get('rows', 0)
+                except Exception as ex:
+                    if isinstance(ex, ValueError):
+                        raise
+                    raise ValueError(f"Tracker Activity Report processing failed: {ex.__class__.__name__}") from ex
             db.session.commit()
             msg = []
             if c1:
                 msg.append(f'EmergencyTaskReport: {c1} record(s)')
             if c2:
                 msg.append(f'Mileage report: {c2} record(s)')
+            if c3_files:
+                msg.append(f'Activity report: {c3_rows} record(s) from {c3_files} file(s)')
             flash('Uploaded. ' + '; '.join(msg) if msg else 'No data imported.', 'success')
             return redirect(url_for('task_report_list', date=task_date.strftime('%d-%m-%Y')))
         except Exception as e:
             db.session.rollback()
             app.logger.exception(
-                "Upload Workbooks failed for date=%s (has_emergency=%s, has_mileage=%s)",
+                "Upload Workbooks failed for date=%s (has_emergency=%s, has_mileage=%s, has_activity=%s)",
                 task_date,
                 bool(fe),
                 bool(fm),
+                bool(fa),
             )
             flash(_build_upload_error_message('Upload Workbooks', e), 'danger')
     return render_template('task_report_upload.html', form=form)
