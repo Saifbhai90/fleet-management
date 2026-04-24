@@ -49,15 +49,26 @@ def _workspace_employee_id():
     return session.get('workspace_employee_id')
 
 
-def _workspace_date_is_closed(employee_id, target_date):
+def _workspace_date_is_closed(employee_id, target_date, district_id=None, project_id=None):
     if not employee_id or not target_date:
         return False
-    return db.session.query(WorkspaceMonthClose.id).filter(
+    q = db.session.query(WorkspaceMonthClose.id).filter(
         WorkspaceMonthClose.employee_id == employee_id,
         WorkspaceMonthClose.status == 'Closed',
         WorkspaceMonthClose.period_start <= target_date,
         WorkspaceMonthClose.period_end >= target_date,
-    ).first() is not None
+    )
+    # Scope-aware close check: only block the exact district/project pair
+    # that was month-closed. Other scopes should remain editable.
+    if district_id is None:
+        q = q.filter(WorkspaceMonthClose.district_id.is_(None))
+    else:
+        q = q.filter(WorkspaceMonthClose.district_id == district_id)
+    if project_id is None:
+        q = q.filter(WorkspaceMonthClose.project_id.is_(None))
+    else:
+        q = q.filter(WorkspaceMonthClose.project_id == project_id)
+    return q.first() is not None
 
 
 def _reverse_workspace_employee_expense_journals(expense_id, workspace_employee_id):
@@ -785,7 +796,12 @@ def employee_expense_form(pk=None):
         if workspace_employee_id and expense.employee_id and expense.employee_id != workspace_employee_id:
             flash('This employee expense does not belong to selected workspace employee.', 'danger')
             return redirect(url_for('employee_expense_list'))
-        if _workspace_date_is_closed(workspace_employee_id, expense.expense_date):
+        if _workspace_date_is_closed(
+            workspace_employee_id,
+            expense.expense_date,
+            district_id=expense.district_id,
+            project_id=expense.project_id,
+        ):
             flash('This expense belongs to a closed month. Reopen month-close batch first to edit.', 'danger')
             return redirect(url_for('employee_expense_list'))
         form = EmployeeExpenseForm(obj=expense)
@@ -823,7 +839,14 @@ def employee_expense_form(pk=None):
     
     if form.validate_on_submit():
         try:
-            if _workspace_date_is_closed(workspace_employee_id, form.expense_date.data):
+            district_id = form.district_id.data if form.district_id.data != 0 else None
+            project_id = form.project_id.data if form.project_id.data != 0 else None
+            if _workspace_date_is_closed(
+                workspace_employee_id,
+                form.expense_date.data,
+                district_id=district_id,
+                project_id=project_id,
+            ):
                 flash('Selected date belongs to a closed month. Reopen month-close batch first.', 'danger')
                 return render_template(
                     'finance/employee_expense_form.html',
@@ -838,8 +861,8 @@ def employee_expense_form(pk=None):
             expense.expense_date = form.expense_date.data
             expense.employee_id = workspace_employee_id
             expense.user_id = session.get('user_id')
-            expense.district_id = form.district_id.data if form.district_id.data != 0 else None
-            expense.project_id = form.project_id.data if form.project_id.data != 0 else None
+            expense.district_id = district_id
+            expense.project_id = project_id
             expense.expense_category = form.expense_category.data
             expense.description = form.description.data
             expense.amount = form.amount.data
@@ -996,7 +1019,12 @@ def employee_expense_delete(pk):
     if workspace_employee_id and expense.employee_id and expense.employee_id != workspace_employee_id:
         flash('This employee expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('employee_expense_list'))
-    if _workspace_date_is_closed(workspace_employee_id, expense.expense_date):
+    if _workspace_date_is_closed(
+        workspace_employee_id,
+        expense.expense_date,
+        district_id=expense.district_id,
+        project_id=expense.project_id,
+    ):
         flash('Cannot delete expense from a closed month. Reopen month-close batch first.', 'danger')
         return redirect(url_for('employee_expense_list'))
     
