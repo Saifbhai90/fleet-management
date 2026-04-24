@@ -3512,9 +3512,17 @@ def workspace_mpg_report():
     if selected_vehicle_id:
         fuel_q = fuel_q.filter(FuelExpense.vehicle_id == selected_vehicle_id)
 
+    # Keep MPG row sequencing aligned with Fuel Expense resequence logic:
+    # date asc, then non-null current_reading first, then current_reading asc.
     fuel_rows = (
         fuel_q
-        .order_by(FuelExpense.vehicle_id.asc(), FuelExpense.fueling_date.asc(), FuelExpense.id.asc())
+        .order_by(
+            FuelExpense.vehicle_id.asc(),
+            FuelExpense.fueling_date.asc(),
+            db.case((FuelExpense.current_reading.is_(None), 1), else_=0).asc(),
+            FuelExpense.current_reading.asc(),
+            FuelExpense.id.asc(),
+        )
         .all()
     )
 
@@ -3620,6 +3628,18 @@ def workspace_mpg_report():
         last_row_for_current = same_end_date_rows[-1] if same_end_date_rows else rows[-1]
 
         previous_reading = _to_dec(first_row_for_prev.previous_reading, None)
+        if previous_reading is None:
+            # Safety for legacy/imported rows: try earliest non-null previous reading
+            # from the same start date bucket, then from full range rows.
+            start_prev_values = [_to_dec(r.previous_reading, None) for r in same_start_date_rows]
+            start_prev_values = [v for v in start_prev_values if v is not None]
+            if start_prev_values:
+                previous_reading = min(start_prev_values)
+            else:
+                all_prev_values = [_to_dec(r.previous_reading, None) for r in rows]
+                all_prev_values = [v for v in all_prev_values if v is not None]
+                if all_prev_values:
+                    previous_reading = min(all_prev_values)
         current_reading = _to_dec(last_row_for_current.current_reading, None)
         km = (current_reading - previous_reading) if (previous_reading is not None and current_reading is not None) else None
 
