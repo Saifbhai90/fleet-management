@@ -291,6 +291,7 @@ PERMISSION_TREE = {
         ('tracker_difference_report', 'Tracker Difference Report'),
         ('unauthorized_movement_report', 'Unauthorized Movement Report'),
         ('task_start_delay_report', 'Driver Response Time Report'),
+        ('task_turnaround_report', 'Task Turnaround Report'),
         ('unexecuted_task_report', 'Unexecuted Task Report'),
         ('missing_documents_report', 'Missing Documents Report'),
     ],
@@ -932,6 +933,7 @@ SECTION_PAGE_GROUPS = {
         ('Tracker Difference Report', [('tracker_difference_report', 'Tracker Difference Report')]),
         ('Unauthorized Movement Report', [('unauthorized_movement_report', 'Unauthorized Movement Report')]),
         ('Driver Response Time Report', [('task_start_delay_report', 'Driver Response Time Report')]),
+        ('Task Turnaround Report', [('task_turnaround_report', 'Task Turnaround Report')]),
         ('Unexecuted Task Report', [('unexecuted_task_report', 'Unexecuted Task Report')]),
         ('Missing Documents Report', [('missing_documents_report', 'Missing Documents Report')]),
         ('Activity Log', [('activity_log_report', 'Activity Log')]),
@@ -1148,6 +1150,7 @@ PAGE_VISIBLE = {
     'tracker_difference_report': ['reports', 'tracker_difference_report'],
     'unauthorized_movement_report': ['reports', 'unauthorized_movement_report'],
     'task_start_delay_report': ['reports', 'task_start_delay_report'],
+    'task_turnaround_report': ['reports', 'task_turnaround_report'],
     'unexecuted_task_report': ['reports', 'unexecuted_task_report'],
     'missing_documents_report': ['reports', 'missing_documents_report'],
     # Administration

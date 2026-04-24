@@ -1,0 +1,120 @@
+{% extends "base_print.html" %}
+{% block title %}Print – Task Turnaround Report{% endblock %}
+
+{% block extra_head %}
+<style>
+  .ttrp-header { background: linear-gradient(135deg, #0f5132 0%, #198754 50%, #20c997 100%); color: #fff; border-radius: 12px; padding: 1.1rem 1.3rem; margin-bottom: 1rem; box-shadow: 0 4px 18px rgba(15,81,50,.3); }
+  .ttrp-header h2 { margin: 0; font-size: 1.26rem; font-weight: 800; letter-spacing: .2px; }
+  .ttrp-sub { margin-top: .3rem; font-size: .82rem; opacity: .95; }
+  .rpt-meta { font-size: 0.8rem; color: #0f5132; margin-bottom: 0.9rem; }
+  .meta-card { background: #f8fffb; border: 1px solid #a3cfbb; border-radius: 10px; padding: .45rem .7rem; display: inline-flex; align-items: center; gap: .35rem; }
+  .total-badge { display: inline-block; background: #d1e7dd; color: #0a3622; font-size: 0.82rem; font-weight: 700; padding: 0.22rem 0.75rem; border-radius: 20px; border: 1px solid #a3cfbb; }
+  .rpt-table { font-size: 0.76rem; border-radius: 10px; overflow: hidden; table-layout: fixed; width: 100%; }
+  .rpt-table thead th { background: #d1e7dd; color: #0a3622; font-weight: 800; font-size: 0.7rem; text-transform: uppercase; border-bottom: 2px solid #198754; white-space: nowrap; padding: 0.4rem 0.45rem; letter-spacing: .2px; }
+  .rpt-table tbody td { vertical-align: middle; padding: 0.3rem 0.4rem; color: #0f172a; }
+  .rpt-table tbody tr:nth-child(even) { background: #f3faf6; }
+  .rpt-table tbody tr:hover { background: #e7f1ed; }
+  .rpt-table th, .rpt-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rpt-table col.col-sr { width: 2%; }
+  .rpt-table col.col-date { width: 6.5%; }
+  .rpt-table col.col-district { width: 9%; }
+  .rpt-table col.col-project { width: 8%; }
+  .rpt-table col.col-vehicle { width: 8%; }
+  .rpt-table col.col-taskid { width: 9%; }
+  .rpt-table col.col-cat { width: 3.5%; }
+  .rpt-table col.col-ts { width: 25%; }
+  .rpt-table col.col-dur { width: 3.5%; }
+  .rpt-table th.col-ts, .rpt-table td.col-ts { overflow: visible; text-overflow: clip; padding-left: 0.35rem; padding-right: 0.35rem; }
+  .rpt-table th.col-sr, .rpt-table td.col-sr,
+  .rpt-table th.col-cat, .rpt-table td.col-cat,
+  .rpt-table th.col-dur, .rpt-table td.col-dur { padding-left: 0.2rem; padding-right: 0.2rem; }
+  .rpt-table td.col-dur { font-variant-numeric: tabular-nums; }
+  .print-container { max-width: none !important; width: calc(100vw - 16px) !important; margin: 0 auto !important; padding: 10px 8px 20px 8px !important; }
+  .preview-search-wrap { display: flex; justify-content: flex-end; margin: 6px 0 10px 0; }
+  .preview-search { width: 300px; max-width: 60vw; border: 1px solid #a3cfbb; border-radius: 8px; padding: 6px 10px; font-size: .85rem; }
+  .preview-count { font-size: .78rem; color: #146c43; margin-right: auto; display: flex; align-items: center; }
+  @page { size: A4 landscape !important; margin: 6mm !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="print-container">
+  <div class="ttrp-header">
+    <h2><i class="bi bi-hourglass-split me-2"></i>Task Turnaround Report</h2>
+    <div class="ttrp-sub">Task create se complete — assign se close tak laga hua waqt (HH:MM)</div>
+  </div>
+
+  <div class="rpt-meta d-flex flex-wrap gap-2">
+    <span class="meta-card"><i class="bi bi-calendar3"></i>Range: {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
+    <span class="meta-card"><i class="bi bi-clock"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
+  </div>
+  <div class="mb-2">
+    <span class="total-badge">Total Rows: {{ total }}</span>
+    {% if check_type and duration_limit %}<span class="total-badge ms-2">Time filter: {{ check_type|capitalize }} {{ duration_limit }}</span>{% endif %}
+  </div>
+
+  <div class="preview-search-wrap no-print">
+    <div class="preview-count" id="previewVisibleCount">Showing {{ total }} of {{ total }}</div>
+    <input type="text" id="previewSearchInput" class="preview-search" placeholder="Search in preview...">
+  </div>
+
+  <table class="table table-sm table-bordered rpt-table w-100">
+    <colgroup>
+      <col class="col-sr"><col class="col-date"><col class="col-district"><col class="col-project"><col class="col-vehicle"><col class="col-taskid"><col class="col-cat">
+      <col class="col-ts"><col class="col-ts"><col class="col-dur">
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="col-sr">Sr</th><th>Date</th><th>District</th><th>Project</th><th>Vehicle</th><th>Task ID</th><th class="col-cat">Category</th>
+        <th class="col-ts">Task Create</th><th class="col-ts">Task Close</th><th class="col-dur">Time taken</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td class="col-sr">{{ loop.index }}</td>
+        <td>{{ r.emg.task_date|ddmmyyyy if r.emg and r.emg.task_date else '-' }}</td>
+        <td>{{ r.district.name if r.district else '-' }}</td>
+        <td>{{ r.project.name if r.project else '-' }}</td>
+        <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
+        <td>{{ r.task_id }}</td>
+        <td class="col-cat">{{ r.category }}</td>
+        <td class="col-ts">{% if r.assign_dt %}{{ r.assign_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
+        <td class="col-ts">{% if r.close_dt %}{{ r.close_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
+        <td class="col-dur">{{ r.duration_display }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="text-center text-muted py-4">No task turnaround records found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var inp = document.getElementById('previewSearchInput');
+  var tbody = document.querySelector('.rpt-table tbody');
+  var countEl = document.getElementById('previewVisibleCount');
+  if (!inp || !tbody) return;
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+  var total = rows.length;
+  function applyFilter() {
+    var q = (inp.value || '').toLowerCase().trim();
+    var visible = 0;
+    var sr = 1;
+    rows.forEach(function (tr) {
+      var txt = (tr.textContent || '').toLowerCase();
+      var show = !q || txt.indexOf(q) !== -1;
+      tr.style.display = show ? '' : 'none';
+      if (show) {
+        visible += 1;
+        var srCell = tr.querySelector('td');
+        if (srCell) srCell.textContent = sr++;
+      }
+    });
+    if (countEl) countEl.textContent = 'Showing ' + visible + ' of ' + total;
+  }
+  inp.addEventListener('input', applyFilter);
+  applyFilter();
+});
+</script>
+{% endblock %}

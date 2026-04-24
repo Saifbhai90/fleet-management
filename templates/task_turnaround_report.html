@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}Task Turnaround Report{% endblock %}
+
+{% block content %}
+<style>
+  .ttr-header { background: linear-gradient(135deg, #0f5132 0%, #198754 55%, #20c997 100%); color: #fff; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
+  .ttr-header h2 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+  .ttr-subtitle { font-size: 0.84rem; opacity: .94; margin-top: .2rem; }
+  .ttr-filter { background: #f8fffb; border: 1px solid #a3cfbb; border-radius: 8px; box-shadow: 0 1px 5px rgba(15,81,50,.1); padding: .9rem 1rem; margin-bottom: 1rem; }
+  .ttr-table-wrap { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(15,81,50,.1); border: 1px solid #d1e7dd; padding: .9rem; }
+  #taskTurnaroundTable thead th { background: #d1e7dd; color: #0a3622; border-bottom: 2px solid #198754; font-size: .76rem; text-transform: uppercase; white-space: nowrap; }
+  #taskTurnaroundTable td { vertical-align: middle; font-size: .83rem; }
+  .ttr-long { color: #b02a37; font-weight: 700; }
+  .ttr-ok { color: #0d503c; font-weight: 600; }
+  .total-badge { background: #d1e7dd; color: #0a3622; padding: .25rem .8rem; border-radius: 20px; font-size: .82rem; font-weight: 700; }
+  .ttr-wait-inline { background: #e7f1ed; border: 1px solid #a3cfbb; border-radius: 8px; padding: .65rem .8rem; margin-bottom: .9rem; display: none; }
+  .ttr-hint { font-size: 0.72rem; color: #146c43; }
+</style>
+
+<div class="container-fluid py-3 px-3 px-md-4">
+  <div class="ttr-header">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <div class="me-auto">
+        <h2><i class="bi bi-hourglass-split me-2"></i>Task Turnaround Report</h2>
+        <div class="ttr-subtitle">Task create (assign) se complete tak — kitna time laga (HH:MM)</div>
+      </div>
+      <a href="{{ url_for('task_turnaround_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, duration_limit=duration_limit) }}" class="btn btn-success btn-sm" id="taskTurnaroundExportBtn" data-export-url="{{ url_for('task_turnaround_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, duration_limit=duration_limit) }}">
+        <i class="bi bi-file-earmark-excel me-1"></i>Export
+      </a>
+      <button type="button" class="btn btn-light btn-sm text-dark" id="taskTurnaroundPreviewBtn" data-preview-url="{{ url_for('task_turnaround_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, duration_limit=duration_limit) }}">
+        <i class="bi bi-printer me-1"></i>Print / Preview
+      </button>
+    </div>
+  </div>
+
+  <div class="ttr-filter">
+    <form method="get" action="{{ url_for('task_turnaround_report') }}" id="taskTurnaroundFilterForm">
+      <div class="row g-2 align-items-end">
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">From Date</label>
+          <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date|ddmmyyyy }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">To Date</label>
+          <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date|ddmmyyyy }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">District</label>
+          <select name="district_id" class="form-select form-select-sm search-select">
+            {% for val, label in district_choices %}
+            <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Project</label>
+          <select name="project_id" class="form-select form-select-sm search-select">
+            {% for val, label in project_choices %}
+            <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Vehicle</label>
+          <select name="vehicle_id" class="form-select form-select-sm search-select">
+            {% for val, label in vehicle_choices %}
+            <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-1">
+          <label class="form-label mb-1 small fw-semibold">Check Type</label>
+          <select name="check_type" class="form-select form-select-sm">
+            <option value="" {% if not check_type %}selected{% endif %}>--</option>
+            <option value="above" {% if check_type == 'above' %}selected{% endif %}>Above</option>
+            <option value="below" {% if check_type == 'below' %}selected{% endif %}>Below</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-1">
+          <label class="form-label mb-1 small fw-semibold" title="Task assign se complete tak ka duration">Time</label>
+          <input type="text" name="duration_limit" class="form-control form-control-sm" placeholder="e.g. 01:30" value="{{ duration_limit or '' }}" inputmode="text" autocomplete="off" maxlength="12">
+          <div class="ttr-hint mt-1">HH:MM (ya minutes)</div>
+        </div>
+        <div class="col-6 col-md-1">
+          <button class="btn btn-success btn-sm w-100"><i class="bi bi-funnel-fill"></i></button>
+        </div>
+      </div>
+      <div class="mt-2">
+        <a href="{{ url_for('task_turnaround_report') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x-circle me-1"></i>Clear
+        </a>
+        <span class="total-badge ms-2">Rows: {{ total }}</span>
+        <span class="total-badge ms-2">Vehicles: {{ unique_vehicle_count }}</span>
+      </div>
+    </form>
+  </div>
+
+  <div id="taskTurnaroundWaitInline" class="ttr-wait-inline">
+    <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+      <div class="d-flex align-items-center gap-2">
+        <span class="spinner-border spinner-border-sm text-success" role="status"></span>
+        <span class="small fw-semibold text-dark">Please wait... report load ho rahi hai.</span>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-success btn-sm" id="taskTurnaroundWaitBtn">Wait</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="taskTurnaroundCloseBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ttr-table-wrap">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="total-badge"><i class="bi bi-activity me-1"></i>Total Rows: {{ total }}</span>
+      <input type="text" id="taskTurnaroundSearchInput" class="form-control form-control-sm" placeholder="Search..." style="max-width:220px;">
+    </div>
+    <div class="table-responsive">
+      <table id="taskTurnaroundTable" class="table table-sm table-bordered table-hover align-middle w-100">
+        <thead>
+          <tr>
+            <th>Sr</th>
+            <th>Date</th>
+            <th>District</th>
+            <th>Project</th>
+            <th>Vehicle</th>
+            <th>Task ID</th>
+            <th>Category</th>
+            <th>Task Create</th>
+            <th>Task Close</th>
+            <th>Time taken</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ r.emg.task_date|ddmmyyyy if r.emg and r.emg.task_date else '-' }}</td>
+            <td>{{ r.district.name if r.district else '-' }}</td>
+            <td>{{ r.project.name if r.project else '-' }}</td>
+            <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
+            <td>{{ r.task_id }}</td>
+            <td>{{ r.category }}</td>
+            <td>{% if r.assign_dt %}{{ r.assign_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
+            <td>{% if r.close_dt %}{{ r.close_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
+            <td class="{% if r.duration_minutes is not none and r.duration_minutes > 120 %}ttr-long{% else %}ttr-ok{% endif %} tabular-nums">{{ r.duration_display }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="text-center text-muted py-4">No task turnaround records found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var previewBtn = document.getElementById('taskTurnaroundPreviewBtn');
+  var exportBtn = document.getElementById('taskTurnaroundExportBtn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var u = this.getAttribute('data-export-url');
+      var sv = (document.getElementById('taskTurnaroundSearchInput') || {}).value || '';
+      if (sv && sv.trim()) {
+        var sep = u.indexOf('?') >= 0 ? '&' : '?';
+        u = u + sep + 'table_search=' + encodeURIComponent(sv.trim());
+      }
+      window.location.href = u;
+    });
+  }
+  if (previewBtn) {
+    var _busy = false;
+    var _name = 'taskTurnaroundPreviewWindow';
+    previewBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (_busy) return;
+      _busy = true;
+      var u = this.getAttribute('data-preview-url');
+      var sv = (document.getElementById('taskTurnaroundSearchInput') || {}).value || '';
+      if (sv && sv.trim()) {
+        var sep = u.indexOf('?') >= 0 ? '&' : '?';
+        u = u + sep + 'table_search=' + encodeURIComponent(sv.trim());
+      }
+      try {
+        var w = window.open(u, _name);
+        if (!w) window.location.href = u;
+      } catch (_) { window.location.href = u; }
+      previewBtn.disabled = true;
+      setTimeout(function(){ _busy = false; previewBtn.disabled = false; }, 1200);
+    });
+  }
+
+  var f = document.getElementById('taskTurnaroundFilterForm');
+  var popup = document.getElementById('taskTurnaroundWaitInline');
+  var closeBtn = document.getElementById('taskTurnaroundCloseBtn');
+  if (f && popup) { f.addEventListener('submit', function() { popup.style.display = 'block'; }); }
+  if (closeBtn && popup) { closeBtn.addEventListener('click', function(){ popup.style.display = 'none'; }); }
+  var waitBtn = document.getElementById('taskTurnaroundWaitBtn');
+  if (waitBtn && popup) { waitBtn.addEventListener('click', function(){ popup.style.display = 'block'; }); }
+
+  var searchBox = document.getElementById('taskTurnaroundSearchInput');
+  var tbody = document.querySelector('#taskTurnaroundTable tbody');
+  if (searchBox && tbody) {
+    var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+    searchBox.addEventListener('input', function () {
+      var q = (this.value || '').toLowerCase().trim();
+      var sr = 1;
+      rows.forEach(function (tr) {
+        var txt = (tr.textContent || '').toLowerCase();
+        var show = !q || txt.indexOf(q) !== -1;
+        tr.style.display = show ? '' : 'none';
+        if (show) {
+          var srCell = tr.querySelector('td');
+          if (srCell) srCell.textContent = sr++;
+        }
+      });
+    });
+    searchBox.dispatchEvent(new Event('input'));
+  }
+});
+</script>
+{% endblock %}

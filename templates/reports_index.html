@@ -180,6 +180,11 @@
               <i class="bi bi-star text-warning me-2"></i>Driver Response Time Report
             </a>
             {% endif %}
+            {% if can_see_page('task_turnaround_report') %}
+            <a href="{{ url_for('task_turnaround_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-success me-2"></i>Task Turnaround Report
+            </a>
+            {% endif %}
             {% if can_see_page('unexecuted_task_report') %}
             <a href="{{ url_for('unexecuted_task_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
               <i class="bi bi-x-octagon me-2" style="color:#4f46e5;"></i>Unexecuted Task Report
