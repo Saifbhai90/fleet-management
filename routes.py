@@ -23741,6 +23741,118 @@ def maintenance_expense_list():
     )
 
 
+@app.route('/maintenance-expenses/export')
+def maintenance_expense_export():
+    _ensure_maintenance_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    today = pk_date()
+    from_date = request.args.get('from_date', '').strip()
+    to_date = request.args.get('to_date', '').strip()
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    work_order_no = (request.args.get('work_order_no') or '').strip()
+
+    from_d = parse_date(from_date) if from_date else today
+    to_d = parse_date(to_date) if to_date else today
+    if not from_d:
+        from_d = today
+    if not to_d:
+        to_d = today
+    if from_d > to_d:
+        from_d, to_d = to_d, from_d
+
+    query = MaintenanceExpense.query.filter(
+        MaintenanceExpense.expense_date >= from_d,
+        MaintenanceExpense.expense_date <= to_d
+    )
+    if workspace_employee_id:
+        query = query.filter(
+            db.or_(
+                MaintenanceExpense.employee_id == workspace_employee_id,
+                MaintenanceExpense.employee_id.is_(None),
+            )
+        )
+
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(MaintenanceExpense.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(MaintenanceExpense.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(MaintenanceExpense.vehicle_id.in_(list(allowed_vehicles)))
+
+    if district_id:
+        query = query.filter(MaintenanceExpense.district_id == district_id)
+    if project_id:
+        query = query.filter(MaintenanceExpense.project_id == project_id)
+    if vehicle_id:
+        query = query.filter(MaintenanceExpense.vehicle_id == vehicle_id)
+    if work_order_no:
+        query = query.join(
+            MaintenanceWorkOrder,
+            MaintenanceWorkOrder.id == MaintenanceExpense.work_order_id,
+        ).filter(MaintenanceWorkOrder.work_order_no.ilike(f"%{work_order_no}%"))
+
+    rows = query.order_by(
+        MaintenanceExpense.expense_date.asc(),
+        db.case((MaintenanceExpense.current_reading.is_(None), 1), else_=0).asc(),
+        MaintenanceExpense.current_reading.asc(),
+        MaintenanceExpense.id.asc(),
+    ).all()
+
+    headers = [
+        'Sr', 'District', 'Project', 'Vehicle', 'Work Order', 'Date', 'Job Category',
+        'Current Reading', 'Items', 'Total Qty', 'Amount', 'Payment Type', 'Party Name', 'Total Bill'
+    ]
+    data_rows = []
+    for i, r in enumerate(rows, 1):
+        total_qty = sum(float(it.qty or 0) for it in r.items)
+        total_amount = sum(float(it.amount or 0) for it in r.items)
+        item_names = []
+        for it in r.items:
+            nm = (it.product.name if it.product else '').strip()
+            nm = re.sub(r'\s+', ' ', nm).strip().strip(',')
+            if nm:
+                item_names.append(nm)
+        items_text = ','.join(item_names) if item_names else '-'
+        data_rows.append([
+            i,
+            r.district.name if r.district else '-',
+            r.project.name if r.project else '-',
+            r.vehicle.vehicle_no if r.vehicle else '-',
+            r.work_order.work_order_no if r.work_order else '-',
+            r.expense_date.strftime('%d-%m-%Y') if r.expense_date else '-',
+            r.job_category or '-',
+            float(r.current_reading) if r.current_reading is not None else '',
+            items_text,
+            round(total_qty, 2),
+            round(total_amount, 2),
+            r.payment_type or '-',
+            r.workspace_party.name if r.workspace_party else '-',
+            float(r.total_bill_amount or 0),
+        ])
+
+    return generate_excel_template(
+        headers,
+        data_rows,
+        required_columns=[],
+        filename=f'maintenance_expense_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+
 @app.route('/maintenance-expenses/history')
 def maintenance_expense_history():
     _ensure_maintenance_work_order_schema()

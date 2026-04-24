@@ -18,7 +18,7 @@
       <a href="{{ url_for('maintenance_work_order_list') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-clipboard2-check me-1"></i>Work Orders</a>
       <a href="{{ url_for('maintenance_expense_history') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-graph-up-arrow me-1"></i>History Report</a>
       <button class="btn btn-outline-light btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
-      <button class="btn btn-outline-light btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      <button class="btn btn-outline-light btn-sm" id="btnExportReport" data-export-url="{{ url_for('maintenance_expense_export') }}"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
       <a href="{{ url_for('maintenance_expense_form') }}" class="btn btn-light btn-sm text-warning">
         <i class="bi bi-plus-circle me-1"></i>Add Maintenance
       </a>
@@ -455,5 +455,20 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 if (window.fleetTableEnhance) window.fleetTableEnhance('maintenanceTable');
 if (window.fleetPrintExport) window.fleetPrintExport('maintenanceTable', 'Maintenance Expense', 'Maintenance_Expense.csv');
+
+(function() {
+  var exportBtn = document.getElementById('btnExportReport');
+  if (!exportBtn) return;
+  exportBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    var baseUrl = exportBtn.getAttribute('data-export-url') || '/maintenance-expenses/export';
+    var qs = new URLSearchParams(window.location.search || '');
+    qs.delete('page');
+    qs.delete('per_page');
+    var url = baseUrl + (qs.toString() ? ('?' + qs.toString()) : '');
+    window.location.href = url;
+  }, true);
+})();
 </script>
 {% endblock %}
