@@ -89,6 +89,8 @@
                         <tr>
                             <th class="text-center" style="width:46px;">#</th>
                             <th>Date</th>
+                            <th>District</th>
+                            <th>Project</th>
                             <th>Employee</th>
                             <th>Category</th>
                             <th>Description</th>
@@ -102,6 +104,8 @@
                         <tr>
                             <td class="text-center text-muted small">{{ ((page - 1) * per_page) + loop.index }}</td>
                             <td>{{ exp.expense_date|ddmmyyyy }}</td>
+                            <td>{{ exp.district.name if exp.district else '-' }}</td>
+                            <td>{{ exp.project.name if exp.project else '-' }}</td>
                             <td>
                                 {% if exp.employee %}
                                     <span class="text-dark">{{ exp.employee.name }}</span>
@@ -143,7 +147,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="8" class="text-center py-5 text-muted">
+                            <td colspan="10" class="text-center py-5 text-muted">
                                 <i class="bi bi-wallet2 display-6 d-block mb-2 opacity-25"></i>
                                 No expenses found{% if from_date or to_date or category or district_id or project_id %} for the selected filters{% endif %}.
                             </td>
@@ -153,7 +157,7 @@
                     {% if expenses %}
                     <tfoot class="table-light fw-bold">
                         <tr>
-                            <td colspan="6" class="text-end">Page Total:</td>
+                            <td colspan="8" class="text-end">Page Total:</td>
                             <td class="text-end text-warning">{{ "{:,.2f}".format(total_amount) }}</td>
                             <td></td>
                         </tr>
