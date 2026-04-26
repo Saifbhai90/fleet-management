@@ -119,8 +119,8 @@
         <button type="button" class="btn btn-dark btn-sm" id="btnPrintSlip"><i class="bi bi-printer me-1"></i>Print / Save PDF</button>
         <span class="small text-muted align-self-center">Print se PDF save karein — signature block certificate par nahi hai.</span>
       </div>
-      <div class="slip-paper border bg-white" id="slipPrintRoot">
-        <div class="slip-inner">
+      <div class="slip-paper border bg-white" id="printContainer">
+        <div class="slip-inner slip-one-page">
           <div class="text-center border-bottom pb-2 mb-3">
             <div class="slip-company" id="slCompany">—</div>
             <div class="slip-proj text-muted small" id="slProjectLine"></div>
@@ -195,14 +195,70 @@
 .slip-table th { color: #4a5568; font-weight: 600; font-size: .8rem; vertical-align: top; }
 .slip-table td { font-size: .875rem; }
 .slip-intro { line-height: 1.5; color: #374151; }
+
+@page { size: A4 portrait; margin: 5mm; }
+
 @media print {
-  .no-print, .navbar, .sidebar, footer, #userNav, .breadcrumb { display: none !important; }
-  #salarySlipPage { padding: 0 !important; }
-  #slipPrintRoot { box-shadow: none !important; border: none !important; }
-  .slip-inner { max-width: 100%; padding: 12mm; }
-  body { background: #fff !important; }
+  html, body { background: #fff !important; height: auto !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page { margin: 4mm; }
+
+  body.page-driver-salary-slip nav.navbar,
+  body.page-driver-salary-slip .sidebar,
+  body.page-driver-salary-slip #sidebar,
+  body.page-driver-salary-slip #sidebarOverlay,
+  body.page-driver-salary-slip .sidebar-overlay,
+  body.page-driver-salary-slip .flash-message,
+  body.page-driver-salary-slip .no-print,
+  body.page-driver-salary-slip #topLoadBar,
+  body.page-driver-salary-slip #cmdPalette,
+  body.page-driver-salary-slip #guideChatbotWrap,
+  body.page-driver-salary-slip .fab-speed-dial,
+  body.page-driver-salary-slip .mobile-bottom,
+  #guideChatbotWrap { display: none !important; }
+
+  body.page-driver-salary-slip .main-content,
+  #mainContent {
+    margin: 0 !important;
+    margin-top: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  #salarySlipPage { padding: 0 !important; max-width: 100% !important; }
+  #salarySlipPage .row { --bs-gutter-x: 0; margin: 0 !important; }
+  #salarySlipPage .col-lg-5,
+  #salarySlipPage .col-lg-7 { width: 100% !important; max-width: 100% !important; padding: 0 !important; }
+
+  #printContainer {
+    box-shadow: none !important;
+    border: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  #printContainer .slip-one-page {
+    max-width: 100% !important;
+    padding: 0 2mm 0 2mm !important;
+    font-size: 7.4pt;
+    line-height: 1.2;
+  }
+  #printContainer .text-center { padding-bottom: 0.25rem !important; margin-bottom: 0.35rem !important; }
+  #printContainer .slip-company { font-size: 11pt !important; }
+  #printContainer .slip-proj, #printContainer .small, #printContainer .text-muted { font-size: 6.5pt !important; }
+  #printContainer .slip-title, #printContainer h1 { font-size: 10pt !important; margin: 0.1rem 0 !important; }
+  #printContainer .slip-intro { font-size: 6.5pt !important; line-height: 1.25 !important; margin-bottom: 0.35rem !important; }
+  #printContainer h6 { font-size: 6.5pt !important; margin: 0.2rem 0 0.1rem !important; padding-bottom: 0.1rem !important; }
+  #printContainer .slip-table { margin-bottom: 0.25rem !important; }
+  #printContainer .slip-table th, #printContainer .slip-table td { padding: 0.1rem 0.2rem !important; font-size: 6.5pt !important; }
+  #printContainer .slip-table.table-bordered th, #printContainer .slip-table.table-bordered td { font-size: 6.5pt !important; }
+  #printContainer p.small { font-size: 6pt !important; margin-bottom: 0.2rem !important; padding-top: 0.2rem !important; }
+  #printContainer #slCertDate { font-size: 7pt; }
+  #printContainer .table-light { background: #f8f9fa !important; -webkit-print-color-adjust: exact; }
 }
 </style>
+<script>document.addEventListener('DOMContentLoaded', function(){ try { document.body.classList.add('page-driver-salary-slip'); } catch (e) {} });</script>
 
 <script>
 (function() {
