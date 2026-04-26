@@ -138,7 +138,7 @@
           <tr class="mwo-table-row" data-wo-id="{{ row.rec.id }}">
             <td class="ps-3">{{ loop.index }}</td>
             <td>
-              <a href="{{ url_for('maintenance_work_order_detail', pk=row.rec.id) }}" class="text-decoration-none fw-semibold text-primary">{{ row.rec.work_order_no }}</a>
+              <a href="{{ url_for('maintenance_work_order_detail', pk=row.rec.id) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="text-decoration-none fw-semibold text-primary">{{ row.rec.work_order_no }}</a>
             </td>
             <td>{{ row.rec.opened_on|ddmmyyyy if row.rec.opened_on else '—' }}</td>
             <td>{{ row.rec.district.name if row.rec.district else '—' }}</td>
@@ -157,10 +157,10 @@
             <td class="text-end">{{ row.bill_count }}</td>
             <td class="text-end">{{ "%.2f"|format(row.total_amount or 0) }}</td>
             <td class="text-end pe-3 text-nowrap">
-              <a href="{{ url_for('maintenance_work_order_detail', pk=row.rec.id) }}" class="btn btn-link btn-sm p-1 text-success" title="View">
+              <a href="{{ url_for('maintenance_work_order_detail', pk=row.rec.id) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="btn btn-link btn-sm p-1 text-success" title="View">
                 <i class="bi bi-eye"></i>
               </a>
-              <a href="{{ url_for('maintenance_work_order_form', pk=row.rec.id) }}" class="btn btn-link btn-sm p-1" title="Edit">
+              <a href="{{ url_for('maintenance_work_order_form', pk=row.rec.id) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="btn btn-link btn-sm p-1" title="Edit">
                 <i class="bi bi-pencil"></i>
               </a>
               <a href="{{ url_for('maintenance_expense_form', work_order_id=row.rec.id) }}" class="btn btn-link btn-sm p-1 text-warning" title="Add bill">

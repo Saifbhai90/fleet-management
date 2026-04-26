@@ -198,9 +198,6 @@
                 {% endif %}
               </td>
               <td class="text-center pe-3">
-                {% if r.work_order %}
-                <a href="{{ url_for('maintenance_work_order_detail', pk=r.work_order.id) }}" class="btn btn-outline-warning btn-sm" title="Work Order"><i class="bi bi-clipboard2-check"></i></a>
-                {% endif %}
                 <div class="expense-view-wrap d-inline-block align-top">
                   <button type="button" class="btn btn-outline-success btn-sm expense-view-eye" title="Invoice / Media" aria-expanded="false" aria-haspopup="true">
                     <i class="bi bi-eye"></i>

@@ -69,7 +69,7 @@ from sqlalchemy import func, text, inspect, or_, cast, and_
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError, DataError
 from sqlalchemy.orm import joinedload
-from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, pk_now, pk_date, pk_time
+from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, format_date_ddmmyyyy, pk_now, pk_date, pk_time
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
 from flask_wtf.csrf import CSRFError
 from werkzeug.security import generate_password_hash
@@ -21229,6 +21229,21 @@ def _workspace_employee_id_for_expenses():
     return session.get('workspace_employee_id')
 
 
+def _safe_internal_path(return_to, default_path):
+    """App-relative path only: prevents open redirects from return_to query param."""
+    from urllib.parse import unquote
+    if not return_to or not isinstance(return_to, str):
+        return default_path
+    raw = unquote(return_to.strip())
+    if not raw or not raw.startswith('/') or raw.startswith('//'):
+        return default_path
+    if any(c in raw for c in '\n\r\x00'):
+        return default_path
+    if len(raw) > 2000:
+        return default_path
+    return raw
+
+
 def _workspace_employee_default_district_id(employee_id):
     if not employee_id:
         return None
@@ -23798,12 +23813,350 @@ def maintenance_work_order_detail(pk):
     expenses = rec.expenses.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
     total_bill = sum(float(x.total_bill_amount or 0) for x in expenses)
     total_media = sum(x.attachments.count() for x in expenses)
+    from urllib.parse import urlencode
+    mwo_preserve_qs = urlencode(request.args) if request.args else None
     return render_template(
         'maintenance_work_order_detail.html',
         rec=rec,
         expenses=expenses,
         total_bill=total_bill,
         total_media=total_media,
+        mwo_preserve_qs=mwo_preserve_qs,
+    )
+
+
+@app.route('/maintenance-work-order/<int:pk>/invoices')
+def maintenance_work_order_invoices(pk):
+    """Consolidated WO + all linked maintenance bills (invoice bodies) on one page."""
+    _ensure_maintenance_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_work_order_list'))
+    expenses = rec.expenses.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
+    total_bill = sum(float(x.total_bill_amount or 0) for x in expenses)
+    total_media = sum(x.attachments.count() for x in expenses)
+    wo_media = rec.attachments.count()
+    from urllib.parse import urlencode
+    mwo_preserve_qs = urlencode(request.args) if request.args else None
+    return render_template(
+        'maintenance_work_order_invoices.html',
+        rec=rec,
+        expenses=expenses,
+        total_bill=total_bill,
+        total_media=total_media,
+        wo_media=wo_media,
+        mwo_preserve_qs=mwo_preserve_qs,
+        this_page_path=request.full_path,
+    )
+
+
+@app.route('/maintenance-work-order/<int:pk>/invoices/export')
+def maintenance_work_order_invoices_export(pk):
+    _ensure_maintenance_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    wo = MaintenanceWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and wo.employee_id and wo.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_work_order_list'))
+    expenses = wo.expenses.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
+    headers = [
+        'Work Order', 'Bill No', 'Date', 'Party', 'Payment', 'Job category', 'Amount', 'Line items (count)',
+    ]
+    data_rows = []
+    for e in expenses:
+        line_ct = e.items.count() if e.items else 0
+        data_rows.append([
+            wo.work_order_no or '',
+            f'MAINT-{e.id}',
+            e.expense_date.strftime('%d-%m-%Y') if e.expense_date else '',
+            e.workspace_party.name if e.workspace_party else '',
+            e.payment_type or '',
+            e.job_category or '',
+            round(float(e.total_bill_amount or 0), 2),
+            line_ct,
+        ])
+    return generate_excel_template(
+        headers,
+        data_rows,
+        required_columns=[],
+        filename=f'wo_{wo.work_order_no or pk}_bills_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx',
+    )
+
+
+@app.route('/maintenance-work-order/<int:pk>/media/download/<int:att_id>')
+def maintenance_work_order_media_download(pk, att_id):
+    _ensure_maintenance_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    wo = MaintenanceWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and wo.employee_id and wo.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_work_order_list'))
+    att = MaintenanceWorkOrderAttachment.query.filter_by(id=att_id, work_order_id=wo.id).first()
+    if not att:
+        flash('Attachment not found.', 'warning')
+        return redirect(url_for('maintenance_work_order_detail', pk=pk))
+    dl_name = _maintenance_attachment_download_name(att)
+    local_full = _maintenance_attachment_local_full_path(att.file_path or '')
+    if local_full:
+        return send_file(local_full, as_attachment=True, download_name=dl_name, conditional=True, max_age=0)
+    try:
+        blob, mime = _maintenance_attachment_read_bytes(att.file_path or '')
+    except Exception as ex:
+        app.logger.warning('WO media download failed (%s): %s', att.id, ex)
+        flash('Download failed for this attachment.', 'danger')
+        return redirect(url_for('maintenance_work_order_unified_media', pk=pk))
+    if not blob:
+        flash('Attachment file is empty.', 'warning')
+        return redirect(url_for('maintenance_work_order_unified_media', pk=pk))
+    return send_file(BytesIO(blob), as_attachment=True, download_name=dl_name, mimetype=(mime or 'application/octet-stream'), max_age=0)
+
+
+def _mwo_unified_gallery_build_items(wo):
+    """Build combined media_items for bill + WO attachments (same shape as maintenance_expense_media)."""
+
+    def _human_size(n):
+        if n is None:
+            return ''
+        size = float(n)
+        units = ['B', 'KB', 'MB', 'GB', 'TB']
+        idx = 0
+        while size >= 1024 and idx < len(units) - 1:
+            size /= 1024.0
+            idx += 1
+        if idx == 0:
+            return f"{int(size)} {units[idx]}"
+        return f"{size:.1f} {units[idx]}"
+
+    def _local_sz(stored_path):
+        if not stored_path:
+            return None
+        p = str(stored_path).strip()
+        if p.startswith('http://') or p.startswith('https://'):
+            return None
+        upload_root = os.path.abspath(app.config.get('UPLOAD_FOLDER', ''))
+        if not upload_root:
+            return None
+        rel = p.replace('\\', '/').lstrip('/')
+        if rel.startswith('uploads/'):
+            rel = rel[len('uploads/'):]
+        full = os.path.abspath(os.path.join(upload_root, rel.replace('/', os.sep)))
+        if not full.startswith(upload_root):
+            return None
+        try:
+            return os.path.getsize(full)
+        except OSError:
+            return None
+
+    def _local_fp(stored_path):
+        if not stored_path:
+            return None
+        p = str(stored_path).strip()
+        if p.startswith('http://') or p.startswith('https://'):
+            return None
+        upload_root = os.path.abspath(app.config.get('UPLOAD_FOLDER', ''))
+        if not upload_root:
+            return None
+        rel = p.replace('\\', '/').lstrip('/')
+        if rel.startswith('uploads/'):
+            rel = rel[len('uploads/'):]
+        full = os.path.abspath(os.path.join(upload_root, rel.replace('/', os.sep)))
+        if not full.startswith(upload_root):
+            return None
+        return full if os.path.isfile(full) else None
+
+    media_items = []
+    expenses = wo.expenses.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
+    for exp in expenses:
+        for att in exp.attachments.order_by(MaintenanceExpenseAttachment.created_at.asc(), MaintenanceExpenseAttachment.id.asc()).all():
+            url = media_url_filter(att.file_path or '')
+            if not url:
+                continue
+            ftype = (att.file_type or '').strip().lower()
+            if ftype not in ('image', 'video'):
+                path = (att.file_path or '').lower()
+                if any(path.endswith(x) for x in ('.mp4', '.webm', '.mov')):
+                    ftype = 'video'
+                else:
+                    ftype = 'image'
+            size_bytes = _local_sz(att.file_path or '')
+            created_at = att.created_at
+            label = f"Bill MAINT-{exp.id}"
+            media_items.append({
+                'url': url,
+                'type': ftype,
+                'name': f"{label} — {att.original_name or os.path.basename(att.file_path or '') or 'Attachment'}",
+                'created_at': created_at.strftime('%d-%m-%Y %I:%M %p') if created_at else '',
+                'created_at_iso': created_at.isoformat() if created_at else '',
+                'size_bytes': size_bytes,
+                'size_label': _human_size(size_bytes),
+                'download_url': url_for('maintenance_expense_media_download', pk=exp.id, att_id=att.id),
+                'is_local_file': bool(_local_fp(att.file_path or '')),
+            })
+    wo_start = len(media_items)
+    for att in wo.attachments.order_by(MaintenanceWorkOrderAttachment.created_at.asc(), MaintenanceWorkOrderAttachment.id.asc()).all():
+        url = media_url_filter(att.file_path or '')
+        if not url:
+            continue
+        ftype = (att.file_type or '').strip().lower()
+        if ftype not in ('image', 'video'):
+            path = (att.file_path or '').lower()
+            if any(path.endswith(x) for x in ('.mp4', '.webm', '.mov')):
+                ftype = 'video'
+            else:
+                ftype = 'image'
+        size_bytes = _local_sz(att.file_path or '')
+        created_at = att.created_at
+        media_items.append({
+            'url': url,
+            'type': ftype,
+            'name': f"WO {wo.work_order_no or ''} — {att.original_name or os.path.basename(att.file_path or '') or 'Attachment'}",
+            'created_at': created_at.strftime('%d-%m-%Y %I:%M %p') if created_at else '',
+            'created_at_iso': created_at.isoformat() if created_at else '',
+            'size_bytes': size_bytes,
+            'size_label': _human_size(size_bytes),
+            'download_url': url_for('maintenance_work_order_media_download', pk=wo.id, att_id=att.id),
+            'is_local_file': bool(_local_fp(att.file_path or '')),
+        })
+    return media_items, wo_start
+
+
+def _mwo_job_gallery_build_items(wo):
+    def _human_size(n):
+        if n is None:
+            return ''
+        size = float(n)
+        units = ['B', 'KB', 'MB', 'GB', 'TB']
+        idx = 0
+        while size >= 1024 and idx < len(units) - 1:
+            size /= 1024.0
+            idx += 1
+        if idx == 0:
+            return f"{int(size)} {units[idx]}"
+        return f"{size:.1f} {units[idx]}"
+
+    def _local_sz(stored_path):
+        if not stored_path:
+            return None
+        p = str(stored_path).strip()
+        if p.startswith('http://') or p.startswith('https://'):
+            return None
+        upload_root = os.path.abspath(app.config.get('UPLOAD_FOLDER', ''))
+        if not upload_root:
+            return None
+        rel = p.replace('\\', '/').lstrip('/')
+        if rel.startswith('uploads/'):
+            rel = rel[len('uploads/'):]
+        full = os.path.abspath(os.path.join(upload_root, rel.replace('/', os.sep)))
+        if not full.startswith(upload_root):
+            return None
+        try:
+            return os.path.getsize(full)
+        except OSError:
+            return None
+
+    def _local_fp(stored_path):
+        if not stored_path:
+            return None
+        p = str(stored_path).strip()
+        if p.startswith('http://') or p.startswith('https://'):
+            return None
+        upload_root = os.path.abspath(app.config.get('UPLOAD_FOLDER', ''))
+        if not upload_root:
+            return None
+        rel = p.replace('\\', '/').lstrip('/')
+        if rel.startswith('uploads/'):
+            rel = rel[len('uploads/'):]
+        full = os.path.abspath(os.path.join(upload_root, rel.replace('/', os.sep)))
+        if not full.startswith(upload_root):
+            return None
+        return full if os.path.isfile(full) else None
+
+    media_items = []
+    for att in wo.attachments.order_by(MaintenanceWorkOrderAttachment.created_at.asc(), MaintenanceWorkOrderAttachment.id.asc()).all():
+        url = media_url_filter(att.file_path or '')
+        if not url:
+            continue
+        ftype = (att.file_type or '').strip().lower()
+        if ftype not in ('image', 'video'):
+            path = (att.file_path or '').lower()
+            if any(path.endswith(x) for x in ('.mp4', '.webm', '.mov')):
+                ftype = 'video'
+            else:
+                ftype = 'image'
+        size_bytes = _local_sz(att.file_path or '')
+        created_at = att.created_at
+        media_items.append({
+            'url': url,
+            'type': ftype,
+            'name': att.original_name or os.path.basename(att.file_path or '') or 'Attachment',
+            'created_at': created_at.strftime('%d-%m-%Y %I:%M %p') if created_at else '',
+            'created_at_iso': created_at.isoformat() if created_at else '',
+            'size_bytes': size_bytes,
+            'size_label': _human_size(size_bytes),
+            'download_url': url_for('maintenance_work_order_media_download', pk=wo.id, att_id=att.id),
+            'is_local_file': bool(_local_fp(att.file_path or '')),
+        })
+    return media_items
+
+
+@app.route('/maintenance-work-order/<int:pk>/all-media')
+def maintenance_work_order_unified_media(pk):
+    _ensure_maintenance_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    wo = MaintenanceWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and wo.employee_id and wo.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_work_order_list'))
+    default_back = url_for('maintenance_work_order_detail', pk=pk)
+    back_url = _safe_internal_path(request.args.get('return_to'), default_back)
+    media_items, wo_start_index = _mwo_unified_gallery_build_items(wo)
+    return render_template(
+        'maintenance_work_order_unified_media.html',
+        rec=wo,
+        media_items=media_items,
+        back_url=back_url,
+        wo_start_index=wo_start_index,
+        media_title='Work order — all media (bills + job photos)',
+        media_date_label=(wo.opened_on.strftime('%d-%m-%Y') if wo.opened_on else '-'),
+    )
+
+
+@app.route('/maintenance-work-order/<int:pk>/job-media')
+def maintenance_work_order_job_media(pk):
+    _ensure_maintenance_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    wo = MaintenanceWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and wo.employee_id and wo.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('maintenance_work_order_list'))
+    default_back = url_for('maintenance_work_order_detail', pk=pk)
+    back_url = _safe_internal_path(request.args.get('return_to'), default_back)
+    media_items = _mwo_job_gallery_build_items(wo)
+    return render_template(
+        'maintenance_expense_media.html',
+        rec=wo,
+        media_items=media_items,
+        back_url=back_url,
+        media_title='Work order job photos / videos',
+        media_date_label=(wo.opened_on.strftime('%d-%m-%Y') if wo.opened_on else None),
+        show_download_all=False,
     )
 
 
@@ -25030,7 +25383,15 @@ def maintenance_expense_view(pk):
     if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('maintenance_expense_list'))
-    return render_template('maintenance_expense_detail.html', rec=rec, title='Maintenance Expense Detail')
+    default_back = url_for('maintenance_expense_list')
+    back_url = _safe_internal_path(request.args.get('return_to'), default_back)
+    return render_template(
+        'maintenance_expense_detail.html',
+        rec=rec,
+        title='Maintenance Expense Detail',
+        back_url=back_url,
+        return_to_path=request.full_path,
+    )
 
 
 @app.route('/maintenance-expense/delete/<int:pk>', methods=['POST'])
@@ -25146,7 +25507,15 @@ def maintenance_expense_media(pk):
             'download_url': url_for('maintenance_expense_media_download', pk=rec.id, att_id=att.id),
             'is_local_file': bool(_local_attachment_full_path(att.file_path or '')),
         })
-    return render_template('maintenance_expense_media.html', rec=rec, media_items=media_items)
+    default_back = url_for('maintenance_expense_list')
+    back_url = _safe_internal_path(request.args.get('return_to'), default_back)
+    return render_template(
+        'maintenance_expense_media.html',
+        rec=rec,
+        media_items=media_items,
+        back_url=back_url,
+        media_date_label=format_date_ddmmyyyy(rec.expense_date) if rec.expense_date else None,
+    )
 
 
 def _maintenance_attachment_download_name(att):

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Maintenance Media{% endblock %}
+{% block title %}Work Order Media (All){% endblock %}
 {% block content %}
 <style>
   .media-wrap { max-width: min(1680px, calc(100vw - 96px)); margin: 0 auto; }
@@ -12,61 +12,27 @@
   .media-meta { padding:.45rem .55rem; border-top:1px solid #e2e8f0; }
   .media-name { font-size:.82rem; font-weight:600; word-break:break-word; line-height:1.3; }
   .media-sub { font-size:.75rem; color:#64748b; margin-top:2px; }
-
   .gv-overlay { position:fixed; inset:0; z-index:9999; background:rgba(2,6,23,.94); display:none; flex-direction:column; }
   .gv-overlay.open { display:flex; }
-  .gv-top {
-    flex:0 0 auto;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:10px;
-    padding:10px 16px;
-    color:#e2e8f0;
-    border-bottom:1px solid rgba(148,163,184,.22);
-  }
+  .gv-top { flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 16px; color:#e2e8f0; border-bottom:1px solid rgba(148,163,184,.22); }
   .gv-top-left { display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0; }
   .gv-top .gv-info { font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: min(62vw, 760px); }
-  .gv-tool {
-    border:none; border-radius:8px; color:#fff; background:rgba(255,255,255,.14);
-    min-width:38px; height:36px; padding:0 10px; font-size:.9rem;
-    display:inline-flex; align-items:center; justify-content:center; gap:6px;
-  }
+  .gv-tool { border:none; border-radius:8px; color:#fff; background:rgba(255,255,255,.14); min-width:38px; height:36px; padding:0 10px; font-size:.9rem; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
   .gv-tool:hover { background:rgba(255,255,255,.24); }
   .gv-close { border-radius:50%; width:38px; height:38px; min-width:38px; }
-
-  .gv-stage {
-    flex:1 1 auto; min-height:0; position:relative; overflow:hidden;
-    display:flex; align-items:center; justify-content:center; touch-action:pan-y;
-  }
-  .gv-stage img, .gv-stage video {
-    max-width: calc(100% - 120px);
-    max-height: calc(100% - 20px);
-    object-fit:contain;
-    border-radius:8px;
-    user-select:none;
-    -webkit-user-drag:none;
-    transform-origin:center center;
-  }
+  .gv-stage { flex:1 1 auto; min-height:0; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; touch-action:pan-y; }
+  .gv-stage img, .gv-stage video { max-width: calc(100% - 120px); max-height: calc(100% - 20px); object-fit:contain; border-radius:8px; user-select:none; -webkit-user-drag:none; transform-origin:center center; }
   .gv-stage img.zoomable { cursor:grab; transition: transform .08s linear; }
   .gv-stage img.zoomable.dragging { cursor:grabbing; }
-
-  .gv-arrow {
-    position:absolute; top:50%; transform:translateY(-50%);
-    width:48px; height:48px; border:none; border-radius:50%;
-    background:rgba(255,255,255,.15); color:#fff; font-size:1.3rem;
-    display:flex; align-items:center; justify-content:center; z-index:2;
-  }
+  .gv-arrow { position:absolute; top:50%; transform:translateY(-50%); width:48px; height:48px; border:none; border-radius:50%; background:rgba(255,255,255,.15); color:#fff; font-size:1.3rem; display:flex; align-items:center; justify-content:center; z-index:2; }
   .gv-arrow:hover { background:rgba(255,255,255,.3); }
   .gv-arrow.left { left:12px; }
   .gv-arrow.right { right:12px; }
   .gv-loading { color:#94a3b8; font-size:.95rem; position:absolute; }
   .gv-err { color:#fca5a5; font-size:.9rem; text-align:center; }
   .gv-err a { color:#93c5fd; }
-
   .pill { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:4px 10px; font-size:.78rem; background:#e2e8f0; color:#0f172a; }
   .pill.dark { background:#0f172a; color:#e2e8f0; border:1px solid #334155; }
-
   @media (max-width: 900px) {
     .gv-top { padding:8px 10px; }
     .gv-top .gv-info { max-width: 52vw; }
@@ -82,10 +48,10 @@
   <div class="media-wrap">
     <div class="d-flex justify-content-between align-items-center mb-3 media-head">
       <div>
-        <h5 class="mb-0"><i class="bi bi-images me-2"></i>{{ media_title or 'Maintenance Media Gallery' }}</h5>
-        <small>Vehicle: {{ rec.vehicle.vehicle_no if rec.vehicle else '-' }} | Date: {{ media_date_label or (rec.expense_date|ddmmyyyy if rec.expense_date else '—') }}</small>
+        <h5 class="mb-0"><i class="bi bi-images me-2"></i>{{ media_title or 'Work order — all media' }}</h5>
+        <small>Work order: {{ rec.work_order_no or '-' }} | Vehicle: {{ rec.vehicle.vehicle_no if rec.vehicle else '-' }} | Opened: {{ rec.opened_on|ddmmyyyy if rec.opened_on else '-' }}</small>
       </div>
-      <a href="{{ back_url or url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>{{ back_link_label|default('Back') }}</a>
+      <a href="{{ back_url or url_for('maintenance_work_order_detail', pk=rec.id) }}" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
     </div>
 
     {% if media_items %}
@@ -95,16 +61,18 @@
         <span class="pill"><i class="bi bi-collection"></i> Total: {{ media_items|length }}</span>
         <span class="pill"><i class="bi bi-image"></i> Images: {{ image_count }}</span>
         <span class="pill"><i class="bi bi-camera-video"></i> Videos: {{ video_count }}</span>
-        {% if show_download_all is not defined or show_download_all %}
-        <a href="{{ download_all_url or url_for('maintenance_expense_media_download_all', pk=rec.id) }}" class="btn btn-sm btn-success ms-auto">
-          <i class="bi bi-download me-1"></i>All Media Download
-        </a>
-        {% endif %}
       </div>
 
       <div class="media-grid" id="mediaGrid">
+        {% set ns = namespace(idx=0) %}
         {% for m in media_items %}
-          <div class="media-card" data-idx="{{ loop.index0 }}">
+          {% if loop.index0 == 0 and wo_start_index > 0 %}
+            <div class="text-primary fw-bold border-bottom py-1" style="grid-column:1 / -1"><i class="bi bi-receipt me-1"></i> Bills (maintenance expense files)</div>
+          {% endif %}
+          {% if loop.index0 == wo_start_index and wo_start_index < (media_items|length) %}
+            <div class="text-primary fw-bold border-bottom py-1 {% if wo_start_index > 0 %}mt-1{% endif %}" style="grid-column:1 / -1"><i class="bi bi-camera me-1"></i> Work order (job photos / videos)</div>
+          {% endif %}
+          <div class="media-card" data-idx="{{ ns.idx }}">
             {% if m.type == 'video' %}
               <video class="media-thumb" src="{{ m.url }}" preload="metadata" muted></video>
             {% else %}
@@ -119,11 +87,12 @@
               </div>
             </div>
           </div>
+          {% set ns.idx = ns.idx + 1 %}
         {% endfor %}
       </div>
     {% else %}
       <div class="card border-0 shadow-sm"><div class="card-body text-center text-muted py-5">
-        <i class="bi bi-image display-6 d-block mb-2"></i>No media found for this maintenance entry.
+        <i class="bi bi-image display-6 d-block mb-2"></i>Koi media file nahi mili.
       </div></div>
     {% endif %}
   </div>
@@ -154,7 +123,6 @@
 (function () {
   var ITEMS = {{ media_items | tojson }};
   if (!Array.isArray(ITEMS) || !ITEMS.length) return;
-
   var overlay = document.getElementById('gvOverlay');
   var stage = document.getElementById('gvStage');
   var info = document.getElementById('gvInfo');
@@ -173,20 +141,12 @@
   var touchStartX = 0;
   var touchStartY = 0;
   var touchStartTime = 0;
-
   document.body.appendChild(overlay);
-
-  function resetZoomState() {
-    zoom = 1;
-    panX = 0;
-    panY = 0;
-  }
-
+  function resetZoomState() { zoom = 1; panX = 0; panY = 0; }
   function applyZoomTransform() {
     if (!mediaEl || mediaEl.tagName !== 'IMG') return;
     mediaEl.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
   }
-
   function setMeta(it) {
     var parts = [];
     parts.push((cur + 1) + ' / ' + ITEMS.length);
@@ -197,7 +157,6 @@
     if (it.created_at) p += ' | ' + it.created_at;
     metaPill.textContent = p;
   }
-
   function clearStageAux() {
     var oldLoad = stage.querySelector('.gv-loading');
     if (oldLoad) oldLoad.remove();
@@ -208,13 +167,11 @@
     mediaEl = null;
     resetZoomState();
   }
-
   function renderCurrent() {
     cur = ((cur % ITEMS.length) + ITEMS.length) % ITEMS.length;
     var it = ITEMS[cur];
     clearStageAux();
     setMeta(it);
-
     if (it.type === 'video') {
       var v = document.createElement('video');
       v.src = it.url;
@@ -225,12 +182,10 @@
       stage.insertBefore(v, document.getElementById('gvNext'));
       return;
     }
-
     var loader = document.createElement('div');
     loader.className = 'gv-loading';
     loader.textContent = 'Loading image...';
     stage.insertBefore(loader, document.getElementById('gvNext'));
-
     var img = new Image();
     img.className = 'zoomable';
     img.alt = it.name || 'Image';
@@ -249,14 +204,9 @@
     };
     img.src = it.url;
   }
-
-  function showAt(index) {
-    cur = index;
-    renderCurrent();
-  }
+  function showAt(index) { cur = index; renderCurrent(); }
   function showPrev() { showAt(cur - 1); }
   function showNext() { showAt(cur + 1); }
-
   function stopSlideshow() {
     if (slideshowTimer) {
       clearInterval(slideshowTimer);
@@ -265,16 +215,10 @@
     }
   }
   function toggleSlideshow() {
-    if (slideshowTimer) {
-      stopSlideshow();
-      return;
-    }
-    slideshowTimer = setInterval(function () {
-      showNext();
-    }, 3500);
+    if (slideshowTimer) { stopSlideshow(); return; }
+    slideshowTimer = setInterval(function () { showNext(); }, 3500);
     document.getElementById('gvPlayBtn').innerHTML = '<i class="bi bi-pause-fill"></i><span class="lbl">Pause</span>';
   }
-
   function openViewer(index) {
     showAt(index);
     overlay.classList.add('open');
@@ -282,7 +226,6 @@
     lastBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
   }
-
   function closeViewer() {
     overlay.classList.remove('open');
     overlay.setAttribute('aria-hidden', 'true');
@@ -290,17 +233,12 @@
     clearStageAux();
     document.body.style.overflow = lastBodyOverflow;
   }
-
   function setZoom(delta) {
     if (!mediaEl || mediaEl.tagName !== 'IMG') return;
     zoom = Math.max(1, Math.min(5, zoom + delta));
-    if (zoom === 1) {
-      panX = 0;
-      panY = 0;
-    }
+    if (zoom === 1) { panX = 0; panY = 0; }
     applyZoomTransform();
   }
-
   function downloadCurrent() {
     var it = ITEMS[cur];
     if (!it) return;
@@ -312,7 +250,6 @@
     a.click();
     a.remove();
   }
-
   if (grid) {
     grid.addEventListener('click', function (e) {
       var card = e.target.closest('.media-card');
@@ -321,7 +258,6 @@
       openViewer(i);
     });
   }
-
   document.getElementById('gvClose').addEventListener('click', closeViewer);
   document.getElementById('gvPrev').addEventListener('click', function (e) { e.stopPropagation(); showPrev(); });
   document.getElementById('gvNext').addEventListener('click', function (e) { e.stopPropagation(); showNext(); });
@@ -329,22 +265,14 @@
   document.getElementById('gvDownloadBtn').addEventListener('click', downloadCurrent);
   document.getElementById('gvZoomInBtn').addEventListener('click', function () { setZoom(0.25); });
   document.getElementById('gvZoomOutBtn').addEventListener('click', function () { setZoom(-0.25); });
-  document.getElementById('gvZoomResetBtn').addEventListener('click', function () {
-    resetZoomState();
-    applyZoomTransform();
-  });
-
-  stage.addEventListener('click', function (e) {
-    if (e.target === stage) closeViewer();
-  });
-
+  document.getElementById('gvZoomResetBtn').addEventListener('click', function () { resetZoomState(); applyZoomTransform(); });
+  stage.addEventListener('click', function (e) { if (e.target === stage) closeViewer(); });
   stage.addEventListener('wheel', function (e) {
     if (!overlay.classList.contains('open')) return;
     if (!mediaEl || mediaEl.tagName !== 'IMG') return;
     e.preventDefault();
     setZoom(e.deltaY > 0 ? -0.15 : 0.15);
   }, { passive: false });
-
   stage.addEventListener('mousedown', function (e) {
     if (!mediaEl || mediaEl.tagName !== 'IMG' || zoom <= 1) return;
     dragOn = true;
@@ -363,14 +291,11 @@
     dragOn = false;
     mediaEl.classList.remove('dragging');
   });
-
   stage.addEventListener('touchstart', function (e) {
     if (!overlay.classList.contains('open')) return;
     var t = e.changedTouches && e.changedTouches[0];
     if (!t) return;
-    touchStartX = t.clientX;
-    touchStartY = t.clientY;
-    touchStartTime = Date.now();
+    touchStartX = t.clientX; touchStartY = t.clientY; touchStartTime = Date.now();
   }, { passive: true });
   stage.addEventListener('touchend', function (e) {
     if (!overlay.classList.contains('open')) return;
@@ -384,7 +309,6 @@
       else showNext();
     }
   }, { passive: true });
-
   document.addEventListener('keydown', function (e) {
     if (!overlay.classList.contains('open')) return;
     if (e.key === 'Escape') closeViewer();

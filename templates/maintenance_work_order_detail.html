@@ -9,11 +9,8 @@
   .mwo-ico-btn:hover { box-shadow: 0 2px 10px rgba(0,0,0,.12); }
   .mwo-ico-btn--print { border-color: #2563eb; color: #2563eb; }
   .mwo-ico-btn--print:hover { background: #eff6ff; }
-  .mwo-wo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
-  .mwo-wo-tile { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; background: #fff; display: block; text-decoration: none; color: inherit; }
-  .mwo-wo-tile img, .mwo-wo-tile video { width: 100%; height: 110px; object-fit: cover; border-radius: 7px; background: #f1f5f9; }
-  #woMediaPanel.wo-media-reveal { animation: mwoFade .25s ease; }
-  @keyframes mwoFade { from { opacity: 0; } to { opacity: 1; } }
+  .mwo-ico-btn--inv { border-color: #0d9488; color: #0d9488; }
+  .mwo-ico-btn--inv:hover { background: #f0fdfa; }
 </style>
 <div class="container-fluid py-3">
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
@@ -22,33 +19,17 @@
       <small class="text-muted">{{ rec.title }}</small>
     </div>
     <div class="d-flex flex-wrap align-items-center gap-2">
-      <div class="dropdown">
-        <button type="button" class="mwo-ico-btn mwo-ico-btn--print dropdown-toggle-no-caret" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" id="woEyeMenuBtn" title="Invoices & media" aria-label="Open invoices and media menu">
-          <i class="bi bi-eye" aria-hidden="true"></i>
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end shadow py-2" style="min-width: 10.5rem;" aria-labelledby="woEyeMenuBtn">
-          <li>
-            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{{ url_for('maintenance_expense_list', work_order_no=rec.work_order_no) }}">
-              <i class="bi bi-receipt text-primary"></i><span>Invoices</span>
-            </a>
-          </li>
-          <li>
-            <button type="button" class="dropdown-item d-flex align-items-center gap-2 py-2" id="btnWoOpenMedia">
-              <i class="bi bi-images text-success"></i><span>Media</span>
-            </button>
-          </li>
-        </ul>
-      </div>
-      <a href="{{ url_for('maintenance_work_order_list') }}" class="btn btn-outline-secondary btn-sm">Back</a>
+      <a href="{{ url_for('maintenance_work_order_invoices', pk=rec.id) }}{% if mwo_preserve_qs %}?{{ mwo_preserve_qs }}{% endif %}" class="btn btn-sm btn-outline-info"><i class="bi bi-receipt me-1"></i>Invoices</a>
+      <a href="{{ url_for('maintenance_work_order_unified_media', pk=rec.id) }}?return_to={{ request.full_path|url_quote }}" class="mwo-ico-btn mwo-ico-btn--print" title="Sari media — alag full page" aria-label="All media full page">
+        <i class="bi bi-eye" aria-hidden="true"></i>
+      </a>
+      <a href="{{ url_for('maintenance_work_order_list') }}{% if mwo_preserve_qs %}?{{ mwo_preserve_qs }}{% endif %}" class="btn btn-outline-secondary btn-sm">Back</a>
       <a href="{{ url_for('maintenance_work_order_form', pk=rec.id) }}" class="btn btn-outline-primary btn-sm">Edit</a>
       <a href="{{ url_for('maintenance_expense_form', work_order_id=rec.id) }}" class="btn btn-success btn-sm">
         <i class="bi bi-plus-circle me-1"></i>Add Bill
       </a>
     </div>
   </div>
-  <style>
-    .dropdown-toggle-no-caret::after { display: none !important; }
-  </style>
 
   <div class="row g-3 mb-3">
     <div class="col-md-8">
@@ -140,8 +121,8 @@
             <td>{{ "%.2f"|format((r.total_bill_amount or 0)|float) }}</td>
             <td>{{ r.attachments.count() }}</td>
             <td class="text-center">
-              <a href="{{ url_for('maintenance_expense_view', pk=r.id) }}" class="btn btn-outline-secondary btn-sm" title="Invoice detail"><i class="bi bi-file-text"></i></a>
-              <a href="{{ url_for('maintenance_expense_media', pk=r.id) }}" class="btn btn-outline-success btn-sm" title="Open bill media"><i class="bi bi-images"></i></a>
+              <a href="{{ url_for('maintenance_expense_view', pk=r.id) }}?return_to={{ request.full_path|url_quote }}" class="btn btn-outline-secondary btn-sm" title="Invoice detail"><i class="bi bi-file-text"></i></a>
+              <a href="{{ url_for('maintenance_expense_media', pk=r.id) }}?return_to={{ request.full_path|url_quote }}" class="btn btn-outline-success btn-sm" title="Open bill media"><i class="bi bi-images"></i></a>
               <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
             </td>
           </tr>
@@ -152,104 +133,5 @@
       </table>
     </div>
   </div>
-
-  {# Media: hidden by default; opened via Eye → Media #}
-  <div id="woMediaPanel" class="card mb-3 d-none wo-media-reveal" tabindex="-1">
-    <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span><i class="bi bi-images me-2"></i>Media gallery</span>
-      <div class="d-flex align-items-center gap-2">
-        <span class="badge bg-secondary">Bills: {{ total_media }} file(s) · WO: {{ rec.attachments.count() }} file(s)</span>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnWoCloseMedia" aria-label="Hide media"><i class="bi bi-x-lg"></i></button>
-      </div>
-    </div>
-    <div class="card-body">
-      <section class="mb-4" aria-labelledby="mwo-sec-bills">
-        <h6 id="mwo-sec-bills" class="text-primary fw-bold border-bottom pb-2 mb-2">
-          <i class="bi bi-receipt me-1"></i> Bills (maintenance expense files)
-        </h6>
-        <p class="text-muted small mb-3">Yeh woh photos / files hain jo <strong>Add Maintenance Expense</strong> form par har bill ke sath upload ki gayi thin.</p>
-        {% set nsb = namespace(n=0) %}
-        {% for e in expenses %}
-          {% if e.attachments.count() %}
-            {% set nsb.n = nsb.n + 1 %}
-            <div class="mb-3">
-              <div class="small fw-semibold text-secondary mb-2">Bill MAINT-{{ e.id }}{% if e.expense_date %} · {{ e.expense_date|ddmmyyyy }}{% endif %}</div>
-              <div class="mwo-wo-grid">
-                {% for att in e.attachments %}
-                  {% set att_url = att.file_path|media_url %}
-                  <a href="{{ att_url }}" target="_blank" rel="noopener" class="mwo-wo-tile">
-                    {% if att.file_type == 'image' %}
-                      <img src="{{ att_url }}" alt="{{ att.original_name or 'Photo' }}" loading="lazy">
-                    {% elif att.file_type == 'video' %}
-                      <video src="{{ att_url }}" controls preload="metadata"></video>
-                    {% else %}
-                      <div class="d-flex align-items-center justify-content-center" style="height:110px;background:#f1f5f9;border-radius:7px"><i class="bi bi-paperclip fs-3"></i></div>
-                    {% endif %}
-                    <div class="mt-1 small text-muted" style="word-break:break-word;font-size:0.78rem">{{ att.original_name or att.file_path }}</div>
-                  </a>
-                {% endfor %}
-              </div>
-            </div>
-          {% endif %}
-        {% endfor %}
-        {% if nsb.n == 0 %}
-        <p class="text-muted small mb-0">Is work order par abhi kisi bill se koi file attach nahi.</p>
-        {% endif %}
-      </section>
-
-      <section aria-labelledby="mwo-sec-wo">
-        <h6 id="mwo-sec-wo" class="text-primary fw-bold border-bottom pb-2 mb-2">
-          <i class="bi bi-camera me-1"></i> Work order (job photos / videos)
-        </h6>
-        <p class="text-muted small mb-3">Yeh files is <strong>work order</strong> par seedha (edit work order) attach ki gayi thin — bills se alag.</p>
-        {% if rec.attachments.count() %}
-        <div class="mwo-wo-grid">
-          {% for att in rec.attachments %}
-            {% set att_url = att.file_path|media_url %}
-            <a href="{{ att_url }}" target="_blank" rel="noopener" class="mwo-wo-tile">
-              {% if att.file_type == 'image' %}
-                <img src="{{ att_url }}" alt="{{ att.original_name or 'Photo' }}" loading="lazy">
-              {% elif att.file_type == 'video' %}
-                <video src="{{ att_url }}" controls preload="metadata"></video>
-              {% else %}
-                <div class="d-flex align-items-center justify-content-center" style="height:110px;background:#f1f5f9;border-radius:7px"><i class="bi bi-paperclip fs-3"></i></div>
-              {% endif %}
-              <div class="mt-1 small text-muted" style="word-break:break-word;font-size:0.78rem">{{ att.original_name or att.file_path }}</div>
-            </a>
-          {% endfor %}
-        </div>
-        {% else %}
-        <p class="text-muted small mb-0">Is work order par koi job photo / video nahi.</p>
-        {% endif %}
-      </section>
-    </div>
-  </div>
 </div>
-<script>
-(function() {
-  var panel = document.getElementById('woMediaPanel');
-  var openBtn = document.getElementById('btnWoOpenMedia');
-  var closeBtn = document.getElementById('btnWoCloseMedia');
-  var eyeBtn = document.getElementById('woEyeMenuBtn');
-  function showPanel() {
-    if (!panel) return;
-    panel.classList.remove('d-none');
-    panel.classList.add('wo-media-reveal');
-    setTimeout(function() { panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
-  }
-  function hidePanel() {
-    if (panel) panel.classList.add('d-none');
-  }
-  if (openBtn) {
-    openBtn.addEventListener('click', function() {
-      if (window.bootstrap) {
-        var inst = window.bootstrap.Dropdown.getInstance(eyeBtn);
-        if (inst) inst.hide();
-      }
-      showPanel();
-    });
-  }
-  if (closeBtn) closeBtn.addEventListener('click', hidePanel);
-})();
-</script>
 {% endblock %}
