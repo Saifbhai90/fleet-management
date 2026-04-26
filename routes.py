@@ -10438,6 +10438,23 @@ def driver_salary_slip():
         veh_q = veh_q.filter(Vehicle.district_id == district_id)
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in veh_q.all()]
 
+    # Driver list: same join/filter as Active Driver Summary (not attendance API) so project/vehicle
+    # OR-logic matches — avoids empty dropdown after Apply when driver.project != vehicle.project.
+    ad_rows = _active_drivers_data(
+        project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift='',
+        from_date_val=None, to_date_val=None,
+        allowed_vehicles=allowed_vehicles, allowed_projects=allowed_projects,
+        allowed_districts=allowed_districts, is_master_or_admin=is_master_or_admin,
+    )
+    driver_choices = [
+        (d.id, f"{d.name} ({d.driver_id})")
+        for d, _veh, _p, _di, _rj in ad_rows
+        if (d.status or '') == 'Active'
+    ]
+    valid_d_ids = {d[0] for d in driver_choices}
+    if selected_driver_id and selected_driver_id not in valid_d_ids:
+        selected_driver_id = 0
+
     return render_template(
         'driver_salary_slip.html',
         project_id=project_id,
@@ -10447,6 +10464,7 @@ def driver_salary_slip():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+        driver_choices=driver_choices,
         disable_project=disable_project,
         disable_district=disable_district,
         disable_vehicle=disable_vehicle,

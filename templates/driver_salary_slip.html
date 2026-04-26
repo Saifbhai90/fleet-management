@@ -45,17 +45,27 @@
               </select>
               {% if disable_vehicle %}<input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">{% endif %}
             </div>
+            <div class="col-12">
+              <label class="form-label small mb-0">Driver <span class="text-danger">*</span></label>
+              <select id="ssDriver" name="driver_id" class="form-select form-select-sm search-select" data-placeholder="Search driver...">
+                <option value="0">— Select driver —</option>
+                {% for did, dlabel in driver_choices %}
+                <option value="{{ did }}" {% if selected_driver_id == did %}selected{% endif %}>{{ dlabel }}</option>
+                {% endfor %}
+              </select>
+            </div>
             <div class="col-12 d-flex gap-2">
               <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>Apply filters</button>
               <a href="{{ url_for('driver_salary_slip') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
             </div>
+            <p class="small text-muted mt-1 mb-0" id="ssDriverHint">
+            {% if driver_choices|length == 0 %}
+            Is filter par koi <strong>Active</strong> driver nahi mila — project / district / vehicle badal kar dubara &quot;Apply filters&quot; try karein.
+            {% else %}
+            <strong>{{ driver_choices|length }}</strong> active driver(s) for this filter. Select a driver to load details (slip right side).
+            {% endif %}
+            </p>
           </form>
-          <hr>
-          <label class="form-label small mb-0">Driver <span class="text-danger">*</span></label>
-          <select id="ssDriver" class="form-select form-select-sm search-select" data-initial-id="{{ selected_driver_id or 0 }}">
-            <option value="0">— Select driver —</option>
-          </select>
-          <p class="small text-muted mt-2 mb-0" id="ssDriverHint">Filters apply karke driver list load hoti hai.</p>
         </div>
       </div>
 
@@ -206,12 +216,15 @@
 
 <script>
 (function() {
-  var projectEl = document.getElementById('ssProject');
-  var districtEl = document.getElementById('ssDistrict');
-  var vehicleEl = document.getElementById('ssVehicle');
   var driverEl = document.getElementById('ssDriver');
   if (!driverEl) return;
-  var initialId = driverEl.getAttribute('data-initial-id') || '0';
+
+  function currentDriverId() {
+    try {
+      if (driverEl.tomselect) return String(driverEl.tomselect.getValue() || '0');
+    } catch (e) {}
+    return String(driverEl.value || '0');
+  }
 
   function txt(el, v) { if (el) el.textContent = (v == null || v === '') ? '—' : String(v); }
 
@@ -288,37 +301,13 @@
     if (slP) slP.textContent = prep ? prep : '_________________________';
   }
 
-  function refreshDriverDropdown() {
-    var pid = (projectEl && projectEl.value) || '0';
-    var did = (districtEl && districtEl.value) || '0';
-    var vid = (vehicleEl && vehicleEl.value) || '0';
-    var want = (initialId && initialId !== '0') ? String(initialId) : ((driverEl.value && driverEl.value !== '0') ? String(driverEl.value) : '');
-    fetch('/api/attendance/filtered-drivers?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did) + '&vehicle_id=' + encodeURIComponent(vid) + '&shift=')
-      .then(function(r) { return r.json(); })
-      .then(function(arr) {
-        driverEl.innerHTML = '<option value="0">— Select driver —</option>';
-        arr.forEach(function(d) {
-          var opt = document.createElement('option');
-          opt.value = d.id;
-          opt.textContent = d.name + ' (' + (d.driver_id || '-') + ')';
-          driverEl.appendChild(opt);
-        });
-        if (want && driverEl.querySelector('option[value="' + want + '"]')) {
-          driverEl.value = want;
-        } else {
-          driverEl.value = '0';
-        }
-        initialId = '0';
-        if (driverEl.value && driverEl.value !== '0') loadDriverData(driverEl.value);
-        else { setDashAuto(); syncManualToSlip(); }
-      }).catch(function() {
-        driverEl.innerHTML = '<option value="0">— Select driver —</option>';
-        setDashAuto();
-        syncManualToSlip();
-      });
+  function bootDriverPreview() {
+    var v = currentDriverId();
+    if (v && v !== '0') loadDriverData(v);
+    else { setDashAuto(); syncManualToSlip(); }
   }
 
-  driverEl.addEventListener('change', function() { loadDriverData(this.value); });
+  driverEl.addEventListener('change', function() { loadDriverData(currentDriverId()); });
   ['inSalaryMonth','inCertDate','inPeriodFrom','inPeriodTo','inBasic','inAllow','inGross','inDed','inNet','inPrepared'].forEach(function(id) {
     var e = document.getElementById(id);
     if (e) e.addEventListener('input', syncManualToSlip);
@@ -329,7 +318,8 @@
   if (_bp) _bp.addEventListener('click', function() { window.print(); });
 
   syncManualToSlip();
-  refreshDriverDropdown();
+  setTimeout(bootDriverPreview, 0);
+  setTimeout(bootDriverPreview, 400);
 })();
 </script>
 {% endblock %}
