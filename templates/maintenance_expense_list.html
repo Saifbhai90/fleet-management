@@ -200,9 +200,15 @@
                 {% if r.work_order %}
                 <a href="{{ url_for('maintenance_work_order_detail', pk=r.work_order.id) }}" class="btn btn-outline-warning btn-sm" title="Work Order"><i class="bi bi-clipboard2-check"></i></a>
                 {% endif %}
-                <button type="button" class="btn btn-outline-success btn-sm expense-view-choose" title="Invoice ya Media"
-                        data-invoice-url="{{ url_for('maintenance_expense_view', pk=r.id) }}"
-                        data-media-url="{{ url_for('maintenance_expense_media', pk=r.id) }}"><i class="bi bi-eye"></i></button>
+                <div class="expense-view-wrap d-inline-block align-top">
+                  <button type="button" class="btn btn-outline-success btn-sm expense-view-eye" title="Invoice / Media" aria-expanded="false" aria-haspopup="true">
+                    <i class="bi bi-eye"></i>
+                  </button>
+                  <div class="expense-view-popover d-none border rounded-2 bg-white shadow p-2" style="z-index: 2000; min-width: 7.25rem;">
+                    <a class="btn btn-primary btn-sm w-100 mb-1 py-1" href="{{ url_for('maintenance_expense_view', pk=r.id) }}" target="_blank" rel="noopener">Invoice</a>
+                    <a class="btn btn-outline-success btn-sm w-100 py-1" href="{{ url_for('maintenance_expense_media', pk=r.id) }}" target="_blank" rel="noopener">Media</a>
+                  </div>
+                </div>
                 <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                 <form action="{{ url_for('maintenance_expense_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this maintenance entry?');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -258,24 +264,6 @@
   </div>
 </div>
 
-<div class="modal fade" id="expenseViewChoiceModal" tabindex="-1" aria-labelledby="expenseViewChoiceLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header py-2">
-        <h5 class="modal-title" id="expenseViewChoiceLabel"><i class="bi bi-question-circle me-2 text-primary"></i>Kya dekhna hai?</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <p class="text-muted small mb-3">Invoice (poori details, print) ya Maintenance Media Gallery?</p>
-        <div class="d-grid gap-2">
-          <a id="expenseChoiceInvoiceLink" href="#" class="btn btn-primary" target="_blank" rel="noopener"><i class="bi bi-receipt me-1"></i>Invoice / Bill (print)</a>
-          <a id="expenseChoiceMediaLink" href="#" class="btn btn-outline-success" target="_blank" rel="noopener"><i class="bi bi-images me-1"></i>Maintenance Media Gallery</a>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <div id="maintUploadStatusPanel" class="card shadow border d-none">
   <div class="card-header py-2 d-flex justify-content-between align-items-center">
     <h6 class="mb-0"><i class="bi bi-cloud-upload me-2"></i>Upload Status</h6>
@@ -297,19 +285,61 @@
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 (function() {
-  document.querySelectorAll('.expense-view-choose').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var modalEl = document.getElementById('expenseViewChoiceModal');
-      if (!modalEl) return;
-      var inv = document.getElementById('expenseChoiceInvoiceLink');
-      var med = document.getElementById('expenseChoiceMediaLink');
-      if (inv) inv.href = btn.getAttribute('data-invoice-url') || '#';
-      if (med) med.href = btn.getAttribute('data-media-url') || '#';
-      if (window.bootstrap && bootstrap.Modal) {
-        new bootstrap.Modal(modalEl).show();
-      }
+  function closeAll() {
+    document.querySelectorAll('.expense-view-popover').forEach(function(p) {
+      p.classList.add('d-none');
+      p.classList.remove('position-fixed');
+      p.style.left = '';
+      p.style.top = '';
+    });
+    document.querySelectorAll('.expense-view-eye').forEach(function(b) {
+      b.setAttribute('aria-expanded', 'false');
+    });
+  }
+  function positionPop(eye, pop) {
+    if (!eye || !pop) return;
+    var r = eye.getBoundingClientRect();
+    var pw = 130;
+    var ph = 76;
+    var left = r.right - pw;
+    if (left < 8) left = 8;
+    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+    var top = r.bottom + 6;
+    if (top + ph > window.innerHeight - 8) {
+      top = r.top - ph - 6;
+    }
+    if (top < 8) top = 8;
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+  document.querySelectorAll('.expense-view-eye').forEach(function(eye) {
+    eye.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var wrap = eye.closest('.expense-view-wrap');
+      var pop = wrap && wrap.querySelector('.expense-view-popover');
+      if (!pop) return;
+      var wasOpen = !pop.classList.contains('d-none');
+      closeAll();
+      if (wasOpen) return;
+      pop.classList.remove('d-none');
+      pop.classList.add('position-fixed');
+      positionPop(eye, pop);
+      eye.setAttribute('aria-expanded', 'true');
     });
   });
+  document.querySelectorAll('.expense-view-popover a[href]').forEach(function(a) {
+    a.addEventListener('click', function() { closeAll(); });
+  });
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.closest && e.target.closest('.expense-view-wrap')) return;
+    closeAll();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeAll();
+  });
+  window.addEventListener('scroll', function() { closeAll(); }, true);
+  window.addEventListener('resize', function() { closeAll(); });
 })();
 document.addEventListener('DOMContentLoaded', function() {
   var districtSelect = document.getElementById('districtSelect');
