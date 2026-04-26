@@ -3,11 +3,11 @@
 {% block content %}
 <style>
   .wo-inv-wrap { max-width: min(920px, calc(100vw - 96px)); margin: 0 auto; }
-  .wo-inv-head { background: linear-gradient(135deg, #1d4ed8 0%, #0f172a 100%); color: #fff; border-radius: 12px; padding: .75rem 1rem; }
-  .mwo-stat { background: #f8fafc; border: 1px solid #e2e8f0; }
-  .mwo-stat--accent { background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%); border-color: #bfdbfe; }
-  .mwo-summary-card__head { background: linear-gradient(to right, #f8fafc 0%, #fff 100%) !important; border-bottom: 1px solid #e2e8f0 !important; }
-  .mwo-summary-card { border: 1px solid #e2e8f0 !important; border-radius: 14px !important; }
+  .wo-inv-head { background: linear-gradient(135deg, #1d4ed8 0%, #0f172a 100%); color: #fff; border-radius: 10px; padding: .5rem .85rem; }
+  .mwo-sum-h { background: #f8fafc !important; }
+  .mwo-metric-row { background: #fafafa; font-size: .8rem; }
+  .mwo-tiny-table { font-size: .8125rem; }
+  .mwo-summary-compact { border-radius: 8px !important; }
   .expense-invoice-bill { max-width: 800px; margin: 0 auto; border: 1px solid #dee2e6; border-radius: 12px; background: #fff; }
   .expense-invoice-bill .inv-head { border-bottom: 2px solid #ea580c; padding: 1rem 1.25rem; background: linear-gradient(135deg, #fff7ed 0%, #fff 100%); border-radius: 12px 12px 0 0; }
   .expense-invoice-bill .inv-row { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding: .35rem 0; border-bottom: 1px dashed #e9ecef; }
@@ -16,15 +16,15 @@
   @media print {
     .navbar, .sidebar, .flash-message, .d-print-none { display: none !important; }
     .main-content { margin: 0 !important; margin-top: 0 !important; padding: 8px !important; }
-    .mwo-summary-card, .expense-invoice-bill { border: 1px solid #000; box-shadow: none !important; }
+    .mwo-summary-compact, .expense-invoice-bill { border: 1px solid #000; box-shadow: none !important; }
   }
 </style>
-<div class="container-fluid py-3">
+<div class="container-fluid py-2">
   <div class="wo-inv-wrap">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 wo-inv-head d-print-none">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2 wo-inv-head d-print-none">
       <div>
-        <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>All invoices — {{ rec.work_order_no }}</h5>
-        <small class="text-white-50">{{ rec.title or '' }}</small>
+        <h6 class="mb-0"><i class="bi bi-receipt me-1"></i>{{ rec.work_order_no }}</h6>
+        <small class="text-white-50" style="font-size:.8rem">{{ rec.title or '' }}</small>
       </div>
       <div class="d-flex flex-wrap gap-2">
         <a href="{{ url_for('maintenance_work_order_detail', pk=rec.id) }}{% if mwo_preserve_qs %}?{{ mwo_preserve_qs }}{% endif %}" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>

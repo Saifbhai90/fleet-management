@@ -1,102 +1,91 @@
 {# requires: rec, expenses, total_bill, total_media, wo_media, return_to_path, mwo_summary_mode in ('detail','invoices'), optional mwo_preserve_qs #}
-<div class="card mwo-summary-card shadow-sm border-0 mb-4" id="wo-summary-details">
-  <div class="card-header py-3 border-0 mwo-summary-card__head d-flex flex-wrap align-items-center justify-content-between gap-2">
-    <div>
-      <h6 class="mb-0 fw-bold text-body"><i class="bi bi-clipboard2-data me-2 text-primary"></i>Summary &amp; work order</h6>
-      <small class="text-muted">Work order: <strong class="text-dark">{{ rec.work_order_no }}</strong> — {{ rec.title or '—' }}</small>
+<div class="card mwo-summary-compact border shadow-sm mb-2" id="wo-summary-details">
+  <div class="card-header py-2 px-3 d-flex flex-wrap align-items-center justify-content-between gap-1 mwo-sum-h">
+    <div class="small fw-semibold text-body">
+      <i class="bi bi-clipboard2-data me-1 text-primary"></i>Summary &amp; work order
+      <span class="text-muted fw-normal">— {{ rec.work_order_no }}{% if rec.title %}: <span class="text-dark">{{ rec.title }}</span>{% endif %}</span>
     </div>
     <div>
       {% if rec.status == 'closed' %}
-      <span class="badge bg-success">Closed</span>
+      <span class="badge bg-success" style="font-size:.7rem">Closed</span>
       {% elif rec.status == 'in_progress' %}
-      <span class="badge bg-warning text-dark">In progress</span>
+      <span class="badge bg-warning text-dark" style="font-size:.7rem">In progress</span>
       {% else %}
-      <span class="badge bg-primary">Open</span>
+      <span class="badge bg-primary" style="font-size:.7rem">Open</span>
       {% endif %}
     </div>
   </div>
-  <div class="card-body pt-0">
-    <div class="row g-2 g-md-3 mb-3 small">
-      <div class="col-6 col-md-3">
-        <div class="mwo-stat p-2 p-md-3 rounded-3 h-100">
-          <div class="text-muted text-uppercase" style="font-size:.65rem;letter-spacing:.04em">Bills</div>
-          <div class="fs-4 fw-bold text-body lh-1 mt-1">{{ expenses|length }}</div>
-        </div>
-      </div>
-      <div class="col-6 col-md-3">
-        <div class="mwo-stat p-2 p-md-3 rounded-3 h-100">
-          <div class="text-muted text-uppercase" style="font-size:.65rem;letter-spacing:.04em">Bill media</div>
-          <div class="fs-4 fw-bold text-body lh-1 mt-1">{{ total_media }}</div>
-        </div>
-      </div>
-      <div class="col-6 col-md-3">
-        <div class="mwo-stat p-2 p-md-3 rounded-3 h-100">
-          <div class="text-muted text-uppercase" style="font-size:.65rem;letter-spacing:.04em">Job photos (WO)</div>
-          <div class="fs-4 fw-bold text-body lh-1 mt-1">{{ wo_media }}</div>
-        </div>
-      </div>
-      <div class="col-6 col-md-3">
-        <div class="mwo-stat mwo-stat--accent p-2 p-md-3 rounded-3 h-100">
-          <div class="text-uppercase" style="font-size:.65rem;letter-spacing:.04em;opacity:.9">Grand total</div>
-          <div class="fs-4 fw-bold lh-1 mt-1">{{ "%.2f"|format(total_bill or 0) }}</div>
-        </div>
-      </div>
+  <div class="card-body p-0">
+    <div class="px-2 py-1 border-bottom small mwo-metric-row">
+      <span class="me-2">Bills <strong>{{ expenses|length }}</strong></span>
+      <span class="text-muted">|</span>
+      <span class="mx-2">Media <strong>{{ total_media }}</strong></span>
+      <span class="text-muted">|</span>
+      <span class="mx-2">Job WO <strong>{{ wo_media }}</strong></span>
+      <span class="text-muted">|</span>
+      <span class="ms-1">Total <strong class="text-primary">{{ "%.2f"|format(total_bill or 0) }}</strong></span>
     </div>
 
-    {% if expenses %}
-    <div class="table-responsive mb-3 rounded-2 border">
-      <table class="table table-sm table-hover mb-0 small">
-        <thead class="table-light">
-          <tr>
-            <th class="ps-3">Bill #</th>
-            <th class="text-end pe-3">Amount</th>
-          </tr>
-        </thead>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered mb-0 mwo-tiny-table">
         <tbody>
+          {% if expenses %}
           {% for e in expenses %}
           <tr>
-            <td class="ps-3">MAINT-{{ e.id }}{% if e.expense_date %} <span class="text-muted">· {{ e.expense_date|ddmmyyyy }}</span>{% endif %}</td>
-            <td class="text-end pe-3 fw-medium">{{ "%.2f"|format((e.total_bill_amount or 0)|float) }}</td>
+            <td class="ps-2 py-1" style="width:55%">MAINT-{{ e.id }}{% if e.expense_date %} <span class="text-muted">{{ e.expense_date|ddmmyyyy }}</span>{% endif %}</td>
+            <td class="text-end pe-2 py-1 fw-medium">{{ "%.2f"|format((e.total_bill_amount or 0)|float) }}</td>
           </tr>
           {% endfor %}
-        </tbody>
-        <tfoot class="table-light">
-          <tr>
-            <th class="ps-3">Grand total (bills)</th>
-            <th class="text-end pe-3">{{ "%.2f"|format(total_bill or 0) }}</th>
+          <tr class="table-light">
+            <th class="ps-2 py-1 small">Grand total (bills)</th>
+            <th class="text-end pe-2 py-1">{{ "%.2f"|format(total_bill or 0) }}</th>
           </tr>
-        </tfoot>
+          {% else %}
+          <tr><td colspan="2" class="text-muted text-center py-1 small">Koi bill link nahi</td></tr>
+          {% endif %}
+        </tbody>
       </table>
     </div>
-    {% else %}
-    <p class="text-muted small mb-3"><i class="bi bi-info-circle me-1"></i>Abhi koi bill link nahi — <strong>Add bill</strong> se shamil karein.</p>
-    {% endif %}
 
-    <div class="border rounded-2 p-3 bg-light">
-      <h6 class="text-primary small fw-bold mb-2 text-uppercase" style="letter-spacing:.04em">Work order details</h6>
-      <div class="row g-2 g-md-3 small">
-        <div class="col-md-4"><span class="text-muted d-block" style="font-size:.75rem">Vehicle</span><span class="fw-semibold">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</span></div>
-        <div class="col-md-4"><span class="text-muted d-block" style="font-size:.75rem">Type</span><span class="fw-semibold">{{ rec.work_type or '—' }}</span></div>
-        <div class="col-md-4"><span class="text-muted d-block" style="font-size:.75rem">Status</span><span class="fw-semibold text-capitalize">{% if rec.status %}{{ rec.status|replace('_', ' ') }}{% else %}—{% endif %}</span></div>
-        <div class="col-md-4"><span class="text-muted d-block" style="font-size:.75rem">Opened</span><span class="fw-semibold">{{ rec.opened_on|ddmmyyyy if rec.opened_on else '—' }}</span></div>
-        <div class="col-md-4"><span class="text-muted d-block" style="font-size:.75rem">Closed</span><span class="fw-semibold">{{ rec.closed_on|ddmmyyyy if rec.closed_on else '—' }}</span></div>
-        <div class="col-md-4"><span class="text-muted d-block" style="font-size:.75rem">District / Project</span><span class="fw-semibold">{{ rec.district.name if rec.district else '—' }} · {{ rec.project.name if rec.project else '—' }}</span></div>
-        <div class="col-12"><span class="text-muted d-block" style="font-size:.75rem">Remarks</span><span class="fw-semibold text-break">{{ rec.remarks or '—' }}</span></div>
-      </div>
+    <div class="table-responsive border-top">
+    <table class="table table-sm table-borderless mb-0 mwo-tiny-table">
+      <tbody>
+        <tr>
+          <td class="text-muted py-1 text-nowrap">Vehicle</td>
+          <td class="py-1 fw-medium">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</td>
+          <td class="text-muted py-1 text-nowrap">Opened / closed</td>
+          <td class="py-1 text-nowrap">{{ rec.opened_on|ddmmyyyy if rec.opened_on else '—' }} <span class="text-muted">/</span> {{ rec.closed_on|ddmmyyyy if rec.closed_on else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="text-muted py-1">District</td>
+          <td class="py-1 fw-medium">{{ rec.district.name if rec.district else '—' }}</td>
+          <td class="text-muted py-1">Project</td>
+          <td class="py-1">{{ rec.project.name if rec.project else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="text-muted py-1">Type · status</td>
+          <td class="py-1" colspan="3">{% if rec.work_type %}{{ rec.work_type }}{% else %}—{% endif %} · {% if rec.status %}{{ rec.status|replace('_', ' ')|title }}{% else %}—{% endif %}</td>
+        </tr>
+        <tr>
+          <td class="text-muted py-1 align-top">Remarks</td>
+          <td class="py-1 small text-break" colspan="3">{{ rec.remarks or '—' }}</td>
+        </tr>
+      </tbody>
+    </table>
     </div>
 
-    <div class="d-flex flex-wrap gap-2 mt-3 pt-2 border-top">
+    <div class="d-flex flex-wrap gap-1 px-2 py-1 border-top bg-light mwo-action-row">
       {% if mwo_summary_mode == 'detail' %}
-      <a href="{{ url_for('maintenance_work_order_invoices', pk=rec.id) }}{% if mwo_preserve_qs is defined and mwo_preserve_qs %}?{{ mwo_preserve_qs }}{% endif %}" class="btn btn-sm btn-info"><i class="bi bi-receipt me-1"></i>Full invoice pack (print / export)</a>
+      <a href="{{ url_for('maintenance_work_order_invoices', pk=rec.id) }}{% if mwo_preserve_qs is defined and mwo_preserve_qs %}?{{ mwo_preserve_qs }}{% endif %}" class="btn btn-sm btn-info py-0 px-2" style="font-size:.8rem">Invoice pack</a>
       {% endif %}
       {% if mwo_summary_mode == 'invoices' %}
-      <a href="#linked-bills-section" class="btn btn-sm btn-outline-primary">Quick table (neeche)</a>
+      <a href="#linked-bills-section" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.8rem">Table</a>
       {% else %}
-      <a href="#linked-bills" class="btn btn-sm btn-outline-primary">Bills table</a>
+      <a href="#linked-bills" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.8rem">Bills</a>
       {% endif %}
-      <a href="{{ url_for('maintenance_work_order_unified_media', pk=rec.id) }}?return_to={{ return_to_path|url_quote }}" class="btn btn-sm btn-outline-primary" title="Bills + WO media"><i class="bi bi-eye me-1"></i>All media</a>
-      <a href="{{ url_for('maintenance_work_order_job_media', pk=rec.id) }}?return_to={{ return_to_path|url_quote }}" class="btn btn-sm btn-outline-success"><i class="bi bi-images me-1"></i>Job photos only</a>
-      <a href="{{ url_for('maintenance_work_order_form', pk=rec.id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil me-1"></i>Edit work order</a>
+      <a href="{{ url_for('maintenance_work_order_unified_media', pk=rec.id) }}?return_to={{ return_to_path|url_quote }}" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.8rem" title="All">Media</a>
+      <a href="{{ url_for('maintenance_work_order_job_media', pk=rec.id) }}?return_to={{ return_to_path|url_quote }}" class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:.8rem">Job only</a>
+      <a href="{{ url_for('maintenance_work_order_form', pk=rec.id) }}" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.8rem">Edit WO</a>
     </div>
   </div>
 </div>
