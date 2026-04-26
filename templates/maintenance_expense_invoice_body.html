@@ -15,7 +15,7 @@
     </div>
   </div>
   <div class="px-2 py-1 meinv-meta">
-    <div class="row g-1 row-cols-2 row-cols-lg-3 small">
+    <div class="row g-2 row-cols-2 row-cols-md-3 row-cols-xl-4 small align-items-start">
       <div class="col">
         <div class="meinv-k">District</div>
         <div class="meinv-v">{{ rec.district.name if rec.district else '—' }}</div>
@@ -28,27 +28,27 @@
         <div class="meinv-k">Vehicle</div>
         <div class="meinv-v">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</div>
       </div>
-      <div class="col-12 col-lg-6">
-        <div class="meinv-k">Party / workshop</div>
-        <div class="meinv-v">{{ rec.workspace_party.name if rec.workspace_party else '—' }}</div>
-      </div>
-      <div class="col-6 col-lg-3">
+      <div class="col">
         <div class="meinv-k">Payment</div>
         <div class="meinv-v">{{ rec.payment_type or '—' }}</div>
       </div>
-      <div class="col-6 col-lg-3">
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="meinv-k">Party / workshop</div>
+        <div class="meinv-v">{{ rec.workspace_party.name if rec.workspace_party else '—' }}</div>
+      </div>
+      <div class="col-6 col-xl-4">
         <div class="meinv-k">Job category</div>
         <div class="meinv-v">{{ rec.job_category or '—' }}</div>
       </div>
-      <div class="col-6 col-lg-3">
+      <div class="col-6 col-xl-4">
         <div class="meinv-k">Interval</div>
         <div class="meinv-v">{% if rec.job_interval_mode == 'interval_km' %}KM{% elif rec.job_interval_mode == 'interval_day' %}Day{% else %}—{% endif %}</div>
       </div>
-      <div class="col-12 col-lg-5">
+      <div class="col-12 col-md-6 col-xl-8">
         <div class="meinv-k">Prev / Curr / KM</div>
         <div class="meinv-v meinv-mono">{{ "%.2f"|format((rec.previous_reading or 0)|float) }} · {{ "%.2f"|format((rec.current_reading or 0)|float) }} · {{ "%.2f"|format((rec.km or 0)|float) }}</div>
       </div>
-      <div class="col-12 col-lg-4">
+      <div class="col-12 col-md-6 col-xl-4">
         <div class="meinv-k">Total bill</div>
         <div class="meinv-v meinv-total">{{ "%.2f"|format((rec.total_bill_amount or 0)|float) if rec.total_bill_amount is not none else '—' }}</div>
       </div>
