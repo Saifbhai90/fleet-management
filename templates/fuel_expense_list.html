@@ -6,7 +6,6 @@
   .fuel-list-head { background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%); color:#fff; border-radius: 12px; padding: .65rem 1rem; }
   .fuel-list-card { border: 1px solid #e9ecef; border-radius: 12px; box-shadow: 0 2px 10px rgba(16,24,40,.06); }
   .fuel-list-card .card-header { background: linear-gradient(to right, #f8f9fa 0%, #fff 100%); font-weight: 600; font-size: .87rem; }
-  #fuelUploadStatusPanel { position: fixed; right: 18px; bottom: 18px; width: min(420px, calc(100vw - 24px)); z-index: 1040; }
 </style>
 <div class="container-fluid py-3">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
@@ -184,7 +183,7 @@
               </td>
               <td class="text-center">
                 {% set ns = namespace(cloud=0, local=0, n=0) %}
-                {% for a in r.attachments %}
+                {% for a in r.attachments.all() %}
                   {% set ns.n = ns.n + 1 %}
                   {% if a.file_path and (a.file_path.startswith('http://') or a.file_path.startswith('https://')) %}
                     {% set ns.cloud = ns.cloud + 1 %}
@@ -217,6 +216,25 @@
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
                 </form>
+              </td>
+            </tr>
+            <tr class="fuel-upload-expand-row d-none" data-record-id="{{ r.id }}">
+              <td colspan="22" class="p-0 bg-body-secondary border-0">
+                <div class="px-3 py-2 m-2 ms-3 small shadow-sm bg-white border-start border-4 border-primary rounded-1">
+                  <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                    <span class="fw-semibold text-body"><i class="bi bi-cloud-upload me-1"></i>Upload status</span>
+                    <button type="button" class="btn-close btn-sm fuel-upload-inline-close" aria-label="Close"></button>
+                  </div>
+                  <div class="progress mb-2" style="height:1.25rem;">
+                    <div class="progress-bar fuel-inline-bar" style="width:0%">0%</div>
+                  </div>
+                  <div class="small text-muted fuel-inline-meta">0 / 0</div>
+                  <pre class="small text-danger mt-2 mb-0 d-none fuel-inline-err" style="white-space:pre-wrap;max-height:150px;overflow:auto;"></pre>
+                  <div class="d-flex justify-content-end gap-2 mt-2 flex-wrap">
+                    <button type="button" class="btn btn-warning btn-sm d-none fuel-inline-resume"><i class="bi bi-arrow-repeat me-1"></i>Resume</button>
+                    <button type="button" class="btn btn-secondary btn-sm fuel-upload-inline-close">Close</button>
+                  </div>
+                </div>
               </td>
             </tr>
             {% else %}
@@ -254,23 +272,6 @@
       </div>
     </div>
   </div>
-  </div>
-</div>
-<div id="fuelUploadStatusPanel" class="card shadow border d-none">
-  <div class="card-header py-2 d-flex justify-content-between align-items-center">
-    <h6 class="mb-0"><i class="bi bi-cloud-upload me-2"></i>Upload Status</h6>
-    <button type="button" class="btn-close btn-sm" id="fuelUploadPanelClose" aria-label="Close"></button>
-  </div>
-  <div class="card-body py-2">
-    <div class="progress mb-2" style="height:1.25rem;">
-      <div id="fuelUploadModalBar" class="progress-bar" style="width:0%">0%</div>
-    </div>
-    <div id="fuelUploadModalMeta" class="small text-muted">0 / 0</div>
-    <pre id="fuelUploadModalError" class="small text-danger mt-2 mb-0 d-none" style="white-space:pre-wrap;max-height:150px;overflow:auto;"></pre>
-  </div>
-  <div class="card-footer py-2 d-flex justify-content-end gap-2">
-    <button type="button" class="btn btn-warning btn-sm d-none" id="fuelUploadResumeBtn"><i class="bi bi-arrow-repeat me-1"></i>Resume</button>
-    <button type="button" class="btn btn-secondary btn-sm" id="fuelUploadPanelHide">Close</button>
   </div>
 </div>
 <script>
@@ -510,6 +511,10 @@
         dataRows.forEach(function(row) {
           var show = !q || window.fleetMultiWordMatch(row.innerText || row.textContent, q);
           row.style.display = show ? '' : 'none';
+          var ex = row.nextElementSibling;
+          if (ex && ex.classList && ex.classList.contains('fuel-upload-expand-row')) {
+            ex.classList.add('d-none');
+          }
           if (show) visible++;
         });
         if (noDataRow) noDataRow.style.display = (dataRows.length === 0 || (q && visible === 0)) ? '' : 'none';
@@ -519,40 +524,42 @@
     }
   }
 
-  var statusBtns = document.querySelectorAll('.fuel-upload-status-btn');
-  var panelEl = document.getElementById('fuelUploadStatusPanel');
-  var panelHideBtn = document.getElementById('fuelUploadPanelHide');
-  var panelCloseBtn = document.getElementById('fuelUploadPanelClose');
-  var bar = document.getElementById('fuelUploadModalBar');
-  var meta = document.getElementById('fuelUploadModalMeta');
-  var err = document.getElementById('fuelUploadModalError');
-  var resumeBtn = document.getElementById('fuelUploadResumeBtn');
+  var activeEls = null;
   var activeId = null;
   var pollTimer = null;
-
   function csrfToken() {
     var m = document.querySelector('meta[name="csrf-token"]');
     return m ? m.getAttribute('content') : '';
   }
-  function paintStatus(st, total, done, failed, msg) {
+  function getFuelInlineEls(expandRow) {
+    if (!expandRow) return null;
+    return {
+      bar: expandRow.querySelector('.fuel-inline-bar'),
+      meta: expandRow.querySelector('.fuel-inline-meta'),
+      err: expandRow.querySelector('.fuel-inline-err'),
+      resumeBtn: expandRow.querySelector('.fuel-inline-resume')
+    };
+  }
+  function paintStatus(els, st, total, done, failed, msg) {
+    if (!els) return;
     var pct = total ? Math.round(100 * done / total) : (st === 'success' ? 100 : 0);
-    if (bar) {
-      bar.style.width = pct + '%';
-      bar.textContent = pct + '%';
-      bar.classList.remove('bg-success', 'bg-warning', 'bg-danger', 'bg-info');
-      bar.classList.add(st === 'success' ? 'bg-success' : (st === 'processing' ? 'bg-warning' : (st === 'partial' ? 'bg-info' : 'bg-danger')));
+    if (els.bar) {
+      els.bar.style.width = pct + '%';
+      els.bar.textContent = pct + '%';
+      els.bar.classList.remove('bg-success', 'bg-warning', 'bg-danger', 'bg-info');
+      els.bar.classList.add(st === 'success' ? 'bg-success' : (st === 'processing' ? 'bg-warning' : (st === 'partial' ? 'bg-info' : 'bg-danger')));
     }
-    if (meta) meta.textContent = (done || 0) + ' / ' + (total || 0) + ' uploaded, failed: ' + (failed || 0) + ' [' + st + ']';
-    if (err) {
+    if (els.meta) els.meta.textContent = (done || 0) + ' / ' + (total || 0) + ' uploaded, failed: ' + (failed || 0) + ' [' + st + ']';
+    if (els.err) {
       if (msg) {
-        err.textContent = msg;
-        err.classList.remove('d-none');
+        els.err.textContent = msg;
+        els.err.classList.remove('d-none');
       } else {
-        err.textContent = '';
-        err.classList.add('d-none');
+        els.err.textContent = '';
+        els.err.classList.add('d-none');
       }
     }
-    if (resumeBtn) resumeBtn.classList.toggle('d-none', !(st === 'error' || st === 'partial'));
+    if (els.resumeBtn) els.resumeBtn.classList.toggle('d-none', !(st === 'error' || st === 'partial'));
   }
   function stopPoll() { if (pollTimer) { window.clearInterval(pollTimer); pollTimer = null; } }
   function fetchStatus(id) {
@@ -560,52 +567,81 @@
       .then(function(r){ return r.json(); })
       .then(function(j){
         if (!j || !j.ok) throw new Error((j && j.error) || 'status error');
-        paintStatus(j.status || 'error', j.total || 0, j.done || 0, j.failed || 0, j.error || '');
+        paintStatus(activeEls, j.status || 'error', j.total || 0, j.done || 0, j.failed || 0, j.error || '');
         if (j.status !== 'processing') stopPoll();
       })
       .catch(function(e){
-        paintStatus('error', 0, 0, 0, String(e));
+        paintStatus(activeEls, 'error', 0, 0, 0, String(e));
         stopPoll();
       });
   }
-  if (resumeBtn) {
-    resumeBtn.addEventListener('click', function() {
-      if (!activeId) return;
-      resumeBtn.disabled = true;
-      fetch('/fuel-expense/' + activeId + '/upload-resume', {
-        method: 'POST',
-        headers: { 'X-CSRFToken': csrfToken() }
-      }).then(function(r){ return r.json(); }).then(function(j){
-        resumeBtn.disabled = false;
-        if (!j || !j.ok) throw new Error((j && j.error) || 'resume failed');
-        paintStatus('processing', 0, 0, 0, '');
-        stopPoll();
-        pollTimer = window.setInterval(function(){ fetchStatus(activeId); }, 2500);
-        fetchStatus(activeId);
-      }).catch(function(e){
-        resumeBtn.disabled = false;
-        paintStatus('error', 0, 0, 0, String(e));
-      });
+  function hideAllFuelExpands() {
+    document.querySelectorAll('.fuel-upload-expand-row').forEach(function(er) { er.classList.add('d-none'); });
+    stopPoll();
+    activeEls = null;
+    activeId = null;
+  }
+  var fuelTable = document.getElementById('fuelExpenseTable');
+  if (fuelTable) {
+    fuelTable.addEventListener('click', function(e) {
+      if (e.target.closest('.fuel-inline-resume')) {
+        e.preventDefault();
+        var rbtn = e.target.closest('.fuel-inline-resume');
+        var ex = rbtn && rbtn.closest('.fuel-upload-expand-row');
+        if (!ex) return;
+        var rid = ex.getAttribute('data-record-id');
+        activeEls = getFuelInlineEls(ex);
+        activeId = rid;
+        rbtn.disabled = true;
+        fetch('/fuel-expense/' + activeId + '/upload-resume', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrfToken() }
+        }).then(function(r){ return r.json(); }).then(function(j){
+          rbtn.disabled = false;
+          if (!j || !j.ok) throw new Error((j && j.error) || 'resume failed');
+          paintStatus(activeEls, 'processing', 0, 0, 0, '');
+          stopPoll();
+          pollTimer = window.setInterval(function(){ fetchStatus(activeId); }, 2500);
+          fetchStatus(activeId);
+        }).catch(function(err2) {
+          rbtn.disabled = false;
+          paintStatus(activeEls, 'error', 0, 0, 0, String(err2));
+        });
+        return;
+      }
+      if (e.target.closest('.fuel-upload-inline-close')) {
+        e.preventDefault();
+        hideAllFuelExpands();
+      }
     });
   }
-  function hidePanel() { if (panelEl) panelEl.classList.add('d-none'); stopPoll(); activeId = null; }
-  if (panelHideBtn) panelHideBtn.addEventListener('click', hidePanel);
-  if (panelCloseBtn) panelCloseBtn.addEventListener('click', hidePanel);
-  statusBtns.forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      activeId = this.getAttribute('data-id');
-      var st = (this.getAttribute('data-status') || 'success').toLowerCase();
-      var total = parseInt(this.getAttribute('data-total') || '0', 10);
-      var done = parseInt(this.getAttribute('data-done') || '0', 10);
-      var failed = parseInt(this.getAttribute('data-failed') || '0', 10);
-      var msg = this.getAttribute('data-error') || '';
-      paintStatus(st, total, done, failed, msg);
-      if (panelEl) panelEl.classList.remove('d-none');
-      stopPoll();
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.fuel-upload-status-btn') || e.target.closest('.fuel-upload-expand-row')) return;
+    hideAllFuelExpands();
+  });
+  document.querySelectorAll('.fuel-upload-status-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var mainRow = btn.closest('tr.fuel-expense-row');
+      var expandRow = mainRow && mainRow.nextElementSibling;
+      if (!expandRow || !expandRow.classList.contains('fuel-upload-expand-row')) return;
+      var willOpen = expandRow.classList.contains('d-none');
+      hideAllFuelExpands();
+      if (!willOpen) return;
+      expandRow.classList.remove('d-none');
+      activeEls = getFuelInlineEls(expandRow);
+      activeId = btn.getAttribute('data-id');
+      var st = (btn.getAttribute('data-status') || 'success').toLowerCase();
+      var total = parseInt(btn.getAttribute('data-total') || '0', 10);
+      var done = parseInt(btn.getAttribute('data-done') || '0', 10);
+      var failed = parseInt(btn.getAttribute('data-failed') || '0', 10);
+      var msg = btn.getAttribute('data-error') || '';
+      paintStatus(activeEls, st, total, done, failed, msg);
       if (st === 'processing' && activeId) {
         pollTimer = window.setInterval(function(){ fetchStatus(activeId); }, 2500);
         fetchStatus(activeId);
       }
+      try { expandRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) { expandRow.scrollIntoView(false); }
     });
   });
 })();

@@ -27,7 +27,6 @@
   .mwo-ico-btn--add      { border-color: #d97706; color: #b45309; background: #fffbeb; }
   .mwo-ico-btn--add:hover      { background: #fef3c7; }
   .mwo-table-bar .form-control { max-width: 360px; border-radius: 8px; }
-  #mwoUploadStatusPanel { position: fixed; right: 18px; bottom: 18px; width: min(420px, calc(100vw - 24px)); z-index: 1040; }
 </style>
 <div class="container-fluid py-3">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
@@ -242,6 +241,25 @@
               {% endif %}
             </td>
           </tr>
+            <tr class="mwo-upload-expand-row d-none" data-record-id="{{ row.rec.id }}">
+              <td colspan="13" class="p-0 bg-body-secondary border-0">
+                <div class="px-3 py-2 m-2 ms-3 small shadow-sm bg-white border-start border-4 border-primary rounded-1">
+                  <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                    <span class="fw-semibold text-body"><i class="bi bi-cloud-upload me-1"></i>Upload status</span>
+                    <button type="button" class="btn-close btn-sm mwo-upload-inline-close" aria-label="Close"></button>
+                  </div>
+                  <div class="progress mb-2" style="height:1.25rem;">
+                    <div class="progress-bar mwo-inline-bar" style="width:0%">0%</div>
+                  </div>
+                  <div class="small text-muted mwo-inline-meta">0 / 0</div>
+                  <pre class="small text-danger mt-2 mb-0 d-none mwo-inline-err" style="white-space:pre-wrap;max-height:150px;overflow:auto;"></pre>
+                  <div class="d-flex justify-content-end gap-2 mt-2 flex-wrap">
+                    <button type="button" class="btn btn-warning btn-sm d-none mwo-inline-resume"><i class="bi bi-arrow-repeat me-1"></i>Resume</button>
+                    <button type="button" class="btn btn-secondary btn-sm mwo-upload-inline-close">Close</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
           {% else %}
           <tr id="mwoNoDataRow">
             <td colspan="13" class="text-center text-muted py-5">No work orders for this filter.</td>
@@ -251,23 +269,6 @@
       </table>
     </div>
   </div>
-  </div>
-</div>
-<div id="mwoUploadStatusPanel" class="card shadow border d-none">
-  <div class="card-header py-2 d-flex justify-content-between align-items-center">
-    <h6 class="mb-0"><i class="bi bi-cloud-upload me-2"></i>Upload Status</h6>
-    <button type="button" class="btn-close btn-sm" id="mwoUploadPanelClose" aria-label="Close"></button>
-  </div>
-  <div class="card-body py-2">
-    <div class="progress mb-2" style="height:1.25rem;">
-      <div id="mwoUploadModalBar" class="progress-bar" style="width:0%">0%</div>
-    </div>
-    <div id="mwoUploadModalMeta" class="small text-muted">0 / 0</div>
-    <pre id="mwoUploadModalError" class="small text-danger mt-2 mb-0 d-none" style="white-space:pre-wrap;max-height:150px;overflow:auto;"></pre>
-  </div>
-  <div class="card-footer py-2 d-flex justify-content-end gap-2">
-    <button type="button" class="btn btn-warning btn-sm d-none" id="mwoUploadResumeBtn"><i class="bi bi-arrow-repeat me-1"></i>Resume</button>
-    <button type="button" class="btn btn-secondary btn-sm" id="mwoUploadPanelHide">Close</button>
   </div>
 </div>
 <script>
@@ -378,6 +379,10 @@ document.addEventListener('DOMContentLoaded', function() {
         dataRows.forEach(function(row) {
           var show = !q || (window.fleetMultiWordMatch && window.fleetMultiWordMatch(row.innerText || row.textContent, q)) || (!window.fleetMultiWordMatch && (row.innerText || row.textContent).toLowerCase().indexOf(q.toLowerCase()) !== -1);
           row.style.display = show ? '' : 'none';
+          var ex = row.nextElementSibling;
+          if (ex && ex.classList && ex.classList.contains('mwo-upload-expand-row')) {
+            ex.classList.add('d-none');
+          }
           if (show) visible++;
         });
         if (noDataRow) {
@@ -458,34 +463,37 @@ document.addEventListener('DOMContentLoaded', function() {
   document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeAll(); });
   window.addEventListener('scroll', function() { closeAll(); }, true);
   window.addEventListener('resize', function() { closeAll(); });
-  var statusBtns = document.querySelectorAll('.mwo-upload-status-btn');
-  var panelEl = document.getElementById('mwoUploadStatusPanel');
-  var panelHideBtn = document.getElementById('mwoUploadPanelHide');
-  var panelCloseBtn = document.getElementById('mwoUploadPanelClose');
-  var bar = document.getElementById('mwoUploadModalBar');
-  var meta = document.getElementById('mwoUploadModalMeta');
-  var err = document.getElementById('mwoUploadModalError');
-  var resumeBtn = document.getElementById('mwoUploadResumeBtn');
+  var activeEls = null;
   var activeId = null;
   var pollTimer = null;
   function csrfToken() {
     var m = document.querySelector('meta[name="csrf-token"]');
     return m ? m.getAttribute('content') : '';
   }
-  function paintStatus(st, total, done, failed, msg) {
+  function getMwoInlineEls(expandRow) {
+    if (!expandRow) return null;
+    return {
+      bar: expandRow.querySelector('.mwo-inline-bar'),
+      meta: expandRow.querySelector('.mwo-inline-meta'),
+      err: expandRow.querySelector('.mwo-inline-err'),
+      resumeBtn: expandRow.querySelector('.mwo-inline-resume')
+    };
+  }
+  function paintStatus(els, st, total, done, failed, msg) {
+    if (!els) return;
     var pct = total ? Math.round(100 * done / total) : (st === 'success' ? 100 : 0);
-    if (bar) {
-      bar.style.width = pct + '%';
-      bar.textContent = pct + '%';
-      bar.classList.remove('bg-success', 'bg-warning', 'bg-danger', 'bg-info');
-      bar.classList.add(st === 'success' ? 'bg-success' : (st === 'processing' ? 'bg-warning' : (st === 'partial' ? 'bg-info' : 'bg-danger')));
+    if (els.bar) {
+      els.bar.style.width = pct + '%';
+      els.bar.textContent = pct + '%';
+      els.bar.classList.remove('bg-success', 'bg-warning', 'bg-danger', 'bg-info');
+      els.bar.classList.add(st === 'success' ? 'bg-success' : (st === 'processing' ? 'bg-warning' : (st === 'partial' ? 'bg-info' : 'bg-danger')));
     }
-    if (meta) meta.textContent = (done || 0) + ' / ' + (total || 0) + ' uploaded, failed: ' + (failed || 0) + ' [' + st + ']';
-    if (err) {
-      if (msg) { err.textContent = msg; err.classList.remove('d-none'); }
-      else { err.textContent = ''; err.classList.add('d-none'); }
+    if (els.meta) els.meta.textContent = (done || 0) + ' / ' + (total || 0) + ' uploaded, failed: ' + (failed || 0) + ' [' + st + ']';
+    if (els.err) {
+      if (msg) { els.err.textContent = msg; els.err.classList.remove('d-none'); }
+      else { els.err.textContent = ''; els.err.classList.add('d-none'); }
     }
-    if (resumeBtn) resumeBtn.classList.toggle('d-none', !(st === 'error' || st === 'partial'));
+    if (els.resumeBtn) els.resumeBtn.classList.toggle('d-none', !(st === 'error' || st === 'partial'));
   }
   function stopPoll() { if (pollTimer) { window.clearInterval(pollTimer); pollTimer = null; } }
   function fetchStatus(id) {
@@ -493,53 +501,80 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(function(r){ return r.json(); })
       .then(function(j){
         if (!j || !j.ok) throw new Error((j && j.error) || 'status error');
-        paintStatus(j.status || 'error', j.total || 0, j.done || 0, j.failed || 0, j.error || '');
+        paintStatus(activeEls, j.status || 'error', j.total || 0, j.done || 0, j.failed || 0, j.error || '');
         if (j.status !== 'processing') stopPoll();
       })
       .catch(function(e) {
-        paintStatus('error', 0, 0, 0, String(e));
+        paintStatus(activeEls, 'error', 0, 0, 0, String(e));
         stopPoll();
       });
   }
-  if (resumeBtn) {
-    resumeBtn.addEventListener('click', function() {
-      if (!activeId) return;
-      resumeBtn.disabled = true;
-      fetch('/maintenance-work-order/' + activeId + '/upload-resume', {
-        method: 'POST',
-        headers: { 'X-CSRFToken': csrfToken() }
-      }).then(function(r){ return r.json(); }).then(function(j){
-        resumeBtn.disabled = false;
-        if (!j || !j.ok) throw new Error((j && j.error) || 'resume failed');
-        paintStatus('processing', 0, 0, 0, '');
-        stopPoll();
-        pollTimer = window.setInterval(function(){ fetchStatus(activeId); }, 2500);
-        fetchStatus(activeId);
-      }).catch(function(e) {
-        resumeBtn.disabled = false;
-        paintStatus('error', 0, 0, 0, String(e));
-      });
+  function hideAllMwoExpands() {
+    document.querySelectorAll('.mwo-upload-expand-row').forEach(function(er) { er.classList.add('d-none'); });
+    stopPoll();
+    activeEls = null;
+    activeId = null;
+  }
+  var mwoUTable = document.getElementById('mwoTable');
+  if (mwoUTable) {
+    mwoUTable.addEventListener('click', function(e) {
+      if (e.target.closest('.mwo-inline-resume')) {
+        e.preventDefault();
+        var rbtn = e.target.closest('.mwo-inline-resume');
+        var ex = rbtn && rbtn.closest('.mwo-upload-expand-row');
+        if (!ex) return;
+        activeEls = getMwoInlineEls(ex);
+        activeId = ex.getAttribute('data-record-id');
+        rbtn.disabled = true;
+        fetch('/maintenance-work-order/' + activeId + '/upload-resume', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrfToken() }
+        }).then(function(r){ return r.json(); }).then(function(j){
+          rbtn.disabled = false;
+          if (!j || !j.ok) throw new Error((j && j.error) || 'resume failed');
+          paintStatus(activeEls, 'processing', 0, 0, 0, '');
+          stopPoll();
+          pollTimer = window.setInterval(function(){ fetchStatus(activeId); }, 2500);
+          fetchStatus(activeId);
+        }).catch(function(err2) {
+          rbtn.disabled = false;
+          paintStatus(activeEls, 'error', 0, 0, 0, String(err2));
+        });
+        return;
+      }
+      if (e.target.closest('.mwo-upload-inline-close')) {
+        e.preventDefault();
+        hideAllMwoExpands();
+      }
     });
   }
-  function hidePanel() { if (panelEl) panelEl.classList.add('d-none'); stopPoll(); activeId = null; }
-  if (panelHideBtn) panelHideBtn.addEventListener('click', hidePanel);
-  if (panelCloseBtn) panelCloseBtn.addEventListener('click', hidePanel);
-  statusBtns.forEach(function(btn) {
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.mwo-upload-status-btn') || e.target.closest('.mwo-upload-expand-row')) return;
+    hideAllMwoExpands();
+  });
+  document.querySelectorAll('.mwo-upload-status-btn').forEach(function(btn) {
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
-      activeId = this.getAttribute('data-id');
-      var st = (this.getAttribute('data-status') || 'success').toLowerCase();
-      var total = parseInt(this.getAttribute('data-total') || '0', 10);
-      var done = parseInt(this.getAttribute('data-done') || '0', 10);
-      var failed = parseInt(this.getAttribute('data-failed') || '0', 10);
-      var msg = this.getAttribute('data-error') || '';
-      paintStatus(st, total, done, failed, msg);
-      if (panelEl) panelEl.classList.remove('d-none');
-      stopPoll();
+      var mainRow = btn.closest('tr.mwo-table-row');
+      var expandRow = mainRow && mainRow.nextElementSibling;
+      if (!expandRow || !expandRow.classList.contains('mwo-upload-expand-row')) return;
+      var willOpen = expandRow.classList.contains('d-none');
+      hideAllMwoExpands();
+      if (!willOpen) return;
+      expandRow.classList.remove('d-none');
+      activeEls = getMwoInlineEls(expandRow);
+      activeId = btn.getAttribute('data-id');
+      var st = (btn.getAttribute('data-status') || 'success').toLowerCase();
+      var total = parseInt(btn.getAttribute('data-total') || '0', 10);
+      var done = parseInt(btn.getAttribute('data-done') || '0', 10);
+      var failed = parseInt(btn.getAttribute('data-failed') || '0', 10);
+      var msg = btn.getAttribute('data-error') || '';
+      paintStatus(activeEls, st, total, done, failed, msg);
       if (st === 'processing' && activeId) {
         pollTimer = window.setInterval(function(){ fetchStatus(activeId); }, 2500);
         fetchStatus(activeId);
       }
+      try { expandRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) { expandRow.scrollIntoView(false); }
     });
   });
 });
