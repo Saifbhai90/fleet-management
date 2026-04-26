@@ -13,9 +13,11 @@
   .mwo-open-wo-panel {
     position: fixed;
     z-index: 1060;
-    right: max(12px, env(safe-area-inset-right, 0px));
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
     top: max(64px, env(safe-area-inset-top, 0px));
-    width: min(920px, calc(100vw - 20px));
+    width: min(920px, calc(100vw - 16px));
     max-height: min(78vh, 860px);
   }
   .mwo-open-wo-panel__card {
@@ -318,7 +320,7 @@
               </td>
               <td class="text-end pe-3 text-nowrap">
                 <a href="{{ url_for('maintenance_expense_form', work_order_id=wo.id) }}" class="btn btn-sm btn-outline-warning">Add bill</a>
-                <button type="button" class="btn btn-sm btn-outline-danger mwo-open-row-close" data-wo-id="{{ wo.id }}">Close</button>
+                <button type="button" class="btn btn-sm btn-outline-danger mwo-open-row-close" data-wo-id="{{ wo.id }}" data-opened-date="{{ wo.opened_on|ddmmyyyy if wo.opened_on else '' }}" title="Close work order (date confirm)">Close</button>
               </td>
             </tr>
             {% else %}
@@ -707,13 +709,22 @@ document.addEventListener('click', function(ev) {
   var woId = btn.getAttribute('data-wo-id');
   if (!woId) return;
   ev.preventDefault();
-  if (!confirm('Is work order ko close mark kar dein?')) return;
+  var openedDefault = (btn.getAttribute('data-opened-date') || '').trim();
+  var msg = 'Close kis date par karein? (dd-mm-yyyy)';
+  var entered = window.prompt(msg, openedDefault);
+  if (entered === null) return;
+  var closeDateStr = (entered || '').trim();
+  if (!closeDateStr && !openedDefault) {
+    alert('Date likhein (dd-mm-yyyy) ya Cancel.');
+    return;
+  }
+  if (!closeDateStr) closeDateStr = openedDefault;
   btn.disabled = true;
   var csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
   fetch('/maintenance-work-order/' + woId + '/close', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
-    body: JSON.stringify({ close_date: '' })
+    body: JSON.stringify({ close_date: closeDateStr })
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
