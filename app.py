@@ -485,6 +485,7 @@ from routes_workspace import (
     workspace_dashboard, workspace_home, workspace_select_employee, workspace_clear_employee,
     workspace_parties_list, workspace_party_form, workspace_party_delete, workspace_party_export,
     workspace_party_print, workspace_party_import, workspace_party_import_template,
+    workspace_party_names_api,
     workspace_products_list, workspace_product_form, workspace_product_delete, workspace_product_export,
     workspace_product_print, workspace_product_import, workspace_product_import_template,
     workspace_product_names_api,
@@ -586,6 +587,7 @@ app.add_url_rule('/workspace/products/import/template', 'workspace_product_impor
 app.add_url_rule('/workspace/product/new', 'workspace_product_new', workspace_product_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/product/<int:pk>/edit', 'workspace_product_edit', workspace_product_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/product/<int:pk>/delete', 'workspace_product_delete', workspace_product_delete, methods=['POST'])
+app.add_url_rule('/api/workspace-party-names', 'workspace_party_names_api', workspace_party_names_api, methods=['GET'])
 app.add_url_rule('/api/workspace-product-names', 'workspace_product_names_api', workspace_product_names_api, methods=['GET'])
 app.add_url_rule('/workspace/accounts', 'workspace_accounts_list', workspace_accounts_list)
 app.add_url_rule('/workspace/account/new', 'workspace_account_new', workspace_account_form, methods=['GET', 'POST'])

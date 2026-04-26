@@ -39,7 +39,8 @@
                      value="{{ name_val }}"
                      autocomplete="off"
                      data-api-url="{{ url_for('workspace_product_names_api') }}"
-                     data-exclude-id="{{ row.id if row else 0 }}">
+                     data-exclude-id="{{ row.id if row else 0 }}"
+                     data-edit-sample-url="{{ url_for('workspace_product_edit', pk=0) }}">
               <div id="wsProductSuggestPanel" class="list-group position-absolute w-100 shadow border rounded mt-1 bg-white" style="display:none; z-index:1050; max-height:240px; overflow-y:auto;">
                 <div class="list-group-item py-1 px-2 small text-muted border-0">Pehle se added products <span class="badge bg-light text-secondary">search</span></div>
                 <div id="wsProductSuggestList"></div>
@@ -113,8 +114,14 @@
   if (!input || !panel) return;
   var apiBase = input.getAttribute('data-api-url');
   var excludeId = input.getAttribute('data-exclude-id') || '0';
+  var editSampleUrl = input.getAttribute('data-edit-sample-url') || '';
   var tmo = null;
   var lastExact = null;
+
+  function productEditHref(id) {
+    if (!editSampleUrl) return '#';
+    return editSampleUrl.replace(/\/0\/edit$/, '/' + id + '/edit');
+  }
 
   function esc(s) {
     if (!s) return '';
@@ -130,16 +137,27 @@
       return;
     }
     items.forEach(function(it) {
+      var row = document.createElement('div');
+      row.className = 'list-group-item list-group-item-light py-1 px-2 d-flex align-items-center justify-content-between gap-2';
       var a = document.createElement('button');
       a.type = 'button';
-      a.className = 'list-group-item list-group-item-action list-group-item-light py-1 px-2 text-start';
+      a.className = 'btn btn-link list-group-item-action text-start text-decoration-none text-body p-0 flex-grow-1 border-0';
       a.innerHTML = '<span class="fw-semibold">' + esc(it.name) + '</span>' + (it.unit ? ' <span class="text-muted">(' + esc(it.unit) + ')</span>' : '');
       a.addEventListener('click', function() {
         input.value = it.name;
         panel.style.display = 'none';
         input.dispatchEvent(new Event('input'));
       });
-      listEl.appendChild(a);
+      var editA = document.createElement('a');
+      editA.className = 'btn btn-sm btn-outline-secondary text-nowrap py-0';
+      editA.textContent = 'Edit';
+      editA.href = productEditHref(it.id);
+      editA.target = '_blank';
+      editA.rel = 'noopener noreferrer';
+      editA.addEventListener('click', function(e) { e.stopPropagation(); });
+      row.appendChild(a);
+      row.appendChild(editA);
+      listEl.appendChild(row);
     });
   }
 
@@ -165,6 +183,13 @@
   function fetchSuggest() {
     if (!apiBase) return;
     var q = (input.value || '').trim();
+    if (!q.length) {
+      panel.style.display = 'none';
+      listEl.innerHTML = '';
+      lastExact = null;
+      if (hints) hints.innerHTML = '';
+      return;
+    }
     var u = apiBase + '?q=' + encodeURIComponent(q) + '&exclude_id=' + encodeURIComponent(excludeId);
     fetch(u, { headers: { 'Accept': 'application/json' } })
       .then(function(r) { return r.json(); })
@@ -173,9 +198,7 @@
         renderRows(data.suggestions);
         lastExact = data.exact_match_id;
         renderHints(data);
-        panel.style.display = (document.activeElement === input && (q.length === 0 || (data.suggestions && data.suggestions.length))) ? 'block' : 'block';
-        if (q.length > 0) panel.style.display = 'block';
-        if (q.length === 0 && (!data.suggestions || !data.suggestions.length)) panel.style.display = 'none';
+        panel.style.display = 'block';
       })
       .catch(function() { listEl.innerHTML = ''; });
   }
@@ -184,15 +207,8 @@
     if (tmo) clearTimeout(tmo);
     tmo = setTimeout(fetchSuggest, 200);
   });
-  input.addEventListener('focus', function() {
-    fetchSuggest();
-    panel.style.display = 'block';
-  });
   input.addEventListener('blur', function() {
     setTimeout(function() { panel.style.display = 'none'; }, 200);
-  });
-  document.addEventListener('click', function(e) {
-    if (e.target === input || (panel && panel.contains(e.target))) return;
   });
 
   if (form) {
@@ -204,7 +220,6 @@
       }
     });
   }
-  fetchSuggest();
 })();
 </script>
 {% endblock %}

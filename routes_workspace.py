@@ -155,6 +155,29 @@ def _workspace_product_name_conflicts(employee_id, name, exclude_id=None):
     return out
 
 
+def _workspace_party_name_conflicts(employee_id, name, exclude_id=None):
+    """Same as workspace product: unique (employee, name) on workspace_party."""
+    norm = _normalize_ws_product_name(name)
+    out = {"exact": None, "similar": None, "similarity": 0.0}
+    if not norm:
+        return out
+    q = WorkspaceParty.query.filter_by(employee_id=employee_id)
+    if exclude_id:
+        q = q.filter(WorkspaceParty.id != exclude_id)
+    best_p, best_r = None, 0.0
+    for p in q.all():
+        pn = _normalize_ws_product_name(p.name)
+        if pn == norm:
+            out["exact"] = p
+            return out
+        r = _ws_product_name_similarity(norm, pn)
+        if r >= _WS_PROD_SIMILAR_MIN and r > best_r:
+            best_p, best_r = p, r
+    if best_p:
+        out["similar"], out["similarity"] = best_p, best_r
+    return out
+
+
 def _is_master_or_admin_user():
     user_id = session.get("user_id")
     if not user_id:
@@ -769,6 +792,19 @@ def workspace_parties_list():
     )
 
 
+def _workspace_party_form_prefill():
+    return {
+        "name": (request.form.get("name") or "").strip(),
+        "party_type": (request.form.get("party_type") or "").strip(),
+        "district_id": request.form.get("district_id", type=int),
+        "contact": (request.form.get("contact") or "").strip(),
+        "phone": (request.form.get("phone") or "").strip(),
+        "address": (request.form.get("address") or "").strip(),
+        "remarks": (request.form.get("remarks") or "").strip(),
+        "is_active": request.form.get("is_active", "1"),
+    }
+
+
 def workspace_party_form(pk=None):
     guard, emp = _workspace_guard("workspace_party_edit" if pk else "workspace_party_add")
     if guard:
@@ -787,7 +823,54 @@ def workspace_party_form(pk=None):
         name = (request.form.get("name") or "").strip()
         if not name:
             flash("Party name is required.", "danger")
-            return render_template("workspace/party_form.html", row=row, employee=emp, districts=districts, next_url=next_url, default_type=default_type)
+            return render_template(
+                "workspace/party_form.html",
+                row=row,
+                employee=emp,
+                districts=districts,
+                next_url=next_url,
+                default_type=default_type,
+                party_form_values=_workspace_party_form_prefill(),
+                show_similar_ack=False,
+            )
+        exid = row.id if row else None
+        conf = _workspace_party_name_conflicts(emp.id, name, exclude_id=exid)
+        if conf.get("exact"):
+            ep = conf["exact"]
+            flash(
+                f'Yeh party pehle se maujood hai: “{ep.name}”. (Same naam — spacing/case alag ho sakta hai). Duplicate nahi bana sakte.',
+                "danger",
+            )
+            return render_template(
+                "workspace/party_form.html",
+                row=row,
+                employee=emp,
+                districts=districts,
+                next_url=next_url,
+                default_type=default_type,
+                party_form_values=_workspace_party_form_prefill(),
+                show_similar_ack=False,
+            )
+        if conf.get("similar") and request.form.get("ack_similar") != "1":
+            sp = conf["similar"]
+            scr = int(round(float(conf.get("similarity") or 0) * 100))
+            flash(
+                f'Yeh naam maujood party “{sp.name}” se bahut milta-julta hai (~{scr}% match). Agar wohi nayi party nahi, pehle wala edit karein; warna neeche tick karke save karein.',
+                "warning",
+            )
+            return render_template(
+                "workspace/party_form.html",
+                row=row,
+                employee=emp,
+                districts=districts,
+                next_url=next_url,
+                default_type=default_type,
+                party_form_values=_workspace_party_form_prefill(),
+                show_similar_ack=True,
+                similar_party_name=sp.name,
+                similar_party_id=sp.id,
+                similar_score=conf.get("similarity") or 0.0,
+            )
         if not row:
             row = WorkspaceParty(employee_id=emp.id)
             db.session.add(row)
@@ -804,16 +887,50 @@ def workspace_party_form(pk=None):
             db.session.flush()
             ensure_workspace_counterparty_account(emp.id, party_id=row.id)
             db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash("Duplicate party: is naam ka record pehle se hai (is employee workspace ke liye).", "danger")
+            r_after = None
+            if pk:
+                r_after = WorkspaceParty.query.filter_by(employee_id=emp.id, id=pk).first()
+            return render_template(
+                "workspace/party_form.html",
+                row=r_after,
+                employee=emp,
+                districts=districts,
+                next_url=next_url,
+                default_type=default_type,
+                party_form_values=_workspace_party_form_prefill(),
+                show_similar_ack=False,
+            )
         except Exception as e:
             db.session.rollback()
             print(f"workspace_party_form save error: {e}")
             flash("Unable to save workspace party right now. Please try again.", "danger")
-            return render_template("workspace/party_form.html", row=row, employee=emp, districts=districts, next_url=next_url, default_type=default_type)
+            return render_template(
+                "workspace/party_form.html",
+                row=row,
+                employee=emp,
+                districts=districts,
+                next_url=next_url,
+                default_type=default_type,
+                party_form_values=_workspace_party_form_prefill(),
+                show_similar_ack=False,
+            )
         flash("Workspace party saved.", "success")
         if next_url:
             return redirect(next_url)
         return redirect(url_for("workspace_parties_list"))
-    return render_template("workspace/party_form.html", row=row, employee=emp, districts=districts, next_url=next_url, default_type=default_type)
+    return render_template(
+        "workspace/party_form.html",
+        row=row,
+        employee=emp,
+        districts=districts,
+        next_url=next_url,
+        default_type=default_type,
+        party_form_values=None,
+        show_similar_ack=False,
+    )
 
 
 def workspace_party_delete(pk):
@@ -1202,6 +1319,68 @@ def workspace_product_names_api():
     similar_list = []
     if nq and len(nq) >= 1:
         for p in all_p:
+            pn = _normalize_ws_product_name(p.name)
+            if pn == nq:
+                exact_id = p.id
+            r = _ws_product_name_similarity(nq, pn)
+            if _WS_PROD_SIMILAR_MIN <= r < 1.0:
+                similar_list.append({"id": p.id, "name": p.name, "score": round(r, 3)})
+        similar_list.sort(key=lambda x: -x["score"])
+        similar_list = similar_list[:8]
+    return jsonify(
+        {
+            "suggestions": suggestions,
+            "exact_match_id": exact_id,
+            "similar": similar_list,
+        }
+    )
+
+
+def workspace_party_names_api():
+    """JSON: filter list by optional party_type; exact/similar use all types (name unique per employee)."""
+    guard, emp = _workspace_guard("workspace_party_list")
+    if guard:
+        return jsonify({"suggestions": [], "exact_match_id": None, "similar": []}), 403
+    qstr = (request.args.get("q") or "").strip()
+    exclude_id = request.args.get("exclude_id", type=int) or 0
+    party_type = (request.args.get("party_type") or "").strip()
+    base_all = WorkspaceParty.query.filter_by(employee_id=emp.id)
+    if exclude_id:
+        base_all = base_all.filter(WorkspaceParty.id != exclude_id)
+    all_for_dup = base_all.order_by(WorkspaceParty.name.asc()).all()
+    base = base_all
+    if party_type:
+        base = base.filter(WorkspaceParty.party_type == party_type)
+    all_p = base.order_by(WorkspaceParty.name.asc()).all()
+    nq = _normalize_ws_product_name(qstr)
+    suggestions = []
+    if not nq:
+        return jsonify({"suggestions": [], "exact_match_id": None, "similar": []})
+    for p in all_p:
+        pn = _normalize_ws_product_name(p.name)
+        if nq in pn or (len(nq) >= 2 and pn.startswith(nq)):
+            suggestions.append(
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "party_type": p.party_type or "",
+                }
+            )
+        else:
+            tokens = [t for t in nq.split() if len(t) >= 2]
+            if tokens and all(t in pn for t in tokens):
+                suggestions.append(
+                    {
+                        "id": p.id,
+                        "name": p.name,
+                        "party_type": p.party_type or "",
+                    }
+                )
+    suggestions = suggestions[:30]
+    exact_id = None
+    similar_list = []
+    if nq and len(nq) >= 1:
+        for p in all_for_dup:
             pn = _normalize_ws_product_name(p.name)
             if pn == nq:
                 exact_id = p.id

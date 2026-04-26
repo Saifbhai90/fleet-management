@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
+{% set pv = party_form_values %}
+{% set name_val = pv.name if pv else (row.name if row else '') %}
+{% set type_val = (pv.party_type if pv else None) or (row.party_type if row else None) or (default_type if not row and default_type else '') %}
+{% set active_is_yes = (pv.is_active == '1') if pv else (not row or row.is_active) %}
 <div class="container-fluid py-3">
   {% include "workspace/_nav.html" %}
   <div class="d-flex justify-content-between align-items-center mb-3">
@@ -8,23 +12,47 @@
   <div class="card border-0 shadow-sm">
     <div class="card-body p-4">
       <div class="alert alert-light border mb-3">
-        <small class="text-muted">Master Party form ki tarah same important fields available hain. Is party ka data sirf selected employee workspace ke liye hoga.</small>
+        <small class="text-muted">Naam type karte waqt <strong>pehle se maujood parties filter</strong> hongi (type bhi chunein to wahi type ke andar). Same naam dubara nahi (employee workspace par).</small>
       </div>
-      <form method="post">
+      {% if show_similar_ack|default(false) %}
+      <div class="alert alert-warning border-warning mb-3">
+        <strong><i class="bi bi-exclamation-triangle me-1"></i>Milta-julta party:</strong>
+        “<a href="{{ url_for('workspace_party_edit', pk=similar_party_id) }}" target="_blank">{{ similar_party_name }}</a>”
+        {% if similar_score %}<span class="badge bg-secondary ms-1">~{{ (similar_score * 100)|round(0, 'floor')|int }}% match</span>{% endif %}
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="checkbox" name="ack_similar" value="1" id="ackSimilarParty">
+          <label class="form-check-label" for="ackSimilarParty">Main confirm karta / karti hoon — yeh <strong>alag</strong> nayi party hai (spelling / naam jaiz taur par different hai).</label>
+        </div>
+      </div>
+      {% endif %}
+      <form method="post" id="wsPartyForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="next" value="{{ next_url or '' }}">
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label fw-semibold">Party Name <span class="text-danger">*</span></label>
-            <input type="text" name="name" class="form-control" value="{{ row.name if row else '' }}" required placeholder="Pump / Workshop / Shop name">
+            <div class="position-relative">
+              <input type="text" name="name" id="wsPartyNameInput" class="form-control" required
+                     placeholder="Type karein — neeche maujood names filter honge"
+                     value="{{ name_val }}"
+                     autocomplete="off"
+                     data-api-url="{{ url_for('workspace_party_names_api') }}"
+                     data-exclude-id="{{ row.id if row else 0 }}"
+                     data-edit-sample-url="{{ url_for('workspace_party_edit', pk=0) }}">
+              <div id="wsPartySuggestPanel" class="list-group position-absolute w-100 shadow border rounded mt-1 bg-white" style="display:none; z-index:1050; max-height:240px; overflow-y:auto;">
+                <div class="list-group-item py-1 px-2 small text-muted border-0">Pehle se added parties <span class="badge bg-light text-secondary">type + search</span></div>
+                <div id="wsPartySuggestList"></div>
+              </div>
+            </div>
+            <div id="wsPartyNameHints" class="small mt-1"></div>
           </div>
           <div class="col-md-3">
             <label class="form-label fw-semibold">Type <span class="text-danger">*</span></label>
-            <select name="party_type" class="form-select search-select" required>
+            <select name="party_type" id="wsPartyTypeSelect" class="form-select search-select" required>
               <option value="">-- Select Type --</option>
-              <option value="Pump" {% if (row and row.party_type == 'Pump') or (not row and default_type == 'Pump') %}selected{% endif %}>Pump</option>
-              <option value="Workshop" {% if (row and row.party_type == 'Workshop') or (not row and default_type == 'Workshop') %}selected{% endif %}>Workshop</option>
-              <option value="Spare parts shop" {% if (row and row.party_type == 'Spare parts shop') or (not row and default_type == 'Spare parts shop') %}selected{% endif %}>Spare parts shop</option>
+              <option value="Pump" {% if type_val == 'Pump' %}selected{% endif %}>Pump</option>
+              <option value="Workshop" {% if type_val == 'Workshop' %}selected{% endif %}>Workshop</option>
+              <option value="Spare parts shop" {% if type_val == 'Spare parts shop' %}selected{% endif %}>Spare parts shop</option>
             </select>
           </div>
           <div class="col-md-3">
@@ -32,32 +60,32 @@
             <select name="district_id" class="form-select search-select">
               <option value="">-- Select District --</option>
               {% for d in districts %}
-              <option value="{{ d.id }}" {% if row and row.district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+              <option value="{{ d.id }}" {% if pv and pv.district_id == d.id %}selected{% elif not pv and row and row.district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
               {% endfor %}
             </select>
           </div>
           <div class="col-md-4">
             <label class="form-label fw-semibold">Contact</label>
-            <input type="text" name="contact" class="form-control" value="{{ row.contact if row else '' }}" placeholder="Primary contact">
+            <input type="text" name="contact" class="form-control" value="{% if pv %}{{ pv.contact }}{% else %}{{ row.contact if row else '' }}{% endif %}" placeholder="Primary contact">
           </div>
           <div class="col-md-4">
             <label class="form-label fw-semibold">Phone</label>
-            <input type="text" name="phone" class="form-control" value="{{ row.phone if row else '' }}" placeholder="03xx-xxxxxxx">
+            <input type="text" name="phone" class="form-control" value="{% if pv %}{{ pv.phone }}{% else %}{{ row.phone if row else '' }}{% endif %}" placeholder="03xx-xxxxxxx">
           </div>
           <div class="col-md-4">
             <label class="form-label fw-semibold">Status</label>
             <select name="is_active" class="form-select">
-              <option value="1" {% if not row or row.is_active %}selected{% endif %}>Active</option>
-              <option value="0" {% if row and not row.is_active %}selected{% endif %}>Inactive</option>
+              <option value="1" {% if active_is_yes %}selected{% endif %}>Active</option>
+              <option value="0" {% if not active_is_yes %}selected{% endif %}>Inactive</option>
             </select>
           </div>
           <div class="col-12">
             <label class="form-label fw-semibold">Address</label>
-            <input type="text" name="address" class="form-control" value="{{ row.address if row else '' }}" placeholder="Address">
+            <input type="text" name="address" class="form-control" value="{% if pv %}{{ pv.address }}{% else %}{{ row.address if row else '' }}{% endif %}" placeholder="Address">
           </div>
           <div class="col-12">
             <label class="form-label fw-semibold">Remarks</label>
-            <textarea name="remarks" class="form-control" rows="2" placeholder="Any notes">{{ row.remarks if row else '' }}</textarea>
+            <textarea name="remarks" class="form-control" rows="2" placeholder="Any notes">{% if pv %}{{ pv.remarks }}{% else %}{{ row.remarks if row else '' }}{% endif %}</textarea>
           </div>
           <div class="col-12 d-flex gap-2">
             <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i>Save Party</button>
@@ -68,4 +96,137 @@
     </div>
   </div>
 </div>
+<script>
+(function() {
+  var input = document.getElementById('wsPartyNameInput');
+  var typeSel = document.getElementById('wsPartyTypeSelect');
+  var panel = document.getElementById('wsPartySuggestPanel');
+  var listEl = document.getElementById('wsPartySuggestList');
+  var hints = document.getElementById('wsPartyNameHints');
+  var form = document.getElementById('wsPartyForm');
+  if (!input || !panel) return;
+  var apiBase = input.getAttribute('data-api-url');
+  var excludeId = input.getAttribute('data-exclude-id') || '0';
+  var editSampleUrl = input.getAttribute('data-edit-sample-url') || '';
+  var tmo = null;
+  var lastExact = null;
+
+  function partyEditHref(id) {
+    if (!editSampleUrl) return '#';
+    return editSampleUrl.replace(/\/0\/edit$/, '/' + id + '/edit');
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function renderRows(items) {
+    listEl.innerHTML = '';
+    if (!items || !items.length) {
+      listEl.innerHTML = '<div class="list-group-item small text-muted">Koi match nahi — naya naam likh sakte hain</div>';
+      return;
+    }
+    items.forEach(function(it) {
+      var row = document.createElement('div');
+      row.className = 'list-group-item list-group-item-light py-1 px-2 d-flex align-items-center justify-content-between gap-2';
+      var a = document.createElement('button');
+      a.type = 'button';
+      a.className = 'btn btn-link list-group-item-action text-start text-decoration-none text-body p-0 flex-grow-1 border-0';
+      a.innerHTML = '<span class="fw-semibold">' + esc(it.name) + '</span>' +
+        (it.party_type ? ' <span class="text-muted">(' + esc(it.party_type) + ')</span>' : '');
+      a.addEventListener('click', function() {
+        input.value = it.name;
+        if (it.party_type && typeSel) {
+          for (var i = 0; i < typeSel.options.length; i++) {
+            if (typeSel.options[i].value === it.party_type) { typeSel.selectedIndex = i; break; }
+          }
+        }
+        panel.style.display = 'none';
+        input.dispatchEvent(new Event('input'));
+      });
+      var editA = document.createElement('a');
+      editA.className = 'btn btn-sm btn-outline-secondary text-nowrap py-0';
+      editA.textContent = 'Edit';
+      editA.href = partyEditHref(it.id);
+      editA.target = '_blank';
+      editA.rel = 'noopener noreferrer';
+      editA.addEventListener('click', function(e) { e.stopPropagation(); });
+      row.appendChild(a);
+      row.appendChild(editA);
+      listEl.appendChild(row);
+    });
+  }
+
+  function renderHints(data) {
+    if (!hints) return;
+    hints.innerHTML = '';
+    if (data.exact_match_id) {
+      var d = document.createElement('div');
+      d.className = 'text-danger fw-semibold';
+      d.innerHTML = '<i class="bi bi-x-octagon me-1"></i>Same naam maujood — duplicate save nahi hoga. Neeche list se wahi select karein ya alag spelling use karein.';
+      hints.appendChild(d);
+      return;
+    }
+    if (data.similar && data.similar.length) {
+      var w = document.createElement('div');
+      w.className = 'text-warning';
+      w.innerHTML = '<i class="bi bi-shuffle me-1"></i><strong>Similar maujood:</strong> ' +
+        data.similar.slice(0, 3).map(function(s) { return '“' + esc(s.name) + '” (' + Math.round(s.score * 100) + '%)'; }).join(' · ');
+      hints.appendChild(w);
+    }
+  }
+
+  function fetchSuggest() {
+    if (!apiBase) return;
+    var q = (input.value || '').trim();
+    if (!q.length) {
+      panel.style.display = 'none';
+      listEl.innerHTML = '';
+      lastExact = null;
+      if (hints) hints.innerHTML = '';
+      return;
+    }
+    var pt = typeSel && typeSel.value ? typeSel.value : '';
+    var u = apiBase + '?q=' + encodeURIComponent(q) + '&exclude_id=' + encodeURIComponent(excludeId) + '&party_type=' + encodeURIComponent(pt);
+    fetch(u, { headers: { 'Accept': 'application/json' } })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) return;
+        renderRows(data.suggestions);
+        lastExact = data.exact_match_id;
+        renderHints(data);
+        panel.style.display = 'block';
+      })
+      .catch(function() { listEl.innerHTML = ''; });
+  }
+
+  input.addEventListener('input', function() {
+    if (tmo) clearTimeout(tmo);
+    tmo = setTimeout(fetchSuggest, 200);
+  });
+  if (typeSel) {
+    typeSel.addEventListener('change', function() {
+      var q = (input.value || '').trim();
+      if (!q.length) return;
+      if (tmo) clearTimeout(tmo);
+      tmo = setTimeout(fetchSuggest, 200);
+    });
+  }
+  input.addEventListener('blur', function() {
+    setTimeout(function() { panel.style.display = 'none'; }, 200);
+  });
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      if (lastExact) {
+        e.preventDefault();
+        alert('Yeh naam pehle se maujood hai — naya duplicate save nahi hoga. List se wahi party use karein ya naam badlein.');
+        return;
+      }
+    });
+  }
+})();
+</script>
 {% endblock %}
