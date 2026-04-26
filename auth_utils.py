@@ -222,6 +222,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('expense_delete_cleanup_retry', 'workspace_dashboard'),
     # Employee Expenses
     ('employee_expense_list', 'employee_expense'),
+    ('employee_expense_view', 'employee_expense'),
     # Employee Workspace
     ('workspace_dashboard', 'workspace_dashboard'),
     ('workspace_home', 'workspace_dashboard'),

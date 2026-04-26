@@ -1,0 +1,94 @@
+{# Expects: rec = EmployeeExpense #}
+<div class="eeinv-headcard expense-invoice-bill shadow-sm mb-1 border eeinv-bill">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 py-2 px-2 px-md-3 eeinv-hero">
+    <div class="min-w-0 eeinv-hero__left">
+      <div class="text-uppercase eeinv-hlabel">Employee expense / invoice</div>
+      <div class="eeinv-htitle mb-0">Entry #{{ rec.id }} <span class="text-muted fw-normal">(EE-{{ rec.id }})</span></div>
+    </div>
+    <div class="text-end small flex-shrink-0 d-flex flex-column align-items-end gap-1">
+      <div class="eeinv-pill text-nowrap">
+        <span class="eeinv-pill__k">Date</span>
+        <span class="eeinv-pill__v">{{ rec.expense_date|ddmmyyyy if rec.expense_date else '—' }}</span>
+      </div>
+      <div class="eeinv-pill text-nowrap">
+        <span class="eeinv-pill__k">Category</span>
+        <span class="eeinv-pill__v">{{ rec.expense_category or '—' }}</span>
+      </div>
+    </div>
+  </div>
+  <div class="px-2 pb-2 pt-1 eeinv-meta eeinv-meta--tiles eeinv-meta--4up">
+    <div class="row g-2 row-cols-2 row-cols-md-4 eeinv-brick-row align-items-stretch">
+      <div class="col d-flex">
+        <div class="eeinv-field w-100">
+          <div class="eeinv-k">District</div>
+          <div class="eeinv-v">{{ rec.district.name if rec.district else '—' }}</div>
+        </div>
+      </div>
+      <div class="col d-flex">
+        <div class="eeinv-field w-100">
+          <div class="eeinv-k">Project</div>
+          <div class="eeinv-v">{{ rec.project.name if rec.project else '—' }}</div>
+        </div>
+      </div>
+      <div class="col d-flex">
+        <div class="eeinv-field w-100">
+          <div class="eeinv-k">Employee</div>
+          <div class="eeinv-v">{{ rec.employee.name if rec.employee else '—' }}</div>
+        </div>
+      </div>
+      <div class="col d-flex">
+        <div class="eeinv-field w-100">
+          <div class="eeinv-k">Payment</div>
+          <div class="eeinv-v">{{ rec.payment_mode or '—' }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="row g-2 row-cols-2 row-cols-md-4 mt-1 eeinv-brick-row eeinv-brick-row--2 align-items-stretch">
+      <div class="col d-flex">
+        <div class="eeinv-field w-100">
+          <div class="eeinv-k">Receipt</div>
+          <div class="eeinv-v">{% if rec.receipt_path %}<span class="text-success">Attached</span>{% else %}<span class="text-muted">—</span>{% endif %}</div>
+        </div>
+      </div>
+      <div class="col d-flex">
+        <div class="eeinv-field w-100">
+          <div class="eeinv-k">Created</div>
+          <div class="eeinv-v small">{{ rec.created_at.strftime('%d-%m-%Y %I:%M %p') if rec.created_at else '—' }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-2 eeinv-brick-row eeinv-brick-row--remarks">
+      <div class="eeinv-field w-100 eeinv-field--remarks">
+        <div class="eeinv-k">Description</div>
+        <div class="eeinv-v eeinv-remarks mb-0">{{ rec.description or '—' }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="eeinv-lines expense-invoice-bill shadow-sm border overflow-hidden mb-0">
+  <div class="px-2 py-2 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-1 bg-light">
+    <span class="small fw-semibold text-uppercase eeinv-lines__h">Amount</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-bordered mb-0 eeinv-table">
+      <thead class="eeinv-thead">
+        <tr>
+          <th>Summary</th>
+          <th class="text-end" style="width:7rem">Amount (PKR)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Employee expense ({{ rec.expense_category or '—' }})</td>
+          <td class="text-end fw-semibold eeinv-mono">{{ "{:,.2f}".format(rec.amount or 0) }}</td>
+        </tr>
+      </tbody>
+      <tfoot class="eeinv-tfoot">
+        <tr>
+          <th class="eeinv-tfoot__label text-end">Total</th>
+          <th class="text-end eeinv-tfoot__amount eeinv-mono">{{ "{:,.2f}".format(rec.amount or 0) }}</th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>

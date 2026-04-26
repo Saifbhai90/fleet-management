@@ -83,7 +83,7 @@
     <div class="d-flex justify-content-between align-items-center mb-3 media-head">
       <div>
         <h5 class="mb-0"><i class="bi bi-images me-2"></i>{{ media_title or 'Maintenance Media Gallery' }}</h5>
-        <small>Vehicle: {{ rec.vehicle.vehicle_no if rec.vehicle else '-' }} | Date: {{ media_date_label or (rec.expense_date|ddmmyyyy if rec.expense_date else '—') }}</small>
+        <small>{% if media_header_subline is defined %}{{ media_header_subline }}{% else %}Vehicle: {{ rec.vehicle.vehicle_no if rec.vehicle else '-' }} | Date: {{ media_date_label or (rec.expense_date|ddmmyyyy if rec.expense_date else '—') }}{% endif %}</small>
       </div>
       <a href="{{ back_url or url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>{{ back_link_label|default('Back') }}</a>
     </div>
@@ -107,6 +107,11 @@
           <div class="media-card" data-idx="{{ loop.index0 }}">
             {% if m.type == 'video' %}
               <video class="media-thumb" src="{{ m.url }}" preload="metadata" muted></video>
+            {% elif m.type == 'pdf' %}
+              <a href="{{ m.url }}" target="_blank" rel="noopener" class="media-thumb d-flex align-items-center justify-content-center text-decoration-none bg-dark text-white flex-column">
+                <i class="bi bi-file-earmark-pdf fs-2"></i>
+                <small>PDF</small>
+              </a>
             {% else %}
               <img class="media-thumb" src="{{ m.url }}" alt="{{ m.name }}" loading="lazy">
             {% endif %}
@@ -203,7 +208,7 @@
     if (oldLoad) oldLoad.remove();
     var oldErr = stage.querySelector('.gv-err');
     if (oldErr) oldErr.remove();
-    var oldMedia = stage.querySelector('img, video');
+    var oldMedia = stage.querySelector('img, video, .gv-pdf-wrap');
     if (oldMedia) oldMedia.remove();
     mediaEl = null;
     resetZoomState();
@@ -223,6 +228,19 @@
       v.preload = 'metadata';
       mediaEl = v;
       stage.insertBefore(v, document.getElementById('gvNext'));
+      return;
+    }
+    if (it.type === 'pdf') {
+      var pdfWrap = document.createElement('div');
+      pdfWrap.className = 'gv-pdf-wrap';
+      pdfWrap.style.cssText = 'width:min(95vw,920px);max-height:85vh;';
+      var f = document.createElement('iframe');
+      f.src = it.url;
+      f.title = it.name || 'PDF';
+      f.style.cssText = 'width:100%;height:80vh;border:0;border-radius:8px;background:#fff';
+      pdfWrap.appendChild(f);
+      mediaEl = pdfWrap;
+      stage.insertBefore(pdfWrap, document.getElementById('gvNext'));
       return;
     }
 

@@ -2,7 +2,7 @@
 Finance & Accounting Routes
 All routes for vouchers, journal entries, ledgers, and financial reports
 """
-from flask import render_template, request, redirect, url_for, flash, jsonify, session
+from flask import render_template, request, redirect, url_for, flash, jsonify, session, current_app
 from sqlalchemy import and_, or_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
@@ -868,23 +868,78 @@ def employee_expense_form(pk=None):
             expense.amount = form.amount.data
             expense.payment_mode = form.payment_mode.data
             expense.created_by_user_id = session.get('user_id')
-            
-            # Handle receipt upload
+
+            # Pre-validate receipt (before flush) so we never commit a row then abort on file rules
+            receipt_ftype = None
             if form.receipt.data:
-                file = form.receipt.data
-                filename = secure_filename(file.filename)
-                timestamp = pk_now().strftime('%Y%m%d_%H%M%S')
-                filename = f"receipt_{timestamp}_{filename}"
-                upload_folder = os.path.join('static', 'uploads', 'receipts')
-                os.makedirs(upload_folder, exist_ok=True)
-                file_path = os.path.join(upload_folder, filename)
-                file.save(file_path)
-                expense.receipt_path = f"uploads/receipts/{filename}"
-            
+                from routes import _expense_attachment_max_bytes
+                f0 = form.receipt.data
+                original_fn = secure_filename(f0.filename) or 'receipt'
+                ext_lo = os.path.splitext(original_fn)[1].lower()
+                content_type = (f0.content_type or '').lower()
+                allowed_image_ct = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+                allowed_video_ct = {'video/mp4', 'video/webm', 'video/quicktime'}
+                if ext_lo in {'.jpg', '.jpeg', '.png', '.gif', '.webp'} or content_type in allowed_image_ct:
+                    receipt_ftype = 'image'
+                elif ext_lo == '.pdf' or content_type == 'application/pdf':
+                    receipt_ftype = 'pdf'
+                elif ext_lo in {'.mp4', '.webm', '.mov'} or content_type in allowed_video_ct:
+                    receipt_ftype = 'video'
+                else:
+                    flash('Receipt: sirf image (jpg/png/…), PDF, ya video (mp4/webm/mov) allowed hai.', 'danger')
+                    return render_template(
+                        'finance/employee_expense_form.html',
+                        form=form,
+                        expense=expense,
+                        all_categories=category_values,
+                        title='Add Employee Expense' if not pk else 'Edit Employee Expense'
+                    )
+                try:
+                    f0.seek(0, os.SEEK_END)
+                    sz = f0.tell()
+                    f0.seek(0)
+                except Exception:
+                    f0.seek(0)
+                    sz = None
+                if sz is not None and sz > _expense_attachment_max_bytes():
+                    flash('Receipt file size limit: expense attachments max (see EXPENSE_ATTACHMENT_MAX_MB).', 'danger')
+                    return render_template(
+                        'finance/employee_expense_form.html',
+                        form=form,
+                        expense=expense,
+                        all_categories=category_values,
+                        title='Add Employee Expense' if not pk else 'Edit Employee Expense'
+                    )
+
             if not pk:
                 db.session.add(expense)
-            
             db.session.flush()
+
+            if form.receipt.data and receipt_ftype:
+                from routes import _save_expense_attachment_path
+                f = form.receipt.data
+                original_fn = secure_filename(f.filename) or 'receipt'
+                rel_prefix = f"employee_expense/{expense.id}"
+                f.seek(0)
+                try:
+                    stored = _save_expense_attachment_path(
+                        f, receipt_ftype, original_fn, 'employee_expense',
+                        current_app.config['UPLOAD_FOLDER'], rel_prefix
+                    )
+                    if stored:
+                        expense.receipt_path = stored
+                except Exception as ex:
+                    current_app.logger.warning('Employee expense receipt save failed: %s', ex)
+                    db.session.rollback()
+                    flash('Receipt upload failed — try a smaller file or different format.', 'danger')
+                    exp_for_form = EmployeeExpense.query.get(pk) if pk else None
+                    return render_template(
+                        'finance/employee_expense_form.html',
+                        form=form,
+                        expense=exp_for_form,
+                        all_categories=category_values,
+                        title='Add Employee Expense' if not pk else 'Edit Employee Expense'
+                    )
 
             # Reverse legacy company journal (if any) + previous workspace journal, then post fresh workspace JE.
             if expense.journal_entry_id:
@@ -1053,6 +1108,30 @@ def employee_expense_delete(pk):
     return redirect(url_for('employee_expense_list'))
 
 
+def employee_expense_view(pk):
+    _guard = _require_workspace_employee_for_expenses()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id()
+    auth_check = check_auth('employee_expense_list')
+    if auth_check:
+        return auth_check
+    from routes import _safe_internal_path
+    rec = EmployeeExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This employee expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('employee_expense_list'))
+    default_back = url_for('employee_expense_list')
+    back_url = _safe_internal_path(request.args.get('return_to'), default_back)
+    return render_template(
+        'finance/employee_expense_detail.html',
+        rec=rec,
+        title='Employee Expense Invoice',
+        back_url=back_url,
+        return_to_path=request.full_path,
+    )
+
+
 def employee_expense_description_suggestions_api():
     _guard = _require_workspace_employee_for_expenses()
     if _guard:
@@ -1085,6 +1164,18 @@ def employee_expense_description_suggestions_api():
     return jsonify(out)
 
 
+def _employee_receipt_public_url(receipt_path):
+    """Legacy static/receipts, UPLOAD_FOLDER paths, or full R2 URL."""
+    if not receipt_path:
+        return ''
+    s = (receipt_path or '').strip()
+    if s.startswith('http://') or s.startswith('https://'):
+        return s
+    if s.startswith('uploads/receipts/'):
+        return url_for('static', filename=s)
+    return url_for('uploaded_file', filename=s)
+
+
 def employee_expense_media(pk):
     _guard = _require_workspace_employee_for_expenses()
     if _guard:
@@ -1098,12 +1189,15 @@ def employee_expense_media(pk):
         flash('No receipt/bill media found for this expense.', 'warning')
         return redirect(url_for('employee_expense_list'))
 
-    receipt_name = os.path.basename(expense.receipt_path or '') or 'Receipt/Bill'
-    receipt_url = url_for('static', filename=expense.receipt_path)
-    lower_name = receipt_name.lower()
-    media_type = 'image'
-    if lower_name.endswith(('.mp4', '.webm', '.mov')):
+    receipt_name = os.path.basename((expense.receipt_path or '').split('?')[0]) or 'Receipt/Bill'
+    receipt_url = _employee_receipt_public_url(expense.receipt_path)
+    path_l = (expense.receipt_path or '').lower()
+    if any(path_l.rstrip('/').split('?')[0].endswith(ext) for ext in ('.mp4', '.webm', '.mov')):
         media_type = 'video'
+    elif '.pdf' in path_l or path_l.rstrip('/').split('?')[0].endswith('.pdf'):
+        media_type = 'pdf'
+    else:
+        media_type = 'image'
 
     media_items = [{
         'url': receipt_url,
@@ -1114,18 +1208,25 @@ def employee_expense_media(pk):
         'size_bytes': None,
         'size_label': '',
         'download_url': receipt_url,
-        'is_local_file': True,
+        'is_local_file': not (receipt_url.startswith('http://') or receipt_url.startswith('https://')),
     }]
 
     date_label = expense.expense_date.strftime('%d-%m-%Y') if expense.expense_date else '-'
+    from routes import _safe_internal_path
+    default_back = url_for('employee_expense_list')
+    back_url = _safe_internal_path(request.args.get('return_to'), default_back)
+    emp_name = expense.employee.name if expense.employee else '-'
+    subline = f"Employee: {emp_name} | {expense.expense_category or '—'} | Date: {date_label}"
     return render_template(
         'maintenance_expense_media.html',
         rec=expense,
         media_items=media_items,
         media_title='Employee Expense Media Gallery',
         media_date_label=date_label,
-        back_url=url_for('employee_expense_list'),
+        media_header_subline=subline,
+        back_url=back_url,
         download_all_url=receipt_url,
+        show_download_all=False,
     )
 
 

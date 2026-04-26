@@ -471,7 +471,7 @@ from routes_finance import (
     accounts_quick_receipt, receipt_vouchers_list,
     accounts_bank_entry, bank_entries_list,
     accounts_account_ledger, accounts_balance_sheet,
-    employee_expense_form, employee_expense_list, employee_expense_delete,
+    employee_expense_form, employee_expense_list, employee_expense_view, employee_expense_delete,
     employee_expense_media, employee_expense_description_suggestions_api,
     chart_of_accounts_list, chart_of_accounts_add, chart_of_accounts_edit, chart_of_accounts_toggle,
     fund_transfer_add, fund_transfer_edit, fund_transfer_delete, fund_transfers_list,
@@ -532,6 +532,7 @@ app.add_url_rule('/accounts/employee-expense/add', 'employee_expense_form', empl
 app.add_url_rule('/accounts/employee-expense/<int:pk>/edit', 'employee_expense_form_edit', employee_expense_form, methods=['GET', 'POST'])
 app.add_url_rule('/accounts/employee-expenses', 'employee_expense_list', employee_expense_list)
 app.add_url_rule('/accounts/employee-expense/<int:pk>/delete', 'employee_expense_delete', employee_expense_delete, methods=['POST'])
+app.add_url_rule('/accounts/employee-expense/<int:pk>/view', 'employee_expense_view', employee_expense_view)
 app.add_url_rule('/accounts/employee-expense/<int:pk>/media', 'employee_expense_media', employee_expense_media)
 app.add_url_rule('/api/employee-expense-descriptions', 'employee_expense_description_suggestions', employee_expense_description_suggestions_api, methods=['GET'])
 

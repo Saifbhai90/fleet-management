@@ -27,6 +27,7 @@
   .mwo-ico-btn--add      { border-color: #d97706; color: #b45309; background: #fffbeb; }
   .mwo-ico-btn--add:hover      { background: #fef3c7; }
   .mwo-table-bar .form-control { max-width: 360px; border-radius: 8px; }
+  #mwoUploadStatusPanel { position: fixed; right: 18px; bottom: 18px; width: min(420px, calc(100vw - 24px)); z-index: 1040; }
 </style>
 <div class="container-fluid py-3">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
@@ -130,7 +131,9 @@
             <th>Status</th>
             <th class="text-end">Bills</th>
             <th class="text-end">Total Cost</th>
-            <th class="text-end pe-3" style="min-width: 8.5rem;">Action</th>
+            <th class="text-center">Upload Status</th>
+            <th class="text-center">Media</th>
+            <th class="text-end pe-3" style="min-width: 8.5rem;">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -156,10 +159,62 @@
             </td>
             <td class="text-end">{{ row.bill_count }}</td>
             <td class="text-end">{{ "%.2f"|format(row.total_amount or 0) }}</td>
+            <td class="text-center">
+              {% set r = row.rec %}
+              {% set up_status = (r.upload_status or 'success')|lower %}
+              {% set up_total = r.upload_total or 0 %}
+              {% set up_done = r.upload_done or 0 %}
+              {% set up_failed = r.upload_failed or 0 %}
+              {% if up_status == 'processing' %}
+              <button type="button" class="btn btn-sm p-0 border-0 bg-transparent mwo-upload-status-btn"
+                      data-id="{{ r.id }}" data-status="{{ up_status }}" data-total="{{ up_total }}" data-done="{{ up_done }}"
+                      data-failed="{{ up_failed }}" data-error="{{ (r.upload_error or '')|e }}">
+                <span class="badge bg-warning text-dark">Processing {{ up_done }}/{{ up_total }}</span>
+              </button>
+              {% elif up_status in ['error', 'partial'] %}
+              <button type="button" class="btn btn-sm p-0 border-0 bg-transparent mwo-upload-status-btn"
+                      data-id="{{ r.id }}" data-status="{{ up_status }}" data-total="{{ up_total }}" data-done="{{ up_done }}"
+                      data-failed="{{ up_failed }}" data-error="{{ (r.upload_error or '')|e }}">
+                <span class="badge bg-danger">{{ 'Partial' if up_status == 'partial' else 'Error' }}</span>
+              </button>
+              {% else %}
+              <button type="button" class="btn btn-sm p-0 border-0 bg-transparent mwo-upload-status-btn"
+                      data-id="{{ r.id }}" data-status="success" data-total="{{ up_total }}" data-done="{{ up_done }}"
+                      data-failed="{{ up_failed }}" data-error="">
+                <span class="badge bg-success">Success</span>
+              </button>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% set ns = namespace(cloud=0, local=0, n=0) %}
+              {% for a in r.attachments %}
+                {% set ns.n = ns.n + 1 %}
+                {% if a.file_path and (a.file_path.startswith('http://') or a.file_path.startswith('https://')) %}
+                  {% set ns.cloud = ns.cloud + 1 %}
+                {% elif a.file_path %}
+                  {% set ns.local = ns.local + 1 %}
+                {% endif %}
+              {% endfor %}
+              {% if ns.n == 0 %}
+              <span class="text-muted">—</span>
+              {% elif ns.local == 0 %}
+              <span class="badge bg-success" title="{{ ns.n }} file(s) on Cloudflare / R2">Cloud</span>
+              {% elif ns.cloud == 0 %}
+              <span class="badge bg-warning text-dark" title="{{ ns.n }} file(s) on app server disk">Local</span>
+              {% else %}
+              <span class="badge bg-info text-dark" title="Some cloud, some local">Mixed</span>
+              {% endif %}
+            </td>
             <td class="text-end pe-3 text-nowrap">
-              <a href="{{ url_for('maintenance_work_order_detail', pk=row.rec.id) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="btn btn-link btn-sm p-1 text-success" title="View">
-                <i class="bi bi-eye"></i>
-              </a>
+              <div class="expense-view-wrap d-inline-block align-top">
+                <button type="button" class="btn btn-outline-success btn-sm expense-view-eye" title="Detail / Media" aria-expanded="false" aria-haspopup="true">
+                  <i class="bi bi-eye"></i>
+                </button>
+                <div class="expense-view-popover d-none border rounded-2 bg-white shadow p-2" style="min-width: 7.25rem;">
+                  <a class="btn btn-primary btn-sm w-100 mb-1 py-1" href="{{ url_for('maintenance_work_order_detail', pk=row.rec.id) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}">Detail</a>
+                  <a class="btn btn-outline-success btn-sm w-100 py-1" href="{{ url_for('maintenance_work_order_unified_media', pk=row.rec.id) }}">All media</a>
+                </div>
+              </div>
               <a href="{{ url_for('maintenance_work_order_form', pk=row.rec.id) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="btn btn-link btn-sm p-1" title="Edit">
                 <i class="bi bi-pencil"></i>
               </a>
@@ -182,13 +237,30 @@
           </tr>
           {% else %}
           <tr id="mwoNoDataRow">
-            <td colspan="11" class="text-center text-muted py-5">No work orders for this filter.</td>
+            <td colspan="13" class="text-center text-muted py-5">No work orders for this filter.</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+  </div>
+</div>
+<div id="mwoUploadStatusPanel" class="card shadow border d-none">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center">
+    <h6 class="mb-0"><i class="bi bi-cloud-upload me-2"></i>Upload Status</h6>
+    <button type="button" class="btn-close btn-sm" id="mwoUploadPanelClose" aria-label="Close"></button>
+  </div>
+  <div class="card-body py-2">
+    <div class="progress mb-2" style="height:1.25rem;">
+      <div id="mwoUploadModalBar" class="progress-bar" style="width:0%">0%</div>
+    </div>
+    <div id="mwoUploadModalMeta" class="small text-muted">0 / 0</div>
+    <pre id="mwoUploadModalError" class="small text-danger mt-2 mb-0 d-none" style="white-space:pre-wrap;max-height:150px;overflow:auto;"></pre>
+  </div>
+  <div class="card-footer py-2 d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-warning btn-sm d-none" id="mwoUploadResumeBtn"><i class="bi bi-arrow-repeat me-1"></i>Resume</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="mwoUploadPanelHide">Close</button>
   </div>
 </div>
 <script>
@@ -308,6 +380,152 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
   }
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  function closeAll() {
+    document.querySelectorAll('.expense-view-popover').forEach(function(p) {
+      p.classList.add('d-none');
+      p.classList.remove('position-fixed');
+      p.style.left = '';
+      p.style.top = '';
+      p.style.zIndex = '';
+      if (p._expenseViewWrap && p.parentNode === document.body) {
+        p._expenseViewWrap.appendChild(p);
+      }
+      p._expenseViewWrap = null;
+    });
+    document.querySelectorAll('.expense-view-eye').forEach(function(b) { b.setAttribute('aria-expanded', 'false'); });
+  }
+  function positionPop(eye, pop) {
+    if (!eye || !pop) return;
+    var r = eye.getBoundingClientRect();
+    var pr = pop.getBoundingClientRect();
+    var w = Math.max(pr.width, pop.offsetWidth, 1);
+    var h = Math.max(pr.height, pop.offsetHeight, 1);
+    var sb = document.querySelector('.sidebar');
+    var minLeft = 8;
+    if (sb) {
+      var sr = sb.getBoundingClientRect();
+      if (sr.width > 0) minLeft = Math.max(minLeft, sr.right + 4);
+    }
+    var left = r.left;
+    if (left < minLeft) left = minLeft;
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+    if (left < minLeft) left = minLeft;
+    var top = r.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = r.top - h - 6;
+    if (top < 8) top = 8;
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+    pop.style.zIndex = '1050';
+  }
+  document.querySelectorAll('.expense-view-wrap').forEach(function(wrap) {
+    var eye = wrap.querySelector('.expense-view-eye');
+    var pop = wrap.querySelector('.expense-view-popover');
+    if (!eye || !pop) return;
+    eye.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var open = pop.classList.contains('d-none');
+      closeAll();
+      if (!open) {
+        pop._expenseViewWrap = wrap;
+        if (pop.parentNode !== document.body) document.body.appendChild(pop);
+        pop.classList.remove('d-none');
+        pop.classList.add('position-fixed');
+        requestAnimationFrame(function() { positionPop(eye, pop); });
+        eye.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+  document.addEventListener('click', function() { closeAll(); });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeAll(); });
+  var statusBtns = document.querySelectorAll('.mwo-upload-status-btn');
+  var panelEl = document.getElementById('mwoUploadStatusPanel');
+  var panelHideBtn = document.getElementById('mwoUploadPanelHide');
+  var panelCloseBtn = document.getElementById('mwoUploadPanelClose');
+  var bar = document.getElementById('mwoUploadModalBar');
+  var meta = document.getElementById('mwoUploadModalMeta');
+  var err = document.getElementById('mwoUploadModalError');
+  var resumeBtn = document.getElementById('mwoUploadResumeBtn');
+  var activeId = null;
+  var pollTimer = null;
+  function csrfToken() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+  function paintStatus(st, total, done, failed, msg) {
+    var pct = total ? Math.round(100 * done / total) : (st === 'success' ? 100 : 0);
+    if (bar) {
+      bar.style.width = pct + '%';
+      bar.textContent = pct + '%';
+      bar.classList.remove('bg-success', 'bg-warning', 'bg-danger', 'bg-info');
+      bar.classList.add(st === 'success' ? 'bg-success' : (st === 'processing' ? 'bg-warning' : (st === 'partial' ? 'bg-info' : 'bg-danger')));
+    }
+    if (meta) meta.textContent = (done || 0) + ' / ' + (total || 0) + ' uploaded, failed: ' + (failed || 0) + ' [' + st + ']';
+    if (err) {
+      if (msg) { err.textContent = msg; err.classList.remove('d-none'); }
+      else { err.textContent = ''; err.classList.add('d-none'); }
+    }
+    if (resumeBtn) resumeBtn.classList.toggle('d-none', !(st === 'error' || st === 'partial'));
+  }
+  function stopPoll() { if (pollTimer) { window.clearInterval(pollTimer); pollTimer = null; } }
+  function fetchStatus(id) {
+    return fetch('/api/work-order/upload-status/' + id)
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if (!j || !j.ok) throw new Error((j && j.error) || 'status error');
+        paintStatus(j.status || 'error', j.total || 0, j.done || 0, j.failed || 0, j.error || '');
+        if (j.status !== 'processing') stopPoll();
+      })
+      .catch(function(e) {
+        paintStatus('error', 0, 0, 0, String(e));
+        stopPoll();
+      });
+  }
+  if (resumeBtn) {
+    resumeBtn.addEventListener('click', function() {
+      if (!activeId) return;
+      resumeBtn.disabled = true;
+      fetch('/maintenance-work-order/' + activeId + '/upload-resume', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken() }
+      }).then(function(r){ return r.json(); }).then(function(j){
+        resumeBtn.disabled = false;
+        if (!j || !j.ok) throw new Error((j && j.error) || 'resume failed');
+        paintStatus('processing', 0, 0, 0, '');
+        stopPoll();
+        pollTimer = window.setInterval(function(){ fetchStatus(activeId); }, 2500);
+        fetchStatus(activeId);
+      }).catch(function(e) {
+        resumeBtn.disabled = false;
+        paintStatus('error', 0, 0, 0, String(e));
+      });
+    });
+  }
+  function hidePanel() { if (panelEl) panelEl.classList.add('d-none'); stopPoll(); activeId = null; }
+  if (panelHideBtn) panelHideBtn.addEventListener('click', hidePanel);
+  if (panelCloseBtn) panelCloseBtn.addEventListener('click', hidePanel);
+  statusBtns.forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      activeId = this.getAttribute('data-id');
+      var st = (this.getAttribute('data-status') || 'success').toLowerCase();
+      var total = parseInt(this.getAttribute('data-total') || '0', 10);
+      var done = parseInt(this.getAttribute('data-done') || '0', 10);
+      var failed = parseInt(this.getAttribute('data-failed') || '0', 10);
+      var msg = this.getAttribute('data-error') || '';
+      paintStatus(st, total, done, failed, msg);
+      if (panelEl) panelEl.classList.remove('d-none');
+      stopPoll();
+      if (st === 'processing' && activeId) {
+        pollTimer = window.setInterval(function(){ fetchStatus(activeId); }, 2500);
+        fetchStatus(activeId);
+      }
+    });
+  });
 });
 </script>
 <script>

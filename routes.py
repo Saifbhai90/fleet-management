@@ -68,7 +68,7 @@ import xlsxwriter
 from sqlalchemy import func, text, inspect, or_, cast, and_
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError, DataError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, format_date_ddmmyyyy, pk_now, pk_date, pk_time
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
 from flask_wtf.csrf import CSRFError
@@ -1095,10 +1095,12 @@ def _save_expense_attachment_path(file_storage, file_type, original_fn, r2_folde
     """Store image/video on R2 when configured, else under upload_root/rel_prefix. Returns DB file_path value."""
     if _expense_attachment_r2_ready():
         try:
-            from r2_storage import upload_image_file, upload_binary_file
+            from r2_storage import upload_image_file, upload_binary_file, upload_pdf_file
             file_storage.seek(0)
             if file_type == 'image':
                 url = upload_image_file(file_storage, folder=r2_folder)
+            elif file_type == 'pdf':
+                url = upload_pdf_file(file_storage, folder=r2_folder)
             else:
                 url = upload_binary_file(file_storage, folder=r2_folder, original_filename=original_fn)
             if url:
@@ -23549,7 +23551,9 @@ def maintenance_work_order_list():
     if vehicle_id:
         query = query.filter(MaintenanceWorkOrder.vehicle_id == vehicle_id)
 
-    work_orders = query.order_by(MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()).all()
+    work_orders = query.options(selectinload(MaintenanceWorkOrder.attachments)).order_by(
+        MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()
+    ).all()
     rows = []
     for wo in work_orders:
         expenses = wo.expenses.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
@@ -23850,13 +23854,39 @@ def api_work_order_upload_status(pk):
     pct = int(round((done / total) * 100)) if total > 0 else 100
     return jsonify({
         'ok': True,
+        'id': rec.id,
         'status': status,
         'total': total,
         'done': done,
         'failed': failed,
-        'pct': pct,
-        'error': rec.upload_error or None,
+        'percent': max(0, min(100, pct)),
+        'error': (rec.upload_error or ''),
     })
+
+
+@app.route('/maintenance-work-order/<int:pk>/upload-resume', methods=['POST'])
+def maintenance_work_order_upload_resume(pk):
+    _ensure_maintenance_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    try:
+        manifest = json.loads(rec.upload_manifest_json or '[]')
+    except Exception:
+        manifest = []
+    if not manifest:
+        return jsonify({'ok': False, 'error': 'nothing_to_resume'}), 400
+    rec.upload_status = 'processing'
+    rec.upload_error = None
+    rec.upload_started_at = pk_now()
+    rec.upload_finished_at = None
+    db.session.commit()
+    started = _start_work_order_upload_worker(rec.id)
+    return jsonify({'ok': True, 'started': bool(started)})
 
 
 @app.route('/maintenance-work-order/<int:pk>')
