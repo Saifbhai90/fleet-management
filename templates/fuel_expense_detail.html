@@ -1,35 +1,61 @@
 {% extends "base.html" %}
 {% block content %}
+{% set pump_name = rec.workspace_pump.name if rec.workspace_pump else (rec.fuel_pump.name if rec.fuel_pump else '-') %}
+<style>
+  .expense-invoice-bill { max-width: 800px; margin: 0 auto; border: 1px solid #dee2e6; border-radius: 12px; background: #fff; }
+  .expense-invoice-bill .inv-head { border-bottom: 2px solid #0d6efd; padding: 1rem 1.25rem; background: linear-gradient(135deg, #f8f9ff 0%, #fff 100%); border-radius: 12px 12px 0 0; }
+  .expense-invoice-bill .inv-row { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding: .35rem 0; border-bottom: 1px dashed #e9ecef; }
+  .expense-invoice-bill .inv-label { min-width: 140px; color: #6c757d; font-size: .82rem; }
+  .expense-invoice-bill .inv-value { font-weight: 600; }
+  @media print {
+    .navbar, .sidebar, .flash-message, .d-print-none { display: none !important; }
+    .main-content { margin: 0 !important; margin-top: 0 !important; padding: 8px !important; }
+    .expense-invoice-bill { border: 1px solid #000; box-shadow: none !important; }
+  }
+</style>
 <div class="container-fluid py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="mb-0"><i class="bi bi-receipt-cutoff me-2 text-primary"></i>{{ title }}</h2>
-    <div class="d-flex gap-2">
+  <div class="d-flex justify-content-between align-items-center mb-3 d-print-none">
+    <h2 class="mb-0 h5"><i class="bi bi-receipt-cutoff me-2 text-primary"></i>{{ title }}</h2>
+    <div class="d-flex flex-wrap gap-2">
       <a href="{{ url_for('fuel_expense_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to List</a>
-      <a href="{{ url_for('fuel_expense_media', pk=rec.id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-images me-1"></i>Media</a>
+      <button type="button" class="btn btn-primary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+      <a href="{{ url_for('fuel_expense_media', pk=rec.id) }}" class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener"><i class="bi bi-images me-1"></i>Media</a>
     </div>
   </div>
 
-  <div class="card border-0 shadow-sm">
-    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-      <strong>Fuel Expense #{{ rec.id }}</strong>
-      <span>{{ rec.fueling_date|ddmmyyyy if rec.fueling_date else '-' }}</span>
+  <div id="expense-invoice-print-root" class="expense-invoice-bill shadow-sm">
+    <div class="inv-head d-flex flex-wrap justify-content-between align-items-start gap-2">
+      <div>
+        <div class="text-uppercase text-primary fw-bold small">Fuel bill / invoice</div>
+        <h2 class="h4 mb-0 mt-1">Entry #{{ rec.id }}</h2>
+      </div>
+      <div class="text-end small">
+        <div><span class="text-muted">Fueling date:</span> <strong>{{ rec.fueling_date|ddmmyyyy if rec.fueling_date else '-' }}</strong></div>
+        {% if rec.card_swipe_date %}
+        <div><span class="text-muted">Card swipe:</span> <strong>{{ rec.card_swipe_date|ddmmyyyy }}</strong></div>
+        {% endif %}
+      </div>
     </div>
-    <div class="card-body">
-      <div class="row g-3">
-        <div class="col-md-3"><small class="text-muted d-block">Vehicle</small><span class="fw-semibold">{{ rec.vehicle.vehicle_no if rec.vehicle else '-' }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Pump Name</small><span class="fw-semibold">{{ rec.workspace_pump.name if rec.workspace_pump else '-' }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Payment Type</small><span class="fw-semibold">{{ rec.payment_type or '-' }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Slip No</small><span class="fw-semibold">{{ rec.slip_no or '-' }}</span></div>
-
-        <div class="col-md-3"><small class="text-muted d-block">Previous Reading</small><span class="fw-semibold">{{ "%.2f"|format((rec.previous_reading or 0)|float) }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Current Reading</small><span class="fw-semibold">{{ "%.2f"|format((rec.current_reading or 0)|float) }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">KM</small><span class="fw-semibold">{{ "%.2f"|format((rec.km or 0)|float) }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">MPG</small><span class="fw-semibold">{{ "%.2f"|format((rec.mpg or 0)|float) if rec.mpg is not none else '-' }}</span></div>
-
-        <div class="col-md-3"><small class="text-muted d-block">Fuel Price</small><span class="fw-semibold">{{ "%.2f"|format((rec.fuel_price or 0)|float) }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Liters</small><span class="fw-semibold">{{ "%.2f"|format((rec.liters or 0)|float) if rec.liters is not none else '-' }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Amount</small><span class="fw-semibold">{{ "%.2f"|format((rec.amount or 0)|float) }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Meter Matched</small><span class="fw-semibold">{{ rec.meter_reading_matched or '-' }}</span></div>
+    <div class="p-3 p-md-4">
+      <div class="inv-row"><span class="inv-label">District</span><span class="inv-value">{{ rec.district.name if rec.district else '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">Project</span><span class="inv-value">{{ rec.project.name if rec.project else '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">Vehicle</span><span class="inv-value">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">Fuel type</span><span class="inv-value">{{ rec.fuel_type or '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">Pump / party</span><span class="inv-value">{{ pump_name }}</span></div>
+      <div class="inv-row"><span class="inv-label">Payment</span><span class="inv-value">{{ rec.payment_type or '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">Slip no.</span><span class="inv-value">{{ rec.slip_no or '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">KM out (task)</span><span class="inv-value">{% if rec.km_out_task is not none %}{{ "%.2f"|format(rec.km_out_task|float) }}{% else %}—{% endif %}</span></div>
+      <div class="inv-row"><span class="inv-label">KM in (task)</span><span class="inv-value">{% if rec.km_in_task is not none %}{{ "%.2f"|format(rec.km_in_task|float) }}{% else %}—{% endif %}</span></div>
+      <div class="inv-row"><span class="inv-label">Previous reading</span><span class="inv-value">{{ "%.2f"|format((rec.previous_reading or 0)|float) }}</span></div>
+      <div class="inv-row"><span class="inv-label">Current reading</span><span class="inv-value">{{ "%.2f"|format((rec.current_reading or 0)|float) }}</span></div>
+      <div class="inv-row"><span class="inv-label">KM (trip)</span><span class="inv-value">{% if rec.km is not none %}{{ "%.2f"|format(rec.km|float) }}{% else %}—{% endif %}</span></div>
+      <div class="inv-row"><span class="inv-label">Meter matched</span><span class="inv-value">{{ rec.meter_reading_matched or '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">Fuel price / L</span><span class="inv-value">{% if rec.fuel_price is not none %}{{ "%.2f"|format(rec.fuel_price|float) }}{% else %}—{% endif %}</span></div>
+      <div class="inv-row"><span class="inv-label">Liters</span><span class="inv-value">{% if rec.liters is not none %}{{ "%.2f"|format(rec.liters|float) }}{% else %}—{% endif %}</span></div>
+      <div class="inv-row"><span class="inv-label">MPG</span><span class="inv-value">{% if rec.mpg is not none %}{{ "%.2f"|format(rec.mpg|float) }}{% else %}—{% endif %}</span></div>
+      <div class="inv-row border-0 pt-3 mt-2 align-items-center">
+        <span class="inv-label fs-5">Total amount</span>
+        <span class="fs-4 text-primary fw-bold">{{ "%.2f"|format((rec.amount or 0)|float) }}</span>
       </div>
     </div>
   </div>

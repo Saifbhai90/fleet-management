@@ -200,7 +200,9 @@
                 {% if r.work_order %}
                 <a href="{{ url_for('maintenance_work_order_detail', pk=r.work_order.id) }}" class="btn btn-outline-warning btn-sm" title="Work Order"><i class="bi bi-clipboard2-check"></i></a>
                 {% endif %}
-                <a href="{{ url_for('maintenance_expense_media', pk=r.id) }}" class="btn btn-outline-success btn-sm" title="View Media"><i class="bi bi-eye"></i></a>
+                <button type="button" class="btn btn-outline-success btn-sm expense-view-choose" title="Invoice ya Media"
+                        data-invoice-url="{{ url_for('maintenance_expense_view', pk=r.id) }}"
+                        data-media-url="{{ url_for('maintenance_expense_media', pk=r.id) }}"><i class="bi bi-eye"></i></button>
                 <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                 <form action="{{ url_for('maintenance_expense_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this maintenance entry?');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -256,6 +258,24 @@
   </div>
 </div>
 
+<div class="modal fade" id="expenseViewChoiceModal" tabindex="-1" aria-labelledby="expenseViewChoiceLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h5 class="modal-title" id="expenseViewChoiceLabel"><i class="bi bi-question-circle me-2 text-primary"></i>Kya dekhna hai?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Invoice (poori details, print) ya Maintenance Media Gallery?</p>
+        <div class="d-grid gap-2">
+          <a id="expenseChoiceInvoiceLink" href="#" class="btn btn-primary" target="_blank" rel="noopener"><i class="bi bi-receipt me-1"></i>Invoice / Bill (print)</a>
+          <a id="expenseChoiceMediaLink" href="#" class="btn btn-outline-success" target="_blank" rel="noopener"><i class="bi bi-images me-1"></i>Maintenance Media Gallery</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="maintUploadStatusPanel" class="card shadow border d-none">
   <div class="card-header py-2 d-flex justify-content-between align-items-center">
     <h6 class="mb-0"><i class="bi bi-cloud-upload me-2"></i>Upload Status</h6>
@@ -276,6 +296,21 @@
 
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
+(function() {
+  document.querySelectorAll('.expense-view-choose').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var modalEl = document.getElementById('expenseViewChoiceModal');
+      if (!modalEl) return;
+      var inv = document.getElementById('expenseChoiceInvoiceLink');
+      var med = document.getElementById('expenseChoiceMediaLink');
+      if (inv) inv.href = btn.getAttribute('data-invoice-url') || '#';
+      if (med) med.href = btn.getAttribute('data-media-url') || '#';
+      if (window.bootstrap && bootstrap.Modal) {
+        new bootstrap.Modal(modalEl).show();
+      }
+    });
+  });
+})();
 document.addEventListener('DOMContentLoaded', function() {
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');

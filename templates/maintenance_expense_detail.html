@@ -1,42 +1,62 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+  .expense-invoice-bill { max-width: 800px; margin: 0 auto; border: 1px solid #dee2e6; border-radius: 12px; background: #fff; }
+  .expense-invoice-bill .inv-head { border-bottom: 2px solid #ea580c; padding: 1rem 1.25rem; background: linear-gradient(135deg, #fff7ed 0%, #fff 100%); border-radius: 12px 12px 0 0; }
+  .expense-invoice-bill .inv-row { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding: .35rem 0; border-bottom: 1px dashed #e9ecef; }
+  .expense-invoice-bill .inv-label { min-width: 140px; color: #6c757d; font-size: .82rem; }
+  .expense-invoice-bill .inv-value { font-weight: 600; }
+  @media print {
+    .navbar, .sidebar, .flash-message, .d-print-none { display: none !important; }
+    .main-content { margin: 0 !important; margin-top: 0 !important; padding: 8px !important; }
+    .expense-invoice-bill { border: 1px solid #000; box-shadow: none !important; }
+  }
+</style>
 <div class="container-fluid py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="mb-0"><i class="bi bi-receipt-cutoff me-2 text-primary"></i>{{ title }}</h2>
-    <div class="d-flex gap-2">
+  <div class="d-flex justify-content-between align-items-center mb-3 d-print-none">
+    <h2 class="mb-0 h5"><i class="bi bi-receipt-cutoff me-2 text-primary"></i>{{ title }}</h2>
+    <div class="d-flex flex-wrap gap-2">
       <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to List</a>
-      <a href="{{ url_for('maintenance_expense_media', pk=rec.id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-images me-1"></i>Media</a>
+      <button type="button" class="btn btn-primary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+      <a href="{{ url_for('maintenance_expense_media', pk=rec.id) }}" class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener"><i class="bi bi-images me-1"></i>Media</a>
     </div>
   </div>
 
-  <div class="card border-0 shadow-sm mb-3">
-    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-      <strong>Maintenance Expense #{{ rec.id }}</strong>
-      <span>{{ rec.expense_date|ddmmyyyy if rec.expense_date else '-' }}</span>
-    </div>
-    <div class="card-body">
-      <div class="row g-3">
-        <div class="col-md-3"><small class="text-muted d-block">Vehicle</small><span class="fw-semibold">{{ rec.vehicle.vehicle_no if rec.vehicle else '-' }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Party</small><span class="fw-semibold">{{ rec.workspace_party.name if rec.workspace_party else '-' }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Payment Type</small><span class="fw-semibold">{{ rec.payment_type or '-' }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Total Bill</small><span class="fw-semibold">{{ "%.2f"|format((rec.total_bill_amount or 0)|float) }}</span></div>
-
-        <div class="col-md-3"><small class="text-muted d-block">Previous Reading</small><span class="fw-semibold">{{ "%.2f"|format((rec.previous_reading or 0)|float) }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Current Reading</small><span class="fw-semibold">{{ "%.2f"|format((rec.current_reading or 0)|float) }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">KM</small><span class="fw-semibold">{{ "%.2f"|format((rec.km or 0)|float) }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Job Category</small><span class="fw-semibold">{{ rec.job_category or '-' }}</span></div>
-
-        <div class="col-md-3"><small class="text-muted d-block">Interval Mode</small><span class="fw-semibold">{{ rec.job_interval_mode or '-' }}</span></div>
-        <div class="col-md-3"><small class="text-muted d-block">Work Order</small><span class="fw-semibold">{% if rec.work_order %}<a href="{{ url_for('maintenance_work_order_detail', pk=rec.work_order.id) }}" class="text-decoration-none">{{ rec.work_order.work_order_no }}</a>{% else %}-{% endif %}</span></div>
-        <div class="col-md-6"><small class="text-muted d-block">Remarks</small><span class="fw-semibold">{{ rec.remarks or '-' }}</span></div>
+  <div id="expense-invoice-print-root" class="expense-invoice-bill shadow-sm mb-4">
+    <div class="inv-head d-flex flex-wrap justify-content-between align-items-start gap-2">
+      <div>
+        <div class="text-uppercase small" style="color:#c2410c;font-weight:700;">Maintenance bill / invoice</div>
+        <h2 class="h4 mb-0 mt-1">Entry #{{ rec.id }}</h2>
+      </div>
+      <div class="text-end small">
+        <div><span class="text-muted">Date:</span> <strong>{{ rec.expense_date|ddmmyyyy if rec.expense_date else '-' }}</strong></div>
+        {% if rec.work_order %}
+        <div><span class="text-muted">Work order:</span> <a href="{{ url_for('maintenance_work_order_detail', pk=rec.work_order.id) }}" class="text-decoration-none"><strong>{{ rec.work_order.work_order_no }}</strong></a></div>
+        {% endif %}
       </div>
     </div>
+    <div class="p-3 p-md-4">
+      <div class="inv-row"><span class="inv-label">District</span><span class="inv-value">{{ rec.district.name if rec.district else '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">Project</span><span class="inv-value">{{ rec.project.name if rec.project else '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">Vehicle</span><span class="inv-value">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">Party / workshop</span><span class="inv-value">{{ rec.workspace_party.name if rec.workspace_party else '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">Payment</span><span class="inv-value">{{ rec.payment_type or '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">Job category</span><span class="inv-value">{{ rec.job_category or '—' }}</span></div>
+      <div class="inv-row"><span class="inv-label">Interval</span><span class="inv-value">{% if rec.job_interval_mode == 'interval_km' %}Interval KM{% elif rec.job_interval_mode == 'interval_day' %}Interval day{% else %}—{% endif %}</span></div>
+      <div class="inv-row"><span class="inv-label">Previous / current / KM</span><span class="inv-value">
+        {{ "%.2f"|format((rec.previous_reading or 0)|float) }} &nbsp;|&nbsp;
+        {{ "%.2f"|format((rec.current_reading or 0)|float) }} &nbsp;|&nbsp;
+        {{ "%.2f"|format((rec.km or 0)|float) }}
+      </span></div>
+      <div class="inv-row"><span class="inv-label">Total bill (party)</span><span class="inv-value">{{ "%.2f"|format((rec.total_bill_amount or 0)|float) if rec.total_bill_amount is not none else '—' }}</span></div>
+      <div class="inv-row border-0"><span class="inv-label">Remarks</span><span class="inv-value text-break" style="font-weight:500;">{{ rec.remarks or '—' }}</span></div>
+    </div>
   </div>
 
-  <div class="card border-0 shadow-sm">
-    <div class="card-header bg-light"><strong>Product Lines</strong></div>
+  <div class="expense-invoice-bill shadow-sm p-0 overflow-hidden" style="max-width:800px;margin:0 auto;">
+    <div class="px-3 py-2 border-bottom bg-light"><strong>Line items (parts / products)</strong></div>
     <div class="table-responsive">
-      <table class="table table-sm table-hover align-middle mb-0">
+      <table class="table table-sm table-bordered mb-0">
         <thead class="table-light">
           <tr>
             <th>#</th>
@@ -53,10 +73,10 @@
             <td>{{ it.product.name if it.product else '-' }}</td>
             <td class="text-end">{{ "%.2f"|format((it.qty or 0)|float) }}</td>
             <td class="text-end">{{ "%.2f"|format((it.price or 0)|float) }}</td>
-            <td class="text-end">{{ "%.2f"|format((it.amount or 0)|float) }}</td>
+            <td class="text-end fw-semibold">{{ "%.2f"|format((it.amount or 0)|float) }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-center text-muted py-3">No items found.</td></tr>
+          <tr><td colspan="5" class="text-center text-muted py-3">No line items</td></tr>
           {% endfor %}
         </tbody>
       </table>
