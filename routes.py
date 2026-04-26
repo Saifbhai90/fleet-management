@@ -816,6 +816,27 @@ def api_check_license():
         return jsonify({'exists': True, 'message': f'License number already registered for driver: {other.name} ({other.driver_id})'})
     return jsonify({'exists': False, 'message': ''})
 
+@app.route('/api/filter/projects-by-district')
+def api_filter_projects_by_district():
+    """Projects that are assigned to the given district (project_district M2M), scoped to allowed_projects."""
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    district_id = request.args.get('district_id', type=int) or 0
+    if not district_id:
+        return jsonify([])
+    q = (
+        Project.query.join(project_district, Project.id == project_district.c.project_id)
+        .filter(project_district.c.district_id == district_id)
+    )
+    if not is_master_or_admin and allowed_projects:
+        q = q.filter(Project.id.in_(list(allowed_projects)))
+    projects = q.order_by(Project.name).all()
+    return jsonify([{'id': p.id, 'name': p.name} for p in projects])
+
+
 @app.route('/api/filter/districts-by-project')
 def api_filter_districts_by_project():
     """Return districts assigned to a project, scoped to user's allowed_districts."""
@@ -10300,11 +10321,11 @@ def _parse_active_driver_filters():
 
 
 def _parse_salary_slip_filters():
-    project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
     driver_id = request.args.get('driver_id', type=int) or 0
-    return project_id, district_id, vehicle_id, driver_id
+    return district_id, project_id, vehicle_id, driver_id
 
 
 def _driver_accessible_for_salary_slip(driver, user_context):
@@ -10386,6 +10407,75 @@ def api_salary_slip_driver(driver_id):
     return jsonify({'ok': True, 'driver': _driver_to_salary_slip_payload(driver)})
 
 
+@app.route('/api/salary-slip/drivers-for-vehicle')
+def api_salary_slip_drivers_for_vehicle():
+    """Active drivers on the selected vehicle (for salary slip), scoped to user assignments."""
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    if not vehicle_id:
+        return jsonify([])
+    rows = (
+        Driver.query.filter(Driver.vehicle_id == vehicle_id, Driver.status == 'Active')
+        .order_by(Driver.name)
+        .all()
+    )
+    out = []
+    for d in rows:
+        if _driver_accessible_for_salary_slip(d, user_context):
+            out.append(
+                {
+                    'id': d.id,
+                    'name': d.name,
+                    'driver_id': d.driver_id or '',
+                    'label': f"{d.name} ({d.driver_id or '-'})",
+                }
+            )
+    return jsonify(out)
+
+
+def _coerce_salary_slip_chain(district_id, project_id, vehicle_id, selected_driver_id, user_context):
+    """Drop invalid / inconsistent filter combinations (cascade: district → project → vehicle → driver)."""
+    if not district_id:
+        return 0, 0, 0, 0
+    if project_id:
+        if not db.session.query(project_district).filter_by(district_id=district_id, project_id=project_id).first():
+            project_id = 0
+    if not project_id:
+        return district_id, 0, 0, 0
+    if vehicle_id:
+        v = Vehicle.query.get(vehicle_id)
+        if (not v
+                or v.district_id != district_id
+                or v.project_id != project_id):
+            vehicle_id = 0
+    if not vehicle_id:
+        return district_id, project_id, 0, 0
+    if selected_driver_id:
+        dr = Driver.query.get(selected_driver_id)
+        if (not dr
+                or dr.vehicle_id != vehicle_id
+                or (dr.status or '') != 'Active'
+                or not _driver_accessible_for_salary_slip(dr, user_context)):
+            selected_driver_id = 0
+    return district_id, project_id, vehicle_id, selected_driver_id
+
+
+def _build_salary_slip_driver_choices(vehicle_id, user_context):
+    if not vehicle_id:
+        return []
+    q = (
+        Driver.query.filter(Driver.vehicle_id == vehicle_id, Driver.status == 'Active')
+        .order_by(Driver.name)
+    )
+    out = []
+    for d in q.all():
+        if _driver_accessible_for_salary_slip(d, user_context):
+            out.append((d.id, f"{d.name} ({d.driver_id})"))
+    return out
+
+
 @app.route('/reports/driver-salary-slip')
 def driver_salary_slip():
     from auth_utils import get_user_context
@@ -10396,61 +10486,82 @@ def driver_salary_slip():
     allowed_vehicles = user_context.get('allowed_vehicles', set())
     is_master_or_admin = user_context.get('is_master_or_admin', False)
 
-    project_id, district_id, vehicle_id, selected_driver_id = _parse_salary_slip_filters()
+    district_id, project_id, vehicle_id, selected_driver_id = _parse_salary_slip_filters()
 
-    disable_project = False
     disable_district = False
+    disable_project = False
     disable_vehicle = False
     if not is_master_or_admin:
-        if len(allowed_projects) == 1:
-            if not project_id:
-                project_id = next(iter(allowed_projects))
-            disable_project = True
         if len(allowed_districts) == 1:
             if not district_id:
                 district_id = next(iter(allowed_districts))
             disable_district = True
+        if len(allowed_projects) == 1:
+            only_p = next(iter(allowed_projects))
+            if (district_id
+                    and db.session.query(project_district).filter_by(
+                        district_id=district_id, project_id=only_p).first()):
+                if not project_id:
+                    project_id = only_p
+                disable_project = True
         if len(allowed_vehicles) == 1:
-            if not vehicle_id:
-                vehicle_id = next(iter(allowed_vehicles))
-            disable_vehicle = True
+            only_v = next(iter(allowed_vehicles))
+            if (not vehicle_id) and district_id and project_id:
+                vrow = Vehicle.query.get(only_v)
+                if (vrow and vrow.district_id == district_id
+                        and (vrow.project_id or 0) == (project_id or 0)):
+                    vehicle_id = only_v
+            if vehicle_id == only_v:
+                disable_vehicle = True
 
-    proj_q = Project.query.order_by(Project.name)
-    if not is_master_or_admin and allowed_projects:
-        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
-    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_q.all()]
+    district_id, project_id, vehicle_id, selected_driver_id = _coerce_salary_slip_chain(
+        district_id, project_id, vehicle_id, selected_driver_id, user_context
+    )
 
+    # District: all in scope
     dist_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
-    if project_id:
-        dist_q = dist_q.join(project_district).filter(project_district.c.project_id == project_id)
-    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.all()]
+    district_choices = [(0, '— Select district —')] + [(d.id, d.name) for d in dist_q.all()]
 
-    veh_q = db.session.query(Vehicle).join(Driver, Vehicle.id == Driver.vehicle_id).filter(
-        Driver.vehicle_id.isnot(None), Driver.status != 'Left',
-    ).distinct().order_by(Vehicle.vehicle_no)
-    if not is_master_or_admin and allowed_vehicles:
-        veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-    if project_id:
-        veh_q = veh_q.filter(or_(Vehicle.project_id == project_id, Driver.project_id == project_id))
-    if district_id:
-        veh_q = veh_q.filter(Vehicle.district_id == district_id)
-    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in veh_q.all()]
+    # Project: only if linked to selected district
+    if not district_id:
+        project_choices = [(0, '— Select district first —')]
+    else:
+        proj_q = (
+            Project.query.join(project_district, Project.id == project_district.c.project_id)
+            .filter(project_district.c.district_id == district_id)
+        )
+        if not is_master_or_admin and allowed_projects:
+            proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+        p_rows = proj_q.order_by(Project.name).all()
+        if not p_rows:
+            project_choices = [(0, '— No project in this district —')]
+        else:
+            project_choices = [(0, '— Select project —')] + [(p.id, p.name) for p in p_rows]
 
-    # Driver list: same join/filter as Active Driver Summary (not attendance API) so project/vehicle
-    # OR-logic matches — avoids empty dropdown after Apply when driver.project != vehicle.project.
-    ad_rows = _active_drivers_data(
-        project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift='',
-        from_date_val=None, to_date_val=None,
-        allowed_vehicles=allowed_vehicles, allowed_projects=allowed_projects,
-        allowed_districts=allowed_districts, is_master_or_admin=is_master_or_admin,
-    )
-    driver_choices = [
-        (d.id, f"{d.name} ({d.driver_id})")
-        for d, _veh, _p, _di, _rj in ad_rows
-        if (d.status or '') == 'Active'
-    ]
+    # Vehicle: same district + project as master assignment (all-vehicles query)
+    if not district_id or not project_id:
+        vehicle_choices = [(0, '— Select district & project first —')]
+    else:
+        veh_q = Vehicle.query.filter(
+            Vehicle.project_id == project_id,
+            Vehicle.district_id == district_id,
+        )
+        if not is_master_or_admin and allowed_vehicles:
+            veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+        v_rows = veh_q.order_by(Vehicle.vehicle_no).all()
+        if not v_rows:
+            vehicle_choices = [(0, '— No vehicle for this project & district —')]
+        else:
+            vehicle_choices = [(0, '— Select vehicle —')] + [(v.id, v.vehicle_no) for v in v_rows]
+
+    # Driver: only on selected vehicle
+    if not vehicle_id:
+        driver_choices = []
+    else:
+        driver_choices = _build_salary_slip_driver_choices(vehicle_id, user_context)
+
     valid_d_ids = {d[0] for d in driver_choices}
     if selected_driver_id and selected_driver_id not in valid_d_ids:
         selected_driver_id = 0

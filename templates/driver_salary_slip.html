@@ -5,7 +5,7 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 no-print">
     <div>
       <h4 class="mb-0"><i class="bi bi-bank2 me-2 text-primary"></i>Driver Salary Slip</h4>
-      <small class="text-muted">Driver details (district / project / vehicle) system se auto-fill; salary figures aur date aap likhein — bank / loan file ke liye print.</small>
+      <small class="text-muted">Pehle <strong>District</strong> → <strong>Project</strong> → <strong>Vehicle</strong> → <strong>Driver</strong> select karein. Apply filters par certificate update hota hai.</small>
     </div>
     <a href="{{ url_for('reports_index') }}#hr-tab" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-arrow-left me-1"></i>Report Centre
@@ -15,21 +15,12 @@
   <div class="row g-3">
     <div class="col-lg-5 no-print">
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-light py-2"><strong>Filter &amp; select driver</strong></div>
+        <div class="card-header bg-light py-2"><strong>Filters (cascade) — pehle upar, phir neeche</strong></div>
         <div class="card-body">
           <form method="get" action="{{ url_for('driver_salary_slip') }}" class="row g-2" id="slipFilterForm">
             <div class="col-12">
-              <label class="form-label small mb-0">Project</label>
-              <select name="project_id" id="ssProject" class="form-select form-select-sm search-select" {% if disable_project %}disabled{% endif %}>
-                {% for val, label in project_choices %}
-                <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-              {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
-            </div>
-            <div class="col-12">
-              <label class="form-label small mb-0">District</label>
-              <select name="district_id" id="ssDistrict" class="form-select form-select-sm search-select" {% if disable_district %}disabled{% endif %}>
+              <label class="form-label small mb-0">1. District <span class="text-danger">*</span></label>
+              <select name="district_id" id="ssDistrict" class="form-select form-select-sm" {% if disable_district %}disabled{% endif %}>
                 {% for val, label in district_choices %}
                 <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
@@ -37,8 +28,17 @@
               {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
             </div>
             <div class="col-12">
-              <label class="form-label small mb-0">Vehicle</label>
-              <select name="vehicle_id" id="ssVehicle" class="form-select form-select-sm search-select" {% if disable_vehicle %}disabled{% endif %}>
+              <label class="form-label small mb-0">2. Project <span class="text-danger">*</span></label>
+              <select name="project_id" id="ssProject" class="form-select form-select-sm" {% if disable_project %}disabled{% endif %}>
+                {% for val, label in project_choices %}
+                <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
+            </div>
+            <div class="col-12">
+              <label class="form-label small mb-0">3. Vehicle <span class="text-danger">*</span></label>
+              <select name="vehicle_id" id="ssVehicle" class="form-select form-select-sm" {% if disable_vehicle %}disabled{% endif %}>
                 {% for val, label in vehicle_choices %}
                 <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
@@ -46,8 +46,8 @@
               {% if disable_vehicle %}<input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">{% endif %}
             </div>
             <div class="col-12">
-              <label class="form-label small mb-0">Driver <span class="text-danger">*</span></label>
-              <select id="ssDriver" name="driver_id" class="form-select form-select-sm search-select" data-placeholder="Search driver...">
+              <label class="form-label small mb-0">4. Driver <span class="text-danger">*</span></label>
+              <select name="driver_id" id="ssDriver" class="form-select form-select-sm">
                 <option value="0">— Select driver —</option>
                 {% for did, dlabel in driver_choices %}
                 <option value="{{ did }}" {% if selected_driver_id == did %}selected{% endif %}>{{ dlabel }}</option>
@@ -59,10 +59,12 @@
               <a href="{{ url_for('driver_salary_slip') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
             </div>
             <p class="small text-muted mt-1 mb-0" id="ssDriverHint">
-            {% if driver_choices|length == 0 %}
-            Is filter par koi <strong>Active</strong> driver nahi mila — project / district / vehicle badal kar dubara &quot;Apply filters&quot; try karein.
+            {% if not district_id or not project_id or not vehicle_id %}
+            <span class="text-warning"><i class="bi bi-info-circle me-1"></i></span>Certificate ke liye district, project, vehicle aur driver mukammal chunein, phir Apply.
+            {% elif driver_choices|length == 0 %}
+            Is gaari par koi <strong>Active</strong> driver (scope) nahi — vehicle badlein.
             {% else %}
-            <strong>{{ driver_choices|length }}</strong> active driver(s) for this filter. Select a driver to load details (slip right side).
+            <strong>{{ driver_choices|length }}</strong> driver(s) is vehicle par — driver chun kar Apply, certificate update ho jaye ga.
             {% endif %}
             </p>
           </form>
@@ -70,7 +72,7 @@
       </div>
 
       <div class="card border-0 shadow-sm mt-3">
-        <div class="card-header bg-light py-2"><strong>Salary &amp; bank certificate (manual)</strong></div>
+        <div class="card-header bg-light py-2"><strong>Salary (certificate par manually)</strong></div>
         <div class="card-body row g-2">
           <div class="col-md-6">
             <label class="form-label small mb-0">Salary month</label>
@@ -108,10 +110,6 @@
             <label class="form-label small mb-0">Net salary (payable)</label>
             <input type="text" class="form-control form-control-sm fw-semibold" id="inNet" placeholder="0" inputmode="decimal">
           </div>
-          <div class="col-12">
-            <label class="form-label small mb-0">Prepared by / title (optional)</label>
-            <input type="text" class="form-control form-control-sm" id="inPrepared" placeholder="Name & designation">
-          </div>
         </div>
       </div>
     </div>
@@ -119,7 +117,7 @@
     <div class="col-lg-7">
       <div class="d-flex flex-wrap gap-2 mb-2 no-print">
         <button type="button" class="btn btn-dark btn-sm" id="btnPrintSlip"><i class="bi bi-printer me-1"></i>Print / Save PDF</button>
-        <span class="small text-muted align-self-center">Print dialog se &quot;Save as PDF&quot; choose karke bank file bana sakte hain.</span>
+        <span class="small text-muted align-self-center">Print se PDF save karein — signature block certificate par nahi hai.</span>
       </div>
       <div class="slip-paper border bg-white" id="slipPrintRoot">
         <div class="slip-inner">
@@ -177,20 +175,12 @@
             </tbody>
           </table>
 
-          <p class="small text-muted border-top pt-2 mb-4">
+          <p class="small text-muted border-top pt-2 mb-3">
             <strong>Note:</strong> This document is for banking / income verification use only. Salary amounts are as declared above for the stated period; original pay records may be required by the bank.
           </p>
 
-          <div class="row small">
-            <div class="col-6">
-              <div class="text-muted">Certificate date</div>
-              <div id="slCertDate" class="fw-medium">—</div>
-            </div>
-            <div class="col-6 text-end">
-              <div class="text-muted">Authorized signatory</div>
-              <div id="slPrepared" class="mt-3">_________________________</div>
-            </div>
-          </div>
+          <div class="small text-muted">Certificate date</div>
+          <div id="slCertDate" class="fw-medium mb-0">—</div>
         </div>
       </div>
     </div>
@@ -216,15 +206,139 @@
 
 <script>
 (function() {
-  var driverEl = document.getElementById('ssDriver');
-  if (!driverEl) return;
+  var dEl = document.getElementById('ssDistrict');
+  var pEl = document.getElementById('ssProject');
+  var vEl = document.getElementById('ssVehicle');
+  var rEl = document.getElementById('ssDriver');
+  if (!dEl || !pEl || !vEl || !rEl) return;
 
-  function currentDriverId() {
-    try {
-      if (driverEl.tomselect) return String(driverEl.tomselect.getValue() || '0');
-    } catch (e) {}
-    return String(driverEl.value || '0');
+  var locked = { district: dEl.disabled, project: pEl.disabled, vehicle: vEl.disabled };
+
+  function loadProjects(did) {
+    if (locked.district) return;
+    if (!did || did === '0') {
+      pEl.innerHTML = '<option value="0">— Select district first —</option>';
+      vEl.innerHTML = '<option value="0">— Select district &amp; project first —</option>';
+      rEl.innerHTML = '<option value="0">— Select driver —</option>';
+      pEl.value = '0';
+      vEl.value = '0';
+      rEl.value = '0';
+      setDashAuto();
+      syncManualToSlip();
+      return;
+    }
+    fetch('/api/filter/projects-by-district?district_id=' + encodeURIComponent(did))
+      .then(function(x) { return x.json(); })
+      .then(function(arr) {
+        pEl.innerHTML = '';
+        var o0p = document.createElement('option');
+        o0p.value = '0';
+        o0p.textContent = arr.length ? '— Select project —' : '— No project in this district —';
+        pEl.appendChild(o0p);
+        arr.forEach(function(p) {
+          var o = document.createElement('option');
+          o.value = p.id;
+          o.textContent = p.name;
+          pEl.appendChild(o);
+        });
+        pEl.value = '0';
+        vEl.innerHTML = '<option value="0">— Select district &amp; project first —</option>';
+        rEl.innerHTML = '<option value="0">— Select driver —</option>';
+        vEl.value = '0';
+        rEl.value = '0';
+        setDashAuto();
+        syncManualToSlip();
+      });
   }
+
+  function loadVehicles() {
+    if (locked.vehicle) return;
+    var pid = pEl.value || '0';
+    var did = dEl.value || '0';
+    if (!pid || pid === '0' || !did || did === '0') {
+      vEl.innerHTML = '<option value="0">— Select district &amp; project first —</option>';
+      rEl.innerHTML = '<option value="0">— Select driver —</option>';
+      vEl.value = '0';
+      rEl.value = '0';
+      return;
+    }
+    var keepVid = vEl.value;
+    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
+      .then(function(x) { return x.json(); })
+      .then(function(arr) {
+        vEl.innerHTML = '';
+        var o0 = document.createElement('option');
+        o0.value = '0';
+        o0.textContent = arr.length ? '— Select vehicle —' : '— No vehicle —';
+        vEl.appendChild(o0);
+        arr.forEach(function(v) {
+          var o = document.createElement('option');
+          o.value = v.id;
+          o.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+          vEl.appendChild(o);
+        });
+        if (keepVid && keepVid !== '0' && vEl.querySelector('option[value="' + keepVid + '"]')) {
+          vEl.value = keepVid;
+          loadDrivers();
+        } else {
+          vEl.value = '0';
+          rEl.innerHTML = '<option value="0">— Select driver —</option>';
+          rEl.value = '0';
+          setDashAuto();
+          syncManualToSlip();
+        }
+      });
+  }
+
+  function loadDrivers() {
+    var vid = vEl.value || '0';
+    if (!vid || vid === '0') {
+      rEl.innerHTML = '<option value="0">— Select driver —</option>';
+      rEl.value = '0';
+      return;
+    }
+    var keepRid = rEl.value;
+    fetch('/api/salary-slip/drivers-for-vehicle?vehicle_id=' + encodeURIComponent(vid))
+      .then(function(x) { return x.json(); })
+      .then(function(arr) {
+        rEl.innerHTML = '';
+        var o0 = document.createElement('option');
+        o0.value = '0';
+        o0.textContent = '— Select driver —';
+        rEl.appendChild(o0);
+        arr.forEach(function(d) {
+          var o = document.createElement('option');
+          o.value = d.id;
+          o.textContent = d.label || (d.name + ' (' + (d.driver_id || '-') + ')');
+          rEl.appendChild(o);
+        });
+        if (keepRid && keepRid !== '0' && rEl.querySelector('option[value="' + keepRid + '"]')) {
+          rEl.value = keepRid;
+        } else {
+          rEl.value = '0';
+        }
+        if (rEl.value && rEl.value !== '0') {
+          loadDriverData(rEl.value);
+        } else {
+          setDashAuto();
+          syncManualToSlip();
+        }
+      });
+  }
+
+  if (!locked.district) {
+    dEl.addEventListener('change', function() { loadProjects(this.value); });
+  }
+  if (!locked.project) {
+    pEl.addEventListener('change', function() { loadVehicles(); });
+  }
+  if (!locked.vehicle) {
+    vEl.addEventListener('change', function() { loadDrivers(); });
+  }
+
+  rEl.addEventListener('change', function() { loadDriverData(this.value); });
+
+  function currentDriverId() { return String(rEl.value || '0'); }
 
   function txt(el, v) { if (el) el.textContent = (v == null || v === '') ? '—' : String(v); }
 
@@ -296,19 +410,9 @@
     money('inNet', 'slNet');
     var cd = (document.getElementById('inCertDate') && document.getElementById('inCertDate').value) || '';
     txt(document.getElementById('slCertDate'), cd || '—');
-    var prep = (document.getElementById('inPrepared') && document.getElementById('inPrepared').value) || '';
-    var slP = document.getElementById('slPrepared');
-    if (slP) slP.textContent = prep ? prep : '_________________________';
   }
 
-  function bootDriverPreview() {
-    var v = currentDriverId();
-    if (v && v !== '0') loadDriverData(v);
-    else { setDashAuto(); syncManualToSlip(); }
-  }
-
-  driverEl.addEventListener('change', function() { loadDriverData(currentDriverId()); });
-  ['inSalaryMonth','inCertDate','inPeriodFrom','inPeriodTo','inBasic','inAllow','inGross','inDed','inNet','inPrepared'].forEach(function(id) {
+  ['inSalaryMonth','inCertDate','inPeriodFrom','inPeriodTo','inBasic','inAllow','inGross','inDed','inNet'].forEach(function(id) {
     var e = document.getElementById(id);
     if (e) e.addEventListener('input', syncManualToSlip);
     if (e) e.addEventListener('change', syncManualToSlip);
@@ -317,9 +421,15 @@
   var _bp = document.getElementById('btnPrintSlip');
   if (_bp) _bp.addEventListener('click', function() { window.print(); });
 
+  function bootDriverPreview() {
+    var v = currentDriverId();
+    if (v && v !== '0') loadDriverData(v);
+    else { setDashAuto(); syncManualToSlip(); }
+  }
+
   syncManualToSlip();
   setTimeout(bootDriverPreview, 0);
-  setTimeout(bootDriverPreview, 400);
+  setTimeout(bootDriverPreview, 200);
 })();
 </script>
 {% endblock %}

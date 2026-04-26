@@ -287,6 +287,8 @@ ENDPOINT_PERMISSION_MAP = [
     ('active_drivers_report', 'active_drivers_report'),
     ('driver_salary_slip', 'driver_salary_slip'),
     ('api_salary_slip_driver', 'driver_salary_slip'),
+    ('api_salary_slip_drivers_for_vehicle', 'driver_salary_slip'),
+    ('api_filter_projects_by_district', 'driver_salary_slip'),
     ('driver_seat_available_report', 'driver_seat_available_report'),
     ('oil_change_alert_report', 'oil_change_alert_report'),
     ('activity_log_report', 'activity_log_report'),
