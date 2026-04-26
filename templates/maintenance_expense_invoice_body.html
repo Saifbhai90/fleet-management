@@ -23,8 +23,9 @@
       {% endif %}
     </div>
   </div>
-  <div class="px-2 pb-2 pt-1 meinv-meta meinv-meta--tiles">
-    <div class="row g-2 row-cols-2 row-cols-md-3 row-cols-xl-4 small align-items-stretch">
+  <div class="px-2 pb-2 pt-1 meinv-meta meinv-meta--tiles meinv-meta--4up">
+    {# Row 1: four cards (project & vehicle scope) #}
+    <div class="row g-2 row-cols-2 row-cols-md-4 meinv-brick-row align-items-stretch">
       <div class="col d-flex">
         <div class="meinv-field w-100">
           <div class="meinv-k">District</div>
@@ -49,38 +50,35 @@
           <div class="meinv-v">{{ rec.payment_type or '—' }}</div>
         </div>
       </div>
-      <div class="col-12 col-md-6 col-xl-4 d-flex">
-        <div class="meinv-field w-100 meinv-field--wide">
+    </div>
+    {# Row 2: four cards (workshop & readings) — total amount only in line items footer below #}
+    <div class="row g-2 row-cols-2 row-cols-md-4 meinv-brick-row meinv-brick-row--2 align-items-stretch">
+      <div class="col d-flex">
+        <div class="meinv-field w-100 meinv-field--party">
           <div class="meinv-k">Party / workshop</div>
           <div class="meinv-v">{{ rec.workspace_party.name if rec.workspace_party else '—' }}</div>
         </div>
       </div>
-      <div class="col-6 col-xl-4 d-flex">
+      <div class="col d-flex">
         <div class="meinv-field w-100">
           <div class="meinv-k">Job category</div>
           <div class="meinv-v">{{ rec.job_category or '—' }}</div>
         </div>
       </div>
-      <div class="col-6 col-xl-4 d-flex">
+      <div class="col d-flex">
         <div class="meinv-field w-100">
           <div class="meinv-k">Interval</div>
           <div class="meinv-v">{% if rec.job_interval_mode == 'interval_km' %}KM{% elif rec.job_interval_mode == 'interval_day' %}Day{% else %}—{% endif %}</div>
         </div>
       </div>
-      <div class="col-12 col-md-6 col-xl-8 d-flex">
-        <div class="meinv-field w-100 meinv-field--wide">
+      <div class="col d-flex">
+        <div class="meinv-field w-100">
           <div class="meinv-k">Prev / Curr / KM</div>
-          <div class="meinv-v meinv-mono meinv-nums">{{ "%.2f"|format((rec.previous_reading or 0)|float) }} <span class="meinv-nums__sep">·</span> {{ "%.2f"|format((rec.current_reading or 0)|float) }} <span class="meinv-nums__sep">·</span> {{ "%.2f"|format((rec.km or 0)|float) }}</div>
-        </div>
-      </div>
-      <div class="col-12 col-md-6 col-xl-4 d-flex">
-        <div class="meinv-field w-100 meinv-field--accent">
-          <div class="meinv-k">Total bill (party)</div>
-          <div class="meinv-v meinv-total mb-0">{{ "%.2f"|format((rec.total_bill_amount or 0)|float) if rec.total_bill_amount is not none else '—' }}</div>
+          <div class="meinv-v meinv-mono meinv-nums meinv-nums--compact">{{ "%.2f"|format((rec.previous_reading or 0)|float) }}<span class="meinv-nums__sep"> · </span>{{ "%.2f"|format((rec.current_reading or 0)|float) }}<span class="meinv-nums__sep"> · </span>{{ "%.2f"|format((rec.km or 0)|float) }}</div>
         </div>
       </div>
     </div>
-    <div class="mt-2 d-flex">
+    <div class="mt-2 meinv-brick-row meinv-brick-row--remarks">
       <div class="meinv-field w-100 meinv-field--remarks">
         <div class="meinv-k">Remarks</div>
         <div class="meinv-v meinv-remarks mb-0">{{ rec.remarks or '—' }}</div>
