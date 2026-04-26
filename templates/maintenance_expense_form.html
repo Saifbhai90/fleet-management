@@ -2155,4 +2155,33 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
+<script>
+(function() {
+  var focus = {{ maintenance_form_focus|default(none) | tojson }};
+  if (!focus) return;
+  function tryFocus() {
+    if (focus === 'expense_date') {
+      var el = document.getElementById('expenseDate');
+      if (el) { el.focus(); try { el.select && el.select(); } catch (e) {} }
+      return;
+    }
+    if (focus === 'job_category') {
+      var jc = document.getElementById('jobCategorySelect');
+      if (!jc) return;
+      if (jc.tomselect) {
+        try {
+          if (jc.tomselect.control_input) jc.tomselect.control_input.focus();
+          else jc.tomselect.focus();
+        } catch (e) {
+          try { jc.tomselect.open(); } catch (e2) {}
+        }
+      } else {
+        jc.focus();
+      }
+    }
+  }
+  setTimeout(tryFocus, 200);
+  setTimeout(tryFocus, 500);
+})();
+</script>
 {% endblock %}

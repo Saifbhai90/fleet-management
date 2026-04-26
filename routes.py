@@ -24306,6 +24306,22 @@ def maintenance_expense_list():
     page_subtotal_amount = sum(item['total_amount'] for item in rows_with_totals)
     page_subtotal_bill = sum(float(item['rec'].total_bill_amount or 0) for item in rows_with_totals)
     cleanup_status = _latest_expense_cleanup_status('maintenance', workspace_employee_id)
+    wo_q = MaintenanceWorkOrder.query.filter(MaintenanceWorkOrder.status != 'closed')
+    if workspace_employee_id:
+        wo_q = wo_q.filter(
+            db.or_(
+                MaintenanceWorkOrder.employee_id == workspace_employee_id,
+                MaintenanceWorkOrder.employee_id.is_(None),
+            )
+        )
+    if not is_master_or_admin:
+        if allowed_projects:
+            wo_q = wo_q.filter(MaintenanceWorkOrder.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            wo_q = wo_q.filter(MaintenanceWorkOrder.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            wo_q = wo_q.filter(MaintenanceWorkOrder.vehicle_id.in_(list(allowed_vehicles)))
+    open_work_orders = wo_q.order_by(MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()).limit(200).all()
     return render_template(
         'maintenance_expense_list.html',
         form=form,
@@ -24317,6 +24333,7 @@ def maintenance_expense_list():
         pagination=pagination,
         per_page=per_page,
         cleanup_status=cleanup_status,
+        open_work_orders=open_work_orders,
         location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
@@ -24849,6 +24866,7 @@ def maintenance_expense_form(pk=None):
             requested_work_order_id = 0
             requested_work_order = None
     form = MaintenanceExpenseForm(obj=rec)
+    maintenance_form_focus = None
     total_bill_error = ''
     entered_total_bill = (
         (request.form.get('total_bill_amount') or '').strip()
@@ -24934,17 +24952,19 @@ def maintenance_expense_form(pk=None):
         if rec.total_bill_amount is not None:
             entered_total_bill = f"{float(rec.total_bill_amount):.2f}"
     elif request.method == 'GET':
-        if default_district_id:
-            form.district_id.data = default_district_id
         if requested_work_order:
             form.district_id.data = requested_work_order.district_id or 0
             form.project_id.data = requested_work_order.project_id or 0
             form.vehicle_id.data = requested_work_order.vehicle_id
             form.work_order_id.data = requested_work_order.id
-            form.expense_date.data = None
+            form.expense_date.data = requested_work_order.opened_on or pk_date()
+        else:
+            if default_district_id:
+                form.district_id.data = default_district_id
+            form.expense_date.data = pk_date()
         selected_payment_type = ''
-        if not rec:
-            form.expense_date.data = None
+    if request.method == 'GET' and not rec:
+        maintenance_form_focus = 'job_category' if requested_work_order else 'expense_date'
 
     if form.validate_on_submit():
         vehicle_id = form.vehicle_id.data
@@ -25396,6 +25416,7 @@ def maintenance_expense_form(pk=None):
         workspace_parties=workspace_parties,
         maintenance_direct_r2=maintenance_direct_r2,
         requested_work_order=requested_work_order,
+        maintenance_form_focus=maintenance_form_focus,
         location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
