@@ -68,7 +68,7 @@ import xlsxwriter
 from sqlalchemy import func, text, inspect, or_, cast, and_
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError, DataError
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, format_date_ddmmyyyy, pk_now, pk_date, pk_time
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
 from flask_wtf.csrf import CSRFError
@@ -23551,7 +23551,9 @@ def maintenance_work_order_list():
     if vehicle_id:
         query = query.filter(MaintenanceWorkOrder.vehicle_id == vehicle_id)
 
-    work_orders = query.options(selectinload(MaintenanceWorkOrder.attachments)).order_by(
+    # Note: do not use selectinload(MaintenanceWorkOrder.attachments) — attachments is lazy='dynamic'
+    # and SQLAlchemy rejects eager loading on dynamic relationships (500 on this page).
+    work_orders = query.order_by(
         MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()
     ).all()
     rows = []
