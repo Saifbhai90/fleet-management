@@ -127,7 +127,7 @@
                     <tbody>
                         {% set items = transfers.items if transfers.items is defined else transfers %}
                         {% for ft in items %}
-                        <tr>
+                        <tr class="ft-transfer-row">
                             <td class="text-center text-muted">{{ ((transfers.page - 1) * per_page + loop.index) if transfers.page is defined else loop.index }}</td>
                             <td><span class="text-primary fw-semibold">{{ ft.transfer_number }}</span></td>
                             <td>{{ ft.transfer_date|ddmmyyyy }}</td>
@@ -144,11 +144,13 @@
                             <td>{{ ft.district.name if ft.district else '-' }}</td>
                             <td>{{ ft.project.name if ft.project else '-' }}</td>
                             <td class="text-center">
-                                {% if ft.attachment %}
-                                <span class="badge bg-success" title="File attached">Success</span>
-                                {% else %}
-                                <span class="text-muted">—</span>
-                                {% endif %}
+                                <button type="button" class="btn btn-sm p-0 border-0 bg-transparent ft-upload-status-btn" title="Upload status">
+                                    {% if ft.attachment %}
+                                    <span class="badge bg-success">Success</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">None</span>
+                                    {% endif %}
+                                </button>
                             </td>
                             <td class="text-center">
                                 {% if not ft.attachment %}
@@ -174,6 +176,29 @@
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-sm btn-delete-compact" title="Delete"><i class="bi bi-trash"></i></button>
                                 </form>
+                            </td>
+                        </tr>
+                        <tr class="ft-upload-expand-row d-none no-print" data-record-id="{{ ft.id }}">
+                            <td colspan="15" class="p-0 bg-body-secondary border-0">
+                                <div class="px-3 py-2 m-2 ms-3 small shadow-sm bg-white border-start border-4 border-primary rounded-1">
+                                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                        <span class="fw-semibold text-body"><i class="bi bi-cloud-upload me-1"></i>Upload status</span>
+                                        <button type="button" class="btn-close btn-sm ft-upload-inline-close" aria-label="Close"></button>
+                                    </div>
+                                    <div class="progress mb-2" style="height:1.25rem;">
+                                        <div class="progress-bar bg-success" style="width:{% if ft.attachment %}100{% else %}0{% endif %}%">{% if ft.attachment %}100%{% else %}0%{% endif %}</div>
+                                    </div>
+                                    <div class="small text-muted ft-inline-meta">{% if ft.attachment %}1 / 1 file (Success){% else %}0 / 0 file{% endif %}</div>
+                                    {% if ft.attachment %}
+                                    <div class="small mt-2">Storage: <span class="badge bg-success">{% if ft.attachment.startswith('http://') or ft.attachment.startswith('https://') %}Cloud / R2{% else %}Local{% endif %}</span></div>
+                                    <div class="mt-1 text-break"><a href="{{ ft.attachment|media_url }}" target="_blank" rel="noopener" class="small">Open attachment</a> · <a class="small" href="{{ url_for('fund_transfer_media', pk=ft.id) }}">Media gallery</a></div>
+                                    {% else %}
+                                    <div class="small mt-2 text-muted">No file uploaded. Edit the transfer to attach a receipt.</div>
+                                    {% endif %}
+                                    <div class="d-flex justify-content-end gap-2 mt-2">
+                                        <button type="button" class="btn btn-secondary btn-sm ft-upload-inline-close">Close</button>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         {% else %}
@@ -339,6 +364,46 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
   window.addEventListener('scroll', function() { closeAll(); }, true);
   window.addEventListener('resize', function() { closeAll(); });
 })();
+
+/* Fund transfer — clickable upload status (inline panel, same UX as oil/fuel) */
+(function() {
+  function hideAllFtUploadExpands() {
+    document.querySelectorAll('#fundTransferTable .ft-upload-expand-row').forEach(function(er) { er.classList.add('d-none'); });
+  }
+  var tbl = document.getElementById('fundTransferTable');
+  if (tbl) {
+    document.addEventListener('click', function(e) {
+      if (e.target && e.target.closest && (e.target.closest('#fundTransferTable .ft-upload-status-btn') || e.target.closest('#fundTransferTable .ft-upload-expand-row'))) {
+        return;
+      }
+      hideAllFtUploadExpands();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') hideAllFtUploadExpands();
+    });
+    tbl.addEventListener('click', function(e) {
+      if (e.target.closest && e.target.closest('.ft-upload-inline-close')) {
+        e.preventDefault();
+        hideAllFtUploadExpands();
+      }
+    });
+    tbl.querySelectorAll('.ft-upload-status-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var mainRow = btn.closest('tr.ft-transfer-row');
+        var expandRow = mainRow && mainRow.nextElementSibling;
+        if (!expandRow || !expandRow.classList.contains('ft-upload-expand-row')) return;
+        var willOpen = expandRow.classList.contains('d-none');
+        hideAllFtUploadExpands();
+        if (!willOpen) return;
+        expandRow.classList.remove('d-none');
+        try { expandRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) { expandRow.scrollIntoView(false); }
+      });
+    });
+  }
+})();
+
 document.addEventListener('DOMContentLoaded', function(){
     if(window.fleetTableEnhance) window.fleetTableEnhance('fundTransferTable');
     window.fleetPrintExport && window.fleetPrintExport('fundTransferTable','Fund Transfers','Fund_Transfers.csv');
