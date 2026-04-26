@@ -20993,7 +20993,8 @@ def fuel_expense_list():
                            from_date=from_d, to_date=to_d, totals=totals,
                            pagination=pagination, page=page, per_page=per_page,
                            district_id=district_id, project_id=project_id, vehicle_id=vehicle_id,
-                           cleanup_status=cleanup_status)
+                           cleanup_status=cleanup_status,
+                           location_cascade=_fuel_expense_location_cascade_dict())
 
 
 @app.route('/expenses/fuel/backfill-task-readings', methods=['POST'])
@@ -21524,7 +21525,7 @@ def fuel_expense_add():
                 'fuel_expense_form.html',
                 form=form,
                 title='Add Fuel Expense',
-                fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
         vehicle = Vehicle.query.get_or_404(vehicle_id)
         district_id = form.district_id.data or None
@@ -21543,7 +21544,7 @@ def fuel_expense_add():
                 'fuel_expense_form.html',
                 form=form,
                 title='Add Fuel Expense',
-                fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
         if payment_type in ('Cash', 'Credit'):
             card_swipe_date = None
@@ -21558,7 +21559,7 @@ def fuel_expense_add():
                 'fuel_expense_form.html',
                 form=form,
                 title='Add Fuel Expense',
-                fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
         previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
@@ -21696,7 +21697,7 @@ def fuel_expense_add():
         rec=None,
         title='Add Fuel Expense',
         last_rec=last_rec,
-        fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 
@@ -21751,7 +21752,7 @@ def fuel_expense_edit(pk):
                 form=form,
                 title='Edit Fuel Expense',
                 rec=rec,
-                fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
         district_id = form.district_id.data or None
         if district_id == 0:
@@ -21770,7 +21771,7 @@ def fuel_expense_edit(pk):
                 form=form,
                 title='Edit Fuel Expense',
                 rec=rec,
-                fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
         if payment_type in ('Cash', 'Credit'):
             card_swipe_date = None
@@ -21787,7 +21788,7 @@ def fuel_expense_edit(pk):
                 form=form,
                 title='Edit Fuel Expense',
                 rec=rec,
-                fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
         previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
@@ -21929,7 +21930,7 @@ def fuel_expense_edit(pk):
         form=form,
         title='Edit Fuel Expense',
         rec=rec,
-        fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 
@@ -22568,6 +22569,7 @@ def oil_expense_list():
         page_subtotal_used=page_subtotal_used,
         page_subtotal_balance=page_subtotal_balance,
         page_subtotal_amount=page_subtotal_amount,
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 
@@ -22666,6 +22668,7 @@ def oil_expense_form(pk=None):
                 total_bill_error=total_bill_error,
                 party_error=party_error,
                 hbl_expense_by_value=hbl_expense_by_value,
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
         expense_date = form.expense_date.data
         payment_type = (form.payment_type.data or '').strip() or None
@@ -22685,6 +22688,7 @@ def oil_expense_form(pk=None):
                 total_bill_error=total_bill_error,
                 party_error=party_error,
                 hbl_expense_by_value=hbl_expense_by_value,
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
         prev_reading = form.previous_reading.data
         curr_reading = form.current_reading.data
@@ -22835,6 +22839,7 @@ def oil_expense_form(pk=None):
                     total_bill_error=total_bill_error,
                     party_error=party_error,
                     hbl_expense_by_value=hbl_expense_by_value,
+                    location_cascade=_fuel_expense_location_cascade_dict(),
                 )
 
             rec.workspace_party_id = selected_party_id_int
@@ -22938,6 +22943,7 @@ def oil_expense_form(pk=None):
         total_bill_error=total_bill_error,
         party_error=party_error,
         hbl_expense_by_value=hbl_expense_by_value,
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 
@@ -23834,6 +23840,7 @@ def maintenance_expense_list():
         pagination=pagination,
         per_page=per_page,
         cleanup_status=cleanup_status,
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 
@@ -24480,6 +24487,7 @@ def maintenance_expense_form(pk=None):
                 selected_party_id=selected_party_id,
                 workspace_parties=workspace_parties,
                 maintenance_direct_r2=maintenance_direct_r2,
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
         district_id = form.district_id.data or None
         if district_id == 0:
@@ -24504,6 +24512,7 @@ def maintenance_expense_form(pk=None):
                 selected_party_id=selected_party_id,
                 workspace_parties=workspace_parties,
                 maintenance_direct_r2=maintenance_direct_r2,
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
         if district_id and int(vehicle_obj.district_id or 0) != int(district_id):
             flash('Selected vehicle does not belong to selected district.', 'danger')
@@ -24521,6 +24530,7 @@ def maintenance_expense_form(pk=None):
                 selected_party_id=selected_party_id,
                 workspace_parties=workspace_parties,
                 maintenance_direct_r2=maintenance_direct_r2,
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
         if district_id and project_id:
             linked = Project.query.join(project_district).filter(
@@ -24543,6 +24553,7 @@ def maintenance_expense_form(pk=None):
                     selected_party_id=selected_party_id,
                     workspace_parties=workspace_parties,
                     maintenance_direct_r2=maintenance_direct_r2,
+                    location_cascade=_fuel_expense_location_cascade_dict(),
                 )
         if not project_id:
             project_id = vehicle_obj.project_id
@@ -24570,6 +24581,7 @@ def maintenance_expense_form(pk=None):
                     selected_party_id=selected_party_id,
                     workspace_parties=workspace_parties,
                     maintenance_direct_r2=maintenance_direct_r2,
+                    location_cascade=_fuel_expense_location_cascade_dict(),
                 )
             if workspace_employee_id and work_order_obj.employee_id and work_order_obj.employee_id != workspace_employee_id:
                 flash('Selected work order is not allowed for current workspace employee.', 'danger')
@@ -24587,6 +24599,7 @@ def maintenance_expense_form(pk=None):
                     selected_party_id=selected_party_id,
                     workspace_parties=workspace_parties,
                     maintenance_direct_r2=maintenance_direct_r2,
+                    location_cascade=_fuel_expense_location_cascade_dict(),
                 )
             if int(work_order_obj.vehicle_id or 0) != int(vehicle_id):
                 flash('Selected work order vehicle does not match expense vehicle.', 'danger')
@@ -24604,6 +24617,7 @@ def maintenance_expense_form(pk=None):
                     selected_party_id=selected_party_id,
                     workspace_parties=workspace_parties,
                     maintenance_direct_r2=maintenance_direct_r2,
+                    location_cascade=_fuel_expense_location_cascade_dict(),
                 )
         expense_date = form.expense_date.data
         curr_reading = form.current_reading.data
@@ -24651,6 +24665,7 @@ def maintenance_expense_form(pk=None):
                 selected_party_id=selected_party_id,
                 workspace_parties=workspace_parties,
                 maintenance_direct_r2=maintenance_direct_r2,
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
         selected_payment_type = payment_type
         workspace_party_id_raw = (request.form.get('workspace_party_id') or '').strip()
@@ -24673,6 +24688,7 @@ def maintenance_expense_form(pk=None):
                 selected_party_id=selected_party_id,
                 workspace_parties=workspace_parties,
                 maintenance_direct_r2=maintenance_direct_r2,
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
 
         product_ids = request.form.getlist('product_id')
@@ -24722,6 +24738,7 @@ def maintenance_expense_form(pk=None):
                 selected_party_id=selected_party_id,
                 workspace_parties=workspace_parties,
                 maintenance_direct_r2=maintenance_direct_r2,
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
 
         if abs(items_total - entered_total_bill_num) > 0.01:
@@ -24741,6 +24758,7 @@ def maintenance_expense_form(pk=None):
                 selected_party_id=selected_party_id,
                 workspace_parties=workspace_parties,
                 maintenance_direct_r2=maintenance_direct_r2,
+                location_cascade=_fuel_expense_location_cascade_dict(),
             )
 
         try:
@@ -24901,6 +24919,7 @@ def maintenance_expense_form(pk=None):
         workspace_parties=workspace_parties,
         maintenance_direct_r2=maintenance_direct_r2,
         requested_work_order=requested_work_order,
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 

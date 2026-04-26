@@ -153,6 +153,7 @@
   </div>
 
   <form method="POST" action="" id="maintenanceExpenseForm" enctype="multipart/form-data">
+    <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
     {{ form.hidden_tag() }}
     <textarea name="attachments_direct_json" id="attachmentsDirectJson" class="d-none" rows="1" autocomplete="off"></textarea>
     <div class="maint-main-grid">
@@ -612,6 +613,32 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};
+  var LOCATION_CASCADE = null;
+  try {
+    var _lcElM = document.getElementById('locationCascadeData');
+    if (_lcElM && _lcElM.textContent) LOCATION_CASCADE = JSON.parse(_lcElM.textContent);
+  } catch (e) { LOCATION_CASCADE = null; }
+  if (LOCATION_CASCADE && LOCATION_CASCADE.projects_by_district) {
+    Object.keys(LOCATION_CASCADE.projects_by_district).forEach(function(dk) {
+      window._cascadeCache['proj_d' + dk] = LOCATION_CASCADE.projects_by_district[dk];
+    });
+  }
+  function vehiclesFromColdCacheMaint(pid, did) {
+    if (!LOCATION_CASCADE || !LOCATION_CASCADE.vehicles) return null;
+    var list = LOCATION_CASCADE.vehicles;
+    var out = [];
+    var restrictDid = (did && did !== '0' && did !== 0) ? String(did) : '';
+    for (var i = 0; i < list.length; i++) {
+      var v = list[i];
+      if (String(v.project_id) !== String(pid)) continue;
+      if (!restrictDid) { out.push(v); continue; }
+      if (String(v.district_id == null ? '' : v.district_id) === restrictDid) out.push(v);
+    }
+    out.sort(function(a, b) {
+      return (a.vehicle_no || '').localeCompare(b.vehicle_no || '', undefined, { numeric: true });
+    });
+    return out;
+  }
   var _suppressCascadeEvents = false;
   function _smoothFillSelect(sel, arr, buildOptionFn, thenSelectVal) {
     if (!sel) return;
@@ -881,6 +908,13 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     var _cKey = 'proj_d' + did;
+    if (LOCATION_CASCADE) {
+      var coldP = (LOCATION_CASCADE.projects_by_district && LOCATION_CASCADE.projects_by_district[String(did)]) || [];
+      window._cascadeCache[_cKey] = coldP;
+      _smoothFillSelect(projectSelect, coldP, function(p) { return {value: String(p.id), text: p.name}; }, thenSelectProjectId || null);
+      if (thenCallback) setTimeout(thenCallback, 20);
+      return;
+    }
     if (window._cascadeCache[_cKey]) {
       _smoothFillSelect(projectSelect, window._cascadeCache[_cKey], function(p) { return {value: String(p.id), text: p.name}; }, thenSelectProjectId || null);
       if (thenCallback) setTimeout(thenCallback, 20);
@@ -911,6 +945,14 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     var _vKey = 'veh_p' + pid + '_d' + (did || '0');
+    if (LOCATION_CASCADE) {
+      var coldV = vehiclesFromColdCacheMaint(pid, did);
+      if (coldV == null) coldV = [];
+      window._cascadeCache[_vKey] = coldV;
+      _smoothFillSelect(vehicleSelect, coldV, function(v) { return {value: String(v.id), text: v.vehicle_no}; }, thenSelectVehicleId || null);
+      if (thenCallback) setTimeout(thenCallback, 20);
+      return;
+    }
     if (window._cascadeCache[_vKey]) {
       _smoothFillSelect(vehicleSelect, window._cascadeCache[_vKey], function(v) { return {value: String(v.id), text: v.vehicle_no}; }, thenSelectVehicleId || null);
       if (thenCallback) setTimeout(thenCallback, 20);

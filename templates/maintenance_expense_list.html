@@ -11,6 +11,7 @@
   #maintUploadStatusPanel { position: fixed; right: 18px; bottom: 18px; width: min(420px, calc(100vw - 24px)); z-index: 1040; }
 </style>
 <div class="container-fluid py-3">
+  <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="maint-list-wrap">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 maint-list-head">
     <h5 class="mb-0"><i class="bi bi-wrench me-2"></i>Maintenance Expense</h5>
@@ -342,6 +343,27 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
   window.addEventListener('resize', function() { closeAll(); });
 })();
 document.addEventListener('DOMContentLoaded', function() {
+  var LC = null;
+  try {
+    var _lc = document.getElementById('locationCascadeData');
+    if (_lc && _lc.textContent) LC = JSON.parse(_lc.textContent);
+  } catch (e) { LC = null; }
+  function listProjectsByDistrict(did) {
+    if (!LC || !LC.projects_by_district) return null;
+    return LC.projects_by_district[String(did)] || [];
+  }
+  function listVehiclesByProjectDistrict(pid, did) {
+    if (!LC || !LC.vehicles) return null;
+    var out = [];
+    var restrictDid = (did && did !== '0') ? String(did) : '';
+    for (var i = 0; i < LC.vehicles.length; i++) {
+      var v = LC.vehicles[i];
+      if (String(v.project_id) !== String(pid)) continue;
+      if (!restrictDid || String(v.district_id == null ? '' : v.district_id) === restrictDid) out.push(v);
+    }
+    out.sort(function(a, b) { return (a.vehicle_no || '').localeCompare(b.vehicle_no || '', undefined, { numeric: true }); });
+    return out;
+  }
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
@@ -354,15 +376,26 @@ document.addEventListener('DOMContentLoaded', function() {
       vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
       initSearchableDropdowns(vehicleSelect.parentNode);
       if (did && did !== '0') {
-        fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
-          arr.forEach(function(p) {
+        var pSync = listProjectsByDistrict(did);
+        if (pSync !== null) {
+          pSync.forEach(function(p) {
             var o = document.createElement('option');
             o.value = p.id;
             o.textContent = p.name;
             projectSelect.appendChild(o);
           });
           initSearchableDropdowns(projectSelect.parentNode);
-        });
+        } else {
+          fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
+            arr.forEach(function(p) {
+              var o = document.createElement('option');
+              o.value = p.id;
+              o.textContent = p.name;
+              projectSelect.appendChild(o);
+            });
+            initSearchableDropdowns(projectSelect.parentNode);
+          });
+        }
       } else {
         initSearchableDropdowns(projectSelect.parentNode);
       }
@@ -375,17 +408,28 @@ document.addEventListener('DOMContentLoaded', function() {
       if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
       vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
       if (pid && pid !== '0') {
-        var url = '/get_vehicles_by_project_district?project_id=' + pid;
-        if (did && did !== '0') url += '&district_id=' + did;
-        fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
-          arr.forEach(function(v) {
+        var vSync = listVehiclesByProjectDistrict(pid, did);
+        if (vSync !== null) {
+          vSync.forEach(function(v) {
             var o = document.createElement('option');
             o.value = v.id;
             o.textContent = v.vehicle_no;
             vehicleSelect.appendChild(o);
           });
           initSearchableDropdowns(vehicleSelect.parentNode);
-        });
+        } else {
+          var url = '/get_vehicles_by_project_district?project_id=' + pid;
+          if (did && did !== '0') url += '&district_id=' + did;
+          fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
+            arr.forEach(function(v) {
+              var o = document.createElement('option');
+              o.value = v.id;
+              o.textContent = v.vehicle_no;
+              vehicleSelect.appendChild(o);
+            });
+            initSearchableDropdowns(vehicleSelect.parentNode);
+          });
+        }
       } else {
         initSearchableDropdowns(vehicleSelect.parentNode);
       }

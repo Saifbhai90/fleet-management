@@ -127,7 +127,7 @@
   {% endif %}
 
   <form method="POST" action="" id="fuelExpenseForm" data-record-id="{{ rec.id if rec else '' }}" enctype="multipart/form-data">
-    <script type="application/json" id="fuelLocationCascadeData">{{ fuel_location_cascade|tojson }}</script>
+    <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
     {{ form.hidden_tag() }}
 
     <div class="row g-3 align-items-start">
@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};
   var FUEL_CASCADE = null;
   try {
-    var _fcEl = document.getElementById('fuelLocationCascadeData');
+    var _fcEl = document.getElementById('locationCascadeData');
     if (_fcEl && _fcEl.textContent) {
       FUEL_CASCADE = JSON.parse(_fcEl.textContent);
     }

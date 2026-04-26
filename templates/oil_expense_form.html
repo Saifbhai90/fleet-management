@@ -54,6 +54,7 @@
   </div>
 
   <form method="POST" action="" id="oilExpenseForm" data-record-id="{{ rec.id if rec else '' }}" enctype="multipart/form-data">
+    <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
     {{ form.hidden_tag() }}
 
     <div class="form-section">
@@ -286,6 +287,32 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};
+  var LOCATION_CASCADE = null;
+  try {
+    var _lcEl = document.getElementById('locationCascadeData');
+    if (_lcEl && _lcEl.textContent) LOCATION_CASCADE = JSON.parse(_lcEl.textContent);
+  } catch (e) { LOCATION_CASCADE = null; }
+  if (LOCATION_CASCADE && LOCATION_CASCADE.projects_by_district) {
+    Object.keys(LOCATION_CASCADE.projects_by_district).forEach(function(dk) {
+      window._cascadeCache['proj_d' + dk] = LOCATION_CASCADE.projects_by_district[dk];
+    });
+  }
+  function vehiclesFromColdCache(pid, did) {
+    if (!LOCATION_CASCADE || !LOCATION_CASCADE.vehicles) return null;
+    var list = LOCATION_CASCADE.vehicles;
+    var out = [];
+    var restrictDid = (did && did !== '0' && did !== 0) ? String(did) : '';
+    for (var i = 0; i < list.length; i++) {
+      var v = list[i];
+      if (String(v.project_id) !== String(pid)) continue;
+      if (!restrictDid) { out.push(v); continue; }
+      if (String(v.district_id == null ? '' : v.district_id) === restrictDid) out.push(v);
+    }
+    out.sort(function(a, b) {
+      return (a.vehicle_no || '').localeCompare(b.vehicle_no || '', undefined, { numeric: true });
+    });
+    return out;
+  }
   function _smoothFillSelect(sel, arr, buildOptionFn) {
     if (!sel) return;
     if (sel.tomselect) {
@@ -888,6 +915,14 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     var _cKey = 'proj_d' + did;
+    if (LOCATION_CASCADE) {
+      var coldP = (LOCATION_CASCADE.projects_by_district && LOCATION_CASCADE.projects_by_district[String(did)]) || [];
+      window._cascadeCache[_cKey] = coldP;
+      _smoothFillSelect(projectSelect, coldP, function(p) { return {value: String(p.id), text: p.name}; });
+      if (thenSelectProjectId) _tsSet(projectSelect, thenSelectProjectId);
+      if (thenCallback) thenCallback();
+      return;
+    }
     if (window._cascadeCache[_cKey]) {
       _smoothFillSelect(projectSelect, window._cascadeCache[_cKey], function(p) { return {value: String(p.id), text: p.name}; });
       if (thenSelectProjectId) _tsSet(projectSelect, thenSelectProjectId);
@@ -916,6 +951,15 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     var _vKey = 'veh_p' + pid + '_d' + (did || '0');
+    if (LOCATION_CASCADE) {
+      var coldV = vehiclesFromColdCache(pid, did);
+      if (coldV == null) coldV = [];
+      window._cascadeCache[_vKey] = coldV;
+      _smoothFillSelect(vehicleSelect, coldV, function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+      if (thenSelectVehicleId) _tsSet(vehicleSelect, thenSelectVehicleId);
+      if (thenCallback) thenCallback();
+      return;
+    }
     if (window._cascadeCache[_vKey]) {
       _smoothFillSelect(vehicleSelect, window._cascadeCache[_vKey], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
       if (thenSelectVehicleId) _tsSet(vehicleSelect, thenSelectVehicleId);
