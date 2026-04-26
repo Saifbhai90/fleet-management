@@ -6,28 +6,48 @@
   .mwo-list-head { background: linear-gradient(135deg, #b45309 0%, #92400e 100%); color:#fff; border-radius: 12px; padding: .65rem 1rem; }
   .mwo-list-card { border: 1px solid #e9ecef; border-radius: 12px; box-shadow: 0 2px 10px rgba(16,24,40,.06); }
   .mwo-list-card .card-header { background: linear-gradient(to right, #fffbeb 0%, #fff 100%); font-weight: 600; font-size: .87rem; }
-  #mwoTable thead tr.mwo-search-row th { border-top: 0; background: #fafafa; }
+  /* Icon toolbar: outlined “document” look on a light surface (ref: PDF/Excel style chips) */
+  .mwo-head-tools {
+    background: #fff; border-radius: 10px; padding: 6px 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  .mwo-ico-btn {
+    display: inline-flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; padding: 0; margin: 0; border: 1.5px solid; border-radius: 8px;
+    background: #fff; line-height: 1; text-decoration: none; transition: box-shadow .15s, transform .1s, background .15s;
+  }
+  .mwo-ico-btn:hover { box-shadow: 0 2px 10px rgba(0,0,0,.12); transform: translateY(-1px); }
+  .mwo-ico-btn i { font-size: 1.1rem; }
+  .mwo-ico-btn--wrench   { border-color: #4f46e5; color: #4f46e5; }
+  .mwo-ico-btn--wrench:hover   { background: #eef2ff; }
+  .mwo-ico-btn--graph    { border-color: #0d9488; color: #0d9488; }
+  .mwo-ico-btn--graph:hover    { background: #f0fdfa; }
+  .mwo-ico-btn--print    { border-color: #2563eb; color: #2563eb; }
+  .mwo-ico-btn--print:hover    { background: #eff6ff; }
+  .mwo-ico-btn--excel    { border-color: #16a34a; color: #16a34a; }
+  .mwo-ico-btn--excel:hover    { background: #f0fdf4; }
+  .mwo-ico-btn--add      { border-color: #d97706; color: #b45309; background: #fffbeb; }
+  .mwo-ico-btn--add:hover      { background: #fef3c7; }
+  .mwo-table-bar .form-control { max-width: 360px; border-radius: 8px; }
 </style>
 <div class="container-fluid py-3">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="mwo-list-wrap">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 mwo-list-head">
-    <h5 class="mb-0"><i class="bi bi-clipboard2-check me-2"></i>Maintenance Work Orders</h5>
-    <div class="d-flex gap-1 flex-wrap align-items-center">
-      <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm" title="Maintenance bills list">
-        <i class="bi bi-wrench"></i>
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 mwo-list-head">
+    <h5 class="mb-0 flex-grow-1"><i class="bi bi-clipboard2-check me-2"></i>Maintenance Work Orders</h5>
+    <div class="mwo-head-tools d-flex flex-wrap gap-1 align-items-center" role="toolbar" aria-label="List actions">
+      <a href="{{ url_for('maintenance_expense_list') }}" class="mwo-ico-btn mwo-ico-btn--wrench" title="Maintenance bills list">
+        <i class="bi bi-wrench" aria-hidden="true"></i>
       </a>
-      <a href="{{ url_for('maintenance_expense_history') }}" class="btn btn-outline-light btn-sm" title="History report">
-        <i class="bi bi-graph-up-arrow"></i>
+      <a href="{{ url_for('maintenance_expense_history') }}" class="mwo-ico-btn mwo-ico-btn--graph" title="History report">
+        <i class="bi bi-graph-up-arrow" aria-hidden="true"></i>
       </a>
-      <button type="button" class="btn btn-outline-light btn-sm" id="btnPrintReport" title="Print / Preview">
+      <button type="button" class="mwo-ico-btn mwo-ico-btn--print" id="btnPrintReport" title="Print / Preview">
         <i class="bi bi-printer" aria-hidden="true"></i><span class="visually-hidden">Print / Preview</span>
       </button>
-      <button type="button" class="btn btn-outline-light btn-sm" id="btnExportReport" data-export-url="{{ url_for('maintenance_work_order_export') }}" title="Export Excel">
-        <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i><span class="visually-hidden">Export</span>
+      <button type="button" class="mwo-ico-btn mwo-ico-btn--excel" id="btnExportReport" data-export-url="{{ url_for('maintenance_work_order_export') }}" title="Export to Excel">
+        <i class="bi bi-file-earmark-excel" aria-hidden="true"></i><span class="visually-hidden">Export to Excel</span>
       </button>
-      <a href="{{ url_for('maintenance_work_order_form') }}" class="btn btn-light btn-sm text-dark" title="New work order">
-        <i class="bi bi-plus-lg"></i>
+      <a href="{{ url_for('maintenance_work_order_form') }}" class="mwo-ico-btn mwo-ico-btn--add" title="New work order">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i>
       </a>
     </div>
   </div>
@@ -87,6 +107,15 @@
   </div>
 
   <div class="card mwo-list-card overflow-hidden">
+    <div class="card-header mwo-table-bar d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
+      <span class="text-muted small mb-0">
+        {% if from_date %}<span class="text-dark fw-semibold">List</span> — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}{% else %}<span class="text-dark fw-semibold">Work orders</span> (apply filter){% endif %}
+      </span>
+      <div class="d-flex align-items-center gap-2 flex-grow-1 flex-md-grow-0 justify-content-md-end">
+        <span class="text-muted small d-none d-sm-inline">Search</span>
+        <input type="search" id="mwoTableSearch" class="form-control form-control-sm" placeholder="Filter rows: work order #, title, location, status…" autocomplete="off" inputmode="search" aria-label="Filter table">
+      </div>
+    </div>
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 small" id="mwoTable">
         <thead class="table-light">
@@ -102,14 +131,6 @@
             <th class="text-end">Bills</th>
             <th class="text-end">Total Cost</th>
             <th class="text-end pe-3" style="min-width: 7rem;">Action</th>
-          </tr>
-          <tr class="mwo-search-row">
-            <th colspan="11" class="py-2 pe-3">
-              <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <span class="text-muted small fw-normal">Date range: {% if from_date %}{{ from_date|ddmmyyyy }} — {{ to_date|ddmmyyyy }}{% else %}(filter){% endif %}</span>
-                <input type="search" id="mwoTableSearch" class="form-control form-control-sm" placeholder="Type to filter rows (work order, location, status…)" style="max-width: 320px;" autocomplete="off" inputmode="search">
-              </div>
-            </th>
           </tr>
         </thead>
         <tbody>

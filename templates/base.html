@@ -3215,6 +3215,14 @@
         var printBtn = document.getElementById('btnPrintReport');
         var exportBtn = document.getElementById('btnExportReport');
         if (!printBtn && !exportBtn) return;
+        if (printBtn && !printBtn._fleetOrigHtml) printBtn._fleetOrigHtml = printBtn.innerHTML;
+        if (exportBtn && !exportBtn._fleetOrigHtml) exportBtn._fleetOrigHtml = exportBtn.innerHTML;
+        function _restorePrint() {
+            if (printBtn) printBtn.innerHTML = printBtn._fleetOrigHtml || '<i class="bi bi-eye me-1"></i>Print / Preview';
+        }
+        function _restoreExport() {
+            if (exportBtn) exportBtn.innerHTML = exportBtn._fleetOrigHtml || '<i class="bi bi-file-earmark-excel me-1"></i>Export';
+        }
 
         function _allPagesUrl() {
             var u = new URLSearchParams(window.location.search);
@@ -3263,7 +3271,7 @@
             printBtn.addEventListener('click', function() {
                 printBtn.disabled = true; printBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
                 _fetchAllTable(function(tbl) {
-                    if (!tbl) { printBtn.disabled = false; printBtn.innerHTML = '<i class="bi bi-eye me-1"></i>Print / Preview'; return; }
+                    if (!tbl) { printBtn.disabled = false; _restorePrint(); return; }
                     var clone = _cleanTable(tbl);
                     var w = window.open('', '_blank');
                     w.document.write('<!DOCTYPE html><html><head><title>' + title + '</title>');
@@ -3292,7 +3300,7 @@
                     w.document.write(clone.outerHTML);
                     w.document.write('</body></html>');
                     w.document.close(); w.focus();
-                    printBtn.disabled = false; printBtn.innerHTML = '<i class="bi bi-eye me-1"></i>Print / Preview';
+                    printBtn.disabled = false; _restorePrint();
                 });
             });
         }
@@ -3300,7 +3308,7 @@
             exportBtn.addEventListener('click', function() {
                 exportBtn.disabled = true; exportBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
                 _fetchAllTable(function(tbl) {
-                    if (!tbl) { exportBtn.disabled = false; exportBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>Export'; return; }
+                    if (!tbl) { exportBtn.disabled = false; _restoreExport(); return; }
                     var clone = _cleanTable(tbl);
                     var headers = [];
                     clone.querySelectorAll('thead th').forEach(function(th){
@@ -3327,7 +3335,7 @@
                     a.href = URL.createObjectURL(blob);
                     a.download = csvFilename;
                     a.click();
-                    exportBtn.disabled = false; exportBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>Export';
+                    exportBtn.disabled = false; _restoreExport();
                 });
             });
         }
