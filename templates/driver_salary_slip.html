@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}Driver Salary Slip (Bank){% endblock %}
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4" id="salarySlipPage">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 no-print">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-bank2 me-2 text-primary"></i>Driver Salary Slip</h4>
+      <small class="text-muted">Driver details (district / project / vehicle) system se auto-fill; salary figures aur date aap likhein — bank / loan file ke liye print.</small>
+    </div>
+    <a href="{{ url_for('reports_index') }}#hr-tab" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Report Centre
+    </a>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-5 no-print">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-light py-2"><strong>Filter &amp; select driver</strong></div>
+        <div class="card-body">
+          <form method="get" action="{{ url_for('driver_salary_slip') }}" class="row g-2" id="slipFilterForm">
+            <div class="col-12">
+              <label class="form-label small mb-0">Project</label>
+              <select name="project_id" id="ssProject" class="form-select form-select-sm search-select" {% if disable_project %}disabled{% endif %}>
+                {% for val, label in project_choices %}
+                <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
+            </div>
+            <div class="col-12">
+              <label class="form-label small mb-0">District</label>
+              <select name="district_id" id="ssDistrict" class="form-select form-select-sm search-select" {% if disable_district %}disabled{% endif %}>
+                {% for val, label in district_choices %}
+                <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
+            </div>
+            <div class="col-12">
+              <label class="form-label small mb-0">Vehicle</label>
+              <select name="vehicle_id" id="ssVehicle" class="form-select form-select-sm search-select" {% if disable_vehicle %}disabled{% endif %}>
+                {% for val, label in vehicle_choices %}
+                <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              {% if disable_vehicle %}<input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">{% endif %}
+            </div>
+            <div class="col-12 d-flex gap-2">
+              <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>Apply filters</button>
+              <a href="{{ url_for('driver_salary_slip') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
+            </div>
+          </form>
+          <hr>
+          <label class="form-label small mb-0">Driver <span class="text-danger">*</span></label>
+          <select id="ssDriver" class="form-select form-select-sm search-select" data-initial-id="{{ selected_driver_id or 0 }}">
+            <option value="0">— Select driver —</option>
+          </select>
+          <p class="small text-muted mt-2 mb-0" id="ssDriverHint">Filters apply karke driver list load hoti hai.</p>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mt-3">
+        <div class="card-header bg-light py-2"><strong>Salary &amp; bank certificate (manual)</strong></div>
+        <div class="card-body row g-2">
+          <div class="col-md-6">
+            <label class="form-label small mb-0">Salary month</label>
+            <input type="month" class="form-control form-control-sm" id="inSalaryMonth" autocomplete="off">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-0">Certificate date</label>
+            <input type="text" class="form-control form-control-sm datepicker" id="inCertDate" placeholder="dd-mm-yyyy" autocomplete="off" value="{{ cert_date_default }}">
+          </div>
+          <div class="col-12">
+            <label class="form-label small mb-0">Pay period (e.g. 01-04-2026 to 30-04-2026)</label>
+            <div class="input-group input-group-sm">
+              <input type="text" class="form-control" id="inPeriodFrom" placeholder="From">
+              <span class="input-group-text">to</span>
+              <input type="text" class="form-control" id="inPeriodTo" placeholder="To">
+            </div>
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-0">Basic salary</label>
+            <input type="text" class="form-control form-control-sm" id="inBasic" placeholder="0" inputmode="decimal">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-0">Allowances</label>
+            <input type="text" class="form-control form-control-sm" id="inAllow" placeholder="0" inputmode="decimal">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-0">Gross salary</label>
+            <input type="text" class="form-control form-control-sm" id="inGross" placeholder="0" inputmode="decimal">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-0">Deductions</label>
+            <input type="text" class="form-control form-control-sm" id="inDed" placeholder="0" inputmode="decimal">
+          </div>
+          <div class="col-12">
+            <label class="form-label small mb-0">Net salary (payable)</label>
+            <input type="text" class="form-control form-control-sm fw-semibold" id="inNet" placeholder="0" inputmode="decimal">
+          </div>
+          <div class="col-12">
+            <label class="form-label small mb-0">Prepared by / title (optional)</label>
+            <input type="text" class="form-control form-control-sm" id="inPrepared" placeholder="Name & designation">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="d-flex flex-wrap gap-2 mb-2 no-print">
+        <button type="button" class="btn btn-dark btn-sm" id="btnPrintSlip"><i class="bi bi-printer me-1"></i>Print / Save PDF</button>
+        <span class="small text-muted align-self-center">Print dialog se &quot;Save as PDF&quot; choose karke bank file bana sakte hain.</span>
+      </div>
+      <div class="slip-paper border bg-white" id="slipPrintRoot">
+        <div class="slip-inner">
+          <div class="text-center border-bottom pb-2 mb-3">
+            <div class="slip-company" id="slCompany">—</div>
+            <div class="slip-proj text-muted small" id="slProjectLine"></div>
+            <h1 class="slip-title h5 mt-2 mb-0">SALARY CERTIFICATE</h1>
+            <div class="small text-muted">(For bank / loan / income verification)</div>
+          </div>
+
+          <p class="slip-intro small mb-3">
+            This is to certify that the following is recorded as a <strong>driver</strong> with our operations.
+            The salary particulars below are entered for the period stated. This certificate is issued at the employee’s request for submission to a bank / financial institution.
+          </p>
+
+          <h6 class="text-uppercase text-secondary border-bottom pb-1 small">Employee &amp; assignment (from system)</h6>
+          <table class="table table-sm table-borderless slip-table mb-3">
+            <tbody>
+              <tr><th style="width:40%">Driver name</th><td id="slName">—</td></tr>
+              <tr><th>Father’s name</th><td id="slFather">—</td></tr>
+              <tr><th>Driver code / ID</th><td id="slCode">—</td></tr>
+              <tr><th>CNIC</th><td id="slCnic">—</td></tr>
+              <tr><th>Date of birth</th><td id="slDob">—</td></tr>
+              <tr><th>Address</th><td id="slAddr">—</td></tr>
+              <tr><th>Phone</th><td id="slPhone">—</td></tr>
+              <tr><th>Designation</th><td id="slPost">Driver</td></tr>
+              <tr><th>Shift</th><td id="slShift">—</td></tr>
+              <tr><th>Date of assignment</th><td id="slAssign">—</td></tr>
+              <tr><th>District</th><td id="slDist">—</td></tr>
+              <tr><th>Project</th><td id="slProj">—</td></tr>
+              <tr><th>Vehicle</th><td id="slVeh">—</td></tr>
+              <tr><th>Driving license No.</th><td id="slLic">—</td></tr>
+            </tbody>
+          </table>
+
+          <h6 class="text-uppercase text-secondary border-bottom pb-1 small">Bank (from driver profile, if any)</h6>
+          <table class="table table-sm table-borderless slip-table mb-3">
+            <tbody>
+              <tr><th style="width:40%">Bank name</th><td id="slBank">—</td></tr>
+              <tr><th>Account title</th><td id="slAccTitle">—</td></tr>
+              <tr><th>Account number</th><td id="slAccNo">—</td></tr>
+            </tbody>
+          </table>
+
+          <h6 class="text-uppercase text-secondary border-bottom pb-1 small">Salary (entered for certificate)</h6>
+          <table class="table table-sm slip-table table-bordered mb-2">
+            <tbody>
+              <tr><th style="width:40%">Salary month</th><td id="slMon">—</td></tr>
+              <tr><th>Pay period</th><td id="slPeriod">—</td></tr>
+              <tr><th>Basic salary</th><td id="slBasic">—</td></tr>
+              <tr><th>Allowances</th><td id="slAllow">—</td></tr>
+              <tr><th>Gross salary</th><td id="slGross">—</td></tr>
+              <tr><th>Deductions</th><td id="slDed">—</td></tr>
+              <tr class="table-light"><th>Net salary (payable)</th><td class="fw-bold" id="slNet">—</td></tr>
+            </tbody>
+          </table>
+
+          <p class="small text-muted border-top pt-2 mb-4">
+            <strong>Note:</strong> This document is for banking / income verification use only. Salary amounts are as declared above for the stated period; original pay records may be required by the bank.
+          </p>
+
+          <div class="row small">
+            <div class="col-6">
+              <div class="text-muted">Certificate date</div>
+              <div id="slCertDate" class="fw-medium">—</div>
+            </div>
+            <div class="col-6 text-end">
+              <div class="text-muted">Authorized signatory</div>
+              <div id="slPrepared" class="mt-3">_________________________</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+#salarySlipPage .slip-paper { border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+.slip-inner { padding: 1.5rem 1.75rem; max-width: 800px; margin: 0 auto; }
+.slip-company { font-size: 1.15rem; font-weight: 700; letter-spacing: .02em; }
+.slip-title { font-weight: 700; color: #1a1a2e; }
+.slip-table th { color: #4a5568; font-weight: 600; font-size: .8rem; vertical-align: top; }
+.slip-table td { font-size: .875rem; }
+.slip-intro { line-height: 1.5; color: #374151; }
+@media print {
+  .no-print, .navbar, .sidebar, footer, #userNav, .breadcrumb { display: none !important; }
+  #salarySlipPage { padding: 0 !important; }
+  #slipPrintRoot { box-shadow: none !important; border: none !important; }
+  .slip-inner { max-width: 100%; padding: 12mm; }
+  body { background: #fff !important; }
+}
+</style>
+
+<script>
+(function() {
+  var projectEl = document.getElementById('ssProject');
+  var districtEl = document.getElementById('ssDistrict');
+  var vehicleEl = document.getElementById('ssVehicle');
+  var driverEl = document.getElementById('ssDriver');
+  if (!driverEl) return;
+  var initialId = driverEl.getAttribute('data-initial-id') || '0';
+
+  function txt(el, v) { if (el) el.textContent = (v == null || v === '') ? '—' : String(v); }
+
+  function setDashAuto() {
+    txt(document.getElementById('slCompany'), '—');
+    ['slName','slFather','slCode','slCnic','slDob','slAddr','slPhone','slPost','slShift','slAssign','slDist','slProj','slVeh','slLic','slBank','slAccTitle','slAccNo','slProjectLine']
+      .forEach(function(id) { txt(document.getElementById(id), '—'); });
+  }
+
+  function loadDriverData(id) {
+    if (!id || id === '0') { setDashAuto(); syncManualToSlip(); return; }
+    fetch('/api/salary-slip/driver/' + encodeURIComponent(id))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.ok) { setDashAuto(); syncManualToSlip(); return; }
+        var d = data.driver;
+        txt(document.getElementById('slCompany'), d.company || d.project || '—');
+        var projLine = [];
+        if (d.project) projLine.push(d.project);
+        if (d.district) projLine.push('District: ' + d.district);
+        txt(document.getElementById('slProjectLine'), projLine.length ? projLine.join(' · ') : '');
+        txt(document.getElementById('slName'), d.name);
+        txt(document.getElementById('slFather'), d.father_name);
+        txt(document.getElementById('slCode'), d.driver_code);
+        txt(document.getElementById('slCnic'), d.cnic);
+        txt(document.getElementById('slDob'), d.dob);
+        txt(document.getElementById('slAddr'), d.address);
+        txt(document.getElementById('slPhone'), d.phone1);
+        txt(document.getElementById('slPost'), d.post || 'Driver');
+        txt(document.getElementById('slShift'), d.shift);
+        txt(document.getElementById('slAssign'), d.assign_date);
+        txt(document.getElementById('slDist'), d.district);
+        txt(document.getElementById('slProj'), d.project);
+        var vline = d.vehicle_no || '';
+        if (d.vehicle_model) vline += (vline ? ' — ' : '') + d.vehicle_model;
+        if (d.vehicle_type) vline += (vline ? ' (' + d.vehicle_type + ')' : d.vehicle_type);
+        txt(document.getElementById('slVeh'), vline);
+        txt(document.getElementById('slLic'), d.license_no);
+        txt(document.getElementById('slBank'), d.bank_name);
+        txt(document.getElementById('slAccTitle'), d.account_title);
+        txt(document.getElementById('slAccNo'), d.account_no);
+        syncManualToSlip();
+      }).catch(function() { setDashAuto(); syncManualToSlip(); });
+  }
+
+  function syncManualToSlip() {
+    var sm = document.getElementById('inSalaryMonth');
+    var mon = '';
+    if (sm && sm.value) {
+      var p = sm.value.split('-');
+      if (p.length === 2) {
+        var months = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+        mon = (months[parseInt(p[1], 10)] || '') + ' ' + p[0];
+      }
+    }
+    txt(document.getElementById('slMon'), mon || '—');
+    var pFrom = (document.getElementById('inPeriodFrom') && document.getElementById('inPeriodFrom').value) || '';
+    var pTo = (document.getElementById('inPeriodTo') && document.getElementById('inPeriodTo').value) || '';
+    txt(document.getElementById('slPeriod'), (pFrom || pTo) ? (pFrom + '  to  ' + pTo) : '—');
+    function money(idIn, idOut) {
+      var v = (document.getElementById(idIn) && document.getElementById(idIn).value) || '';
+      v = v.trim();
+      txt(document.getElementById(idOut), v ? v : '—');
+    }
+    money('inBasic', 'slBasic');
+    money('inAllow', 'slAllow');
+    money('inGross', 'slGross');
+    money('inDed', 'slDed');
+    money('inNet', 'slNet');
+    var cd = (document.getElementById('inCertDate') && document.getElementById('inCertDate').value) || '';
+    txt(document.getElementById('slCertDate'), cd || '—');
+    var prep = (document.getElementById('inPrepared') && document.getElementById('inPrepared').value) || '';
+    var slP = document.getElementById('slPrepared');
+    if (slP) slP.textContent = prep ? prep : '_________________________';
+  }
+
+  function refreshDriverDropdown() {
+    var pid = (projectEl && projectEl.value) || '0';
+    var did = (districtEl && districtEl.value) || '0';
+    var vid = (vehicleEl && vehicleEl.value) || '0';
+    var want = (initialId && initialId !== '0') ? String(initialId) : ((driverEl.value && driverEl.value !== '0') ? String(driverEl.value) : '');
+    fetch('/api/attendance/filtered-drivers?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did) + '&vehicle_id=' + encodeURIComponent(vid) + '&shift=')
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        driverEl.innerHTML = '<option value="0">— Select driver —</option>';
+        arr.forEach(function(d) {
+          var opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = d.name + ' (' + (d.driver_id || '-') + ')';
+          driverEl.appendChild(opt);
+        });
+        if (want && driverEl.querySelector('option[value="' + want + '"]')) {
+          driverEl.value = want;
+        } else {
+          driverEl.value = '0';
+        }
+        initialId = '0';
+        if (driverEl.value && driverEl.value !== '0') loadDriverData(driverEl.value);
+        else { setDashAuto(); syncManualToSlip(); }
+      }).catch(function() {
+        driverEl.innerHTML = '<option value="0">— Select driver —</option>';
+        setDashAuto();
+        syncManualToSlip();
+      });
+  }
+
+  driverEl.addEventListener('change', function() { loadDriverData(this.value); });
+  ['inSalaryMonth','inCertDate','inPeriodFrom','inPeriodTo','inBasic','inAllow','inGross','inDed','inNet','inPrepared'].forEach(function(id) {
+    var e = document.getElementById(id);
+    if (e) e.addEventListener('input', syncManualToSlip);
+    if (e) e.addEventListener('change', syncManualToSlip);
+  });
+
+  var _bp = document.getElementById('btnPrintSlip');
+  if (_bp) _bp.addEventListener('click', function() { window.print(); });
+
+  syncManualToSlip();
+  refreshDriverDropdown();
+})();
+</script>
+{% endblock %}

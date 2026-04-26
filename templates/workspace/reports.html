@@ -21,6 +21,9 @@
       <li class="nav-item" role="presentation">
         <button class="nav-link {{ 'active' if active_tab == 'w-ops' else '' }} fw-semibold" id="w-ops-tab" data-bs-toggle="tab" data-bs-target="#w-ops" type="button" role="tab"><i class="bi bi-grid me-1"></i>Operational Reports</button>
       </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {{ 'active' if active_tab == 'w-hr' else '' }} fw-semibold" id="w-hr-tab" data-bs-toggle="tab" data-bs-target="#w-hr" type="button" role="tab"><i class="bi bi-people me-1"></i>HR &amp; Workforce</button>
+      </li>
     </ul>
 
     <div class="tab-content ws-tab-content" id="workspaceReportTabContent">
@@ -171,6 +174,22 @@
             <a href="{{ url_for('maintenance_work_order_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
               <i class="bi bi-star text-warning me-2"></i>Maintenance Work Order Report
             </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade {{ 'show active' if active_tab == 'w-hr' else '' }}" id="w-hr" role="tabpanel">
+        <div class="ws-panel">
+          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">HR &amp; Workforce</h6>
+          <div class="list-group list-group-flush workspace-report-link-group">
+            {% if can_see_page('driver_salary_slip') %}
+            <a href="{{ url_for('driver_salary_slip') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 workspace-report-link">
+              <i class="bi bi-bank2 text-primary me-2"></i>Driver Salary Slip (Bank)
+              <small class="text-muted d-block ms-4">Bank / loan file: driver details auto, salary figures manual.</small>
+            </a>
+            {% else %}
+            <div class="small text-muted">Is section ke liye report permission assign honi chahiye (Driver Salary Slip).</div>
+            {% endif %}
           </div>
         </div>
       </div>

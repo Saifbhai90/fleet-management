@@ -10299,6 +10299,161 @@ def _parse_active_driver_filters():
     return project_id, district_id, vehicle_id, shift, from_date_str, to_date_str, from_date_val, to_date_val
 
 
+def _parse_salary_slip_filters():
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    driver_id = request.args.get('driver_id', type=int) or 0
+    return project_id, district_id, vehicle_id, driver_id
+
+
+def _driver_accessible_for_salary_slip(driver, user_context):
+    """Align with _active_drivers_data / active driver list (scoped project, district, vehicle)."""
+    if not driver or driver.status != 'Active' or not driver.vehicle_id:
+        return False
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    if is_master_or_admin:
+        return True
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    v = driver.vehicle
+    if allowed_projects:
+        dp, vp = driver.project_id, (v.project_id if v else None)
+        if not ((dp in allowed_projects) or (vp is not None and vp in allowed_projects)):
+            return False
+    if allowed_districts:
+        dd, vd = driver.district_id, (v.district_id if v else None)
+        if not ((dd in allowed_districts) or (vd is not None and vd in allowed_districts)):
+            return False
+    if allowed_vehicles and driver.vehicle_id not in allowed_vehicles:
+        return False
+    return True
+
+
+def _driver_to_salary_slip_payload(driver):
+    """Build JSON-serializable dict of auto-filled (driver) fields for the salary slip UI."""
+    v = driver.vehicle
+    dist = None
+    if driver.district_id and driver.district:
+        dist = driver.district
+    elif v and v.district_id and v.district:
+        dist = v.district
+    proj = driver.project
+    if not proj and v and v.project_id:
+        proj = v.project
+    company_name = ''
+    if proj and proj.company:
+        company_name = proj.company.name or ''
+    dstr = lambda d: d.strftime('%d-%m-%Y') if d else ''
+    return {
+        'id': driver.id,
+        'driver_code': (driver.driver_id or '').strip(),
+        'name': driver.name or '',
+        'father_name': driver.father_name or '',
+        'cnic': format_cnic(driver.cnic_no) if driver.cnic_no else '',
+        'dob': dstr(driver.dob),
+        'address': (driver.address or '').strip(),
+        'phone1': (driver.phone1 or '').strip(),
+        'post': (driver.post or 'Driver').strip() or 'Driver',
+        'shift': (driver.shift or '').strip(),
+        'assign_date': dstr(driver.assign_date),
+        'license_no': (driver.license_no or '').strip(),
+        'bank_name': (driver.bank_name or '').strip(),
+        'account_no': (driver.account_no or '').strip(),
+        'account_title': (driver.account_title or '').strip(),
+        'district': dist.name if dist else '',
+        'project': proj.name if proj else '',
+        'company': company_name,
+        'vehicle_no': (v.vehicle_no if v else '') or '',
+        'vehicle_model': (v.model if v else '') or '',
+        'vehicle_type': (v.vehicle_type if v else '') or '',
+    }
+
+
+@app.route('/api/salary-slip/driver/<int:driver_id>')
+def api_salary_slip_driver(driver_id):
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    driver = Driver.query.options(
+        joinedload(Driver.vehicle),
+        joinedload(Driver.district),
+        joinedload(Driver.project),
+    ).filter_by(id=driver_id).first()
+    if not driver or not _driver_accessible_for_salary_slip(driver, user_context):
+        return jsonify({'ok': False, 'error': 'Driver not found or access denied.'}), 404
+    return jsonify({'ok': True, 'driver': _driver_to_salary_slip_payload(driver)})
+
+
+@app.route('/reports/driver-salary-slip')
+def driver_salary_slip():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    project_id, district_id, vehicle_id, selected_driver_id = _parse_salary_slip_filters()
+
+    disable_project = False
+    disable_district = False
+    disable_vehicle = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+        if len(allowed_vehicles) == 1:
+            if not vehicle_id:
+                vehicle_id = next(iter(allowed_vehicles))
+            disable_vehicle = True
+
+    proj_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_q.all()]
+
+    dist_q = District.query.order_by(District.name)
+    if not is_master_or_admin and allowed_districts:
+        dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
+    if project_id:
+        dist_q = dist_q.join(project_district).filter(project_district.c.project_id == project_id)
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.all()]
+
+    veh_q = db.session.query(Vehicle).join(Driver, Vehicle.id == Driver.vehicle_id).filter(
+        Driver.vehicle_id.isnot(None), Driver.status != 'Left',
+    ).distinct().order_by(Vehicle.vehicle_no)
+    if not is_master_or_admin and allowed_vehicles:
+        veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    if project_id:
+        veh_q = veh_q.filter(or_(Vehicle.project_id == project_id, Driver.project_id == project_id))
+    if district_id:
+        veh_q = veh_q.filter(Vehicle.district_id == district_id)
+    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in veh_q.all()]
+
+    return render_template(
+        'driver_salary_slip.html',
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        selected_driver_id=selected_driver_id,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        vehicle_choices=vehicle_choices,
+        disable_project=disable_project,
+        disable_district=disable_district,
+        disable_vehicle=disable_vehicle,
+        cert_date_default=pk_date().strftime('%d-%m-%Y'),
+    )
+
+
 @app.route('/active-drivers-report')
 def active_drivers_report():
     from auth_utils import get_user_context
