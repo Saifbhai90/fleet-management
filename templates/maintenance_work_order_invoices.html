@@ -2,13 +2,18 @@
 {% block title %}Work order — all invoices ({{ rec.work_order_no }}){% endblock %}
 {% block content %}
 <style>
-  .wo-inv-wrap { max-width: min(920px, calc(100vw - 96px)); margin: 0 auto; }
+  .wo-inv-wrap { width: 100%; max-width: none; margin: 0; padding-left: 0; padding-right: 0; }
   .wo-inv-head { background: linear-gradient(135deg, #1d4ed8 0%, #0f172a 100%); color: #fff; border-radius: 10px; padding: .5rem .85rem; }
-  .mwo-sum-h { background: #f8fafc !important; }
-  .mwo-metric-row { background: #fafafa; font-size: .8rem; }
-  .mwo-tiny-table { font-size: .8125rem; }
-  .mwo-summary-compact { border-radius: 8px !important; }
-  .expense-invoice-bill { max-width: 800px; margin: 0 auto; border: 1px solid #dee2e6; border-radius: 12px; background: #fff; }
+  .mwo-panel__title { font-size: .9375rem; font-weight: 600; letter-spacing: .02em; }
+  .mwo-panel__title--bills { background: linear-gradient(90deg, #eff6ff 0%, #f8fafc 100%); border-bottom: 1px solid #93c5fd; color: #1e3a8a; }
+  .mwo-panel__title--wo { background: linear-gradient(90deg, #f1f5f9 0%, #fff 100%); border-bottom: 1px solid #cbd5e1; color: #1e293b; }
+  .mwo-panel--bills { border-color: #bfdbfe !important; }
+  .mwo-panel--wo { border-color: #cbd5e1 !important; }
+  .mwo-panel--actions { background: linear-gradient(180deg, #fafafa 0%, #fff 100%); border-color: #e2e8f0 !important; }
+  .mwo-metric-row { background: #f8fafc; font-size: .875rem; }
+  .mwo-tiny-table { font-size: .875rem; line-height: 1.45; }
+  .mwo-bad { font-size: .75rem; padding: .28em .55em; }
+  .expense-invoice-bill { max-width: min(800px, 100%); margin: 0 auto; border: 1px solid #dee2e6; border-radius: 12px; background: #fff; }
   .expense-invoice-bill .inv-head { border-bottom: 2px solid #ea580c; padding: 1rem 1.25rem; background: linear-gradient(135deg, #fff7ed 0%, #fff 100%); border-radius: 12px 12px 0 0; }
   .expense-invoice-bill .inv-row { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding: .35rem 0; border-bottom: 1px dashed #e9ecef; }
   .expense-invoice-bill .inv-label { min-width: 140px; color: #6c757d; font-size: .82rem; }
@@ -16,11 +21,11 @@
   @media print {
     .navbar, .sidebar, .flash-message, .d-print-none { display: none !important; }
     .main-content { margin: 0 !important; margin-top: 0 !important; padding: 8px !important; }
-    .mwo-summary-compact, .expense-invoice-bill { border: 1px solid #000; box-shadow: none !important; }
+    .mwo-slab .border, .expense-invoice-bill { border: 1px solid #000 !important; box-shadow: none !important; }
   }
 </style>
-<div class="container-fluid py-2">
-  <div class="wo-inv-wrap">
+<div class="container-fluid py-2 px-0">
+  <div class="wo-inv-wrap w-100">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2 wo-inv-head d-print-none">
       <div>
         <h6 class="mb-0"><i class="bi bi-receipt me-1"></i>{{ rec.work_order_no }}</h6>

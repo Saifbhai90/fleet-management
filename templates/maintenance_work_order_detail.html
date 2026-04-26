@@ -2,9 +2,10 @@
 {% block title %}Maintenance Work Order — {{ rec.work_order_no }}{% endblock %}
 {% block content %}
 <style>
-  .mwo-page { max-width: min(1200px, calc(100vw - 32px)); margin: 0 auto; }
+  /* Full width between app sidebars — drop centering cap */
+  .mwo-page { max-width: none !important; width: 100%; margin: 0; padding-left: 0; padding-right: 0; }
   .mwo-ico-btn {
-    display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; padding: 0; border: 1px solid; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center; width: 2.35rem; height: 2.35rem; padding: 0; border: 1px solid; border-radius: 8px;
     background: #fff; line-height: 1; text-decoration: none; transition: box-shadow .12s, background .12s;
   }
   .mwo-ico-btn:hover { box-shadow: 0 1px 6px rgba(0,0,0,.1); }
@@ -13,37 +14,63 @@
   .mwo-hero {
     background: #fff;
     border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: .5rem .75rem;
-    margin-bottom: .5rem;
+    border-radius: 10px;
+    padding: .65rem 1rem;
+    margin-bottom: .75rem;
   }
-  .mwo-sum-h { background: #f8fafc !important; }
-  .mwo-metric-row { background: #fafafa; font-size: .8rem; }
-  .mwo-tiny-table { font-size: .8125rem; }
+  /* Summary / WO / actions — distinct panels */
+  .mwo-panel__title { font-size: .9375rem; font-weight: 600; letter-spacing: .02em; }
+  .mwo-panel__title--bills {
+    background: linear-gradient(90deg, #eff6ff 0%, #f8fafc 100%);
+    border-bottom: 1px solid #93c5fd;
+    color: #1e3a8a;
+  }
+  .mwo-panel__title--wo {
+    background: linear-gradient(90deg, #f1f5f9 0%, #ffffff 100%);
+    border-bottom: 1px solid #cbd5e1;
+    color: #1e293b;
+  }
+  .mwo-panel--bills { border-color: #bfdbfe !important; }
+  .mwo-panel--wo { border-color: #cbd5e1 !important; }
+  .mwo-panel--actions {
+    background: linear-gradient(180deg, #fafafa 0%, #fff 100%);
+    border-color: #e2e8f0 !important;
+  }
+  .mwo-metric-row { background: #f8fafc; font-size: .875rem; }
+  .mwo-tiny-table { font-size: .875rem; line-height: 1.45; }
   .mwo-tiny-table td, .mwo-tiny-table th { vertical-align: middle; }
-  .mwo-action-row .btn { line-height: 1.2; }
-  .mwo-summary-compact { border-radius: 8px !important; }
-  .mwo-linked .card-header { padding: .4rem .75rem; font-size: .9rem; }
-  .mwo-linked .table { font-size: .8125rem; }
-  .mwo-linked .table th, .mwo-linked .table td { padding: .35rem .5rem; }
+  .mwo-bad { font-size: .75rem; padding: .28em .55em; }
+  .mwo-linked { border-color: #e2e8f0 !important; border-radius: 10px !important; overflow: hidden; }
+  .mwo-linked__head {
+    background: linear-gradient(90deg, #fffbeb 0%, #fff 100%);
+    border-bottom: 2px solid #fcd34d !important;
+    color: #78350f;
+    font-size: .9375rem;
+    padding: .5rem 1rem !important;
+  }
+  .mwo-linked .table { font-size: .875rem; }
+  .mwo-linked .table th, .mwo-linked .table td { padding: .45rem .65rem; }
+  @media (min-width: 1200px) {
+    .mwo-slab__row { min-height: 12rem; }
+  }
 </style>
-<div class="container-fluid py-2 mwo-page">
+<div class="container-fluid py-2 px-0 mwo-page">
   <div class="mwo-hero d-flex flex-wrap justify-content-between align-items-center gap-2">
     <div class="d-flex align-items-center gap-2 min-w-0">
-      <i class="bi bi-clipboard2-data text-warning" style="font-size:1.35rem"></i>
+      <i class="bi bi-clipboard2-data text-warning" style="font-size:1.4rem"></i>
       <div class="min-w-0">
-        <div class="fw-bold text-truncate" style="font-size:1rem; line-height:1.2">{{ rec.work_order_no }}</div>
-        <small class="text-muted text-truncate d-block" style="max-width: 70vw;">{{ rec.title or '—' }}</small>
+        <div class="fw-bold text-truncate" style="font-size:1.05rem; line-height:1.25">{{ rec.work_order_no }}</div>
+        <div class="text-muted text-truncate small" style="font-size:.875rem">{{ rec.title or '—' }}</div>
       </div>
     </div>
     <div class="d-flex flex-wrap align-items-center gap-1">
-      <a href="{{ url_for('maintenance_work_order_invoices', pk=rec.id) }}{% if mwo_preserve_qs %}?{{ mwo_preserve_qs }}{% endif %}" class="btn btn-sm btn-info py-0 px-2" style="font-size:.8rem">Invoices</a>
-      <a href="{{ url_for('maintenance_work_order_unified_media', pk=rec.id) }}?return_to={{ request.full_path|url_quote }}" class="mwo-ico-btn mwo-ico-btn--print" title="All media" aria-label="All media">
-        <i class="bi bi-eye" style="font-size:1rem" aria-hidden="true"></i>
+      <a href="{{ url_for('maintenance_work_order_invoices', pk=rec.id) }}{% if mwo_preserve_qs %}?{{ mwo_preserve_qs }}{% endif %}" class="btn btn-sm btn-info">Invoices</a>
+      <a href="{{ url_for('maintenance_work_order_unified_media', pk=rec.id) }}?return_to={{ request.full_path|url_quote }}" class="mwo-ico-btn mwo-ico-btn--print" title="All media (full page)" aria-label="All media">
+        <i class="bi bi-eye" style="font-size:1.05rem" aria-hidden="true"></i>
       </a>
-      <a href="{{ url_for('maintenance_work_order_list') }}{% if mwo_preserve_qs %}?{{ mwo_preserve_qs }}{% endif %}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:.8rem">Back</a>
-      <a href="{{ url_for('maintenance_work_order_form', pk=rec.id) }}" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:.8rem">Edit</a>
-      <a href="{{ url_for('maintenance_expense_form', work_order_id=rec.id) }}" class="btn btn-success btn-sm py-0 px-2" style="font-size:.8rem"><i class="bi bi-plus-lg me-1"></i>Bill</a>
+      <a href="{{ url_for('maintenance_work_order_list') }}{% if mwo_preserve_qs %}?{{ mwo_preserve_qs }}{% endif %}" class="btn btn-outline-secondary btn-sm">Back</a>
+      <a href="{{ url_for('maintenance_work_order_form', pk=rec.id) }}" class="btn btn-outline-primary btn-sm">Edit</a>
+      <a href="{{ url_for('maintenance_expense_form', work_order_id=rec.id) }}" class="btn btn-success btn-sm"><i class="bi bi-plus-lg me-1"></i>Bill</a>
     </div>
   </div>
 
@@ -52,9 +79,9 @@
   {% endwith %}
 
   {% if rec.upload_status == 'processing' %}
-  <div id="woDetailUploadBar" class="alert alert-info d-flex align-items-center gap-2 mb-2 py-1 px-2 small">
-    <span class="spinner-border spinner-border-sm flex-shrink-0" style="width:1rem;height:1rem"></span>
-    <span>Upload <strong id="woDetailUploadPct">{{ ((rec.upload_done or 0) / (rec.upload_total or 1) * 100)|int }}%</strong> <span id="woDetailUploadCount">({{ rec.upload_done or 0 }}/{{ rec.upload_total or 0 }})</span></span>
+  <div id="woDetailUploadBar" class="alert alert-info d-flex align-items-center gap-2 mb-2 py-2 px-3">
+    <span class="spinner-border spinner-border-sm flex-shrink-0"></span>
+    <span class="small" style="font-size:.875rem">Upload <strong id="woDetailUploadPct">{{ ((rec.upload_done or 0) / (rec.upload_total or 1) * 100)|int }}%</strong> <span id="woDetailUploadCount">({{ rec.upload_done or 0 }}/{{ rec.upload_total or 0 }})</span></span>
   </div>
   <script>
   (function() {
@@ -70,7 +97,7 @@
           if (pctEl) pctEl.textContent = d.pct + '%';
           if (cntEl) cntEl.textContent = '(' + d.done + '/' + d.total + ')';
           if (d.status === 'processing') { setTimeout(poll, 2500); }
-          else if (barEl) { barEl.innerHTML = '<span class="text-success fw-semibold">Upload complete — reload for media.</span>'; }
+          else if (barEl) { barEl.innerHTML = '<span class="text-success fw-semibold small">Upload complete — reload for media.</span>'; }
         })
         .catch(function(){setTimeout(poll,5000);});
     }
@@ -78,32 +105,33 @@
   })();
   </script>
   {% elif rec.upload_status in ('error', 'partial') %}
-  <div class="alert alert-warning small mb-2 py-1">Kuch files upload nahi ho sakein — edit se dobara try karein.</div>
+  <div class="alert alert-warning mb-2 py-2 small">Kuch files upload nahi ho sakein — edit se dobara try karein.</div>
   {% endif %}
 
-  <div class="card mwo-linked border shadow-sm" id="linked-bills">
-    <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-1">
-      <span>Linked bills <span class="text-muted fw-normal small">({{ rec.work_order_no }})</span></span>
+  <div class="card mwo-linked border shadow-sm mt-2" id="linked-bills">
+    <div class="card-header fw-semibold mwo-linked__head border-0 rounded-0">
+      <i class="bi bi-list-ul me-1"></i>Linked bills
+      <span class="text-muted fw-normal small ms-1">({{ rec.work_order_no }})</span>
     </div>
     <div class="table-responsive">
       <table class="table table-sm table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
-            <th class="ps-2">#</th>
+            <th class="ps-3">#</th>
             <th>Bill No</th>
             <th>Date</th>
             <th>Party</th>
             <th>Pay</th>
             <th>Category</th>
             <th class="text-end">Amt</th>
-            <th class="text-center">M</th>
-            <th class="text-center pe-2">Act</th>
+            <th class="text-center">Media</th>
+            <th class="text-center pe-3">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for r in expenses %}
           <tr>
-            <td class="ps-2">{{ loop.index }}</td>
+            <td class="ps-3">{{ loop.index }}</td>
             <td class="fw-semibold">MAINT-{{ r.id }}</td>
             <td>{{ r.expense_date|ddmmyyyy if r.expense_date else '—' }}</td>
             <td>{{ r.workspace_party.name if r.workspace_party else '—' }}</td>
@@ -111,10 +139,10 @@
             <td>{{ r.job_category or '—' }}</td>
             <td class="text-end">{{ "%.2f"|format((r.total_bill_amount or 0)|float) }}</td>
             <td class="text-center">{{ r.attachments.count() }}</td>
-            <td class="text-center pe-2 text-nowrap">
-              <a href="{{ url_for('maintenance_expense_view', pk=r.id) }}?return_to={{ request.full_path|url_quote }}" class="btn btn-outline-secondary py-0 px-1" style="font-size:.75rem" title="Detail"><i class="bi bi-file-text"></i></a>
-              <a href="{{ url_for('maintenance_expense_media', pk=r.id) }}?return_to={{ request.full_path|url_quote }}" class="btn btn-outline-success py-0 px-1" style="font-size:.75rem" title="Media"><i class="bi bi-images"></i></a>
-              <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}" class="btn btn-outline-primary py-0 px-1" style="font-size:.75rem" title="Edit"><i class="bi bi-pencil"></i></a>
+            <td class="text-center pe-3 text-nowrap">
+              <a href="{{ url_for('maintenance_expense_view', pk=r.id) }}?return_to={{ request.full_path|url_quote }}" class="btn btn-outline-secondary btn-sm py-0" title="Detail"><i class="bi bi-file-text"></i></a>
+              <a href="{{ url_for('maintenance_expense_media', pk=r.id) }}?return_to={{ request.full_path|url_quote }}" class="btn btn-outline-success btn-sm py-0" title="Media"><i class="bi bi-images"></i></a>
+              <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}" class="btn btn-outline-primary btn-sm py-0" title="Edit"><i class="bi bi-pencil"></i></a>
             </td>
           </tr>
           {% else %}
