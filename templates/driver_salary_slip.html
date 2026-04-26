@@ -20,7 +20,7 @@
           <form method="get" action="{{ url_for('driver_salary_slip') }}" class="row g-2" id="slipFilterForm">
             <div class="col-12">
               <label class="form-label small mb-0">1. District <span class="text-danger">*</span></label>
-              <select name="district_id" id="ssDistrict" class="form-select form-select-sm" {% if disable_district %}disabled{% endif %}>
+              <select name="district_id" id="ssDistrict" class="form-select form-select-sm{% if not disable_district %} search-select{% endif %}" data-placeholder="Search district…" {% if disable_district %}disabled{% endif %}>
                 {% for val, label in district_choices %}
                 <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
@@ -29,7 +29,7 @@
             </div>
             <div class="col-12">
               <label class="form-label small mb-0">2. Project <span class="text-danger">*</span></label>
-              <select name="project_id" id="ssProject" class="form-select form-select-sm" {% if disable_project %}disabled{% endif %}>
+              <select name="project_id" id="ssProject" class="form-select form-select-sm{% if not disable_project %} search-select{% endif %}" data-placeholder="Search project…" {% if disable_project %}disabled{% endif %}>
                 {% for val, label in project_choices %}
                 <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
@@ -38,7 +38,7 @@
             </div>
             <div class="col-12">
               <label class="form-label small mb-0">3. Vehicle <span class="text-danger">*</span></label>
-              <select name="vehicle_id" id="ssVehicle" class="form-select form-select-sm" {% if disable_vehicle %}disabled{% endif %}>
+              <select name="vehicle_id" id="ssVehicle" class="form-select form-select-sm{% if not disable_vehicle %} search-select{% endif %}" data-placeholder="Search vehicle…" {% if disable_vehicle %}disabled{% endif %}>
                 {% for val, label in vehicle_choices %}
                 <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
@@ -47,7 +47,7 @@
             </div>
             <div class="col-12">
               <label class="form-label small mb-0">4. Driver <span class="text-danger">*</span></label>
-              <select name="driver_id" id="ssDriver" class="form-select form-select-sm">
+              <select name="driver_id" id="ssDriver" class="form-select form-select-sm search-select" data-placeholder="Search driver…">
                 <option value="0">— Select driver —</option>
                 {% for did, dlabel in driver_choices %}
                 <option value="{{ did }}" {% if selected_driver_id == did %}selected{% endif %}>{{ dlabel }}</option>
@@ -99,16 +99,16 @@
             <input type="text" class="form-control form-control-sm" id="inAllow" placeholder="0" inputmode="decimal">
           </div>
           <div class="col-6">
-            <label class="form-label small mb-0">Gross salary</label>
-            <input type="text" class="form-control form-control-sm" id="inGross" placeholder="0" inputmode="decimal">
+            <label class="form-label small mb-0">Gross salary <span class="text-muted">(auto)</span></label>
+            <input type="text" class="form-control form-control-sm bg-light" id="inGross" placeholder="0" inputmode="decimal" readonly aria-readonly="true" tabindex="-1" title="Basic + Allowances">
           </div>
           <div class="col-6">
             <label class="form-label small mb-0">Deductions</label>
             <input type="text" class="form-control form-control-sm" id="inDed" placeholder="0" inputmode="decimal">
           </div>
           <div class="col-12">
-            <label class="form-label small mb-0">Net salary (payable)</label>
-            <input type="text" class="form-control form-control-sm fw-semibold" id="inNet" placeholder="0" inputmode="decimal">
+            <label class="form-label small mb-0">Net salary (payable) <span class="text-muted">(auto)</span></label>
+            <input type="text" class="form-control form-control-sm fw-semibold bg-light" id="inNet" placeholder="0" inputmode="decimal" readonly aria-readonly="true" tabindex="-1" title="Gross − Deductions">
           </div>
         </div>
       </div>
@@ -270,8 +270,57 @@
 
   var locked = { district: dEl.disabled, project: pEl.disabled, vehicle: vEl.disabled };
 
+  function reinitDropdown(el) {
+    if (!el) return;
+    if (el.tomselect) el.tomselect.destroy();
+    if (typeof window.initSearchableDropdowns === 'function') {
+      window.initSearchableDropdowns(el.parentNode || document);
+    }
+  }
+
+  function getSelVal(el) {
+    if (!el) return '0';
+    if (el.tomselect) {
+      var v = el.tomselect.getValue();
+      return (v == null || v === '') ? '0' : String(v);
+    }
+    return el.value || '0';
+  }
+
+  function parseMoneyInput(raw) {
+    if (raw == null) return 0;
+    var s = String(raw).replace(/[,\s]/g, '');
+    if (s === '' || s === '.' || s === '-' || s === '-.') return 0;
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function formatMoney(n) {
+    if (!isFinite(n)) return '0';
+    var r = Math.round(n * 100) / 100;
+    if (r % 1 === 0) return String(r);
+    return String(r);
+  }
+
+  function recalcSalaryFromInputs() {
+    var b = document.getElementById('inBasic');
+    var a = document.getElementById('inAllow');
+    var d = document.getElementById('inDed');
+    var g = document.getElementById('inGross');
+    var n = document.getElementById('inNet');
+    if (!b || !a || !d || !g || !n) { syncManualToSlip(); return; }
+    var gross = parseMoneyInput(b.value) + parseMoneyInput(a.value);
+    var net = gross - parseMoneyInput(d.value);
+    g.value = formatMoney(gross);
+    n.value = formatMoney(net);
+    syncManualToSlip();
+  }
+
   function loadProjects(did) {
     if (locked.district) return;
+    if (pEl.tomselect) pEl.tomselect.destroy();
+    if (vEl.tomselect) vEl.tomselect.destroy();
+    if (rEl.tomselect) rEl.tomselect.destroy();
     if (!did || did === '0') {
       pEl.innerHTML = '<option value="0">— Select district first —</option>';
       vEl.innerHTML = '<option value="0">— Select district &amp; project first —</option>';
@@ -279,6 +328,9 @@
       pEl.value = '0';
       vEl.value = '0';
       rEl.value = '0';
+      reinitDropdown(pEl);
+      reinitDropdown(vEl);
+      reinitDropdown(rEl);
       setDashAuto();
       syncManualToSlip();
       return;
@@ -302,6 +354,9 @@
         rEl.innerHTML = '<option value="0">— Select driver —</option>';
         vEl.value = '0';
         rEl.value = '0';
+        reinitDropdown(pEl);
+        reinitDropdown(vEl);
+        reinitDropdown(rEl);
         setDashAuto();
         syncManualToSlip();
       });
@@ -309,16 +364,20 @@
 
   function loadVehicles() {
     if (locked.vehicle) return;
-    var pid = pEl.value || '0';
-    var did = dEl.value || '0';
+    var pid = getSelVal(pEl);
+    var did = getSelVal(dEl);
+    var keepVid = getSelVal(vEl);
+    if (vEl.tomselect) vEl.tomselect.destroy();
+    if (rEl.tomselect) rEl.tomselect.destroy();
     if (!pid || pid === '0' || !did || did === '0') {
       vEl.innerHTML = '<option value="0">— Select district &amp; project first —</option>';
       rEl.innerHTML = '<option value="0">— Select driver —</option>';
       vEl.value = '0';
       rEl.value = '0';
+      reinitDropdown(vEl);
+      reinitDropdown(rEl);
       return;
     }
-    var keepVid = vEl.value;
     fetch('/api/filter/all-vehicles-by-project-district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
       .then(function(x) { return x.json(); })
       .then(function(arr) {
@@ -335,11 +394,15 @@
         });
         if (keepVid && keepVid !== '0' && vEl.querySelector('option[value="' + keepVid + '"]')) {
           vEl.value = keepVid;
+          reinitDropdown(vEl);
+          reinitDropdown(rEl);
           loadDrivers();
         } else {
           vEl.value = '0';
           rEl.innerHTML = '<option value="0">— Select driver —</option>';
           rEl.value = '0';
+          reinitDropdown(vEl);
+          reinitDropdown(rEl);
           setDashAuto();
           syncManualToSlip();
         }
@@ -347,13 +410,15 @@
   }
 
   function loadDrivers() {
-    var vid = vEl.value || '0';
+    var vid = getSelVal(vEl);
+    var keepRid = getSelVal(rEl);
+    if (rEl.tomselect) rEl.tomselect.destroy();
     if (!vid || vid === '0') {
       rEl.innerHTML = '<option value="0">— Select driver —</option>';
       rEl.value = '0';
+      reinitDropdown(rEl);
       return;
     }
-    var keepRid = rEl.value;
     fetch('/api/salary-slip/drivers-for-vehicle?vehicle_id=' + encodeURIComponent(vid))
       .then(function(x) { return x.json(); })
       .then(function(arr) {
@@ -373,6 +438,7 @@
         } else {
           rEl.value = '0';
         }
+        reinitDropdown(rEl);
         if (rEl.value && rEl.value !== '0') {
           loadDriverData(rEl.value);
         } else {
@@ -383,7 +449,7 @@
   }
 
   if (!locked.district) {
-    dEl.addEventListener('change', function() { loadProjects(this.value); });
+    dEl.addEventListener('change', function() { loadProjects(getSelVal(dEl)); });
   }
   if (!locked.project) {
     pEl.addEventListener('change', function() { loadVehicles(); });
@@ -392,9 +458,9 @@
     vEl.addEventListener('change', function() { loadDrivers(); });
   }
 
-  rEl.addEventListener('change', function() { loadDriverData(this.value); });
+  rEl.addEventListener('change', function() { loadDriverData(getSelVal(rEl)); });
 
-  function currentDriverId() { return String(rEl.value || '0'); }
+  function currentDriverId() { return String(getSelVal(rEl)); }
 
   function txt(el, v) { if (el) el.textContent = (v == null || v === '') ? '—' : String(v); }
 
@@ -468,10 +534,15 @@
     txt(document.getElementById('slCertDate'), cd || '—');
   }
 
-  ['inSalaryMonth','inCertDate','inPeriodFrom','inPeriodTo','inBasic','inAllow','inGross','inDed','inNet'].forEach(function(id) {
+  ['inSalaryMonth','inCertDate','inPeriodFrom','inPeriodTo'].forEach(function(id) {
     var e = document.getElementById(id);
     if (e) e.addEventListener('input', syncManualToSlip);
     if (e) e.addEventListener('change', syncManualToSlip);
+  });
+  ['inBasic','inAllow','inDed'].forEach(function(id) {
+    var e = document.getElementById(id);
+    if (e) e.addEventListener('input', recalcSalaryFromInputs);
+    if (e) e.addEventListener('change', recalcSalaryFromInputs);
   });
 
   var _bp = document.getElementById('btnPrintSlip');
@@ -483,9 +554,17 @@
     else { setDashAuto(); syncManualToSlip(); }
   }
 
-  syncManualToSlip();
+  recalcSalaryFromInputs();
   setTimeout(bootDriverPreview, 0);
   setTimeout(bootDriverPreview, 200);
+  setTimeout(function() {
+    if (typeof window.initSearchableDropdowns === 'function') {
+      reinitDropdown(dEl);
+      reinitDropdown(pEl);
+      reinitDropdown(vEl);
+      reinitDropdown(rEl);
+    }
+  }, 50);
 })();
 </script>
 {% endblock %}
