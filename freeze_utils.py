@@ -57,6 +57,9 @@ DATE_FIELD_PRIORITY = (
     'to_date',
     'start_date',
     'end_date',
+    'opened_on',
+    'closed_on',
+    'close_date',
 )
 
 
@@ -133,6 +136,8 @@ FREEZE_FORM_CATALOG = [
     ('Expenses - Maintenance Add', 'maintenance_expense_form:add'),
     ('Expenses - Maintenance Edit', 'maintenance_expense_form:edit'),
     ('Expenses - Maintenance Delete', 'maintenance_expense_delete'),
+    ('Expenses - Maintenance Work Order Add', 'maintenance_work_order_form:add'),
+    ('Expenses - Maintenance Work Order Edit', 'maintenance_work_order_form:edit'),
     ('Books - Stock Entry', 'book_stock_entry'),
     ('Books - Stock Edit', 'book_stock_edit'),
     ('Books - Book Issue', 'book_issue'),
@@ -161,6 +166,9 @@ FREEZE_ENDPOINT_ALIASES = {
     'maintenance_expense_new': 'maintenance_expense_form:add',
     'maintenance_expense_edit': 'maintenance_expense_form:edit',
     'maintenance_expense_form': ('maintenance_expense_form:add', 'maintenance_expense_form:edit'),
+    'maintenance_work_order_new': 'maintenance_work_order_form:add',
+    'maintenance_work_order_edit': 'maintenance_work_order_form:edit',
+    'maintenance_work_order_form': ('maintenance_work_order_form:add', 'maintenance_work_order_form:edit'),
 }
 
 
@@ -255,6 +263,9 @@ def get_freeze_request_codes(req: Request, endpoint: str) -> list:
     elif endpoint == 'maintenance_expense_form':
         op = 'edit' if view_args.get('pk') else 'add'
         codes.append(f'maintenance_expense_form:{op}')
+    elif endpoint == 'maintenance_work_order_form':
+        op = 'edit' if view_args.get('pk') else 'add'
+        codes.append(f'maintenance_work_order_form:{op}')
     codes.append(endpoint)
     return codes
 
