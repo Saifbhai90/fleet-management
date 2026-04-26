@@ -207,7 +207,7 @@
                   <button type="button" class="btn btn-outline-success btn-sm expense-view-eye" title="Invoice / Media" aria-expanded="false" aria-haspopup="true">
                     <i class="bi bi-eye"></i>
                   </button>
-                  <div class="expense-view-popover d-none border rounded-2 bg-white shadow p-2" style="z-index: 2000; min-width: 7.25rem;">
+                  <div class="expense-view-popover d-none border rounded-2 bg-white shadow p-2" style="min-width: 7.25rem;">
                     <a class="btn btn-primary btn-sm w-100 mb-1 py-1" href="{{ url_for('fuel_expense_view', pk=r.id) }}" target="_blank" rel="noopener">Invoice</a>
                     <a class="btn btn-outline-success btn-sm w-100 py-1" href="{{ url_for('fuel_expense_media', pk=r.id) }}" target="_blank" rel="noopener">Media</a>
                   </div>
@@ -281,6 +281,11 @@
       p.classList.remove('position-fixed');
       p.style.left = '';
       p.style.top = '';
+      p.style.zIndex = '';
+      if (p._expenseViewWrap && p.parentNode === document.body) {
+        p._expenseViewWrap.appendChild(p);
+      }
+      p._expenseViewWrap = null;
     });
     document.querySelectorAll('.expense-view-eye').forEach(function(b) {
       b.setAttribute('aria-expanded', 'false');
@@ -289,14 +294,22 @@
   function positionPop(eye, pop) {
     if (!eye || !pop) return;
     var r = eye.getBoundingClientRect();
-    var pw = 130;
-    var ph = 76;
-    var left = r.right - pw;
-    if (left < 8) left = 8;
-    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+    var pr = pop.getBoundingClientRect();
+    var w = Math.max(pr.width, pop.offsetWidth, 1);
+    var h = Math.max(pr.height, pop.offsetHeight, 1);
+    var sb = document.querySelector('.sidebar');
+    var minLeft = 8;
+    if (sb) {
+      var sr = sb.getBoundingClientRect();
+      if (sr.width > 0) minLeft = Math.max(minLeft, sr.right + 4);
+    }
+    var left = r.left;
+    if (left < minLeft) left = minLeft;
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+    if (left < minLeft) left = minLeft;
     var top = r.bottom + 6;
-    if (top + ph > window.innerHeight - 8) {
-      top = r.top - ph - 6;
+    if (top + h > window.innerHeight - 8) {
+      top = r.top - h - 6;
     }
     if (top < 8) top = 8;
     pop.style.left = left + 'px';
@@ -312,20 +325,25 @@
       e.preventDefault();
       e.stopPropagation();
       var wrap = eye.closest('.expense-view-wrap');
-      var pop = wrap && wrap.querySelector('.expense-view-popover');
+      var pop = (wrap && (wrap._expenseViewPop || (wrap._expenseViewPop = wrap.querySelector('.expense-view-popover')))) || null;
       if (!pop) return;
       var wasOpen = !pop.classList.contains('d-none');
       closeAll();
       if (wasOpen) return;
+      document.body.appendChild(pop);
+      pop._expenseViewWrap = wrap;
       pop.classList.remove('d-none');
       pop.classList.add('position-fixed');
-      positionPop(eye, pop);
+      pop.style.zIndex = '10050';
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() { positionPop(eye, pop); });
+      });
       eye.setAttribute('aria-expanded', 'true');
     });
   });
   wirePopoverLinks();
   document.addEventListener('click', function(e) {
-    if (e.target && e.target.closest && e.target.closest('.expense-view-wrap')) return;
+    if (e.target && e.target.closest && (e.target.closest('.expense-view-wrap') || e.target.closest('.expense-view-popover'))) return;
     closeAll();
   });
   document.addEventListener('keydown', function(e) {
