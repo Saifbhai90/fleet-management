@@ -3248,10 +3248,14 @@
         function _cleanTable(tbl) {
             var clone = tbl.cloneNode(true);
             clone.querySelectorAll('.ft-filter-wrap').forEach(function(el){ el.remove(); });
+            clone.querySelectorAll('thead tr.mwo-search-row').forEach(function(el){ el.remove(); });
             clone.querySelectorAll('tbody tr').forEach(function(r){ if(r.style.display==='none') r.remove(); });
             clone.querySelectorAll('.btn, button, a.btn').forEach(function(el){ el.closest('td') && el.closest('td').remove(); });
             var ths = clone.querySelectorAll('thead th');
-            ths.forEach(function(th){ if(th.textContent.trim()==='Edit' || th.textContent.trim()==='Actions') th.remove(); });
+            ths.forEach(function(th){
+                var t = th.textContent.trim();
+                if (t === 'Edit' || t === 'Actions' || t === 'Action') th.remove();
+            });
             return clone;
         }
 

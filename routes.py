@@ -23468,8 +23468,9 @@ def maintenance_work_order_list():
     if from_d > to_d:
         from_d, to_d = to_d, from_d
     status = (request.args.get('status') or '').strip().lower()
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
-    q_txt = (request.args.get('q') or '').strip()
 
     query = MaintenanceWorkOrder.query.filter(
         MaintenanceWorkOrder.opened_on >= from_d,
@@ -23491,17 +23492,12 @@ def maintenance_work_order_list():
             query = query.filter(MaintenanceWorkOrder.vehicle_id.in_(list(allowed_vehicles)))
     if status in ('open', 'in_progress', 'closed'):
         query = query.filter(MaintenanceWorkOrder.status == status)
+    if district_id:
+        query = query.filter(MaintenanceWorkOrder.district_id == district_id)
+    if project_id:
+        query = query.filter(MaintenanceWorkOrder.project_id == project_id)
     if vehicle_id:
         query = query.filter(MaintenanceWorkOrder.vehicle_id == vehicle_id)
-    if q_txt:
-        q_like = f"%{q_txt}%"
-        query = query.filter(
-            db.or_(
-                MaintenanceWorkOrder.work_order_no.ilike(q_like),
-                MaintenanceWorkOrder.title.ilike(q_like),
-                MaintenanceWorkOrder.work_type.ilike(q_like),
-            )
-        )
 
     work_orders = query.order_by(MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()).all()
     rows = []
@@ -23516,19 +23512,120 @@ def maintenance_work_order_list():
             'media_count': media_count,
         })
 
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
     vehicle_q = Vehicle.query
     if not is_master_or_admin and allowed_vehicles:
         vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-    vehicles = vehicle_q.order_by(Vehicle.vehicle_no.asc()).all()
+    d_list = district_q.order_by(District.name).all()
+    p_list = project_q.order_by(Project.name).all()
+    v_list = vehicle_q.order_by(Vehicle.vehicle_no).all()
+    district_choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in d_list]
+    project_choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in p_list]
+    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in v_list]
     return render_template(
         'maintenance_work_order_list.html',
         rows=rows,
-        vehicles=vehicles,
         from_date=from_d,
         to_date=to_d,
         selected_status=status,
+        selected_district_id=district_id,
+        selected_project_id=project_id,
         selected_vehicle_id=vehicle_id,
-        q_txt=q_txt,
+        district_choices=district_choices,
+        project_choices=project_choices,
+        vehicle_choices=vehicle_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
+    )
+
+
+@app.route('/maintenance-work-orders/export')
+def maintenance_work_order_export():
+    _ensure_maintenance_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    today = pk_date()
+    from_d = parse_date(request.args.get('from_date', '').strip()) or today
+    to_d = parse_date(request.args.get('to_date', '').strip()) or today
+    if from_d > to_d:
+        from_d, to_d = to_d, from_d
+    status = (request.args.get('status') or '').strip().lower()
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+
+    query = MaintenanceWorkOrder.query.filter(
+        MaintenanceWorkOrder.opened_on >= from_d,
+        MaintenanceWorkOrder.opened_on <= to_d,
+    )
+    if workspace_employee_id:
+        query = query.filter(
+            db.or_(
+                MaintenanceWorkOrder.employee_id == workspace_employee_id,
+                MaintenanceWorkOrder.employee_id.is_(None),
+            )
+        )
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(MaintenanceWorkOrder.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(MaintenanceWorkOrder.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(MaintenanceWorkOrder.vehicle_id.in_(list(allowed_vehicles)))
+    if status in ('open', 'in_progress', 'closed'):
+        query = query.filter(MaintenanceWorkOrder.status == status)
+    if district_id:
+        query = query.filter(MaintenanceWorkOrder.district_id == district_id)
+    if project_id:
+        query = query.filter(MaintenanceWorkOrder.project_id == project_id)
+    if vehicle_id:
+        query = query.filter(MaintenanceWorkOrder.vehicle_id == vehicle_id)
+
+    work_orders = query.order_by(MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()).all()
+
+    status_label = {'open': 'Open', 'in_progress': 'In Progress', 'closed': 'Closed'}
+    headers = [
+        'Sr', 'Work Order', 'Open Date', 'District', 'Project', 'Vehicle', 'Title', 'Status',
+        'Bills', 'Total Cost',
+    ]
+    data_rows = []
+    for i, wo in enumerate(work_orders, 1):
+        expenses = wo.expenses.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
+        total_amount = sum(float(e.total_bill_amount or 0) for e in expenses)
+        st = (wo.status or '').lower()
+        data_rows.append([
+            i,
+            wo.work_order_no or '',
+            wo.opened_on.strftime('%d-%m-%Y') if wo.opened_on else '',
+            wo.district.name if wo.district else '-',
+            wo.project.name if wo.project else '-',
+            wo.vehicle.vehicle_no if wo.vehicle else '-',
+            (wo.title or '').replace('\n', ' ').strip(),
+            status_label.get(st, st or '-'),
+            len(expenses),
+            round(total_amount, 2),
+        ])
+
+    return generate_excel_template(
+        headers,
+        data_rows,
+        required_columns=[],
+        filename=f'maintenance_work_orders_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx',
     )
 
 
