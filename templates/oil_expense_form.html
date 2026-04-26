@@ -44,6 +44,10 @@
   .oil-form-wrap .compact-field .form-select { min-height: 36px; padding-top: 0.4rem; padding-bottom: 0.4rem; }
   .oil-form-wrap .action-bar { padding: 0.78rem 1rem; background: #f8fafc; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 0.5rem; }
   .oil-form-wrap .btn { font-size: 0.92rem; }
+  .oil-form-wrap .oil-price-inline-note { font-size: .7rem; font-weight: 500; line-height: 1.2; }
+  .oil-form-wrap .oil-last-price-badge { color: #dc2626; font-weight: 700; }
+  .oil-form-wrap .balance-qty--bad { color: #dc2626 !important; font-weight: 700; }
+  .oil-form-wrap .balance-qty-input--bad { color: #dc2626; font-weight: 700; border-color: #f87171 !important; }
 </style>
 <div class="container-fluid oil-form-wrap py-2">
   <div class="page-header d-flex justify-content-between align-items-center">
@@ -129,7 +133,7 @@
     <div class="form-section">
       <div class="form-section-header">Product Lines</div>
       <div class="form-section-body">
-        <p class="small text-muted mb-2">Search product → Purchase Qty → Used Qty → Price (Amount auto). Balance = Purchase − Used. Press <kbd>Enter</kbd> to add line to list below.</p>
+        <p class="small text-muted mb-2">Search product → Purchase Qty → Used Qty → Price. Amount = Purchase × Price (aap Amount edit karke Price adjust kar saktay hain). Balance = Purchase − Used (agar used zyada ho to <span class="text-danger">red</span> + alert). Press <kbd>Enter</kbd> to add line to list below.</p>
         <div class="row g-2 align-items-end mb-3 border rounded p-2 bg-light" id="entryRow">
           <div class="col-md-3">
             <label class="form-label mb-0">Product</label>
@@ -218,9 +222,9 @@
                 </td>
                 <td><input type="number" name="purchase_qty" class="form-control form-control-sm item-purchase-qty" step="0.01" min="0" value="{{ it.purchase_qty or 0 }}" placeholder="0"></td>
                 <td><input type="number" name="used_qty" class="form-control form-control-sm item-used-qty" step="0.01" min="0" value="{{ it.used_qty or 0 }}" placeholder="0"></td>
-                <td><input type="number" name="price" class="form-control form-control-sm item-price" step="0.01" min="0" value="{{ it.price }}" placeholder="0"></td>
-                <td><input type="text" class="form-control form-control-sm bg-light item-amount" readonly placeholder="0"></td>
-                <td><span class="balance-qty text-muted small">—</span></td>
+                <td><input type="text" name="price" class="form-control form-control-sm item-price" inputmode="decimal" value="{{ '%.2f'|format((it.price or 0)|float) }}" placeholder="0.00" autocomplete="off"></td>
+                <td><input type="text" name="line_amount" class="form-control form-control-sm item-amount" inputmode="decimal" value="{{ '%.2f'|format((it.amount or 0)|float) }}" placeholder="0.00" autocomplete="off"></td>
+                <td><input type="text" class="form-control form-control-sm bg-light item-balance-qty" readonly value="{{ '%.2f'|format(((it.purchase_qty or 0)|float) - ((it.used_qty or 0)|float)) }}" autocomplete="off"></td>
                 <td><button type="button" class="btn btn-outline-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>
               </tr>
               {% endfor %}
@@ -376,6 +380,56 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var productsForOil = [{% for p in products_for_oil %}{id:{{ p.id }},name:{{ p.name | tojson }},default_price:{% if p.default_price is not none %}{{ (p.default_price|float) }}{% else %}null{% endif %}}{% if not loop.last %},{% endif %}{% endfor %}];
 
+  function parseNum(v) {
+    if (v == null) return 0;
+    var s = String(v).replace(/,/g, '').trim();
+    if (!s) return 0;
+    var n = Number(s);
+    return isFinite(n) ? n : 0;
+  }
+  function fmt2(v) {
+    var n = Number(v);
+    if (!isFinite(n)) n = 0;
+    return n.toFixed(2);
+  }
+  var _oilBalanceAlertAt = 0;
+  function _oilAlertBalance(msg) {
+    var now = Date.now();
+    if (now - _oilBalanceAlertAt < 4000) return;
+    _oilBalanceAlertAt = now;
+    alert(msg);
+  }
+  function _styleEntryBalance() {
+    if (!entryBalanceQty) return;
+    var p = parseNum(entryPurchaseQty && entryPurchaseQty.value);
+    var u = parseNum(entryUsedQty && entryUsedQty.value);
+    entryBalanceQty.classList.remove('balance-qty-input--bad', 'text-danger', 'text-muted');
+    if (u > p + 0.0001) {
+      entryBalanceQty.classList.add('balance-qty-input--bad');
+      _oilAlertBalance('Used Qty purchase qty se zyada hai (negative balance). Save block nahi — values check karein.');
+    }
+  }
+  function _styleRowBalance(tr) {
+    if (!tr) return;
+    var pInput = tr.querySelector('.item-purchase-qty');
+    var uInput = tr.querySelector('.item-used-qty');
+    var balInput = tr.querySelector('.item-balance-qty');
+    if (!balInput) return;
+    var p = parseNum(pInput && pInput.value);
+    var u = parseNum(uInput && uInput.value);
+    var bad = u > p + 0.0001;
+    balInput.classList.remove('balance-qty-input--bad');
+    if (bad) {
+      balInput.classList.add('balance-qty-input--bad');
+      if (!tr.dataset.balanceWarned) {
+        tr.dataset.balanceWarned = '1';
+        _oilAlertBalance('Is line par used qty purchase se zyada hai. Save block nahi — record check karein.');
+      }
+    } else {
+      tr.dataset.balanceWarned = '';
+    }
+  }
+
   function _populateOilProducts(arr) {
     productsForOil = arr;
     var sel = entryProductSelect;
@@ -391,7 +445,19 @@ document.addEventListener('DOMContentLoaded', function() {
     initSearchableDropdowns(sel.parentNode);
     if (sel.tomselect) {
       sel.tomselect.on('change', function() {
+        if (entryDefaultPriceHint) {
+          entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="oil-last-price-badge">Last: 0.00</span>';
+        }
         updateDefaultPriceHint();
+        fetchOilPriceHistory(false);
+      });
+    } else {
+      sel.addEventListener('change', function() {
+        if (entryDefaultPriceHint) {
+          entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="oil-last-price-badge">Last: 0.00</span>';
+        }
+        updateDefaultPriceHint();
+        fetchOilPriceHistory(false);
       });
     }
     if (sel.tomselect && sel.tomselect.control_input) {
@@ -541,50 +607,109 @@ document.addEventListener('DOMContentLoaded', function() {
     expenseByBalanceHint.textContent = '(Bal: ' + bal + ')';
   }
 
-  function updateEntryAmountAndBalance() {
-    var purchase = parseFloat(entryPurchaseQty.value) || 0;
-    var used = parseFloat(entryUsedQty.value) || 0;
-    var price = parseFloat(entryPrice.value) || 0;
-    entryAmount.value = (purchase * price).toFixed(2);
-    entryBalanceQty.value = (purchase - used).toFixed(2);
+  function updateEntryAmountFromPurchasePrice() {
+    if (!entryAmount || !entryPrice || !entryPurchaseQty) return;
+    var purchase = parseNum(entryPurchaseQty.value);
+    var price = parseNum(entryPrice.value);
+    entryAmount.value = fmt2(purchase * price);
+    if (entryBalanceQty) entryBalanceQty.value = fmt2(purchase - parseNum(entryUsedQty && entryUsedQty.value));
+    _styleEntryBalance();
+  }
+  function updateEntryPriceFromAmountPurchase() {
+    if (!entryAmount || !entryPrice || !entryPurchaseQty) return;
+    var purchase = parseNum(entryPurchaseQty.value);
+    var amountVal = parseNum(entryAmount.value);
+    if (purchase > 0) {
+      entryPrice.value = fmt2(amountVal / purchase);
+    }
+    if (entryBalanceQty) entryBalanceQty.value = fmt2(purchase - parseNum(entryUsedQty && entryUsedQty.value));
+    _styleEntryBalance();
   }
   function updateDefaultPriceHint() {
     if (!entryDefaultPriceHint || !entryProductSelect) return;
     var pid = entryProductSelect.value;
     var p = productsForOil.find(function(x) { return String(x.id) === String(pid); });
     var dp = p && p.default_price != null ? parseFloat(p.default_price) : null;
-    if (dp != null && isFinite(dp)) {
-      entryDefaultPriceHint.textContent = '(Default: ' + dp.toFixed(2) + ')';
-    } else {
-      entryDefaultPriceHint.textContent = '';
-    }
+    var defaultHtml = (dp != null && isFinite(dp))
+      ? ('<span class="oil-last-price-badge">Default: ' + dp.toFixed(2) + '</span>')
+      : '<span class="oil-last-price-badge">Default: 0.00</span>';
+    var lastHtml = entryDefaultPriceHint.dataset.lastPriceLabel || '<span class="oil-last-price-badge">Last: 0.00</span>';
+    entryDefaultPriceHint.innerHTML = [defaultHtml, '<span class="text-muted">|</span>', lastHtml].join(' ');
   }
   function applyOilSuggestedPrice(data) {
     if (!entryPrice) return;
-    entryPrice.setAttribute('placeholder', '0');
+    entryPrice.setAttribute('placeholder', '0.00');
+    var lastFromHistory = '0.00';
+    if (data && data.same_party && data.same_party.length && data.same_party[0].price_label) {
+      lastFromHistory = data.same_party[0].price_label;
+    } else if (data && data.other_parties && data.other_parties.length && data.other_parties[0].price_label) {
+      lastFromHistory = data.other_parties[0].price_label;
+    }
+    if (!lastFromHistory || lastFromHistory === '-') lastFromHistory = '0.00';
+    if (entryDefaultPriceHint) {
+      entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="oil-last-price-badge">Last: ' + lastFromHistory + '</span>';
+    }
+    updateDefaultPriceHint();
     var suggested = (data && data.suggested_price != null) ? parseFloat(data.suggested_price) : null;
     if (suggested == null || !isFinite(suggested) || suggested <= 0) {
       if (entryPrice.dataset.autoSuggested === '1') {
-        entryPrice.value = '';
+        entryPrice.value = '0.00';
         entryPrice.dataset.autoSuggested = '0';
       }
-      updateEntryAmountAndBalance();
+      updateEntryAmountFromPurchasePrice();
       return;
     }
     entryPrice.setAttribute('placeholder', 'Suggested: ' + suggested.toFixed(2));
-    var entered = parseFloat(entryPrice.value || '');
-    if (!isFinite(entered) || entered <= 0 || entryPrice.dataset.autoSuggested === '1') {
+    var entered = parseNum(entryPrice.value);
+    if (entered <= 0 || entryPrice.dataset.autoSuggested === '1') {
       entryPrice.value = suggested.toFixed(2);
       entryPrice.dataset.autoSuggested = '1';
     }
-    updateEntryAmountAndBalance();
+    updateEntryAmountFromPurchasePrice();
   }
-  entryPurchaseQty.addEventListener('input', updateEntryAmountAndBalance);
-  entryUsedQty.addEventListener('input', updateEntryAmountAndBalance);
-  entryPrice.addEventListener('input', function() { entryPrice.dataset.autoSuggested = '0'; updateEntryAmountAndBalance(); });
-  if (entryProductSelect) entryProductSelect.addEventListener('change', function() { updateDefaultPriceHint(); fetchOilPriceHistory(false); });
-  entryPrice.addEventListener('focus', fetchOilPriceHistory);
-  entryPrice.addEventListener('blur', function() { window.setTimeout(hidePriceHistoryPanel, 120); });
+  if (entryPurchaseQty) {
+    entryPurchaseQty.addEventListener('input', function() {
+      updateEntryAmountFromPurchasePrice();
+    });
+  }
+  if (entryUsedQty) {
+    entryUsedQty.addEventListener('input', function() {
+      if (entryBalanceQty) {
+        var purchase = parseNum(entryPurchaseQty && entryPurchaseQty.value);
+        var used = parseNum(entryUsedQty.value);
+        entryBalanceQty.value = fmt2(purchase - used);
+      }
+      _styleEntryBalance();
+    });
+  }
+  if (entryPrice) {
+    entryPrice.addEventListener('input', function() {
+      entryPrice.dataset.autoSuggested = '0';
+      updateEntryAmountFromPurchasePrice();
+    });
+  }
+  if (entryAmount) {
+    entryAmount.addEventListener('input', function() { updateEntryPriceFromAmountPurchase(); });
+  }
+  if (entryPrice) {
+    entryPrice.addEventListener('focus', function() {
+      if (String(entryPrice.value || '').trim() === '0.00') entryPrice.value = '';
+      fetchOilPriceHistory(true);
+    });
+    entryPrice.addEventListener('blur', function() {
+      if (entryPrice) entryPrice.value = fmt2(parseNum(entryPrice.value));
+      window.setTimeout(hidePriceHistoryPanel, 120);
+    });
+  }
+  if (entryAmount) {
+    entryAmount.addEventListener('focus', function() {
+      if (String(entryAmount.value || '').trim() === '0.00') entryAmount.value = '';
+    });
+    entryAmount.addEventListener('blur', function() {
+      entryAmount.value = fmt2(parseNum(entryAmount.value));
+      updateEntryPriceFromAmountPurchase();
+    });
+  }
   if (entryUsedQty) {
     entryUsedQty.addEventListener('keydown', function(e) {
       if (e.key === 'Tab' && !e.shiftKey) window.setTimeout(fetchOilPriceHistory, 0);
@@ -669,14 +794,20 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function clearEntryRow() {
-    entryProductSelect.value = '';
+    if (entryProductSelect.tomselect) {
+      entryProductSelect.tomselect.setValue('', true);
+    } else {
+      entryProductSelect.value = '';
+    }
     entryPurchaseQty.value = '0';
     entryUsedQty.value = '0';
-    entryPrice.value = '';
+    entryPrice.value = '0.00';
     entryPrice.dataset.autoSuggested = '0';
-    entryAmount.value = '';
-    entryBalanceQty.value = '';
-    updateEntryAmountAndBalance();
+    entryAmount.value = '0.00';
+    if (entryDefaultPriceHint) {
+      entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="oil-last-price-badge">Last: 0.00</span>';
+    }
+    updateEntryAmountFromPurchasePrice();
     updateDefaultPriceHint();
     hidePriceHistoryPanel();
     if (entryProductSelect && entryProductSelect.tomselect) {
@@ -687,7 +818,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function addEntryToList() {
-    var pid = entryProductSelect.value;
+    var pid = _tsVal(entryProductSelect);
     if (!pid) {
       alert('Please select a product.');
       entryProductSelect.focus();
@@ -695,22 +826,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     var p = productsForOil.find(function(x) { return String(x.id) === String(pid); });
     var productName = escapeHtml(p ? (p.name || '') : '');
-    var purchaseQty = parseFloat(entryPurchaseQty.value) || 0;
-    var usedQty = parseFloat(entryUsedQty.value) || 0;
-    var price = parseFloat(entryPrice.value) || 0;
-    var amount = (purchaseQty * price).toFixed(2);
-    var balanceQty = (purchaseQty - usedQty).toFixed(2);
-
+    var purchaseQty = parseNum(entryPurchaseQty && entryPurchaseQty.value);
+    var usedQty = parseNum(entryUsedQty && entryUsedQty.value);
+    var price = parseNum(entryPrice && entryPrice.value);
+    var amountVal = parseNum(entryAmount && entryAmount.value);
+    if (purchaseQty > 0) {
+      if (amountVal <= 0) amountVal = purchaseQty * price;
+    } else {
+      if (amountVal <= 0) amountVal = 0;
+    }
     if (purchaseQty <= 0 && usedQty <= 0) {
       alert('Purchase Qty ya Used Qty me se koi aik value add karein.');
       entryPurchaseQty.focus();
       return;
     }
-    if (purchaseQty > 0 && price <= 0) {
-      alert('Purchase Qty ke sath Price 0 se bari honi chahiye.');
+    if (purchaseQty > 0 && price <= 0 && amountVal <= 0) {
+      alert('Purchase ke sath price ya amount 0 se bara chahiye.');
       entryPrice.focus();
       return;
     }
+
+    var lineAmt = fmt2(amountVal);
+    var priceStr = purchaseQty > 0 ? fmt2(parseNum(lineAmt) / purchaseQty) : fmt2(price);
 
     var tr = document.createElement('tr');
     tr.className = 'item-row';
@@ -719,9 +856,9 @@ document.addEventListener('DOMContentLoaded', function() {
       '<td><input type="hidden" name="product_id" value="' + pid + '"><span class="product-name">' + (productName || '') + '</span></td>' +
       '<td><input type="number" name="purchase_qty" class="form-control form-control-sm item-purchase-qty" step="0.01" min="0" value="' + purchaseQty + '"></td>' +
       '<td><input type="number" name="used_qty" class="form-control form-control-sm item-used-qty" step="0.01" min="0" value="' + usedQty + '"></td>' +
-      '<td><input type="number" name="price" class="form-control form-control-sm item-price" step="0.01" min="0" value="' + price + '"></td>' +
-      '<td><input type="text" class="form-control form-control-sm bg-light item-amount" readonly value="' + amount + '"></td>' +
-      '<td><span class="balance-qty text-muted small">' + balanceQty + '</span></td>' +
+      '<td><input type="text" name="price" class="form-control form-control-sm item-price" inputmode="decimal" value="' + priceStr + '"></td>' +
+      '<td><input type="text" name="line_amount" class="form-control form-control-sm item-amount" inputmode="decimal" value="' + lineAmt + '"></td>' +
+      '<td><input type="text" class="form-control form-control-sm bg-light item-balance-qty" readonly value="' + fmt2(purchaseQty - usedQty) + '"></td>' +
       '<td><button type="button" class="btn btn-outline-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>';
     itemsBody.appendChild(tr);
     bindListRow(tr);
@@ -743,42 +880,68 @@ document.addEventListener('DOMContentLoaded', function() {
   entryPurchaseQty.addEventListener('keydown', onEntryKeydown);
   entryUsedQty.addEventListener('keydown', onEntryKeydown);
   entryPrice.addEventListener('keydown', onEntryKeydown);
+  if (entryAmount) entryAmount.addEventListener('keydown', onEntryKeydown);
 
   function bindListRow(tr) {
     var purchaseQty = tr.querySelector('.item-purchase-qty');
     var usedQty = tr.querySelector('.item-used-qty');
     var price = tr.querySelector('.item-price');
     var amount = tr.querySelector('.item-amount');
-    var balanceSpan = tr.querySelector('.balance-qty');
-
-    function updateRow() {
-      var p = parseFloat(purchaseQty.value) || 0;
-      var u = parseFloat(usedQty.value) || 0;
-      var pr = parseFloat(price.value) || 0;
-      amount.value = (p * pr).toFixed(2);
-      balanceSpan.textContent = (p - u).toFixed(2);
+    var bal = tr.querySelector('.item-balance-qty');
+    function updateFromPurchasePrice() {
+      var p = parseNum(purchaseQty && purchaseQty.value);
+      var pr = parseNum(price && price.value);
+      if (amount) amount.value = fmt2(p * pr);
+      if (bal) bal.value = fmt2(p - parseNum(usedQty && usedQty.value));
+      _styleRowBalance(tr);
       updateTotals();
     }
-    purchaseQty.addEventListener('input', updateRow);
-    usedQty.addEventListener('input', updateRow);
-    price.addEventListener('input', updateRow);
-
+    function updateFromAmount() {
+      var p = parseNum(purchaseQty && purchaseQty.value);
+      var a = parseNum(amount && amount.value);
+      if (p > 0 && price) {
+        price.value = fmt2(a / p);
+      }
+      if (bal) bal.value = fmt2(p - parseNum(usedQty && usedQty.value));
+      _styleRowBalance(tr);
+      updateTotals();
+    }
+    if (purchaseQty) purchaseQty.addEventListener('input', updateFromPurchasePrice);
+    if (usedQty) {
+      usedQty.addEventListener('input', function() {
+        var p = parseNum(purchaseQty && purchaseQty.value);
+        var u = parseNum(usedQty.value);
+        if (bal) bal.value = fmt2(p - u);
+        _styleRowBalance(tr);
+        updateTotals();
+      });
+    }
+    if (price) price.addEventListener('input', updateFromPurchasePrice);
+    if (amount) amount.addEventListener('input', updateFromAmount);
+    [purchaseQty, usedQty, price, amount].forEach(function(el) {
+      if (!el) return;
+      el.addEventListener('blur', function() {
+        el.value = fmt2(parseNum(el.value));
+        if (el === amount) updateFromAmount();
+        else updateFromPurchasePrice();
+      });
+    });
     tr.querySelector('.remove-row').addEventListener('click', function() {
       tr.remove();
       updateTotals();
     });
-    updateRow();
+    updateFromPurchasePrice();
   }
 
   function updateTotals() {
     var totalPurchase = 0, totalUsed = 0, totalBalance = 0, totalAmount = 0;
     itemsBody.querySelectorAll('.item-row').forEach(function(tr) {
-      var p = parseFloat(tr.querySelector('.item-purchase-qty').value) || 0;
-      var u = parseFloat(tr.querySelector('.item-used-qty').value) || 0;
+      var p = parseNum(tr.querySelector('.item-purchase-qty') && tr.querySelector('.item-purchase-qty').value);
+      var u = parseNum(tr.querySelector('.item-used-qty') && tr.querySelector('.item-used-qty').value);
       totalPurchase += p;
       totalUsed += u;
       totalBalance += (p - u);
-      totalAmount += parseFloat(tr.querySelector('.item-amount').value) || 0;
+      totalAmount += parseNum(tr.querySelector('.item-amount') && tr.querySelector('.item-amount').value);
     });
     document.getElementById('totalPurchaseQty').textContent = totalPurchase.toFixed(2);
     document.getElementById('totalUsedQty').textContent = totalUsed.toFixed(2);
@@ -1087,7 +1250,10 @@ document.addEventListener('DOMContentLoaded', function() {
   window.setTimeout(function() { fetchOilTaskReadings(); }, 250);
   updateKm();
   updateOilReadingMatch();
-  updateEntryAmountAndBalance();
+  if (entryDefaultPriceHint) {
+    entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="oil-last-price-badge">Last: 0.00</span>';
+  }
+  updateEntryAmountFromPurchasePrice();
   updateDefaultPriceHint();
   handleOilExpenseByBehavior(false);
   updateExpenseByBalanceHint();

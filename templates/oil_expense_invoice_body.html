@@ -1,0 +1,131 @@
+{# Oil expense invoice: same layout family as maintenance_expense_invoice_body #}
+{% set _sum = namespace(v=0.0) %}
+{% for it in rec.items %}
+  {% set _sum.v = _sum.v + ((it.amount or 0)|float) %}
+{% endfor %}
+{% set _footer_total = rec.total_bill_amount if rec.total_bill_amount is not none else _sum.v %}
+<div class="meinv-headcard expense-invoice-bill shadow-sm mb-1 border oeinv-bill">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 py-2 px-2 px-md-3 oeinv-hero">
+    <div class="min-w-0 meinv-hero__left">
+      <div class="text-uppercase meinv-hlabel oeinv-hlabel">Oil bill / invoice</div>
+      <div class="meinv-htitle mb-0">Entry #{{ rec.id }} <span class="text-muted fw-normal">(OIL-{{ rec.id }})</span></div>
+    </div>
+    <div class="text-end small flex-shrink-0 d-flex flex-column align-items-end gap-1">
+      <div class="meinv-pill text-nowrap">
+        <span class="meinv-pill__k">Oil change</span>
+        <span class="meinv-pill__v">{{ rec.expense_date|ddmmyyyy if rec.expense_date else '—' }}</span>
+      </div>
+      {% if rec.card_swipe_date %}
+      <div class="meinv-pill text-nowrap">
+        <span class="meinv-pill__k">Card swipe</span>
+        <span class="meinv-pill__v">{{ rec.card_swipe_date|ddmmyyyy }}</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="px-2 pb-2 pt-1 meinv-meta meinv-meta--tiles meinv-meta--4up">
+    <div class="row g-2 row-cols-2 row-cols-md-4 meinv-brick-row align-items-stretch">
+      <div class="col d-flex">
+        <div class="meinv-field w-100">
+          <div class="meinv-k">District</div>
+          <div class="meinv-v">{{ rec.district.name if rec.district else '—' }}</div>
+        </div>
+      </div>
+      <div class="col d-flex">
+        <div class="meinv-field w-100">
+          <div class="meinv-k">Project</div>
+          <div class="meinv-v">{{ rec.project.name if rec.project else '—' }}</div>
+        </div>
+      </div>
+      <div class="col d-flex">
+        <div class="meinv-field w-100">
+          <div class="meinv-k">Vehicle</div>
+          <div class="meinv-v">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</div>
+        </div>
+      </div>
+      <div class="col d-flex">
+        <div class="meinv-field w-100">
+          <div class="meinv-k">Payment</div>
+          <div class="meinv-v">{{ rec.payment_type or '—' }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="row g-2 row-cols-2 row-cols-md-4 meinv-brick-row meinv-brick-row--2 align-items-stretch">
+      <div class="col d-flex">
+        <div class="meinv-field w-100 meinv-field--party">
+          <div class="meinv-k">Party / workshop</div>
+          <div class="meinv-v">{{ rec.workspace_party.name if rec.workspace_party else '—' }}</div>
+        </div>
+      </div>
+      <div class="col d-flex">
+        <div class="meinv-field w-100">
+          <div class="meinv-k">Total bill (entered)</div>
+          <div class="meinv-v meinv-mono">{{ "%.2f"|format((rec.total_bill_amount or 0)|float) }}</div>
+        </div>
+      </div>
+      <div class="col d-flex">
+        <div class="meinv-field w-100">
+          <div class="meinv-k">Prev / Curr / KM</div>
+          <div class="meinv-v meinv-mono meinv-nums meinv-nums--compact">{{ "%.2f"|format((rec.previous_reading or 0)|float) }}<span class="meinv-nums__sep"> · </span>{{ "%.2f"|format((rec.current_reading or 0)|float) }}<span class="meinv-nums__sep"> · </span>{{ "%.2f"|format((rec.km or 0)|float) }}</div>
+        </div>
+      </div>
+      <div class="col d-flex">
+        <div class="meinv-field w-100">
+          <div class="meinv-k">List sum</div>
+          <div class="meinv-v meinv-mono">{{ "%.2f"|format(_sum.v|float) }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-2 meinv-brick-row meinv-brick-row--remarks">
+      <div class="meinv-field w-100 meinv-field--remarks">
+        <div class="meinv-k">Remarks</div>
+        <div class="meinv-v meinv-remarks mb-0">{{ rec.remarks or '—' }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="meinv-lines expense-invoice-bill shadow-sm border overflow-hidden mb-0">
+  <div class="px-2 py-2 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-1 bg-light">
+    <span class="small fw-semibold text-uppercase meinv-lines__h">Line items (products)</span>
+    <span class="text-muted" style="font-size:.7rem;letter-spacing:.04em">Purchase × price → amount &nbsp;|&nbsp; Balance = purchase − used</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-bordered mb-0 meinv-table">
+      <thead class="meinv-thead">
+        <tr>
+          <th style="width:2.5rem">#</th>
+          <th>Product</th>
+          <th class="text-end" style="width:4.5rem">Purchase</th>
+          <th class="text-end" style="width:4.5rem">Used</th>
+          <th class="text-end" style="width:4.5rem">Price</th>
+          <th class="text-end" style="width:5.5rem">Amount</th>
+          <th class="text-end" style="width:4.5rem">Bal. qty</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in rec.items %}
+        {% set pur = (it.purchase_qty or 0)|float %}
+        {% set u = (it.used_qty or 0)|float %}
+        <tr>
+          <td class="text-muted">{{ loop.index }}</td>
+          <td>{{ it.product.name if it.product else '-' }}</td>
+          <td class="text-end meinv-mono">{{ "%.2f"|format(pur) }}</td>
+          <td class="text-end meinv-mono">{{ "%.2f"|format(u) }}</td>
+          <td class="text-end meinv-mono">{{ "%.2f"|format((it.price or 0)|float) }}</td>
+          <td class="text-end fw-semibold meinv-mono">{{ "%.2f"|format((it.amount or 0)|float) }}</td>
+          <td class="text-end meinv-mono{% if (pur - u) < 0 %} text-danger fw-bold{% endif %}">{{ "%.2f"|format(pur - u) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-2 small">No line items</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="meinv-tfoot">
+        <tr>
+          <th colspan="5" class="text-end meinv-tfoot__label">Total bill</th>
+          <th class="text-end meinv-tfoot__amount">{{ "%.2f"|format(_footer_total|float) }}</th>
+          <th></th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>

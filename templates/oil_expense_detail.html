@@ -1,88 +1,49 @@
 {% extends "base.html" %}
+{% block title %}Oil bill — OIL-{{ rec.id }}{% endblock %}
 {% block content %}
 <style>
-  .expense-invoice-bill { max-width: 800px; margin: 0 auto; border: 1px solid #dee2e6; border-radius: 12px; background: #fff; }
-  .expense-invoice-bill .inv-head { border-bottom: 2px solid #5b21b6; padding: 1rem 1.25rem; background: linear-gradient(135deg, #f5f3ff 0%, #fff 100%); border-radius: 12px 12px 0 0; }
-  .expense-invoice-bill .inv-row { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding: .35rem 0; border-bottom: 1px dashed #e9ecef; }
-  .expense-invoice-bill .inv-label { min-width: 140px; color: #6c757d; font-size: .82rem; }
-  .expense-invoice-bill .inv-value { font-weight: 600; }
+  .oeinv-page { max-width: 100%; width: 100%; margin: 0; padding-left: 0 !important; padding-right: 0 !important; }
+  .oeinv-bill { border: 1px solid #e2e8f0; border-top: 3px solid #5b21b6; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); border-radius: 10px 10px 0 0; }
+  .oeinv-hero { background: linear-gradient(135deg, #f5f3ff 0%, #fff 55%); border-bottom: 1px solid #ddd6fe; border-radius: 9px 9px 0 0; }
+  .oeinv-hlabel { color: #5b21b6 !important; }
+  .meinv-headcard, .meinv-lines { max-width: none; width: 100%; }
+  .meinv-tfoot th { background: #f5f3ff !important; border-top: 2px solid #c4b5fd !important; color: #5b21b6 !important; }
+  .meinv-tfoot__amount { color: #4c1d95 !important; }
+  .expense-invoice-bill { border-radius: 10px; }
   @media print {
     .navbar, .sidebar, .flash-message, .d-print-none { display: none !important; }
-    .main-content { margin: 0 !important; margin-top: 0 !important; padding: 8px !important; }
-    .expense-invoice-bill { border: 1px solid #000; box-shadow: none !important; }
+    .main-content { margin: 0 !important; margin-top: 0 !important; padding: 6px !important; }
+    .expense-invoice-bill { border: 1px solid #000 !important; box-shadow: none !important; page-break-inside: avoid; }
+    .meinv-table { font-size: 9pt; }
+    .meinv-tfoot th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
+  /* Inherit meinv line styles from maintenance detail for consistency */
+  .oeinv-page .meinv-hero { background: linear-gradient(135deg, #f5f3ff 0%, #fff 55%); border-bottom: 1px solid #ddd6fe; }
+  .oeinv-page .meinv-bill { border-top: 3px solid #5b21b6; }
+  .oeinv-page .meinv-pill { background: #f5f3ff; border-color: #ddd6fe; }
+  .oeinv-page .meinv-pill--link { background: #eef2ff; border-color: #c7d2fe; }
+  .oeinv-page .meinv-hlabel { color: #5b21b6; }
+  .oeinv-page .meinv-htitle { color: #0f172a; }
+  .oeinv-page .meinv-thead th { background: #faf5ff !important; border-bottom: 1px solid #e9d5ff; }
+  .oeinv-page .meinv-table tbody tr:nth-child(even) { background: #fafafa; }
+  .oeinv-page .meinv-k, .oeinv-page .meinv-pill__k { color: #64748b; }
+  .oeinv-page .meinv-v { color: #0f172a; }
+  .oeinv-page .meinv-field { border-color: #e9d5ff; }
+  .oeinv-page .meinv-field--remarks { background: #faf5ff; border-color: #ddd6fe; }
+  .oeinv-page .meinv-meta--tiles { background: linear-gradient(180deg, #faf5ff 0%, #f5f3ff 100%); }
 </style>
-<div class="container-fluid py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3 d-print-none">
-    <h2 class="mb-0 h5"><i class="bi bi-receipt-cutoff me-2 text-primary"></i>{{ title }}</h2>
-    <div class="d-flex flex-wrap gap-2">
-      <a href="{{ url_for('oil_expense_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to List</a>
-      <button type="button" class="btn btn-primary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
-      <a href="{{ url_for('oil_expense_media', pk=rec.id) }}" class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener"><i class="bi bi-images me-1"></i>Media</a>
+<div class="container-fluid py-2 px-0 oeinv-page">
+  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2 d-print-none">
+    <div class="small text-muted fw-semibold text-uppercase" style="letter-spacing:.04em">Bill view</div>
+    <div class="d-flex flex-wrap gap-1">
+      <a href="{{ back_url if back_url is defined else url_for('oil_expense_list') }}" class="btn btn-outline-secondary btn-sm py-1"><i class="bi bi-arrow-left me-1"></i>Back</a>
+      <button type="button" class="btn btn-primary btn-sm py-1" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+      <a href="{{ url_for('oil_expense_media', pk=rec.id) }}{% if return_to_path is defined and return_to_path %}?return_to={{ return_to_path|url_quote }}{% endif %}" class="btn btn-outline-primary btn-sm py-1"><i class="bi bi-images me-1"></i>Media</a>
     </div>
   </div>
 
-  <div id="expense-invoice-print-root" class="expense-invoice-bill shadow-sm mb-4">
-    <div class="inv-head d-flex flex-wrap justify-content-between align-items-start gap-2">
-      <div>
-        <div class="text-uppercase small" style="color:#5b21b6;font-weight:700;">Oil bill / invoice</div>
-        <h2 class="h4 mb-0 mt-1">Entry #{{ rec.id }}</h2>
-      </div>
-      <div class="text-end small">
-        <div><span class="text-muted">Date:</span> <strong>{{ rec.expense_date|ddmmyyyy if rec.expense_date else '-' }}</strong></div>
-        {% if rec.card_swipe_date %}
-        <div><span class="text-muted">Card swipe:</span> <strong>{{ rec.card_swipe_date|ddmmyyyy }}</strong></div>
-        {% endif %}
-      </div>
-    </div>
-    <div class="p-3 p-md-4">
-      <div class="inv-row"><span class="inv-label">District</span><span class="inv-value">{{ rec.district.name if rec.district else '—' }}</span></div>
-      <div class="inv-row"><span class="inv-label">Project</span><span class="inv-value">{{ rec.project.name if rec.project else '—' }}</span></div>
-      <div class="inv-row"><span class="inv-label">Vehicle</span><span class="inv-value">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</span></div>
-      <div class="inv-row"><span class="inv-label">Party / workshop</span><span class="inv-value">{{ rec.workspace_party.name if rec.workspace_party else '—' }}</span></div>
-      <div class="inv-row"><span class="inv-label">Payment type</span><span class="inv-value">{{ rec.payment_type or '—' }}</span></div>
-      <div class="inv-row"><span class="inv-label">Total bill (entered)</span><span class="inv-value">{{ "%.2f"|format((rec.total_bill_amount or 0)|float) }}</span></div>
-      <div class="inv-row"><span class="inv-label">Previous / current / KM</span><span class="inv-value">
-        {{ "%.2f"|format((rec.previous_reading or 0)|float) }} &nbsp;|&nbsp;
-        {{ "%.2f"|format((rec.current_reading or 0)|float) }} &nbsp;|&nbsp;
-        {{ "%.2f"|format((rec.km or 0)|float) }}
-      </span></div>
-      <div class="inv-row border-0"><span class="inv-label">Remarks</span><span class="inv-value text-break" style="font-weight:500;">{{ rec.remarks or '—' }}</span></div>
-    </div>
-  </div>
-
-  <div class="expense-invoice-bill shadow-sm p-0 overflow-hidden" style="max-width:800px;margin:0 auto;">
-    <div class="px-3 py-2 border-bottom bg-light"><strong>Line items (products)</strong></div>
-    <div class="table-responsive">
-      <table class="table table-sm table-bordered mb-0">
-        <thead class="table-light">
-          <tr>
-            <th>#</th>
-            <th>Product</th>
-            <th>Payment</th>
-            <th class="text-end">Purchase</th>
-            <th class="text-end">Used</th>
-            <th class="text-end">Price</th>
-            <th class="text-end">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for it in rec.items %}
-          <tr>
-            <td>{{ loop.index }}</td>
-            <td>{{ it.product.name if it.product else '-' }}</td>
-            <td>{{ it.payment_type or '—' }}</td>
-            <td class="text-end">{{ "%.2f"|format((it.purchase_qty or 0)|float) }}</td>
-            <td class="text-end">{{ "%.2f"|format((it.used_qty or 0)|float) }}</td>
-            <td class="text-end">{{ "%.2f"|format((it.price or 0)|float) }}</td>
-            <td class="text-end fw-semibold">{{ "%.2f"|format((it.amount or 0)|float) }}</td>
-          </tr>
-          {% else %}
-          <tr><td colspan="7" class="text-center text-muted py-3">No line items</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+  <div id="expense-invoice-print-root" class="oeinv-page">
+  {% include 'oil_expense_invoice_body.html' %}
   </div>
 </div>
 {% endblock %}

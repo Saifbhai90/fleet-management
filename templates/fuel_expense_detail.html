@@ -1,61 +1,158 @@
 {% extends "base.html" %}
+{% block title %}Fuel bill — #{{ rec.id }}{% endblock %}
 {% block content %}
-{% set pump_name = rec.workspace_pump.name if rec.workspace_pump else (rec.fuel_pump.name if rec.fuel_pump else '-') %}
+{% set pump_name = rec.workspace_pump.name if rec.workspace_pump else (rec.fuel_pump.name if rec.fuel_pump else '—') %}
 <style>
-  .expense-invoice-bill { max-width: 800px; margin: 0 auto; border: 1px solid #dee2e6; border-radius: 12px; background: #fff; }
-  .expense-invoice-bill .inv-head { border-bottom: 2px solid #0d6efd; padding: 1rem 1.25rem; background: linear-gradient(135deg, #f8f9ff 0%, #fff 100%); border-radius: 12px 12px 0 0; }
-  .expense-invoice-bill .inv-row { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding: .35rem 0; border-bottom: 1px dashed #e9ecef; }
-  .expense-invoice-bill .inv-label { min-width: 140px; color: #6c757d; font-size: .82rem; }
-  .expense-invoice-bill .inv-value { font-weight: 600; }
+  .feinv-page { max-width: 100%; width: 100%; margin: 0; }
+  .feinv-bill { border: 1px solid #e2e8f0; border-top: 3px solid #0d6efd; border-radius: 10px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
+  .feinv-hero { background: linear-gradient(135deg, #eff6ff 0%, #fff 60%); border-bottom: 1px solid #bfdbfe; border-radius: 9px 9px 0 0; }
+  .feinv-hlabel { font-size: .65rem; letter-spacing: .08em; color: #1d4ed8; font-weight: 700; }
+  .feinv-htitle { font-size: 1.1rem; font-weight: 700; color: #0f172a; }
+  .feinv-pill { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .55rem; border-radius: 999px; background: #eff6ff; border: 1px solid #bfdbfe; }
+  .feinv-pill__k { font-size: .62rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+  .feinv-pill__v { font-size: .8rem; font-weight: 700; color: #0f172a; }
+  .feinv-k { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; line-height: 1.15; margin-bottom: .2rem; }
+  .feinv-v { font-size: .86rem; font-weight: 600; color: #0f172a; line-height: 1.3; word-break: break-word; }
+  .feinv-field { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: .5rem .65rem; min-height: 100%; }
+  .feinv-mono { font-variant-numeric: tabular-nums; }
+  .feinv-nums__sep { color: #94a3b8; font-weight: 500; }
+  .feinv-meta--tiles { background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%); padding: .5rem; border-radius: 0 0 8px 8px; }
+  .feinv-total-band {
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%);
+    color: #fff; padding: 1rem 1.1rem; border-radius: 0 0 8px 8px;
+  }
+  .feinv-total-band .feinv-total__label { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; opacity: .9; }
+  .feinv-total-band .feinv-total__amt { font-size: 1.65rem; font-weight: 800; line-height: 1.1; }
+  .feinv-subgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; }
+  @media (min-width: 768px) { .feinv-subgrid { grid-template-columns: repeat(4, 1fr); } }
   @media print {
     .navbar, .sidebar, .flash-message, .d-print-none { display: none !important; }
-    .main-content { margin: 0 !important; margin-top: 0 !important; padding: 8px !important; }
-    .expense-invoice-bill { border: 1px solid #000; box-shadow: none !important; }
+    .main-content { margin: 0 !important; margin-top: 0 !important; padding: 6px !important; }
+    .feinv-bill { box-shadow: none !important; border: 1px solid #000 !important; }
   }
 </style>
-<div class="container-fluid py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3 d-print-none">
-    <h2 class="mb-0 h5"><i class="bi bi-receipt-cutoff me-2 text-primary"></i>{{ title }}</h2>
-    <div class="d-flex flex-wrap gap-2">
-      <a href="{{ url_for('fuel_expense_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to List</a>
-      <button type="button" class="btn btn-primary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
-      <a href="{{ url_for('fuel_expense_media', pk=rec.id) }}" class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener"><i class="bi bi-images me-1"></i>Media</a>
+<div class="container-fluid py-2 feinv-page">
+  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2 d-print-none">
+    <div class="small text-muted fw-semibold text-uppercase" style="letter-spacing:.04em">Bill view</div>
+    <div class="d-flex flex-wrap gap-1">
+      <a href="{{ back_url if back_url is defined else url_for('fuel_expense_list') }}" class="btn btn-outline-secondary btn-sm py-1"><i class="bi bi-arrow-left me-1"></i>Back</a>
+      <button type="button" class="btn btn-primary btn-sm py-1" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+      <a href="{{ url_for('fuel_expense_media', pk=rec.id) }}{% if return_to_path is defined and return_to_path %}?return_to={{ return_to_path|url_quote }}{% endif %}" class="btn btn-light btn-sm py-1 text-primary border border-primary"><i class="bi bi-images me-1"></i>Media</a>
     </div>
   </div>
 
-  <div id="expense-invoice-print-root" class="expense-invoice-bill shadow-sm">
-    <div class="inv-head d-flex flex-wrap justify-content-between align-items-start gap-2">
-      <div>
-        <div class="text-uppercase text-primary fw-bold small">Fuel bill / invoice</div>
-        <h2 class="h4 mb-0 mt-1">Entry #{{ rec.id }}</h2>
+  <div id="expense-invoice-print-root" class="feinv-bill shadow-sm mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 py-2 px-2 px-md-3 feinv-hero">
+      <div class="min-w-0">
+        <div class="text-uppercase feinv-hlabel">Fuel bill / invoice</div>
+        <div class="feinv-htitle mb-0">Entry #{{ rec.id }}</div>
       </div>
-      <div class="text-end small">
-        <div><span class="text-muted">Fueling date:</span> <strong>{{ rec.fueling_date|ddmmyyyy if rec.fueling_date else '-' }}</strong></div>
+      <div class="text-end d-flex flex-column align-items-end gap-1 small">
+        <div class="feinv-pill text-nowrap">
+          <span class="feinv-pill__k">Fueling</span>
+          <span class="feinv-pill__v">{{ rec.fueling_date|ddmmyyyy if rec.fueling_date else '—' }}</span>
+        </div>
         {% if rec.card_swipe_date %}
-        <div><span class="text-muted">Card swipe:</span> <strong>{{ rec.card_swipe_date|ddmmyyyy }}</strong></div>
+        <div class="feinv-pill text-nowrap">
+          <span class="feinv-pill__k">Card</span>
+          <span class="feinv-pill__v">{{ rec.card_swipe_date|ddmmyyyy }}</span>
+        </div>
         {% endif %}
       </div>
     </div>
-    <div class="p-3 p-md-4">
-      <div class="inv-row"><span class="inv-label">District</span><span class="inv-value">{{ rec.district.name if rec.district else '—' }}</span></div>
-      <div class="inv-row"><span class="inv-label">Project</span><span class="inv-value">{{ rec.project.name if rec.project else '—' }}</span></div>
-      <div class="inv-row"><span class="inv-label">Vehicle</span><span class="inv-value">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</span></div>
-      <div class="inv-row"><span class="inv-label">Fuel type</span><span class="inv-value">{{ rec.fuel_type or '—' }}</span></div>
-      <div class="inv-row"><span class="inv-label">Pump / party</span><span class="inv-value">{{ pump_name }}</span></div>
-      <div class="inv-row"><span class="inv-label">Payment</span><span class="inv-value">{{ rec.payment_type or '—' }}</span></div>
-      <div class="inv-row"><span class="inv-label">Slip no.</span><span class="inv-value">{{ rec.slip_no or '—' }}</span></div>
-      <div class="inv-row"><span class="inv-label">KM out (task)</span><span class="inv-value">{% if rec.km_out_task is not none %}{{ "%.2f"|format(rec.km_out_task|float) }}{% else %}—{% endif %}</span></div>
-      <div class="inv-row"><span class="inv-label">KM in (task)</span><span class="inv-value">{% if rec.km_in_task is not none %}{{ "%.2f"|format(rec.km_in_task|float) }}{% else %}—{% endif %}</span></div>
-      <div class="inv-row"><span class="inv-label">Previous reading</span><span class="inv-value">{{ "%.2f"|format((rec.previous_reading or 0)|float) }}</span></div>
-      <div class="inv-row"><span class="inv-label">Current reading</span><span class="inv-value">{{ "%.2f"|format((rec.current_reading or 0)|float) }}</span></div>
-      <div class="inv-row"><span class="inv-label">KM (trip)</span><span class="inv-value">{% if rec.km is not none %}{{ "%.2f"|format(rec.km|float) }}{% else %}—{% endif %}</span></div>
-      <div class="inv-row"><span class="inv-label">Meter matched</span><span class="inv-value">{{ rec.meter_reading_matched or '—' }}</span></div>
-      <div class="inv-row"><span class="inv-label">Fuel price / L</span><span class="inv-value">{% if rec.fuel_price is not none %}{{ "%.2f"|format(rec.fuel_price|float) }}{% else %}—{% endif %}</span></div>
-      <div class="inv-row"><span class="inv-label">Liters</span><span class="inv-value">{% if rec.liters is not none %}{{ "%.2f"|format(rec.liters|float) }}{% else %}—{% endif %}</span></div>
-      <div class="inv-row"><span class="inv-label">MPG</span><span class="inv-value">{% if rec.mpg is not none %}{{ "%.2f"|format(rec.mpg|float) }}{% else %}—{% endif %}</span></div>
-      <div class="inv-row border-0 pt-3 mt-2 align-items-center">
-        <span class="inv-label fs-5">Total amount</span>
-        <span class="fs-4 text-primary fw-bold">{{ "%.2f"|format((rec.amount or 0)|float) }}</span>
+    <div class="px-2 pb-2 feinv-meta--tiles">
+      <div class="feinv-subgrid mb-2">
+        <div class="feinv-field">
+          <div class="feinv-k">District</div>
+          <div class="feinv-v">{{ rec.district.name if rec.district else '—' }}</div>
+        </div>
+        <div class="feinv-field">
+          <div class="feinv-k">Project</div>
+          <div class="feinv-v">{{ rec.project.name if rec.project else '—' }}</div>
+        </div>
+        <div class="feinv-field">
+          <div class="feinv-k">Vehicle</div>
+          <div class="feinv-v">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</div>
+        </div>
+        <div class="feinv-field">
+          <div class="feinv-k">Payment</div>
+          <div class="feinv-v">{{ rec.payment_type or '—' }}</div>
+        </div>
+      </div>
+      <div class="feinv-subgrid">
+        <div class="feinv-field">
+          <div class="feinv-k">Fuel</div>
+          <div class="feinv-v">{{ rec.fuel_type or '—' }}</div>
+        </div>
+        <div class="feinv-field">
+          <div class="feinv-k">Pump / party</div>
+          <div class="feinv-v">{{ pump_name }}</div>
+        </div>
+        <div class="feinv-field">
+          <div class="feinv-k">Slip no.</div>
+          <div class="feinv-v feinv-mono">{{ rec.slip_no or '—' }}</div>
+        </div>
+        <div class="feinv-field">
+          <div class="feinv-k">Meter</div>
+          <div class="feinv-v feinv-mono" style="font-size:.8rem;">{{ rec.meter_reading_matched or '—' }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="px-2 pb-2">
+      <div class="row g-2">
+        <div class="col-6 col-md-3">
+          <div class="feinv-field h-100">
+            <div class="feinv-k">KM out (task)</div>
+            <div class="feinv-v feinv-mono">{% if rec.km_out_task is not none %}{{ "%.2f"|format(rec.km_out_task|float) }}{% else %}—{% endif %}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="feinv-field h-100">
+            <div class="feinv-k">KM in (task)</div>
+            <div class="feinv-v feinv-mono">{% if rec.km_in_task is not none %}{{ "%.2f"|format(rec.km_in_task|float) }}{% else %}—{% endif %}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="feinv-field h-100">
+            <div class="feinv-k">Previous / current</div>
+            <div class="feinv-v feinv-mono" style="font-size:.8rem;">{{ "%.2f"|format((rec.previous_reading or 0)|float) }}<span class="feinv-nums__sep"> · </span>{{ "%.2f"|format((rec.current_reading or 0)|float) }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="feinv-field h-100">
+            <div class="feinv-k">Trip KM / MPG</div>
+            <div class="feinv-v feinv-mono" style="font-size:.8rem;">
+              {% if rec.km is not none %}{{ "%.2f"|format(rec.km|float) }}{% else %}—{% endif %}
+              <span class="feinv-nums__sep"> · </span>
+              {% if rec.mpg is not none %}{{ "%.2f"|format(rec.mpg|float) }}{% else %}—{% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="px-2 pb-2">
+      <div class="row g-2">
+        <div class="col-6 col-md-4">
+          <div class="feinv-field border-dashed" style="border-style: dashed; background: #f8fafc;">
+            <div class="feinv-k">Price / liter</div>
+            <div class="feinv-v feinv-mono">{% if rec.fuel_price is not none %}{{ "%.2f"|format(rec.fuel_price|float) }}{% else %}—{% endif %}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4">
+          <div class="feinv-field border-dashed" style="border-style: dashed; background: #f8fafc;">
+            <div class="feinv-k">Liters</div>
+            <div class="feinv-v feinv-mono">{% if rec.liters is not none %}{{ "%.2f"|format(rec.liters|float) }}{% else %}—{% endif %}</div>
+          </div>
+        </div>
+        <div class="col-12 col-md-4 d-flex align-items-stretch">
+          <div class="feinv-total-band w-100 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+              <div class="feinv-total__label">Total</div>
+              <div class="feinv-total__amt feinv-mono">{{ "%.2f"|format((rec.amount or 0)|float) }}</div>
+            </div>
+            <i class="bi bi-droplet-half d-none d-sm-block" style="font-size:2rem;opacity:.35;"></i>
+          </div>
+        </div>
       </div>
     </div>
   </div>

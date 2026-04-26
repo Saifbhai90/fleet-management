@@ -21959,7 +21959,15 @@ def fuel_expense_view(pk):
     if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('fuel_expense_list'))
-    return render_template('fuel_expense_detail.html', rec=rec, title='Fuel Expense Detail')
+    default_back = url_for('fuel_expense_list')
+    back_url = _safe_internal_path(request.args.get('return_to'), default_back)
+    return render_template(
+        'fuel_expense_detail.html',
+        rec=rec,
+        title='Fuel Expense Detail',
+        back_url=back_url,
+        return_to_path=request.full_path,
+    )
 
 
 @app.route('/expenses/fuel/<int:pk>/delete', methods=['POST'])
@@ -22749,8 +22757,12 @@ def oil_expense_form(pk=None):
         purchase_qtys = request.form.getlist('purchase_qty')
         used_qtys = request.form.getlist('used_qty')
         prices = request.form.getlist('price')
+        line_amounts = request.form.getlist('line_amount')
         items_data = []
-        n = max(len(product_ids or [0]), len(purchase_qtys or [0]), len(used_qtys or [0]), len(prices or [0]))
+        n = max(
+            len(product_ids or [0]), len(purchase_qtys or [0]), len(used_qtys or [0]), len(prices or [0]),
+            len(line_amounts or [0])
+        )
         for i in range(n):
             pid = product_ids[i] if i < len(product_ids or []) else None
             try:
@@ -22771,7 +22783,22 @@ def oil_expense_form(pk=None):
                 price = float(prices[i]) if i < len(prices or []) and prices[i] else 0
             except (TypeError, ValueError):
                 price = 0
-            amount = (purchase_qty * price) if price else None
+            line_amt = None
+            if i < len(line_amounts or []):
+                raw = line_amounts[i]
+                if raw is not None and str(raw).strip() != '':
+                    try:
+                        line_amt = float(raw)
+                    except (TypeError, ValueError):
+                        line_amt = None
+            if line_amt is not None:
+                amount = line_amt
+                if purchase_qty and purchase_qty > 0:
+                    price = float(line_amt) / float(purchase_qty)
+            elif purchase_qty and price:
+                amount = float(purchase_qty) * float(price)
+            else:
+                amount = None
             items_data.append({
                 'product_id': pid,
                 'purchase_qty': purchase_qty, 'used_qty': used_qty,
@@ -22972,7 +22999,15 @@ def oil_expense_view(pk):
     if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('oil_expense_list'))
-    return render_template('oil_expense_detail.html', rec=rec, title='Oil Expense Detail')
+    default_back = url_for('oil_expense_list')
+    back_url = _safe_internal_path(request.args.get('return_to'), default_back)
+    return render_template(
+        'oil_expense_detail.html',
+        rec=rec,
+        title='Oil Expense Detail',
+        back_url=back_url,
+        return_to_path=request.full_path,
+    )
 
 
 @app.route('/oil-expense/delete/<int:pk>', methods=['POST'])

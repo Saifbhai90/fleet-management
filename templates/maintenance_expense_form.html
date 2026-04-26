@@ -193,7 +193,7 @@
             {% endif %}
           </div>
 
-          <!-- Row 2: Work Order (+ Close Job btn) | Job Category -->
+          <!-- Row 2: Work Order | Job Category -->
           <div class="col-md-6 field-group">
             <label class="form-label d-flex justify-content-between align-items-center">
               <span>Work Order <small class="text-muted fw-normal">(optional — multi-bill job)</small></span>
@@ -202,18 +202,10 @@
                 <a href="{{ url_for('maintenance_work_order_form') }}" class="small text-decoration-none text-success">+ New</a>
               </span>
             </label>
-            <div class="d-flex gap-2 align-items-start">
-              <div class="flex-grow-1">
-                {{ form.work_order_id(class="form-select search-select", id="workOrderSelect") }}
-                {% if form.work_order_id.errors %}
-                  <div class="text-danger small mt-1">{{ form.work_order_id.errors[0] }}</div>
-                {% endif %}
-              </div>
-              <button type="button" class="btn btn-outline-danger btn-sm text-nowrap d-none" id="closeJobBtn" style="min-height:40px">
-                <i class="bi bi-lock-fill me-1"></i>Close Job
-              </button>
-            </div>
-            <div id="workOrderStatusHint" class="small mt-1"></div>
+            {{ form.work_order_id(class="form-select search-select", id="workOrderSelect") }}
+            {% if form.work_order_id.errors %}
+              <div class="text-danger small mt-1">{{ form.work_order_id.errors[0] }}</div>
+            {% endif %}
           </div>
           <div class="col-md-6 field-group job-category-group">
             <label class="form-label">Job Category</label>
@@ -709,8 +701,6 @@ document.addEventListener('DOMContentLoaded', function() {
   var totalBillInput = document.getElementById('totalBillInput');
   var totalBillEvalHint = document.getElementById('totalBillEvalHint');
   var workOrderSelect = document.getElementById('workOrderSelect');
-  var closeJobBtn = document.getElementById('closeJobBtn');
-  var workOrderStatusHint = document.getElementById('workOrderStatusHint');
   var cashExpenseByValue = '';
   var maintAttachmentFiles = document.getElementById('maintAttachmentFiles');
   var maintAttachmentPasteHint = document.getElementById('maintAttachmentPasteHint');
@@ -819,66 +809,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }, true);
     }
-  }
-
-  /* ── Work Order: Close Job Button ── */
-  function _updateCloseJobBtnVisibility() {
-    if (!workOrderSelect || !closeJobBtn) return;
-    var woId = _selVal(workOrderSelect);
-    if (woId && woId !== '0' && woId !== '') {
-      closeJobBtn.classList.remove('d-none');
-    } else {
-      closeJobBtn.classList.add('d-none');
-      if (workOrderStatusHint) workOrderStatusHint.textContent = '';
-    }
-  }
-  if (workOrderSelect) {
-    workOrderSelect.addEventListener('change', _updateCloseJobBtnVisibility);
-    if (workOrderSelect.tomselect) {
-      workOrderSelect.tomselect.on('change', _updateCloseJobBtnVisibility);
-    }
-    _updateCloseJobBtnVisibility();
-  }
-  if (closeJobBtn) {
-    closeJobBtn.addEventListener('click', function() {
-      var woId = _selVal(workOrderSelect);
-      if (!woId || woId === '0') return;
-      var dateVal = expenseDate ? expenseDate.value : '';
-      if (!confirm('Is Work Order ko Close mark kar dein? Close karne ke baad ye form mein nazar nahi aayega.')) return;
-      closeJobBtn.disabled = true;
-      closeJobBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Closing...';
-      fetch('/maintenance-work-order/' + woId + '/close', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': (document.querySelector('[name=csrf_token]') || {}).value || ''},
-        body: JSON.stringify({close_date: dateVal}),
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.ok) {
-          if (workOrderStatusHint) {
-            workOrderStatusHint.innerHTML = '<span class="badge bg-success"><i class="bi bi-lock-fill me-1"></i>Job Closed: ' + (data.work_order_no || '') + ' on ' + (data.closed_on || '') + '</span>';
-          }
-          if (workOrderSelect && workOrderSelect.tomselect) {
-            workOrderSelect.tomselect.clear();
-            workOrderSelect.tomselect.removeOption(String(woId));
-          } else if (workOrderSelect) {
-            var opt = workOrderSelect.querySelector('option[value="' + woId + '"]');
-            if (opt) opt.remove();
-            workOrderSelect.value = '0';
-          }
-          closeJobBtn.classList.add('d-none');
-        } else {
-          alert('Error: ' + (data.error || 'Close nahi ho saka'));
-          closeJobBtn.disabled = false;
-          closeJobBtn.innerHTML = '<i class="bi bi-lock-fill me-1"></i>Close Job';
-        }
-      })
-      .catch(function() {
-        alert('Network error — try again');
-        closeJobBtn.disabled = false;
-        closeJobBtn.innerHTML = '<i class="bi bi-lock-fill me-1"></i>Close Job';
-      });
-    });
   }
 
   function _selVal(sel) {
