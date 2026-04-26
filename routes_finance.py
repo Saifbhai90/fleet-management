@@ -1215,14 +1215,6 @@ def employee_expense_receipt_push_cloud(pk):
     if workspace_employee_id and expense.employee_id and expense.employee_id != workspace_employee_id:
         flash('This employee expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('employee_expense_list'))
-    if _workspace_date_is_closed(
-        workspace_employee_id,
-        expense.expense_date,
-        district_id=expense.district_id,
-        project_id=expense.project_id,
-    ):
-        flash('Closed month wala expense — pehle month reopen karein.', 'danger')
-        return redirect(request.referrer or url_for('employee_expense_list'))
 
     rp = (expense.receipt_path or '').strip()
     if not rp:

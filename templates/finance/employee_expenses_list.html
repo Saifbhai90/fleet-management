@@ -2,9 +2,6 @@
 {% block title %}Employee Expenses{% endblock %}
 
 {% block content %}
-<style>
-  #eeReceiptStatusPanel { position: fixed; right: 18px; bottom: 18px; width: min(420px, calc(100vw - 24px)); z-index: 1040; }
-</style>
 <div class="container-fluid py-3">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
         <h2 class="mb-0"><i class="bi bi-wallet2 me-2 text-warning"></i>Employee Expenses</h2>
@@ -109,7 +106,7 @@
                         {% set rp = (exp.receipt_path or '')|trim %}
                         {% set is_cloud = rp and (rp.startswith('http://') or rp.startswith('https://')) %}
                         {% set is_local = rp and not is_cloud %}
-                        <tr>
+                        <tr class="ee-data-row" data-ee-id="{{ exp.id }}">
                             <td class="text-center text-muted small">{{ ((page - 1) * per_page) + loop.index }}</td>
                             <td>{{ exp.expense_date|ddmmyyyy }}</td>
                             <td>{{ exp.district.name if exp.district else '-' }}</td>
@@ -137,10 +134,6 @@
                             <td class="text-center">
                               <button type="button" class="btn btn-sm p-0 border-0 bg-transparent ee-receipt-status-btn"
                                       data-id="{{ exp.id }}"
-                                      data-has="{{ '1' if rp else '0' }}"
-                                      data-local="{{ '1' if is_local else '0' }}"
-                                      data-cloud="{{ '1' if is_cloud else '0' }}"
-                                      data-push-url="{% if is_local %}{{ url_for('employee_expense_receipt_push_cloud', pk=exp.id) }}{% else %}#{% endif %}"
                                       title="Receipt / storage detail">
                                 {% if rp %}
                                 <span class="badge bg-success">Success</span>
@@ -155,13 +148,7 @@
                                 {% elif is_cloud %}
                                 <span class="badge bg-success" title="Receipt on Cloudflare / R2">Cloud</span>
                                 {% else %}
-                                <div class="d-flex flex-column align-items-center gap-1 py-0">
-                                  <span class="badge bg-warning text-dark" title="Receipt on app server (local disk)">Local</span>
-                                  <form method="POST" action="{{ url_for('employee_expense_receipt_push_cloud', pk=exp.id) }}" class="mb-0" onsubmit="return confirm('Local receipt ko cloud (R2) par bhejna hai?');">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-outline-primary btn-sm py-0 px-2" title="Dubara push — cloud (R2)">↑ Cloud</button>
-                                  </form>
-                                </div>
+                                <span class="badge bg-warning text-dark" title="Receipt on app server (local disk)">Local</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
@@ -186,6 +173,27 @@
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </form>
+                            </td>
+                        </tr>
+                        <tr class="ee-receipt-expand-row d-none" data-ee-id="{{ exp.id }}">
+                            <td colspan="12" class="p-0 bg-body-secondary border-0">
+                                <div class="px-3 py-2 m-2 ms-3 small shadow-sm bg-white border-start border-4 border-warning rounded-1">
+                                    <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                                        <span class="fw-semibold text-body"><i class="bi bi-receipt me-1"></i>Receipt / upload status</span>
+                                        <button type="button" class="btn-close btn-sm ee-receipt-inline-close" aria-label="Band karein"></button>
+                                    </div>
+                                    {% if not rp %}
+                                    <p class="mb-0 text-muted">Is expense par koi receipt / bill upload nahi hui.</p>
+                                    {% elif is_cloud %}
+                                    <p class="mb-0">Receipt <strong>cloud (R2)</strong> par stored hai (secure URL). Neeche Media se dekh sakte hain.</p>
+                                    {% else %}
+                                    <p class="mb-2">Receipt abhi <strong>local server</strong> (uploads folder) par hai. Cloud (R2) par bhejne ke liye neeche button dabayein.</p>
+                                    <form method="POST" action="{{ url_for('employee_expense_receipt_push_cloud', pk=exp.id) }}" class="mb-0 d-inline-block" onsubmit="return confirm('Local receipt ko cloud (R2) par bhejna hai?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-primary btn-sm">Cloud (R2) par bhejein</button>
+                                    </form>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% else %}
@@ -224,55 +232,45 @@
         </div>
     </div>
 </div>
-<div id="eeReceiptStatusPanel" class="card shadow border d-none">
-  <div class="card-header py-2 d-flex justify-content-between align-items-center">
-    <h6 class="mb-0"><i class="bi bi-receipt me-2"></i>Receipt / upload status</h6>
-    <button type="button" class="btn-close btn-sm" id="eeReceiptPanelClose" aria-label="Close"></button>
-  </div>
-  <div class="card-body py-2 small" id="eeReceiptPanelBody"></div>
-  <div class="card-footer py-2 d-none" id="eeReceiptPanelFooter">
-    <form method="POST" id="eeReceiptPushForm" action="#">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-primary btn-sm w-100">Cloud (R2) par bhejein</button>
-    </form>
-  </div>
-</div>
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 document.addEventListener('DOMContentLoaded', function(){
     if(window.fleetTableEnhance) window.fleetTableEnhance('eeTable');
     window.fleetPrintExport && window.fleetPrintExport('eeTable','Employee Expenses','Employee_Expenses.csv');
-    (function eeReceiptPanel() {
-      var panel = document.getElementById('eeReceiptStatusPanel');
-      var bodyEl = document.getElementById('eeReceiptPanelBody');
-      var foot = document.getElementById('eeReceiptPanelFooter');
-      var pushForm = document.getElementById('eeReceiptPushForm');
-      var closeBtn = document.getElementById('eeReceiptPanelClose');
-      function hideP() { if (panel) panel.classList.add('d-none'); }
-      if (closeBtn) closeBtn.addEventListener('click', hideP);
+    (function eeReceiptInlineExpand() {
+      function hideAllExpand() {
+        document.querySelectorAll('.ee-receipt-expand-row').forEach(function(r) { r.classList.add('d-none'); });
+      }
       document.querySelectorAll('.ee-receipt-status-btn').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
           e.preventDefault();
           e.stopPropagation();
-          if (!panel || !bodyEl) return;
-          var has = btn.getAttribute('data-has') === '1';
-          var local = btn.getAttribute('data-local') === '1';
-          var cloud = btn.getAttribute('data-cloud') === '1';
-          var pushUrl = (btn.getAttribute('data-push-url') || '#').trim();
-          if (!has) {
-            bodyEl.innerHTML = '<p class="mb-0 text-muted">Is expense par koi receipt / bill upload nahi hui.</p>';
-            if (foot) foot.classList.add('d-none');
-          } else if (cloud) {
-            bodyEl.innerHTML = '<p class="mb-0">Receipt <strong>cloud (R2)</strong> par stored hai (secure URL). List par Media column is location ko dikhata hai.</p>';
-            if (foot) foot.classList.add('d-none');
-          } else {
-            bodyEl.innerHTML = '<p class="mb-0">Receipt <strong>local server</strong> (uploads) par hai. <strong>↑ Cloud</strong> se isko R2 par bhej sakte hain — neeche button ya Media column wala chhota button.</p>';
-            if (foot) foot.classList.remove('d-none');
-            if (pushForm && pushUrl && pushUrl !== '#') pushForm.action = pushUrl;
-            else if (foot) foot.classList.add('d-none');
+          var id = btn.getAttribute('data-id');
+          if (!id) return;
+          var row = document.querySelector('.ee-receipt-expand-row[data-ee-id="' + id + '"]');
+          if (!row) return;
+          var opening = row.classList.contains('d-none');
+          hideAllExpand();
+          if (opening) {
+            row.classList.remove('d-none');
+            try {
+              row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            } catch (err) {
+              row.scrollIntoView(false);
+            }
           }
-          panel.classList.remove('d-none');
         });
+      });
+      document.querySelectorAll('.ee-receipt-inline-close').forEach(function(x) {
+        x.addEventListener('click', function(e) {
+          e.preventDefault();
+          var tr = e.target && e.target.closest && e.target.closest('.ee-receipt-expand-row');
+          if (tr) tr.classList.add('d-none');
+        });
+      });
+      document.addEventListener('click', function(e) {
+        if (e.target && e.target.closest && (e.target.closest('.ee-receipt-status-btn') || e.target.closest('.ee-receipt-expand-row'))) return;
+        hideAllExpand();
       });
     })();
     (function() {
