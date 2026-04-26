@@ -4,24 +4,44 @@
 <style>
   /* Fill main content width — no narrow centered column with empty sides */
   .meinv-page { max-width: 100%; width: 100%; margin: 0; padding-left: 0 !important; padding-right: 0 !important; }
+  .meinv-bill { border: 1px solid #e2e8f0; border-top: 3px solid #f97316; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
+  .meinv-hero { background: linear-gradient(135deg, #fff7ed 0%, #fff 55%); border-bottom: 1px solid #fed7aa; }
   .meinv-hlabel { font-size: .65rem; letter-spacing: .08em; color: #c2410c; font-weight: 700; }
-  .meinv-htitle { font-size: 1.05rem; font-weight: 700; line-height: 1.2; color: #0f172a; }
-  .meinv-k { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; line-height: 1.15; }
-  .meinv-v { font-size: .84rem; font-weight: 600; color: #0f172a; line-height: 1.25; word-break: break-word; }
+  .meinv-htitle { font-size: 1.1rem; font-weight: 700; line-height: 1.2; color: #0f172a; }
+  .meinv-pill { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .55rem; border-radius: 999px; background: #f1f5f9; border: 1px solid #e2e8f0; }
+  .meinv-pill--link { background: #eff6ff; border-color: #bfdbfe; }
+  .meinv-pill__k { font-size: .62rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+  .meinv-pill__v { font-size: .8rem; font-weight: 700; color: #0f172a; }
+  .meinv-pill__a { font-size: .8rem; font-weight: 700; text-decoration: none; color: #1d4ed8; }
+  .meinv-pill__a:hover { text-decoration: underline; color: #1e3a8a; }
+  .meinv-meta--tiles { background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); }
+  .meinv-field { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: .5rem .65rem; min-height: 100%; }
+  .meinv-field--wide .meinv-v { font-size: .88rem; }
+  .meinv-field--accent { border-color: #fdba74; background: linear-gradient(180deg, #fff 0%, #fffbeb 100%); }
+  .meinv-field--remarks { border-style: dashed; background: #fafafa; }
+  .meinv-k { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; line-height: 1.15; margin-bottom: .2rem; }
+  .meinv-v { font-size: .86rem; font-weight: 600; color: #0f172a; line-height: 1.3; word-break: break-word; }
   .meinv-mono { font-variant-numeric: tabular-nums; }
-  .meinv-total { font-size: 1.05rem; font-weight: 700; color: #c2410c; }
-  .meinv-remarks { font-weight: 500; font-size: .82rem; color: #334155; }
-  .meinv-meta { background: linear-gradient(180deg, #fafafa 0%, #fff 100%); }
-  .meinv-table { font-size: .84rem; width: 100%; }
-  .meinv-table thead th { font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: .35rem .5rem; }
-  .meinv-table tbody td { padding: .35rem .5rem; vertical-align: middle; }
+  .meinv-nums { letter-spacing: .01em; }
+  .meinv-nums__sep { color: #94a3b8; font-weight: 500; }
+  .meinv-total { font-size: 1.1rem; font-weight: 800; color: #c2410c; }
+  .meinv-remarks { font-weight: 500; font-size: .84rem; color: #334155; }
+  .meinv-thead th { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; background: #f8fafc !important; border-bottom: 1px solid #e2e8f0; padding: .4rem .5rem; }
+  .meinv-table { font-size: .86rem; width: 100%; }
+  .meinv-table tbody td { padding: .4rem .5rem; vertical-align: middle; border-color: #e2e8f0; }
+  .meinv-table tbody tr:nth-child(even) { background: #fafafa; }
+  .meinv-tfoot th { background: #fff7ed !important; border-top: 2px solid #fed7aa !important; color: #9a3412; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; padding: .5rem .5rem; }
+  .meinv-tfoot__label { font-weight: 800 !important; }
+  .meinv-tfoot__amount { font-size: 1.05rem !important; color: #c2410c !important; font-weight: 800 !important; }
   .meinv-headcard.expense-invoice-bill, .meinv-lines.expense-invoice-bill { max-width: none; width: 100%; }
+  .meinv-lines__h { letter-spacing: .04em; color: #334155; }
   .expense-invoice-bill { border-radius: 10px; }
   @media print {
     .navbar, .sidebar, .flash-message, .d-print-none { display: none !important; }
     .main-content { margin: 0 !important; margin-top: 0 !important; padding: 6px !important; }
     .expense-invoice-bill { border: 1px solid #000 !important; box-shadow: none !important; page-break-inside: avoid; }
     .meinv-table { font-size: 9pt; }
+    .meinv-tfoot th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style>
 <div class="container-fluid py-2 px-0 meinv-page">
