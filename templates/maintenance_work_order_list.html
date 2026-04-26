@@ -128,7 +128,7 @@
             <th>Project</th>
             <th>Vehicle</th>
             <th>Title</th>
-            <th>Status</th>
+            <th title="Work order lifecycle (open / in progress / closed)">WO status</th>
             <th class="text-end">Bills</th>
             <th class="text-end">Total Cost</th>
             <th class="text-center">Upload Status</th>
@@ -138,6 +138,7 @@
         </thead>
         <tbody>
           {% for row in rows %}
+          {% set wo_st = (row.rec.status or 'open')|lower|trim %}
           <tr class="mwo-table-row" data-wo-id="{{ row.rec.id }}">
             <td class="ps-3">{{ loop.index }}</td>
             <td>
@@ -148,13 +149,13 @@
             <td>{{ row.rec.project.name if row.rec.project else '—' }}</td>
             <td class="fw-medium">{{ row.rec.vehicle.vehicle_no if row.rec.vehicle else '—' }}</td>
             <td>{{ row.rec.title }}</td>
-            <td>
-              {% if row.rec.status == 'closed' %}
-              <span class="badge bg-success">Closed</span>
-              {% elif row.rec.status == 'in_progress' %}
-              <span class="badge bg-warning text-dark">In Progress</span>
+            <td class="mwo-col-wo-status text-nowrap">
+              {% if wo_st == 'closed' %}
+              <span class="badge bg-success" title="Work order status: {{ row.rec.status or 'closed' }}">Closed</span>
+              {% elif wo_st == 'in_progress' %}
+              <span class="badge bg-warning text-dark" title="Work order status: {{ row.rec.status or 'in progress' }}">In Progress</span>
               {% else %}
-              <span class="badge bg-primary">Open</span>
+              <span class="badge bg-primary" title="Work order status: {{ row.rec.status or 'open' }}">Open</span>
               {% endif %}
             </td>
             <td class="text-end">{{ row.bill_count }}</td>
@@ -185,9 +186,9 @@
               </button>
               {% endif %}
             </td>
-            <td class="text-center">
+            <td class="text-center mwo-col-media">
               {% set ns = namespace(cloud=0, local=0, n=0) %}
-              {% for a in r.attachments %}
+              {% for a in r.attachments.all() %}
                 {% set ns.n = ns.n + 1 %}
                 {% if a.file_path and (a.file_path.startswith('http://') or a.file_path.startswith('https://')) %}
                   {% set ns.cloud = ns.cloud + 1 %}
@@ -218,9 +219,15 @@
               <a href="{{ url_for('maintenance_work_order_form', pk=row.rec.id) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="btn btn-link btn-sm p-1" title="Edit">
                 <i class="bi bi-pencil"></i>
               </a>
+              {% if wo_st == 'closed' %}
+              <span class="d-inline-block btn btn-link btn-sm p-1 text-secondary" style="opacity:.45;cursor:not-allowed" title="Work order band — naya bill add nahi ho sakta">
+                <i class="bi bi-receipt"></i>
+              </span>
+              {% else %}
               <a href="{{ url_for('maintenance_expense_form', work_order_id=row.rec.id) }}" class="btn btn-link btn-sm p-1 text-warning" title="Add bill">
                 <i class="bi bi-receipt"></i>
               </a>
+              {% endif %}
               {% if row.bill_count == 0 %}
               <form action="{{ url_for('maintenance_work_order_delete', pk=row.rec.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Is work order ko delete karein? (Koi bill link nahi hai.)');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -419,29 +426,38 @@ document.addEventListener('DOMContentLoaded', function() {
     if (top < 8) top = 8;
     pop.style.left = left + 'px';
     pop.style.top = top + 'px';
-    pop.style.zIndex = '1050';
   }
-  document.querySelectorAll('.expense-view-wrap').forEach(function(wrap) {
-    var eye = wrap.querySelector('.expense-view-eye');
-    var pop = wrap.querySelector('.expense-view-popover');
-    if (!eye || !pop) return;
+  document.querySelectorAll('.expense-view-eye').forEach(function(eye) {
     eye.addEventListener('click', function(e) {
       e.preventDefault();
       e.stopPropagation();
-      var open = pop.classList.contains('d-none');
+      var wrap = eye.closest('.expense-view-wrap');
+      var pop = (wrap && (wrap._expenseViewPop || (wrap._expenseViewPop = wrap.querySelector('.expense-view-popover')))) || null;
+      if (!pop) return;
+      var wasOpen = !pop.classList.contains('d-none');
       closeAll();
-      if (!open) {
-        pop._expenseViewWrap = wrap;
-        if (pop.parentNode !== document.body) document.body.appendChild(pop);
-        pop.classList.remove('d-none');
-        pop.classList.add('position-fixed');
+      if (wasOpen) return;
+      document.body.appendChild(pop);
+      pop._expenseViewWrap = wrap;
+      pop.classList.remove('d-none');
+      pop.classList.add('position-fixed');
+      pop.style.zIndex = '10050';
+      requestAnimationFrame(function() {
         requestAnimationFrame(function() { positionPop(eye, pop); });
-        eye.setAttribute('aria-expanded', 'true');
-      }
+      });
+      eye.setAttribute('aria-expanded', 'true');
     });
   });
-  document.addEventListener('click', function() { closeAll(); });
+  document.querySelectorAll('.expense-view-popover a[href]').forEach(function(a) {
+    a.addEventListener('click', function() { closeAll(); });
+  });
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.closest && (e.target.closest('.expense-view-wrap') || e.target.closest('.expense-view-popover'))) return;
+    closeAll();
+  });
   document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeAll(); });
+  window.addEventListener('scroll', function() { closeAll(); }, true);
+  window.addEventListener('resize', function() { closeAll(); });
   var statusBtns = document.querySelectorAll('.mwo-upload-status-btn');
   var panelEl = document.getElementById('mwoUploadStatusPanel');
   var panelHideBtn = document.getElementById('mwoUploadPanelHide');

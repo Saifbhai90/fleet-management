@@ -398,6 +398,7 @@ ENDPOINT_PERMISSION_MAP = [
     # Employee expense (correct granular codes replacing phantom employee_expense_form)
     ('employee_expense_form', 'employee_expense_add'),
     ('employee_expense_form_edit', 'employee_expense_edit'),
+    ('employee_expense_receipt_push_cloud', 'employee_expense_edit'),
     ('employee_expense_delete', 'employee_expense_delete'),
     # Transfer Print / Export routes
     ('vehicle_transfers_print', 'vehicle_transfers'),

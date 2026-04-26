@@ -3,6 +3,7 @@ Finance & Accounting Routes
 All routes for vouchers, journal entries, ledgers, and financial reports
 """
 from flask import render_template, request, redirect, url_for, flash, jsonify, session, current_app
+import io
 from sqlalchemy import and_, or_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
@@ -22,6 +23,7 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal
 import os
 from werkzeug.utils import secure_filename
+from werkzeug.datastructures import FileStorage
 
 
 # Helper function for authentication and permission checks
@@ -1174,6 +1176,110 @@ def _employee_receipt_public_url(receipt_path):
     if s.startswith('uploads/receipts/'):
         return url_for('static', filename=s)
     return url_for('uploaded_file', filename=s)
+
+
+def _employee_expense_local_receipt_filesystem_path(receipt_path):
+    """Safe path under UPLOAD_FOLDER for a stored relative receipt; None if not a local file."""
+    s = (receipt_path or '').strip()
+    if not s or s.startswith('http://') or s.startswith('https://'):
+        return None
+    upload_root = current_app.config.get('UPLOAD_FOLDER') or ''
+    if not upload_root:
+        return None
+    rel = s.replace('\\', '/').lstrip('/')
+    if rel.startswith('uploads/'):
+        rel = rel[len('uploads/') :]
+    base = os.path.abspath(upload_root)
+    full = os.path.abspath(os.path.join(base, rel.replace('/', os.sep)))
+    if not full.startswith(base) or not os.path.isfile(full):
+        return None
+    return full
+
+
+def employee_expense_receipt_push_cloud(pk):
+    """POST: copy local disk receipt to R2 and update receipt_path to public URL."""
+    _guard = _require_workspace_employee_for_expenses()
+    if _guard:
+        return _guard
+    auth_check = check_auth('employee_expense_edit')
+    if auth_check:
+        return auth_check
+    workspace_employee_id = _workspace_employee_id()
+    from routes import _expense_attachment_r2_ready, _save_expense_attachment_path, _expense_attachment_max_bytes
+
+    if not _expense_attachment_r2_ready():
+        flash('Cloud (R2) abhi configure nahi — push possible nahi.', 'danger')
+        return redirect(request.referrer or url_for('employee_expense_list'))
+
+    expense = EmployeeExpense.query.get_or_404(pk)
+    if workspace_employee_id and expense.employee_id and expense.employee_id != workspace_employee_id:
+        flash('This employee expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('employee_expense_list'))
+    if _workspace_date_is_closed(
+        workspace_employee_id,
+        expense.expense_date,
+        district_id=expense.district_id,
+        project_id=expense.project_id,
+    ):
+        flash('Closed month wala expense — pehle month reopen karein.', 'danger')
+        return redirect(request.referrer or url_for('employee_expense_list'))
+
+    rp = (expense.receipt_path or '').strip()
+    if not rp:
+        flash('Koi receipt file nahi mili.', 'warning')
+        return redirect(request.referrer or url_for('employee_expense_list'))
+    if rp.startswith('http://') or rp.startswith('https://'):
+        flash('Receipt pehle se cloud URL par hai.', 'info')
+        return redirect(request.referrer or url_for('employee_expense_list'))
+
+    full = _employee_expense_local_receipt_filesystem_path(rp)
+    if not full:
+        flash('Local file server par nahi mili (path / static check).', 'warning')
+        return redirect(request.referrer or url_for('employee_expense_list'))
+
+    try:
+        sz = os.path.getsize(full)
+    except OSError:
+        flash('File read nahi ho saki.', 'danger')
+        return redirect(request.referrer or url_for('employee_expense_list'))
+    if sz > _expense_attachment_max_bytes():
+        flash('File size zyada bari — EXPENSE_ATTACHMENT_MAX_MB dekhain.', 'danger')
+        return redirect(request.referrer or url_for('employee_expense_list'))
+
+    name = os.path.basename(full) or 'receipt'
+    ext = os.path.splitext(name)[1].lower()
+    if ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
+        ftype = 'image'
+    elif ext == '.pdf':
+        ftype = 'pdf'
+    elif ext in {'.mp4', '.webm', '.mov'}:
+        ftype = 'video'
+    else:
+        ftype = 'image'
+
+    try:
+        with open(full, 'rb') as fh:
+            data = fh.read()
+        fs = FileStorage(stream=io.BytesIO(data), filename=name, name='file')
+        new_path = _save_expense_attachment_path(
+            fs, ftype, name, 'employee_expense',
+            current_app.config['UPLOAD_FOLDER'], f'employee_expense/{expense.id}',
+        )
+        if not new_path or not (new_path.startswith('http://') or new_path.startswith('https://')):
+            flash('R2 par upload nahi ho saka — logs check karein.', 'danger')
+            return redirect(request.referrer or url_for('employee_expense_list'))
+        try:
+            os.remove(full)
+        except OSError:
+            pass
+        expense.receipt_path = new_path
+        db.session.commit()
+        flash('Receipt cloud (R2) par bhej diya gaya.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception('Employee expense receipt push failed')
+        flash(f'Push failed: {str(e)}', 'danger')
+    return redirect(request.referrer or url_for('employee_expense_list'))
 
 
 def employee_expense_media(pk):
