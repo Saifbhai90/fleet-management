@@ -100,6 +100,7 @@
       <input type="text" id="fuelExpenseSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Search..." style="max-width: 220px;" autocomplete="off">
     </div>
     <div class="card-body p-0">
+      {% set umc = show_upload_media_columns|default(true) %}
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0 small" id="fuelExpenseTable">
           <thead class="table-light">
@@ -123,8 +124,10 @@
               <th>MPG</th>
               <th>Amount</th>
               <th>Matched</th>
+              {% if umc %}
               <th class="text-center">Upload Status</th>
               <th class="text-center">Media</th>
+              {% endif %}
               <th class="text-center pe-3">Actions</th>
             </tr>
           </thead>
@@ -156,6 +159,7 @@
                   <span class="badge bg-secondary">No</span>
                 {% endif %}
               </td>
+              {% if umc %}
               <td class="text-center">
                 {% set up_status = (r.upload_status or 'success')|lower %}
                 {% set up_total = r.upload_total or 0 %}
@@ -201,6 +205,7 @@
                   <span class="badge bg-info text-dark" title="Some cloud, some local">Mixed</span>
                 {% endif %}
               </td>
+              {% endif %}
               <td class="text-center pe-3">
                 <div class="expense-view-wrap d-inline-block align-top">
                   <button type="button" class="btn btn-outline-success btn-sm expense-view-eye" title="Invoice / Media" aria-expanded="false" aria-haspopup="true">
@@ -219,7 +224,7 @@
               </td>
             </tr>
             <tr class="fuel-upload-expand-row d-none" data-record-id="{{ r.id }}">
-              <td colspan="22" class="p-0 bg-body-secondary border-0">
+              <td colspan="{% if umc %}22{% else %}20{% endif %}" class="p-0 bg-body-secondary border-0">
                 <div class="px-3 py-2 m-2 ms-3 small shadow-sm bg-white border-start border-4 border-primary rounded-1">
                   <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                     <span class="fw-semibold text-body"><i class="bi bi-cloud-upload me-1"></i>Upload status</span>
@@ -239,7 +244,7 @@
             </tr>
             {% else %}
             <tr id="fuelExpenseNoDataRow">
-              <td colspan="22" class="text-center py-5 text-muted">
+              <td colspan="{% if umc %}22{% else %}20{% endif %}" class="text-center py-5 text-muted">
                 <i class="bi bi-fuel-pump display-6 d-block mb-2"></i>
                 No fuel expense entries. <a href="{{ url_for('fuel_expense_add') }}">Add Fuel Expense</a>
               </td>
@@ -264,7 +269,7 @@
               <td>{{ totals.total_liters|round(2) }}</td>
               <td>{{ totals.avg_mpg|round(2) if totals.avg_mpg is not none else '-' }}</td>
               <td>{{ totals.total_amount|round(2) }}</td>
-              <td colspan="4"></td>
+              <td colspan="{% if umc %}4{% else %}2{% endif %}"></td>
             </tr>
           </tfoot>
           {% endif %}

@@ -5,7 +5,7 @@ from calendar import monthrange
 from decimal import Decimal, InvalidOperation
 
 from flask import flash, redirect, render_template, request, session, url_for, make_response, jsonify
-from sqlalchemy import and_, or_, cast, String
+from sqlalchemy import and_, or_, not_, cast, String
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
@@ -2993,6 +2993,17 @@ def workspace_fund_transfers_list():
     total_amount = (
         query.with_entities(db.func.coalesce(db.func.sum(WorkspaceFundTransfer.amount), 0)).scalar() or 0
     )
+    _wsft_not_ideal = or_(
+        WorkspaceFundTransfer.attachment.is_(None),
+        WorkspaceFundTransfer.attachment == '',
+        and_(
+            WorkspaceFundTransfer.attachment.isnot(None),
+            WorkspaceFundTransfer.attachment != '',
+            not_(or_(WorkspaceFundTransfer.attachment.ilike('http://%'), WorkspaceFundTransfer.attachment.ilike('https://%'))),
+        ),
+    )
+    show_upload_media_columns = query.filter(_wsft_not_ideal).limit(1).first() is not None
+
     pagination = query.order_by(
         WorkspaceFundTransfer.transfer_date.desc(),
         WorkspaceFundTransfer.id.desc(),
@@ -3008,6 +3019,7 @@ def workspace_fund_transfers_list():
         to_date=to_date,
         employee=emp,
         total_amount=total_amount,
+        show_upload_media_columns=show_upload_media_columns,
     )
 
 

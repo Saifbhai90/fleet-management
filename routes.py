@@ -20988,6 +20988,11 @@ def fuel_expense_list():
                   'avg_mpg': avg_mpg,
                   'avg_fuel_price': avg_fuel_price}
 
+    from list_visibility import expense_or_work_order_needs_upload_media_columns
+    show_upload_media_columns = (
+        any(expense_or_work_order_needs_upload_media_columns(r) for r in all_rows) if all_rows else False
+    )
+
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     rows = pagination.items
     cleanup_status = _latest_expense_cleanup_status('fuel', workspace_employee_id)
@@ -20996,6 +21001,7 @@ def fuel_expense_list():
                            pagination=pagination, page=page, per_page=per_page,
                            district_id=district_id, project_id=project_id, vehicle_id=vehicle_id,
                            cleanup_status=cleanup_status,
+                           show_upload_media_columns=show_upload_media_columns,
                            location_cascade=_fuel_expense_location_cascade_dict())
 
 
@@ -22541,6 +22547,10 @@ def oil_expense_list():
         OilExpense.current_reading.asc(),
         OilExpense.id.asc(),
     ).all()
+    from list_visibility import expense_or_work_order_needs_upload_media_columns
+    show_upload_media_columns = (
+        any(expense_or_work_order_needs_upload_media_columns(r) for r in rows) if rows else False
+    )
     # Attach item totals per row for list display
     rows_with_totals = []
     overall_purchase_qty = 0
@@ -22594,6 +22604,7 @@ def oil_expense_list():
         page_subtotal_used=page_subtotal_used,
         page_subtotal_balance=page_subtotal_balance,
         page_subtotal_amount=page_subtotal_amount,
+        show_upload_media_columns=show_upload_media_columns,
         location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
@@ -23556,6 +23567,10 @@ def maintenance_work_order_list():
     work_orders = query.order_by(
         MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()
     ).all()
+    from list_visibility import expense_or_work_order_needs_upload_media_columns
+    show_upload_media_columns = (
+        any(expense_or_work_order_needs_upload_media_columns(wo) for wo in work_orders) if work_orders else False
+    )
     rows = []
     for wo in work_orders:
         expenses = wo.expenses.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
@@ -23595,6 +23610,7 @@ def maintenance_work_order_list():
         district_choices=district_choices,
         project_choices=project_choices,
         vehicle_choices=vehicle_choices,
+        show_upload_media_columns=show_upload_media_columns,
         location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
@@ -24346,6 +24362,10 @@ def maintenance_expense_list():
         MaintenanceExpense.current_reading.asc(),
         MaintenanceExpense.id.asc(),
     ).all()
+    from list_visibility import expense_or_work_order_needs_upload_media_columns
+    show_upload_media_columns = (
+        any(expense_or_work_order_needs_upload_media_columns(r) for r in rows) if rows else False
+    )
     rows_with_totals = []
     overall_total_qty = 0
     overall_total_amount = 0
@@ -24401,6 +24421,7 @@ def maintenance_expense_list():
         per_page=per_page,
         cleanup_status=cleanup_status,
         open_work_orders=open_work_orders,
+        show_upload_media_columns=show_upload_media_columns,
         location_cascade=_fuel_expense_location_cascade_dict(),
     )
 

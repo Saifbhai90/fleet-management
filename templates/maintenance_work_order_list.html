@@ -116,6 +116,7 @@
         <input type="search" id="mwoTableSearch" class="form-control form-control-sm" placeholder="Filter rows: work order #, title, location, status…" autocomplete="off" inputmode="search" aria-label="Filter table">
       </div>
     </div>
+    {% set umc = show_upload_media_columns|default(true) %}
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 small" id="mwoTable">
         <thead class="table-light">
@@ -130,8 +131,10 @@
             <th title="Work order lifecycle (open / in progress / closed)">WO status</th>
             <th class="text-end">Bills</th>
             <th class="text-end">Total Cost</th>
+            {% if umc %}
             <th class="text-center">Upload Status</th>
             <th class="text-center">Media</th>
+            {% endif %}
             <th class="text-end pe-3" style="min-width: 8.5rem;">Actions</th>
           </tr>
         </thead>
@@ -139,6 +142,7 @@
           {% for row in rows %}
           {% set wo_st = (row.rec.status or 'open')|lower|trim %}
           <tr class="mwo-table-row" data-wo-id="{{ row.rec.id }}">
+            {% set r = row.rec %}
             <td class="ps-3">{{ loop.index }}</td>
             <td>
               <a href="{{ url_for('maintenance_work_order_detail', pk=row.rec.id) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="text-decoration-none fw-semibold text-primary">{{ row.rec.work_order_no }}</a>
@@ -159,8 +163,8 @@
             </td>
             <td class="text-end">{{ row.bill_count }}</td>
             <td class="text-end">{{ "%.2f"|format(row.total_amount or 0) }}</td>
+            {% if umc %}
             <td class="text-center">
-              {% set r = row.rec %}
               {% set up_status = (r.upload_status or 'success')|lower %}
               {% set up_total = r.upload_total or 0 %}
               {% set up_done = r.upload_done or 0 %}
@@ -205,6 +209,7 @@
               <span class="badge bg-info text-dark" title="Some cloud, some local">Mixed</span>
               {% endif %}
             </td>
+            {% endif %}
             <td class="text-end pe-3 text-nowrap">
               <div class="expense-view-wrap d-inline-block align-top">
                 <button type="button" class="btn btn-outline-success btn-sm expense-view-eye" title="Detail / Media" aria-expanded="false" aria-haspopup="true">
@@ -242,7 +247,7 @@
             </td>
           </tr>
             <tr class="mwo-upload-expand-row d-none" data-record-id="{{ row.rec.id }}">
-              <td colspan="13" class="p-0 bg-body-secondary border-0">
+              <td colspan="{% if umc %}13{% else %}11{% endif %}" class="p-0 bg-body-secondary border-0">
                 <div class="px-3 py-2 m-2 ms-3 small shadow-sm bg-white border-start border-4 border-primary rounded-1">
                   <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                     <span class="fw-semibold text-body"><i class="bi bi-cloud-upload me-1"></i>Upload status</span>
@@ -262,7 +267,7 @@
             </tr>
           {% else %}
           <tr id="mwoNoDataRow">
-            <td colspan="13" class="text-center text-muted py-5">No work orders for this filter.</td>
+            <td colspan="{% if umc %}13{% else %}11{% endif %}" class="text-center text-muted py-5">No work orders for this filter.</td>
           </tr>
           {% endfor %}
         </tbody>

@@ -103,6 +103,7 @@
             </div>
         </div>
         <div class="card-body p-0">
+            {% set umc = show_upload_media_columns|default(true) %}
             <div class="data-table-wrapper" style="overflow-x:auto">
                 <table class="table table-hover table-bordered mb-0" id="fundTransferTable" data-ft-auto-totals="1" data-ft-total-records="{{ transfers.total }}">
                     <thead class="table-light">
@@ -119,8 +120,10 @@
                             <th>Description</th>
                             <th>District</th>
                             <th>Project</th>
+                            {% if umc %}
                             <th class="text-center">Upload status</th>
                             <th class="text-center">Media</th>
+                            {% endif %}
                             <th class="text-center no-print no-export">Actions</th>
                         </tr>
                     </thead>
@@ -143,6 +146,7 @@
                             <td><div class="desc-cell" title="{{ ft.description or '' }}">{{ ft.description or '-' }}</div></td>
                             <td>{{ ft.district.name if ft.district else '-' }}</td>
                             <td>{{ ft.project.name if ft.project else '-' }}</td>
+                            {% if umc %}
                             <td class="text-center">
                                 <button type="button" class="btn btn-sm p-0 border-0 bg-transparent ft-upload-status-btn" title="Upload status">
                                     {% if ft.attachment %}
@@ -161,6 +165,7 @@
                                 <span class="badge bg-warning text-dark" title="On app server (relative path)">Local</span>
                                 {% endif %}
                             </td>
+                            {% endif %}
                             <td class="text-center no-print no-export">
                                 <div class="expense-view-wrap d-inline-block align-top">
                                     <button type="button" class="btn btn-outline-success btn-sm expense-view-eye" title="Invoice / Media" aria-expanded="false" aria-haspopup="true">
@@ -179,7 +184,7 @@
                             </td>
                         </tr>
                         <tr class="ft-upload-expand-row d-none no-print" data-record-id="{{ ft.id }}">
-                            <td colspan="15" class="p-0 bg-body-secondary border-0">
+                            <td colspan="{% if umc %}15{% else %}13{% endif %}" class="p-0 bg-body-secondary border-0">
                                 <div class="px-3 py-2 m-2 ms-3 small shadow-sm bg-white border-start border-4 border-primary rounded-1">
                                     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                                         <span class="fw-semibold text-body"><i class="bi bi-cloud-upload me-1"></i>Upload status</span>
@@ -203,7 +208,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="15" class="text-center py-5 text-muted">
+                            <td colspan="{% if umc %}15{% else %}13{% endif %}" class="text-center py-5 text-muted">
                                 <i class="bi bi-arrow-left-right display-6 d-block mb-2 opacity-25"></i>
                                 No fund transfers found{% if from_date or to_date %} for the selected filters{% endif %}.
                             </td>
@@ -214,12 +219,12 @@
                         <tr class="table-warning fw-semibold">
                             <td colspan="5" class="text-end">Subtotal (Current Page)</td>
                             <td class="text-end" data-ft-visible-col="5">{{ "{:,.2f}".format(page_amount_subtotal or 0) }}</td>
-                            <td colspan="9"></td>
+                            <td colspan="{% if umc %}9{% else %}7{% endif %}"></td>
                         </tr>
                         <tr class="table-info fw-bold">
                             <td colspan="5" class="text-end">Total (All Filtered Records)</td>
                             <td class="text-end" data-ft-total-col="5" data-ft-base="{{ overall_amount_total or 0 }}">{{ "{:,.2f}".format(overall_amount_total or 0) }}</td>
-                            <td colspan="9"></td>
+                            <td colspan="{% if umc %}9{% else %}7{% endif %}"></td>
                         </tr>
                     </tfoot>
                 </table>

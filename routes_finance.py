@@ -4,7 +4,7 @@ All routes for vouchers, journal entries, ledgers, and financial reports
 """
 from flask import render_template, request, redirect, url_for, flash, jsonify, session, current_app
 import io
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, not_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
                     FundTransfer, BankAccountDirectory, FundTransferCategory, WorkspaceAccount, WorkspaceJournalEntry,
@@ -2232,6 +2232,17 @@ def fund_transfers_list():
                 FundTransfer.reference_no.ilike(like),
             ))
 
+    _ft_not_ideal_attachment = or_(
+        FundTransfer.attachment.is_(None),
+        FundTransfer.attachment == '',
+        and_(
+            FundTransfer.attachment.isnot(None),
+            FundTransfer.attachment != '',
+            not_(or_(FundTransfer.attachment.ilike('http://%'), FundTransfer.attachment.ilike('https://%'))),
+        ),
+    )
+    show_upload_media_columns = query.filter(_ft_not_ideal_attachment).limit(1).first() is not None
+
     overall_amount_total = query.with_entities(db.func.coalesce(db.func.sum(FundTransfer.amount), 0)).scalar() or 0
     query = query.order_by(FundTransfer.transfer_date.desc(), FundTransfer.id.desc())
     transfers = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -2242,7 +2253,8 @@ def fund_transfers_list():
                            from_date=from_date, to_date=to_date, per_page=per_page, search=search,
                            category_choices=category_choices,
                            page_amount_subtotal=page_amount_subtotal,
-                           overall_amount_total=overall_amount_total)
+                           overall_amount_total=overall_amount_total,
+                           show_upload_media_columns=show_upload_media_columns)
 
 
 def _ft_media_items_from_path(attachment, display_name='Attachment'):
